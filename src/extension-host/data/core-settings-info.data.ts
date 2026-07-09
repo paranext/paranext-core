@@ -2,7 +2,6 @@ import { localization } from '@extension-host/services/papi-backend.service';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
@@ -11,12 +10,6 @@ export const platformSettings: SettingsContribution = [
     label: '%settings_platform_group1_label_alternative%',
     description: '%settings_platform_group1_description%',
     properties: {
-      'platform.verseRef': {
-        label: '%settings_platform_verseRef_label%',
-        description: '%settings_platform_verseRef_description%',
-        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-        isHidden: true,
-      },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
         description: '%settings_platform_interfaceLanguage_description%',
@@ -50,23 +43,6 @@ export const platformSettings: SettingsContribution = [
     },
   },
 ];
-
-// TODO: Add range checking of BCV numbers given the current versification
-export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = async (
-  newValue: SerializedVerseRef,
-): Promise<boolean> => {
-  return (
-    'book' in newValue &&
-    'chapterNum' in newValue &&
-    'verseNum' in newValue &&
-    typeof newValue.book === 'string' &&
-    typeof newValue.chapterNum === 'number' &&
-    typeof newValue.verseNum === 'number' &&
-    Canon.isBookIdValid(newValue.book) &&
-    newValue.chapterNum >= 0 &&
-    newValue.verseNum >= 0
-  );
-};
 
 // TODO: Validate that strings in the array match BCP 47 values once the i18n code is ready. Or maybe
 // now that we're validating against actual locales read in by the localization service, that check
@@ -138,7 +114,6 @@ const interfaceModeValidator: SettingValidator<'platform.interfaceMode'> = async
 };
 
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
-  'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,

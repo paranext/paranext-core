@@ -565,6 +565,69 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void GetCommentThreads_StatusAndIsResolvedBothSet_Throws()
+        {
+            // Status and IsResolved both constrain thread status; setting both is ambiguous and
+            // would silently AND to zero results, so it must fail fast.
+            var selector = new CommentThreadSelector
+            {
+                Status = NoteStatus.Resolved,
+                IsResolved = true,
+            };
+
+            Assert.That(
+                () => _provider.GetCommentThreads(selector),
+                Throws.ArgumentException.With.Message.Contains("both filter thread status")
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByAssignedToEmpty_ReturnsOnlyUnassignedThreads()
+        {
+            // Arrange - one thread assigned to Team, one left unassigned.
+            var assignedComment = CreateTestComment("GEN", 1, 1, "Assigned to team");
+            string assignedCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(assignedComment)
+            );
+            string assignedThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == assignedCommentId))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = assignedThreadId, AssignedUser = "Team" }
+                )
+            );
+
+            var unassignedComment = CreateTestComment("GEN", 1, 2, "Unassigned");
+            string unassignedCommentId = _provider.CreateComment(
+                new PlatformCommentWrapper(unassignedComment)
+            );
+            string unassignedThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == unassignedCommentId))
+                .Id;
+
+            // Act - empty string is the "unassigned" filter (CommentThread.unassignedUser), not "no
+            // filter", so it must return only unassigned threads, not every thread.
+            var threads = _provider.GetCommentThreads(
+                new CommentThreadSelector { AssignedTo = "" }
+            );
+
+            // Assert - only the unassigned thread, NOT the Team-assigned one.
+            Assert.That(
+                threads.Select(t => t.Id),
+                Has.Member(unassignedThreadId),
+                "Unassigned thread should match the empty-string assignment filter"
+            );
+            Assert.That(
+                threads.Select(t => t.Id),
+                Has.No.Member(assignedThreadId),
+                "Team-assigned thread should be excluded by the empty-string (unassigned) filter"
+            );
+        }
+
+        [Test]
         public void GetCommentThreads_FilterByIsReadTrue_ReturnsOnlyReadThreads()
         {
             // Arrange - Create multiple threads with different read statuses
@@ -2175,6 +2238,234 @@ namespace TestParanextDataProvider.Projects
 
             // Assert - Should still return the regular comment
             Assert.That(threads, Has.Count.EqualTo(1));
+        }
+
+        // Creates an unresolved (Todo) verseText-style conflict thread and returns its thread ID.
+        private string CreateUnresolvedConflictThread(string verseRefStr)
+        {
+            Comment conflict = CommentTestHelper.CreateConflictComment();
+            conflict.Thread = null!; // provider assigns the thread ID
+            conflict.VerseRefStr = verseRefStr;
+            string commentId = _provider.CreateComment(new PlatformCommentWrapper(conflict));
+            return _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Id;
+        }
+
+        // Resolves a thread by appending a Resolved comment through CommentManager directly. Not via
+        // AddCommentToThread: the provider's generic status path rejects Status=Resolved on conflict
+        // threads, and this helper must keep working regardless.
+        private void ResolveThreadViaCommentManager(string threadId)
+        {
+            CommentManager commentManager = CommentManager.Get(_scrText);
+            CommentThread thread = commentManager.FindThread(threadId);
+            Comment resolution = thread.AddNewComment();
+            resolution.Status = NoteStatus.Resolved;
+            commentManager.AddComment(resolution);
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsResolvedFalse_ExcludesOnlyResolvedThreads()
+        {
+            // Arrange - three threads: Todo, Resolved, Done. "Unresolved" means the THREAD status is
+            // not Resolved (PT9 StatusFilter semantics), so the Done thread must still match.
+            var comment1 = CreateTestComment("GEN", 1, 1, "Todo thread");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId2, Status = NoteStatus.Resolved }
+                )
+            );
+
+            var comment3 = CreateTestComment("GEN", 1, 3, "Done thread");
+            string commentId3 = _provider.CreateComment(new PlatformCommentWrapper(comment3));
+            string threadId3 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId3))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId3, Status = NoteStatus.Done }
+                )
+            );
+
+            var selector = new CommentThreadSelector { IsResolved = false };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId1, threadId3 }),
+                "IsResolved=false must return every thread whose status is not Resolved (incl. Done)"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsResolvedTrue_ReturnsOnlyResolvedThreads()
+        {
+            // Arrange
+            var comment1 = CreateTestComment("GEN", 1, 1, "Todo thread");
+            _provider.CreateComment(new PlatformCommentWrapper(comment1));
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId2, Status = NoteStatus.Resolved }
+                )
+            );
+
+            var selector = new CommentThreadSelector { IsResolved = true };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(threadId2),
+                "IsResolved=true must return only Resolved threads"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_FilterByIsResolvedNull_ReturnsAllThreads()
+        {
+            // Arrange - one Todo thread and one Resolved thread
+            var comment1 = CreateTestComment("GEN", 1, 1, "Todo thread");
+            string commentId1 = _provider.CreateComment(new PlatformCommentWrapper(comment1));
+            string threadId1 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId1))
+                .Id;
+
+            var comment2 = CreateTestComment("GEN", 1, 2, "Resolved thread");
+            string commentId2 = _provider.CreateComment(new PlatformCommentWrapper(comment2));
+            string threadId2 = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId2))
+                .Id;
+            _provider.AddCommentToThread(
+                new PlatformCommentWrapper(
+                    new Comment(_scrText.User) { Thread = threadId2, Status = NoteStatus.Resolved }
+                )
+            );
+
+            var selector = new CommentThreadSelector();
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { threadId1, threadId2 }),
+                "Unset IsResolved must apply no resolved-status filtering"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_TypeConflictAndIsResolvedFalse_ReturnsOnlyUnresolvedConflicts()
+        {
+            // Arrange - the "Unresolved conflicts" dropdown query. An unresolved conflict must match;
+            // a resolved conflict and a normal Todo thread must not.
+            string unresolvedConflictThreadId = CreateUnresolvedConflictThread("MAT 1:1");
+
+            string resolvedConflictThreadId = CreateUnresolvedConflictThread("MAT 2:2");
+            ResolveThreadViaCommentManager(resolvedConflictThreadId);
+
+            _provider.CreateComment(
+                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 1, "Normal todo thread"))
+            );
+
+            var selector = new CommentThreadSelector
+            {
+                Type = NoteType.Conflict,
+                IsResolved = false,
+            };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(unresolvedConflictThreadId),
+                "Only the unresolved conflict thread should match the Unresolved-conflicts query"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_TypeConflict_ReturnsResolvedAndUnresolvedConflicts()
+        {
+            // Arrange - the "Conflicts" (all) dropdown query. Both an unresolved and a resolved
+            // conflict must match; a normal thread must not.
+            string unresolvedConflictThreadId = CreateUnresolvedConflictThread("MAT 1:1");
+
+            string resolvedConflictThreadId = CreateUnresolvedConflictThread("MAT 2:2");
+            ResolveThreadViaCommentManager(resolvedConflictThreadId);
+
+            _provider.CreateComment(
+                new PlatformCommentWrapper(CreateTestComment("GEN", 1, 1, "Normal todo thread"))
+            );
+
+            var selector = new CommentThreadSelector { Type = NoteType.Conflict };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Select(t => t.Id),
+                Is.EquivalentTo(new[] { unresolvedConflictThreadId, resolvedConflictThreadId }),
+                "The Conflicts query must return conflict threads regardless of resolved status"
+            );
+        }
+
+        [Test]
+        public void GetCommentThreads_TypeNormal_ReturnsOnlyRegularThreads()
+        {
+            // Arrange - the "Comments" (non-conflict) dropdown query. A regular note must match; a
+            // conflict note must not. Regular notes default to NoteType.Normal (CommentList.cs), so
+            // filtering on Type == Normal cleanly separates them from Conflict-typed threads.
+            var regular = CreateTestComment("GEN", 1, 1, "Regular note");
+            string regularCommentId = _provider.CreateComment(new PlatformCommentWrapper(regular));
+            string regularThreadId = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == regularCommentId))
+                .Id;
+
+            CreateUnresolvedConflictThread("MAT 1:1");
+
+            var selector = new CommentThreadSelector { Type = NoteType.Normal };
+
+            // Act
+            var threads = _provider.GetCommentThreads(selector);
+
+            // Assert
+            Assert.That(
+                threads.Single().Id,
+                Is.EqualTo(regularThreadId),
+                "type: Normal must return only regular (non-conflict) threads"
+            );
         }
 
         #endregion

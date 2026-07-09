@@ -119,7 +119,12 @@ declare module 'legacy-comment-manager' {
    * All properties are optional - if none are specified, returns all threads
    */
   export type LegacyCommentThreadSelector = {
-    /** Filter by note status */
+    /**
+     * Filter by note status.
+     *
+     * Note: this and {@link isResolved} both filter on thread status. Combining them contradictorily
+     * (e.g. `status: 'Todo'` with `isResolved: true`) yields no results — prefer one or the other.
+     */
     status?: CommentStatus;
     /** Filter by note type */
     type?: CommentType;
@@ -135,6 +140,16 @@ declare module 'legacy-comment-manager' {
     scriptureRanges?: CommentScriptureRange[];
     /** Filter by read status */
     isRead?: boolean;
+    /**
+     * Filter by resolved status. This filters on the THREAD's status — the note-lifecycle sense of
+     * "resolved" — not on any conflict-specific state. `false` matches threads whose status is
+     * anything other than `Resolved` (`Todo`, `Done`, or unspecified), mirroring Paratext 9's
+     * "unresolved" filter semantics.
+     *
+     * Overlaps {@link status} (both filter thread status); prefer one or the other rather than
+     * combining them.
+     */
+    isResolved?: boolean;
     /**
      * Specifies which category of note threads to include in results.
      *
