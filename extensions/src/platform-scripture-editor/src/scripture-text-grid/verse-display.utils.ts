@@ -78,7 +78,11 @@ export function sliceUsjToVerse(usj: Usj, verseNum: number): { usj: Usj; isEmpty
 
   usj.content.forEach((node) => {
     if (!isMarkerObject(node)) return;
-    if (node.type === 'book' || node.type === 'chapter') return; // drop chrome
+    if (node.type === 'book' || node.type === 'chapter') {
+      // Chrome is dropped AND acts as a boundary: an open verse never crosses a chapter marker.
+      active = false;
+      return;
+    }
     if (node.type !== 'para') return;
     if (node.marker && STRUCTURAL_MARKERS.has(node.marker)) {
       active = false; // heading is a boundary; close any open verse
