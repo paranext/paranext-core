@@ -814,18 +814,6 @@ declare module 'papi-shared-types' {
       resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
       projectId?: string,
     ) => Promise<string | undefined>;
-    /**
-     * Opens the Share Layout with Team dialog, as a modal overlay, for the project shown in a
-     * scripture editor WebView.
-     *
-     * @param webViewId The ID of the scripture editor WebView whose project layout is being shared.
-     *   Menu commands invoked from that WebView's top menu receive its WebView id (not a literal
-     *   project id); the handler resolves the project id from it.
-     * @returns `true` if the admin confirmed the share; `undefined` if cancelled
-     */
-    'platformScriptureEditor.shareLayoutWithTeam': (
-      webViewId: string | undefined,
-    ) => Promise<boolean | undefined>;
   }
 
   export interface DataProviders {

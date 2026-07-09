@@ -1029,24 +1029,6 @@ async function openResourceText(
   return papi.webViews.openWebView(webViewType, { type: 'tab' }, openOptions);
 }
 
-/**
- * This implements the `platformScriptureEditor.shareLayoutWithTeam` command
- *
- * @param webViewId The ID of the scripture editor WebView whose project layout is being shared
- *   (menu commands from a WebView's top menu receive that WebView's id, not a literal project id;
- *   see `openManageBooks` in `platform-scripture`'s `main.ts` for the same pattern)
- */
-async function shareLayoutWithTeam(webViewId: string | undefined): Promise<boolean | undefined> {
-  let projectId: string | undefined;
-  if (webViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-    projectId = webViewDefinition?.projectId;
-  }
-
-  if (!projectId) throw new Error('No project ID provided!');
-  return papi.dialogs.showDialog('platform.shareLayoutDialog', { projectId, isModal: true });
-}
-
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.debug('Scripture editor is activating!');
 
@@ -1344,30 +1326,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  const shareLayoutWithTeamPromise = papi.commands.registerCommand(
-    'platformScriptureEditor.shareLayoutWithTeam',
-    shareLayoutWithTeam,
-    {
-      method: {
-        summary: 'Open the Share Layout with Team dialog for a project',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary:
-              'The ID of the scripture editor WebView whose project layout is being shared (menu commands from the WebView top menu receive its WebView id, not a literal project id)',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'True if the admin confirmed the share; undefined if cancelled',
-          schema: { type: 'boolean' },
-        },
-      },
-    },
-  );
-
   // Create the selection changed event emitter
   selectionChangedEventEmitter = papi.network.createNetworkEventEmitter<SelectionChangeEvent>(
     EDITOR_SELECTION_CHANGED_EVENT,
@@ -1410,7 +1368,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentariesPanelWebViewProviderPromise,
     ...(scriptureTextGridRegistration ? [scriptureTextGridRegistration] : []),
     await openResourceTextPromise,
-    await shareLayoutWithTeamPromise,
     selectionChangedEventEmitter,
     {
       dispose: async () => {
