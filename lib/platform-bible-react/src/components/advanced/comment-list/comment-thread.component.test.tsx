@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
@@ -228,5 +228,74 @@ describe('CommentThread assignee state machine', () => {
       expect(screen.getByText('Assigning to: Alice')).toBeInTheDocument();
     });
     expect(screen.queryByText('Assigning to: Charlie')).not.toBeInTheDocument();
+  });
+});
+
+describe('CommentThread read-state sync (PT-3852)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // The thread seeds its read state from the `isRead` prop once on mount; the parent reuses a
+  // stable key per thread, so a later backend read update arrives as a prop change rather than a
+  // remount. Without syncing the prop, those updates never reach the UI.
+  it('reflects a backend read update delivered as a prop change after mount', () => {
+    const { rerender } = render(
+      <CommentThread {...defaultProps} isSelected={false} isRead={false} />,
+    );
+
+    // Unread: the toggle offers "Mark as read"
+    expect(screen.getByRole('button', { name: 'Mark as read' })).toBeInTheDocument();
+
+    rerender(<CommentThread {...defaultProps} isSelected={false} isRead />);
+
+    // The backend now reports the thread as read, so the toggle must offer "Mark as unread"
+    expect(screen.getByRole('button', { name: 'Mark as unread' })).toBeInTheDocument();
+  });
+
+  // PT-3852: after a user manually marks a thread unread, adding a reply re-marks the thread read
+  // on the backend (verified persisted). That read state must reach the view; previously the manual
+  // unread plus the missing prop sync kept the thread visually unread until an app restart.
+  it('shows read again when a manual unread is followed by a backend re-mark-read', () => {
+    const handleReadStatusChange = vi.fn();
+    const { rerender } = render(
+      <CommentThread
+        {...defaultProps}
+        isSelected={false}
+        isRead
+        handleReadStatusChange={handleReadStatusChange}
+      />,
+    );
+
+    // Starts read
+    expect(screen.getByRole('button', { name: 'Mark as unread' })).toBeInTheDocument();
+
+    // User manually marks it unread (this persists isRead=false to the backend)
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as unread' }));
+    expect(handleReadStatusChange).toHaveBeenLastCalledWith('thread-1', false);
+    expect(screen.getByRole('button', { name: 'Mark as read' })).toBeInTheDocument();
+
+    // The persisted unread round-trips back as a prop update; the manual unread must be preserved
+    rerender(
+      <CommentThread
+        {...defaultProps}
+        isSelected={false}
+        isRead={false}
+        handleReadStatusChange={handleReadStatusChange}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Mark as read' })).toBeInTheDocument();
+
+    // A reply re-marks the thread read on the backend, arriving as an isRead prop change
+    rerender(
+      <CommentThread
+        {...defaultProps}
+        isSelected={false}
+        isRead
+        handleReadStatusChange={handleReadStatusChange}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Mark as unread' })).toBeInTheDocument();
   });
 });
