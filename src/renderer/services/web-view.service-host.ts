@@ -23,6 +23,7 @@ import {
   OnLayoutChange,
   PapiDockLayout,
   SavedTabInfo,
+  TAB_TYPE_WEBVIEW,
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
@@ -710,6 +711,65 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
 };
 
 /**
+ * Collects the ids of all web view tabs present in layout information (docked, floated, and
+ * maximized boxes) without loading it. Layout info tabs are `SavedTabInfo`-shaped, so a web view
+ * tab is one whose `tabType` is {@link TAB_TYPE_WEBVIEW}; a web view tab's id is its `WebViewId`.
+ *
+ * Reads the layout data instead of querying the dock layout because rc-dock applies `loadLayout`
+ * via React state, so the dock layout still reports the pre-load tabs immediately after a load.
+ */
+function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
+  const webViewIds = new Set<WebViewId>();
+
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    if ('tabs' in node && Array.isArray(node.tabs)) {
+      node.tabs.forEach((tab: unknown) => {
+        if (
+          tab &&
+          typeof tab === 'object' &&
+          'tabType' in tab &&
+          tab.tabType === TAB_TYPE_WEBVIEW &&
+          'id' in tab &&
+          typeof tab.id === 'string'
+        )
+          webViewIds.add(tab.id);
+      });
+    }
+    if ('children' in node && Array.isArray(node.children)) node.children.forEach(visit);
+  };
+
+  visit(layout.dockbox);
+  visit(layout.floatbox);
+  visit(layout.maxbox);
+  visit(layout.windowbox);
+
+  return webViewIds;
+}
+
+/**
+ * Emits {@link onDidCloseWebView} for every web view that was open before a whole-layout load and is
+ * not present in the loaded layout. `PapiDockLayout.loadLayout` replaces all tabs at once without
+ * running rc-dock's per-tab remove callback (the only other place the close event is emitted — see
+ * `onLayoutChange`), so without this, web views discarded by a layout load (e.g. switching
+ * `platform.interfaceMode`) would close silently and close subscribers — the window service's
+ * last-selected tracker, web view nonce cleanup — would keep references to web views that no longer
+ * exist.
+ */
+function emitCloseEventsForWebViewsRemovedByLayoutLoad(
+  webViewsBeforeLoad: WebViewDefinition[],
+  loadedLayout: LayoutInfo,
+): void {
+  const webViewIdsAfterLoad = collectWebViewIdsFromLayoutInfo(loadedLayout);
+  webViewsBeforeLoad.forEach((webViewDefinition) => {
+    if (!webViewIdsAfterLoad.has(webViewDefinition.id))
+      onDidCloseWebViewBufferedEmitter.emit({
+        webView: convertWebViewDefinitionToSaved(webViewDefinition),
+      });
+  });
+}
+
+/**
  * Loads layout information into the dock layout.
  *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
@@ -717,9 +777,13 @@ const onLayoutChange: OnLayoutChange = async (newLayout, _currentTabId, changeIn
  */
 async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const dockLayoutVar = await getDockLayout();
+  // Capture the web views open before the load so close events can be emitted for the ones the
+  // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
+  const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
   if (layout) {
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
     dockLayoutVar.loadLayout(layout);
+    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layout);
     await onLayoutChange(layout);
     return;
   }
@@ -743,6 +807,7 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
       ? dockLayoutVar.simpleLayout
       : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
   dockLayoutVar.loadLayout(layoutToLoad);
+  emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
 }
 
 /**
@@ -1129,16 +1194,10 @@ export function getSavedWebViewDefinitionSync(
 
 /** See {@link WebViewServiceType.getAllOpenWebViewDefinitions} */
 async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
-  const dockLayout = await getDockLayout();
-  return dockLayout.getAllWebViewDefinitions().map((webViewData) => {
-    // Strip runtime-only properties (content, styles, security flags); providers re-supply these
-    // when the view is loaded.
-    const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewData);
-    // Load the WebView state so the WebViewState service doesn't delete this entry. We should
-    // remove this if/when we feel good about removing the WebViewState service
-    getFullWebViewStateById(savedWebViewDefinition.id);
-    return savedWebViewDefinition;
-  });
+  // Wait for the dock layout to be registered, then delegate to the sync implementation so the
+  // strip-and-keep-alive logic lives in one place
+  await getDockLayout();
+  return getAllOpenWebViewDefinitionsSync();
 }
 
 /**
@@ -1153,7 +1212,11 @@ export function getAllOpenWebViewDefinitionsSync(): SavedWebViewDefinition[] {
   return getDockLayoutSync()
     .getAllWebViewDefinitions()
     .map((webViewData) => {
+      // Strip runtime-only properties (content, styles, security flags); providers re-supply these
+      // when the view is loaded.
       const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewData);
+      // Load the WebView state so the WebViewState service doesn't delete this entry. We should
+      // remove this if/when we feel good about removing the WebViewState service
       getFullWebViewStateById(savedWebViewDefinition.id);
       return savedWebViewDefinition;
     });

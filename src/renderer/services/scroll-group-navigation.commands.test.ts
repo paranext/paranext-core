@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   updateWebViewDefinitionSync: vi.fn(() => true),
   getScrRefSync: vi.fn(),
   getScrRefForProject: vi.fn(),
-  setScrRefSync: vi.fn(() => true),
+  // Typed to accept args so tests can read written refs back out of `mock.calls`
+  setScrRefSync: vi.fn<(...args: unknown[]) => boolean>(() => true),
   getBookChapterControlHandle: vi.fn(),
   pdpGet: vi.fn(),
   windowServiceGetFocus: vi.fn(),
@@ -301,6 +302,100 @@ describe('versification-aware rollover', () => {
     expect(mocks.setScrRefSync).toHaveBeenCalledWith(
       0,
       { book: 'GEN', chapterNum: 1, verseNum: 9 },
+      'project-1',
+    );
+  });
+
+  test('book navigation does not fetch the versification bounds it never uses', async () => {
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    await navigationCommandHandlers['platform.goToNextBook']();
+
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'EXO', chapterNum: 1, verseNum: 1 },
+      'project-1',
+    );
+    expect(mocks.pdpGet).not.toHaveBeenCalledWith('platformScripture.Versification', 'project-1');
+  });
+
+  test('keeps the current-book bounds when the previous-book prefetch fails', async () => {
+    // GEN (bookNum 1) fetch rejects; EXO (bookNum 2) has 2 chapters ending 8/25. The current
+    // chapter is 1, so GEN is prefetched and fails — the EXO bounds must survive.
+    const getFinalVerseNumbersInBookPartial = vi.fn(async (bookNum: number) => {
+      if (bookNum === 1) throw new Error('no verse counts for GEN');
+      return [0, 8, 25];
+    });
+    mocks.pdpGet.mockImplementation(async (projectInterface: string) => {
+      if (projectInterface === 'platformScripture.Versification')
+        return { getFinalVerseNumbersInBook: getFinalVerseNumbersInBookPartial };
+      return { getSetting: vi.fn(async () => '11') };
+    });
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'EXO', chapterNum: 1, verseNum: 8 });
+
+    await navigationCommandHandlers['platform.goToNextVerse']();
+
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'EXO', chapterNum: 2, verseNum: 1 },
+      'project-1',
+    );
+  });
+});
+
+describe('books-present handling', () => {
+  test('goToNextBook does not substitute the full canon when booksPresent marks no books', async () => {
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
+    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'web-view-1',
+      scrollGroupScrRef: 0,
+      projectId: 'project-1',
+    });
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    // All-zeros = the project genuinely has no books (the C# provider returns a fixed-width flag
+    // string). The book picker shows an empty list for this value, so the command must agree and
+    // no-op rather than navigating the full canon.
+    const getSetting = vi.fn(async () => '000');
+    mocks.pdpGet.mockImplementation(async () => ({ getSetting }));
+
+    await navigationCommandHandlers['platform.goToNextBook']();
+
+    expect(getSetting).toHaveBeenCalledWith('platformScripture.booksPresent');
+    expect(mocks.setScrRefSync).not.toHaveBeenCalled();
+    expect(mocks.updateWebViewDefinitionSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('command serialization', () => {
+  test('overlapping invocations run one after another so each press advances exactly one step', async () => {
+    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('web-view-1');
+    mocks.getSavedWebViewDefinitionSync.mockReturnValue({
+      id: 'web-view-1',
+      scrollGroupScrRef: 2,
+      projectId: 'project-1',
+    });
+    // Stateful current ref: each read returns the last written ref, so the assertions can tell
+    // whether the second run read the first run's result (serialized) or the original ref (raced)
+    mocks.getScrRefForProject.mockImplementation(async () => {
+      const lastWrite = mocks.setScrRefSync.mock.calls.at(-1);
+      return lastWrite ? lastWrite[1] : GEN_5_3;
+    });
+
+    await Promise.all([
+      navigationCommandHandlers['platform.goToNextVerse'](),
+      navigationCommandHandlers['platform.goToNextVerse'](),
+    ]);
+
+    expect(mocks.setScrRefSync).toHaveBeenNthCalledWith(
+      1,
+      2,
+      { book: 'GEN', chapterNum: 5, verseNum: 4 },
+      'project-1',
+    );
+    expect(mocks.setScrRefSync).toHaveBeenNthCalledWith(
+      2,
+      2,
+      { book: 'GEN', chapterNum: 5, verseNum: 5 },
       'project-1',
     );
   });

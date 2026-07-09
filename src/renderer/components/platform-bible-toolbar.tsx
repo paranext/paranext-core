@@ -188,9 +188,14 @@ export function PlatformBibleToolbar() {
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
-  const getActiveBookIds = booksPresent
-    ? () => getBookIdsFromBooksPresent(booksPresent)
-    : undefined;
+  // Stable identity per booksPresent value — BookChapterControl memoizes its book list (and the
+  // filtering/matching derived from it) on this function's identity, so a fresh closure every
+  // render would recompute all of that on every toolbar render
+  const fetchActiveBookIds = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
+  const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
 
   // Register the top BookChapterControl's imperative handle only while it is enabled — a React 19
   // cleanup callback ref so registration tracks both mount/unmount and the enabled state. When

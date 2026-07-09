@@ -121,4 +121,63 @@ describe('BookChapterControl imperative handle', () => {
     );
     expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toBeDisabled();
   });
+
+  test('open() does not open the dropdown while the control is disabled', () => {
+    const handleRef = createRef<BookChapterControlHandle>();
+    render(
+      <BookChapterControl
+        ref={handleRef}
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        disabled
+      />,
+    );
+
+    act(() => {
+      handleRef.current?.open();
+    });
+
+    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  test('an open dropdown closes when the control becomes disabled', async () => {
+    const handleRef = createRef<BookChapterControlHandle>();
+    const { rerender } = render(
+      <BookChapterControl
+        ref={handleRef}
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    act(() => {
+      handleRef.current?.open();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+    });
+
+    // The control's target disappears mid-interaction (e.g. the toolbar's last editor closes)
+    rerender(
+      <BookChapterControl
+        ref={handleRef}
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        disabled
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+    });
+  });
 });

@@ -21,6 +21,10 @@ import {
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
+import {
   FindJobStatus,
   FindJobStatusReport,
   FindOptions,
@@ -56,7 +60,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   ...WEB_VIEW_LOCALIZED_STRINGS,
 ];
 
-const defaultBooksPresent: string = '';
 const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
@@ -259,21 +262,20 @@ global.webViewComponent = function FindWebView({
   const [booksPresentPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
-    defaultBooksPresent,
+    BOOKS_PRESENT_DEFAULT,
   );
 
   const booksPresent: string = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
       logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
-      return defaultBooksPresent;
+      return BOOKS_PRESENT_DEFAULT;
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
   const availableBooksIds = useMemo(() => {
-    return Canon.allBookIds.filter(
-      (bookId, index) =>
-        booksPresent[index] === '1' && !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    return getBookIdsFromBooksPresent(booksPresent).filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
     );
   }, [booksPresent]);
 

@@ -596,6 +596,14 @@ describe('book-chapter-control.navigation', () => {
         vi.mocked(fetchEndChapter).mockReturnValue(1);
         expect(getNextChapterRef({ book: 'GEN', chapterNum: 1, verseNum: 1 }, [])).toBeUndefined();
       });
+
+      test('returns undefined at the last chapter of a book not in availableBooks', () => {
+        // Without the -1 guard, indexOf's -1 + 1 would "roll" to the FIRST available book
+        vi.mocked(fetchEndChapter).mockReturnValue(28);
+        expect(
+          getNextChapterRef({ book: 'MAT', chapterNum: 28, verseNum: 1 }, BOOKS),
+        ).toBeUndefined();
+      });
     });
 
     describe('getPreviousBookRef / getNextBookRef', () => {

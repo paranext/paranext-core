@@ -359,6 +359,14 @@ export function BookChapterControl({
     }
   }, []);
 
+  // `disabled` on the trigger button only prevents OPENING the popover — it does not affect one
+  // that is already open, which would otherwise keep accepting input and submit a reference for a
+  // control the UI reports as non-interactive (e.g. the toolbar's navigation target disappearing
+  // mid-interaction). Close it when the control becomes disabled.
+  useEffect(() => {
+    if (disabled) handleOpenChange(false);
+  }, [disabled, handleOpenChange]);
+
   // Imperative `open()` goes through handleOpenChange (not setIsCommandOpen directly) so the
   // deferred view-state reset runs: the control deliberately leaves stale chapters/verses view
   // state behind on close (see handleVerseSelect / handleChapterSelect) and only resets it when
@@ -379,11 +387,13 @@ export function BookChapterControl({
     ref,
     () => ({
       open: () => {
+        // Match the trigger button: a disabled control cannot be opened imperatively either
+        if (disabled) return;
         handleOpenChange(true);
         setFocusSearchInputRequestId((requestId) => requestId + 1);
       },
     }),
-    [handleOpenChange],
+    [handleOpenChange, disabled],
   );
 
   // #endregion

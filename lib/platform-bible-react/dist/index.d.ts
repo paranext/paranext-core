@@ -76,7 +76,10 @@ export type BookChapterControlLocalizedStrings = {
  * `platform.openBookChapterControl` command opening it in response to Ctrl+B
  */
 export type BookChapterControlHandle = {
-	/** Opens the reference dropdown and focuses its search input, ready for typing */
+	/**
+	 * Opens the reference dropdown and focuses its search input, ready for typing. No-op while the
+	 * control is disabled.
+	 */
 	open: () => void;
 };
 export type BookChapterControlProps = {
@@ -174,7 +177,11 @@ export type BookChapterControlProps = {
 	align?: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>["align"];
 	/** Ref that receives a {@link BookChapterControlHandle} for imperative control */
 	ref?: React$1.Ref<BookChapterControlHandle>;
-	/** When true, the trigger button is disabled (e.g. no target to navigate) */
+	/**
+	 * When true, the control is disabled (e.g. no target to navigate): the trigger button cannot be
+	 * clicked, an already-open dropdown closes, and the imperative
+	 * {@link BookChapterControlHandle.open} is a no-op
+	 */
 	disabled?: boolean;
 };
 /**

@@ -1,4 +1,5 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
 
 // Using `as` here simplifies type changes.
@@ -39,7 +40,7 @@ export const simpleLayout: LayoutBase = {
                 id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
-                  webViewType: 'platformScriptureEditor.react',
+                  webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
                   id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
                   contentType: 'react',
                   state: {},

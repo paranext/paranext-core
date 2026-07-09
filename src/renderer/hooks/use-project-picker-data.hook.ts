@@ -13,9 +13,9 @@ import {
 } from '@shared/services/web-view.service-model';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
+import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
-const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 const EMPTY_RECENT_IDS: string[] = [];
 
 /**
@@ -110,9 +110,7 @@ export function useProjectPickerData(): ProjectPickerData {
       // eslint-disable-next-line no-unused-expressions
       refreshCounter;
       const allDefs = await webViews.getAllOpenWebViewDefinitions();
-      const editorDef = allDefs.find(
-        (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && def.projectId,
-      );
+      const editorDef = findFirstEditorWebViewDefinition(allDefs);
       if (!editorDef?.projectId) return undefined;
       try {
         const { fullName, shortName, language, languageDisplayName } = await fetchProjectDetails(

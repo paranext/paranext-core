@@ -2,14 +2,13 @@ import {
   getAllOpenWebViewDefinitionsSync,
   getSavedWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
-import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+import {
+  findFirstEditorWebViewDefinition,
+  SavedWebViewDefinition,
+  WebViewId,
+} from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
-
-// Must match SCRIPTURE_EDITOR_WEBVIEW_TYPE in platform-scripture-editor.utils.ts. Core code
-// cannot import from extension source, so this is intentionally duplicated (see the same pattern
-// in `use-project-picker-data.hook.ts` and `shutdown-tasks.ts`).
-const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 /** A web view id paired with its current saved definition */
 export type ResolvedWebView = { id: WebViewId; definition: SavedWebViewDefinition };
@@ -49,10 +48,7 @@ function resolveMainEditorWebView(): ResolvedWebView | undefined {
     return undefined;
   }
 
-  const editorDefinition = definitions.find(
-    (definition) =>
-      definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && definition.projectId,
-  );
+  const editorDefinition = findFirstEditorWebViewDefinition(definitions);
   if (!editorDefinition) return undefined;
   return { id: editorDefinition.id, definition: editorDefinition };
 }

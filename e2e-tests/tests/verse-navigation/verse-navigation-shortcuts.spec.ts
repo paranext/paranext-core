@@ -1,5 +1,15 @@
+import { type Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
+import {
+  sendPapiRequestOnce,
+  waitForAppReady,
+  waitForPapiMethodRegistered,
+} from '../../fixtures/helpers';
+import {
+  cleanupCommentTestProject,
+  createCommentTestProject,
+  type CommentTestProject,
+} from '../../fixtures/comment-test-helpers';
 
 // The top toolbar's BookChapterControl trigger is the first one in the DOM (the toolbar
 // renders above the dock layout)
@@ -12,15 +22,77 @@ function parseChapterVerse(label: string): { chapterNum: number; verseNum: numbe
   return { chapterNum: Number(match[1]), verseNum: Number(match[2]) };
 }
 
+/**
+ * Opens a Scripture editor for the given project and waits for its iframe to attach.
+ *
+ * The top BookChapterControl is disabled until a scripture-navigable web view is open (nothing to
+ * navigate), and a fresh test profile opens none on its own — this spec used to sample the disabled
+ * state once and self-skip, which silently skipped ALL of its coverage on fresh profiles. Opening
+ * an editor first makes the enabled state a hard expectation instead.
+ *
+ * Mirrors `openCommentList` in `comment-test-helpers.ts`, including its loadLayout-race guard and
+ * retry loop; see that helper for the full explanation of the race.
+ */
+async function openScriptureEditorForProject(mainPage: Page, projectId: string): Promise<void> {
+  // Wait for the dock layout's initial loadLayout() to complete (signalled by the first iframe —
+  // the Home webview — appearing) so loadLayout can't wipe the newly added editor tab
+  await mainPage.waitForSelector('iframe', { state: 'attached', timeout: 30_000 });
+
+  await waitForPapiMethodRegistered('command:platformScriptureEditor.openResourceViewer');
+
+  // Sequential retry loop: each attempt must await the PAPI response and iframe appearance before
+  // deciding whether to retry (see openCommentList for the dock-layout race this covers).
+  /* eslint-disable no-await-in-loop, no-continue */
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 1_000);
+      });
+    }
+
+    const editorId = await sendPapiRequestOnce<string | undefined>(
+      'command:platformScriptureEditor.openResourceViewer',
+      [projectId],
+      undefined,
+      60_000,
+    );
+    if (!editorId) continue;
+
+    const editorIframeFound = await mainPage
+      .locator(`iframe[data-web-view-id="${editorId}"]`)
+      .waitFor({ state: 'attached', timeout: attempt < 4 ? 8_000 : 20_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (editorIframeFound) return;
+  }
+  /* eslint-enable no-await-in-loop, no-continue */
+
+  throw new Error(`Could not open a Scripture editor for project ${projectId} after 5 attempts`);
+}
+
 test.describe('verse navigation keyboard shortcuts', () => {
+  let project: CommentTestProject;
+
+  test.beforeAll(async () => {
+    // Disposable copy of the bundled WEB project for the editor these tests navigate. The helper
+    // is comment-flavored only in name — it creates a plain project copy with a unique id.
+    project = await createCommentTestProject([]);
+  });
+
+  test.afterAll(() => {
+    cleanupCommentTestProject(project);
+  });
+
   test('top toolbar BookChapterControl navigates to a typed reference', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
+    await openScriptureEditorForProject(mainPage, project.projectId);
 
     const trigger = mainPage.locator(BCV_TRIGGER).first();
     await expect(trigger).toBeVisible({ timeout: 15_000 });
-    // If the top BCV is disabled (power mode with no tab selected), the shortcuts are
-    // documented no-ops — nothing to assert through the top toolbar
-    test.skip(await trigger.isDisabled(), 'Top BookChapterControl is disabled (no active tab)');
+    // The open editor becomes the navigation target, so the top control MUST enable. This is an
+    // assertion (not a skip-if-disabled) so a regression fails loudly instead of skipping the
+    // whole spec's coverage.
+    await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
     // Navigate to a reference that is NOT the app default (GEN 1:1) first, so the assertion
     // proves the submit flow actually changes state — asserting only the default reference
@@ -62,12 +134,12 @@ test.describe('verse navigation keyboard shortcuts', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
+    await openScriptureEditorForProject(mainPage, project.projectId);
 
     const trigger = mainPage.locator(BCV_TRIGGER).first();
     await expect(trigger).toBeVisible({ timeout: 15_000 });
-    // If the top BCV is disabled (power mode with no tab selected), the shortcuts are
-    // documented no-ops — nothing to assert through the top toolbar
-    test.skip(await trigger.isDisabled(), 'Top BookChapterControl is disabled (no active tab)');
+    // Same hard expectation as the enabled test above: with an editor open, the control enables
+    await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
     // Normalize to a known reference via the UI so navigation targets are predictable
     await trigger.click();

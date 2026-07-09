@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, test, vi, beforeEach } from 'vitest';
 import {
   getLastFocusedTabId,
   getLastSelectedScriptureNavigableWebViewId,
@@ -59,6 +59,26 @@ function emitCloseWebView(id: string) {
   closeWebViewCallbacks.forEach((callback) => callback({ webView: { id } }));
 }
 
+/**
+ * Engines created during the current test — disposed in the `afterEach` below. The engine
+ * constructor attaches window `focusin`/`focusout` listeners and kicks off an initial focus
+ * detection; without disposal, every test's engine would keep listening in the file's shared jsdom
+ * window, and a future test that moves DOM focus would wake all of them at once.
+ */
+const enginesToDispose: ReturnType<
+  typeof testingWindowService.implementWindowDataProviderEngine
+>[] = [];
+
+function createTestEngine() {
+  const engine = testingWindowService.implementWindowDataProviderEngine();
+  enginesToDispose.push(engine);
+  return engine;
+}
+
+afterEach(async () => {
+  await Promise.all(enginesToDispose.splice(0).map((engine) => engine.dispose()));
+});
+
 describe('last selected scripture-navigable web view tracking', () => {
   beforeEach(() => {
     // Reset tracker state between tests by "closing" whatever is tracked
@@ -74,7 +94,7 @@ describe('last selected scripture-navigable web view tracking', () => {
   });
 
   test('remembers the most recently focused web view', async () => {
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
 
@@ -83,14 +103,14 @@ describe('last selected scripture-navigable web view tracking', () => {
   });
 
   test('retains the web view when focus moves to a tab or nothing', async () => {
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
     await engine.setFocus(undefined);
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
   });
 
   test('clears only when the tracked web view closes', async () => {
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
 
     emitCloseWebView('some-other-web-view');
@@ -105,7 +125,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     const unsubscribe = onDidChangeLastSelectedScriptureNavigableWebViewId((id) => {
       received.push(id);
     });
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-9' });
     await engine.setFocus({ focusType: 'webView', id: 'web-view-9' });
     expect(received).toEqual(['web-view-9']);
@@ -118,7 +138,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     // focus subject before it reaches `#setFocusInternal`.
     getTabInfoByIdMock.mockReturnValueOnce({ id: 'web-view-tab-1', tabType: 'webView' });
 
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'tab', id: 'web-view-tab-1' });
 
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-tab-1');
@@ -127,7 +147,7 @@ describe('last selected scripture-navigable web view tracking', () => {
   test('retains the tracked web view when a non-web-view tab is focused via setFocus tab path', async () => {
     // Note: `setFocus` with `focusType: 'webView'` never calls `getTabInfoById`, so no mock return
     // value is queued for it here.
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
 
@@ -141,7 +161,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     test('tracks a web view whose definition has only projectId', async () => {
       getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-1', projectId: 'proj-1' });
 
-      const engine = testingWindowService.implementWindowDataProviderEngine();
+      const engine = createTestEngine();
       await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
 
       expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
@@ -153,14 +173,14 @@ describe('last selected scripture-navigable web view tracking', () => {
         shouldShowToolbar: true,
       });
 
-      const engine = testingWindowService.implementWindowDataProviderEngine();
+      const engine = createTestEngine();
       await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
 
       expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
     });
 
     test('retains the previous tracked web view when focusing a web view with no projectId or shouldShowToolbar', async () => {
-      const engine = testingWindowService.implementWindowDataProviderEngine();
+      const engine = createTestEngine();
       // First track an eligible web view (default mock: has projectId)
       await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
       expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
@@ -173,7 +193,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     });
 
     test('retains the previous tracked web view when the definition cannot be found (undefined)', async () => {
-      const engine = testingWindowService.implementWindowDataProviderEngine();
+      const engine = createTestEngine();
       await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
       expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
 
@@ -184,7 +204,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     });
 
     test('retains the previous tracked web view when reading the definition throws', async () => {
-      const engine = testingWindowService.implementWindowDataProviderEngine();
+      const engine = createTestEngine();
       await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
       expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
 
@@ -197,7 +217,7 @@ describe('last selected scripture-navigable web view tracking', () => {
     });
 
     test('retains the previous tracked web view when an ineligible web view tab is focused via setFocus tab path', async () => {
-      const engine = testingWindowService.implementWindowDataProviderEngine();
+      const engine = createTestEngine();
       await engine.setFocus({ focusType: 'webView', id: 'web-view-1' });
       expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-1');
 
@@ -222,7 +242,7 @@ describe('last focused tab tracking', () => {
   });
 
   test('remembers the most recently focused web view even when it is not scripture-navigable', async () => {
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     // Track an eligible web view (default mock: has projectId)
     await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-1' });
     expect(getLastFocusedTabId()).toBe('web-view-focus-1');
@@ -238,7 +258,7 @@ describe('last focused tab tracking', () => {
   });
 
   test('remembers a focused non-web-view tab', async () => {
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     getTabInfoByIdMock.mockReturnValueOnce({ id: 'settings-tab-focus', tabType: 'settings-tab' });
     await engine.setFocus({ focusType: 'tab', id: 'settings-tab-focus' });
 
@@ -246,7 +266,7 @@ describe('last focused tab tracking', () => {
   });
 
   test('retains the last focused tab when focus moves outside all tabs', async () => {
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-3' });
     await engine.setFocus(undefined);
 
@@ -258,7 +278,7 @@ describe('last focused tab tracking', () => {
     const unsubscribe = onDidChangeLastFocusedTabId((id) => {
       received.push(id);
     });
-    const engine = testingWindowService.implementWindowDataProviderEngine();
+    const engine = createTestEngine();
     await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-4' });
     await engine.setFocus({ focusType: 'webView', id: 'web-view-focus-4' });
     expect(received).toEqual(['web-view-focus-4']);

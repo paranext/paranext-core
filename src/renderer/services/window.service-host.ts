@@ -8,6 +8,7 @@ import {
   SetFocusSpecifier,
   FocusSubjectWebView,
   FocusSubjectTab,
+  getWebViewIdFromFocusSubject,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
@@ -25,7 +26,7 @@ import {
   getSavedWebViewDefinitionSync,
   onDidCloseWebView,
 } from '@renderer/services/web-view.service-host';
-import { isDirectionFromTab, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 
@@ -51,6 +52,12 @@ type FocusSubjectElement = {
  * the previous value, as does focus moving to something that is not a web view (the toolbar, a
  * dialog, nothing), so navigation keeps targeting the navigable tab the user was most recently
  * working in. Cleared when that web view closes.
+ *
+ * Note: this tracker (and {@link lastFocusedTabId} below) is deliberately renderer-internal module
+ * state rather than window service PAPI data (e.g. a `WindowDataTypes` data type) — we are not yet
+ * confident this API shape is what we want to expose to extensions, so it stays off the PAPI until
+ * we are. If extensions need it later (PT9's "active window" is a platform-level concept), migrate
+ * it into the window data provider engine as a subscribable data type.
  */
 let lastSelectedScriptureNavigableWebViewId: WebViewId | undefined;
 
@@ -295,28 +302,21 @@ class WindowDataProviderEngine
 
     if (newFocusSubject) {
       // Follow focus to every tab and web view with no eligibility gate (see `lastFocusedTabId`)
-      if (newFocusSubject.focusType === 'webView' || newFocusSubject.focusType === 'tab')
+      if (newFocusSubject.focusType === 'webView' || newFocusSubject.focusType === 'tab') {
         setLastFocusedTabId(newFocusSubject.id);
 
-      // Only track web views that are actually scripture-navigable (see
-      // `isScriptureNavigableWebView`). An ineligible web view retains whatever was tracked
-      // before, same as focus moving to something that is not a web view at all.
-      if (newFocusSubject.focusType === 'webView') {
-        if (isScriptureNavigableWebView(newFocusSubject.id))
-          setLastSelectedScriptureNavigableWebViewId(newFocusSubject.id);
+        // Only track web views that are actually scripture-navigable (see
+        // `isScriptureNavigableWebView`). An ineligible web view retains whatever was tracked
+        // before, same as focus moving to something that is not a web view at all.
+        // A web view's TAB counts as its web view (see `getWebViewIdFromFocusSubject`): a tab
+        // click resolves and stamps `tabType` onto the subject synchronously (see `setFocus`
+        // above) and reaches here directly, bypassing the 250ms trailing-edge debounce that
+        // `detectFocus()` sits behind. Without this, clicking a web view's tab left the tracker
+        // (and thus the top toolbar's BCV) stale until the debounced detect path caught up.
+        const focusedWebViewId = getWebViewIdFromFocusSubject(newFocusSubject);
+        if (focusedWebViewId && isScriptureNavigableWebView(focusedWebViewId))
+          setLastSelectedScriptureNavigableWebViewId(focusedWebViewId);
       }
-      // A tab click resolves and stamps `tabType` onto the subject synchronously (see `setFocus`
-      // above) and reaches here directly, bypassing the 250ms trailing-edge debounce that
-      // `detectFocus()` sits behind. Without this, clicking a web view's tab left the tracker
-      // (and thus the top toolbar's BCV) stale until the debounced detect path caught up.
-      // For a web view tab, the tab id is the same as its `WebViewId` (see
-      // `FocusSubjectTab.id` and `addWebViewToDock` in `platform-dock-layout-storage.util.ts`).
-      else if (
-        newFocusSubject.focusType === 'tab' &&
-        newFocusSubject.tabType === TAB_TYPE_WEBVIEW &&
-        isScriptureNavigableWebView(newFocusSubject.id)
-      )
-        setLastSelectedScriptureNavigableWebViewId(newFocusSubject.id);
     }
 
     return true;

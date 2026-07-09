@@ -643,6 +643,12 @@ async function main() {
       // PT9 verse navigation shortcuts: F8/Ctrl+F8 chapter, F9/Ctrl+F9 book,
       // Ctrl+Up/Ctrl+Down verse, Ctrl+B open Book Chapter Control (PT-4033).
       // On macOS the modified shortcuts use Command instead of Control
+      //
+      // TODO (PT-4143): this claims the matching chords app-wide with no focus/modal awareness —
+      // `before-input-event` fires before any renderer frame (including web view iframes and text
+      // fields) sees the key, so e.g. Ctrl/Cmd+B never reaches an editor as "bold" and Cmd+Up/Down
+      // no longer move the caret on macOS. Make the claim focus-aware (skip when a text-editing
+      // surface has focus or a modal is open).
       const verseNavigationCommand = getVerseNavigationCommand(
         input,
         process.platform === 'darwin',

@@ -12,7 +12,7 @@ import { getLastSelectedScriptureNavigableWebViewId } from '@renderer/services/w
 import { resolveTargetWebView } from '@renderer/services/navigation-target.util';
 import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { WebViewId } from '@shared/models/web-view.model';
-import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -42,7 +42,7 @@ type NavigationTarget = {
    * The resolved web view (tracked last-selected web view or, failing that, the main project
    * editor) — needed to write a detached ref back
    */
-  webViewId?: WebViewId;
+  webViewId: WebViewId;
   scrollGroupScrRef: ScrollGroupScrRef;
   /** The resolved web view's project — versification frame for reads and writes */
   projectId?: string;
@@ -74,7 +74,11 @@ async function getAvailableBooks(projectId: string | undefined): Promise<string[
       projectId,
     );
     const booksPresent = await projectDataProvider.getSetting('platformScripture.booksPresent');
-    if (typeof booksPresent === 'string' && booksPresent.includes('1'))
+    // A non-empty flag string is authoritative even when it marks NO books present (all zeros —
+    // e.g. a newly created project): the book picker UI shows the same empty list for it, and the
+    // commands must not disagree with the picker by substituting the full canon. Fall back to the
+    // canon only when there is no usable data at all.
+    if (typeof booksPresent === 'string' && booksPresent.length > 0)
       return getBookIdsFromBooksPresent(booksPresent);
   } catch (e) {
     logger.debug(
@@ -85,6 +89,15 @@ async function getAvailableBooks(projectId: string | undefined): Promise<string[
 }
 
 /**
+ * Starts acquiring the versification project data provider for a project (per-chapter verse
+ * counts). Split out so the acquisition can begin concurrently with other round trips — it depends
+ * only on the project id.
+ */
+function acquireVersificationPdp(projectId: string) {
+  return papiFrontendProjectDataProviderService.get('platformScripture.Versification', projectId);
+}
+
+/**
  * Builds versification-aware chapter/verse bounds for `scrRef`'s neighborhood by prefetching the
  * project's final-verse-per-chapter arrays from the `platformScripture.Versification` provider —
  * the current book always, plus the previous available book when at chapter ≤ 1 (previous
@@ -92,19 +105,17 @@ async function getAvailableBooks(projectId: string | undefined): Promise<string[
  * are honored without subscription bookkeeping.
  *
  * Returns `undefined` (versification-unaware navigation, e.g. verses do not roll across chapters)
- * when there is no project or the provider is unavailable.
+ * when the provider is unavailable. A book whose fetch fails is simply unknown to the returned
+ * bounds — the other books' fetches still apply.
  */
 async function getScriptureBounds(
-  projectId: string | undefined,
+  versificationPdpPromise: ReturnType<typeof acquireVersificationPdp>,
+  projectId: string,
   scrRef: SerializedVerseRef,
   availableBooks: string[],
 ): Promise<ScriptureBounds | undefined> {
-  if (!projectId) return undefined;
   try {
-    const versificationPdp = await papiFrontendProjectDataProviderService.get(
-      'platformScripture.Versification',
-      projectId,
-    );
+    const versificationPdp = await versificationPdpPromise;
 
     const booksToFetch = [scrRef.book];
     if (scrRef.chapterNum <= 1) {
@@ -113,16 +124,25 @@ async function getScriptureBounds(
     }
 
     // Index n of each array is the last verse of chapter n; index 0 is filler, so length - 1 is
-    // the book's last chapter
+    // the book's last chapter. allSettled so one book's failed fetch does not throw away another
+    // book's successful one (e.g. the current book's rollover must survive a failed previous-book
+    // prefetch).
     const endVersesByBook = new Map<string, number[]>();
-    await Promise.all(
-      booksToFetch.map(async (book) => {
-        endVersesByBook.set(
-          book,
-          await versificationPdp.getFinalVerseNumbersInBook(Canon.bookIdToNumber(book)),
-        );
-      }),
+    const settledFetches = await Promise.allSettled(
+      booksToFetch.map(async (book) => ({
+        book,
+        endVerses: await versificationPdp.getFinalVerseNumbersInBook(Canon.bookIdToNumber(book)),
+      })),
     );
+    settledFetches.forEach((settledFetch) => {
+      if (settledFetch.status === 'fulfilled')
+        endVersesByBook.set(settledFetch.value.book, settledFetch.value.endVerses);
+      else
+        logger.debug(
+          `Navigation command could not get verse counts for a book in project ${projectId}: ${getErrorMessage(settledFetch.reason)}`,
+        );
+    });
+    if (endVersesByBook.size === 0) return undefined;
 
     return {
       getEndChapter: (book) => {
@@ -144,7 +164,6 @@ function writeNewRef(target: NavigationTarget, newRef: SerializedVerseRef): void
     setScrRefSync(target.scrollGroupScrRef, newRef, target.projectId);
     return;
   }
-  if (!target.webViewId) return;
   try {
     updateWebViewDefinitionSync(target.webViewId, { scrollGroupScrRef: newRef });
   } catch (e) {
@@ -154,28 +173,72 @@ function writeNewRef(target: NavigationTarget, newRef: SerializedVerseRef): void
   }
 }
 
+/**
+ * The tail of the most recently enqueued go-to command run (see {@link enqueueNavigationCommand}).
+ * Resolved when there is nothing in flight.
+ */
+let navigationCommandQueue: Promise<void> = Promise.resolve();
+
+/**
+ * Serializes go-to command executions. Each run reads the current ref, awaits several network round
+ * trips, then writes the stepped ref — so overlapping runs (e.g. holding a shortcut key, whose
+ * auto-repeat sends one command per repeat) would read the same starting ref and lose steps, and a
+ * slow earlier run could write its stale result after a newer one, stepping backward. Chaining each
+ * run behind the previous one makes N presses advance exactly N steps, in order. This is an
+ * internal detail of this module; callers just await their own command as usual.
+ */
+function enqueueNavigationCommand(run: () => Promise<void>): Promise<void> {
+  const runPromise = navigationCommandQueue.then(run);
+  // Keep the queue alive when a run rejects — the rejection still reaches that run's own caller
+  navigationCommandQueue = runPromise.catch(() => {});
+  return runPromise;
+}
+
 function makeGoToCommandHandler(
   getNewRef: (
     scrRef: SerializedVerseRef,
     availableBooks: string[],
     bounds?: ScriptureBounds,
   ) => SerializedVerseRef | undefined,
+  // Book navigation (getNextBookRef/getPreviousBookRef) never reads chapter/verse bounds, so those
+  // commands skip the versification prefetch round trips entirely
+  needsBounds = true,
 ): () => Promise<void> {
-  return async () => {
-    const target = resolveNavigationTarget();
-    if (!target) {
-      logger.debug('Navigation command ignored: no active web view to navigate');
-      return;
-    }
-    const [currentRef, availableBooks] = await Promise.all([
-      getCurrentRef(target),
-      getAvailableBooks(target.projectId),
-    ]);
-    const bounds = await getScriptureBounds(target.projectId, currentRef, availableBooks);
-    const newRef = getNewRef(currentRef, availableBooks, bounds);
-    if (!newRef) return;
-    writeNewRef(target, newRef);
-  };
+  return () =>
+    enqueueNavigationCommand(async () => {
+      const target = resolveNavigationTarget();
+      if (!target) {
+        logger.debug('Navigation command ignored: no active web view to navigate');
+        return;
+      }
+
+      // Start acquiring the versification provider right away — it depends only on the project
+      // id, so it can resolve concurrently with the current-ref and books-present round trips
+      // below instead of serializing after them
+      const versificationPdpPromise =
+        needsBounds && target.projectId ? acquireVersificationPdp(target.projectId) : undefined;
+      // Mark an early rejection as handled so it cannot surface as an unhandled rejection while
+      // the round trips below are still in flight; the failure is actually handled (with a debug
+      // log and versification-unaware fallback) where getScriptureBounds awaits this promise
+      versificationPdpPromise?.catch(() => {});
+
+      const [currentRef, availableBooks] = await Promise.all([
+        getCurrentRef(target),
+        getAvailableBooks(target.projectId),
+      ]);
+      const bounds =
+        versificationPdpPromise && target.projectId
+          ? await getScriptureBounds(
+              versificationPdpPromise,
+              target.projectId,
+              currentRef,
+              availableBooks,
+            )
+          : undefined;
+      const newRef = getNewRef(currentRef, availableBooks, bounds);
+      if (!newRef) return;
+      writeNewRef(target, newRef);
+    });
 }
 
 /**
@@ -187,10 +250,7 @@ function makeGoToCommandHandler(
 async function getFocusedWebViewId(): Promise<WebViewId | undefined> {
   try {
     const focusSubject = await windowService.getFocus();
-    if (focusSubject?.focusType === 'webView') return focusSubject.id;
-    if (focusSubject?.focusType === 'tab' && focusSubject.tabType === TAB_TYPE_WEBVIEW)
-      return focusSubject.id;
-    return undefined;
+    return focusSubject ? getWebViewIdFromFocusSubject(focusSubject) : undefined;
   } catch (e) {
     logger.warn(
       `platform.openBookChapterControl could not read current focus: ${getErrorMessage(e)}`,
@@ -236,8 +296,8 @@ export const navigationCommandHandlers: {
 } = {
   'platform.goToNextChapter': makeGoToCommandHandler(getNextChapterRef),
   'platform.goToPreviousChapter': makeGoToCommandHandler(getPreviousChapterRef),
-  'platform.goToNextBook': makeGoToCommandHandler(getNextBookRef),
-  'platform.goToPreviousBook': makeGoToCommandHandler(getPreviousBookRef),
+  'platform.goToNextBook': makeGoToCommandHandler(getNextBookRef, false),
+  'platform.goToPreviousBook': makeGoToCommandHandler(getPreviousBookRef, false),
   'platform.goToNextVerse': makeGoToCommandHandler(getNextVerseRef),
   'platform.goToPreviousVerse': makeGoToCommandHandler(getPreviousVerseRef),
   'platform.openBookChapterControl': openBookChapterControl,

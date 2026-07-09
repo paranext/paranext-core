@@ -65,7 +65,10 @@ export function getNextChapterRef(
     return { book: scrRef.book, chapterNum: scrRef.chapterNum + 1, verseNum: 1 };
 
   const currentBookIndex = availableBooks.indexOf(scrRef.book);
-  if (currentBookIndex >= availableBooks.length - 1) return undefined;
+  // A current book that is not in availableBooks (e.g. a shared scroll group ref set by another
+  // project) must no-op like the other get*Ref functions — without the -1 guard, index -1 + 1
+  // would "roll" to the FIRST available book
+  if (currentBookIndex === -1 || currentBookIndex >= availableBooks.length - 1) return undefined;
 
   return { book: availableBooks[currentBookIndex + 1], chapterNum: 1, verseNum: 1 };
 }
@@ -170,7 +173,9 @@ export function useQuickNavButtons(
   }, [scrRef, availableBooks, handleSubmit]);
 
   // The buttons intentionally pass no ScriptureBounds (no versification source here), so verse
-  // navigation keeps its floor-at-0 / unbounded behavior and these refs are always defined
+  // navigation keeps its floor-at-0 / unbounded behavior and these refs are always defined.
+  // Making the buttons versification-aware so they match the keyboard navigation commands is
+  // tracked in PT-4143.
   const handlePreviousVerse = useCallback(() => {
     const newRef = getPreviousVerseRef(scrRef);
     if (newRef) handleSubmit(newRef);

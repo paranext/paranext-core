@@ -39,7 +39,15 @@ export function getVerseNavigationCommand(
       return primaryModifier ? 'platform.goToNextVerse' : undefined;
     case 'ArrowUp':
       return primaryModifier ? 'platform.goToPreviousVerse' : undefined;
-    // CapsLock produces 'B' without shift, so match both cases
+    // CapsLock produces 'B' without shift, so match both cases.
+    //
+    // Note on keyboard layouts: `input.key` is the character the layout produces, so on non-Latin
+    // layouts (e.g. Cyrillic) Ctrl+B does not match — the physical key reports its layout
+    // character, not 'b'. Matching `input.code` ('KeyB') instead would bind the PHYSICAL key at
+    // the US-QWERTY B position, which produces some other character on such layouts — hard to
+    // discover with no shortcuts UI showing live bindings. Every existing shortcut in main.ts
+    // matches `input.key` (including layout-dependent punctuation like '='/'-'), so this follows
+    // the established convention; revisit all of them together if layout support comes up.
     case 'b':
     case 'B':
       return primaryModifier ? 'platform.openBookChapterControl' : undefined;
