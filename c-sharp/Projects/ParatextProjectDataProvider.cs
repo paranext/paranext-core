@@ -387,6 +387,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (!string.IsNullOrEmpty(selector.ThreadId))
             filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
+        // Status and IsResolved both constrain the thread's status (IsResolved is the negatable
+        // "== Resolved" form), so setting both can silently AND to zero results. Reject the
+        // ambiguous combination instead of returning a confusing empty set.
+        if (selector.Status != Enum<NoteStatus>.Null && selector.IsResolved is not null)
+            throw new ArgumentException(
+                "CommentThreadSelector.Status and IsResolved both filter thread status; set only one."
+            );
+
         // Filter by status
         if (selector.Status != Enum<NoteStatus>.Null)
         {
@@ -405,8 +413,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 t.Comments.Any(c => c.User == selector.Author)
             );
 
-        // Filter by assigned user
-        if (!string.IsNullOrEmpty(selector.AssignedTo))
+        // Filter by assigned user. null (absent) means "any assignee"; an empty string is the real
+        // "unassigned" value (CommentThread.unassignedUser), so it must still filter rather than be
+        // treated as "no filter".
+        if (selector.AssignedTo != null)
             filteredThreads = filteredThreads.Where(t => t.AssignedUser == selector.AssignedTo);
 
         // Filter by date
@@ -420,6 +430,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Filter by read status
         if (selector.IsRead is bool isRead)
             filteredThreads = filteredThreads.Where(t => ThreadStatus.IsThreadRead(t) == isRead);
+
+        // Filter by resolved status (THREAD status == Resolved or not; PT9 StatusFilter semantics)
+        if (selector.IsResolved is bool isResolved)
+            filteredThreads = filteredThreads.Where(t =>
+                (t.Status == NoteStatus.Resolved) == isResolved
+            );
 
         List<PlatformCommentThreadWrapper> results = filteredThreads
             .Select(t => new PlatformCommentThreadWrapper(t))
