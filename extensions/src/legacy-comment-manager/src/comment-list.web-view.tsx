@@ -128,7 +128,7 @@ global.webViewComponent = function CommentListWebView({
   // Listen for messages from the web view controller
   useEffect(() => {
     const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
-      if (data.method === 'selectThread') {
+      if (data?.method === 'selectThread') {
         logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
         // Note: We pass `true` for isDataLoading as a conservative default since we can't access
         // the current loading state synchronously here. The pending thread will be processed
@@ -136,7 +136,7 @@ global.webViewComponent = function CommentListWebView({
         trySelectThread(data.threadId, true);
       }
 
-      if (data.method === 'setFilters') {
+      if (data?.method === 'setFilters') {
         logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
         // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
         // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
@@ -151,7 +151,8 @@ global.webViewComponent = function CommentListWebView({
     return () => {
       window.removeEventListener('message', messageListener);
     };
-  }, [trySelectThread, setFilters, setScopeFilter]);
+    // setFilters / setScopeFilter are stable useState setters, so they don't belong in the deps.
+  }, [trySelectThread]);
 
   // Fetch current user's registration data on mount
   useEffect(() => {

@@ -148,4 +148,12 @@ describe('applyFilterOverrides', () => {
     applyFilterOverrides({ type: 'conflicts' });
     expect(DEFAULT_COMMENT_FILTERS.type).toBe('all');
   });
+
+  it('resets a present-but-null axis to its default (null survives the JSON command bus)', () => {
+    // `undefined` is stripped over the command bus, but `null` survives. A null axis must reset to
+    // its default — leaking it would blank the dropdown while the query still behaves as 'all'. The
+    // web view's setFilters handler applies exactly these semantics via applyFilterOverrides.
+    const overridesWithNull: Partial<CommentFilters> = JSON.parse('{ "type": null }');
+    expect(applyFilterOverrides(overridesWithNull)).toEqual(DEFAULT_COMMENT_FILTERS);
+  });
 });

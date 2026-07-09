@@ -429,9 +429,13 @@ declare module 'legacy-comment-manager' {
 
   // #region Comment filter axis types (shared with comment-list-filters.model.ts)
 
+  /** Resolved-status filter axis: all threads, only unresolved, or only resolved. */
   export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
+  /** Read-status filter axis: all threads, only unread, or only read (for the current user). */
   export type ReadFilter = 'all' | 'unread' | 'read';
+  /** Note-type filter axis: all notes, only conflict notes, or only regular comments. */
   export type TypeFilter = 'all' | 'conflicts' | 'comments';
+  /** Assignment filter axis: all threads, assigned to me, assigned to the team, or unassigned. */
   export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
 
   /** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
@@ -463,6 +467,9 @@ declare module 'legacy-comment-manager' {
      * merged with the user's current selection — and an omitted `scopeFilter` resets scope to
      * 'unfiltered' (all books). The result is the requested view with nothing carried over from
      * prior state.
+     *
+     * @param filters Comment-filter axes to apply; unspecified axes reset to 'all'.
+     * @param scopeFilter Scope to apply; omitting it resets scope to 'unfiltered' (all books).
      */
     setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
   }>;

@@ -115,7 +115,16 @@ export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
  * both apply the same merge semantics.
  */
 export function applyFilterOverrides(overrides?: Partial<CommentFilters>): CommentFilters {
-  return { ...DEFAULT_COMMENT_FILTERS, ...overrides };
+  // Build from the known axes rather than spreading `overrides`, so a present-but-nullish axis
+  // (e.g. `{ type: null }` surviving the JSON bus) resets to its default instead of leaking a null
+  // that would blank the dropdown while the query still behaves as 'all'. A new axis on
+  // CommentFilters forces a compile error here, which is the intended safety net.
+  return {
+    resolved: overrides?.resolved ?? DEFAULT_COMMENT_FILTERS.resolved,
+    read: overrides?.read ?? DEFAULT_COMMENT_FILTERS.read,
+    type: overrides?.type ?? DEFAULT_COMMENT_FILTERS.type,
+    assignment: overrides?.assignment ?? DEFAULT_COMMENT_FILTERS.assignment,
+  };
 }
 
 // Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned

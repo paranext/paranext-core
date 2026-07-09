@@ -67,13 +67,22 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       localizeKey: '%webView_legacyCommentManager_commentList_title%',
     });
 
-    const title = projectId
-      ? `${baseTitle}: ${
-          (await (
-            await papi.projectDataProviders.get('platform.base', projectId)
-          ).getSetting('platform.name')) ?? projectId
-        }`
-      : baseTitle;
+    // A caller-supplied projectId may be invalid or not yet loaded; a rejection here would fail the
+    // whole open, so guard the lookup and fall back to the id rather than let the title throw.
+    let title = baseTitle;
+    if (projectId) {
+      let projectName: string | undefined;
+      try {
+        const baseProjectPdp = await papi.projectDataProviders.get('platform.base', projectId);
+        projectName = await baseProjectPdp.getSetting('platform.name');
+      } catch (error) {
+        logger.warn(
+          `Could not resolve a name for project ${projectId}; using the id in the title`,
+          error,
+        );
+      }
+      title = `${baseTitle}: ${projectName ?? projectId}`;
+    }
 
     return {
       ...savedWebView,
@@ -98,21 +107,17 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
     webViewDefinition: WebViewDefinition,
     webViewNonce: string,
   ): Promise<CommentListWebViewController> {
+    // Single message channel for this controller, closing over the id/nonce so the two methods
+    // can't drift on the plumbing.
+    const postToWebView = (message: CommentListWebViewMessage) =>
+      papi.webViewProviders.postMessageToWebView(webViewDefinition.id, webViewNonce, message);
+
     return {
       async selectThread(threadId: string): Promise<void> {
         logger.debug(
           `Comment List WebView Controller ${webViewDefinition.id} received request to selectThread ${threadId}`,
         );
-
-        const message: CommentListWebViewMessage = {
-          method: 'selectThread',
-          threadId,
-        };
-        await papi.webViewProviders.postMessageToWebView(
-          webViewDefinition.id,
-          webViewNonce,
-          message,
-        );
+        await postToWebView({ method: 'selectThread', threadId });
       },
       async setFilters(
         filters?: Partial<CommentFilters>,
@@ -121,12 +126,7 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
         logger.debug(
           `Comment List WebView Controller ${webViewDefinition.id} received setFilters ${serialize({ filters, scopeFilter })}`,
         );
-        const message: CommentListWebViewMessage = { method: 'setFilters', filters, scopeFilter };
-        await papi.webViewProviders.postMessageToWebView(
-          webViewDefinition.id,
-          webViewNonce,
-          message,
-        );
+        await postToWebView({ method: 'setFilters', filters, scopeFilter });
       },
       async dispose(): Promise<boolean> {
         return true;
@@ -180,6 +180,16 @@ async function openCommentList(
   const editorWebViewId = editorContextApplies ? webViewId : undefined;
   if (!editorContextApplies) editorScrollGroupId = undefined;
 
+  // A cross-project target has no editor to derive "current chapter" from, so a current-chapter
+  // scope would filter against a stale/blank ref. Fall back to all-books in that case.
+  let effectiveScopeFilterToSet = options.scopeFilterToSet;
+  if (!editorContextApplies && effectiveScopeFilterToSet === 'current-chapter') {
+    logger.warn(
+      'openCommentList: dropping current-chapter scope for a cross-project target (no editor context); using all-books',
+    );
+    effectiveScopeFilterToSet = undefined;
+  }
+
   if (!projectId) {
     logger.debug('No project!');
     return undefined;
@@ -211,14 +221,17 @@ async function openCommentList(
     }
   }
 
+  let createdNew = false;
   if (!commentListWebViewId) {
-    // No existing comment list, so create a new one
+    // No existing comment list, so create a new one. The initial filters/scope are seeded into the
+    // web view state so the view mounts already-filtered — no post-open setFilters is needed.
+    createdNew = true;
     const webViewOptions: CommentListWebViewOptions = {
       projectId,
       editorScrollGroupId,
       editorWebViewId,
       initialFilters: options.filtersToSet,
-      initialScopeFilter: options.scopeFilterToSet,
+      initialScopeFilter: effectiveScopeFilterToSet,
     };
     commentListWebViewId = await papi.webViews.openWebView(
       commentListWebViewType,
@@ -227,12 +240,14 @@ async function openCommentList(
     );
   }
 
-  // Apply post-open controller actions (select a thread, pre-apply filters) with a single
-  // controller lookup.
-  if (
-    commentListWebViewId &&
-    (options.threadIdToSelect || options.filtersToSet || options.scopeFilterToSet)
-  ) {
+  // Post-open controller actions. A newly-created view already has its filters seeded, so it only
+  // needs a thread selection; a reused view needs setFilters to apply the requested view. Only fetch
+  // the controller when there is actually something to send — so a filters-only open of a NEW view
+  // skips it entirely and can't fail on a transient controller-lookup miss.
+  const needsSetFilters =
+    !createdNew && (!!options.filtersToSet || effectiveScopeFilterToSet !== undefined);
+  const needsSelectThread = !!options.threadIdToSelect;
+  if (commentListWebViewId && (needsSetFilters || needsSelectThread)) {
     const commentListController = await papi.webViews.getWebViewController(
       commentListWebViewType,
       commentListWebViewId,
@@ -242,15 +257,14 @@ async function openCommentList(
         `Could not get WebView Controller for comment list WebView ${commentListWebViewId}`,
       );
 
-    // Scroll to the specified thread in the comment list
+    // setFilters BEFORE selectThread so the selection lands within the final filtered view rather
+    // than being filtered out by a subsequent re-query.
+    if (needsSetFilters)
+      await commentListController.setFilters(options.filtersToSet, effectiveScopeFilterToSet);
+
+    // Scroll to the specified thread in the comment list.
     if (options.threadIdToSelect)
       await commentListController.selectThread(options.threadIdToSelect);
-
-    // Pre-apply the requested filter axes / scope (e.g. the S/R link opens the unresolved-conflicts
-    // view). Deterministic: this sets the whole view — unspecified filter axes reset to 'all' and an
-    // omitted scope resets to all-books (see the setFilters controller docs).
-    if (options.filtersToSet || options.scopeFilterToSet)
-      await commentListController.setFilters(options.filtersToSet, options.scopeFilterToSet);
   }
 
   return commentListWebViewId;
@@ -320,11 +334,17 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
               filtersToSet: {
                 type: 'object',
                 description: 'Comment-filter axes to pre-apply; unspecified axes reset to all',
+                // These enums duplicate the axis unions (ResolvedFilter / ReadFilter / TypeFilter /
+                // AssignmentFilter in legacy-comment-manager.d.ts). Keep them in sync by hand until a
+                // codegen step derives this schema from the types.
                 properties: {
                   resolved: { type: 'string', enum: ['all', 'unresolved', 'resolved'] },
                   read: { type: 'string', enum: ['all', 'unread', 'read'] },
                   type: { type: 'string', enum: ['all', 'conflicts', 'comments'] },
-                  assignment: { type: 'string', enum: ['all', 'assigned-to-me', 'team'] },
+                  assignment: {
+                    type: 'string',
+                    enum: ['all', 'assigned-to-me', 'team', 'unassigned'],
+                  },
                 },
               },
               scopeFilterToSet: {
