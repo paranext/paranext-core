@@ -291,7 +291,7 @@ declare module 'legacy-comment-manager' {
        *   "threadId/userName/date")
        * @throws If the thread ID is missing or doesn't exist
        * @throws If trying to resolve/unresolve without permission
-       * @throws If trying to set status 'Resolved' on a merge-conflict thread — use resolveConflict
+       * @throws If trying to set status 'Resolved' on a merge-conflict thread - use resolveConflict
        *   instead
        * @throws If the assignedUser is not a valid assignable user for this project
        */
@@ -322,14 +322,14 @@ declare module 'legacy-comment-manager' {
       resolveConflict(threadId: string, resolution: 'accept' | 'reject' | 'merge'): Promise<void>;
 
       /**
-       * The resolution actions the current user may take on the given conflict thread — the
+       * The resolution actions the current user may take on the given conflict thread - the
        * capability query for {@link resolveConflict}. Never rejects; failures map to `'none'`.
        *
        * - `'none'`: not an unresolved `verseText` conflict, or the current user is neither a project
        *   administrator nor the assigned resolver. UIs should hide the accept/reject controls
        *   entirely.
        * - `'accept'`: the user may resolve, but the verse has been edited since the conflict was
-       *   recorded (stale), so only `'accept'` (keep the current text) is available —
+       *   recorded (stale), so only `'accept'` (keep the current text) is available -
        *   `resolveConflict(threadId, 'reject')` would throw.
        * - `'acceptOrReject'`: fully available.
        * - `'acceptRejectOrMerge'`: the user may resolve, and the two changes are independent so

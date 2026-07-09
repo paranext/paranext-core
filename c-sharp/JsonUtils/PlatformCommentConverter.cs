@@ -324,7 +324,23 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         JsonConverterUtils.TryWriteString(writer, ACCEPTED_TEXT, value.AcceptedText);
         JsonConverterUtils.TryWriteString(writer, RESULT_TEXT, value.ResultText);
         JsonConverterUtils.TryWriteString(writer, REJECTED_RESULT_TEXT, value.RejectedResultText);
-        JsonConverterUtils.TryWriteString(writer, MERGED_TEXT, value.MergedText);
+        // MergedText is the only serialized field that runs the live USFM diff engine (GetMergedUsfm
+        // + DiffToken.GetDiffString + XmlDocument.LoadXml). An exception here would abort Write and
+        // drop the ENTIRE getCommentThreads response, not just this field, so contain it: log and
+        // omit the merge preview for the one bad conflict.
+        string? mergedText;
+        try
+        {
+            mergedText = value.MergedText;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"Failed to compute MergedText for comment '{value.Id}'; omitting the merge preview: {e}"
+            );
+            mergedText = null;
+        }
+        JsonConverterUtils.TryWriteString(writer, MERGED_TEXT, mergedText);
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));

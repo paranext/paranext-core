@@ -2207,6 +2207,13 @@ namespace TestParanextDataProvider.Projects
         // Chapter 2 with NO verse 1 at all, so reading MAT 2:1 yields no USFM (unreadable verse).
         private const string MatTwoMissingVerseUsfm = "\\id MAT\n\\c 2\n";
 
+        // Chapter 2 whose \v 1 the losing side deleted ENTIRELY (marker included; see
+        // CommentTestHelper.CreateVerseTextConflictCommentDeletion). \v 2 follows so the reject
+        // splice boundary (\v 1 -> next \v) is observable. The winner kept \v 1, and its text matches
+        // the fixture's recorded winner Verse, so the reject is not stale.
+        private const string MatTwoDeletionWinnerUsfm =
+            "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.\n\\v 2 Then wise men from the east came to Jerusalem.\n";
+
         // Delegates to the static overload (below) to avoid duplicating the seeding logic.
         private CommentThread SeedVerseTextConflict() => SeedVerseTextConflict(_scrText, null);
 
@@ -2283,6 +2290,35 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void ResolveConflict_RejectWholeVerseDeletion_AppliesPt9DeletionWritePath()
+        {
+            // Characterization (PT-4029 review B1): when the losing side deleted the WHOLE verse
+            // (marker included), reject writes the loser's text = "" via PT9's ReplaceAcceptedText,
+            // which we call unmodified. This pins PT9's actual output so a future change to our
+            // delegation is caught. It is faithful PT9 behavior: a guard that instead left an empty
+            // "\v 1 " would DIVERGE from Paratext, which we do not want. Here the reject removes \v 1
+            // entirely (marker + text) and leaves \v 2 untouched.
+            _scrText.PutText(40, 0, false, MatTwoDeletionWinnerUsfm, null);
+            var mgr = CommentManager.Get(_scrText);
+            Comment conflict = CommentTestHelper.CreateVerseTextConflictCommentDeletion();
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            CommentThread thread = mgr.FindThread(conflict.Thread);
+            var chapterRef = new VerseRef("MAT", "2", "0", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            Assert.That(ReloadThread(thread.Id).Status, Is.EqualTo(NoteStatus.Resolved));
+            string after = _scrText.GetText(chapterRef, true, true);
+            // Verse 1 is gone entirely - both its text and its \v 1 marker were spliced out...
+            Assert.That(after, Does.Not.Contain("When Jesus was born"));
+            Assert.That(after, Does.Not.Contain("\\v 1"));
+            // ...while verse 2 (after the splice boundary) is untouched.
+            Assert.That(after, Does.Contain("\\v 2"));
+            Assert.That(after, Does.Contain("wise men from the east"));
+        }
+
+        [Test]
         public void ResolveConflict_ConcurrentRejects_ApplyExactlyOnce()
         {
             // Several resolveConflict calls racing on the same thread must not both write the verse.
@@ -2331,6 +2367,41 @@ namespace TestParanextDataProvider.Projects
             string after = _scrText.GetText(vref, true, true);
             Assert.That(after, Does.Contain("small village"));
             Assert.That(after, Does.Not.Contain("big village"));
+        }
+
+        [Test]
+        public void AddCommentToThread_ConcurrentReplies_AllPersistNoneLost()
+        {
+            // The comment-mutation lock (B2) must serialize concurrent AddCommentToThread calls so no
+            // reply is lost. Without it, concurrent read-modify-write of the shared CommentManager's
+            // comment list can drop replies or corrupt it. Fire N replies at one thread and assert all
+            // N land. (Resolve-vs-resolve is covered by ConcurrentRejects; this covers a non-resolve
+            // mutator - the gap the previously one-sided lock left open.)
+            CommentThread thread = SeedVerseTextConflict();
+            int Count() => CommentManager.Get(_scrText).FindThread(thread.Id).Comments.Count;
+            int baseCount = Count();
+
+            const int repliers = 8;
+            var tasks = new Task[repliers];
+            for (int i = 0; i < repliers; i++)
+            {
+                tasks[i] = Task.Run(() =>
+                {
+                    var reply = new Comment(_scrText.User)
+                    {
+                        Thread = thread.Id,
+                        Status = NoteStatus.Todo,
+                    };
+                    _provider.AddCommentToThread(new PlatformCommentWrapper(reply));
+                });
+            }
+            Task.WaitAll(tasks);
+
+            Assert.That(
+                Count(),
+                Is.EqualTo(baseCount + repliers),
+                "every concurrent reply must persist - none dropped by an unsynchronized list mutation"
+            );
         }
 
         [Test]
@@ -2971,6 +3042,31 @@ namespace TestParanextDataProvider.Projects
                 Throws.TypeOf<InvalidOperationException>().With.Message.Contain("resolveConflict")
             );
             Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+        }
+
+        [Test]
+        public void AddCommentToThread_ResolveNonVerseTextConflictViaStatus_StillWorks()
+        {
+            // Regression (PT-4029 review): the resolve-via-status guard must fire ONLY for verseText
+            // conflicts (which must be resolved through ResolveConflict). Other conflict types
+            // (invalidVerses, readError, verseBridge, ...) have no ResolveConflict path, so blocking
+            // them here left them permanently unresolvable through any API - they must stay resolvable
+            // by setting status directly, as they were before this guard existed.
+            var mgr = CommentManager.Get(_scrText);
+            Comment conflict = CommentTestHelper.CreateConflictComment();
+            conflict.ConflictType = NoteConflictType.InvalidVerses;
+            mgr.AddComment(conflict);
+            mgr.SaveUser(conflict.User, false);
+            var resolve = new Comment(_scrText.User)
+            {
+                Thread = conflict.Thread,
+                Status = NoteStatus.Resolved,
+            };
+            Assert.That(
+                () => _provider.AddCommentToThread(new PlatformCommentWrapper(resolve)),
+                Throws.Nothing
+            );
+            Assert.That(ReloadThread(conflict.Thread).Status, Is.EqualTo(NoteStatus.Resolved));
         }
 
         [Test]

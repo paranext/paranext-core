@@ -315,7 +315,7 @@ public class PlatformCommentWrapper
     /// <summary>
     /// For a verseText conflict whose two sides are independent, the PT9 "merge all changes" preview:
     /// the merged verse diffed against the base, rendered with the same &lt;u&gt;/&lt;s&gt; markup as the
-    /// accepted/rejected sides. Null when merge is not available (overlapping edits — GetMergedUsfm null)
+    /// accepted/rejected sides. Null when merge is not available (overlapping edits - GetMergedUsfm null)
     /// or the render is empty. Computation is PT9's exact display path (CommentHtmlBuilderUI): GetMergedUsfm
     /// + GetDiffVerseUsfm(base) + DiffToken.GetDiffString.
     /// </summary>
@@ -329,8 +329,13 @@ public class PlatformCommentWrapper
             string? mergedUsfm = CommentEditHelper.GetMergedUsfm(thread);
             if (mergedUsfm == null)
                 return null;
+            // Base must come from the SAME comment GetMergedUsfm diffs against (thread.Comments[0]),
+            // not _comment: the root is identified by earliest date (RootCommentId) and, after
+            // thread-fragment dedup, may not be Comments[0] (see IsFirstCommentInThread). Diffing a
+            // root-based base against a Comments[0]-based merge would garble the preview when they
+            // differ; in the common case (root == Comments[0]) this is the same text.
             string baseUsfm = CommentEditHelper.GetDiffVerseUsfm(
-                _comment.Contents,
+                thread.Comments[0].Contents,
                 getChangedVersion: false
             );
             string differences = DiffToken.GetDiffString(
