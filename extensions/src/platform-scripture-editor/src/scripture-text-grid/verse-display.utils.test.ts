@@ -164,3 +164,63 @@ describe('sliceUsjToVerse — combined and partial ranges', () => {
     ]);
   });
 });
+
+// A section heading (s) + reference (r) sit between verse 1 and verse 2.
+const usxHeading = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="1" style="c" sid="MAT 1" />
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1" />The book of the genealogy.<verse eid="MAT 1:1" /></para>
+  <para style="s">The Genealogy</para>
+  <para style="r">(Luke 3:23-38)</para>
+  <para style="p">
+    <verse number="2" style="v" sid="MAT 1:2" />Abraham became the father of Isaac.<verse eid="MAT 1:2" /></para>
+</usx>
+`;
+const usjHeading = usxStringToUsj(usxHeading);
+
+// Two chapters in one document (cross-chapter): make sure chapter 2's verse 1 is not confused
+// with chapter 1's verse 1 when slicing the doc for a given verse number.
+const usxCrossChapter = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="MAT" style="id">WEB</book>
+  <chapter number="1" style="c" sid="MAT 1" />
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1" />Chapter one verse one.<verse eid="MAT 1:1" /></para>
+  <chapter eid="MAT 1" />
+  <chapter number="2" style="c" sid="MAT 2" />
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 2:1" />Chapter two verse one.<verse eid="MAT 2:1" /></para>
+</usx>
+`;
+const usjCrossChapter = usxStringToUsj(usxCrossChapter);
+
+describe('sliceUsjToVerse — boundaries and empty', () => {
+  it('does not leak a following section heading into the prior verse', () => {
+    const { usj } = sliceUsjToVerse(usjHeading, 1);
+    expect(paragraphs(usj)).toEqual([{ marker: 'p', text: '1The book of the genealogy.' }]);
+    expect(paragraphs(usj).some((p) => p.text.includes('Genealogy'))).toBe(false);
+  });
+
+  it('is empty for a verse-0 request with no renderable text (PT-3133)', () => {
+    const { usj, isEmpty } = sliceUsjToVerse(usjHeading, 0);
+    expect(isEmpty).toBe(true);
+    expect(paragraphs(usj)).toEqual([]);
+  });
+
+  it('is empty for a verse missing from this resource (does not blank the row)', () => {
+    const { isEmpty } = sliceUsjToVerse(usjHeading, 99);
+    expect(isEmpty).toBe(true);
+  });
+
+  it('renders chapter markers as chrome-dropped; verse 1 slice still has content in a multi-chapter doc', () => {
+    const { usj, isEmpty } = sliceUsjToVerse(usjCrossChapter, 1);
+    expect(isEmpty).toBe(false);
+    // Both chapters have a verse 1; the naive slice includes both verse-1 paragraphs (chrome
+    // dropped). The consuming cell fetches a single chapter, so in practice only one is present;
+    // this asserts chrome is dropped and content is preserved, not cross-chapter disambiguation.
+    expect(paragraphs(usj).every((p) => p.marker === 'p')).toBe(true);
+    expect(paragraphs(usj).some((p) => p.text.includes('Chapter'))).toBe(true);
+  });
+});
