@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
@@ -169,7 +170,30 @@ namespace TestParanextDataProvider
                 string? relDirPath = null
             )
             {
-                return Enumerable.Empty<string>();
+                // Return the in-memory files (written via SetXml / the writers) whose name matches the
+                // glob, non-recursively within relDirPath (project root when null) - the same slice
+                // Directory.GetFiles would give. A prior stub returned nothing, so CommentManager.Load()
+                // - which rebuilds its comment list purely from ProjectFiles("Notes_*.xml") - saw zero
+                // files and dropped every seeded comment whenever a reload was triggered.
+                var regex = new Regex(
+                    "^"
+                        + Regex.Escape(searchPattern).Replace("\\*", ".*").Replace("\\?", ".")
+                        + "$",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
+                string dir = relDirPath ?? "";
+                // Snapshot the keys: Load() enumerates this on a worker thread while other comment
+                // operations may mutate _fileSystem.
+                return _fileSystem
+                    .Keys.ToList()
+                    .Where(key =>
+                        string.Equals(
+                            Path.GetDirectoryName(key) ?? "",
+                            dir,
+                            StringComparison.OrdinalIgnoreCase
+                        ) && regex.IsMatch(Path.GetFileName(key))
+                    )
+                    .ToList();
             }
 
             public override IEnumerable<string> ProjectDirectories(
