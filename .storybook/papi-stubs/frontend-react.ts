@@ -29,3 +29,17 @@ export function useSetting<T>(
 export const useProjectSetting = (): unknown[] => [undefined, async () => undefined];
 export const useProjectDataProvider = (): unknown => undefined;
 export const useData = (): unknown[] => [undefined, async () => undefined, false];
+
+/**
+ * `useProjectData` is accessed as `useProjectData(type, id).<DataMethod>(selector, default)` and
+ * each data method returns a `[data, setData, isLoading]` tuple. The Proxy returns that inert tuple
+ * for any data-method name so components (e.g. `ResourceCell`) render their loading/offline state
+ * in Storybook without a live PAPI connection.
+ */
+export const useProjectData = (): unknown =>
+  new Proxy(
+    {},
+    {
+      get: () => (): unknown[] => [undefined, async () => undefined, false],
+    },
+  );

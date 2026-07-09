@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { WebViewProps } from '@papi/core';
 import type { TextCollectionSources } from './scripture-text-grid/scripture-text-grid-contents.utils';
@@ -41,12 +41,23 @@ vi.mock('./scripture-text-grid/scripture-text-grid.component', () => ({
   ScriptureTextGrid: ({
     resources,
     ariaLabel,
+    viewMode,
+    chapterContext,
+    onChapterContextChange,
   }: {
     resources: { label: string }[];
     ariaLabel?: string;
+    viewMode?: string;
+    chapterContext?: { label: string } | undefined;
+    onChapterContextChange?: (context: { label: string }) => void;
   }) => {
-    gridSpy({ resources, ariaLabel });
-    return <div data-testid="grid">{resources.map((r) => r.label).join(',')}</div>;
+    gridSpy({ resources, ariaLabel, viewMode, chapterContext, onChapterContextChange });
+    return (
+      <div data-testid="grid">
+        {resources.map((r) => r.label).join(',')}
+        {chapterContext ? `|chapter:${chapterContext.label}` : ''}
+      </div>
+    );
   },
 }));
 
@@ -136,6 +147,38 @@ describe('ScriptureTextGrid web view', () => {
     const { getByTestId } = renderWebView();
     expect(getByTestId('grid').textContent).toBe('');
     expect(mockUpdateDef).toHaveBeenCalledWith({ title: 'Scripture text' });
+  });
+
+  it('passes verse default view mode and closed chapter context to the grid', () => {
+    renderWebView();
+    expect(gridSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewMode: 'verse',
+        chapterContext: undefined,
+        onChapterContextChange: expect.any(Function),
+      }),
+    );
+  });
+
+  it('closes chapter context on Escape', async () => {
+    renderWebView();
+    const openContext = gridSpy.mock.calls.at(-1)?.[0]?.onChapterContextChange;
+    expect(openContext).toBeDefined();
+
+    act(() => {
+      openContext({ projectId: 'p1', label: 'WEB' });
+    });
+    await waitFor(() =>
+      expect(gridSpy.mock.calls.at(-1)?.[0].chapterContext).toEqual({
+        projectId: 'p1',
+        label: 'WEB',
+      }),
+    );
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await waitFor(() => expect(gridSpy.mock.calls.at(-1)?.[0].chapterContext).toBeUndefined());
   });
 });
 

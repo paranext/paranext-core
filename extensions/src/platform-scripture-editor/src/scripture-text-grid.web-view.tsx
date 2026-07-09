@@ -2,9 +2,12 @@ import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
-import { ScriptureTextGrid } from './scripture-text-grid/scripture-text-grid.component';
+import {
+  ChapterContextResource,
+  ScriptureTextGrid,
+} from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { getScriptureTextGridContents } from './scripture-text-grid/scripture-text-grid-contents.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
@@ -13,7 +16,15 @@ import { useTextCollectionSources } from './use-text-collection-sources.hook';
 // displayed, "Text Collection" when 2 or more (see `selectScriptureTextGridTitle`).
 const TITLE_SINGLE_KEY = '%webView_scriptureTextGrid_title_single%';
 const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
-const ALL_STRING_KEYS: LocalizeKey[] = [TITLE_SINGLE_KEY, TITLE_MULTIPLE_KEY];
+const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  TITLE_SINGLE_KEY,
+  TITLE_MULTIPLE_KEY,
+  CHAPTER_CONTEXT_CLOSE_KEY,
+];
+
+/** Sprint default; A5 View Options will wire a user toggle here. */
+const DEFAULT_ROW_VIEW_MODE = 'verse' as const;
 
 /**
  * Scripture Text Grid web view (PT-4049 / A1 shell; PT-4050 / A2 first-open trigger; PT-4051 / A3
@@ -37,6 +48,28 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid; child
   // components cannot call this hook (it is a WebViewProps member, not a @papi/frontend/react export).
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
+    undefined,
+  );
+
+  // `setChapterContext` is a stable useState setter, so it is passed to the grid directly (no
+  // wrapping callback needed). `handleCloseChapterContext` adapts it to a `() => void` closer used by
+  // both the Escape handler and the panel's close button.
+  const handleCloseChapterContext = useCallback(() => {
+    setChapterContext(undefined);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || chapterContext === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleCloseChapterContext();
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [chapterContext, handleCloseChapterContext]);
 
   const textConnectionPdp = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -97,6 +130,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         resources={resources}
         scrRef={scrRef}
         setScrRef={setScrRef}
+        viewMode={DEFAULT_ROW_VIEW_MODE}
+        chapterContext={chapterContext}
+        onChapterContextChange={setChapterContext}
+        onChapterContextClose={handleCloseChapterContext}
+        closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
       />
     </div>
   );
