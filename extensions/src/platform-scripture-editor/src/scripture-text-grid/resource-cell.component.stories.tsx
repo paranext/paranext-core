@@ -48,6 +48,20 @@ function SampleChapter({ rtl = false }: { rtl?: boolean }) {
   );
 }
 
+/** Stand-in for the read-only `Editorial` when showing a single verse (poetry-style). */
+function SampleVerse({ rtl = false }: { rtl?: boolean }) {
+  const text = rtl
+    ? 'אַשְׁרֵי הָאִישׁ אֲשֶׁר לֹא הָלַךְ בַּעֲצַת רְשָׁעִים'
+    : 'Blessed are the poor in spirit, for theirs is the kingdom of heaven.';
+  return (
+    <div style={{ fontFamily: 'serif', lineHeight: 1.7 }}>
+      <p style={{ margin: 0 }}>
+        <sup>3</sup> {text}
+      </p>
+    </div>
+  );
+}
+
 /** Chapter USJ is still downloading — a Spinner plus the localized "Downloading…" subtitle. */
 export const Downloading: Story = {
   render: () => (
@@ -106,6 +120,52 @@ export const ReadyRightToLeft: Story = {
         textDirection="rtl"
         localizedStrings={localizedStrings}
         editor={<SampleChapter rtl />}
+      />
+    </div>
+  ),
+};
+
+/** Verse mode, ready — the editor slot shows a single verse (stand-in). */
+export const VerseReady: Story = {
+  render: () => (
+    <div style={CELL_BOX_STYLE}>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleVerse />}
+      />
+    </div>
+  ),
+};
+
+/** Verse mode, empty — no text for the focused verse (e.g. verse 0). */
+export const VerseEmpty: Story = {
+  render: () => (
+    <div style={CELL_BOX_STYLE}>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        isVerseEmpty
+        editor={undefined}
+      />
+    </div>
+  ),
+};
+
+/** Mixed-direction smoke: a Hebrew (rtl) verse cell — its own dir, independent of the UI. */
+export const VerseRightToLeft: Story = {
+  render: () => (
+    <div style={CELL_BOX_STYLE}>
+      <ResourceCellView
+        state="ready"
+        label="עברית"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        editor={<SampleVerse rtl />}
       />
     </div>
   ),
