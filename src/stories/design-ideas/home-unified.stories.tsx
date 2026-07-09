@@ -397,6 +397,7 @@ function InteractiveHarness(overrides?: Partial<HomeUnifiedProps>) {
         hasMore={hasMore}
         onFetchMore={handleFetchMore}
         isLoading={overrides?.isLoading}
+        variant={overrides?.variant}
         headerContent={
           overrides?.headerContent ?? (
             <div className="tw:flex tw:items-center tw:gap-2">
@@ -419,6 +420,22 @@ export const Default: Story = {
           'The full catalog: several installed projects/resources at the top, then the DBL ' +
           'discovery set. Only the first 100 items are loaded initially — scrolling near the ' +
           'bottom or applying any filter pages in the remaining ~150.',
+      },
+    },
+  },
+};
+
+export const ButtonFiltersAndSrIntegration: Story = {
+  render: InteractiveHarness({ variant: 'buttons' }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Alternative layout: type filters shown as a horizontal row of big toggle buttons; the ' +
+          'language filter shrinks to a count-only combobox with a hover tooltip listing the ' +
+          'selected languages. Row names carry S/R-style status badges (Edited / Update / New / ' +
+          'DBL), and Select All / None / Edited / New preselection buttons sit at the top-right ' +
+          'of the table for quick multi-select from the send/receive dialog.',
       },
     },
   },

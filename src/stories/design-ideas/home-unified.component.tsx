@@ -25,6 +25,7 @@
  */
 
 import {
+  Badge,
   Button,
   Card,
   CardContent,
@@ -44,6 +45,7 @@ import {
   DropdownMenuTrigger,
   Filter,
   Label,
+  MultiSelectComboBox,
   MultiSelectComboBoxEntry,
   SearchBar,
   Spinner,
@@ -106,6 +108,20 @@ const STRINGS = {
   selectionSuffix: 'selected',
   clearSelection: 'Clear',
   clearSelectionAria: 'Clear selection',
+  presetProjectsLabel: 'Projects:',
+  presetResourcesLabel: 'Resources:',
+  presetAll: 'All',
+  presetNone: 'None',
+  presetEdited: 'Edited',
+  presetNew: 'New',
+  presetInstalled: 'Installed',
+  presetHasUpdate: 'Has update',
+  badgeEdited: 'Edited',
+  badgeUpdate: 'Update',
+  badgeNew: 'New',
+  badgeDbl: 'DBL',
+  languageSelectedSingular: 'language selected',
+  languageSelectedPlural: 'languages selected',
   noResults: 'No projects or resources match your filters.',
   clearFiltersCta: 'Clear filters',
   browseDblCta: 'Nothing local yet — search or browse resources on DBL to get started.',
@@ -206,6 +222,13 @@ export type HomeUnifiedProps = {
    * whenever the user starts filtering/searching, so filters always apply against the full set.
    */
   onFetchMore?: () => void;
+  /**
+   * Layout variant. `'default'` keeps the original two-combobox header. `'buttons'` swaps the type
+   * combobox for a row of big toggle buttons, replaces the language filter with a compact
+   * count-only combobox, shows status badges next to each item's short name, and exposes "Select
+   * All / None / Edited / New" preselection buttons above the table.
+   */
+  variant?: 'default' | 'buttons';
 };
 
 type SortKey = 'shortName' | 'fullName' | 'language' | 'type' | 'lastUsed' | 'status';
@@ -352,6 +375,7 @@ export function HomeUnified({
   inFlightIds = [],
   hasMore = false,
   onFetchMore,
+  variant = 'default',
 }: HomeUnifiedProps) {
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -742,34 +766,102 @@ export function HomeUnified({
               />
             </div>
           </div>
-          <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-            {/* Scoped muted color only on the badgesPlaceholder (a shadcn Label with
-                data-slot="label"). The trigger button inside MultiSelectComboBox uses a native
-                <button>, not a Label, so it keeps the normal foreground color. Portal-rendered
-                popover contents aren't DOM descendants of this wrapper, so they're unaffected. */}
-            <div className="tw:[&_[data-slot=label]]:text-muted-foreground">
-              <Filter
-                entries={typeOptions}
-                selected={selectedTypes}
-                onChange={setSelectedTypes}
-                placeholder={STRINGS.filterType}
-                icon={<Shapes />}
-                badgesPlaceholder={STRINGS.anyType}
-              />
+          {variant === 'buttons' ? (
+            /* Buttons variant — row 1: type filter rendered as a horizontal row of "big" toggle
+               buttons, one per type present in the catalog. Selected types render as the primary
+               button variant; unselected as outline. */
+            <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+              {typeOptions.map((option) => {
+                const isSelected = selectedTypes.includes(option.value);
+                return (
+                  <Button
+                    key={option.value}
+                    variant={isSelected ? 'default' : 'outline'}
+                    onClick={() => {
+                      setSelectedTypes(
+                        isSelected
+                          ? selectedTypes.filter((t) => t !== option.value)
+                          : [...selectedTypes, option.value],
+                      );
+                    }}
+                  >
+                    {option.label}
+                    <span className="tw:ms-1 tw:text-muted-foreground">
+                      {option.secondaryLabel}
+                    </span>
+                  </Button>
+                );
+              })}
             </div>
-            <div className="tw:[&_[data-slot=label]]:text-muted-foreground">
-              <Filter
-                entries={languageOptions}
-                selected={selectedLanguages}
-                onChange={handleLanguagesChange}
-                placeholder={STRINGS.filterLanguage}
-                icon={<Globe />}
-                sortSelected
-                badgesPlaceholder={STRINGS.anyLanguage}
-              />
+          ) : (
+            <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+              {/* Scoped muted color only on the badgesPlaceholder (a shadcn Label with
+                  data-slot="label"). The trigger button inside MultiSelectComboBox uses a native
+                  <button>, not a Label, so it keeps the normal foreground color. Portal-rendered
+                  popover contents aren't DOM descendants of this wrapper, so they're unaffected. */}
+              <div className="tw:[&_[data-slot=label]]:text-muted-foreground">
+                <Filter
+                  entries={typeOptions}
+                  selected={selectedTypes}
+                  onChange={setSelectedTypes}
+                  placeholder={STRINGS.filterType}
+                  icon={<Shapes />}
+                  badgesPlaceholder={STRINGS.anyType}
+                />
+              </div>
+              <div className="tw:[&_[data-slot=label]]:text-muted-foreground">
+                <Filter
+                  entries={languageOptions}
+                  selected={selectedLanguages}
+                  onChange={handleLanguagesChange}
+                  placeholder={STRINGS.filterLanguage}
+                  icon={<Globe />}
+                  sortSelected
+                  badgesPlaceholder={STRINGS.anyLanguage}
+                />
+              </div>
             </div>
-          </div>
+          )}
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+            {variant === 'buttons' && (
+              /* Buttons variant — row 2: language selector is now a plain combobox whose trigger
+                 shows only a count (no badges). A Tooltip on the whole trigger enumerates the
+                 selected language names on hover so the info is still one gesture away. */
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <MultiSelectComboBox
+                      entries={languageOptions}
+                      selected={selectedLanguages}
+                      onChange={handleLanguagesChange}
+                      placeholder={STRINGS.filterLanguage}
+                      icon={<Globe />}
+                      sortSelected
+                      customSelectedText={
+                        selectedLanguages.length > 0
+                          ? `${STRINGS.filterLanguage} · ${selectedLanguages.length}`
+                          : undefined
+                      }
+                    />
+                  </div>
+                </TooltipTrigger>
+                {selectedLanguages.length > 0 && (
+                  <TooltipContent side="bottom">
+                    <div className="tw:flex tw:flex-col tw:gap-0.5">
+                      <div className="tw:text-xs tw:opacity-70">
+                        {selectedLanguages.length}{' '}
+                        {selectedLanguages.length === 1
+                          ? STRINGS.languageSelectedSingular
+                          : STRINGS.languageSelectedPlural}
+                      </div>
+                      {selectedLanguages.map((lang) => (
+                        <div key={lang}>{lang}</div>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="tw:flex tw:items-center tw:gap-2">
@@ -807,6 +899,110 @@ export function HomeUnified({
             className="tw:flex-grow tw:overflow-auto tw:px-0"
             onScroll={handleContentScroll}
           >
+            {/* Preselection rows: quick selection presets split by scope. Each row's "All" and
+                "None" operate on its own scope — Projects (type === 'Project') or Resources
+                (everything else) — so the user can compose e.g. "all new projects + all
+                has-update resources" by clicking two buttons. `addToSelection` merges the preset
+                into the current selection; `removeFromSelection` subtracts by scope. */}
+            {variant === 'buttons' && sorted.length > 0 && (
+              <div className="tw:flex tw:flex-col tw:items-end tw:gap-1 tw:px-3 tw:pb-2">
+                {(() => {
+                  const projectItems = sorted.filter((item) => item.type === 'Project');
+                  const resourceItems = sorted.filter((item) => item.type !== 'Project');
+                  const addToSelection = (ids: string[]) =>
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      ids.forEach((id) => next.add(id));
+                      return next;
+                    });
+                  const removeFromSelection = (ids: string[]) =>
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      ids.forEach((id) => next.delete(id));
+                      return next;
+                    });
+                  const renderPresetRow = (
+                    label: string,
+                    scopeItems: UnifiedItem[],
+                    extras: { label: string; matcher: (item: UnifiedItem) => boolean }[],
+                    includeAllButton: boolean,
+                  ) => (
+                    <div className="tw:flex tw:items-center tw:gap-1">
+                      {/* Fixed-width label so the button strips in both preset rows start at the
+                          same x-position and read as a stacked grid. */}
+                      <Label className="tw:me-2 tw:w-24 tw:text-xs tw:text-muted-foreground tw:uppercase">
+                        {label}
+                      </Label>
+                      {includeAllButton && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="tw:h-6"
+                          onClick={() => addToSelection(scopeItems.map((item) => item.id))}
+                        >
+                          {STRINGS.presetAll}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="tw:h-6"
+                        onClick={() => removeFromSelection(scopeItems.map((item) => item.id))}
+                      >
+                        {STRINGS.presetNone}
+                      </Button>
+                      {extras.map((extra) => (
+                        <Button
+                          key={extra.label}
+                          variant="ghost"
+                          size="sm"
+                          className="tw:h-6"
+                          onClick={() =>
+                            addToSelection(scopeItems.filter(extra.matcher).map((item) => item.id))
+                          }
+                        >
+                          {extra.label}
+                        </Button>
+                      ))}
+                    </div>
+                  );
+                  return (
+                    <>
+                      {renderPresetRow(
+                        STRINGS.presetProjectsLabel,
+                        projectItems,
+                        [
+                          {
+                            label: STRINGS.presetEdited,
+                            matcher: (item) => item.status === 'installedNeedsSync',
+                          },
+                          {
+                            label: STRINGS.presetNew,
+                            matcher: (item) => item.status === 'sharedNotInstalled',
+                          },
+                        ],
+                        true,
+                      )}
+                      {renderPresetRow(
+                        STRINGS.presetResourcesLabel,
+                        resourceItems,
+                        [
+                          {
+                            label: STRINGS.presetInstalled,
+                            matcher: (item) => item.status === 'installedResource',
+                          },
+                          {
+                            label: STRINGS.presetHasUpdate,
+                            matcher: (item) => item.status === 'installedNeedsUpdate',
+                          },
+                        ],
+                        false,
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
             {sorted.length === 0 ? (
               <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:p-8 tw:text-center">
                 <Label className="tw:text-muted-foreground">
@@ -899,6 +1095,25 @@ export function HomeUnified({
                             <span className="tw:font-medium tw:whitespace-nowrap">
                               {item.shortName}
                             </span>
+                            {variant === 'buttons' && (
+                              /* S/R-style status badges next to the short name — mirrors the
+                                 badges shown in the send/receive dialog so users can spot new,
+                                 edited, and update-available items at a glance. */
+                              <>
+                                {item.status === 'installedNeedsSync' && (
+                                  <Badge variant="default">{STRINGS.badgeEdited}</Badge>
+                                )}
+                                {item.status === 'installedNeedsUpdate' && (
+                                  <Badge variant="default">{STRINGS.badgeUpdate}</Badge>
+                                )}
+                                {item.status === 'sharedNotInstalled' && (
+                                  <Badge variant="default">{STRINGS.badgeNew}</Badge>
+                                )}
+                                {item.status === 'dblNotInstalled' && (
+                                  <Badge variant="muted">{STRINGS.badgeDbl}</Badge>
+                                )}
+                              </>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className="tw:hidden tw:wrap-anywhere tw:whitespace-normal tw:md:!table-cell">
