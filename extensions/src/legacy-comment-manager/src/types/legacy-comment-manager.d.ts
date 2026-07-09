@@ -356,6 +356,26 @@ declare module 'legacy-comment-manager' {
       getConflictResolutionOptions(threadId: string): Promise<ConflictResolutionOptions>;
 
       /**
+       * Undoes the resolution of a `verseText` merge conflict: restores the auto-merge winning
+       * verse text and re-opens the note so a different resolution can be chosen. Distinct from
+       * re-opening the comment thread — this rolls back the verse write, not just the note status.
+       * Appends `undoneCommentText` (already localized by the caller) as the reopening reply.
+       *
+       * @throws If the thread is not a resolved `verseText` conflict, the user lacks permission, or
+       *   the verse was edited after it was resolved (undo would clobber the later edit — use Verse
+       *   History).
+       */
+      unresolveConflict(threadId: string, undoneCommentText: string): Promise<void>;
+
+      /**
+       * Capability query for {@link unresolveConflict}: `true` when the current user may undo this
+       * conflict's resolution (a resolved `verseText` conflict they are admin/assignee for). Never
+       * rejects. Does NOT reflect staleness — a stale undo still returns `true` here and is refused
+       * (with an explanatory error) only when {@link unresolveConflict} is actually called.
+       */
+      canUnresolveConflict(threadId: string): Promise<boolean>;
+
+      /**
        * Deletes a comment by its ID
        *
        * @param commentId The unique ID of the comment to delete
