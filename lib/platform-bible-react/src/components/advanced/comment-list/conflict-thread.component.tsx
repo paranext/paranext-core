@@ -39,14 +39,22 @@ export function ConflictThread(props: ConflictThreadProps) {
     [activeComments],
   );
 
-  const { conflictOptions, isResolving, resolve, resolvedResolution, showResolveCheck } =
-    useConflictResolution({
-      threadId,
-      threadStatus,
-      isSelected,
-      activeComments,
-      conflictResolution,
-    });
+  const {
+    conflictOptions,
+    isResolving,
+    resolve,
+    resolvedResolution,
+    showResolveCheck,
+    canUnresolve,
+    isUnresolving,
+    unresolve,
+  } = useConflictResolution({
+    threadId,
+    threadStatus,
+    isSelected,
+    activeComments,
+    conflictResolution,
+  });
 
   const isVerseText = isVerseTextConflictNote(rootComment);
 
@@ -62,6 +70,9 @@ export function ConflictThread(props: ConflictThreadProps) {
         resolvedResolution={resolvedResolution}
         onResolve={resolve}
         isResolving={isResolving}
+        canUnresolve={canUnresolve}
+        isUnresolving={isUnresolving}
+        onUnresolve={unresolve}
       />
     ) : (
       <ConflictThreadSummary
