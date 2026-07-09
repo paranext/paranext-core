@@ -3,21 +3,26 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import { Button, Popover, PopoverContent, PopoverTrigger } from 'platform-bible-react';
 import { Settings2 } from 'lucide-react';
-import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import {
+  DblResourceData,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
-  addToUserResources,
-  getViewOptionsTexts,
-  removeFromUserResources,
-  setUserDisplay,
-} from './scripture-text-grid-contents.utils';
+  persistUserAddition,
+  persistUserDisplay,
+  persistUserRemoval,
+} from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import {
-  ScriptureTextGridOptions,
-  SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
-  type ScriptureTextGridViewMode,
-} from './scripture-text-grid-options/scripture-text-grid-options.component';
+  ResourceCollectionOptions,
+  RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  type ResourceCollectionViewMode,
+} from './resource-collection-options/resource-collection-options.component';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -27,7 +32,7 @@ const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
-  ...SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
+  ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
 // The Scripture Text Grid shows Bible-text resources.
@@ -44,7 +49,7 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
  * View Options panel.
  *
  * Renders the header View Options icon button + popover wrapping the reusable
- * `ScriptureTextGridOptions` component, wired to the View Options data-layer helpers and persisted
+ * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. The grid body (the verse-cell row renderer) is
  * built separately; this file owns only the header and leaves the body placeholder below the seam.
  */
@@ -69,7 +74,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
 
-  const [viewMode, setViewMode] = useState<ScriptureTextGridViewMode>('verse');
+  const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>('verse');
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
@@ -108,30 +113,27 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
   }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
-  // Pick the tab icon variant from the web view's themed foreground brightness (light text ⇒ dark
-  // theme). Read the root element, which carries `tw:text-foreground`, so the color follows the
-  // theme (reading `document.body` returns the un-themed default). getComputedStyle serializes colors
-  // to `rgb(...)`, so parsing is reliable; the observer re-checks when the theme toggles the root
-  // class/attribute.
-  // A DOM ref requires a `null` initial value per React convention.
-  // eslint-disable-next-line no-null/no-null
-  const rootRef = useRef<HTMLDivElement>(null);
+  // Pick the tab icon variant to match the current theme. The tab icon is painted by the platform
+  // as a static background-image, so a `currentColor` SVG can't follow the theme — we swap the
+  // `iconUrl` ourselves based on the theme type from `papi.themes`.
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
-    const recompute = () => {
-      if (!rootRef.current) return;
-      const channels = getComputedStyle(rootRef.current).color.match(/\d+/g);
-      if (!channels || channels.length < 3) return;
-      const [r, g, b] = channels.map(Number);
-      setIsDarkTheme(0.299 * r + 0.587 * g + 0.114 * b > 140);
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
     };
-    recompute();
-    const observer = new MutationObserver(recompute);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'style', 'data-theme'],
-    });
-    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -142,17 +144,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (resourceId: string, checked: boolean) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      const next = setUserDisplay(resourceId, checked, current);
-      if (next.userReferenced !== current.userReferenced) {
-        textConnectionPdp
-          .setUserReferencedProjectsAndResources(next.userReferenced)
-          .catch((e) => logger.warn(`Failed to persist user list: ${getErrorMessage(e)}`));
-      }
-      if (next.overlay !== current.overlay) {
-        textConnectionPdp
-          .setShownByDefaultOverlay(next.overlay)
-          .catch((e) => logger.warn(`Failed to persist overlay: ${getErrorMessage(e)}`));
-      }
+      persistUserDisplay(textConnectionPdp, resourceId, checked, current).forEach((write) =>
+        write.catch((e) =>
+          logger.warn(`Failed to persist view-options change: ${getErrorMessage(e)}`),
+        ),
+      );
     },
     [textConnectionPdp],
   );
@@ -161,12 +157,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (resourceId: string) => {
       const { current } = sourcesRef;
       if (!current || !textConnectionPdp) return;
-      const next = removeFromUserResources(resourceId, current.userReferenced);
-      if (next !== current.userReferenced) {
-        textConnectionPdp
-          .setUserReferencedProjectsAndResources(next)
-          .catch((e) => logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`));
-      }
+      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) =>
+        logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`),
+      );
     },
     [textConnectionPdp],
   );
@@ -198,12 +191,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         name: resource.displayName,
         id: resource.dblEntryUid,
       };
-      const next = addToUserResources(reference, current.userReferenced);
-      if (next !== current.userReferenced) {
-        textConnectionPdp
-          .setUserReferencedProjectsAndResources(next)
-          .catch((e) => logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`));
-      }
+      persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) =>
+        logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`),
+      );
     },
     [dblResourcesProvider, textConnectionPdp],
   );
@@ -235,7 +225,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   return (
     <div
       data-testid="scripture-text-grid"
-      ref={rootRef}
       className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
     >
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
@@ -253,7 +242,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             </Button>
           </PopoverTrigger>
           <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
-            <ScriptureTextGridOptions
+            <ResourceCollectionOptions
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               top={top}

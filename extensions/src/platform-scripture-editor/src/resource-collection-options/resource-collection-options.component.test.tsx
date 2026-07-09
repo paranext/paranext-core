@@ -5,13 +5,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { DblResourceReference } from 'platform-scripture';
 import {
-  ScriptureTextGridOptions,
-  SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS,
-} from './scripture-text-grid-options.component';
+  ResourceCollectionOptions,
+  RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+} from './resource-collection-options.component';
 import type {
-  ScriptureTextGridOptionsProps,
+  ResourceCollectionOptionsProps,
   ViewOptionsTextEntry,
-} from './scripture-text-grid-options.types';
+} from './resource-collection-options.types';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip/Popover wire
 // ResizeObservers. A no-op stub keeps the render path from throwing.
@@ -30,7 +30,7 @@ beforeAll(() => {
 });
 
 const STRINGS: Record<string, string> = Object.fromEntries(
-  SCRIPTURE_TEXT_GRID_OPTIONS_STRING_KEYS.map((key) => [key, key]),
+  RESOURCE_COLLECTION_OPTIONS_STRING_KEYS.map((key) => [key, key]),
 );
 // Human-readable overrides for the strings the tests assert on.
 STRINGS['%webView_scriptureTextGrid_viewOptions_viewHeader%'] = 'VIEW';
@@ -61,8 +61,8 @@ const row = (
   ...overrides,
 });
 
-function renderComponent(overrides?: Partial<ScriptureTextGridOptionsProps>) {
-  const props: ScriptureTextGridOptionsProps = {
+function renderComponent(overrides?: Partial<ResourceCollectionOptionsProps>) {
+  const props: ResourceCollectionOptionsProps = {
     viewMode: 'verse',
     onViewModeChange: vi.fn(),
     isChapterEnabled: false,
@@ -74,13 +74,13 @@ function renderComponent(overrides?: Partial<ScriptureTextGridOptionsProps>) {
     localizedStrings: STRINGS,
     ...overrides,
   };
-  render(<ScriptureTextGridOptions {...props} />);
+  render(<ResourceCollectionOptions {...props} />);
   return props;
 }
 
 afterEach(() => vi.clearAllMocks());
 
-describe('ScriptureTextGridOptions — VIEW toggle', () => {
+describe('ResourceCollectionOptions — VIEW toggle', () => {
   it('renders Verse selected and Chapter disabled with a "coming soon" hint by default', () => {
     renderComponent({ viewMode: 'verse', isChapterEnabled: false });
     const verse = screen.getByRole('radio', { name: 'Verse' });
@@ -109,7 +109,7 @@ describe('ScriptureTextGridOptions — VIEW toggle', () => {
   });
 });
 
-describe('ScriptureTextGridOptions — TEXTS list', () => {
+describe('ResourceCollectionOptions — TEXTS list', () => {
   it('renders admin (top) rows with checkboxes and no remove control', () => {
     renderComponent({
       top: [row('a1', 'Admin Text', { isAdminLocked: true, checked: true })],
@@ -153,7 +153,7 @@ describe('ScriptureTextGridOptions — TEXTS list', () => {
   });
 });
 
-describe('ScriptureTextGridOptions — Get Resources', () => {
+describe('ResourceCollectionOptions — Get Resources', () => {
   it('fires onGetResources when the button is clicked', () => {
     const props = renderComponent();
     fireEvent.click(screen.getByRole('button', { name: 'Get Resources' }));
