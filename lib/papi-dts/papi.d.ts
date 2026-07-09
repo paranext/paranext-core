@@ -529,8 +529,8 @@ declare module 'shared/models/web-view.model' {
    * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
    * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
    *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
-   *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving the
-   *   active Scripture reference
+   *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+   *   the active Scripture reference
    *
    * _＠example_
    *
@@ -626,7 +626,7 @@ declare module 'shared/models/web-view.model' {
      *
      * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
      *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
      *
      * - `scrRef`: The current value for the Scripture reference this web view is on
      * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -634,11 +634,16 @@ declare module 'shared/models/web-view.model' {
      * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
      *   synced to a scroll group, this is `undefined`
      * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+     * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+     *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+     *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+     *   the active Scripture reference
      *
      * _＠example_
      *
      * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+     *   useWebViewScrollGroupScrRef();
      * ```
      */
     useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
@@ -787,7 +792,7 @@ declare module 'shared/global-this.model' {
      *
      * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
      *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
      *
      * - `scrRef`: The current value for the Scripture reference this web view is on
      * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -795,11 +800,16 @@ declare module 'shared/global-this.model' {
      * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
      *   synced to a scroll group, this is `undefined`
      * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+     * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+     *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+     *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+     *   the active Scripture reference
      *
      * _＠example_
      *
      * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+     *   useWebViewScrollGroupScrRef();
      * ```
      */
     var useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
@@ -8297,9 +8307,9 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
    *       If not synced to a scroll group, this is `undefined`
    *   - `setScrollGroupId`: Function to use to update the scroll group with which this
    *       `scrollGroupScrRef` is synced
-   *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the
-   *       source frame of `scrRef`); this web view's own `projectId` when not synced to a scroll
-   *       group. `undefined` when unknown
+   *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the source
+   *       frame of `scrRef`); this web view's own `projectId` when not synced to a scroll group.
+   *       `undefined` when unknown
    */
   export function useScrollGroupScrRef(
     scrollGroupScrRef: ScrollGroupScrRef | undefined,
