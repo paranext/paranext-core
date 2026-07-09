@@ -355,7 +355,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
         var item = (ProjectReference)list.Items[0];
 
         Assert.That(item.IsResourceShownByDefault, Is.Null);
-        Assert.That(item.InTextCollectionUser, Is.Null);
+        Assert.That(item.IsResourceShownForUser, Is.Null);
     }
 
     [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]

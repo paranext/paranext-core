@@ -1711,15 +1711,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // PROJECT-scope resource-reference-list settings carry the admin-only
-        // isResourceShownByDefault flag and drive auto-promote. Enforce the admin gate server-side
-        // (the UI-facing query is canUserWriteProjectTextConnectionSettings()). USER-scope writes
-        // (user lists, overlay, init) are intentionally UNGATED.
+        // The referenced-projects-and-resources list carries the admin-only isResourceShownByDefault
+        // flag (the shared shown-by-default default for the Scripture Text Grid), so its writes are
+        // gated to project administrators server-side (the UI-facing query is
+        // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
+        // shown-by-default and keep their pre-existing ungated behavior. USER-scope writes (user
+        // lists, overlay, init) are intentionally UNGATED.
         if (
-            (
-                paratextSettingName == ProjectSettingsNames.PT_MODEL_TEXTS
-                || paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
-            ) && !IsUserProjectAdministrator()
+            paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+            && !IsUserProjectAdministrator()
         )
             throw new UnauthorizedAccessException(
                 $"Only project administrators may write '{settingName}'."
@@ -1832,11 +1832,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                                 $"{ResourceReferenceList.CurrentFormatVersion} {parsedList.SerializeToJson()}"
                             );
                             scrText.Settings.Save(false);
-                            AutoPromoteShownByDefaultResources(
-                                scrText,
-                                paratextSettingName,
-                                parsedList
-                            );
                             // Return here; SendDataUpdateEvent fires after the lock releases below.
                             return;
                         }
@@ -1968,7 +1963,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 item with
                 {
                     IsResourceShownByDefault = null,
-                    InTextCollectionUser = null,
+                    IsResourceShownForUser = null,
                 }
             );
 

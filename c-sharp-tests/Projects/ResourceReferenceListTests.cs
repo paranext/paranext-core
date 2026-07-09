@@ -366,7 +366,7 @@ public class ResourceReferenceListTests
                     Name = "P",
                     Id = "aabbcc",
                     IsResourceShownByDefault = true,
-                    InTextCollectionUser = false,
+                    IsResourceShownForUser = false,
                 },
             ],
         };
@@ -374,7 +374,7 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as ProjectReference;
         Assert.That(item!.IsResourceShownByDefault, Is.True);
-        Assert.That(item.InTextCollectionUser, Is.False);
+        Assert.That(item.IsResourceShownForUser, Is.False);
     }
 
     [Test]
@@ -388,7 +388,7 @@ public class ResourceReferenceListTests
 
         // Old-build files must stay clean: unset flags are absent, not `false`.
         Assert.That(json, Does.Not.Contain("isResourceShownByDefault"));
-        Assert.That(json, Does.Not.Contain("inTextCollectionUser"));
+        Assert.That(json, Does.Not.Contain("isResourceShownForUser"));
     }
 
     [Test]
@@ -401,7 +401,7 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as ProjectReference;
         Assert.That(item!.IsResourceShownByDefault, Is.Null);
-        Assert.That(item.InTextCollectionUser, Is.Null);
+        Assert.That(item.IsResourceShownForUser, Is.Null);
     }
 
     [Test]
@@ -430,7 +430,7 @@ public class ResourceReferenceListTests
                     Name = "D",
                     Id = "112233445566",
                     IsResourceShownByDefault = false,
-                    InTextCollectionUser = true,
+                    IsResourceShownForUser = true,
                 },
             ],
         };
@@ -439,7 +439,7 @@ public class ResourceReferenceListTests
 
         var item = result.Items[0] as DblResourceReference;
         Assert.That(item!.IsResourceShownByDefault, Is.False);
-        Assert.That(item.InTextCollectionUser, Is.True);
+        Assert.That(item.IsResourceShownForUser, Is.True);
     }
 
     [Test]
@@ -453,7 +453,7 @@ public class ResourceReferenceListTests
         var itemEl = xml.Elements("Item").First();
 
         Assert.That(itemEl.Attribute("isResourceShownByDefault"), Is.Null);
-        Assert.That(itemEl.Attribute("inTextCollectionUser"), Is.Null);
+        Assert.That(itemEl.Attribute("isResourceShownForUser"), Is.Null);
     }
 
     [Test]
@@ -466,7 +466,7 @@ public class ResourceReferenceListTests
 
         var item = result.Items[0] as ProjectReference;
         Assert.That(item!.IsResourceShownByDefault, Is.Null);
-        Assert.That(item.InTextCollectionUser, Is.Null);
+        Assert.That(item.IsResourceShownForUser, Is.Null);
     }
 
     [Test]
@@ -499,19 +499,19 @@ public class ResourceReferenceListTests
     [Test]
     public void NamedOnlyType_PreservesBibleTextOnlyProperties_OnJsonRoundTrip()
     {
-        // A name-only type (enhancedResource) never natively handles "id" or "inTextCollectionUser"
+        // A name-only type (enhancedResource) never natively handles "id" or "isResourceShownForUser"
         // (both are Bible-text-only). A future build that attaches them must not have them silently
         // dropped: they flow through ExtraData (captured against the narrower
         // KnownNamedOnlyPropertyNames set) and are re-emitted. isResourceShownByDefault, by contrast,
         // is understood on every type, so it is a real field rather than a passthrough.
         const string json =
-            """{"dataVersion":"1.1.0","items":[{"type":"enhancedResource","name":"Enh","id":"keep-id","inTextCollectionUser":true}]}""";
+            """{"dataVersion":"1.1.0","items":[{"type":"enhancedResource","name":"Enh","id":"keep-id","isResourceShownForUser":true}]}""";
         var result = json.DeserializeFromJson<ResourceReferenceList>();
         Assert.That(result!.Items[0], Is.InstanceOf<EnhancedResourceReference>());
 
         string reSerialized = result.SerializeToJson();
         Assert.That(reSerialized, Does.Contain("keep-id"));
-        Assert.That(reSerialized, Does.Contain("inTextCollectionUser"));
+        Assert.That(reSerialized, Does.Contain("isResourceShownForUser"));
     }
 
     [Test]
