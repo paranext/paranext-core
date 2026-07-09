@@ -2372,7 +2372,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void AddCommentToThread_ConcurrentReplies_AllPersistNoneLost()
         {
-            // The comment-mutation lock (B2) must serialize concurrent AddCommentToThread calls so no
+            // The comment-mutation lock must serialize concurrent AddCommentToThread calls so no
             // reply is lost. Without it, concurrent read-modify-write of the shared CommentManager's
             // comment list can drop replies or corrupt it. Fire N replies at one thread and assert all
             // N land. (Resolve-vs-resolve is covered by ConcurrentRejects; this covers a non-resolve
