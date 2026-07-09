@@ -28,6 +28,12 @@ import {
 
 const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };
 
+// `useLocalizedStrings`'s `localizationKeys` param must be a stable reference (see its JSDoc) —
+// spreading a frozen array into a new array literal on every render breaks that contract and
+// causes an infinite update loop. Hoist to module scope so the array identity never changes.
+const SHARE_LAYOUT_STRING_KEYS = [...SHARE_LAYOUT_DIALOG_STRING_KEYS];
+const RESOURCE_PICKER_STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
+
 /**
  * `projectId` is required on `ShareLayoutDialogOptions`, but `DialogDefinitionBase['Component']`'s
  * generic base signature is `(props: DialogProps<unknown>) => ReactElement` — a required field on
@@ -46,10 +52,8 @@ function ShareLayoutDialogWrapper({
   Omit<ShareLayoutDialogOptions, 'projectId'> & {
     projectId?: ShareLayoutDialogOptions['projectId'];
   }) {
-  const [localizedStrings] = useLocalizedStrings([...SHARE_LAYOUT_DIALOG_STRING_KEYS]);
-  const [resourcePickerLocalizedStrings] = useLocalizedStrings([
-    ...RESOURCE_PICKER_DIALOG_STRING_KEYS,
-  ]);
+  const [localizedStrings] = useLocalizedStrings(SHARE_LAYOUT_STRING_KEYS);
+  const [resourcePickerLocalizedStrings] = useLocalizedStrings(RESOURCE_PICKER_STRING_KEYS);
 
   const [allResources, isResourcesLoading] = usePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),

@@ -6,7 +6,6 @@ import {
   Checkbox,
   Dialog,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   Popover,
@@ -346,14 +345,14 @@ export function ShareLayoutDialogContent({
         )}
       </div>
 
-      <DialogFooter>
+      <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
         <Button variant="outline" onClick={onCancel}>
           {localizeString(strings, '%shareLayoutDialog_cancel_label%')}
         </Button>
         <Button onClick={handleConfirm}>
           {localizeString(strings, '%shareLayoutDialog_confirm_label%')}
         </Button>
-      </DialogFooter>
+      </div>
     </>
   );
 }
