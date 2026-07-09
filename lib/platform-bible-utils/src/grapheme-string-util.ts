@@ -207,7 +207,10 @@ export class GraphemeString {
 
   /**
    * Split into an array of GraphemeStrings on `separator` (string or RegExp). An empty-string
-   * separator splits into individual graphemes. `splitLimit` caps the number of returned pieces.
+   * separator splits into individual graphemes. `splitLimit`, if given, splits at most `splitLimit
+   *
+   * - 1`times and returns at most`splitLimit`pieces, where the final piece is the unsplit remainder
+   *   of the string (this differs from native`String.split`, which discards the remainder).
    */
   split(separator: string | RegExp, splitLimit?: number): GraphemeString[] {
     if (splitLimit !== undefined && splitLimit <= 0) return [this];
@@ -226,7 +229,9 @@ export class GraphemeString {
 
     const result: GraphemeString[] = [];
     let current = 0;
-    const limit = splitLimit ? splitLimit - 1 : matches.length;
+    // Bound by matches.length so a splitLimit larger than the match count never indexes past
+    // `matches` (which would pass `undefined` to indexOf and throw).
+    const limit = Math.min(splitLimit ? splitLimit - 1 : matches.length, matches.length);
     for (let i = 0; i < limit; i++) {
       const matchIndex = this.indexOf(matches[i], current);
       if (matchIndex < 0) break;
