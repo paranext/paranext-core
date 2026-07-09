@@ -72,6 +72,33 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void TryRender_WhenAConflictDecodeGetterThrows_ReturnsNullInsteadOfPropagating()
+    {
+        // PT-4110 Layer 1 routes the four conflict-decode getters (RejectedText/AcceptedText/
+        // ResultText/RejectedResultText) through TryRender so one that throws on corrupt content is
+        // omitted (null → field dropped by TryWriteString) rather than aborting the whole note.
+        // Exercised on the helper directly because ParatextData's decoders return empty rather than
+        // throwing on the malformed inputs available to a test, so a real getter throw can't be forced.
+        string? result = "sentinel";
+        Assert.That(
+            () =>
+                result = PlatformCommentConverter.TryRender(
+                    () => throw new InvalidOperationException("decode failed"),
+                    "comment-id",
+                    "acceptedText"
+                ),
+            Throws.Nothing
+        );
+        Assert.That(result, Is.Null);
+
+        // And a getter that succeeds is returned unchanged.
+        Assert.That(
+            PlatformCommentConverter.TryRender(() => "rendered", "comment-id", "acceptedText"),
+            Is.EqualTo("rendered")
+        );
+    }
+
+    [Test]
     public void Serialize_CommentWithBasicFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();

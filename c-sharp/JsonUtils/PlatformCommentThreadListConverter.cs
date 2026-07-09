@@ -44,7 +44,9 @@ public class PlatformCommentThreadListConverter : JsonConverter<List<PlatformCom
                 );
                 continue;
             }
-            writer.WriteRawValue(bytes);
+            // The bytes came straight from JsonSerializer.SerializeToUtf8Bytes above (already valid
+            // JSON), so skip WriteRawValue's redundant re-parse/validation on this hot path.
+            writer.WriteRawValue(bytes, skipInputValidation: true);
         }
         writer.WriteEndArray();
     }

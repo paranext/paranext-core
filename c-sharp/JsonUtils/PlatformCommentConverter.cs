@@ -42,8 +42,14 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string VERSE_REF = "verseRef";
 
     // PT-4110: written into a note's body when its stored content can't be rendered, so one
-    // unrenderable note doesn't fail the whole getCommentThreads response. Fixed English by design.
-    private const string ContentsUnavailablePlaceholder =
+    // unrenderable note doesn't fail the whole getCommentThreads response. Deliberately a fixed
+    // English literal, NOT localized: this is a stateless JsonConverter with no access to the
+    // localization service or the caller's UI language, and localizing it would mean exposing a
+    // machine-readable "degraded" flag on the wire and rendering the message TS-side — not worth that
+    // coupling for this rare corrupt-note edge case. `internal` so
+    // ParatextProjectDataProvider.UpdateComment can refuse to persist this placeholder back over a
+    // note's real content.
+    internal const string ContentsUnavailablePlaceholder =
         "<p>This note could not be displayed.</p>";
 
     /// <summary>
@@ -371,7 +377,10 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     /// Reads an optional rendered field, logging and returning null instead of throwing so one
     /// unrenderable field can't abort serialization of the whole note (PT-4110).
     /// </summary>
-    private static string? TryRender(Func<string?> get, string commentId, string field)
+    // `internal` for direct unit testing of the catch contract: reliably forcing the underlying
+    // ParatextData conflict-decode getters to throw on demand isn't readily available (they return
+    // empty rather than throwing on malformed input), so the isolation is verified on the helper.
+    internal static string? TryRender(Func<string?> get, string commentId, string field)
     {
         try
         {

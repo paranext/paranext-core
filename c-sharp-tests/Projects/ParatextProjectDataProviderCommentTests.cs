@@ -999,6 +999,34 @@ namespace TestParanextDataProvider.Projects
             Assert.That(string.Equals(updatedComment.Thread, threadId), Is.True);
         }
 
+        [Test]
+        public void UpdateComment_WithUnrenderablePlaceholder_IsRejectedAndKeepsRealContent()
+        {
+            // PT-4110: a note whose content can't be rendered is served to the client as the
+            // "could not be displayed" placeholder. If the user opens that degraded note and saves,
+            // the frontend sends the placeholder back here — UpdateComment must reject it so the
+            // note's real (unrenderable but present) content is not silently overwritten.
+            var comment = CommentTestHelper.CreateBasicComment();
+            comment.Thread = null; // set in CreateComment
+            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            bool result = _provider.UpdateComment(
+                commentId,
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            );
+
+            Assert.That(result, Is.False); // rejected — not persisted
+            var storedComment = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Comments.Single(c => c.Id == commentId);
+            Assert.That(storedComment.Contents!.InnerText, Does.Contain("Test Comment"));
+            Assert.That(
+                storedComment.Contents.InnerText,
+                Does.Not.Contain("could not be displayed")
+            );
+        }
+
         // Note: The following test is a just a POC to make sure roundtripping works with an update.
         // You are not necessarily supposed to edit conflict comment contents like this in real
         // usage. It is possible; we just didn't look into getting the answer to this question.
