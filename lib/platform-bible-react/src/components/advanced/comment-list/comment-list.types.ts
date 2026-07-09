@@ -23,6 +23,10 @@ export interface ConflictResolutionCallbacks {
    * getConflictResolutionOptions capability). Treat missing as 'none'.
    */
   getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
+  /** Undo a resolved conflict (restore the auto-merge winner + reopen). Resolves false on failure. */
+  unresolve: (threadId: string) => Promise<boolean>;
+  /** Capability query: may the current user undo this conflict's resolution? */
+  getUndoAvailability: (threadId: string) => Promise<boolean>;
 }
 
 /** Options for adding a comment to a thread */
