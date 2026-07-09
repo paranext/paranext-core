@@ -29,17 +29,32 @@ const CELL_BOX_STYLE: React.CSSProperties = {
   borderRadius: '4px',
 };
 
+const ROW_BOX_STYLE: React.CSSProperties = {
+  display: 'flex',
+  gap: '8px',
+  height: '320px',
+};
+
 /**
  * Supplies the `grid` → `row` ARIA ancestors that `role="gridcell"` requires (in the app, PR-2's
- * `ScriptureTextGrid` row container provides these) and bounds the cell like a real grid column.
+ * `ScriptureTextGrid` row container provides these).
  */
-function GridCellBox({ children }: { children: React.ReactNode }) {
+function GridRowBox({ children }: { children: React.ReactNode }) {
   return (
     <div role="grid" aria-label="Scripture text grid story preview">
-      <div role="row" style={CELL_BOX_STYLE}>
+      <div role="row" style={ROW_BOX_STYLE}>
         {children}
       </div>
     </div>
+  );
+}
+
+/** Wraps one cell in a bounded column inside a single-row grid (preserves single-cell stories). */
+function GridCellBox({ children }: { children: React.ReactNode }) {
+  return (
+    <GridRowBox>
+      <div style={CELL_BOX_STYLE}>{children}</div>
+    </GridRowBox>
   );
 }
 
@@ -170,7 +185,7 @@ export const VerseEmpty: Story = {
   ),
 };
 
-/** Mixed-direction smoke: a Hebrew (rtl) verse cell — its own dir, independent of the UI. */
+/** Single-cell RTL verse: the resource's own `dir`, independent of the UI locale. */
 export const VerseRightToLeft: Story = {
   render: () => (
     <GridCellBox>
@@ -182,5 +197,87 @@ export const VerseRightToLeft: Story = {
         editor={<SampleVerse rtl />}
       />
     </GridCellBox>
+  ),
+};
+
+/**
+ * PR-1 partial-failure row smoke: ready, failed, and downloading cells side by side in one row.
+ * Neighbors stay independent — one offline cell does not blank its siblings.
+ */
+export const PartialFailureRow: Story = {
+  render: () => (
+    <GridRowBox>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          editor={<SampleChapter />}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="failed"
+          label="ASV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          editor={undefined}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="downloading"
+          label="KJV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          editor={undefined}
+        />
+      </div>
+    </GridRowBox>
+  ),
+};
+
+/**
+ * PR-1 mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic in one row. Each cell
+ * applies its own `dir` on the content area, independent of the UI locale.
+ */
+export const MixedDirectionRow: Story = {
+  render: () => (
+    <GridRowBox>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="ready"
+          label="WEB"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          editor={<SampleChapter />}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="ready"
+          label="עברית"
+          textDirection="rtl"
+          localizedStrings={localizedStrings}
+          editor={<SampleChapter rtl />}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="ready"
+          label="العربية"
+          textDirection="rtl"
+          localizedStrings={localizedStrings}
+          editor={
+            <div style={{ fontFamily: 'serif', lineHeight: 1.7 }}>
+              <p style={{ margin: '0 0 8px' }}>
+                <sup>3</sup> طُوبَى لِلْمَسَاكِينِ بِالرُّوحِ
+              </p>
+            </div>
+          }
+        />
+      </div>
+    </GridRowBox>
   ),
 };
