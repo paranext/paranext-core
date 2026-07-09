@@ -21,6 +21,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
       '%webView_scriptureTextGrid_cell_status_downloading%': 'Downloading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
+      '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
     },
     false,
   ],
@@ -159,5 +160,16 @@ describe('ResourceCell viewMode', () => {
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
     const [fedUsj] = setUsjSpy.mock.lastCall ?? [];
     expect(JSON.stringify(fedUsj)).toContain('verse one'); // whole chapter present
+  });
+
+  it('verse mode with no text for the verse shows the empty state, not the editor or "loading…"', async () => {
+    renderResourceCell({
+      viewMode: 'verse',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 0 }, // verse 0 → empty slice
+      chapterUsj: twoVerseChapterUsj,
+    });
+    // The empty label is rendered; the editor is not.
+    expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
+    expect(setUsjSpy).not.toHaveBeenCalled();
   });
 });

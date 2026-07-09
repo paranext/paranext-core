@@ -92,10 +92,13 @@ export function ResourceCell({
 
   useEffect(() => {
     if (state !== 'ready' || !usjPossiblyError || isPlatformError(usjPossiblyError)) return;
+    if (viewMode === 'verse' && verseSlice?.isEmpty) return; // nothing to show
     const usjToShow = viewMode === 'verse' && verseSlice ? verseSlice.usj : usjPossiblyError;
     editorRef.current?.setUsj(usjToShow);
   }, [state, usjPossiblyError, viewMode, verseSlice]);
   // #endregion
+
+  const isVerseEmpty = viewMode === 'verse' && state === 'ready' && (verseSlice?.isEmpty ?? false);
 
   return (
     <ResourceCellView
@@ -103,6 +106,7 @@ export function ResourceCell({
       label={resourceRef.label}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
+      isVerseEmpty={isVerseEmpty}
       editor={
         <Editorial
           ref={editorRef}
