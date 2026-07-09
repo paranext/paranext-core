@@ -2656,6 +2656,53 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void UnresolveConflict_TrailingStatuslessCommentAfterReject_StillRestoresWinner()
+        {
+            // Regression (PT-4141 final review): UnresolveConflict must derive the undone action
+            // from the RESOLVING comment - the last comment carrying a non-Unspecified status - not
+            // from thread.LastComment. CommentThread.Status is derived by scanning Comments
+            // last-to-first for the first non-Unspecified status, so a trailing status-less comment
+            // (e.g. an assignment-only AddCommentToThread, which appends Status = Unspecified /
+            // ConflictResolutionAction = None and does NOT reopen the thread) leaves the thread
+            // Resolved while LastComment is that trailing comment, not the resolution. Reproduce
+            // that shape directly via the CommentManager (mirroring what an assignment-only
+            // AddCommentToThread produces) to isolate exactly the LastComment mismatch the bug
+            // hinges on.
+            string expectedWinner = ExpectedWinnerVerseText();
+            CommentThread thread = SeedVerseTextConflict();
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "reject"); // verse now holds the loser (small village)
+
+            // Append a trailing status-less comment to the still-Resolved thread WITHOUT reopening
+            // it. Leave extra.Status at its default (Unspecified) and ConflictResolutionAction at
+            // its default (None/null) - do NOT set contents or a status.
+            var mgr = CommentManager.Get(_scrText);
+            CommentThread reloadedForAppend = mgr.FindThread(thread.Id);
+            Comment extra = reloadedForAppend.AddNewComment();
+            mgr.AddComment(extra);
+            mgr.SaveUser(extra.User, false);
+
+            // Precondition: the thread is still Resolved (the trailing comment did not reopen it),
+            // and its last comment is NOT the resolution comment - so this test genuinely exercises
+            // the bug rather than a scenario the old LastComment read already handled correctly.
+            PlatformCommentThreadWrapper precondition = ReloadThread(thread.Id);
+            Assert.That(precondition.Status, Is.EqualTo(NoteStatus.Resolved));
+            Assert.That(precondition.Comments.Last().ConflictResolutionAction, Is.Null);
+
+            _provider.UnresolveConflict(thread.Id, "Resolution undone.");
+
+            // The winner must be restored - a fix that (incorrectly) reads LastComment.
+            // ConflictResolutionAction would see None here and skip the restore, leaving the loser
+            // ("small village") in the verse.
+            string after = _scrText.GetText(vref, true, true);
+            Assert.That(after, Is.EqualTo(expectedWinner));
+            Assert.That(after, Does.Contain("big village"));
+            Assert.That(after, Does.Not.Contain("small village"));
+            Assert.That(ReloadThread(thread.Id).Status, Is.Not.EqualTo(NoteStatus.Resolved));
+        }
+
+        [Test]
         public void UnresolveConflict_UnresolvedConflict_Throws()
         {
             // Nothing to undo on a conflict that was never resolved.
@@ -3967,6 +4014,36 @@ namespace TestParanextDataProvider.Projects
                 _provider.GetConflictResolutionOptions(thread.Id),
                 Is.EqualTo("acceptRejectOrMerge")
             );
+        }
+
+        [Test]
+        public void UnresolveConflict_MergeThenVerseEdited_RefusesAndKeepsVerse()
+        {
+            // Mirrors UnresolveConflict_VerseEditedAfterResolution_RefusesAndKeepsVerse but for the
+            // merge resolution path (coverage gap from review: the staleness gate was only exercised
+            // for reject): if the verse was edited AFTER a MERGE resolution, undo must refuse rather
+            // than clobber that later edit by restoring the winner.
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+            var vref = new VerseRef("MAT", "2", "1", _scrText.Settings.Versification);
+
+            _provider.ResolveConflict(thread.Id, "merge"); // verse now holds the merged (both-sides) text
+            // A later legitimate edit changes the verse away from the merge output.
+            _scrText.PutText(
+                40,
+                0,
+                false,
+                "\\id MAT\n\\c 2\n\\v 1 When Jesus was born in the tiny village of Bethlehem in Judea, Herod was king.\n",
+                null
+            );
+
+            Assert.That(
+                () => _provider.UnresolveConflict(thread.Id, "Resolution undone."),
+                Throws
+                    .TypeOf<InvalidOperationException>()
+                    .With.Message.Contains("changed since it was resolved")
+            );
+            // The post-resolution edit is preserved, not rolled back to the winner.
+            Assert.That(_scrText.GetText(vref, true, true), Does.Contain("tiny village"));
         }
 
         #endregion

@@ -851,10 +851,28 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             CommentThread thread = VerifyUserCanUnresolveConflict(threadId);
 
-            // What the resolution wrote is recorded on the resolution (last) comment: accept -> None
-            // (null), reject -> Replaced, merge -> Merged. NoteConflictResolutions are string
-            // constants (None == null), so ConflictResolutionAction is a string.
-            string? action = thread.LastComment.ConflictResolutionAction;
+            // What the resolution wrote is recorded on the RESOLVING comment: accept -> None (null),
+            // reject -> Replaced, merge -> Merged. NoteConflictResolutions are string constants
+            // (None == null), so ConflictResolutionAction is a string.
+            //
+            // This must NOT be read from thread.LastComment: LastComment is whatever comment was
+            // appended most recently, which is not necessarily the resolution. E.g. an
+            // assignment-only AddCommentToThread appends a trailing comment with
+            // Status = Unspecified and ConflictResolutionAction = None without reopening the thread
+            // (CommentThread.Status scans Comments last-to-first for the first non-Unspecified
+            // status, so the thread stays Resolved). Reading LastComment there would read that
+            // trailing comment's None action instead of the resolution's, skip the winner restore,
+            // and reopen with the loser/merged text still in the verse. The resolving comment is
+            // instead the last comment carrying a non-Unspecified status - VerifyUserCanUnresolveConflict
+            // already proved the thread is Resolved, so that comment exists and carries
+            // Status = Resolved plus the ConflictResolutionAction. (A "last comment with any non-None
+            // action" scan would be wrong across re-resolve cycles - e.g. reject -> undo -> accept
+            // leaves a stale 'Replaced' comment earlier in the thread - so status, not action, is
+            // what must be keyed on.)
+            Comment resolvingComment = thread.Comments.Last(c =>
+                c.Status != NoteStatus.Unspecified
+            );
+            string? action = resolvingComment.ConflictResolutionAction;
             restoredVerse = action != NoteConflictResolutions.None;
 
             if (restoredVerse)
