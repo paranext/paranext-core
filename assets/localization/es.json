@@ -508,6 +508,7 @@
   "%shareLayoutDialog_activeTab_comments%": "Comentarios",
   "%shareLayoutDialog_activeTab_commentaryResource%": "Comentarios bíblicos",
   "%shareLayoutDialog_activeTab_label%": "Pestaña predeterminada",
+  "%shareLayoutDialog_activeTab_none%": "Ninguno",
   "%shareLayoutDialog_activeTab_scriptureResource%": "Textos bíblicos",
   "%shareLayoutDialog_activeTab_sublabel%": "Para la tercera columna",
   "%shareLayoutDialog_cancel_label%": "Cancelar",

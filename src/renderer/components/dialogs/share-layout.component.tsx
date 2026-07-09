@@ -37,6 +37,7 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_modelText_none%',
   '%shareLayoutDialog_activeTab_label%',
   '%shareLayoutDialog_activeTab_sublabel%',
+  '%shareLayoutDialog_activeTab_none%',
   '%shareLayoutDialog_activeTab_scriptureResource%',
   '%shareLayoutDialog_activeTab_commentaryResource%',
   '%shareLayoutDialog_activeTab_comments%',
@@ -315,7 +316,9 @@ export function ShareLayoutDialogContent({
               }}
             >
               <SelectTrigger className="tw:h-8">
-                <SelectValue />
+                <SelectValue
+                  placeholder={localizeString(strings, '%shareLayoutDialog_activeTab_none%')}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ScriptureResource">

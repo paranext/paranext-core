@@ -16,6 +16,7 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_modelText_none%': 'None selected',
   '%shareLayoutDialog_activeTab_label%': 'Default tab',
   '%shareLayoutDialog_activeTab_sublabel%': 'For Third Column',
+  '%shareLayoutDialog_activeTab_none%': 'None',
   '%shareLayoutDialog_activeTab_scriptureResource%': 'Bible Texts',
   '%shareLayoutDialog_activeTab_commentaryResource%': 'Commentaries',
   '%shareLayoutDialog_activeTab_comments%': 'Comments',
@@ -127,6 +128,7 @@ type Story = StoryObj<typeof ShareLayoutDialogContent>;
 
 export const Default: Story = {};
 export const NoModelTextSelected: Story = { args: { initialModelText: undefined } };
+export const NoActiveTabSelected: Story = { args: { initialActiveTab: undefined } };
 export const NoResourcesYet: Story = {
   args: { initialScriptureResources: [], initialCommentaryResources: [] },
 };

@@ -390,6 +390,7 @@
   "%shareLayoutDialog_activeTab_comments%": "Comments",
   "%shareLayoutDialog_activeTab_commentaryResource%": "Commentaries",
   "%shareLayoutDialog_activeTab_label%": "Default tab",
+  "%shareLayoutDialog_activeTab_none%": "None",
   "%shareLayoutDialog_activeTab_scriptureResource%": "Bible Texts",
   "%shareLayoutDialog_activeTab_sublabel%": "For Third Column",
   "%shareLayoutDialog_cancel_label%": "Cancel",
