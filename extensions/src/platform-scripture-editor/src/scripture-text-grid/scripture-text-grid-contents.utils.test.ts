@@ -5,8 +5,8 @@ import type {
   ResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
-import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
+import { isDblResourceReference, isProjectReference } from '../resource-reference.utils';
+import { CURRENT_DATA_VERSION } from '../resource-reference-list.const';
 import {
   addToUserResources,
   getScriptureTextGridContents,
@@ -517,5 +517,32 @@ describe('addToUserResources', () => {
   it('does not mutate its input', () => {
     const userReferenced = deepFreeze(list([dbl('u1', { inTextCollectionUser: true })]));
     expect(() => addToUserResources(project('new'), userReferenced)).not.toThrow();
+  });
+});
+
+describe('dataVersion preservation on modified lists', () => {
+  it('preserves an incoming version newer than CURRENT_DATA_VERSION (no downgrade write)', () => {
+    const userReferenced = { dataVersion: '1.2.0', items: [dbl('u1')] };
+    expect(addToUserResources(project('new'), userReferenced).dataVersion).toBe('1.2.0');
+    expect(removeFromUserResources('u1', userReferenced).dataVersion).toBe('1.2.0');
+    const { userReferenced: setResult } = setUserDisplay('u1', false, {
+      ...makeSources(),
+      userReferenced,
+    });
+    expect(setResult.dataVersion).toBe('1.2.0');
+  });
+
+  it('lifts an incoming version older than CURRENT_DATA_VERSION (the write adds 1.1.0 semantics)', () => {
+    const userReferenced = { dataVersion: '1.0.0', items: [dbl('u1')] };
+    expect(addToUserResources(project('new'), userReferenced).dataVersion).toBe(
+      CURRENT_DATA_VERSION,
+    );
+  });
+
+  it('lifts a malformed incoming version', () => {
+    const userReferenced = { dataVersion: 'not-semver', items: [dbl('u1')] };
+    expect(addToUserResources(project('new'), userReferenced).dataVersion).toBe(
+      CURRENT_DATA_VERSION,
+    );
   });
 });

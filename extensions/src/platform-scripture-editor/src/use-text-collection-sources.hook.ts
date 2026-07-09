@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { isPlatformError, type PlatformError } from 'platform-bible-utils';
 import type { ResourceReferenceList, ShownByDefaultOverlay } from 'platform-scripture';
 import { useProjectData, useProjectSetting } from '@papi/frontend/react';
-import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
+import type { TextCollectionSources } from './scripture-text-grid/scripture-text-grid-contents.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-reference-list.const';
 
 // Empty overlay while it loads or on error; `getScriptureTextGridContents` falls back to the admin

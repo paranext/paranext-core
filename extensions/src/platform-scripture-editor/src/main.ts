@@ -871,7 +871,7 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
   async getWebView(
     savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: OpenWebViewOptions & { projectId?: string },
+    openWebViewOptions: ResourceViewerOptions,
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
@@ -898,6 +898,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     };
   },
 };
+
 /**
  * Pending projectIds to apply during the next resource panel getWebView call, keyed by web view
  * type. A Map entry present (even with value `undefined`) means a reload is in progress and the

@@ -2,7 +2,8 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { ResourceCell } from './resource-cell.component';
 
 const { mockUseProjectData, mockUseProjectSetting, setUsjSpy } = vi.hoisted(() => ({
@@ -20,6 +21,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
       '%webView_scriptureTextGrid_cell_status_downloading%': 'Downloading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
+      '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
     },
     false,
   ],
@@ -32,12 +34,19 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     }),
   };
 });
-vi.mock('@eten-tech-foundation/scripture-utilities', () => ({
-  EMPTY_USJ: { type: 'USJ', version: '3.1', content: [] },
-  // USJ_TYPE isn't used directly by ResourceCell, but platform-bible-utils's bundled barrel
-  // (pulled in transitively by isPlatformError/getErrorMessage) imports it at module-load time.
-  USJ_TYPE: 'USJ',
-}));
+vi.mock('@eten-tech-foundation/scripture-utilities', async (importOriginal) => {
+  // Keep the real usxStringToUsj (used to build test fixtures below) alongside the existing
+  // lightweight EMPTY_USJ/USJ_TYPE stand-ins.
+  const original =
+    await importOriginal<typeof import('@eten-tech-foundation/scripture-utilities')>();
+  return {
+    ...original,
+    EMPTY_USJ: { type: 'USJ', version: '3.1', content: [] },
+    // USJ_TYPE isn't used directly by ResourceCell, but platform-bible-utils's bundled barrel
+    // (pulled in transitively by isPlatformError/getErrorMessage) imports it at module-load time.
+    USJ_TYPE: 'USJ',
+  };
+});
 
 const scrRef = { book: 'MAT', chapterNum: 5, verseNum: 3, versificationStr: 'English' };
 const chapter = {
@@ -53,9 +62,34 @@ const chapter = {
 };
 const props = { resourceRef: { projectId: 'p1', label: 'WEB' }, scrRef, setScrRef: vi.fn() };
 
+// Two-verse chapter fixture for viewMode tests: verse 1 "verse one" + verse 2 "verse two" in one
+// <para style="p">, so a chapter-vs-verse slice is unambiguous.
+const twoVerseChapterUsj = usxStringToUsj(`<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.1">
+  <book code="GEN" style="id">Sample</book>
+  <chapter number="1" style="c" sid="GEN 1" />
+  <para style="p">
+    <verse number="1" style="v" sid="GEN 1:1" />verse one<verse eid="GEN 1:1" /><verse number="2" style="v" sid="GEN 1:2" />verse two<verse eid="GEN 1:2" /></para>
+</usx>
+`);
+
 // 3-tuple [data, setData, isLoading].
 function setUsjResult(value: unknown, isLoading = false) {
   mockUseProjectData.mockReturnValue({ ChapterUSJ: () => [value, vi.fn(), isLoading] });
+}
+
+// Renders ResourceCell with the given chapter USJ wired through useProjectData, mirroring the
+// per-test setUsjResult + render pattern used above but for the viewMode-focused tests below.
+function renderResourceCell(
+  overrides: Partial<
+    Pick<React.ComponentProps<typeof ResourceCell>, 'viewMode' | 'scrRef'> & {
+      chapterUsj: unknown;
+    }
+  >,
+) {
+  const { chapterUsj, ...rest } = overrides;
+  setUsjResult(chapterUsj ?? chapter, false);
+  render(<ResourceCell {...props} {...rest} />);
 }
 
 beforeEach(() => {
@@ -99,5 +133,44 @@ describe('ResourceCell', () => {
     render(<ResourceCell {...props} />);
     const cell = screen.getByRole('gridcell', { name: 'WEB' });
     expect(cell.tagName).not.toBe('BUTTON');
+  });
+});
+
+describe('ResourceCell viewMode', () => {
+  it('verse mode feeds Editorial only the focused verse, not the whole chapter', async () => {
+    renderResourceCell({
+      viewMode: 'verse',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+      chapterUsj: twoVerseChapterUsj,
+    });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+    // mock.lastCall (rather than a non-null-asserted array index) avoids no-type-assertion.
+    const [fedUsj] = setUsjSpy.mock.lastCall ?? [];
+    const text = JSON.stringify(fedUsj);
+    expect(text).toContain('verse two');
+    expect(text).not.toContain('verse one'); // sliced, not whole chapter
+  });
+
+  it('chapter mode is unchanged: feeds the whole chapter', async () => {
+    renderResourceCell({
+      viewMode: 'chapter',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+      chapterUsj: twoVerseChapterUsj,
+    });
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+    const [fedUsj] = setUsjSpy.mock.lastCall ?? [];
+    expect(JSON.stringify(fedUsj)).toContain('verse one'); // whole chapter present
+  });
+
+  it('verse mode with no text for the verse shows the empty state, not the editor or "loading…"', async () => {
+    renderResourceCell({
+      viewMode: 'verse',
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 0 }, // verse 0 → empty slice
+      chapterUsj: twoVerseChapterUsj,
+    });
+    // The empty label is rendered; the editor is not.
+    expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
   });
 });

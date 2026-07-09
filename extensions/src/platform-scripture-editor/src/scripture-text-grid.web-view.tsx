@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
 import { ScriptureTextGrid } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
-import { getScriptureTextGridContents } from './scripture-text-grid-contents.utils';
+import { getScriptureTextGridContents } from './scripture-text-grid/scripture-text-grid-contents.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
 
 // Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are

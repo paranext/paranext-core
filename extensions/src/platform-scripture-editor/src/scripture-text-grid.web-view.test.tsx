@@ -2,20 +2,25 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import type { WebViewProps } from '@papi/core';
-import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
+import type { TextCollectionSources } from './scripture-text-grid/scripture-text-grid-contents.utils';
 
 import './scripture-text-grid.web-view';
 
-const { mockUseSources, mockUpdateDef, gridSpy } = vi.hoisted(() => ({
-  mockUseSources: vi.fn(),
-  mockUpdateDef: vi.fn(),
-  gridSpy: vi.fn(),
-}));
+const { mockUseSources, mockUpdateDef, gridSpy, mockUseProjectDataProvider, mockLoggerError } =
+  vi.hoisted(() => ({
+    mockUseSources: vi.fn(),
+    mockUpdateDef: vi.fn(),
+    gridSpy: vi.fn(),
+    mockUseProjectDataProvider: vi.fn(),
+    mockLoggerError: vi.fn(),
+  }));
 
-vi.mock('@papi/frontend', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@papi/frontend', () => ({
+  logger: { error: mockLoggerError, warn: vi.fn(), info: vi.fn() },
+}));
 vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [
     {
@@ -24,9 +29,7 @@ vi.mock('@papi/frontend/react', () => ({
     },
     false,
   ],
-  useProjectDataProvider: () => ({
-    initializeShownByDefaultOverlay: vi.fn().mockResolvedValue(true),
-  }),
+  useProjectDataProvider: (...a: unknown[]) => mockUseProjectDataProvider(...a),
 }));
 // The four-source assembly hook is a local extension hook (not a `@papi/frontend/react` export),
 // so it is mocked at its real module path. The web view runs the REAL A3 selector over whatever
@@ -67,12 +70,13 @@ const props = {
 
 type WebViewComponentGlobal = { webViewComponent: (p: WebViewProps) => ReactElement };
 
+// globalThis.webViewComponent is assigned by importing the module above; cast through unknown
+// because `globalThis` has no built-in `webViewComponent` member.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const { webViewComponent: WebViewComponent } = globalThis as unknown as WebViewComponentGlobal;
+
 function renderWebView() {
-  // globalThis.webViewComponent is assigned by importing the module above; cast through unknown
-  // because `globalThis` has no built-in `webViewComponent` member.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const { webViewComponent: Component } = globalThis as unknown as WebViewComponentGlobal;
-  return render(<Component {...props} />);
+  return render(<WebViewComponent {...props} />);
 }
 
 const EMPTY_LIST = { dataVersion: '1.1.0', items: [] };
@@ -90,8 +94,17 @@ function sourcesWithModelTexts(items: unknown[]): TextCollectionSources {
   } as unknown as TextCollectionSources;
 }
 
+/** A fresh PDP object per call so the init effect's `textConnectionPdp` dependency changes. */
+function makePdp(initializeShownByDefaultOverlay: () => Promise<boolean>) {
+  return { initializeShownByDefaultOverlay };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  // Defaults so each suite only overrides the mock it exercises. `clearAllMocks` keeps
+  // implementations, so re-set them here to keep tests order-independent.
+  mockUseSources.mockReturnValue([sourcesWithModelTexts([]), false]);
+  mockUseProjectDataProvider.mockReturnValue(makePdp(vi.fn().mockResolvedValue(true)));
 });
 
 describe('ScriptureTextGrid web view', () => {
@@ -124,5 +137,36 @@ describe('ScriptureTextGrid web view', () => {
     const { getByTestId } = renderWebView();
     expect(getByTestId('grid').textContent).toBe('');
     expect(mockUpdateDef).toHaveBeenCalledWith({ title: 'Scripture text' });
+  });
+});
+
+describe('ScriptureTextGridWebView first-open overlay init', () => {
+  it('retries init on a later effect run after a failure (local guard is released)', async () => {
+    const init = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(true);
+    mockUseProjectDataProvider.mockReturnValue(makePdp(init));
+
+    const { rerender } = renderWebView();
+    await waitFor(() => expect(mockLoggerError).toHaveBeenCalledTimes(1));
+    expect(init).toHaveBeenCalledTimes(1);
+
+    // New PDP identity re-runs the effect (e.g. the provider reconnects after being offline).
+    mockUseProjectDataProvider.mockReturnValue(makePdp(init));
+    rerender(<WebViewComponent {...props} />);
+    await waitFor(() => expect(init).toHaveBeenCalledTimes(2));
+  });
+
+  it('does not re-init on a later effect run after a success (guard holds)', async () => {
+    const init = vi.fn().mockResolvedValue(true);
+    mockUseProjectDataProvider.mockReturnValue(makePdp(init));
+
+    const { rerender } = renderWebView();
+    await waitFor(() => expect(init).toHaveBeenCalledTimes(1));
+
+    mockUseProjectDataProvider.mockReturnValue(makePdp(init));
+    rerender(<WebViewComponent {...props} />);
+    // Flush the effect re-run, then confirm no second round-trip was made.
+    await waitFor(() => expect(mockUseProjectDataProvider.mock.calls.length).toBeGreaterThan(1));
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(mockLoggerError).not.toHaveBeenCalled();
   });
 });

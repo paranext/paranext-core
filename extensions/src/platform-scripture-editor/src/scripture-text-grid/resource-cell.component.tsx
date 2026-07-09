@@ -6,7 +6,8 @@ import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-ut
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEffect, useMemo, useRef } from 'react';
 import { deriveCellState } from './resource-cell.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell.view';
+import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import { sliceUsjToVerse } from './verse-display.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
@@ -16,14 +17,21 @@ type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
+  viewMode?: 'chapter' | 'verse';
 };
 
 /**
- * One resource, the focused chapter. Reuses the resource-text-panel render path: fetch the chapter,
- * feed it to Editorial, which navigates to `scrRef`. Delegates layout and the downloading/failed
- * visuals to `ResourceCellView`.
+ * One resource, the focused chapter or verse. Reuses the resource-text-panel render path: fetch the
+ * chapter, feed it to Editorial, which navigates to `scrRef`. In verse mode, feeds Editorial only
+ * the slice for `scrRef.verseNum` (via `sliceUsjToVerse`) instead of the whole chapter. Delegates
+ * layout and the downloading/failed visuals to `ResourceCellView`.
  */
-export function ResourceCell({ resourceRef, scrRef, setScrRef }: ResourceCellProps) {
+export function ResourceCell({
+  resourceRef,
+  scrRef,
+  setScrRef,
+  viewMode = 'chapter',
+}: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
@@ -74,11 +82,23 @@ export function ResourceCell({ resourceRef, scrRef, setScrRef }: ResourceCellPro
     () => ({ isReadonly: true, hasSpellCheck: false, textDirection }),
     [textDirection],
   );
+  // Slice depends on scrRef.verseNum (unlike the chapter fetch memo above, which intentionally
+  // omits it — the chapter is identical across verses, but the slice is not).
+  const verseSlice = useMemo(() => {
+    if (viewMode !== 'verse') return undefined;
+    if (!usjPossiblyError || isPlatformError(usjPossiblyError)) return undefined;
+    return sliceUsjToVerse(usjPossiblyError, scrRef.verseNum);
+  }, [viewMode, usjPossiblyError, scrRef.verseNum]);
+
   useEffect(() => {
-    if (state === 'ready' && usjPossiblyError && !isPlatformError(usjPossiblyError))
-      editorRef.current?.setUsj(usjPossiblyError);
-  }, [state, usjPossiblyError]);
+    if (state !== 'ready' || !usjPossiblyError || isPlatformError(usjPossiblyError)) return;
+    if (viewMode === 'verse' && verseSlice?.isEmpty) return; // nothing to show
+    const usjToShow = viewMode === 'verse' && verseSlice ? verseSlice.usj : usjPossiblyError;
+    editorRef.current?.setUsj(usjToShow);
+  }, [state, usjPossiblyError, viewMode, verseSlice]);
   // #endregion
+
+  const isVerseEmpty = viewMode === 'verse' && state === 'ready' && (verseSlice?.isEmpty ?? false);
 
   return (
     <ResourceCellView
@@ -86,6 +106,7 @@ export function ResourceCell({ resourceRef, scrRef, setScrRef }: ResourceCellPro
       label={resourceRef.label}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
+      isVerseEmpty={isVerseEmpty}
       editor={
         <Editorial
           ref={editorRef}
