@@ -67,7 +67,7 @@ Collaboration features enable distributed translation teams to work together on 
 - Paratext > Send/Receive projects (Ctrl+Shift+S)
   - Menu Structure: `MainForm`, handler `sendReceiveToolStripMenuItem_Click`, line 950
   - File: `Paratext/MainForm.cs`
-- Project > Send/Receive this project (F9)
+- Project > Send/Receive this project (no shortcut — PT9 binds F9 to Next Book; the multi-project dialog uses Ctrl+Shift+S)
   - Menu Structure: `ParatextWindowWithMenus`, handler `sendReceiveThisProjectToolStripMenuItem_Click`, line 706
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - USB Backup Option
