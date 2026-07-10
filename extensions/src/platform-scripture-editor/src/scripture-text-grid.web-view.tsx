@@ -10,6 +10,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  usePromise,
 } from 'platform-bible-react';
 import { Settings2 } from 'lucide-react';
 import {
@@ -40,6 +41,7 @@ import {
   ScriptureTextGrid,
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
+import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -130,15 +132,19 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     [sources],
   );
 
-  // The grid body's cells: A3's selector over the four Text Collection sources, mapped to the row's
+  // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
+  // installed project id the cell fetches chapter text with; project references need no lookup.
+  const [cachedResources] = usePromise(
+    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
+    undefined,
+  );
+
+  // The grid body's cells: A3's selector over the Text Collection sources, resolved to the row's
   // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
-      (sources ? getScriptureTextGridContents(sources) : []).map((reference) => ({
-        projectId: reference.id,
-        label: reference.name,
-      })),
-    [sources],
+      toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
+    [sources, cachedResources],
   );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
