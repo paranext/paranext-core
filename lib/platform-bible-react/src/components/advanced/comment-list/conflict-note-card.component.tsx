@@ -262,7 +262,7 @@ export function ConflictNoteCard({
                     {/* asChild so the tooltip wraps the disabled option card and still receives
                         pointer events over it */}
                     <TooltipTrigger asChild>{renderOptionCard(option)}</TooltipTrigger>
-                    <TooltipContent side="right">{staleNotice}</TooltipContent>
+                    <TooltipContent>{staleNotice}</TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               );
