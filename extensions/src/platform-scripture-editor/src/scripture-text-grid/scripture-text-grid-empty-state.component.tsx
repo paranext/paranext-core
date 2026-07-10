@@ -9,7 +9,8 @@ export type ScriptureTextGridEmptyStateProps = {
 /**
  * Centered directional copy shown in the Scripture Text Grid body when there is nothing renderable.
  * Points the user at the View Options button in the header. Purely presentational — the web view
- * owns the decision of when to render it (see the empty conditional in `scripture-text-grid.web-view`).
+ * owns the decision of when to render it (see the empty conditional in
+ * `scripture-text-grid.web-view`).
  */
 export function ScriptureTextGridEmptyState({ prompt }: ScriptureTextGridEmptyStateProps) {
   return (
