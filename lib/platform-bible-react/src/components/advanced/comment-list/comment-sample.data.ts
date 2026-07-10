@@ -100,6 +100,18 @@ export const sampleComments: LegacyCommentThread[] = [
         hideInTextWindow: false,
         contents:
           "<blockquote lang='hwc-AQ' style='text-align:left'><p>Two different people made conflicting changes in this verse.</p><p><span lang='hwc-AQ'>\\v 1 Da wait a <s>minuteeeee </s><u>minute </u>time wen eryting had start, God make da sky an da world. </span></p></blockquote>",
+        // The four verseText fields below are HAND-AUTHORED sample data written in the captured-sample
+        // style — NOT converter-captured like verseTextConflictComment/verseTextConflictReplacementSample.
+        // Narrative: two people changed the garbled ancestor "minuteeeee" differently — accepted
+        // (current) "moment", rejected "minute". rejectedText mirrors the diff shown in `contents`.
+        rejectedText:
+          "<blockquote lang='hwc-AQ' style='text-align:left'><p><span lang='hwc-AQ'>\\v 1 Da wait a <s>minuteeeee </s><u>minute </u>time wen eryting had start, God make da sky an da world. </span></p></blockquote>",
+        acceptedText:
+          "<blockquote lang='hwc-AQ' style='text-align:left'><p><span lang='hwc-AQ'>\\v 1 Da wait a <s>minuteeeee </s><u>moment </u>time wen eryting had start, God make da sky an da world. </span></p></blockquote>",
+        resultText:
+          '\\v 1 Da wait a moment time wen eryting had start, God make da sky an da world. ',
+        rejectedResultText:
+          '\\v 1 Da wait a minute time wen eryting had start, God make da sky an da world. ',
       },
       {
         id: '19499e40/TJ Couch/2024-08-23T14:29:35.4874426-05:00',
@@ -167,6 +179,18 @@ export const sampleComments: LegacyCommentThread[] = [
         hideInTextWindow: false,
         contents:
           "<blockquote lang='hwc-AQ' style='text-align:left'><p>TJ Couch edited this verse on two different machines.</p><p><span lang='hwc-AQ'>\\v 1 Afta couple days, Jesus go back <s>Capernaum </s><u>Capernaummmm </u>wea he wen stay befoa. Da peopo hear dat Jesus stay home now. </span></p></blockquote>",
+        // The four verseText fields below are HAND-AUTHORED sample data written in the captured-sample
+        // style — NOT converter-captured like verseTextConflictComment/verseTextConflictReplacementSample.
+        // Narrative: TJ edited the ancestor "Capernaum" differently on two machines — accepted (current)
+        // "Capernaum town", rejected the fat-fingered "Capernaummmm". rejectedText mirrors `contents`.
+        rejectedText:
+          "<blockquote lang='hwc-AQ' style='text-align:left'><p><span lang='hwc-AQ'>\\v 1 Afta couple days, Jesus go back <s>Capernaum </s><u>Capernaummmm </u>wea he wen stay befoa. Da peopo hear dat Jesus stay home now. </span></p></blockquote>",
+        acceptedText:
+          "<blockquote lang='hwc-AQ' style='text-align:left'><p><span lang='hwc-AQ'>\\v 1 Afta couple days, Jesus go back <s>Capernaum </s><u>Capernaum town </u>wea he wen stay befoa. Da peopo hear dat Jesus stay home now. </span></p></blockquote>",
+        resultText:
+          '\\v 1 Afta couple days, Jesus go back Capernaum town wea he wen stay befoa. Da peopo hear dat Jesus stay home now. ',
+        rejectedResultText:
+          '\\v 1 Afta couple days, Jesus go back Capernaummmm wea he wen stay befoa. Da peopo hear dat Jesus stay home now. ',
       },
       {
         id: 'c0b0e523/TJ Couch/2024-07-31T09:49:45.2006000-05:00',
@@ -878,16 +902,14 @@ export const verseTextConflictComment: LegacyComment = {
 };
 
 /**
- * A verseText merge-conflict comment demonstrating a REPLACEMENT on BOTH sides (each side both
- * deletes and inserts) — common ancestor "town", loser replaced with "village", winner replaced
- * with "city". Both rejectedText and acceptedText carry `<s>` (deletion) and `<u>` (insertion), so
- * the card renders struck-red "town" and green "village"/"city". The HTML/USFM field values are the
- * ACTUAL serialized output of the C# PlatformCommentConverter run on the
- * `CreateVerseTextConflictCommentReplacementBothSides` fixture — captured verbatim; do not
- * hand-edit them. (`id`/`thread` are renamed to `conflict-replacement` here for readability; the
- * fixture serializes an opaque thread id.)
+ * A verseText merge-conflict comment demonstrating a REPLACEMENT (both deletion and insertion) —
+ * common ancestor "town", loser replaced with "village", winner replaced with "city". Both
+ * rejectedText and acceptedText contain `<s>` (deletion) and `<u>` (insertion) so the card renders
+ * struck-red "town" and green "village"/"city". Fields are the ACTUAL serialized output of the C#
+ * PlatformCommentConverter run on the CreateVerseTextConflictCommentWithReplacement fixture —
+ * captured verbatim. Do not hand-edit the field values.
  */
-export const verseTextConflictReplacementBothSidesSample: LegacyComment = {
+export const verseTextConflictReplacementSample: LegacyComment = {
   id: 'conflict-replacement/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
   isRead: false,
   thread: 'conflict-replacement',
@@ -910,4 +932,38 @@ export const verseTextConflictReplacementBothSidesSample: LegacyComment = {
   resultText: '\\v 1 When Jesus was born in the city of Bethlehem in Judea, Herod was king.',
   rejectedResultText:
     '\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was king.',
+};
+
+/**
+ * A verseText merge-conflict comment whose two edits are INDEPENDENT, so a `mergedText` "combine
+ * both changes" preview is available (one side made the village "big", the other named the "royal"
+ * king). The four verseText fields plus `mergedText` are HAND-AUTHORED sample data in the
+ * captured-sample style — NOT converter-captured — to exercise the "Combine both changes" option
+ * and the resolved 'merged' outcome, which the captured fixtures above do not cover.
+ */
+export const verseTextConflictMergeSample: LegacyComment = {
+  id: 'conflict-merge/Tim Steenwyk/2011-08-16T15:49:18.4019847-04:00',
+  isRead: false,
+  thread: 'conflict-merge',
+  user: 'Tim Steenwyk',
+  verseRef: 'MAT 2:1',
+  language: '',
+  date: '2011-08-16T15:49:18.4019847-04:00',
+  deleted: false,
+  startPosition: 0,
+  status: 'Todo',
+  type: 'Conflict',
+  conflictType: 'verseText',
+  hideInTextWindow: false,
+  contents:
+    "<blockquote lang='dmy' style='text-align:left'><p>Two different people edited this verse. The change shown here (in red) is not in the current copy of the text.</p><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  rejectedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was <u>royal </u>king.</span></p></blockquote>",
+  acceptedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was king.</span></p></blockquote>",
+  mergedText:
+    "<blockquote lang='dmy' style='text-align:left'><p><span lang='es-015-vaidika'>\\v 1 When Jesus was born in the <u>big </u>village of Bethlehem in Judea, Herod was <u>royal </u>king.</span></p></blockquote>",
+  resultText: '\\v 1 When Jesus was born in the big village of Bethlehem in Judea, Herod was king.',
+  rejectedResultText:
+    '\\v 1 When Jesus was born in the village of Bethlehem in Judea, Herod was royal king.',
 };

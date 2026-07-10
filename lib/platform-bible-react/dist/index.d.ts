@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
@@ -329,6 +329,90 @@ export interface CommentEditorProps {
  * @param CommentEditorProps - The properties for the comment editor component
  */
 export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, initialAssignedUser, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
+type ConflictCardActions = ConflictResolutionOptions | "loading";
+/**
+ * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
+ * (losing) side, or merge (combine) both sides.
+ */
+export type ConflictResolution = "accept" | "reject" | "merge";
+/**
+ * How an already-resolved conflict was resolved, derived from the resolution comment's
+ * `conflictResolutionAction`:
+ *
+ * - `'accept'`: resolved by accepting (no text was written); the accepted side stands.
+ * - `'reject'`: resolved by rejecting (the rejected side was written into the verse).
+ * - `'merged'`: resolved by combining both changes (PT10's "Combine both changes" option, or a PT9
+ *   three-way merge). The card shows the merged verse text (`mergedText`); the outcome itself is
+ *   stated in prose by CommentItem's resolution-reply banner, not on the card.
+ *
+ * Distinct from {@link ConflictResolution} (the live accept/reject choice) because it adds the
+ * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.
+ */
+export type ConflictResolutionOutcome = "accept" | "reject" | "merged";
+/**
+ * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
+ * consuming extension) and forward the result via the localizedStrings prop.
+ */
+export declare const CONFLICT_NOTE_STRING_KEYS: readonly [
+	"%conflict_note_description_verseText%",
+	"%conflict_note_choose_aria_label%",
+	"%conflict_note_stale_notice%",
+	"%conflict_note_resolve_failed%",
+	"%conflict_note_choose_prompt%",
+	"%conflict_note_option_keep_current%",
+	"%conflict_note_option_use_other%",
+	"%conflict_note_option_combine%",
+	"%conflict_note_save_and_resolve%",
+	"%conflict_note_save_disabled_tooltip%",
+	"%conflict_note_save_warning%",
+	"%conflict_note_no_result%",
+	"%conflict_note_outcome_used_other%",
+	"%conflict_note_outcome_combined%",
+	"%conflict_note_summary_unresolved%",
+	"%conflict_note_summary_resolved_kept_current%",
+	"%conflict_note_summary_resolved_used_other%",
+	"%conflict_note_summary_resolved_combined%"
+];
+/** Props for the ConflictNoteCard component */
+export interface ConflictNoteCardProps {
+	/**
+	 * The conflict comment. Reads rejected/accepted/result/rejectedResultText + conflictType; falls
+	 * back to contents.
+	 */
+	comment: LegacyComment;
+	/** Localized strings for the component */
+	localizedStrings: LanguageStrings;
+	/**
+	 * Which resolution actions are available (default 'acceptOrReject'). 'loading' shows a skeleton
+	 * while the options are being fetched; 'none' hides the selector and Resolve button entirely
+	 * (read-only regions); 'accept' disables the Reject option with a stale-verse explanation
+	 * tooltip. The card manages its own selection state (uncontrolled, default 'accept').
+	 */
+	availableActions?: ConflictCardActions;
+	/**
+	 * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
+	 * `'none'` (read-only): it makes the Result region show the text that was actually applied
+	 * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText) instead of the
+	 * live selector state. Ignored while the conflict is still resolvable.
+	 */
+	resolvedResolution?: ConflictResolutionOutcome;
+	/** Called when the user clicks Resolve, with the currently selected resolution. */
+	onResolve?: (resolution: ConflictResolution) => void;
+	/** Disables the selector and Resolve button while a resolve call is in flight. */
+	isResolving?: boolean;
+}
+interface ConflictResolutionCallbacks {
+	/**
+	 * Applies a conflict resolution via the comments data provider's resolveConflict. Returns true on
+	 * success, false on failure (the card re-enables its controls).
+	 */
+	resolve: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+	/**
+	 * Returns which resolution actions the current user may take on a conflict thread (the
+	 * getConflictResolutionOptions capability). Treat missing as 'none'.
+	 */
+	getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
+}
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -449,63 +533,32 @@ export interface CommentListProps {
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 	/** Callback when the user clicks a verse reference in a comment thread. */
 	onVerseRefClick?: (thread: LegacyCommentThread) => void;
+	/**
+	 * Conflict-resolution callbacks (resolve + getOptions). Conflict threads render a read-only card
+	 * when this is not provided.
+	 */
+	conflictResolution?: ConflictResolutionCallbacks;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 /**
- * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
- * (losing) side.
+ * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
+ * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"
+ * (reject), and, when the two edits are independent, "Combine both changes" (merge) — each showing
+ * its inline red/green diff. Clicking anywhere on an option card selects it; the cards keep radio
+ * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
+ * visible radio inline with each card's title. A Save-and-resolve button commits the choice.
+ * Handles the stale state (accept stays enabled and selected; reject is disabled and carries a
+ * read-only explanation; Save stays present but disabled) and the already-resolved read-only state
+ * (just the chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
+ * resolution-reply banner). Falls back to rendering the raw note contents for any non-verseText
+ * conflict.
  */
-export type ConflictResolution = "accept" | "reject";
-/**
- * Object containing all keys used for localization in the ConflictNoteCard component. If you're
- * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
- * obtain the localized strings and pass them into the localizedStrings prop of this component.
- */
-export declare const CONFLICT_NOTE_STRING_KEYS: readonly [
-	"%conflictNote_description_verseText%",
-	"%conflictNote_chooseLabel%",
-	"%conflictNote_chooseAriaLabel%",
-	"%conflictNote_accept%",
-	"%conflictNote_reject%",
-	"%conflictNote_rejectedLabel%",
-	"%conflictNote_acceptedLabel%",
-	"%conflictNote_resultLabel%",
-	"%conflictNote_resultUnavailable%"
-];
-/** Type definition for the localized strings used in the ConflictNoteCard component */
-export type ConflictNoteCardLocalizedStrings = {
-	[localizedKey in (typeof CONFLICT_NOTE_STRING_KEYS)[number]]?: string;
-};
-/** Props for the ConflictNoteCard component */
-export interface ConflictNoteCardProps {
-	/**
-	 * The conflict comment. Reads rejected/accepted/result/rejectedResultText + conflictType; falls
-	 * back to contents.
-	 */
-	comment: LegacyComment;
-	/** Optional localized strings for the component; English fallbacks apply when omitted */
-	localizedStrings?: ConflictNoteCardLocalizedStrings;
-	/**
-	 * Controlled selected resolution. When omitted, the card manages its own state (default
-	 * 'accept').
-	 */
-	selectedResolution?: ConflictResolution;
-	/** Called when the user changes the Accept/Reject selection */
-	onResolutionChange?: (resolution: ConflictResolution) => void;
-	/** Whether the current user may accept/reject; disables the selector when false */
-	canAcceptReject?: boolean;
-}
-/**
- * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
- * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
- * to rendering the raw note contents for any non-verseText conflict.
- */
-export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, canAcceptReject, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ConflictNoteCard({ comment, localizedStrings, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -3383,6 +3436,7 @@ export declare const Z_INDEX_MODAL = 500;
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	ConflictResolutionOptions,
 	TabNavigationContentSearch as NavigationContentSearch,
 	Toaster as Sonner,
 	sonner,

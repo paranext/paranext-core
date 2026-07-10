@@ -211,7 +211,7 @@ internal static class CommentTestHelper
     /// AcceptedChangeXmlStr (parent→winner diff): town struck through, city bolded.
     /// Verse: winner plain USFM (city).
     /// </summary>
-    internal static Comment CreateVerseTextConflictCommentReplacementBothSides()
+    internal static Comment CreateVerseTextConflictCommentBothSidesReplaced()
     {
         XmlDocument contentsDoc = new XmlDocument();
         contentsDoc.LoadXml(

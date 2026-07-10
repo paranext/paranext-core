@@ -64,6 +64,7 @@ export type CommentListPanelProps = Pick<
   | 'canUserAddCommentToThread'
   | 'canUserAssignThreadCallback'
   | 'canUserResolveThreadCallback'
+  | 'conflictResolution'
   | 'canUserEditOrDeleteCommentCallback'
   | 'selectedThreadId'
   | 'onSelectedThreadChange'
@@ -164,6 +165,7 @@ export function CommentListPanel({
   canUserAddCommentToThread,
   canUserAssignThreadCallback,
   canUserResolveThreadCallback,
+  conflictResolution,
   canUserEditOrDeleteCommentCallback,
   selectedThreadId,
   onSelectedThreadChange,
@@ -252,6 +254,7 @@ export function CommentListPanel({
             canUserAddCommentToThread={canUserAddCommentToThread}
             canUserAssignThreadCallback={canUserAssignThreadCallback}
             canUserResolveThreadCallback={canUserResolveThreadCallback}
+            conflictResolution={conflictResolution}
             canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
             selectedThreadId={selectedThreadId}
             onSelectedThreadChange={onSelectedThreadChange}

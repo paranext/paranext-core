@@ -132,6 +132,22 @@ public class PlatformCommentWrapper
         IsFirstCommentInThread ? _comment.ConflictType : NoteConflictType.None;
 
     /// <summary>
+    /// The conflict-resolution action recorded on this comment, if any: <c>null</c> (accept, or not
+    /// a resolution comment at all), <c>"replaced"</c> (a reject wrote the losing side into the
+    /// verse), or <c>"merged"</c> (PT10's merge resolution wrote PT9's auto-merged, both-sides text
+    /// into the verse - data synced from a PT9 three-way merge may also carry it). Comes straight
+    /// from the underlying <see cref="Comment"/> field.
+    ///
+    /// UNGATED on purpose (unlike the four verseText decode fields below, which are gated on
+    /// <see cref="IsVerseTextConflict"/>): PT9's SaveEdits stamps this on the resolution comment it
+    /// appends, and that comment has <c>Type == Conflict</c> but its <c>ConflictType</c> is
+    /// <see cref="NoteConflictType.None"/> (never copied from the original conflict note). A
+    /// verseText gate would therefore NEVER fire for the resolution comment, so this must serialize
+    /// whenever the underlying field is set — the converter null-skips it.
+    /// </summary>
+    public string? ConflictResolutionAction => _comment.ConflictResolutionAction;
+
+    /// <summary>
     /// The verse USFM captured on this comment. Per-comment history data, deliberately NOT gated to
     /// the thread's first comment: PT9's <c>CommentThread.AddNewComment</c> stores the current verse
     /// text on any comment (reply included) written after the verse changed. Only on a conflict
@@ -187,8 +203,7 @@ public class PlatformCommentWrapper
                 )
                 : _comment.GetContentsAsHtml(
                     _thread.ThreadInternal,
-                    // TODO (PT-4104): this comparison is never true (comment ID vs thread ID); replace with IsFirstCommentInThread — behavior-neutral, see ticket.
-                    _comment.Id == _thread?.Id,
+                    IsFirstCommentInThread,
                     false,
                     false
                 );

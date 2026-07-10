@@ -3589,6 +3589,60 @@ namespace TestParanextDataProvider.Projects
             Assert.That(after, Does.Contain("big village"));
         }
 
+
+        [Test]
+        public void ResolveConflict_Reject_StampsReplacedResolutionActionOnResolutionComment()
+        {
+            // Reject writes the losing side, so SaveEdits stamps ConflictResolutionAction='replaced'
+            // on the appended resolution comment. The wrapper surfaces it (ungated), which is what the
+            // card's Result region and the resolution reply's outcome line read.
+            CommentThread thread = SeedVerseTextConflict();
+
+            _provider.ResolveConflict(thread.Id, "reject");
+
+            PlatformCommentThreadWrapper reloaded = ReloadThread(thread.Id);
+            Assert.That(
+                reloaded.Comments.Any(c => c.ConflictResolutionAction == "replaced"),
+                Is.True,
+                "reject must record a 'replaced' resolution action on the resolution comment"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_Accept_LeavesNoResolutionActionOnAnyComment()
+        {
+            // Accept writes no text, so SaveEdits leaves ConflictResolutionAction null on every
+            // comment. The UI reads that absence as the accept outcome.
+            CommentThread thread = SeedVerseTextConflict();
+
+            _provider.ResolveConflict(thread.Id, "accept");
+
+            PlatformCommentThreadWrapper reloaded = ReloadThread(thread.Id);
+            Assert.That(
+                reloaded.Comments.All(c => c.ConflictResolutionAction == null),
+                Is.True,
+                "accept must not record any resolution action"
+            );
+        }
+
+        [Test]
+        public void ResolveConflict_Merge_StampsMergedResolutionActionOnResolutionComment()
+        {
+            // Merge writes the auto-merged (both-sides) text, so SaveEdits stamps
+            // ConflictResolutionAction='merged' on the appended resolution comment. The wrapper
+            // surfaces it (ungated), which is what the card's Result region and the resolution
+            // reply's outcome line read.
+            CommentThread thread = SeedIndependentVerseTextConflict(_scrText);
+
+            _provider.ResolveConflict(thread.Id, "merge");
+
+            PlatformCommentThreadWrapper reloaded = ReloadThread(thread.Id);
+            Assert.That(
+                reloaded.Comments.Any(c => c.ConflictResolutionAction == "merged"),
+                Is.True,
+                "merge must record a 'merged' resolution action on the resolution comment"
+            );
+        }
         #endregion
     }
 }

@@ -3,6 +3,11 @@ import papi, { logger } from '@papi/frontend';
 import {
   AddCommentToThreadOptions,
   COMMENT_LIST_STRING_KEYS,
+  CONFLICT_NOTE_STRING_KEYS,
+  ConflictResolution,
+  ConflictResolutionOptions,
+  Sonner,
+  sonner,
   usePromise,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -57,7 +62,11 @@ global.webViewComponent = function CommentListWebView({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
-      return [...Array.from(COMMENT_LIST_STRING_KEYS), ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS];
+      return [
+        ...Array.from(COMMENT_LIST_STRING_KEYS),
+        ...Array.from(CONFLICT_NOTE_STRING_KEYS),
+        ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+      ];
     }, []),
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
@@ -265,6 +274,19 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const getConflictResolutionOptionsCallback = useCallback(
+    async (threadId: string): Promise<ConflictResolutionOptions> =>
+      withPdp(commentsPdp, 'getConflictResolutionOptionsCallback', 'none', async (pdp) => {
+        try {
+          return await pdp.getConflictResolutionOptions(threadId);
+        } catch (error) {
+          logger.error(`Failed to get conflict resolution options for thread ${threadId}:`, error);
+          return 'none';
+        }
+      }),
+    [commentsPdp],
+  );
+
   const canUserEditOrDeleteCommentCallback = useCallback(
     async (commentId: string): Promise<boolean> =>
       withPdp(commentsPdp, 'canUserEditOrDeleteCommentCallback', false, (pdp) =>
@@ -290,6 +312,29 @@ global.webViewComponent = function CommentListWebView({
         }
       }),
     [commentsPdp],
+  );
+
+  const handleResolveConflict = useCallback(
+    async (threadId: string, resolution: ConflictResolution): Promise<boolean> =>
+      withPdp(commentsPdp, 'handleResolveConflict', false, async (pdp) => {
+        try {
+          await pdp.resolveConflict(threadId, resolution);
+          return true;
+        } catch (error) {
+          logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
+          sonner.error(
+            localizedStrings['%conflict_note_resolve_failed%'] ?? 'Could not resolve the conflict.',
+          );
+          return false;
+        }
+      }),
+    [commentsPdp, localizedStrings],
+  );
+
+  // Bundle the two conflict callbacks into the single slot CommentList/ConflictThread consume.
+  const conflictResolution = useMemo(
+    () => ({ resolve: handleResolveConflict, getOptions: getConflictResolutionOptionsCallback }),
+    [handleResolveConflict, getConflictResolutionOptionsCallback],
   );
 
   const handleUpdateComment = useCallback(
@@ -359,30 +404,34 @@ global.webViewComponent = function CommentListWebView({
   );
 
   return (
-    <CommentListPanel
-      localizedStrings={localizedStrings}
-      isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
-      threads={safeCommentThreads}
-      currentUser={currentUserName}
-      filters={filters}
-      onFiltersChange={setFilters}
-      scopeFilter={scopeFilter}
-      onScopeFilterChange={setScopeFilter}
-      // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
-      // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
-      hasEditorContext={!!editorWebViewId}
-      handleAddCommentToThread={handleAddCommentToThread}
-      handleUpdateComment={handleUpdateComment}
-      handleDeleteComment={handleDeleteComment}
-      handleReadStatusChange={handleReadStatusChange}
-      assignableUsers={assignableUsers}
-      canUserAddCommentToThread={canUserAddCommentToThread}
-      canUserAssignThreadCallback={canUserAssignThreadCallback}
-      canUserResolveThreadCallback={canUserResolveThreadCallback}
-      canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-      selectedThreadId={selectedThreadId}
-      onSelectedThreadChange={setSelectedThreadId}
-      onVerseRefClick={handleVerseRefClick}
-    />
+    <>
+      <CommentListPanel
+        localizedStrings={localizedStrings}
+        isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
+        threads={safeCommentThreads}
+        currentUser={currentUserName}
+        filters={filters}
+        onFiltersChange={setFilters}
+        scopeFilter={scopeFilter}
+        onScopeFilterChange={setScopeFilter}
+        // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
+        // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
+        hasEditorContext={!!editorWebViewId}
+        handleAddCommentToThread={handleAddCommentToThread}
+        handleUpdateComment={handleUpdateComment}
+        handleDeleteComment={handleDeleteComment}
+        handleReadStatusChange={handleReadStatusChange}
+        assignableUsers={assignableUsers}
+        canUserAddCommentToThread={canUserAddCommentToThread}
+        canUserAssignThreadCallback={canUserAssignThreadCallback}
+        canUserResolveThreadCallback={canUserResolveThreadCallback}
+        canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+        selectedThreadId={selectedThreadId}
+        onSelectedThreadChange={setSelectedThreadId}
+        onVerseRefClick={handleVerseRefClick}
+        conflictResolution={conflictResolution}
+      />
+      <Sonner />
+    </>
   );
 };
