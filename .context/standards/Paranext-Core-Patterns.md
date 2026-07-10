@@ -1023,10 +1023,13 @@ scroll-group sync, cross-project navigation, showing one project's current refer
 project's editor or resource — the reference **must be converted into the target project's
 versification**. Never assume two projects share a versification.
 
-- **In React (renderer and web views), use the scroll-group hooks — they convert for you.**
-  `useScrollGroupScrRef(scrollGroupScrRef, setScrollGroupScrRef, projectId)` (and its web-view
-  counterpart `useWebViewScrollGroupScrRef()`) return the group's reference already converted into
-  the consuming project's versification. Prefer these over converting by hand.
+- **In React (renderer and web views), use the scroll-group hooks — they convert for you, given
+  your project.** `useScrollGroupScrRef(scrollGroupScrRef, setScrollGroupScrRef, projectId)` only
+  converts when you pass the consuming project's `projectId` as the third argument; omit it and the
+  hook returns the raw verse reference with no conversion and no error. Pass `projectId` whenever
+  conversion may be needed. Its web-view counterpart `useWebViewScrollGroupScrRef()` is unaffected —
+  it reads `projectId` from the web view definition automatically. Prefer these hooks over
+  converting by hand.
 - **Elsewhere (C#/Node, or non-React callers), use the PAPI command**
   `platformScripture.mapVerseRefBetweenProjects` directly. See its TSDoc/OpenRPC documentation for
   the exact contract.
