@@ -81,10 +81,11 @@ public static class JsonConverterUtils
 
     /// <summary>
     /// Serializes <paramref name="items"/> as a JSON array in which a single element that fails to
-    /// serialize is dropped (and logged) instead of aborting the whole array. Each element is
-    /// serialized into a reused side buffer first — <see cref="Utf8JsonWriter"/> is forward-only and
-    /// cannot roll back a partial write, so an element that throws mid-serialization must never reach
-    /// <paramref name="writer"/> — and only elements that serialize cleanly are copied out.
+    /// serialize is dropped (and logged) instead of aborting the whole array, and returns the number
+    /// of elements dropped. Each element is serialized into a reused side buffer first — <see
+    /// cref="Utf8JsonWriter"/> is forward-only and cannot roll back a partial write, so an element
+    /// that throws mid-serialization must never reach <paramref name="writer"/> — and only elements
+    /// that serialize cleanly are copied out.
     /// </summary>
     /// <remarks>
     /// A <see cref="CommentThreadContextMissingException"/> is a wiring/programmer error, not corrupt
@@ -92,7 +93,7 @@ public static class JsonConverterUtils
     /// wiring regression should surface loudly. The side buffer is allocated once and reused across
     /// all elements (one allocation per array, not per element).
     /// </remarks>
-    internal static void WriteIsolatedArray<T>(
+    internal static int WriteIsolatedArray<T>(
         Utf8JsonWriter writer,
         IEnumerable<T> items,
         JsonSerializerOptions options,
@@ -100,6 +101,7 @@ public static class JsonConverterUtils
     )
     {
         writer.WriteStartArray();
+        int dropped = 0;
         var buffer = new ArrayBufferWriter<byte>();
         using var itemWriter = new Utf8JsonWriter(
             buffer,
@@ -121,6 +123,7 @@ public static class JsonConverterUtils
             catch (Exception e)
             {
                 itemWriter.Reset();
+                dropped++;
                 Console.WriteLine(
                     $"WARNING: dropping {SafeDescribe(item, describe)} from serialization; "
                         + $"it could not be serialized. {e.Message}"
@@ -132,6 +135,7 @@ public static class JsonConverterUtils
             writer.WriteRawValue(buffer.WrittenSpan, skipInputValidation: true);
         }
         writer.WriteEndArray();
+        return dropped;
     }
 
     /// <summary>Describes an item for a log message without throwing, so logging a failed item can't

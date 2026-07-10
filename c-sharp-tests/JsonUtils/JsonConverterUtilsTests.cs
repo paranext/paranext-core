@@ -247,29 +247,34 @@ public class JsonConverterUtilsTests
         }
     }
 
-    private static string WriteIsolatedArrayToJson(IEnumerable<string> items)
+    private static (string json, int dropped) WriteIsolatedArrayToJson(IEnumerable<string> items)
     {
         var options = new JsonSerializerOptions();
         options.Converters.Add(new SentinelStringConverter());
         var buffer = new ArrayBufferWriter<byte>();
+        int dropped;
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            WriteIsolatedArray(writer, items, options, s => $"item '{s}'");
+            dropped = WriteIsolatedArray(writer, items, options, s => $"item '{s}'");
             writer.Flush();
         }
-        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+        return (Encoding.UTF8.GetString(buffer.WrittenSpan), dropped);
     }
 
     [Test]
     public void WriteIsolatedArray_HealthyItems_WritesAllInOrder()
     {
-        Assert.That(WriteIsolatedArrayToJson(["a", "b", "c"]), Is.EqualTo("[\"a\",\"b\",\"c\"]"));
+        var (json, dropped) = WriteIsolatedArrayToJson(["a", "b", "c"]);
+        Assert.That(json, Is.EqualTo("[\"a\",\"b\",\"c\"]"));
+        Assert.That(dropped, Is.EqualTo(0));
     }
 
     [Test]
     public void WriteIsolatedArray_EmptyInput_WritesEmptyArray()
     {
-        Assert.That(WriteIsolatedArrayToJson([]), Is.EqualTo("[]"));
+        var (json, dropped) = WriteIsolatedArrayToJson([]);
+        Assert.That(json, Is.EqualTo("[]"));
+        Assert.That(dropped, Is.EqualTo(0));
     }
 
     [Test]
@@ -277,10 +282,11 @@ public class JsonConverterUtilsTests
     {
         // The middle item partially writes then throws; it must be fully discarded (no half-object)
         // and the survivors kept in their original order.
-        Assert.That(
-            WriteIsolatedArrayToJson(["a", SentinelStringConverter.ThrowAfterPartialWrite, "b"]),
-            Is.EqualTo("[\"a\",\"b\"]")
+        var (json, dropped) = WriteIsolatedArrayToJson(
+            ["a", SentinelStringConverter.ThrowAfterPartialWrite, "b"]
         );
+        Assert.That(json, Is.EqualTo("[\"a\",\"b\"]"));
+        Assert.That(dropped, Is.EqualTo(1));
     }
 
     [Test]
