@@ -73,7 +73,7 @@ type ConversionResult = {
  * @param projectId Optional project id for the consuming web view. When provided, the returned
  *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
  *   scroll group with this project as the source.
- * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+ * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
  *
  *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
  *       converted into `projectId`'s versification when a `projectId` is provided
@@ -83,6 +83,9 @@ type ConversionResult = {
  *       If not synced to a scroll group, this is `undefined`
  *   - `setScrollGroupId`: Function to use to update the scroll group with which this
  *       `scrollGroupScrRef` is synced
+ *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the source
+ *       frame of `scrRef`); this web view's own `projectId` when not synced to a scroll group.
+ *       `undefined` when unknown
  */
 export function useScrollGroupScrRef(
   scrollGroupScrRef: ScrollGroupScrRef | undefined,
@@ -93,6 +96,7 @@ export function useScrollGroupScrRef(
   setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+  sourceProjectId: string | undefined,
 ] {
   // Default scroll group is 0
   const scrollGroupScrRefDefaulted = scrollGroupScrRef ?? 0;
@@ -293,7 +297,7 @@ export function useScrollGroupScrRef(
     [displayScrRef],
   );
 
-  return [displayScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId];
+  return [displayScrRef, setScrRef, scrollGroupIdLocal, setScrollGroupId, sourceProjectIdLocal];
 }
 
 export default useScrollGroupScrRef;
