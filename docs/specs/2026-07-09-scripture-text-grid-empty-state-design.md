@@ -93,6 +93,30 @@ on-screen target.
 - Spanish: AI-generated to match (e.g. *"No hay textos para mostrar. Abre Opciones de vista para
   elegir qué textos mostrar."* — finalize in implementation).
 
+### Consuming A4's renderer (PT-4052)
+
+A4 (branches `pt-4052-scripture-text-grid-row-and-webview` and
+`pt-4052-scripture-text-grid-verse-cell`) is the grid renderer A6's non-empty branch will
+eventually hold. Two things were verified against those branches:
+
+- **A4 has no empty state of its own.** Its `ScriptureTextGrid` component renders exactly
+  `resources.length` cells; when the list is empty it emits a `role="grid"` with an empty
+  `role="row"` — a blank pane. So A6 genuinely owns the empty state (nothing to de-duplicate), and
+  A6's `contents.length === 0 ? <ScriptureTextGridEmptyState/> : <placeholder/>` conditional is the
+  exact seam A4's `<ScriptureTextGrid resources={...} .../>` slots into (the else branch).
+- **A4 and A5 are parallel forks** — neither contains the other; both rewrite the web view. A6
+  stacks on **A5** and follows A5's conventions. Integration reconciliation (A4 + A5 + A6 into one
+  web view) is out of A6's scope, but these known divergences should be flagged in the A6 PR so the
+  integrator is not surprised:
+  - A4 moved the contents util into a subfolder (`scripture-text-grid/scripture-text-grid-contents.utils.ts`);
+    A5/A6 keep it at `src/scripture-text-grid-contents.utils.ts`.
+  - `useTextCollectionSources` has different return shapes on the two branches (A5:
+    `{ sources, textConnectionPdp }`; A4: a tuple `[sources]`). A6 uses A5's object shape.
+  - A5 binds to the active editor's project (`projectId ?? activeEditorProjectId`); A4 uses
+    `projectId` directly.
+
+  A6 does not attempt to resolve these; it builds cleanly on A5 and leaves a note in the PR body.
+
 ## Part 2 — View Options TEXTS-list empty prompt
 
 **Files touched (A5's):**
