@@ -13,6 +13,9 @@ and with citations. **Do NOT use Edit, Write, or any file-modifying tools.**
 
 - `PT9_MAP` — the entry points, forms, and implementing classes for one aspect (from
   `feature-mapper`).
+- `PT9_CLAIMS` (optional) — the PRD's numbered assertions about PT9 behavior (`PC-n` rows from
+  the PRD interpreter). Verify each against source; PRDs routinely misdescribe PT9, and a
+  refuted claim is a headline finding, not a footnote.
 
 ## Degradation
 
@@ -238,6 +241,15 @@ Return a behavior/architecture digest:
 ### UI                     (abstract elements + ASCII wireframes + state variants — if applicable)
 ### Dev-access flags       (DEV-### proposals, or `None.`)
 ### Review Flags
+### Claim verdicts         (when PT9_CLAIMS provided)
+```
+
+Claim-verdicts format — one row per `PC-n`; Refuted or Partly rows must quote what PT9 actually
+does:
+
+```
+| # | PRD assertion | Verdict | Evidence |
+| PC-1 | … | Confirmed / Refuted / Partly | file:line |
 ```
 
 ## Status reporting
