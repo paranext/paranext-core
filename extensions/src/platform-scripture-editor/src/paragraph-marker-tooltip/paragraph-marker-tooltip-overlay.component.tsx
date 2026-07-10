@@ -115,6 +115,12 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     // an element with overflow-y: auto or scroll. The editor's scroll container is an ancestor
     // of positionAnchor — walking DOWN into children never reaches it.
     // Falls back to positionAnchor if no scrolling ancestor is found.
+    //
+    // Intentionally style-only (no scrollHeight > clientHeight check): this walk runs once on
+    // mount, possibly before content has loaded and made anything overflow, so "actually
+    // overflowing right now" would be the wrong criterion here. Contrast with findScrollContainer
+    // in ../editor-dom.util.ts, which requires actual overflow because it runs at scroll time,
+    // after content has loaded.
     let scrollContainer: HTMLElement = positionAnchor;
     // parentElement is typed as HTMLElement | null; null terminates the walk
     // eslint-disable-next-line no-type-assertion/no-type-assertion

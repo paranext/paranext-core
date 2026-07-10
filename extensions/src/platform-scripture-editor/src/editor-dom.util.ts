@@ -58,7 +58,39 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
 }
 
 /**
- * Scrolls to the verse marker at the specified verse ref within the editor container.
+ * Finds the element that actually scrolls the given element's content: the nearest ancestor
+ * (starting with the element itself) that is styled scrollable (`overflow-y: auto | scroll`) AND
+ * actually overflows (`scrollHeight > clientHeight`).
+ *
+ * The scroll container is discovered, not assumed: wrapper elements between the web view's sized
+ * flex column and `.editor-container` leave `.editor-container` auto-height, so it grows to its
+ * content height and scrolling it is a silent no-op — the web view's outer `tw:overflow-auto`
+ * wrapper is what actually scrolls (regression diagnosed 2026-07-09). If a future layout change
+ * re-constrains `.editor-container`, discovery resolves there instead — correct either way.
+ *
+ * Note: `ParagraphMarkerTooltipOverlay` keeps its own style-only walk-up (no overflow check) — it
+ * attaches its scroll listener once on mount, possibly before content has loaded and made anything
+ * overflow, so "actually overflowing right now" would be the wrong criterion there.
+ *
+ * @param fromElement Element whose scroll container to find
+ * @returns The scroll container, or undefined if nothing scrollable exists (nothing to scroll)
+ */
+export function findScrollContainer(fromElement: HTMLElement): HTMLElement | undefined {
+  let candidate: HTMLElement | undefined = fromElement;
+  while (candidate) {
+    const { overflowY } = window.getComputedStyle(candidate);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      candidate.scrollHeight > candidate.clientHeight
+    )
+      return candidate;
+    candidate = candidate.parentElement ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Scrolls to the verse marker at the specified verse ref within the editor content.
  *
  * @param verseRef The verse ref whose matching verse marker to scroll to
  * @returns The verse marker's DOM element if found; otherwise undefined
@@ -71,28 +103,30 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
           `.editor-container span[data-marker="v"][data-number="${verseRef.verseNum}"]`,
         ) ?? undefined);
 
-  const scrollContainerElement =
-    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+  // Fall back to the editor container for the chapter-start case where no verse marker exists
+  const scrollStartElement =
+    verseElement ?? document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+  const scrollContainerElement = scrollStartElement
+    ? findScrollContainer(scrollStartElement)
+    : undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
   if (scrollContainerElement && (verseElement || verseRef.verseNum <= 1)) {
-    // Get the scroll position all the way up to the scroll container
-    let offsetElement = verseElement;
     let verseOffsetTop = 0;
-    if (verseRef.verseNum >= 1) {
-      // Find the y offset from the scrolling container
-      while (offsetElement && offsetElement !== scrollContainerElement) {
-        verseOffsetTop += offsetElement.offsetTop;
-        offsetElement =
-          offsetElement.offsetParent instanceof HTMLElement
-            ? offsetElement.offsetParent
-            : undefined;
-      }
+    if (verseElement) {
+      // Rect math instead of an offsetParent walk: the scroll container is not necessarily
+      // positioned, so it may not appear in the offsetParent chain at all
+      const verseRect = verseElement.getBoundingClientRect();
+      const containerRect = scrollContainerElement.getBoundingClientRect();
       // Scroll a bit above the verse so you can see a bit of context
-      verseOffsetTop -= VERSE_NUMBER_SCROLL_OFFSET;
+      verseOffsetTop =
+        scrollContainerElement.scrollTop +
+        verseRect.top -
+        containerRect.top -
+        VERSE_NUMBER_SCROLL_OFFSET;
     }
 
-    scrollContainerElement?.scrollTo({
+    scrollContainerElement.scrollTo({
       behavior: 'smooth',
       top: verseOffsetTop,
     });
@@ -102,7 +136,7 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
 }
 
 /**
- * Scrolls to the annotation with the given ID within the editor container.
+ * Scrolls to the annotation with the given ID within the editor content.
  *
  * @param id The ID of the annotation to scroll to
  * @returns The DOM element of the annotation if found; otherwise undefined
@@ -111,26 +145,21 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
   const annotationElement =
     document.querySelector<HTMLElement>(`.editor-container .annotationId-${id}`) ?? undefined;
 
-  const scrollContainerElement =
-    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+  const scrollContainerElement = annotationElement
+    ? findScrollContainer(annotationElement)
+    : undefined;
 
   // Scroll if we find the annotation
   if (scrollContainerElement && annotationElement) {
-    // Compute the annotation's offset relative to the scrolling container
-    let offsetElement: HTMLElement | undefined = annotationElement;
-    let annotationOffsetTop = 0;
-    while (offsetElement && offsetElement !== scrollContainerElement) {
-      annotationOffsetTop += offsetElement.offsetTop;
-      offsetElement =
-        offsetElement.offsetParent instanceof HTMLElement ? offsetElement.offsetParent : undefined;
-    }
+    // Rect math instead of an offsetParent walk — see scrollToVerse
+    const annotationRect = annotationElement.getBoundingClientRect();
+    const containerRect = scrollContainerElement.getBoundingClientRect();
 
     const containerScrollTop = scrollContainerElement.scrollTop;
     const containerHeight = scrollContainerElement.clientHeight;
-    const annotationHeight = annotationElement.offsetHeight;
 
-    const annotationTop = annotationOffsetTop;
-    const annotationBottom = annotationTop + annotationHeight;
+    const annotationTop = containerScrollTop + annotationRect.top - containerRect.top;
+    const annotationBottom = annotationTop + annotationRect.height;
 
     // If the annotation is fully visible, don't scroll
     if (

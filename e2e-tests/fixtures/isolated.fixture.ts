@@ -5,7 +5,7 @@ import {
   TestInfo,
   ConsoleMessage,
 } from '@playwright/test';
-import { launchElectronApp, teardownElectronApp } from './helpers';
+import { launchElectronApp, LaunchElectronAppOptions, teardownElectronApp } from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -30,16 +30,24 @@ export { expect } from '@playwright/test';
  * inherit stale module state, which prevents dock tabs from rendering correctly.
  */
 export interface IsolatedFixtures {
+  /**
+   * Per-suite launch options; set with `test.use({ electronLaunchOptions: { ... } })`. Named
+   * `electronLaunchOptions` (not `launchOptions`) because Playwright's base `test` already
+   * registers a worker-scoped `launchOptions` option fixture (browser launch options); reusing that
+   * name throws "Fixture ... has already been registered as a { scope: 'worker' } fixture".
+   */
+  electronLaunchOptions: LaunchElectronAppOptions;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
 
 export const test = base.extend<IsolatedFixtures>({
+  // Option fixture: suites override via test.use(); default launches with no special options.
+  electronLaunchOptions: [{}, { option: true }],
+
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
-  // Playwright fixtures require destructured parameter even when no dependencies are needed
-  // eslint-disable-next-line no-empty-pattern
-  electronApp: async ({}, use) => {
-    const ctx = await launchElectronApp();
+  electronApp: async ({ electronLaunchOptions }, use) => {
+    const ctx = await launchElectronApp(electronLaunchOptions);
 
     await use(ctx.electronApp);
 

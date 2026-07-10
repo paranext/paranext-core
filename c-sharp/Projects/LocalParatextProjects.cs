@@ -62,12 +62,20 @@ internal class LocalParatextProjects
 
     public LocalParatextProjects()
     {
-        ProjectRootFolder = Path.Join(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".platform.bible",
-            "projects",
-            "Paratext 9 Projects"
+        // E2E tests (and other tooling) can point the app at an isolated projects folder so runs
+        // don't touch the user's real projects; Initialize() installs the bundled sample WEB
+        // project into an empty root. See e2e-tests/fixtures/helpers.ts (isolatedProjectRoot).
+        string? projectRootOverride = Environment.GetEnvironmentVariable(
+            "PLATFORM_BIBLE_PROJECT_ROOT_FOLDER"
         );
+        ProjectRootFolder = !string.IsNullOrWhiteSpace(projectRootOverride)
+            ? projectRootOverride
+            : Path.Join(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".platform.bible",
+                "projects",
+                "Paratext 9 Projects"
+            );
     }
 
     #endregion
