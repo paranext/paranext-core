@@ -169,7 +169,7 @@ type DecoratorConfig = {
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
   hasEditorContext?: boolean;
-  hiddenNoteCount?: number;
+  hiddenCount?: number;
 };
 
 /**
@@ -206,7 +206,7 @@ function createDecorator(config: DecoratorConfig) {
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
             hasEditorContext: config.hasEditorContext,
-            hiddenNoteCount: config.hiddenNoteCount ?? 0,
+            hiddenCount: config.hiddenCount ?? 0,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -317,7 +317,7 @@ export const NoEditorContext: Story = {
 
 /** One dropped thread — the banner uses the singular copy ("1 note couldn't be shown"). */
 export const OneNoteHidden: Story = {
-  decorators: [createDecorator({ hiddenNoteCount: 1 })],
+  decorators: [createDecorator({ hiddenCount: 1 })],
 };
 
 /**
@@ -325,10 +325,10 @@ export const OneNoteHidden: Story = {
  * banner.
  */
 export const SomeNotesHidden: Story = {
-  decorators: [createDecorator({ hiddenNoteCount: 3 })],
+  decorators: [createDecorator({ hiddenCount: 3 })],
 };
 
 /** Every thread was dropped — the banner shows above the empty-state, not just a bare "no comments". */
 export const AllNotesHidden: Story = {
-  decorators: [createDecorator({ threads: [], hiddenNoteCount: 2 })],
+  decorators: [createDecorator({ threads: [], hiddenCount: 2 })],
 };

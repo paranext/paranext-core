@@ -236,7 +236,7 @@ global.webViewComponent = function CommentListWebView({
     return commentThreadsResult.threads;
   }, [commentThreadsResult]);
 
-  const hiddenNoteCount = useMemo<number>(() => {
+  const hiddenCount = useMemo<number>(() => {
     if (!commentThreadsResult || isPlatformError(commentThreadsResult)) return 0;
     return commentThreadsResult.hiddenCount;
   }, [commentThreadsResult]);
@@ -420,7 +420,7 @@ global.webViewComponent = function CommentListWebView({
         localizedStrings={localizedStrings}
         isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
         threads={safeCommentThreads}
-        hiddenNoteCount={hiddenNoteCount}
+        hiddenCount={hiddenCount}
         currentUser={currentUserName}
         filters={filters}
         onFiltersChange={setFilters}

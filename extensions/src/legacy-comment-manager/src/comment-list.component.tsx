@@ -10,6 +10,7 @@ import {
   SelectValue,
   Skeleton,
 } from 'platform-bible-react';
+import { formatReplacementString } from 'platform-bible-utils';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { ComponentProps } from 'react';
 import {
@@ -93,7 +94,7 @@ export type CommentListPanelProps = Pick<
    */
   hasEditorContext?: boolean;
   /** How many threads the backend dropped because they couldn't be serialized (0 = no banner). */
-  hiddenNoteCount: number;
+  hiddenCount: number;
 };
 
 /**
@@ -163,7 +164,7 @@ export function CommentListPanel({
   scopeFilter,
   onScopeFilterChange,
   hasEditorContext = true,
-  hiddenNoteCount,
+  hiddenCount,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -239,15 +240,14 @@ export function CommentListPanel({
 
       {/* Comments list */}
       <div className="tw:flex-1 tw:overflow-auto">
-        {hiddenNoteCount > 0 && (
+        {hiddenCount > 0 && (
           <Alert className="tw:m-4 tw:w-auto">
             <AlertDescription>
-              {hiddenNoteCount === 1
+              {hiddenCount === 1
                 ? localizedStrings['%comment_notes_hidden_single%']
-                : localizedStrings['%comment_notes_hidden_multiple%'].replace(
-                    '{count}',
-                    hiddenNoteCount.toString(),
-                  )}
+                : formatReplacementString(localizedStrings['%comment_notes_hidden_multiple%'], {
+                    count: hiddenCount,
+                  })}
             </AlertDescription>
           </Alert>
         )}
