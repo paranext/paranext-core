@@ -80,11 +80,11 @@ global.webViewComponent = function CommentListWebView({
   // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
   // race where a setFilters message could arrive before this view's message listener attaches. An
   // already-open (reused) view keeps its state and is updated via the setFilters message instead.
-  const [initialFilters] = useWebViewState<Partial<CommentFilters> | undefined>(
+  const [initialFilters, setInitialFilters] = useWebViewState<Partial<CommentFilters> | undefined>(
     'initialFilters',
     undefined,
   );
-  const [initialScopeFilter] = useWebViewState<ScopeFilter | undefined>(
+  const [initialScopeFilter, setInitialScopeFilter] = useWebViewState<ScopeFilter | undefined>(
     'initialScopeFilter',
     undefined,
   );
@@ -93,6 +93,16 @@ global.webViewComponent = function CommentListWebView({
     applyFilterOverrides(initialFilters),
   );
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScopeFilter ?? UNFILTERED);
+
+  // Consume the one-shot seed exactly once. The useState initializers above already read it
+  // synchronously on first render, so clear it from persistent web view state now. Otherwise an
+  // in-session remount that re-runs this component (e.g. dragging the tab to another dock region)
+  // would re-read the stale seed and snap the user's live filter changes back to the original
+  // programmatic request.
+  useEffect(() => {
+    if (initialFilters !== undefined) setInitialFilters(undefined);
+    if (initialScopeFilter !== undefined) setInitialScopeFilter(undefined);
+  }, [initialFilters, initialScopeFilter, setInitialFilters, setInitialScopeFilter]);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
@@ -353,6 +363,9 @@ global.webViewComponent = function CommentListWebView({
       onFiltersChange={setFilters}
       scopeFilter={scopeFilter}
       onScopeFilterChange={setScopeFilter}
+      // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
+      // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
+      hasEditorContext={!!editorWebViewId}
       handleAddCommentToThread={handleAddCommentToThread}
       handleUpdateComment={handleUpdateComment}
       handleDeleteComment={handleDeleteComment}

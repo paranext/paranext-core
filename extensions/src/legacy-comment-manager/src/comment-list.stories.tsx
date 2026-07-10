@@ -168,6 +168,7 @@ type DecoratorConfig = {
   isLoading?: boolean;
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
+  hasEditorContext?: boolean;
 };
 
 /**
@@ -203,6 +204,7 @@ function createDecorator(config: DecoratorConfig) {
             onFiltersChange: setFilters,
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
+            hasEditorContext: config.hasEditorContext,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -301,4 +303,12 @@ export const Empty: Story = {
 /** No comments match the active filter — shows the "no comments match filter" message. */
 export const EmptyFiltered: Story = {
   decorators: [createDecorator({ threads: [], initialFilters: { type: 'conflicts' } })],
+};
+
+/**
+ * Opened without an editor (e.g. a cross-project open from the Send/Receive results link): the
+ * scope dropdown omits "current chapter" because there is no editor to derive the chapter from.
+ */
+export const NoEditorContext: Story = {
+  decorators: [createDecorator({ hasEditorContext: false })],
 };

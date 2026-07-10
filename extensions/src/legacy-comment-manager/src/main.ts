@@ -17,6 +17,7 @@ import { serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { SCOPE_FILTER_CURRENT_CHAPTER, UNFILTERED } from './comment-list-filters.model';
 import {
   LEGACY_COMMENT_USJ_PDPF_ID,
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
@@ -63,15 +64,16 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       activeCommentListsByProject.set(projectId, savedWebView.id);
     }
 
-    const baseTitle = await papi.localization.getLocalizedString({
+    // Kick off the (independent) title localization now so it runs concurrently with the
+    // project-name lookup below instead of serially before it.
+    const baseTitlePromise = papi.localization.getLocalizedString({
       localizeKey: '%webView_legacyCommentManager_commentList_title%',
     });
 
     // A caller-supplied projectId may be invalid or not yet loaded; a rejection here would fail the
     // whole open, so guard the lookup and fall back to the id rather than let the title throw.
-    let title = baseTitle;
+    let projectName: string | undefined;
     if (projectId) {
-      let projectName: string | undefined;
       try {
         const baseProjectPdp = await papi.projectDataProviders.get('platform.base', projectId);
         projectName = await baseProjectPdp.getSetting('platform.name');
@@ -81,8 +83,12 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
           error,
         );
       }
-      title = `${baseTitle}: ${projectName ?? projectId}`;
     }
+
+    const baseTitle = await baseTitlePromise;
+    // Fall back to the id when the name is missing OR empty (`||`, not `??`, so an empty-string
+    // project name doesn't render a blank "Comments: " suffix).
+    const title = projectId ? `${baseTitle}: ${projectName || projectId}` : baseTitle;
 
     return {
       ...savedWebView,
@@ -181,13 +187,16 @@ async function openCommentList(
   if (!editorContextApplies) editorScrollGroupId = undefined;
 
   // A cross-project target has no editor to derive "current chapter" from, so a current-chapter
-  // scope would filter against a stale/blank ref. Fall back to all-books in that case.
+  // scope would filter against a stale/blank ref. Fall back to all-books (UNFILTERED) in that case.
+  // UNFILTERED rather than undefined keeps the new-view and reused-view paths consistent: on a reused
+  // view it makes needsSetFilters true so an actual setFilters is sent (undefined would leave a
+  // reused view stale while a new view mounted at all-books — the same call diverging by view state).
   let effectiveScopeFilterToSet = options.scopeFilterToSet;
-  if (!editorContextApplies && effectiveScopeFilterToSet === 'current-chapter') {
+  if (!editorContextApplies && effectiveScopeFilterToSet === SCOPE_FILTER_CURRENT_CHAPTER) {
     logger.warn(
       'openCommentList: dropping current-chapter scope for a cross-project target (no editor context); using all-books',
     );
-    effectiveScopeFilterToSet = undefined;
+    effectiveScopeFilterToSet = UNFILTERED;
   }
 
   if (!projectId) {
@@ -252,10 +261,23 @@ async function openCommentList(
       commentListWebViewType,
       commentListWebViewId,
     );
-    if (!commentListController)
+    if (!commentListController) {
+      // Name the pending action(s) so a controller-lookup miss is diagnosable in logs.
+      const pendingActions: string[] = [];
+      if (needsSetFilters)
+        pendingActions.push(
+          `apply filters ${serialize({
+            filters: options.filtersToSet,
+            scopeFilter: effectiveScopeFilterToSet,
+          })}`,
+        );
+      if (needsSelectThread) pendingActions.push(`select thread ${options.threadIdToSelect}`);
       throw new Error(
-        `Could not get WebView Controller for comment list WebView ${commentListWebViewId}`,
+        `Could not get WebView Controller for comment list WebView ${commentListWebViewId} to ${pendingActions.join(
+          ' and ',
+        )}`,
       );
+    }
 
     // setFilters BEFORE selectThread so the selection lands within the final filtered view rather
     // than being filtered out by a subsequent re-query.
