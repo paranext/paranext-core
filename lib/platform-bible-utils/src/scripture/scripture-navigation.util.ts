@@ -247,8 +247,13 @@ export function getNextVerseRef(
     const endVerse = bounds?.getEndVerse(book, chapterNum);
     if (endVerse === undefined || verseNum < endVerse)
       return { book, chapterNum, verseNum: verseNum + 1 };
-    // At (or past) the last verse of the chapter: roll to the next chapter, crossing into the
-    // closest next present book at the last chapter
+    // At (or past) the last verse of the chapter. Handle the in-book roll to the next chapter FIRST —
+    // it needs only the current book's chapter count, not the book list — so a bounds-aware caller
+    // that omits `availableBooks` still rolls to the next chapter of the same book (symmetric with
+    // getPreviousVerseRef, which rolls back a chapter without needing `availableBooks`). Only at the
+    // book's LAST chapter do we consult the book list to cross into the closest next present book.
+    if (chapterNum < getEndChapterWithFallback(book, bounds))
+      return { book, chapterNum: chapterNum + 1, verseNum: 1 };
     return getNextChapterRef(scrRef, availableBooks ?? [], bounds);
   }
 

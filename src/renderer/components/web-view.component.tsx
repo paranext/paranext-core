@@ -481,7 +481,14 @@ export function WebView({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = () => getBookIdsFromBooksPresent(booksPresent);
+  // Stable identity per booksPresent value. BookChapterControl memoizes its book list (and the
+  // filtering/matching derived from it) on this function's identity, so a fresh closure every render
+  // would recompute all of that on every WebView render while a control is mounted (power mode).
+  // Mirrors the top toolbar's fetchActiveBookIds in platform-bible-toolbar.tsx.
+  const fetchActiveBooks = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
 
   const projectMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {

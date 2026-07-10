@@ -721,6 +721,18 @@ describe('getBookIdsFromBooksPresent', () => {
     expect(getBookIdsFromBooksPresent('')).toEqual([]);
     expect(getBookIdsFromBooksPresent('000')).toEqual([]);
   });
+
+  test('bounds to the canon length, ignoring flags past the last canonical book', () => {
+    // A '1' past the last canonical book would otherwise become the '***' placeholder id, which
+    // downstream Canon.isObsolete / Canon.bookIdToNumber calls crash on (TypeError). GEN is present;
+    // the trailing stray '1' (one position past the canon) must be ignored, not emitted as '***'.
+    const overlong = `1${'0'.repeat(Canon.allBookIds.length - 1)}1`;
+    expect(overlong.length).toBe(Canon.allBookIds.length + 1);
+
+    const result = getBookIdsFromBooksPresent(overlong);
+    expect(result).toEqual(['GEN']);
+    expect(result).not.toContain('***');
+  });
 });
 
 describe('collectUsjMarkers', () => {

@@ -271,6 +271,27 @@ describe('getNextVerseRef with bounds', () => {
       getNextVerseRef({ book: 'EXO', chapterNum: 5, verseNum: 3 }, ['GEN', 'LEV'], bounds),
     ).toEqual({ book: 'LEV', chapterNum: 1, verseNum: 1 });
   });
+
+  test('rolls to the next chapter of the same book at a chapter last verse even without availableBooks', () => {
+    // Regression: a bounds-aware caller that omits availableBooks must still roll within the book
+    // (symmetric with getPreviousVerseRef). GEN 1 ends at verse 8 and is not GEN's last chapter, so
+    // the in-book rollover applies before the book list is ever consulted.
+    expect(getNextVerseRef({ book: 'GEN', chapterNum: 1, verseNum: 8 }, undefined, bounds)).toEqual(
+      {
+        book: 'GEN',
+        chapterNum: 2,
+        verseNum: 1,
+      },
+    );
+  });
+
+  test('returns undefined at the last chapter last verse without availableBooks (no book list to cross with)', () => {
+    // GEN 3 is GEN's last chapter (per bounds), so crossing into the next book requires the book
+    // list — which is omitted here, so there is nowhere to go.
+    expect(
+      getNextVerseRef({ book: 'GEN', chapterNum: 3, verseNum: 24 }, undefined, bounds),
+    ).toBeUndefined();
+  });
 });
 
 describe('getPreviousVerseRef with bounds', () => {

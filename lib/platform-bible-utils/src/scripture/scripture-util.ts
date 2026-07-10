@@ -200,10 +200,16 @@ export const BOOKS_PRESENT_DEFAULT = '';
  * @experimental This export is unstable and may change shape or disappear without notice
  */
 export function getBookIdsFromBooksPresent(booksPresent: string): string[] {
-  return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-    if (char === '1') ids.push(Canon.bookNumberToId(index + 1));
-    return ids;
-  }, []);
+  const ids: string[] = [];
+  // Bound to the canon length. A '1' past the last canonical book would make Canon.bookNumberToId
+  // return the '***' placeholder id, which downstream Canon.isObsolete/bookIdToNumber calls choke on
+  // (a TypeError that crashes the book-list build). The provider always emits exactly
+  // Canon.allBookIds.length flags, so any extra characters are never meaningful — ignore them.
+  const bookCount = Math.min(booksPresent.length, Canon.allBookIds.length);
+  for (let index = 0; index < bookCount; index += 1) {
+    if (booksPresent[index] === '1') ids.push(Canon.bookNumberToId(index + 1));
+  }
+  return ids;
 }
 
 /**
