@@ -12,12 +12,26 @@
  * per element. `overflow-y` is set via inline styles, which jsdom's getComputedStyle reflects.
  */
 
-import { afterEach, describe, expect, it, vi, Mock } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi, Mock } from 'vitest';
 import { findScrollContainer, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 
 vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+
+// jsdom doesn't provide CSS.escape; polyfill for tests (same approach as
+// src/renderer/services/overlays/overlay-coordinates.test.ts). scrollToAnnotation escapes the
+// annotation class token before querySelector, so the tests need CSS.escape to exist.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const cssPolyfill = {
+  escape: (value: string) => value.replace(/[!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~]/g, '\\$&'),
+} as typeof CSS;
+
+beforeAll(() => {
+  if (typeof CSS === 'undefined' || !CSS.escape) {
+    globalThis.CSS = cssPolyfill;
+  }
+});
 
 interface GeometryOptions {
   scrollHeight: number;
@@ -226,6 +240,19 @@ describe('scrollToVerse', () => {
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1420 });
   });
 
+  it('subtracts the scroll container top offset when the container is not at the viewport top', () => {
+    const { wrapper, wrapperScrollTo } = buildEditorDom();
+    // The scroll container sits 100px below the viewport top (e.g. below the app toolbar/tab bar),
+    // so the container-top term in getTopWithinScrollContainer is load-bearing here (unlike the
+    // other cases where the container rect top is 0).
+    stubRect(wrapper, 100, VIEWPORT_HEIGHT);
+
+    scrollToVerse({ book: 'OBA', chapterNum: 1, verseNum: 15 });
+
+    // scrollTop (0) + verseRect.top (1500) - containerRect.top (100) - offset (80) = 1320
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 1320 });
+  });
+
   it('scrolls .editor-container when it is the real scroll container', () => {
     const { wrapperScrollTo, editorContainerScrollTo } = buildEditorDom({
       editorContainerScrolls: true,
@@ -309,6 +336,33 @@ describe('scrollToAnnotation', () => {
 
     // bottom-edge target = 3010 - 900 + 80 = 2190 > maxScrollTop (3000 - 900 = 2100) -> clamp
     expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 2100 });
+  });
+
+  it('clamps a negative top-aligned target up to 0', () => {
+    const { wrapper, annotation, wrapperScrollTo } = buildAnnotationDom();
+    wrapper.scrollTop = 100;
+    stubRect(annotation, -70, 20);
+
+    scrollToAnnotation('thread1');
+
+    // annotationTop = 100 + (-70) - 0 = 30, above viewport [100, 1000) -> top edge
+    // top-aligned target = 30 - 80 = -50 -> clamped up to 0
+    expect(wrapperScrollTo).toHaveBeenCalledWith({ behavior: 'smooth', top: 0 });
+  });
+
+  it('escapes CSS-special characters in the annotation id (a raw id would throw a SyntaxError)', () => {
+    const dom = buildEditorDom({ verseNumbers: [] });
+    const annotation = document.createElement('span');
+    // Real annotation/comment ids can contain ':'; the applied class is `annotationId-<id>`.
+    annotation.className = 'annotationId-thread:1';
+    stubRect(annotation, 400, 20); // fully visible -> resolves the element, no scroll
+    dom.editorContainer.append(annotation);
+
+    // Without CSS.escape, `.annotationId-thread:1` is an invalid selector and querySelector throws.
+    const annotationElement = scrollToAnnotation('thread:1');
+
+    expect(annotationElement).toBe(annotation);
+    expect(dom.wrapperScrollTo).not.toHaveBeenCalled();
   });
 
   it('returns undefined and does not scroll when the annotation does not exist', () => {

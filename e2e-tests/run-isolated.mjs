@@ -2,9 +2,10 @@
 // Runner for the `isolated` e2e suite — the common set of locally-runnable tests, organized in
 // subdirectories by feature under `e2e-tests/tests/isolated/`.
 //
-//   npm run test:e2e:isolated                     List the available subsets and usage
+//   npm run test:e2e:isolated                     List the available subsets (exits non-zero; runs nothing)
 //   npm run test:e2e:isolated all                 Run every isolated test
 //   npm run test:e2e:isolated <subset>            Run one subdirectory (e.g. scroll-groups)
+//   npm run test:e2e:isolated <path>              Run a path filter (e.g. tests/isolated/scroll-groups/)
 //   npm run test:e2e:isolated <subset> -- --debug Extra args after `--` go to Playwright
 //   npm run test:e2e:isolated -- --list           Flags go straight to Playwright (all subsets)
 import { spawnSync } from 'child_process';
@@ -36,8 +37,10 @@ Usage:
 const [first, ...rest] = process.argv.slice(2);
 
 if (!first) {
+  // No subset given: list what's available but exit non-zero — nothing ran, so a scripted caller
+  // (or muscle memory expecting the old run-everything script) does not get a false green.
   printUsage();
-  process.exit(0);
+  process.exit(1);
 }
 
 const playwrightArgs = [
@@ -47,13 +50,16 @@ const playwrightArgs = [
   '--project=isolated',
 ];
 
-if (first.startsWith('-')) {
-  // Flags only (e.g. --list, --grep): pass straight through, no subset filter
-  playwrightArgs.push(first, ...rest);
-} else if (first === 'all') {
+// A path (contains a separator) is passed straight to Playwright as a path filter, preserving the
+// old `test:e2e:isolated -- <path>` behavior alongside the bare subset-name shorthand.
+const isPath = first.includes('/') || first.includes('\\');
+
+if (first === 'all') {
+  // No path filter: run every isolated test
   playwrightArgs.push(...rest);
-} else if (subsets.includes(first)) {
-  // Playwright treats positional args as path filters; the subdirectory name selects the subset
+} else if (first.startsWith('-') || subsets.includes(first) || isPath) {
+  // A flag (e.g. --list, --grep), a subset directory name, or a path. Playwright treats a positional
+  // arg as a path filter, so the subdirectory name selects that subset.
   playwrightArgs.push(first, ...rest);
 } else {
   console.error(`Unknown subset '${first}'.\n`);

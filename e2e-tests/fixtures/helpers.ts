@@ -119,8 +119,11 @@ export async function launchElectronApp(
   // Playwright's env type is Record<string, string>).
   // NODE_ENV=development so the renderer loads from the webpack dev server.
   // Omit ELECTRON_RUN_AS_NODE so the Electron child does not inherit it.
+  // Also strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: the C# backend honors it, so an ambient value
+  // from the dev/CI shell would silently redirect the project root of suites that did not opt into
+  // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { ELECTRON_RUN_AS_NODE, ...restEnv } = process.env;
+  const { ELECTRON_RUN_AS_NODE, PLATFORM_BIBLE_PROJECT_ROOT_FOLDER, ...restEnv } = process.env;
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
