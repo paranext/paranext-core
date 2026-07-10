@@ -262,10 +262,26 @@ declare module 'legacy-comment-manager' {
 
   // #region Data Provider Types
 
+  /**
+   * The getCommentThreads response: the threads that could be serialized, plus a count of threads
+   * that were dropped because they could not be serialized (so the UI can tell the user some notes
+   * couldn't be shown).
+   */
+  export type LegacyCommentThreadsResult = {
+    /** The comment threads that matched the selector and serialized successfully. */
+    threads: LegacyCommentThread[];
+    /** How many threads were dropped because they could not be serialized (0 in the normal case). */
+    hiddenCount: number;
+  };
+
   /** Provides comment data */
   export type LegacyCommentProjectInterfaceDataTypes = {
-    /** Comment threads matching the selector criteria */
-    CommentThreads: DataProviderDataType<LegacyCommentThreadSelector, LegacyCommentThread[], never>;
+    /** Comment threads matching the selector criteria, plus a hidden-thread count */
+    CommentThreads: DataProviderDataType<
+      LegacyCommentThreadSelector,
+      LegacyCommentThreadsResult,
+      never
+    >;
   };
 
   /** Provides comments from project team members in a way that is compatible with Paratext 9 */
@@ -276,9 +292,12 @@ declare module 'legacy-comment-manager' {
        *
        * @param selector Filter criteria for comment threads. If not provided or all properties are
        *   undefined, returns all threads
-       * @returns Promise that resolves to an array of comment threads
+       * @returns Promise resolving to `{ threads, hiddenCount }` — the threads that serialized
+       *   successfully and the number that were dropped because they couldn't be serialized
        */
-      getCommentThreads(selector?: LegacyCommentThreadSelector): Promise<LegacyCommentThread[]>;
+      getCommentThreads(
+        selector?: LegacyCommentThreadSelector,
+      ): Promise<LegacyCommentThreadsResult>;
 
       /**
        * Creates a new comment (which will automatically also create a new thread). Use

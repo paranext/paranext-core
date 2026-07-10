@@ -1,4 +1,6 @@
 import {
+  Alert,
+  AlertDescription,
   CommentList,
   Label,
   Select,
@@ -47,6 +49,8 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%comment_filter_type_conflicts%',
   '%no_comments%',
   '%no_comments_match_filter%',
+  '%comment_notes_hidden_single%',
+  '%comment_notes_hidden_multiple%',
 ] as const;
 
 // Reuse the underlying CommentList prop types so this panel stays in sync with platform-bible-react.
@@ -87,6 +91,8 @@ export type CommentListPanelProps = Pick<
    * to `true`.
    */
   hasEditorContext?: boolean;
+  /** How many threads the backend dropped because they couldn't be serialized (0 = no banner). */
+  hiddenNoteCount: number;
 };
 
 /**
@@ -156,6 +162,7 @@ export function CommentListPanel({
   scopeFilter,
   onScopeFilterChange,
   hasEditorContext = true,
+  hiddenNoteCount,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -230,6 +237,18 @@ export function CommentListPanel({
 
       {/* Comments list */}
       <div className="tw:flex-1 tw:overflow-auto">
+        {hiddenNoteCount > 0 && (
+          <Alert className="tw:m-4 tw:w-auto">
+            <AlertDescription>
+              {hiddenNoteCount === 1
+                ? localizedStrings['%comment_notes_hidden_single%']
+                : localizedStrings['%comment_notes_hidden_multiple%'].replace(
+                    '{count}',
+                    hiddenNoteCount.toString(),
+                  )}
+            </AlertDescription>
+          </Alert>
+        )}
         {threads.length === 0 ? (
           <div className="tw:m-4 tw:flex tw:justify-center">
             <Label>

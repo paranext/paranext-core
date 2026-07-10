@@ -14,7 +14,10 @@ import {
 } from '@papi/frontend/react';
 import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
-import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import type {
+  LegacyCommentThreadsResult,
+  LegacyCommentThreadSelector,
+} from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
@@ -25,7 +28,10 @@ import {
   UNFILTERED,
 } from './comment-list-filters.model';
 
-const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+const DEFAULT_LEGACY_COMMENT_THREADS_RESULT: LegacyCommentThreadsResult = {
+  threads: [],
+  hiddenCount: 0,
+};
 
 /**
  * Wraps a PDP method call with a null check. If the PDP is not yet available, logs a debug message
@@ -199,7 +205,7 @@ global.webViewComponent = function CommentListWebView({
   // name resolves so the panel shows skeletons instead of that flash.
   const isAwaitingCurrentUserName = filters.assignment === 'assigned-to-me' && !currentUserName;
 
-  const [commentThreads, , isLoadingCommentThreads] = useProjectData(
+  const [commentThreadsResult, , isLoadingCommentThreads] = useProjectData(
     'legacyCommentManager.comments',
     projectId,
   ).CommentThreads(
@@ -213,13 +219,18 @@ global.webViewComponent = function CommentListWebView({
         }),
       [scopeBook, scopeChapterNum, scopeVerseNum, scopeFilter, filters, currentUserName],
     ),
-    DEFAULT_LEGACY_COMMENT_THREADS,
+    DEFAULT_LEGACY_COMMENT_THREADS_RESULT,
   );
 
   const safeCommentThreads = useMemo<LegacyCommentThread[]>(() => {
-    if (!commentThreads || isPlatformError(commentThreads)) return [];
-    return commentThreads;
-  }, [commentThreads]);
+    if (!commentThreadsResult || isPlatformError(commentThreadsResult)) return [];
+    return commentThreadsResult.threads;
+  }, [commentThreadsResult]);
+
+  const hiddenNoteCount = useMemo<number>(() => {
+    if (!commentThreadsResult || isPlatformError(commentThreadsResult)) return 0;
+    return commentThreadsResult.hiddenCount;
+  }, [commentThreadsResult]);
 
   // Process any pending thread selection once data finishes loading
   useEffect(() => {
@@ -363,6 +374,7 @@ global.webViewComponent = function CommentListWebView({
       localizedStrings={localizedStrings}
       isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
       threads={safeCommentThreads}
+      hiddenNoteCount={hiddenNoteCount}
       currentUser={currentUserName}
       filters={filters}
       onFiltersChange={setFilters}
