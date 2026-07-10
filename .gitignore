@@ -64,6 +64,8 @@ docs/superpowers/
 docs/adr/
 .superpowers/
 .review
+/.claude/*.lock
+/.claude/settings.local.json
 
 # cursor
 .cursor/
