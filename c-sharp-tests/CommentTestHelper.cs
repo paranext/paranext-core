@@ -202,16 +202,14 @@ internal static class CommentTestHelper
     }
 
     /// <summary>
-    /// Creates a verseText merge-conflict Comment where both sides replaced a word (REPLACEMENT),
-    /// so both strikethrough (deletion) and bold (insertion) tokens appear in the diffs.
+    /// Creates a verseText merge-conflict Comment where BOTH sides replaced a word, so both
+    /// strikethrough (deletion) and bold (insertion) tokens appear in the accepted AND rejected
+    /// diffs. Distinct from <see cref="CreateVerseTextConflictCommentReplacement"/>, which is
+    /// loser-only (no common ancestor, <c>AcceptedChangeXmlStr == null</c>).
     /// Common ancestor word: "town". Loser replaced it with "village"; winner replaced it with "city".
     /// Contents (parent→loser diff): town struck through, village bolded.
     /// AcceptedChangeXmlStr (parent→winner diff): town struck through, city bolded.
     /// Verse: winner plain USFM (city).
-    ///
-    /// Distinct from <see cref="CreateVerseTextConflictCommentReplacement"/> (loser-only: no
-    /// accepted-side change, so <c>AcceptedChangeXmlStr == null</c>). Both are used side by side in
-    /// the converter tests, so keep the names clearly different.
     /// </summary>
     internal static Comment CreateVerseTextConflictCommentBothSidesReplaced()
     {

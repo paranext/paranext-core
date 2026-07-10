@@ -661,9 +661,8 @@ describe('openDefaultActiveProjectIfApplicable', () => {
 
     expect(outcome).toBe('no-send-receive');
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
-    expect(mockSendCommand).not.toHaveBeenCalledWith(
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'platformScriptureEditor.openScriptureEditor',
-      expect.anything(),
     );
     // Expected steady state on Platform.Bible — logged at debug, not warn.
     expect(mockDebug).toHaveBeenCalled();
@@ -2303,9 +2302,8 @@ describe('syncOnProjectSwitch', () => {
 
     await syncOnProjectSwitch(papi, 'proj-incoming', undefined);
 
-    expect(mockSendCommand).not.toHaveBeenCalledWith(
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
       'paratextBibleSendReceive.sendReceiveProjects',
-      expect.anything(),
     );
   });
 

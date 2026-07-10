@@ -19,10 +19,6 @@ vi.mock('@shared/services/network.service', () => ({
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: vi.fn() },
 }));
-const settingsSet = vi.fn();
-vi.mock('@shared/services/settings.service', () => ({
-  settingsService: { set: (...args: unknown[]) => settingsSet(...args), subscribe: vi.fn() },
-}));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn(), error: vi.fn() } }));
 
 const sendCommand = vi.fn();
@@ -47,7 +43,6 @@ describe('scroll-group.service-host source project tracking', () => {
     localStorage.clear();
     vi.resetModules();
     sendCommand.mockReset();
-    settingsSet.mockReset();
     Object.keys(projectVersifications).forEach((key) => {
       delete projectVersifications[key];
     });
@@ -95,7 +90,7 @@ describe('scroll-group.service-host source project tracking', () => {
     expect(host.getScrRefSourceProjectIdSync(1)).toBe('projB');
   });
 
-  it('does not clobber a known source when a same-numbered ref is set with no source (verseRef echo)', async () => {
+  it('does not clobber a known source when a same-numbered ref is set with no source', async () => {
     const host = await import('@renderer/services/scroll-group.service-host');
     const ref = { book: 'PSA', chapterNum: 3, verseNum: 1 };
     host.setScrRefSync(1, ref, 'projA');
@@ -288,35 +283,6 @@ describe('scroll-group.service-host source project tracking', () => {
       ...refForIndex(CAP),
       versificationStr: 'converted',
     });
-  });
-
-  it('rewrites the platform.verseRef setting when the verse numbers change on group 0', async () => {
-    const host = await import('@renderer/services/scroll-group.service-host');
-    settingsSet.mockClear();
-
-    host.setScrRefSync(0, { book: 'PSA', chapterNum: 23, verseNum: 1 }, 'projA');
-
-    // The write happens synchronously inside setScrRefSync (no await before settingsService.set).
-    expect(settingsSet).toHaveBeenCalledWith('platform.verseRef', {
-      book: 'PSA',
-      chapterNum: 23,
-      verseNum: 1,
-    });
-  });
-
-  it('does NOT rewrite platform.verseRef on a source-only change to group 0', async () => {
-    const host = await import('@renderer/services/scroll-group.service-host');
-    const ref = { book: 'PSA', chapterNum: 23, verseNum: 1 };
-    host.setScrRefSync(0, ref, 'projA');
-    settingsSet.mockClear();
-
-    // Same numbers, different source: must still emit for followers (changed === true) but must not
-    // rewrite the frame-blind setting, which would fan out an identical-value notification app-wide.
-    const changed = host.setScrRefSync(0, { ...ref }, 'projB');
-
-    expect(changed).toBe(true);
-    expect(host.getScrRefSourceProjectIdSync(0)).toBe('projB');
-    expect(settingsSet).not.toHaveBeenCalled();
   });
 
   it('emits a versification-changed event only when a tracked versification actually changes', async () => {

@@ -287,6 +287,7 @@ export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
+export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export {
   useListbox,
   type UseListboxProps,

@@ -13,7 +13,6 @@ import {
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
-import { settingsService } from '@shared/services/settings.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   compareScrRefs,
@@ -186,8 +185,8 @@ export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerse
  *
  * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
  * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
- *   was never set with a source, or its ref came from the `platform.verseRef` setting / an external
- *   writer whose versification is not known
+ *   was never set with a source, or its ref came from an external writer whose versification is not
+ *   known
  */
 export function getScrRefSourceProjectIdSync(scrollGroupId: ScrollGroupId = 0): string | undefined {
   return scrRefSourceProjectIds[scrollGroupId];
@@ -476,15 +475,11 @@ async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<Serializ
  *
  * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
  *   unknown / canonical English.
- * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
- *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
- *   Only set to `false` when running this from subscription to updates to the setting
  */
 export function setScrRefSync(
   scrollGroupId: ScrollGroupId | undefined,
   scrRef: SerializedVerseRef,
   sourceProjectId?: string,
-  shouldSetVerseRefSetting = true,
 ): boolean {
   if (
     !scrRef ||
@@ -499,9 +494,8 @@ export function setScrRefSync(
 
   // compareScrRefs is versification-blind (book/chapter/verse only), so a same-numbered ref set by a
   // different source project still changes the versification frame and must NOT be treated as a
-  // no-op. Skip only when the numbers are unchanged AND the write carries no new source info — the
-  // `undefined`-source clause also covers the platform.verseRef echo (the setting-sync subscription
-  // re-sets the same ref with no source), which must not clobber a known source.
+  // no-op. Skip only when the numbers are unchanged AND the write carries no new source info — a
+  // same-numbered write with no source (`undefined`) must not clobber a known source.
   const scrRefUnchanged =
     compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0;
   if (
@@ -517,9 +511,9 @@ export function setScrRefSync(
   scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   // A numbers-changed write with no source project (`sourceProjectId === undefined`) intentionally
   // CLEARS the stored source frame. This is by design: a driver with no associated project (e.g. a
-  // data model that does not track versification, or the platform.verseRef echo below) has an
-  // unknown versification, so followers must take the raw reference rather than mis-frame it under
-  // the previous source. This is not a lost-frame bug — an unknown frame is honestly unknown.
+  // data model that does not track versification) has an unknown versification, so followers must
+  // take the raw reference rather than mis-frame it under the previous source. This is not a
+  // lost-frame bug — an unknown frame is honestly unknown.
   scrRefSourceProjectIds[scrollGroupIdDefaulted] = sourceProjectId;
   saveScrRefs(sourceProjectIdChanged);
   onDidUpdateScrRefBufferedEmitter.emit({
@@ -527,22 +521,6 @@ export function setScrRefSync(
     scrRef: scrRefClone,
     sourceProjectId,
   });
-
-  // Only mirror into the backwards-compat platform.verseRef setting when the verse numbers actually
-  // changed. A source-only change (same numbers, different source project) still emits the scroll
-  // event above so followers re-convert, but must NOT rewrite the setting: platform.verseRef tracks
-  // the verse, not the frame, and settingsService.set fans out to every settings subscriber — an
-  // identical-value write would be a needless app-wide notification.
-  if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0 && !scrRefUnchanged)
-    (async () => {
-      try {
-        settingsService.set('platform.verseRef', scrRefClone);
-      } catch (e) {
-        logger.warn(
-          `Failed to update platform.verseRef to ${serialize(scrRefClone)} to keep in sync with scroll group 0! ${getErrorMessage(e)}`,
-        );
-      }
-    })();
 
   return true;
 }
@@ -564,23 +542,4 @@ const scrollGroupService: IScrollGroupRemoteService = {
 /** Register the network object that backs the scroll group service */
 export async function startScrollGroupService(): Promise<void> {
   await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
-
-  // Keep scroll group 0 in sync with the verse ref setting for backwards compatibility
-  await settingsService.subscribe('platform.verseRef', (newScrRef) => {
-    if (isPlatformError(newScrRef)) {
-      logger.warn(
-        `Scroll group service failed to get platform.verseRef setting to keep in sync! ${getErrorMessage(newScrRef)}`,
-      );
-      return;
-    }
-    // Pass `undefined` for the source: the setting carries no source-project frame, so a restored /
-    // external platform.verseRef value has an unknown versification and must NOT be assumed to be in
-    // the previous source project's frame. When the numbers match the stored ref this is a harmless
-    // no-op (the no-op guard in setScrRefSync preserves any known source); when they differ it is a
-    // genuine external change whose frame we honestly don't know, so the followers pass it through
-    // unconverted rather than mis-framing it.
-    // (See the source-assignment note in setScrRefSync: a numbers-changed write with no source
-    // deliberately clears the frame so followers use the raw reference.)
-    setScrRefSync(0, newScrRef, undefined, false);
-  });
 }
