@@ -151,14 +151,6 @@ if (!isFirstInstance) {
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
 
-/**
- * Scroll group the reference-history keyboard shortcuts operate on. INTERIM: hardcoded to 0 (the
- * top toolbar's default group, and effectively the only group Simple-mode users are on) until the
- * toolbar tracks the active web view's scroll group, at which point this dispatch should resolve
- * the active group instead.
- */
-const INTERIM_KEYBOARD_HISTORY_SCROLL_GROUP_ID = 0;
-
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
 /** Background color of the window buttons in the custom title bar on Windows */
@@ -689,19 +681,19 @@ async function main() {
         // future editor/extension binding ⌘[ / ⌘] or Alt+Arrow would be silently swallowed here.
         // Tracked in PT-4143.
         event.preventDefault();
-        // Dispatch the PHYSICAL direction (left/right). The renderer resolves it to a logical
-        // back/forward for the current UI layout direction (RTL swaps the pair — see
+        // Dispatch the PHYSICAL direction (left/right) and nothing else. The renderer resolves it to
+        // a logical back/forward for the current UI layout direction (RTL swaps the pair — see
         // resolveReferenceHistoryDirection in platform-bible-utils, shared with the toolbar's hint
-        // display), so the main process stays direction-agnostic and sends a single command rather
-        // than also round-tripping to read the UI direction. Auto-repeat is intentional: holding the
-        // key steps through history entry-by-entry, matching Paratext 9.
+        // display) AND resolves which scroll group to act on — the active one the top toolbar follows
+        // — so the main process stays agnostic of both the UI direction and the active scroll group.
+        // Auto-repeat is intentional: holding the key steps through history entry-by-entry, matching
+        // Paratext 9.
         (async () => {
           try {
             await commandService.sendCommand(
               physicalHistoryDirection === 'left'
                 ? 'platform.navigateLeftInReferenceHistory'
                 : 'platform.navigateRightInReferenceHistory',
-              INTERIM_KEYBOARD_HISTORY_SCROLL_GROUP_ID,
             );
           } catch (e) {
             logger.warn(`Reference history keyboard navigation failed. ${getErrorMessage(e)}`);

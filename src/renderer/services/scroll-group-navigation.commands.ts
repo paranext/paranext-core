@@ -5,6 +5,7 @@ import {
 import {
   getScrRefForProject,
   getScrRefSync,
+  navigateReferenceHistoryPhysicalSync,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
@@ -34,7 +35,7 @@ import { windowService } from '@shared/services/window.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { CommandNames } from 'papi-shared-types';
 import { ALL_BOOK_IDS } from 'platform-bible-react/experimental';
-import { getErrorMessage, Mutex } from 'platform-bible-utils';
+import { getErrorMessage, Mutex, ScrollGroupId } from 'platform-bible-utils';
 
 /**
  * What a navigation command mutates: the resolved target web view's scroll group ref (or its
@@ -62,6 +63,22 @@ function resolveNavigationTarget(): NavigationTarget | undefined {
     scrollGroupScrRef: target.definition.scrollGroupScrRef ?? 0,
     projectId: target.definition.projectId,
   };
+}
+
+/**
+ * The scroll group whose reference history the keyboard commands act on: the SAME scroll group the
+ * top toolbar's book/chapter/verse controls and history buttons follow (the active navigation
+ * target's — see {@link getNavigationTargetWebView}), so a keyboard shortcut and the on-screen
+ * history buttons can never disagree. Mirrors how the toolbar derives its scroll group id
+ * (`platform-bible-toolbar.tsx` seeds `useScrollGroupScrRef` with
+ * `resolvedWebView?.definition.scrollGroupScrRef ?? 0`, whose `extractScrollGroupId` keeps only
+ * numeric ids). Returns `undefined` when the active target follows a detached (independent-ref) web
+ * view rather than a numbered scroll group — the toolbar hides its history buttons then, so the
+ * command no-ops. With no active target this is scroll group 0, matching the toolbar's `?? 0`.
+ */
+function getActiveReferenceHistoryScrollGroupId(): ScrollGroupId | undefined {
+  const scrollGroupScrRef = getNavigationTargetWebView()?.definition.scrollGroupScrRef ?? 0;
+  return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
 }
 
 async function getCurrentRef(target: NavigationTarget): Promise<SerializedVerseRef> {
@@ -312,11 +329,57 @@ export const navigationCommandHandlers: {
 
 /** Registers the PT-4032 navigation commands. Call once at renderer startup */
 export async function startScrollGroupNavigationCommands(): Promise<void> {
-  await Promise.all(
-    Object.entries(navigationCommandHandlers).map(([commandName, handler]) =>
+  const didNavigateResult = { name: 'didNavigate', schema: { type: 'boolean' } } as const;
+  await Promise.all([
+    ...Object.entries(navigationCommandHandlers).map(([commandName, handler]) =>
       // Object.entries widens the key to string; the map above pins each name to its handler type
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       registerCommand(commandName as CommandNames, handler),
     ),
-  );
+    // Reference-history keyboard commands (PT-4033) live here with the other active-target
+    // navigation commands: they resolve the scroll group to act on from the shared navigation target
+    // (getActiveReferenceHistoryScrollGroupId) — the one the top toolbar follows — so a keyboard
+    // shortcut and the on-screen history buttons can never disagree. The renderer also resolves the
+    // physical→logical RTL swap (in navigateReferenceHistoryPhysicalSync), so the main-process
+    // keyboard handler dispatches the physical key with no arguments. No-op (`false`) when the
+    // active web view has no numbered scroll group (a detached ref).
+    registerCommand(
+      'platform.navigateLeftInReferenceHistory',
+      async () => {
+        const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
+        return scrollGroupId === undefined
+          ? false
+          : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left');
+      },
+      {
+        method: {
+          'x-experimental': true,
+          summary:
+            'Navigate the reference history of the active scroll group (the one the top toolbar ' +
+            'follows) in the physical "left" direction (back in LTR, forward in RTL)',
+          params: [],
+          result: didNavigateResult,
+        },
+      },
+    ),
+    registerCommand(
+      'platform.navigateRightInReferenceHistory',
+      async () => {
+        const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
+        return scrollGroupId === undefined
+          ? false
+          : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right');
+      },
+      {
+        method: {
+          'x-experimental': true,
+          summary:
+            'Navigate the reference history of the active scroll group (the one the top toolbar ' +
+            'follows) in the physical "right" direction (forward in LTR, back in RTL)',
+          params: [],
+          result: didNavigateResult,
+        },
+      },
+    ),
+  ]);
 }

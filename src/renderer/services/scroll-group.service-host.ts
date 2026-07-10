@@ -755,37 +755,12 @@ export async function startScrollGroupService(): Promise<void> {
         ],
       },
     ),
-    // Physical left/right (not logical back/forward): the renderer resolves the direction for the
-    // current UI layout, so the main-process keyboard handler dispatches the physical key directly
-    // without a separate direction round-trip. In RTL the pair swaps meaning.
-    registerCommand(
-      'platform.navigateLeftInReferenceHistory',
-      async (scrollGroupId) => navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left'),
-      {
-        method: {
-          'x-experimental': true,
-          summary:
-            'Navigate the reference history of the given scroll group in the physical "left" ' +
-            'direction (back in LTR, forward in RTL)',
-          params: [scrollGroupIdParam],
-          result: didNavigateResult,
-        },
-      },
-    ),
-    registerCommand(
-      'platform.navigateRightInReferenceHistory',
-      async (scrollGroupId) => navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right'),
-      {
-        method: {
-          'x-experimental': true,
-          summary:
-            'Navigate the reference history of the given scroll group in the physical "right" ' +
-            'direction (forward in LTR, back in RTL)',
-          params: [scrollGroupIdParam],
-          result: didNavigateResult,
-        },
-      },
-    ),
+    // The physical left/right keyboard commands (`platform.navigateLeft/RightInReferenceHistory`),
+    // which act on the ACTIVE scroll group the top toolbar follows, are registered in
+    // `scroll-group-navigation.commands.ts` alongside the other active-target navigation commands.
+    // That file may depend on the window service to resolve the active target; this state service
+    // must not (it is in the generated `papi.d.ts` type graph, which cannot reach the web-view host).
+    // This `byOffset` command takes an explicit scroll group, so it stays here with the history state.
     registerCommand(
       'platform.navigateReferenceHistoryByOffset',
       async (scrollGroupId, offset) => navigateReferenceHistorySync(scrollGroupId, offset),

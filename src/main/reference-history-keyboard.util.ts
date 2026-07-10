@@ -11,10 +11,12 @@ type HistoryKeyInput = Pick<Input, 'key' | 'alt' | 'control' | 'shift' | 'meta'>
  * shift guard keeps Cmd+Shift+[/] free for tab focus navigation.
  *
  * Returns a _physical_ direction only. The main process dispatches the matching physical command
- * (`platform.navigateLeftInReferenceHistory` / `...Right...`); the renderer resolves physical →
- * logical back/forward for the current UI layout direction via `resolveReferenceHistoryDirection`
- * in platform-bible-utils (shared with the toolbar's shortcut-hint display). This keeps the RTL
- * swap in one place and means the main process never needs to know the UI direction.
+ * (`platform.navigateLeftInReferenceHistory` / `...Right...`) with no arguments; the renderer
+ * resolves physical → logical back/forward for the current UI layout direction via
+ * `resolveReferenceHistoryDirection` in platform-bible-utils (shared with the toolbar's
+ * shortcut-hint display) AND resolves which scroll group to act on (the active one the top toolbar
+ * follows). This keeps the RTL swap in one place and means the main process never needs to know the
+ * UI direction or the active scroll group.
  *
  * @returns `'left'` (the Left / `[` key) or `'right'` (the Right / `]` key), or `undefined` if this
  *   is not a history navigation key

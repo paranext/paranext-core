@@ -162,32 +162,36 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.openBookChapterControl': () => Promise<void>;
+    /**
+     * Navigate the reference history in the physical "left" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate the reference history in the physical "right" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
 
-    // These commands are provided in `src/renderer/services/scroll-group.service-host.ts`
-    /**
-     * Navigate the reference history of the given scroll group in the physical "left" direction.
-     * The renderer resolves the physical direction to a logical one for the current UI layout
-     * direction: left = back in LTR, forward in RTL (the pair swaps, physical-direction
-     * preserving). The main-process keyboard handler dispatches this directly so it never needs to
-     * know the UI direction.
-     *
-     * @param scrollGroupId Scroll group whose history to navigate
-     * @returns `true` if navigation happened; `false` when there is no history in that direction
-     * @experimental
-     */
-    'platform.navigateLeftInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
-    /**
-     * Navigate the reference history of the given scroll group in the physical "right" direction.
-     * The renderer resolves the physical direction to a logical one for the current UI layout
-     * direction: right = forward in LTR, back in RTL (the pair swaps, physical-direction
-     * preserving). The main-process keyboard handler dispatches this directly so it never needs to
-     * know the UI direction.
-     *
-     * @param scrollGroupId Scroll group whose history to navigate
-     * @returns `true` if navigation happened; `false` when there is no history in that direction
-     * @experimental
-     */
-    'platform.navigateRightInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
+    // This command is provided in `src/renderer/services/scroll-group.service-host.ts`
     /**
      * Navigate multiple steps within the reference history of the given scroll group,
      * browser-`history.go` style.
