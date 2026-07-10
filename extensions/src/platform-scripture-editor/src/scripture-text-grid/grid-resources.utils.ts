@@ -8,7 +8,7 @@ type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
  * Maps the Bible-text references chosen for display to renderable grid cells. A cell fetches its
- * chapter text by `projectId`, so each reference must resolve to the *installed project's* id:
+ * chapter text by `projectId`, so each reference must resolve to the _installed project's_ id:
  *
  * - `ProjectReference` — its `id` already IS the project id.
  * - `DblResourceReference` — its `id` is the DBL entry UID, NOT a project id. Resolve it to the
@@ -16,7 +16,8 @@ type BibleTextReference = ProjectReference | DblResourceReference;
  *   how `resource-text-panel` resolves the resource it renders.
  *
  * A DBL resource with no installed project (not yet downloaded, or absent from the cache) has no
- * fetchable text, so it is omitted rather than rendered as a cell whose subscription spins forever.
+ * fetchable text, so it is omitted rather than rendered as a cell whose subscription spins
+ * forever.
  */
 export function toGridResources(
   references: BibleTextReference[],

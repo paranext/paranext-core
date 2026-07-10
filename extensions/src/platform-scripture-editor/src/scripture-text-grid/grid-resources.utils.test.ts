@@ -23,7 +23,9 @@ describe('toGridResources', () => {
   it('resolves a DBL reference to the installed project id — NOT the DBL entry UID', () => {
     // The reference id is the DBL entry UID; the cell must fetch by the installed project id.
     const references = [dbl('dblUid-1')];
-    const dblResources = [cached({ dblEntryUid: 'dblUid-1', installed: true, projectId: 'project-abc' })];
+    const dblResources = [
+      cached({ dblEntryUid: 'dblUid-1', installed: true, projectId: 'project-abc' }),
+    ];
 
     expect(toGridResources(references, dblResources)).toEqual([
       { projectId: 'project-abc', label: 'DBL dblUid-1' },
@@ -47,7 +49,9 @@ describe('toGridResources', () => {
 
   it('preserves order and handles a mix of project and DBL references', () => {
     const references = [project('p1'), dbl('u1')];
-    const dblResources = [cached({ dblEntryUid: 'u1', installed: true, projectId: 'installed-u1' })];
+    const dblResources = [
+      cached({ dblEntryUid: 'u1', installed: true, projectId: 'installed-u1' }),
+    ];
 
     expect(toGridResources(references, dblResources)).toEqual([
       { projectId: 'p1', label: 'Proj p1' },
