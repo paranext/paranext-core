@@ -15,13 +15,14 @@ import {
   SerializedParagraphNode,
   SerializedTextNode,
 } from 'lexical';
-import { ArrowUp, AtSign, Check, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
+import { ArrowUp, AtSign, ChevronDown, ChevronUp, Mail, MailOpen } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
 import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
+import { ResolveCheckButton } from './resolve-check-button.component';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
 const initialValue: SerializedEditorState<
@@ -88,6 +89,10 @@ export function CommentThread({
   autoReadDelay = 5,
   onVerseRefClick,
   initialAssignedUser,
+  activeComments: providedActiveComments,
+  rootContentSlot,
+  resolveActionSlot,
+  spaceRootContentFromReplies = false,
 }: CommentThreadProps) {
   const [pendingCommentEditorState, setPendingCommentEditorState] =
     useState<SerializedEditorState>(initialValue);
@@ -204,7 +209,12 @@ export function CommentThread({
     }
   }, [isSelected, initialAssignedUser, canAssign, assignedUser]);
 
-  const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
+  // Prefer the caller's pre-computed active comments (ConflictThread already derives them) over
+  // re-filtering, so a conflict thread doesn't run the same non-deleted filter twice per render.
+  const activeComments = useMemo(
+    () => providedActiveComments ?? comments.filter((comment) => !comment.deleted),
+    [providedActiveComments, comments],
+  );
 
   // Check edit/delete permissions for all comments when thread is selected or comments change
   useEffect(() => {
@@ -431,6 +441,25 @@ export function CommentThread({
   // If all comments have been deleted there is nothing to render
   if (activeComments.length === 0) return undefined;
 
+  // The default root-comment render, used unless a rootContentSlot override is supplied (e.g. a
+  // conflict thread's summary or resolution card).
+  const defaultRootComment = (
+    <CommentItem
+      comment={firstComment}
+      localizedStrings={localizedStrings}
+      isThreadExpanded={isSelected}
+      threadStatus={threadStatus}
+      handleAddCommentToThread={handleAddCommentToThreadWithContents}
+      handleUpdateComment={handleUpdateComment}
+      handleDeleteComment={handleDeleteComment}
+      onEditingChange={setIsAnyCommentEditing}
+      canEditOrDelete={
+        (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
+      }
+      canUserResolveThread={canResolve}
+    />
+  );
+
   return (
     <Card
       role="option"
@@ -475,26 +504,19 @@ export function CommentThread({
             >
               {isRead ? <MailOpen /> : <Mail />}
             </Button>
-            {canResolve && threadStatus !== 'Resolved' && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'tw:ms-auto',
-                  'tw:text-primary tw:transition-opacity tw:duration-200 tw:hover:bg-primary/10',
-                  'tw:opacity-0 tw:group-hover:opacity-100',
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAddCommentToThreadWithContents({
-                    threadId,
-                    status: 'Resolved',
-                  });
-                }}
-                aria-label={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
-              >
-                <Check className="tw:h-4 tw:w-4" />
-              </Button>
+            {resolveActionSlot === undefined ? (
+              // Generic status-resolve check (used by non-conflict threads and, via ConflictThread
+              // leaving this slot undefined, by non-verseText conflicts, which resolve through a
+              // plain status change). ConflictThread overrides this slot for verseText conflicts.
+              <ResolveCheckButton
+                show={canResolve && threadStatus !== 'Resolved'}
+                onClick={() =>
+                  handleAddCommentToThreadWithContents({ threadId, status: 'Resolved' })
+                }
+                ariaLabel={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
+              />
+            ) : (
+              resolveActionSlot
             )}
           </div>
           <div className="tw:flex tw:max-w-full tw:flex-wrap tw:items-baseline tw:gap-2">
@@ -533,20 +555,7 @@ export function CommentThread({
               </span>
             </p>
           </div>
-          <CommentItem
-            comment={firstComment}
-            localizedStrings={localizedStrings}
-            isThreadExpanded={isSelected}
-            threadStatus={threadStatus}
-            handleAddCommentToThread={handleAddCommentToThreadWithContents}
-            handleUpdateComment={handleUpdateComment}
-            handleDeleteComment={handleDeleteComment}
-            onEditingChange={setIsAnyCommentEditing}
-            canEditOrDelete={
-              (!isAnyCommentEditing && commentEditDeletePermissions.get(firstComment.id)) ?? false
-            }
-            canUserResolveThread={canResolve}
-          />
+          {rootContentSlot ?? defaultRootComment}
         </div>
         <>
           {hasReplies && !isSelected && (
@@ -567,6 +576,13 @@ export function CommentThread({
           )}
           {isSelected && (
             <>
+              {/* Extra vertical spacing between custom root content (e.g. a conflict resolution
+                  card) and the reply comments. Only rendered when there is at least one visible
+                  reply, so a thread with no other comments doesn't get dead whitespace before the
+                  compose editor. */}
+              {spaceRootContentFromReplies && visibleReplies.length > 0 && (
+                <div className="tw:h-2" data-slot="root-content-reply-gap" aria-hidden="true" />
+              )}
               {/* Show "hidden replies" separator before the visible replies if there are hidden replies */}
               {hiddenReplyCount > 0 && (
                 <div

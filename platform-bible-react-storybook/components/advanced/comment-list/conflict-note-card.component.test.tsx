@@ -6,12 +6,13 @@ import { vi, beforeAll } from 'vitest';
 import { ConflictNoteCard } from './conflict-note-card.component';
 import {
   verseTextConflictComment,
-  verseTextConflictReplacementBothSidesSample,
+  verseTextConflictMergeSample,
+  verseTextConflictReplacementSample,
 } from './comment-sample.data';
 
 // jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView.
-// Radix Select uses all three when opening its dropdown. No-op stubs are sufficient
-// because the tests don't assert layout or scroll behaviour.
+// Radix components (Tooltip/RadioGroup) may reference them. No-op stubs are sufficient because the
+// tests don't assert layout or scroll behaviour.
 class NoopResizeObserver implements ResizeObserver {
   private readonly targets = new Set<Element>();
 
@@ -40,67 +41,220 @@ beforeAll(() => {
   }
 });
 
-// The description carries a SENTINEL value (not equal to the component's English fallback) so at
-// least one localizedStrings lookup is falsifiable: if the component dropped or mistyped the
-// %conflictNote_description_verseText% key, it would silently render the fallback and the sentinel
-// assertion below would fail. The remaining values match their fallbacks, which is fine — they're
-// exercised as the omitted-prop path by other tests.
-const DESCRIPTION_SENTINEL = 'CONFLICT_NOTE_DESCRIPTION_SENTINEL';
 const localizedStrings = {
-  '%conflictNote_description_verseText%': DESCRIPTION_SENTINEL,
-  '%conflictNote_chooseLabel%': 'Choose:',
-  '%conflictNote_chooseAriaLabel%': 'Choose resolution',
-  '%conflictNote_accept%': 'Accept',
-  '%conflictNote_reject%': 'Reject',
-  '%conflictNote_rejectedLabel%': 'Rejected',
-  '%conflictNote_acceptedLabel%': 'Accepted',
-  '%conflictNote_resultLabel%': 'Result',
-  '%conflictNote_resultUnavailable%': 'No result preview available.',
+  '%conflict_note_description_verseText%': 'Conflicting changes were made to the verse text.',
+  '%conflict_note_choose_prompt%': 'Select which change to keep:',
+  '%conflict_note_option_keep_current%': 'Keep the current text',
+  '%conflict_note_option_use_other%': 'Use the other change',
+  '%conflict_note_option_combine%': 'Combine both changes',
+  '%conflict_note_save_and_resolve%': 'Save and resolve',
+  '%conflict_note_save_disabled_tooltip%':
+    'Keeping the current text makes no change — resolve the thread with the ✓ to keep it.',
+  '%conflict_note_save_warning%': "This can't be undone.",
 };
 
-test('renders the three region labels and the diff highlight', () => {
+/** The container div that boxes a single resolution option (carries the selected border). */
+const optionRow = (value: string) =>
+  document.querySelector(`[data-slot="conflict-resolution-option"][data-value="${value}"]`);
+
+test('acceptRejectOrMerge shows three radios including "Combine both changes", accept checked', () => {
   render(
-    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+    <ConflictNoteCard
+      comment={verseTextConflictMergeSample}
+      localizedStrings={localizedStrings}
+      availableActions="acceptRejectOrMerge"
+    />,
   );
-  expect(screen.getByText('Rejected')).toBeInTheDocument();
-  expect(screen.getByText('Accepted')).toBeInTheDocument();
-  expect(screen.getByText('Result')).toBeInTheDocument();
-  // The provided localized description (a sentinel that differs from the English fallback) is
-  // rendered, proving the localizedStrings lookup is actually consumed rather than falling through.
-  expect(screen.getByText(DESCRIPTION_SENTINEL)).toBeInTheDocument();
-  // The rejected/accepted regions render PT9 diff HTML with <u>/<s> markup
-  expect(document.querySelector('u')).toBeInTheDocument();
-  // Result value is a plain <p>, not an editable control
-  expect(
-    screen
-      .getByText(verseTextConflictComment.resultText ?? '')
-      .closest('input, textarea, [contenteditable="true"]'),
-  ).toBeNull();
-  // The Result value sits in an aria-live region so screen readers hear the Accept/Reject swap.
-  expect(
-    screen.getByText(verseTextConflictComment.resultText ?? '').closest('[aria-live="polite"]'),
-  ).not.toBeNull();
+  expect(screen.getAllByRole('radio')).toHaveLength(3);
+  expect(screen.getByRole('radio', { name: 'Keep the current text' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeInTheDocument();
+  expect(screen.getByRole('radio', { name: 'Combine both changes' })).toBeInTheDocument();
 });
 
-test('Result shows the accept outcome by default and the reject outcome when reject is selected', () => {
-  const { rerender } = render(
+test('acceptOrReject shows two radios and no "Combine both changes" option', () => {
+  render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      selectedResolution="accept"
+      availableActions="acceptOrReject"
     />,
   );
-  // Default (accept) -> resultText (winner, "big")
-  expect(screen.getByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
+  expect(screen.getAllByRole('radio')).toHaveLength(2);
+  expect(screen.getByRole('radio', { name: 'Keep the current text' })).toBeChecked();
+  expect(screen.queryByRole('radio', { name: 'Combine both changes' })).not.toBeInTheDocument();
+});
+
+test('selecting "Use the other change" (uncontrolled) boxes the reject option', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  // Selected border starts on accept, not reject.
+  expect(optionRow('accept')).toHaveClass('tw:border-border');
+  expect(optionRow('reject')).not.toHaveClass('tw:border-border');
+
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+
+  // The card manages its own selection: the selected border follows the choice to reject.
+  expect(optionRow('reject')).toHaveClass('tw:border-border');
+  expect(optionRow('accept')).not.toHaveClass('tw:border-border');
+});
+
+test('the merge option renders the mergedText diff HTML', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictMergeSample}
+      localizedStrings={localizedStrings}
+      availableActions="acceptRejectOrMerge"
+    />,
+  );
+  const mergeRow = optionRow('merge');
+  // The mergedText combines both edits ("big" village AND "royal" king); "royal" appears only there.
+  expect(mergeRow?.textContent).toContain('royal');
+  // The diff markup (<u> insertions) is preserved through the sanitize pipeline.
+  expect(mergeRow?.querySelector('u')).toBeInTheDocument();
+});
+
+test('clicking anywhere on the "Combine both changes" card selects merge and boxes that card', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictMergeSample}
+      localizedStrings={localizedStrings}
+      availableActions="acceptRejectOrMerge"
+    />,
+  );
+  // Merge starts unselected (accept is the default).
+  expect(optionRow('merge')).not.toHaveClass('tw:border-border');
+
+  // Click the card itself (not the radio) — the whole card is the target.
+  const mergeCard = optionRow('merge');
+  if (!mergeCard) throw new Error('expected a "Combine both changes" option card');
+  await user.click(mergeCard);
+
+  // Uncontrolled, so the selection (and its box) follows the click to the merge card.
+  expect(optionRow('merge')).toHaveClass('tw:border-border');
+  expect(optionRow('accept')).not.toHaveClass('tw:border-border');
+});
+
+test('Save and resolve is disabled on accept and enabled after choosing reject', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  const saveButton = screen.getByRole('button', { name: 'Save and resolve' });
+  // Accept is preselected -> nothing to save yet.
+  expect(saveButton).toBeDisabled();
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+  expect(saveButton).toBeEnabled();
+});
+
+test('Save and resolve reports the current selection to onResolve', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onResolve = vi.fn();
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      onResolve={onResolve}
+    />,
+  );
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+  await user.click(screen.getByRole('button', { name: 'Save and resolve' }));
+  expect(onResolve).toHaveBeenCalledTimes(1);
+  expect(onResolve).toHaveBeenCalledWith('reject');
+});
+
+test('isResolving disables the radio group and the Save and resolve button', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      isResolving
+    />,
+  );
+  expect(screen.getByRole('radio', { name: 'Keep the current text' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeDisabled();
+});
+
+test('stale (availableActions=accept) disables the reject radio with a notice, keeps accept enabled, and hides Combine', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="accept"
+    />,
+  );
+  const acceptRadio = screen.getByRole('radio', { name: 'Keep the current text' });
+  expect(acceptRadio).toBeChecked();
+  // Accept is the only still-valid resolution when stale, so it stays enabled.
+  expect(acceptRadio).toBeEnabled();
+  expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeDisabled();
+  // No Combine option in the stale state.
+  expect(screen.queryByRole('radio', { name: 'Combine both changes' })).not.toBeInTheDocument();
+  // Save stays present (so the layout never shifts) but disabled — keeping the current text is a no-op.
+  expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeDisabled();
+});
+
+test('the radio group has an accessible name', () => {
+  render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  expect(screen.getByRole('radiogroup', { name: 'Choose resolution' })).toBeInTheDocument();
+});
+
+test('the Save tooltip warns when enabled and explains the no-op when disabled', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  // Default accept -> Save disabled -> the tooltip explains that saving is a no-op.
+  await user.hover(screen.getByText('Save and resolve'));
+  expect(await screen.findByRole('tooltip')).toHaveTextContent(
+    'Keeping the current text makes no change',
+  );
+
+  // Choose the other change -> Save enabled -> the tooltip carries the irreversibility warning.
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+  await user.hover(screen.getByRole('button', { name: 'Save and resolve' }));
+  expect(await screen.findByRole('tooltip')).toHaveTextContent("This can't be undone.");
+});
+
+test('the Save tooltip is suppressed when Save is disabled solely by isResolving', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const { rerender } = render(
+    <ConflictNoteCard comment={verseTextConflictComment} localizedStrings={localizedStrings} />,
+  );
+  // Choose reject first (an enabled Save would otherwise warn "This can't be undone.")...
+  await user.click(screen.getByRole('radio', { name: 'Use the other change' }));
+  // ...then flip on isResolving, which disables the button - showing that warning here would
+  // misleadingly suggest clicking a button the user currently can't press.
   rerender(
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      selectedResolution="reject"
+      isResolving
     />,
   );
-  // Reject -> rejectedResultText (loser, "small")
-  expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
+  await user.hover(screen.getByText('Save and resolve'));
+  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+});
+
+test('stale reject option is programmatically described by the stale notice for screen readers', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      // Empty strings so the component falls back to its default English notice.
+      localizedStrings={{}}
+      availableActions="accept"
+    />,
+  );
+  // aria-describedby resolves to the visually-hidden notice, so the reason the choice is read-only
+  // reaches assistive tech, not just the pointer-only Tooltip.
+  expect(screen.getByRole('radio', { name: 'Use the other change' })).toHaveAccessibleDescription(
+    /the verse was edited after this conflict was recorded/i,
+  );
 });
 
 test('non-verseText conflict falls back to rendering contents', () => {
@@ -111,152 +265,107 @@ test('non-verseText conflict falls back to rendering contents', () => {
   };
   render(<ConflictNoteCard comment={fallback} localizedStrings={localizedStrings} />);
   expect(screen.getByText('FALLBACK BODY')).toBeInTheDocument();
-  expect(screen.queryByText('Rejected')).not.toBeInTheDocument();
+  expect(screen.queryByRole('radio')).not.toBeInTheDocument();
 });
 
-test('verseText conflict with resultText absent still renders the resolution UI (not the contents fallback)', () => {
-  // resultText absent is not producible from a real PT9 merge (an emptied verse keeps its \v marker,
-  // so Comment.Verse is non-blank; a deleted verse produces no note at all — BookFileMerger). But the
-  // card must not strand it: gate on conflictType alone, like PT9, and degrade the Result region.
-  const emptyResultComment: LegacyComment = {
-    ...verseTextConflictComment,
-    resultText: undefined,
-    contents: '<p>SHOULD NOT SHOW AS FALLBACK</p>',
-  };
-  render(<ConflictNoteCard comment={emptyResultComment} localizedStrings={localizedStrings} />);
-  // Structured card renders: selector + regions present...
-  expect(screen.getByRole('combobox')).toBeInTheDocument();
-  expect(screen.getByText('Rejected')).toBeInTheDocument();
-  // ...and the raw contents fallback is NOT used.
-  expect(screen.queryByText('SHOULD NOT SHOW AS FALLBACK')).not.toBeInTheDocument();
-  // Accept outcome has no result USFM -> neutral empty-state, not a blank paragraph.
-  expect(screen.getByText('No result preview available.')).toBeInTheDocument();
-});
-
-test('Rejected region is omitted when rejectedText is absent (no orphan heading)', () => {
-  const noRejectedComment: LegacyComment = {
-    ...verseTextConflictComment,
-    rejectedText: undefined,
-  };
-  render(<ConflictNoteCard comment={noRejectedComment} localizedStrings={localizedStrings} />);
-  // Card still renders (Accepted present), but the Rejected heading must not appear over an empty body.
-  expect(screen.getByText('Accepted')).toBeInTheDocument();
-  expect(screen.queryByText('Rejected')).not.toBeInTheDocument();
-});
-
-test('Result shows the empty-state when reject is selected and rejectedResultText is absent', () => {
-  // rejectedResultText is absent (the reject outcome decodes to an empty verse, or the note carries
-  // no decodable diff — the two causes are indistinguishable here). Either way the Result region
-  // shows the neutral "unavailable" state rather than a blank paragraph.
-  const rejectDeletesComment: LegacyComment = {
-    ...verseTextConflictComment,
-    rejectedResultText: undefined,
-  };
-  render(
-    <ConflictNoteCard
-      comment={rejectDeletesComment}
-      localizedStrings={localizedStrings}
-      selectedResolution="reject"
-    />,
-  );
-  expect(screen.getByText('No result preview available.')).toBeInTheDocument();
-});
-
-test('canAcceptReject=false disables the selector', () => {
+test('availableActions none hides the radios and the Save and resolve button', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      canAcceptReject={false}
+      availableActions="none"
     />,
   );
-  expect(screen.getByRole('combobox')).toBeDisabled();
+  expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save and resolve' })).not.toBeInTheDocument();
 });
 
-test('no-ancestor case (acceptedText absent): selector and Rejected render, Accepted absent, Result tracks resolution', () => {
-  const noAncestorComment = { ...verseTextConflictComment, acceptedText: undefined };
-  const { rerender } = render(
-    <ConflictNoteCard
-      comment={noAncestorComment}
-      localizedStrings={localizedStrings}
-      selectedResolution="accept"
-    />,
-  );
-  // The selector (combobox) must render
-  expect(screen.getByRole('combobox')).toBeInTheDocument();
-  // The Rejected region must render
-  expect(screen.getByText('Rejected')).toBeInTheDocument();
-  // The Accepted label must NOT be in the document (no acceptedText)
-  expect(screen.queryByText('Accepted')).not.toBeInTheDocument();
-  // Result preview defaults to resultText (accept outcome, the winner)
-  expect(screen.getByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
-  rerender(
-    <ConflictNoteCard
-      comment={noAncestorComment}
-      localizedStrings={localizedStrings}
-      selectedResolution="reject"
-    />,
-  );
-  // Result preview switches to rejectedResultText (reject outcome, the loser)
-  expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
-});
-
-test('onResolutionChange fires with "reject" when the user changes the selector', async () => {
-  const onResolutionChange = vi.fn();
-  // Radix Select (shadcn) requires pointer-event sequences that fireEvent.click does not
-  // synthesize. userEvent v14 with pointerEventsCheck:0 drives the combobox reliably in
-  // jsdom where layout measurements are unavailable (same pattern as scope-selector tests).
-  const user = userEvent.setup({ pointerEventsCheck: 0 });
+test('resolved read-only accept shows the accepted result and no outcome line', () => {
   render(
     <ConflictNoteCard
       comment={verseTextConflictComment}
       localizedStrings={localizedStrings}
-      onResolutionChange={onResolutionChange}
-    />,
-  );
-
-  // Open the Radix Select dropdown
-  await user.click(screen.getByRole('combobox'));
-  // Pick "Reject" from the option list (Radix renders items as options in the listbox)
-  await user.click(await screen.findByRole('option', { name: 'Reject' }));
-
-  expect(onResolutionChange).toHaveBeenCalledTimes(1);
-  expect(onResolutionChange).toHaveBeenCalledWith('reject');
-});
-
-test('controlled mode does not leak the internal resolution when the parent declines a change', async () => {
-  // Parent controls the card at 'accept' and ignores the user's reject (never updates the prop).
-  const user = userEvent.setup({ pointerEventsCheck: 0 });
-  const { rerender } = render(
-    <ConflictNoteCard
-      comment={verseTextConflictComment}
-      localizedStrings={localizedStrings}
-      selectedResolution="accept"
-      onResolutionChange={() => {}}
-    />,
-  );
-  await user.click(screen.getByRole('combobox'));
-  await user.click(await screen.findByRole('option', { name: 'Reject' }));
-  // Parent later stops controlling. The card must fall back to its default ('accept'), not the
-  // 'reject' the parent declined — so the Result still shows the accept outcome.
-  rerender(
-    <ConflictNoteCard
-      comment={verseTextConflictComment}
-      localizedStrings={localizedStrings}
-      onResolutionChange={() => {}}
+      availableActions="none"
+      resolvedResolution="accept"
     />,
   );
   expect(screen.getByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
   expect(
     screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
   ).not.toBeInTheDocument();
+  // Accept is the no-op outcome, so no outcome sentence is shown.
+  expect(
+    screen.queryByText('Used the other change instead of the current text.'),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText('Combined both changes.')).not.toBeInTheDocument();
+});
+
+test('resolved read-only reject shows the rejected result and no outcome line', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="reject"
+    />,
+  );
+  expect(screen.getByText(verseTextConflictComment.rejectedResultText ?? '')).toBeInTheDocument();
+  expect(screen.queryByText(verseTextConflictComment.resultText ?? '')).not.toBeInTheDocument();
+  expect(
+    screen.queryByText('Used the other change instead of the current text.'),
+  ).not.toBeInTheDocument();
+});
+
+test('renders the localized verseText description, not the English fallback', () => {
+  // Sentinel deliberately distinct from the component's English fallback ("Conflicting changes were
+  // made to the verse text."), so a dropped or renamed lookup renders the fallback and fails here.
+  const sentinel = '⟦localized verseText description⟧';
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={{ ...localizedStrings, '%conflict_note_description_verseText%': sentinel }}
+      availableActions="acceptOrReject"
+    />,
+  );
+  expect(screen.getByText(sentinel)).toBeInTheDocument();
+});
+
+test('resolved read-only with an empty result shows the neutral no-result notice', () => {
+  // A reject that decoded to an empty verse leaves rejectedResultText blank; the Result region must
+  // show the neutral notice rather than an empty region. Sentinel distinct from any fallback so this
+  // asserts both the empty-result branch and that the lookup is used.
+  const emptyResult: LegacyComment = { ...verseTextConflictComment, rejectedResultText: '' };
+  render(
+    <ConflictNoteCard
+      comment={emptyResult}
+      localizedStrings={{ ...localizedStrings, '%conflict_note_no_result%': '⟦no result⟧' }}
+      availableActions="none"
+      resolvedResolution="reject"
+    />,
+  );
+  expect(screen.getByText('⟦no result⟧')).toBeInTheDocument();
+});
+
+test('resolved read-only merged shows the merged text and no outcome line', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictMergeSample}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="merged"
+    />,
+  );
+  // The merged verse (with its diff markup) is shown rather than being hidden.
+  expect(document.querySelector('u')).toBeInTheDocument();
+  expect(document.body.textContent).toContain('royal');
+  expect(screen.queryByText('Combined both changes.')).not.toBeInTheDocument();
 });
 
 test('trims trailing whitespace out of diff spans so the strikethrough does not dangle', () => {
   // The replacement sample removes "town": its diff HTML is `<s>town </s>` (trailing space inside).
   render(
     <ConflictNoteCard
-      comment={verseTextConflictReplacementBothSidesSample}
+      comment={verseTextConflictReplacementSample}
       localizedStrings={localizedStrings}
     />,
   );
