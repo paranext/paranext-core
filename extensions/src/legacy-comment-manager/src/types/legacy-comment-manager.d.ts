@@ -483,6 +483,30 @@ declare module 'legacy-comment-manager' {
 
   // #endregion
 
+  // #region Comment filter axis types (shared with comment-list-filters.model.ts)
+
+  /** Resolved-status filter axis: all threads, only unresolved, or only resolved. */
+  export type ResolvedFilter = 'all' | 'unresolved' | 'resolved';
+  /** Read-status filter axis: all threads, only unread, or only read (for the current user). */
+  export type ReadFilter = 'all' | 'unread' | 'read';
+  /** Note-type filter axis: all notes, only conflict notes, or only regular comments. */
+  export type TypeFilter = 'all' | 'conflicts' | 'comments';
+  /** Assignment filter axis: all threads, assigned to me, assigned to the team, or unassigned. */
+  export type AssignmentFilter = 'all' | 'assigned-to-me' | 'team' | 'unassigned';
+
+  /** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
+  export type CommentFilters = {
+    resolved: ResolvedFilter;
+    read: ReadFilter;
+    type: TypeFilter;
+    assignment: AssignmentFilter;
+  };
+
+  /** Scope axis: current chapter vs all books. */
+  export type ScopeFilter = 'unfiltered' | 'current-chapter';
+
+  // #endregion
+
   // #region Comment list WebView types
 
   /** Web view controller for the Comment List web view */
@@ -493,11 +517,31 @@ declare module 'legacy-comment-manager' {
      * @param threadId The ID of the thread to scroll to and select
      */
     selectThread(threadId: string): Promise<void>;
+    /**
+     * Set the comment-list view deterministically, exactly as a fresh open would. `filters` is
+     * applied on top of the default (all) filters — unspecified axes reset to 'all', they are NOT
+     * merged with the user's current selection — and an omitted `scopeFilter` resets scope to
+     * 'unfiltered' (all books). The result is the requested view with nothing carried over from
+     * prior state.
+     *
+     * @param filters Comment-filter axes to apply; unspecified axes reset to 'all'.
+     * @param scopeFilter Scope to apply; omitting it resets scope to 'unfiltered' (all books).
+     */
+    setFilters(filters?: Partial<CommentFilters>, scopeFilter?: ScopeFilter): Promise<void>;
   }>;
 
   export type OpenCommentListWebViewOptions = {
     /** ID of the thread to select and scroll to in the comment list */
     threadIdToSelect?: string | undefined;
+    /**
+     * Project whose comments to show. Use when the caller is not the project's own web view (e.g.
+     * the S/R results dialog). Takes precedence over the project derived from `webViewId`.
+     */
+    projectId?: string | undefined;
+    /** Comment-filter axes to pre-apply (unspecified axes reset to 'all'). */
+    filtersToSet?: Partial<CommentFilters> | undefined;
+    /** Scope to pre-apply; an omitted value resets scope to `'unfiltered'` (all books). */
+    scopeFilterToSet?: ScopeFilter | undefined;
   };
 
   // #endregion Comment list WebView types
@@ -522,10 +566,14 @@ declare module 'papi-shared-types' {
      * WebView ID
      *
      * @param webViewId The ID of the WebView whose project comments to display
-     * @param options Additional options for opening the comment list WebView
+     * @param options Additional options for opening the comment list WebView. `options.projectId`
+     *   targets a project directly, taking precedence over the project derived from `webViewId`
+     *   (e.g. for callers that are not that project's own web view). `options.filtersToSet` and
+     *   `options.scopeFilterToSet` pre-apply comment-filter axes/scope on open or focus.
      * @returns The ID of the comment list WebView that was opened or focused, or `undefined` if no
      *   project ID could be determined
-     * @throws If something goes wrong with selecting the provided thread ID
+     * @throws If the comment list WebView controller cannot be obtained to apply the requested
+     *   thread selection or filters
      */
     'legacyCommentManager.openCommentList': (
       webViewId?: string | undefined,

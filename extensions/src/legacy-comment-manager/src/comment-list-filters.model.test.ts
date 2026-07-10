@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CommentFilters, ScopeFilter } from './comment-list-filters.model';
 import {
   areCommentFiltersAtDefault,
+  applyFilterOverrides,
   buildCommentThreadSelector,
   DEFAULT_COMMENT_FILTERS,
   isAssignmentFilter,
@@ -113,5 +114,46 @@ describe('areCommentFiltersAtDefault', () => {
     expect(areCommentFiltersAtDefault({ ...DEFAULT_COMMENT_FILTERS, assignment: 'team' })).toBe(
       false,
     );
+  });
+});
+
+describe('applyFilterOverrides', () => {
+  it('returns the defaults when given no overrides', () => {
+    expect(applyFilterOverrides()).toEqual(DEFAULT_COMMENT_FILTERS);
+    expect(applyFilterOverrides(undefined)).toEqual(DEFAULT_COMMENT_FILTERS);
+    expect(applyFilterOverrides({})).toEqual(DEFAULT_COMMENT_FILTERS);
+  });
+
+  it('applies the given axes over the defaults', () => {
+    expect(applyFilterOverrides({ type: 'conflicts', resolved: 'unresolved' })).toEqual({
+      resolved: 'unresolved',
+      read: 'all',
+      type: 'conflicts',
+      assignment: 'all',
+    });
+  });
+
+  it('resets unspecified axes to "all" rather than merging with a prior selection', () => {
+    // The whole point: overrides are applied onto DEFAULT, not onto the caller's current filters,
+    // so a programmatic open shows exactly the requested view.
+    expect(applyFilterOverrides({ read: 'unread' })).toEqual({
+      resolved: 'all',
+      read: 'unread',
+      type: 'all',
+      assignment: 'all',
+    });
+  });
+
+  it('does not mutate DEFAULT_COMMENT_FILTERS', () => {
+    applyFilterOverrides({ type: 'conflicts' });
+    expect(DEFAULT_COMMENT_FILTERS.type).toBe('all');
+  });
+
+  it('resets a present-but-null axis to its default (null survives the JSON command bus)', () => {
+    // `undefined` is stripped over the command bus, but `null` survives. A null axis must reset to
+    // its default — leaking it would blank the dropdown while the query still behaves as 'all'. The
+    // web view's setFilters handler applies exactly these semantics via applyFilterOverrides.
+    const overridesWithNull: Partial<CommentFilters> = JSON.parse('{ "type": null }');
+    expect(applyFilterOverrides(overridesWithNull)).toEqual(DEFAULT_COMMENT_FILTERS);
   });
 });
