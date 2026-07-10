@@ -42,6 +42,8 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
+STRINGS['%webView_scriptureTextGrid_viewOptions_emptyTexts%'] =
+  'No texts added yet. Use Get Resources to add texts to your collection.';
 
 const ref = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -180,6 +182,31 @@ describe('ResourceCollectionOptions — disabled (no project/PDP bound)', () => 
   it('does not show the disabled message when enabled', () => {
     renderComponent({ disabled: false, disabledMessage: 'No project selected.' });
     expect(screen.queryByText('No project selected.')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceCollectionOptions — empty TEXTS list', () => {
+  it('shows the empty-texts prompt when the list is empty and enabled', () => {
+    renderComponent({ top: [], bottom: [], installingResourceNames: [] });
+    expect(
+      screen.getByText('No texts added yet. Use Get Resources to add texts to your collection.'),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the empty-texts prompt when a row is present', () => {
+    renderComponent({ bottom: [row('u1', 'My Text', { isUserRemovable: true })] });
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
+  });
+
+  it('hides the empty-texts prompt while an install is pending', () => {
+    renderComponent({ installingResourceNames: ['New Resource'] });
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
+  });
+
+  it('shows the disabled message, not the empty prompt, when disabled with a message', () => {
+    renderComponent({ disabled: true, disabledMessage: 'No project selected.' });
+    expect(screen.getByText('No project selected.')).toBeInTheDocument();
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
   });
 });
 

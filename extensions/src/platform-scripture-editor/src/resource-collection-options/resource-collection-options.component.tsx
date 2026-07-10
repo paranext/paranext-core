@@ -47,6 +47,12 @@ export function ResourceCollectionOptions({
   disabledMessage,
   localizedStrings = {},
 }: ResourceCollectionOptionsProps) {
+  // The TEXTS list is empty when there are no admin/user rows and nothing installing. Shown only
+  // when interactive (`!disabled`): while disabled we already show `disabledMessage` (no project)
+  // or nothing (brief load), so this never double-messages or fires prematurely.
+  const isTextsListEmpty =
+    top.length === 0 && bottom.length === 0 && installingResourceNames.length === 0;
+
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
     // is always selected) and any unexpected value.
@@ -122,6 +128,11 @@ export function ResourceCollectionOptions({
         </Label>
         {disabled && disabledMessage && (
           <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
+        )}
+        {!disabled && isTextsListEmpty && (
+          <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">
+            {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts)}
+          </p>
         )}
         {top.map(renderRow)}
         {bottom.map(renderRow)}
