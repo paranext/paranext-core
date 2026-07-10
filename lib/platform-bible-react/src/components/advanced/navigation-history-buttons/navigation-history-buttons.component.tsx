@@ -1,11 +1,11 @@
 import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
 import { ButtonGroup } from '@/components/shadcn-ui/button-group';
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/shadcn-ui/context-menu';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
 import { Kbd } from '@/components/shadcn-ui/kbd';
 import {
   Tooltip,
@@ -18,6 +18,7 @@ import { isMacOs } from '@/utils/platform.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { resolveReferenceHistoryDirection } from 'platform-bible-utils/experimental';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -40,7 +41,7 @@ const localizeString = (
   key: keyof NavigationHistoryButtonsLocalizedStrings,
 ) => strings[key] ?? key;
 
-/** One entry in a navigation-history context menu */
+/** One entry in a navigation-history menu */
 export type NavigationHistoryItem = {
   /** Display label for the history entry, e.g. 'Mark 4:1' */
   label: string;
@@ -75,9 +76,9 @@ export type NavigationHistoryButtonsProps = {
 
 /**
  * Back/forward reference-history buttons merged into a single button group. Left-click navigates
- * one step; right-click (or long-press, or the keyboard context-menu key) opens a menu listing the
- * history entries in that direction. In RTL the pair mirrors (order, arrow icons, and tooltip
- * shortcut hints), matching Paratext 9.
+ * one step; right-click (or long-press, or the keyboard context-menu key) opens a menu of the
+ * history entries in that direction, anchored below the button. In RTL the pair mirrors (order,
+ * arrow icons, and tooltip shortcut hints), matching Paratext 9.
  */
 export function NavigationHistoryButtons({
   canGoBack = false,
@@ -93,6 +94,18 @@ export function NavigationHistoryButtons({
   const isMac = isMacOs();
   const interfaceDirection = readDirection();
   const isRtl = interfaceDirection === 'rtl';
+
+  // Which direction's history menu is open. The menus open ONLY from the right-click handler
+  // below — the menu roots are controlled and ignore Radix's own open requests (left-click and
+  // keyboard on the trigger must navigate, not open the menu).
+  const [openMenu, setOpenMenu] = useState<'back' | 'forward' | undefined>(undefined);
+  // `null` is React's canonical "not yet attached" ref value; there's no undefined equivalent
+  // in the DOM/ref API (same pattern as book-chapter-control's triggerRef)
+  // eslint-disable-next-line no-null/no-null
+  const backButtonRef = useRef<HTMLButtonElement | null>(null);
+  // `null` for the same DOM/ref API reason as backButtonRef above
+  // eslint-disable-next-line no-null/no-null
+  const forwardButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const backLocalized = localizeString(localizedStrings, '%navigationHistory_back_tooltip%');
   const forwardLocalized = localizeString(localizedStrings, '%navigationHistory_forward_tooltip%');
@@ -121,32 +134,63 @@ export function NavigationHistoryButtons({
     const tooltip = isBack ? backLocalized : forwardLocalized;
     const listAriaLabel = isBack ? backListLocalized : forwardListLocalized;
     const shortcut = isBack ? backShortcut : forwardShortcut;
+    const buttonRef = isBack ? backButtonRef : forwardButtonRef;
+    const isOpen = openMenu === direction;
     // Arrow glyphs mirror in RTL (like the BookChapterControl's back-to-list button)
     const showLeftArrow = isBack !== isRtl;
 
     return (
-      <ContextMenu key={direction}>
+      <DropdownMenu
+        key={direction}
+        dir={interfaceDirection}
+        open={isOpen}
+        // Only closes are accepted here (Escape, outside click, item select). Opens come solely
+        // from the right-click handler on the wrapper span — Radix's trigger open requests
+        // (left-click/keyboard) are deliberately ignored so those keep navigating instead.
+        onOpenChange={(open) => {
+          if (!open) setOpenMenu(undefined);
+        }}
+      >
         <Tooltip>
           {/* The span wrapper keeps tooltips working while the button is disabled (a disabled
-              button gets pointer-events-none, so it can't be the trigger itself). The
-              ButtonGroup corner-merging styles land on the span, so the buttons carry the
-              equivalent logical rounding classes directly. */}
+              button gets pointer-events-none, so it can't be the trigger itself). It is also the
+              DropdownMenuTrigger, so the menu anchors below the button. The ButtonGroup
+              corner-merging styles land on the span, so the buttons carry the equivalent logical
+              rounding classes directly. */}
           <TooltipTrigger asChild>
-            <span className="tw:inline-flex">
-              <ContextMenuTrigger asChild disabled={items.length === 0}>
+            <DropdownMenuTrigger asChild>
+              <span
+                className="tw:inline-flex"
+                onContextMenu={(event) => {
+                  // Right-click (or long-press / Shift+F10 / the context-menu key) opens this
+                  // direction's history menu instead of a native context menu
+                  event.preventDefault();
+                  if (items.length > 0) setOpenMenu(direction);
+                }}
+              >
                 <Button
+                  ref={buttonRef}
                   aria-label={tooltip}
+                  aria-haspopup="menu"
+                  aria-expanded={isOpen}
                   data-testid={`navigation-history-${direction}-button`}
                   className={cn(isFirst ? 'tw:rounded-e-none' : 'tw:rounded-s-none', className)}
                   size="icon"
                   variant={variant}
                   disabled={!enabled}
                   onClick={() => onNavigate(isBack ? -1 : 1)}
+                  onKeyDown={(event) => {
+                    // Radix's menu trigger (the wrapper span) preventDefaults these keys to run
+                    // its own open-menu behavior; stop them from reaching it so the button keeps
+                    // native keyboard activation (Enter/Space navigate)
+                    if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown')
+                      event.stopPropagation();
+                  }}
                 >
                   {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
                 </Button>
-              </ContextMenuTrigger>
-            </span>
+              </span>
+            </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent>
             <p>
@@ -160,14 +204,27 @@ export function NavigationHistoryButtons({
             </p>
           </TooltipContent>
         </Tooltip>
-        <ContextMenuContent aria-label={listAriaLabel}>
+        <DropdownMenuContent
+          align="start"
+          aria-label={listAriaLabel}
+          // Radix defaults the menu's aria-labelledby to its trigger — here the unnamed wrapper
+          // span — which would override aria-label in accessible-name computation; clear it so
+          // the localized list label above wins
+          aria-labelledby={undefined}
+          onCloseAutoFocus={(event) => {
+            // Radix would return focus to the trigger — the non-focusable wrapper span, dropping
+            // focus on the body. Send it back to the button so keyboard users keep their place.
+            event.preventDefault();
+            buttonRef.current?.focus();
+          }}
+        >
           {items.map((item) => (
-            <ContextMenuItem key={item.offset} onSelect={() => onNavigate(item.offset)}>
+            <DropdownMenuItem key={item.offset} onSelect={() => onNavigate(item.offset)}>
               {item.label}
-            </ContextMenuItem>
+            </DropdownMenuItem>
           ))}
-        </ContextMenuContent>
-      </ContextMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   };
 

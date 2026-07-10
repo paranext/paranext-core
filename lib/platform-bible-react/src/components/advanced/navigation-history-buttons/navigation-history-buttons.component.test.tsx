@@ -9,7 +9,7 @@ import {
 } from './navigation-history-buttons.component';
 
 // jsdom doesn't ship ResizeObserver. Radix's Popper positioning (used by both the Tooltip and
-// ContextMenu content here) instantiates one on mount — with TooltipProvider's delayDuration=0,
+// DropdownMenu content here) instantiates one on mount — with TooltipProvider's delayDuration=0,
 // a plain click can open the tooltip synchronously, so this is needed even for click-only tests.
 // Same stub as project-selector.component.test.tsx.
 class NoopResizeObserver implements ResizeObserver {
@@ -68,6 +68,17 @@ describe('NavigationHistoryButtons', () => {
     expect(screen.queryByRole('menu')).toBeNull();
   });
 
+  test('Enter and Space on a focused button navigate without opening the history menu', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    screen.getByTestId('navigation-history-back-button').focus();
+    await user.keyboard('{Enter}');
+    expect(defaultProps.onNavigate).toHaveBeenCalledWith(-1);
+    await user.keyboard(' ');
+    expect(defaultProps.onNavigate).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   test('buttons are disabled when canGoBack/canGoForward are false', () => {
     render(
       <NavigationHistoryButtons
@@ -112,7 +123,8 @@ describe('NavigationHistoryButtons', () => {
   test('right-clicking a button with no history entries does not open a menu', () => {
     render(<NavigationHistoryButtons {...defaultProps} canGoForward={false} forwardItems={[]} />);
     // fireEvent rather than userEvent: the button is disabled, so a real pointer would hit the
-    // wrapper — this asserts the ContextMenuTrigger itself is disabled even if an event lands on it
+    // wrapper span — this asserts the right-click handler's empty-items guard even if an event
+    // lands on the button itself
     fireEvent.contextMenu(screen.getByTestId('navigation-history-forward-button'));
     expect(screen.queryByRole('menu')).toBeNull();
   });
