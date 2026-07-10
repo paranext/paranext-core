@@ -315,7 +315,20 @@ export const NoEditorContext: Story = {
   decorators: [createDecorator({ hasEditorContext: false })],
 };
 
-/** Some threads couldn't be serialized by the backend — shows the "notes couldn't be shown" banner. */
-export const HiddenNotes: Story = {
+/** One dropped thread — the banner uses the singular copy ("1 note couldn't be shown"). */
+export const OneNoteHidden: Story = {
+  decorators: [createDecorator({ hiddenNoteCount: 1 })],
+};
+
+/**
+ * Several threads couldn't be serialized by the backend — the plural "N notes couldn't be shown"
+ * banner.
+ */
+export const SomeNotesHidden: Story = {
   decorators: [createDecorator({ hiddenNoteCount: 3 })],
+};
+
+/** Every thread was dropped — the banner shows above the empty-state, not just a bare "no comments". */
+export const AllNotesHidden: Story = {
+  decorators: [createDecorator({ threads: [], hiddenNoteCount: 2 })],
 };
