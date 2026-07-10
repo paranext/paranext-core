@@ -1,11 +1,20 @@
-import { test, expect } from '../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../fixtures/helpers';
-import { openScriptureEditorForProject } from '../../fixtures/scripture-editor-helpers';
+import { test, expect } from '../../../fixtures/comment.fixture';
+import { waitForAppReady } from '../../../fixtures/helpers';
+import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
 import {
   cleanupCommentTestProject,
   createCommentTestProject,
   type CommentTestProject,
-} from '../../fixtures/comment-test-helpers';
+} from '../../../fixtures/comment-test-helpers';
+
+// Launch fixture (not the cdp connect fixture): the running app scans the projects folder exactly
+// once at startup (LocalParatextProjects.Initialize) — there is no on-demand rescan — so the test
+// project MUST exist on disk before the app launches. The cdp fixture connects to an
+// already-running app, so a project created in beforeAll is written AFTER that scan and
+// openResourceViewer fails with "No project found". comment.fixture launches Electron lazily (after
+// beforeAll), so the project is present for the startup scan. This is the same worker-scoped launch
+// fixture the comment-assignment isolated spec uses; "comment" is only its historical name — it
+// launches the full app and provides mainPage.
 
 // The top toolbar's BookChapterControl trigger is the first one in the DOM (the toolbar
 // renders above the dock layout)
@@ -23,7 +32,8 @@ test.describe('verse navigation keyboard shortcuts', () => {
 
   test.beforeAll(async () => {
     // Disposable copy of the bundled WEB project for the editor these tests navigate. The helper
-    // is comment-flavored only in name — it creates a plain project copy with a unique id.
+    // is comment-flavored only in name — it creates a plain project copy with a unique id. Created
+    // here (before the fixture launches Electron) so it is present during the app's startup scan.
     project = await createCommentTestProject([]);
   });
 
@@ -66,18 +76,18 @@ test.describe('verse navigation keyboard shortcuts', () => {
     expect(genesisLabel).not.toBe(exodusLabel);
   });
 
-  // SKIPPED: Playwright's `keyboard.press` over CDP uses `Input.dispatchKeyEvent`, which injects
-  // key events at the renderer-process level. Electron's `before-input-event` (where these
-  // shortcuts are handled in src/main/main.ts) fires in the BROWSER process, before OS-level
-  // input reaches the renderer — synthetic CDP key events never pass through it. Verified
-  // empirically against the running app: F8, Control+ArrowDown, and Control+b all left the
-  // reference label unchanged and never opened the Book Chapter Control, while the same
-  // navigation through the UI (click trigger -> type -> Enter) works. Exercising these shortcuts
-  // end-to-end requires OS-level input injection (e.g. xdotool X11 key events into the Xvfb
-  // display), which is not available in this environment. The shortcut-to-command mapping is
-  // covered by unit tests in src/main/verse-navigation-shortcuts.util.test.ts, and the shortcuts
-  // are covered by manual verification. Do NOT delete these assertions — they document the
-  // intended end-to-end behavior and can be re-enabled if OS-level injection becomes available.
+  // SKIPPED: Playwright's `keyboard.press` injects key events at the renderer-process level via
+  // CDP's `Input.dispatchKeyEvent` (true whether Playwright launches Electron or connects to it).
+  // Electron's `before-input-event` (where these shortcuts are handled in src/main/main.ts) fires
+  // in the BROWSER process, before OS-level input reaches the renderer — synthetic CDP key events
+  // never pass through it. Verified empirically against the running app: F8, Control+ArrowDown, and
+  // Control+b all left the reference label unchanged and never opened the Book Chapter Control,
+  // while the same navigation through the UI (click trigger -> type -> Enter) works. Exercising
+  // these shortcuts end-to-end requires OS-level input injection (e.g. xdotool X11 key events into
+  // the Xvfb display), which is not available in this environment. The shortcut-to-command mapping
+  // is covered by unit tests in src/main/verse-navigation-shortcuts.util.test.ts, and the shortcuts
+  // are covered by manual verification. Do NOT delete these assertions — they document the intended
+  // end-to-end behavior and can be re-enabled if OS-level injection becomes available.
   test.skip('F8/Ctrl+F8 and Ctrl+Down/Ctrl+Up navigate; F9/Ctrl+F9 change book; Ctrl+B opens the control', async ({
     mainPage,
   }) => {

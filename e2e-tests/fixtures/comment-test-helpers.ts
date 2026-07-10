@@ -41,10 +41,16 @@ import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } f
 /** Source WEB project bundled with the c-sharp assets */
 const WEB_PROJECT_ASSETS_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 
-/** Platform.Bible's Paratext 9 projects root (matches LocalParatextProjects constructor) */
+/**
+ * Platform.Bible's Paratext 9 projects root. Must match the folder the app scans at startup —
+ * `LocalParatextProjects`'s constructor hardcodes `~/.platform.bible/projects/Paratext 9 Projects`
+ * (c-sharp/Projects/LocalParatextProjects.cs), where `UserProfile` === `os.homedir()`. The app
+ * scans this folder exactly once at startup (there is no on-demand rescan), so a test project
+ * written here is discoverable only if it exists before the app launches.
+ */
 const PARATEXT_PROJECTS_ROOT = path.join(
   os.homedir(),
-  '.{{ productInfo.name }}',
+  '.platform.bible',
   'projects',
   'Paratext 9 Projects',
 );
