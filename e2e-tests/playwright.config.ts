@@ -40,9 +40,10 @@ const config = defineConfig({
     },
     {
       // Local-only - NOT wired into CI's `test:e2e:smoke`. The ER tests need real
-      // Marble resources (e.g., ESV16UK+) which are not available in CI. Run locally:
-      //   ./.erb/scripts/refresh.sh    # boot the app once with CDP enabled
-      //   npm run test:e2e:enhanced-resources
+      // Marble resources (e.g., ESV16UK+) which are not available in CI. There is no dedicated
+      // npm script; run the project directly (after booting the app once with CDP enabled):
+      //   ./.erb/scripts/refresh.sh
+      //   npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources
       name: 'enhanced-resources',
       testDir: './tests/enhanced-resources',
     },

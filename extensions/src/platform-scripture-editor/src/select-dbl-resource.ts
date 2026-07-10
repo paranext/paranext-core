@@ -1,12 +1,7 @@
 import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DblResourceData } from 'platform-bible-utils';
 import { isDblResourceReference } from './resource-reference.utils';
-
-export const CURRENT_DATA_VERSION = '1.0.0';
-export const DEFAULT_RESOURCE_REFERENCE_LIST: ResourceReferenceList = {
-  dataVersion: CURRENT_DATA_VERSION,
-  items: [],
-};
+import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
 
 /**
  * Adds a DBL resource to the project's text connections.
