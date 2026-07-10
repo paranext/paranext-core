@@ -37,11 +37,19 @@ const makeWriter = (): UserResourceWriter => ({
 
 /** Reads `isResourceShownForUser` off a reference without a type assertion. */
 const userFlagOf = (refList: ResourceReferenceList, id: string): boolean | undefined => {
-  const ref = refList.items.find((item) => item.id === id);
+  const ref = refList.items.find(
+    (item) => (isProjectReference(item) || isDblResourceReference(item)) && item.id === id,
+  );
   return ref && (isProjectReference(ref) || isDblResourceReference(ref))
     ? ref.isResourceShownForUser
     : undefined;
 };
+
+/** Reads the ids off a reference list, narrowing to Bible-text references (the only ones with `id`). */
+const idsOf = (refList: ResourceReferenceList): (string | undefined)[] =>
+  refList.items.map((item) =>
+    isProjectReference(item) || isDblResourceReference(item) ? item.id : undefined,
+  );
 
 describe('persistUserDisplay', () => {
   it('routes an admin-owned entry to the overlay only (not the user list)', () => {
@@ -89,7 +97,7 @@ describe('persistUserRemoval', () => {
 
     expect(result).toBeDefined();
     const persisted = vi.mocked(writer.setUserReferencedProjectsAndResources).mock.calls[0][0];
-    expect(persisted.items.map((item) => item.id)).toEqual(['kjv']);
+    expect(idsOf(persisted)).toEqual(['kjv']);
   });
 
   it('is a no-op (no write) when the id is not in the user list', () => {
@@ -108,7 +116,7 @@ describe('persistUserAddition', () => {
 
     expect(result).toBeDefined();
     const persisted = vi.mocked(writer.setUserReferencedProjectsAndResources).mock.calls[0][0];
-    expect(persisted.items.map((item) => item.id)).toEqual(['niv']);
+    expect(idsOf(persisted)).toEqual(['niv']);
     expect(userFlagOf(persisted, 'niv')).toBe(true);
   });
 
