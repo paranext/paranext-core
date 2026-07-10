@@ -366,3 +366,30 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     expect(elapsedMs).toBeLessThan(220);
   });
 });
+
+test.describe('Scripture Text Grid empty state (A6)', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('shows directional copy and no cells when nothing is shown', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    // Flag nothing → the effective list is empty → the grid renders the empty state, not cells.
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, []);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(0);
+  });
+});
