@@ -25,6 +25,8 @@ internal static class SerializationOptions
         options.Converters.Add(new CommentThreadSelectorConverter());
         options.Converters.Add(new PlatformCommentConverter());
         options.Converters.Add(new PlatformCommentThreadConverter());
+        // Isolates per-thread serialization failures in the getCommentThreads response.
+        options.Converters.Add(new PlatformCommentThreadListConverter());
         options.Converters.Add(new ConcurrentHashSetConverter<string>());
         options.Converters.Add(new InternetSettingsMementoConverter());
         options.Converters.Add(new InventoryOptionValueConverter());

@@ -309,6 +309,27 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void CreateComment_WithUnavailableContentPlaceholder_ThrowsInvalidOperationException()
+        {
+            // The "content could not be displayed" placeholder is served for a note whose content
+            // can't be rendered. It must never be storable as a note's real content — otherwise the
+            // note would be created and then permanently un-editable (UpdateComment rejects the same
+            // placeholder). Mirrors the UpdateComment guard.
+            var comment = CreateTestComment(
+                "GEN",
+                1,
+                1,
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            );
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+            );
+
+            Assert.That(ex!.Message, Does.Contain("unavailable-content placeholder"));
+        }
+
+        [Test]
         public void CreateComment_AssignedUserNotAssignable_ThrowsInvalidOperationException()
         {
             // Arrange
@@ -1061,6 +1082,59 @@ namespace TestParanextDataProvider.Projects
             Assert.That(updatedComment!.Contents!.InnerText, Does.Contain("Updated Test Comment"));
             Assert.That(string.Equals(updatedComment.Id, commentId), Is.True);
             Assert.That(string.Equals(updatedComment.Thread, threadId), Is.True);
+        }
+
+        [Test]
+        public void UpdateComment_WithUnrenderablePlaceholder_IsRejectedAndKeepsRealContent()
+        {
+            // A note whose content can't be rendered is served to the client as the
+            // "could not be displayed" placeholder. If the user opens that degraded note and saves,
+            // the frontend sends the placeholder back here — UpdateComment must reject it so the
+            // note's real (unrenderable but present) content is not silently overwritten.
+            var comment = CommentTestHelper.CreateBasicComment();
+            comment.Thread = null; // set in CreateComment
+            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            bool result = _provider.UpdateComment(
+                commentId,
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            );
+
+            Assert.That(result, Is.False); // rejected — not persisted
+            var storedComment = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Comments.Single(c => c.Id == commentId);
+            Assert.That(storedComment.Contents!.InnerText, Does.Contain("Test Comment"));
+            Assert.That(
+                storedComment.Contents.InnerText,
+                Does.Not.Contain("could not be displayed")
+            );
+        }
+
+        [Test]
+        public void UpdateComment_WithReserializedPlaceholder_IsAlsoRejected()
+        {
+            // The comment editor round-trips saved content through Lexical, which can re-serialize the
+            // placeholder with different markup (attributes, span wrappers, whitespace) while
+            // preserving its text. The guard matches on normalized text, so these variants must be
+            // rejected too — otherwise a corrupt note's real content could still be overwritten on an
+            // unedited save.
+            var comment = CommentTestHelper.CreateBasicComment();
+            comment.Thread = null; // set in CreateComment
+            string commentId = _provider.CreateComment(new PlatformCommentWrapper(comment));
+
+            bool result = _provider.UpdateComment(
+                commentId,
+                "<p dir=\"ltr\"><span>This note could not be displayed.</span></p>"
+            );
+
+            Assert.That(result, Is.False); // rejected — not persisted
+            var storedComment = _provider
+                .GetCommentThreads(new CommentThreadSelector())
+                .Single(t => t.Comments.Any(c => c.Id == commentId))
+                .Comments.Single(c => c.Id == commentId);
+            Assert.That(storedComment.Contents!.InnerText, Does.Contain("Test Comment"));
         }
 
         // Note: The following test is a just a POC to make sure roundtripping works with an update.
