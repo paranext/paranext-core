@@ -137,7 +137,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
         Assert.That(promoted.Name, Is.EqualTo("D"));
         // The promoted copy exists only to drive download; it does not carry the flags.
         Assert.That(promoted.IsResourceShownByDefault, Is.Null);
-        Assert.That(promoted.InTextCollectionUser, Is.Null);
+        Assert.That(promoted.IsResourceShownForUser, Is.Null);
     }
 
     [Test]

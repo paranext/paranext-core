@@ -1968,7 +1968,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 item with
                 {
                     IsResourceShownByDefault = null,
-                    InTextCollectionUser = null,
+                    IsResourceShownForUser = null,
                 }
             );
 

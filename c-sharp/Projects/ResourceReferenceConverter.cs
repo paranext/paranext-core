@@ -23,10 +23,10 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
                 : null;
 
         bool? shown = GetBool(root, "isResourceShownByDefault");
-        bool? inCollection = GetBool(root, "inTextCollectionUser");
+        bool? inCollection = GetBool(root, "isResourceShownForUser");
 
         // Capture extras against the per-type known-name set so name-only types don't silently
-        // swallow (and drop) a Bible-text-only property such as "id" or "inTextCollectionUser" —
+        // swallow (and drop) a Bible-text-only property such as "id" or "isResourceShownForUser" —
         // those flow through ExtraData instead. See ResourceReferenceList.Known*PropertyNames.
         // isResourceShownByDefault is understood on every type (see PT-4040), so it is in both sets.
         return type switch
@@ -36,7 +36,7 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
                 IsResourceShownByDefault = shown,
-                InTextCollectionUser = inCollection,
+                IsResourceShownForUser = inCollection,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownBibleTextPropertyNames),
             },
             "dblResource" => new DblResourceReference
@@ -44,7 +44,7 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
                 IsResourceShownByDefault = shown,
-                InTextCollectionUser = inCollection,
+                IsResourceShownForUser = inCollection,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownBibleTextPropertyNames),
             },
             "enhancedResource" => new EnhancedResourceReference
@@ -147,8 +147,8 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
         // Emit the two flags only when set, so old-build files stay clean.
         if (value.IsResourceShownByDefault is bool shownVal)
             writer.WriteBoolean("isResourceShownByDefault", shownVal);
-        if (value.InTextCollectionUser is bool inCollectionVal)
-            writer.WriteBoolean("inTextCollectionUser", inCollectionVal);
+        if (value.IsResourceShownForUser is bool inCollectionVal)
+            writer.WriteBoolean("isResourceShownForUser", inCollectionVal);
 
         // Forward-compat: re-emit unknown properties captured on read.
         if (value.ExtraData is not null)
