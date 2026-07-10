@@ -2085,15 +2085,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetShownByDefaultOverlay(object? value)
     {
         string? json = value?.ToString();
-        var map =
-            (
-                string.IsNullOrEmpty(json)
-                    ? null
-                    : json.DeserializeFromJson<Dictionary<string, bool>>()
-            )
-            ?? throw new InvalidDataException(
-                "ShownByDefaultOverlay value must be a JSON object map"
+        Dictionary<string, bool>? map;
+        try
+        {
+            // Deserialize inside try/catch so a wrong-SHAPE value (JSON array/number/string) surfaces
+            // the same InvalidDataException as a null/empty value, rather than leaking a raw
+            // JsonException. System.Text.Json throws for a shape mismatch and returns null only for a
+            // literal JSON null, so both failure modes must be funneled to one contract.
+            map = string.IsNullOrEmpty(json)
+                ? null
+                : json.DeserializeFromJson<Dictionary<string, bool>>();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException(
+                "ShownByDefaultOverlay value must be a JSON object map",
+                ex
             );
+        }
+        if (map is null)
+            throw new InvalidDataException("ShownByDefaultOverlay value must be a JSON object map");
         WriteOverlay(map);
         SendDataUpdateEvent(
             ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,

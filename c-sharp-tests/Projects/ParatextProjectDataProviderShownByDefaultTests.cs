@@ -208,11 +208,15 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
 
     [TestCase("null")] // JSON null literal -> deserializes to null
     [TestCase("")] // empty value -> treated as nothing to store
-    public void Overlay_Set_WithNullOrEmptyValue_Throws(string json)
+    [TestCase("[1,2,3]")] // JSON array, not an object map
+    [TestCase("\"hello\"")] // JSON string, not an object map
+    [TestCase("42")] // JSON number, not an object map
+    [TestCase("{ not json")] // malformed JSON
+    public void Overlay_Set_WithNonMapValue_Throws(string json)
     {
-        // SetShownByDefaultOverlay must reject a value that does not yield a { id -> bool } map
-        // rather than storing garbage. (Wrong-shape JSON such as an array or number throws a
-        // JsonException earlier in deserialization; this covers the explicit null-map guard.)
+        // SetShownByDefaultOverlay must reject any value that does not yield a { id -> bool } map
+        // with a consistent InvalidDataException — whether it is null/empty (deserializes to null) or
+        // a wrong-shape/malformed value (System.Text.Json throws, which the setter wraps).
         Assert.Throws<InvalidDataException>(() => _provider.SetShownByDefaultOverlay(json));
     }
 
