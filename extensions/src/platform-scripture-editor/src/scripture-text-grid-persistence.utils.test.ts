@@ -23,7 +23,6 @@ const list = (items: DblResourceReference[] = []): ResourceReferenceList => ({
 });
 
 const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollectionSources => ({
-  adminModelTexts: list(),
   adminReferenced: list(),
   userReferenced: list(),
   overlay: {},
@@ -36,11 +35,11 @@ const makeWriter = (): UserResourceWriter => ({
   setShownByDefaultOverlay: vi.fn().mockResolvedValue(true),
 });
 
-/** Reads `inTextCollectionUser` off a reference without a type assertion. */
+/** Reads `isResourceShownForUser` off a reference without a type assertion. */
 const userFlagOf = (refList: ResourceReferenceList, id: string): boolean | undefined => {
   const ref = refList.items.find((item) => item.id === id);
   return ref && (isProjectReference(ref) || isDblResourceReference(ref))
-    ? ref.inTextCollectionUser
+    ? ref.isResourceShownForUser
     : undefined;
 };
 
@@ -48,7 +47,7 @@ describe('persistUserDisplay', () => {
   it('routes an admin-owned entry to the overlay only (not the user list)', () => {
     const writer = makeWriter();
     const sources = makeSources({
-      adminModelTexts: list([dbl('esv', { isResourceShownByDefault: true })]),
+      adminReferenced: list([dbl('esv', { isResourceShownByDefault: true })]),
     });
 
     persistUserDisplay(writer, 'esv', false, sources);
@@ -60,7 +59,7 @@ describe('persistUserDisplay', () => {
   it('routes a user entry to the user list only (not the overlay)', () => {
     const writer = makeWriter();
     const sources = makeSources({
-      userReferenced: list([dbl('web', { inTextCollectionUser: true })]),
+      userReferenced: list([dbl('web', { isResourceShownForUser: true })]),
     });
 
     persistUserDisplay(writer, 'web', false, sources);
@@ -84,7 +83,7 @@ describe('persistUserDisplay', () => {
 describe('persistUserRemoval', () => {
   it('persists the user list without the removed entry', () => {
     const writer = makeWriter();
-    const userReferenced = list([dbl('web', { inTextCollectionUser: true }), dbl('kjv')]);
+    const userReferenced = list([dbl('web', { isResourceShownForUser: true }), dbl('kjv')]);
 
     const result = persistUserRemoval(writer, 'web', userReferenced);
 
@@ -103,7 +102,7 @@ describe('persistUserRemoval', () => {
 });
 
 describe('persistUserAddition', () => {
-  it('appends the reference with inTextCollectionUser and persists', () => {
+  it('appends the reference with isResourceShownForUser and persists', () => {
     const writer = makeWriter();
     const result = persistUserAddition(writer, dbl('niv'), list());
 

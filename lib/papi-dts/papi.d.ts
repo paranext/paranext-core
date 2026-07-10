@@ -4221,7 +4221,6 @@ declare module 'papi-shared-types' {
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -4329,11 +4328,6 @@ declare module 'papi-shared-types' {
    */
   interface SettingTypes {
     /**
-     * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
-     * `useWebViewScrollGroupScrRef`
-     */
-    'platform.verseRef': SerializedVerseRef;
-    /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
      * localizes to English if it does not have a localization in a higher-priority locale.
@@ -4383,7 +4377,7 @@ declare module 'papi-shared-types' {
    *
    * Automatically includes all extensions' user settings that are added to {@link SettingTypes}.
    *
-   * @example 'platform.verseRef'
+   * @example 'platform.interfaceLanguage'
    */
   type SettingNames = keyof SettingTypes;
   /**
@@ -7811,6 +7805,144 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export const useData: UseDataHook;
   export default useData;
 }
+declare module 'renderer/services/scroll-group.service-host' {
+  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+   * placeholder and will be refactored significantly in
+   * https://github.com/paranext/paranext-core/issues/788
+   */
+  export const availableScrollGroupIds: (number | undefined)[];
+  /**
+   * Event that emits with information about a changed Scripture Reference for a scroll group. Note it
+   * also fires on a source-only change — a same-numbered reference set by a different-versification
+   * project (the `sourceProjectId` changes while the verse numbers do not) — so consumers must not
+   * assume it fires only when the verse numbers change; use the payload's `sourceProjectId` to tell a
+   * frame change from a verse change.
+   */
+  export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  /**
+   * Event that emits when a tracked project's versification changes mid-session (see
+   * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
+   * a genuine change.
+   */
+  export const onDidChangeVersification: PlatformEvent<{
+    projectId: string;
+  }>;
+  /** See {@link IScrollGroupRemoteService.getScrRef} */
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
+  /**
+   * Get the id of the project whose versification the scroll group's stored `scrRef` is expressed in.
+   *
+   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
+   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
+   *   was never set with a source, or its ref came from an external writer whose versification is not
+   *   known
+   */
+  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
+  /**
+   * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
+   * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
+   * Never fires a round-trip. Used for the initial displayed value and when detaching a web view so
+   * callers never block on the async conversion. Returns the raw reference when no conversion is
+   * needed (source frame unknown or already `projectId`) or when a conversion has not been computed
+   * yet.
+   *
+   * @param scrollGroupId Scroll group whose reference to read. If `undefined`, defaults to 0
+   * @param projectId Project into whose versification the reference should be converted
+   * @returns The cached converted reference, or the raw reference when none is available
+   */
+  export function getScrRefForProjectSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): SerializedVerseRef;
+  /**
+   * Get the scroll group's Scripture reference converted into the versification of `projectId`.
+   *
+   * The group stores its reference in the versification of whichever project last set it (see
+   * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
+   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
+   * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
+   * when no conversion is needed: the source frame is unknown, or already matches `projectId`. On any
+   * conversion failure it falls back to the raw reference (and does not permanently suppress the
+   * project — the failure may be transient).
+   *
+   * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
+   * @param projectId Project into whose versification to convert the reference
+   * @returns The reference in `projectId`'s versification
+   */
+  export function getScrRefForProject(
+    scrollGroupId: ScrollGroupId | undefined,
+    projectId: string,
+  ): Promise<SerializedVerseRef>;
+  /**
+   * See {@link IScrollGroupRemoteService.setScrRef}
+   *
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown / canonical English.
+   */
+  export function setScrRefSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): boolean;
+  /** Register the network object that backs the scroll group service */
+  export function startScrollGroupService(): Promise<void>;
+}
+declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
+  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
+   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
+   * `scrollGroupScrRef`. Use similarly to `useState`.
+   *
+   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
+   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
+   *   actually updated any properties; `false` otherwise
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because this is just used when needed and doesn't have any
+   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
+   *   always set using the latest value of this callback
+   * @param projectId Optional project id for the consuming web view. When provided, the returned
+   *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
+   *   scroll group with this project as the source.
+   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
+   *
+   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
+   *       converted into `projectId`'s versification when a `projectId` is provided
+   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
+   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
+   *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
+   *       If not synced to a scroll group, this is `undefined`
+   *   - `setScrollGroupId`: Function to use to update the scroll group with which this
+   *       `scrollGroupScrRef` is synced
+   *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the source
+   *       frame of `scrRef`); this web view's own `projectId` when not synced to a scroll group.
+   *       `undefined` when unknown
+   */
+  export function useScrollGroupScrRef(
+    scrollGroupScrRef: ScrollGroupScrRef | undefined,
+    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
+    projectId?: string,
+  ): [
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
+    scrollGroupId: ScrollGroupId | undefined,
+    setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+    sourceProjectId: string | undefined,
+  ];
+  export default useScrollGroupScrRef;
+}
 declare module 'shared/data/platform.data' {
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
@@ -8181,148 +8313,6 @@ declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   export const settingsService: ISettingsService;
   export default settingsService;
-}
-declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
-  /**
-   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
-   * placeholder and will be refactored significantly in
-   * https://github.com/paranext/paranext-core/issues/788
-   */
-  export const availableScrollGroupIds: (number | undefined)[];
-  /**
-   * Event that emits with information about a changed Scripture Reference for a scroll group. Note it
-   * also fires on a source-only change — a same-numbered reference set by a different-versification
-   * project (the `sourceProjectId` changes while the verse numbers do not) — so consumers must not
-   * assume it fires only when the verse numbers change; use the payload's `sourceProjectId` to tell a
-   * frame change from a verse change.
-   */
-  export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
-  /**
-   * Event that emits when a tracked project's versification changes mid-session (see
-   * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
-   * a genuine change.
-   */
-  export const onDidChangeVersification: PlatformEvent<{
-    projectId: string;
-  }>;
-  /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
-  /**
-   * Get the id of the project whose versification the scroll group's stored `scrRef` is expressed in.
-   *
-   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
-   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
-   *   was never set with a source, or its ref came from the `platform.verseRef` setting / an external
-   *   writer whose versification is not known
-   */
-  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
-  /**
-   * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
-   * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
-   * Never fires a round-trip. Used for the initial displayed value and when detaching a web view so
-   * callers never block on the async conversion. Returns the raw reference when no conversion is
-   * needed (source frame unknown or already `projectId`) or when a conversion has not been computed
-   * yet.
-   *
-   * @param scrollGroupId Scroll group whose reference to read. If `undefined`, defaults to 0
-   * @param projectId Project into whose versification the reference should be converted
-   * @returns The cached converted reference, or the raw reference when none is available
-   */
-  export function getScrRefForProjectSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    projectId: string,
-  ): SerializedVerseRef;
-  /**
-   * Get the scroll group's Scripture reference converted into the versification of `projectId`.
-   *
-   * The group stores its reference in the versification of whichever project last set it (see
-   * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
-   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
-   * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
-   * when no conversion is needed: the source frame is unknown, or already matches `projectId`. On any
-   * conversion failure it falls back to the raw reference (and does not permanently suppress the
-   * project — the failure may be transient).
-   *
-   * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
-   * @param projectId Project into whose versification to convert the reference
-   * @returns The reference in `projectId`'s versification
-   */
-  export function getScrRefForProject(
-    scrollGroupId: ScrollGroupId | undefined,
-    projectId: string,
-  ): Promise<SerializedVerseRef>;
-  /**
-   * See {@link IScrollGroupRemoteService.setScrRef}
-   *
-   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
-   *   unknown / canonical English.
-   * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
-   *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
-   *   Only set to `false` when running this from subscription to updates to the setting
-   */
-  export function setScrRefSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    scrRef: SerializedVerseRef,
-    sourceProjectId?: string,
-    shouldSetVerseRefSetting?: boolean,
-  ): boolean;
-  /** Register the network object that backs the scroll group service */
-  export function startScrollGroupService(): Promise<void>;
-}
-declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
-  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { ScrollGroupId } from 'platform-bible-utils';
-  /**
-   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
-   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
-   * `scrollGroupScrRef`. Use similarly to `useState`.
-   *
-   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
-   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
-   *
-   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-   *   updated every render
-   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
-   *   actually updated any properties; `false` otherwise
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because this is just used when needed and doesn't have any
-   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
-   *   always set using the latest value of this callback
-   * @param projectId Optional project id for the consuming web view. When provided, the returned
-   *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
-   *   scroll group with this project as the source.
-   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
-   *
-   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
-   *       converted into `projectId`'s versification when a `projectId` is provided
-   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
-   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
-   *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
-   *       If not synced to a scroll group, this is `undefined`
-   *   - `setScrollGroupId`: Function to use to update the scroll group with which this
-   *       `scrollGroupScrRef` is synced
-   *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the source
-   *       frame of `scrRef`); this web view's own `projectId` when not synced to a scroll group.
-   *       `undefined` when unknown
-   */
-  export function useScrollGroupScrRef(
-    scrollGroupScrRef: ScrollGroupScrRef | undefined,
-    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
-    projectId?: string,
-  ): [
-    scrRef: SerializedVerseRef,
-    setScrRef: (newScrRef: SerializedVerseRef) => void,
-    scrollGroupId: ScrollGroupId | undefined,
-    setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
-    sourceProjectId: string | undefined,
-  ];
-  export default useScrollGroupScrRef;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';

@@ -46,16 +46,12 @@ function settingTuple(
 }
 
 /**
- * Configures `useProjectSetting` to answer per setting key. The hook re-renders on state updates,
- * so keying on the setting name (rather than call order) keeps each render consistent.
+ * Configures `useProjectSetting` to answer with the admin `referencedProjectsAndResources` tuple.
+ * That is the only project setting the hook reads (model texts are decoupled from the
+ * shown-by-default feature, so they are no longer a source).
  */
-function mockSettings(options: {
-  modelTexts: ReturnType<typeof useProjectSetting>;
-  referenced: ReturnType<typeof useProjectSetting>;
-}) {
-  mockUseProjectSetting.mockImplementation((_projectId, key) =>
-    key === 'platformScripture.modelTexts' ? options.modelTexts : options.referenced,
-  );
+function mockSettings(referenced: ReturnType<typeof useProjectSetting>) {
+  mockUseProjectSetting.mockImplementation(() => referenced);
 }
 
 /**
@@ -135,11 +131,8 @@ describe('useTextCollectionSources', () => {
     vi.clearAllMocks();
   });
 
-  it('returns sources undefined while the admin settings are still loading', () => {
-    mockSettings({
-      modelTexts: settingTuple(list(), true),
-      referenced: settingTuple(list(), true),
-    });
+  it('returns sources undefined while the admin setting is still loading', () => {
+    mockSettings(settingTuple(list(), true));
     mockUseProjectDataProvider.mockReturnValue(makeControllablePdp().pdp);
 
     const { result } = renderHook(() => useTextCollectionSources('proj-1'));
@@ -148,10 +141,7 @@ describe('useTextCollectionSources', () => {
   });
 
   it('returns sources undefined when settings are loaded but subscriptions have not delivered', async () => {
-    mockSettings({
-      modelTexts: settingTuple(list(), false),
-      referenced: settingTuple(list(), false),
-    });
+    mockSettings(settingTuple(list(), false));
     const controller = makeControllablePdp();
     mockUseProjectDataProvider.mockReturnValue(controller.pdp);
 
@@ -163,13 +153,9 @@ describe('useTextCollectionSources', () => {
     expect(result.current.sources).toBeUndefined();
   });
 
-  it('assembles all four fields once settings are loaded and both subscriptions deliver', async () => {
-    const adminModelTexts = list('model-v');
+  it('assembles all three fields once the setting is loaded and both subscriptions deliver', async () => {
     const adminReferenced = list('ref-v');
-    mockSettings({
-      modelTexts: settingTuple(adminModelTexts, false),
-      referenced: settingTuple(adminReferenced, false),
-    });
+    mockSettings(settingTuple(adminReferenced, false));
     const controller = makeControllablePdp();
     mockUseProjectDataProvider.mockReturnValue(controller.pdp);
 
@@ -181,7 +167,6 @@ describe('useTextCollectionSources', () => {
     await controller.deliver(userReferenced, overlay);
 
     expect(result.current.sources).toEqual({
-      adminModelTexts,
       adminReferenced,
       userReferenced,
       overlay,
@@ -189,10 +174,7 @@ describe('useTextCollectionSources', () => {
   });
 
   it('keeps sources undefined until BOTH subscriptions have delivered', async () => {
-    mockSettings({
-      modelTexts: settingTuple(list(), false),
-      referenced: settingTuple(list(), false),
-    });
+    mockSettings(settingTuple(list(), false));
     const controller = makeControllablePdp();
     mockUseProjectDataProvider.mockReturnValue(controller.pdp);
 
@@ -208,28 +190,8 @@ describe('useTextCollectionSources', () => {
     expect(result.current.sources).toBeDefined();
   });
 
-  it('keeps sources undefined when the admin modelTexts setting is a PlatformError', async () => {
-    mockSettings({
-      modelTexts: settingTuple(makePlatformError(), false),
-      referenced: settingTuple(list(), false),
-    });
-    const controller = makeControllablePdp();
-    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
-
-    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
-
-    await controller.resolveSubscriptions();
-    await controller.deliver(list('user-v'), { 'res-1': true });
-
-    // Even with everything else ready, an admin PlatformError blocks assembly.
-    expect(result.current.sources).toBeUndefined();
-  });
-
   it('keeps sources undefined when the admin referenced setting is a PlatformError', async () => {
-    mockSettings({
-      modelTexts: settingTuple(list(), false),
-      referenced: settingTuple(makePlatformError(), false),
-    });
+    mockSettings(settingTuple(makePlatformError(), false));
     const controller = makeControllablePdp();
     mockUseProjectDataProvider.mockReturnValue(controller.pdp);
 

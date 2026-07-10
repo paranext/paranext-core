@@ -10,22 +10,18 @@ import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-refe
 const DEFAULT_OVERLAY: ShownByDefaultOverlay = {};
 
 /**
- * Assembles the four data sources the View Options helpers read — the two admin project-scope lists
- * (`modelTexts`, `referencedProjectsAndResources`), the per-user list, and the per-user
- * shown-by-default overlay — into a single {@link TextCollectionSources} object, and returns the
+ * Assembles the three data sources the View Options helpers read — the admin project-scope
+ * `referencedProjectsAndResources` list, the per-user list, and the per-user shown-by-default
+ * overlay — into a single {@link TextCollectionSources} object, and returns the
  * `platformScripture.textConnectionSettings` data provider so callers can persist mutations via its
  * `setUserReferencedProjectsAndResources` / `setShownByDefaultOverlay` setters.
  *
- * The View Options panel reads the admin lists but never writes them (admin sharing lives in a
- * separate dialog); the auto-promote on admin writes runs server-side regardless. `sources` is
- * `undefined` while any source is still loading.
+ * Model texts are decoupled from the shown-by-default feature (they carry no admin flag and the
+ * overlay is initialized only from the referenced list), so they are not read here. The View
+ * Options panel reads the admin list but never writes it (admin sharing lives in a separate
+ * dialog). `sources` is `undefined` while any source is still loading.
  */
 export function useTextCollectionSources(projectId: string | undefined) {
-  const [adminModelTexts, , , isModelTextsLoading] = useProjectSetting(
-    projectId,
-    'platformScripture.modelTexts',
-    DEFAULT_LIST,
-  );
   const [adminReferenced, , , isReferencedLoading] = useProjectSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
@@ -84,18 +80,11 @@ export function useTextCollectionSources(projectId: string | undefined) {
   }, [textConnectionPdp]);
 
   const sources = useMemo<TextCollectionSources | undefined>(() => {
-    if (isModelTextsLoading || isReferencedLoading) return undefined;
-    if (isPlatformError(adminModelTexts) || isPlatformError(adminReferenced)) return undefined;
+    if (isReferencedLoading) return undefined;
+    if (isPlatformError(adminReferenced)) return undefined;
     if (userReferenced === undefined || overlay === undefined) return undefined;
-    return { adminModelTexts, adminReferenced, userReferenced, overlay };
-  }, [
-    isModelTextsLoading,
-    isReferencedLoading,
-    adminModelTexts,
-    adminReferenced,
-    userReferenced,
-    overlay,
-  ]);
+    return { adminReferenced, userReferenced, overlay };
+  }, [isReferencedLoading, adminReferenced, userReferenced, overlay]);
 
   return { sources, textConnectionPdp };
 }
