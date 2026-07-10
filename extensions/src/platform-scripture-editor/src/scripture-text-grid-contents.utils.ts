@@ -8,7 +8,7 @@ import type {
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 
-/** A Bible-text reference — the only reference types that carry `id` and `inTextCollectionUser`. */
+/** A Bible-text reference — the only reference types that carry `id` and `isResourceShownForUser`. */
 type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
@@ -124,7 +124,7 @@ function isAdminOwnedId(resourceId: string, sources: TextCollectionSources): boo
 /**
  * Computes the Bible-text references that render in the Scripture Text Grid for the current user:
  * admin-owned entries the user has shown (overlay choice, falling back to the admin flag), followed
- * by the user's own list entries with `inTextCollectionUser === true`. Deduplicated by `id` with
+ * by the user's own list entries with `isResourceShownForUser === true`. Deduplicated by `id` with
  * admin precedence; admin entries keep project-list order, user entries keep user-list order.
  */
 export function getScriptureTextGridContents(sources: TextCollectionSources): BibleTextReference[] {
@@ -142,7 +142,7 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
     if (seen.has(item.id)) return;
     seen.add(item.id);
-    if (item.inTextCollectionUser === true) contents.push(item);
+    if (item.isResourceShownForUser === true) contents.push(item);
   });
 
   return contents;
@@ -156,7 +156,7 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * - `bottom` — resources the user can freely toggle and remove (`isAdminLocked: false`): other
  *   admin-owned entries (opted out, or shown before) followed by the user's own list additions.
  *
- * Checkbox state comes from the overlay for admin-owned entries and from `inTextCollectionUser` for
+ * Checkbox state comes from the overlay for admin-owned entries and from `isResourceShownForUser` for
  * the user's own entries. An admin-owned id never also appears as a user entry (admin precedence).
  */
 export function getViewOptionsTexts(sources: TextCollectionSources): {
@@ -185,7 +185,7 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
     if (adminIds.has(item.id)) return; // admin-owned ids are rendered by the loop above
     bottom.push({
       reference: item,
-      checked: item.inTextCollectionUser === true,
+      checked: item.isResourceShownForUser === true,
       isAdminLocked: false,
       isUserRemovable: true,
     });
@@ -197,7 +197,7 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
 /**
  * Records the user's shown/hidden choice for a resource, returning the next state (callers
  * persist). Routes by ownership: an admin-owned entry writes the per-user overlay (the admin's flag
- * is untouched); a user-list entry writes that item's `inTextCollectionUser`. Unknown ids are a
+ * is untouched); a user-list entry writes that item's `isResourceShownForUser`. Unknown ids are a
  * no-op.
  */
 export function setUserDisplay(
@@ -214,7 +214,7 @@ export function setUserDisplay(
   if (index < 0) return { userReferenced, overlay };
 
   const items = userReferenced.items.map((item, itemIndex) =>
-    itemIndex === index ? { ...item, inTextCollectionUser: shown } : item,
+    itemIndex === index ? { ...item, isResourceShownForUser: shown } : item,
   );
   return { userReferenced: { dataVersion: CURRENT_DATA_VERSION, items }, overlay };
 }
@@ -239,7 +239,7 @@ export function removeFromUserResources(
 }
 
 /**
- * Appends a Bible-text reference to the user's per-user list with `inTextCollectionUser === true`
+ * Appends a Bible-text reference to the user's per-user list with `isResourceShownForUser === true`
  * (the Get Resources flow). Idempotent: returns the list unchanged when the id is already present.
  *
  * Precondition: `reference` must not be an admin-owned resource. Admin-owned resources are
@@ -256,6 +256,6 @@ export function addToUserResources(
   }
   return {
     dataVersion: CURRENT_DATA_VERSION,
-    items: [...userReferenced.items, { ...reference, inTextCollectionUser: true }],
+    items: [...userReferenced.items, { ...reference, isResourceShownForUser: true }],
   };
 }
