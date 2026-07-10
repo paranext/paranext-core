@@ -12,12 +12,14 @@ import { sliceUsjToVerse } from './verse-display.utils';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
 
-type GridResource = { projectId: string; label: string };
+export type GridResource = { projectId: string; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
+  /** Opens the chapter-context split for this cell (pointer-down / Enter on the gridcell). */
+  onActivate?: () => void;
 };
 
 /**
@@ -31,6 +33,7 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
+  onActivate,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -107,6 +110,7 @@ export function ResourceCell({
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
+      onActivate={onActivate}
       editor={
         <Editorial
           ref={editorRef}

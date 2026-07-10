@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { LocalizedStringValue } from 'platform-bible-utils';
-import { ReactNode, useCallback, useRef, useState } from 'react';
+import { ReactNode, useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -42,6 +42,8 @@ export type ResourceCellViewProps = {
   editor: ReactNode;
   /** When true (verse mode, slice empty), render the empty label instead of the editor. */
   isVerseEmpty?: boolean;
+  /** Fired on click anywhere in the cell or Enter while the gridcell is focused. */
+  onActivate?: () => void;
 };
 
 /**
@@ -56,6 +58,7 @@ export function ResourceCellView({
   localizedStrings,
   editor,
   isVerseEmpty,
+  onActivate,
 }: ResourceCellViewProps) {
   // The tooltip only repeats the visible label, so it should show only when the label is actually
   // truncated. Radix's auto-detection cannot know that, so control `open` manually and measure the
@@ -80,8 +83,27 @@ export function ResourceCellView({
     );
   }
 
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        onActivate?.();
+      }
+    },
+    [onActivate],
+  );
+
   return (
-    <div role="gridcell" aria-label={label} className="tw:flex tw:min-w-0 tw:flex-col">
+    <div
+      role="gridcell"
+      aria-label={label}
+      tabIndex={onActivate ? 0 : undefined}
+      onKeyDown={onActivate ? handleKeyDown : undefined}
+      onClick={onActivate}
+      // `cursor-pointer` signals the cell is clickable (opens the chapter-context split) so the
+      // affordance is discoverable; only when activation is wired.
+      className={`tw:flex tw:min-w-0 tw:flex-col ${onActivate ? 'tw:cursor-pointer' : ''}`}
+    >
       <TooltipProvider>
         <Tooltip open={isHeaderTooltipOpen}>
           <TooltipTrigger asChild>
