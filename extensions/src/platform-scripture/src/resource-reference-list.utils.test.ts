@@ -66,6 +66,61 @@ describe('isValidResourceReference', () => {
   it('rejects an item where type is not a string', () => {
     expect(isValidResourceReference({ type: 42 })).toBe(false);
   });
+
+  it('accepts a project reference with valid optional boolean flags', () => {
+    expect(
+      isValidResourceReference({
+        type: 'project',
+        name: 'P',
+        id: 'aabbcc',
+        isResourceShownByDefault: true,
+        isResourceShownForUser: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a project reference with a non-boolean isResourceShownByDefault', () => {
+    expect(
+      isValidResourceReference({
+        type: 'project',
+        name: 'P',
+        id: 'aabbcc',
+        isResourceShownByDefault: 'yes',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a dblResource reference with a non-boolean isResourceShownForUser', () => {
+    expect(
+      isValidResourceReference({
+        type: 'dblResource',
+        name: 'D',
+        id: '112233445566',
+        isResourceShownForUser: 3,
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts a dblResource reference with both flags absent', () => {
+    expect(
+      isValidResourceReference({
+        type: 'dblResource',
+        name: 'D',
+        id: '112233445566',
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a dblResource reference with a non-boolean isResourceShownByDefault', () => {
+    expect(
+      isValidResourceReference({
+        type: 'dblResource',
+        name: 'D',
+        id: '112233445566',
+        isResourceShownByDefault: 'no',
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('resourceReferenceListValidator', () => {

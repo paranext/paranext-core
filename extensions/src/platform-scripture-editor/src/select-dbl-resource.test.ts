@@ -1,6 +1,7 @@
 import type { ResourceReferenceList } from 'platform-scripture';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+import { selectTextConnection } from './select-dbl-resource';
 
 const RESOURCE_A = {
   dblEntryUid: 'uid-a',
