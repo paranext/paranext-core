@@ -17,6 +17,13 @@ file-modifying tools.**
   run **in parallel** with PT9 archaeology, so work from the PRD summary; a `pt9-archaeologist`
   behavior digest is **optional** and often not yet available — if one is provided, use it to
   sharpen the reuse-vs-build judgment for that aspect.
+- `DEPTH` (optional; default `full`) — `full`: everything below. `capability-scan`: the shallow
+  mode for `/refine-prd` — answer only "what related user-facing capability already exists, and
+  in which product mode?". Run Step 1 (discovery, including the product-mode matrix and
+  lifecycle sweeps) and skip Step 2 (command surface), Step 3 (placement) and Step 4
+  (reuse-vs-build); output only `### Relevant existing code`, `### Open questions`, and
+  `### Review Flags`. Keep citing `file:line` — the calling command owns any translation to
+  product language.
 
 ## The constellation (read live; degrade gracefully)
 
@@ -93,6 +100,18 @@ keep the two in sync if either changes) — PT10 may name things differently tha
 - **Read the 2–3 most-likely files in full** (not just grep snippets); document what each does,
   its extension points (could new functionality be added here?), and conflicts (would adding
   here create confusion/coupling?).
+- **Product-mode matrix (ALWAYS)** — Paratext 10 ships in more than one product mode (Simple,
+  Power). For each relevant behavior found, record which mode(s) it exists in, and explicitly
+  check how the OTHER mode already handles the PRD's need — mode differences are where prior art
+  hides (e.g. Simple-only auto-sync at startup/shutdown).
+- **Lifecycle & contribution surfaces (ALWAYS)** — sweep `src/main/startup-tasks.ts`,
+  `src/main/shutdown-tasks.ts`, extension `contributions/` files (menus, settings, toolbars),
+  and notification usage for the feature's key terms; these carry shipped behavior that
+  `c-sharp/` keyword greps miss.
+- **In-flight and recent work (ALWAYS)** — existing work includes unmerged work: check
+  `gh pr list --search "{keyword}" --state open` for the relevant repos and
+  `git log --oneline --since='90 days ago' -- {relevant paths}`; report in-flight PRs in the
+  landscape with their PR numbers and treat them as reuse candidates contingent on landing.
 
 ## Step 2 — Map the existing command surface
 
@@ -191,7 +210,7 @@ with confidence**. If none: `No items flagged.`
 ```
 ## PT10 landscape
 ### Relevant existing code (per repo)
-| Repo | File:line | What it does | Similarity |
+| Repo | File:line | What it does | Mode | Similarity |
 ### Recommended home
 {repo/extension} — Rationale: {…}  (new top-level structure? flag for approval)
 ### Command surface (existing)
