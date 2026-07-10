@@ -105,7 +105,7 @@ Collaboration features enable distributed translation teams to work together on 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Not found - accessed via Options dialog | `-` |
-| Form Relationships | Settings accessed via `OptionsForm` | `[FR]` |
+| Form Relationships | Settings live inside the Send/Receive Projects dialog (`cmbProjectUpdates` combo + "Schedule..." button → `SendReceiveScheduleForm` in `AutomaticSendReceiveSettingsForm.cs`) — NOT `OptionsForm`, which contains no auto-S/R settings | `[FR]` (corrected against source 2026-07-10) |
 | Requirements | Not explicitly mentioned | `-` |
 | Manual | `admin/ma_06_send_receive.md`: Setup guide | `[M]` |
 | HelpData | Keyword: `ComponentSend/ReceiveGeneral`; ID: `fcd92ec8-28da-4547-8286-d5879c649d6e` | `[H]` |
@@ -116,7 +116,7 @@ Collaboration features enable distributed translation teams to work together on 
 |-------|------|-----------|----------|
 | 0 | `Paratext/Repository/AutoSendReceiveManager.cs` | HelpData/Feature search | Manages automatic S/R scheduling |
 | 0 | `Paratext/Repository/AutomaticSendReceiveSettingsForm.cs` | Feature search | Settings form for S/R scheduling |
-| 1 | `ParatextData/Repository/SendReceiveMemento.cs` | Used by D0 | Stores S/R schedule settings |
+| 1 | `ParatextData/Repository/SendReceiveMemento.cs` | Used by D0 | Stores S/R **dialog** state (source, selections, last tip IDs); the schedule itself lives in `SendReceiveScheduleMemento` (`Paratext/Repository/AutoSendReceiveManager.cs`, UI layer) |
 | 1 | `ParatextData/Repository/SharingLogic.cs` | Import in D0 | `using Paratext.Data.Repository;` |
 
 **UI Entry Points**:
