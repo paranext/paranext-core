@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import postcss from 'postcss';
+// @ts-expect-error ts(2307) - @tailwindcss/postcss ships its types only through its package
+// "exports" map, which this project's classic 'node' moduleResolution (tsconfig.json) can't follow.
+// Runtime resolution under vitest is fine; switching moduleResolution repo-wide is out of scope here.
 import tailwindcss from '@tailwindcss/postcss';
 
 // Guards for core's app Tailwind entry (PT-3920). The failure mode this protects against is
@@ -10,9 +12,8 @@ import tailwindcss from '@tailwindcss/postcss';
 // theme color values, or drifts out of sync with platform-bible-react (PBR), nothing errors —
 // classes just render wrong. These tests turn those silent failures into a red build.
 
-const here = dirname(fileURLToPath(import.meta.url));
-const entryPath = resolve(here, 'tailwind.css');
-const pbrIndexPath = resolve(here, '../../../lib/platform-bible-react/src/index.css');
+const entryPath = resolve(__dirname, 'tailwind.css');
+const pbrIndexPath = resolve(__dirname, '../../../lib/platform-bible-react/src/index.css');
 
 /** Extract the `@theme inline { ... }` block's `--token: value` pairs from a CSS file's text. */
 function readThemeInlineTokens(cssPath: string): Map<string, string> {
