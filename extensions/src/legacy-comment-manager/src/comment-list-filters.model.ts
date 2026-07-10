@@ -1,5 +1,23 @@
-import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
+import type {
+  LegacyCommentThreadSelector,
+  ResolvedFilter,
+  ReadFilter,
+  TypeFilter,
+  AssignmentFilter,
+  CommentFilters,
+  ScopeFilter,
+} from 'legacy-comment-manager';
 import { deepEqual } from 'platform-bible-utils';
+import type { LocalizeKey } from 'platform-bible-utils';
+
+export type {
+  ResolvedFilter,
+  ReadFilter,
+  TypeFilter,
+  AssignmentFilter,
+  CommentFilters,
+  ScopeFilter,
+};
 
 // Filter constants, types, and the selector mapping — shared between the presentational panel (which
 // renders the filter toolbar) and the web view (which uses the values to build its comment-thread
@@ -18,9 +36,7 @@ export const SCOPE_FILTER_CURRENT_CHAPTER = 'current-chapter';
 export const scopeFilterToLabelKey = {
   [SCOPE_FILTER_CURRENT_CHAPTER]: '%comment_filter_scope_current_chapter%',
   [UNFILTERED]: '%comment_filter_scope_all_books%',
-} as const;
-
-export type ScopeFilter = keyof typeof scopeFilterToLabelKey;
+} as const satisfies Record<ScopeFilter, LocalizeKey>;
 
 export function isScopeFilter(value: string): value is ScopeFilter {
   return Object.hasOwn(scopeFilterToLabelKey, value);
@@ -32,9 +48,7 @@ export const resolvedFilterToLabelKey = {
   all: '%comment_filter_resolved_all%',
   unresolved: '%comment_filter_resolved_unresolved%',
   resolved: '%comment_filter_resolved_resolved%',
-} as const;
-
-export type ResolvedFilter = keyof typeof resolvedFilterToLabelKey;
+} as const satisfies Record<ResolvedFilter, LocalizeKey>;
 
 export function isResolvedFilter(value: string): value is ResolvedFilter {
   return Object.hasOwn(resolvedFilterToLabelKey, value);
@@ -46,9 +60,7 @@ export const readFilterToLabelKey = {
   all: '%comment_filter_read_all%',
   unread: '%comment_filter_read_unread%',
   read: '%comment_filter_read_read%',
-} as const;
-
-export type ReadFilter = keyof typeof readFilterToLabelKey;
+} as const satisfies Record<ReadFilter, LocalizeKey>;
 
 export function isReadFilter(value: string): value is ReadFilter {
   return Object.hasOwn(readFilterToLabelKey, value);
@@ -60,9 +72,7 @@ export const typeFilterToLabelKey = {
   all: '%comment_filter_type_all%',
   conflicts: '%comment_filter_type_conflicts%',
   comments: '%comment_filter_type_comments%',
-} as const;
-
-export type TypeFilter = keyof typeof typeFilterToLabelKey;
+} as const satisfies Record<TypeFilter, LocalizeKey>;
 
 export function isTypeFilter(value: string): value is TypeFilter {
   return Object.hasOwn(typeFilterToLabelKey, value);
@@ -75,21 +85,11 @@ export const assignmentFilterToLabelKey = {
   'assigned-to-me': '%comment_filter_assignment_me%',
   team: '%comment_filter_assignment_team%',
   unassigned: '%comment_filter_assignment_unassigned%',
-} as const;
-
-export type AssignmentFilter = keyof typeof assignmentFilterToLabelKey;
+} as const satisfies Record<AssignmentFilter, LocalizeKey>;
 
 export function isAssignmentFilter(value: string): value is AssignmentFilter {
   return Object.hasOwn(assignmentFilterToLabelKey, value);
 }
-
-/** The four orthogonal comment-filter axis selections. Each defaults to `'all'` (no filtering). */
-export type CommentFilters = {
-  resolved: ResolvedFilter;
-  read: ReadFilter;
-  type: TypeFilter;
-  assignment: AssignmentFilter;
-};
 
 export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
   resolved: 'all',
@@ -105,6 +105,26 @@ export const DEFAULT_COMMENT_FILTERS: CommentFilters = {
  */
 export function areCommentFiltersAtDefault(filters: CommentFilters): boolean {
   return deepEqual(filters, DEFAULT_COMMENT_FILTERS);
+}
+
+/**
+ * Applies partial filter overrides onto {@link DEFAULT_COMMENT_FILTERS}. Any axis not present in
+ * `overrides` is reset to its `'all'` default — the overrides are NOT merged with the user's
+ * current selection — so a programmatic open (e.g. the S/R conflict link) shows exactly the
+ * requested view. Shared by the web view's initial state and its `setFilters` message handler so
+ * both apply the same merge semantics.
+ */
+export function applyFilterOverrides(overrides?: Partial<CommentFilters>): CommentFilters {
+  // Build from the known axes rather than spreading `overrides`, so a present-but-nullish axis
+  // (e.g. `{ type: null }` surviving the JSON bus) resets to its default instead of leaking a null
+  // that would blank the dropdown while the query still behaves as 'all'. A new axis on
+  // CommentFilters forces a compile error here, which is the intended safety net.
+  return {
+    resolved: overrides?.resolved ?? DEFAULT_COMMENT_FILTERS.resolved,
+    read: overrides?.read ?? DEFAULT_COMMENT_FILTERS.read,
+    type: overrides?.type ?? DEFAULT_COMMENT_FILTERS.type,
+    assignment: overrides?.assignment ?? DEFAULT_COMMENT_FILTERS.assignment,
+  };
 }
 
 // Paratext 9's literal "assigned to the whole team" token (UserFilter/CommentTags): threads assigned

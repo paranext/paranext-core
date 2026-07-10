@@ -198,7 +198,7 @@ public class PlatformCommentWrapper
     {
         get =>
             _thread?.ThreadInternal == null
-                ? throw new InvalidOperationException(
+                ? throw new CommentThreadContextMissingException(
                     "Cannot get ContentsHtml without a valid thread."
                 )
                 : _comment.GetContentsAsHtml(

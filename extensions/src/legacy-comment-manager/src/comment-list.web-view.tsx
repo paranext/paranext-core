@@ -23,9 +23,9 @@ import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
+  applyFilterOverrides,
   buildCommentThreadSelector,
   CommentFilters,
-  DEFAULT_COMMENT_FILTERS,
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
@@ -85,8 +85,33 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  const [filters, setFilters] = useState<CommentFilters>(DEFAULT_COMMENT_FILTERS);
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
+  // Initial filter/scope axes passed by openCommentList when opening a NEW comment list (e.g. the
+  // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
+  // race where a setFilters message could arrive before this view's message listener attaches. An
+  // already-open (reused) view keeps its state and is updated via the setFilters message instead.
+  const [initialFilters, setInitialFilters] = useWebViewState<Partial<CommentFilters> | undefined>(
+    'initialFilters',
+    undefined,
+  );
+  const [initialScopeFilter, setInitialScopeFilter] = useWebViewState<ScopeFilter | undefined>(
+    'initialScopeFilter',
+    undefined,
+  );
+
+  const [filters, setFilters] = useState<CommentFilters>(() =>
+    applyFilterOverrides(initialFilters),
+  );
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScopeFilter ?? UNFILTERED);
+
+  // Consume the one-shot seed exactly once. The useState initializers above already read it
+  // synchronously on first render, so clear it from persistent web view state now. Otherwise an
+  // in-session remount that re-runs this component (e.g. dragging the tab to another dock region)
+  // would re-read the stale seed and snap the user's live filter changes back to the original
+  // programmatic request.
+  useEffect(() => {
+    if (initialFilters !== undefined) setInitialFilters(undefined);
+    if (initialScopeFilter !== undefined) setInitialScopeFilter(undefined);
+  }, [initialFilters, initialScopeFilter, setInitialFilters, setInitialScopeFilter]);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
@@ -122,12 +147,22 @@ global.webViewComponent = function CommentListWebView({
   // Listen for messages from the web view controller
   useEffect(() => {
     const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
-      if (data.method === 'selectThread') {
+      if (data?.method === 'selectThread') {
         logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
         // Note: We pass `true` for isDataLoading as a conservative default since we can't access
         // the current loading state synchronously here. The pending thread will be processed
         // by the effect below once loading completes.
         trySelectThread(data.threadId, true);
+      }
+
+      if (data?.method === 'setFilters') {
+        logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
+        // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
+        // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
+        // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
+        // carries over from prior state.
+        setFilters(applyFilterOverrides(data.filters));
+        setScopeFilter(data.scopeFilter ?? UNFILTERED);
       }
     };
 
@@ -135,6 +170,7 @@ global.webViewComponent = function CommentListWebView({
     return () => {
       window.removeEventListener('message', messageListener);
     };
+    // setFilters / setScopeFilter are stable useState setters, so they don't belong in the deps.
   }, [trySelectThread]);
 
   // Fetch current user's registration data on mount
@@ -305,8 +341,13 @@ global.webViewComponent = function CommentListWebView({
     async (commentId: string, contents: string): Promise<boolean> =>
       withPdp(commentsPdp, 'handleUpdateComment', false, async (pdp) => {
         try {
-          await pdp.updateComment(commentId, contents);
-          return true;
+          // `false` means the update was rejected (comment not found, or its content normalizes to
+          // the "content unavailable" placeholder, which is never persisted over real content).
+          // Surface it so the editor stays open instead of closing as if the edit had saved.
+          const updateSucceeded = (await pdp.updateComment(commentId, contents)) !== false;
+          if (!updateSucceeded)
+            logger.warn(`Update of comment ${commentId} was rejected and not saved.`);
+          return updateSucceeded;
         } catch (error) {
           logger.error(`Failed to update comment ${commentId}:`, error);
           return false;
@@ -373,6 +414,9 @@ global.webViewComponent = function CommentListWebView({
         onFiltersChange={setFilters}
         scopeFilter={scopeFilter}
         onScopeFilterChange={setScopeFilter}
+        // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
+        // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
+        hasEditorContext={!!editorWebViewId}
         handleAddCommentToThread={handleAddCommentToThread}
         handleUpdateComment={handleUpdateComment}
         handleDeleteComment={handleDeleteComment}

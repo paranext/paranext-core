@@ -510,6 +510,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         VerifyUserCanCreateComments();
 
+        // Never let the "content could not be displayed" placeholder become a note's real content.
+        // A degraded note is served with PlatformCommentConverter.ContentsUnavailablePlaceholder;
+        // planting that text here would create a note that UpdateComment then permanently refuses to
+        // edit (it rejects the same placeholder). Mirrors the guard in UpdateComment.
+        if (PlatformCommentConverter.IsContentsUnavailablePlaceholder(comment.Contents?.OuterXml))
+            throw new InvalidOperationException(
+                "Cannot create a comment whose content is the unavailable-content placeholder."
+            );
+
         if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
         {
             throw new InvalidOperationException(
@@ -1056,6 +1065,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(commentId))
+                return false;
+
+            // Never persist the "content could not be displayed" placeholder back over a note's
+            // real stored content. A note whose content can't be rendered is served to the client as
+            // PlatformCommentConverter.ContentsUnavailablePlaceholder; if the user opens that degraded
+            // note and saves, the frontend sends the placeholder here, which would silently overwrite
+            // the (unrenderable but present) original. Matched on normalized text rather than exact
+            // HTML because the editor may re-serialize the placeholder markup on save. Reject that.
+            if (PlatformCommentConverter.IsContentsUnavailablePlaceholder(updatedContentHtml))
                 return false;
 
             // Find the comment by ID and its parent thread

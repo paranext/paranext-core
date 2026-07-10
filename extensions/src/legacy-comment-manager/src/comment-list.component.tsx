@@ -22,6 +22,7 @@ import {
   readFilterToLabelKey,
   resolvedFilterToLabelKey,
   ScopeFilter,
+  SCOPE_FILTER_CURRENT_CHAPTER,
   scopeFilterToLabelKey,
   typeFilterToLabelKey,
   UNFILTERED,
@@ -81,6 +82,12 @@ export type CommentListPanelProps = Pick<
   scopeFilter: ScopeFilter;
   /** Called when the scope filter changes. */
   onScopeFilterChange: (filter: ScopeFilter) => void;
+  /**
+   * Whether an editor is wired to this list. When false (e.g. a cross-project open), the "current
+   * chapter" scope option is hidden because there is no editor to derive the chapter from. Defaults
+   * to `true`.
+   */
+  hasEditorContext?: boolean;
 };
 
 /**
@@ -94,12 +101,15 @@ function FilterDropdown<T extends string>({
   isValue,
   onChange,
   localizedStrings,
+  hiddenValues,
 }: {
   value: T;
   labelKeys: Readonly<Record<T, LocalizeKey>>;
   isValue: (value: string) => value is T;
   onChange: (value: T) => void;
   localizedStrings: LanguageStrings;
+  /** Option values to omit from the list (e.g. a scope that doesn't apply without editor context). */
+  hiddenValues?: readonly T[];
 }) {
   return (
     <Select
@@ -118,6 +128,7 @@ function FilterDropdown<T extends string>({
       <SelectContent className="tw:max-w-sm" align="start">
         {Object.keys(labelKeys)
           .filter(isValue)
+          .filter((option) => !hiddenValues?.includes(option))
           .map((option) => (
             <SelectItem key={option} value={option}>
               {localizedStrings[labelKeys[option]]}
@@ -145,6 +156,7 @@ export function CommentListPanel({
   onFiltersChange,
   scopeFilter,
   onScopeFilterChange,
+  hasEditorContext = true,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -214,6 +226,7 @@ export function CommentListPanel({
           isValue={isScopeFilter}
           onChange={onScopeFilterChange}
           localizedStrings={localizedStrings}
+          hiddenValues={hasEditorContext ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
         />
       </div>
 
