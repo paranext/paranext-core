@@ -75,6 +75,8 @@ const renderConflict = (overrides: RenderOverrides = {}) => {
   const conflictResolution: ConflictResolutionCallbacks = {
     resolve: resolve ?? vi.fn().mockResolvedValue(true),
     getOptions: getOptions ?? (async (): Promise<ConflictResolutionOptions> => 'acceptOrReject'),
+    unresolve: vi.fn().mockResolvedValue(true),
+    getUndoAvailability: vi.fn().mockResolvedValue(false),
   };
   return render(
     <ConflictThread

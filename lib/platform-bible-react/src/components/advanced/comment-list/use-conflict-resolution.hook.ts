@@ -1,12 +1,12 @@
 import { CommentStatus, LegacyComment } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConflictResolutionCallbacks } from './comment-list.types';
+import { actionToOutcome, isVerseTextConflictNote } from './comment-list.utils';
 import {
   ConflictCardActions,
   ConflictResolution,
   ConflictResolutionOutcome,
 } from './conflict-note-card.types';
-import { actionToOutcome } from './comment-list.utils';
 
 /** Maps a live resolution choice to the already-resolved outcome it produces. */
 function resolutionToOutcome(resolution: ConflictResolution): ConflictResolutionOutcome {
@@ -25,7 +25,10 @@ export interface UseConflictResolutionParams {
   isSelected: boolean;
   /** The thread's non-deleted comments, newest-last (scanned for the resolution stamp). */
   activeComments: LegacyComment[];
-  /** The resolve + getOptions callbacks; absent renders a read-only card. */
+  /**
+   * The resolve/getOptions/unresolve/getUndoAvailability callbacks; absent renders a read-only
+   * card.
+   */
   conflictResolution?: ConflictResolutionCallbacks;
 }
 
@@ -41,6 +44,16 @@ export interface UseConflictResolutionResult {
   resolvedResolution: ConflictResolutionOutcome | undefined;
   /** Whether to show the header resolve check (options are loaded AND actually resolvable). */
   showResolveCheck: boolean;
+  /**
+   * Whether the current user may undo this conflict's resolution. Only ever true for a resolved,
+   * selected, verseText conflict; `false` otherwise (including while the availability check is in
+   * flight, so the undo affordance never flashes on before it is confirmed).
+   */
+  canUnresolve: boolean;
+  /** True while an unresolve call is in flight. */
+  isUnresolving: boolean;
+  /** Undoes the conflict's resolution. The reopened thread arrives via the data-update event. */
+  unresolve: () => Promise<void>;
 }
 
 /**
@@ -48,7 +61,8 @@ export interface UseConflictResolutionResult {
  * options only once the thread is open (a `'loading'` sentinel renders a skeleton meanwhile, never
  * the read-only view), applies a resolution optimistically so a reject/merge shows the correct
  * result immediately instead of flashing the accepted text, derives the resolved outcome in a
- * status-aware way, and gates the resolve check on real resolvability.
+ * status-aware way, gates the resolve check on real resolvability, and (symmetrically) fetches undo
+ * availability for a resolved verseText conflict and runs the unresolve action.
  */
 export function useConflictResolution({
   threadId,
@@ -66,9 +80,20 @@ export function useConflictResolution({
   const [optimisticOutcome, setOptimisticOutcome] = useState<
     ConflictResolutionOutcome | undefined
   >();
+  // Undo (unresolve) state, alongside the resolve state above: whether the current user may undo
+  // this conflict's resolution, and whether an unresolve call is in flight.
+  const [canUnresolve, setCanUnresolve] = useState(false);
+  const [isUnresolving, setIsUnresolving] = useState(false);
 
   const getOptions = conflictResolution?.getOptions;
   const resolveCallback = conflictResolution?.resolve;
+  const getUndoAvailability = conflictResolution?.getUndoAvailability;
+  const unresolveCallback = conflictResolution?.unresolve;
+
+  // Undo is only ever meaningful for a resolved, selected, verseText conflict (the only conflict
+  // type resolved via resolveConflict in the first place). Reading conflictType off the first
+  // active comment mirrors derivedResolution's read of conflictResolutionAction below.
+  const isVerseTextConflict = isVerseTextConflictNote(activeComments[0]);
 
   // Fetch the resolution options only when the thread is open; re-run on status change (resolve and
   // reopen both change availability). Degrades to 'none' on any failure so the skeleton never hangs.
@@ -128,6 +153,45 @@ export function useConflictResolution({
     [resolveCallback, threadId],
   );
 
+  // Fetch undo availability only for a resolved, selected, verseText conflict; re-run on status
+  // change (an unresolve reopens the thread, which should stop offering undo). Degrades to false
+  // on any failure so the affordance never shows for an unconfirmed capability.
+  useEffect(() => {
+    let isCurrent = true;
+    if (threadStatus !== 'Resolved' || !isSelected || !isVerseTextConflict) {
+      setCanUnresolve(false);
+      return undefined;
+    }
+    const check = async () => {
+      let available: boolean;
+      try {
+        available = getUndoAvailability ? await getUndoAvailability(threadId) : false;
+      } catch {
+        available = false;
+      }
+      if (isCurrent) setCanUnresolve(available);
+    };
+    check();
+    return () => {
+      isCurrent = false;
+    };
+  }, [threadStatus, isSelected, isVerseTextConflict, threadId, getUndoAvailability]);
+
+  const unresolve = useCallback(async () => {
+    if (!unresolveCallback) return;
+    setIsUnresolving(true);
+    try {
+      await unresolveCallback(threadId);
+      // Success re-opens the thread; the comment-list data-update event refreshes the card into
+      // its actionable state, so no local option-state mutation is needed here (mirrors resolve's
+      // reliance on the same event for the confirming refetch).
+    } finally {
+      // Always clear the busy state, even if a consumer's unresolve rejects (contract violation),
+      // otherwise the card stays locked in its isUnresolving state.
+      setIsUnresolving(false);
+    }
+  }, [unresolveCallback, threadId]);
+
   // The outcome an already-resolved conflict was resolved with, read off the MOST-RECENT resolution
   // comment's conflictResolutionAction. Only the newest resolution counts: a re-resolve leaves the
   // earlier resolution comment in place (reject -> reopen -> accept keeps the old 'replaced'
@@ -150,5 +214,14 @@ export function useConflictResolution({
 
   const showResolveCheck = conflictOptions !== 'loading' && conflictOptions !== 'none';
 
-  return { conflictOptions, isResolving, resolve, resolvedResolution, showResolveCheck };
+  return {
+    conflictOptions,
+    isResolving,
+    resolve,
+    resolvedResolution,
+    showResolveCheck,
+    canUnresolve,
+    isUnresolving,
+    unresolve,
+  };
 }

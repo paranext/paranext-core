@@ -361,6 +361,51 @@ test('resolved read-only merged shows the merged text and no outcome line', () =
   expect(screen.queryByText('Combined both changes.')).not.toBeInTheDocument();
 });
 
+test('shows Undo on a resolved card and calls onUnresolve when clicked', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const onUnresolve = vi.fn();
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="reject"
+      canUnresolve
+      onUnresolve={onUnresolve}
+    />,
+  );
+  await user.click(screen.getByRole('button', { name: /undo resolution/i }));
+  expect(onUnresolve).toHaveBeenCalledTimes(1);
+});
+
+test('hides Undo when canUnresolve is false', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="reject"
+      canUnresolve={false}
+    />,
+  );
+  expect(screen.queryByRole('button', { name: /undo resolution/i })).toBeNull();
+});
+
+test('disables the Undo button while isUnresolving', () => {
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={localizedStrings}
+      availableActions="none"
+      resolvedResolution="reject"
+      canUnresolve
+      onUnresolve={vi.fn()}
+      isUnresolving
+    />,
+  );
+  expect(screen.getByRole('button', { name: /undo resolution/i })).toBeDisabled();
+});
+
 test('trims trailing whitespace out of diff spans so the strikethrough does not dangle', () => {
   // The replacement sample removes "town": its diff HTML is `<s>town </s>` (trailing space inside).
   render(

@@ -41,6 +41,9 @@ export function ConflictNoteCard({
   resolvedResolution,
   onResolve,
   isResolving = false,
+  canUnresolve = false,
+  isUnresolving = false,
+  onUnresolve,
 }: ConflictNoteCardProps) {
   const [internalResolution, setInternalResolution] = useState<ConflictResolution>('accept');
   // Stable id linking the disabled accept option to its visually-hidden explanation via
@@ -235,7 +238,35 @@ export function ConflictNoteCard({
           <Skeleton className="tw:h-8 tw:w-24" />
         </div>
       )}
-      {!isLoading && isReadOnly && renderResolvedResult()}
+      {!isLoading && isReadOnly && (
+        <>
+          {renderResolvedResult()}
+          {canUnresolve && onUnresolve && (
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* span wrapper so the tooltip still receives pointer events when the button is
+                      disabled */}
+                  <span className="tw:inline-flex tw:self-start">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isUnresolving}
+                      onClick={() => onUnresolve()}
+                    >
+                      {localizedStrings['%conflict_note_undo_resolution%'] ?? 'Undo resolution'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {localizedStrings['%conflict_note_undo_tooltip%'] ??
+                    'Restores the automatically merged result and reopens the conflict so you can choose again.'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </>
+      )}
       {!isLoading && !isReadOnly && (
         <>
           <p>

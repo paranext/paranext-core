@@ -340,6 +340,8 @@ function CommentThreadStory({
           conflictResolution={{
             resolve: handleResolveConflict,
             getOptions: getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject'),
+            unresolve: async () => true,
+            getUndoAvailability: async () => false,
           }}
         />
       ) : (

@@ -66,6 +66,8 @@ global.webViewComponent = function CommentListWebView({
         ...Array.from(COMMENT_LIST_STRING_KEYS),
         ...Array.from(CONFLICT_NOTE_STRING_KEYS),
         ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+        '%conflict_note_undo_audit_comment%',
+        '%conflict_note_undo_failed%',
       ];
     }, []),
   );
@@ -295,10 +297,54 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp, localizedStrings],
   );
 
-  // Bundle the two conflict callbacks into the single slot CommentList/ConflictThread consume.
+  const getUndoAvailabilityCallback = useCallback(
+    (threadId: string): Promise<boolean> =>
+      withPdp(commentsPdp, 'getUndoAvailabilityCallback', false, async (pdp) => {
+        try {
+          return await pdp.canUnresolveConflict(threadId);
+        } catch (error) {
+          logger.error(`Failed to get undo availability for thread ${threadId}:`, error);
+          return false;
+        }
+      }),
+    [commentsPdp],
+  );
+
+  const handleUnresolveConflict = useCallback(
+    (threadId: string): Promise<boolean> =>
+      withPdp(commentsPdp, 'handleUnresolveConflict', false, async (pdp) => {
+        try {
+          await pdp.unresolveConflict(
+            threadId,
+            localizedStrings['%conflict_note_undo_audit_comment%'] ?? 'Conflict resolution undone.',
+          );
+          return true;
+        } catch (error) {
+          logger.error(`Failed to undo conflict thread ${threadId}:`, error);
+          sonner.error(
+            localizedStrings['%conflict_note_undo_failed%'] ??
+              "Couldn't undo this resolution because the verse changed after it was resolved. Use Verse History to restore it.",
+          );
+          return false;
+        }
+      }),
+    [commentsPdp, localizedStrings],
+  );
+
+  // Bundle the conflict callbacks into the single slot CommentList/ConflictThread consume.
   const conflictResolution = useMemo(
-    () => ({ resolve: handleResolveConflict, getOptions: getConflictResolutionOptionsCallback }),
-    [handleResolveConflict, getConflictResolutionOptionsCallback],
+    () => ({
+      resolve: handleResolveConflict,
+      getOptions: getConflictResolutionOptionsCallback,
+      unresolve: handleUnresolveConflict,
+      getUndoAvailability: getUndoAvailabilityCallback,
+    }),
+    [
+      handleResolveConflict,
+      getConflictResolutionOptionsCallback,
+      handleUnresolveConflict,
+      getUndoAvailabilityCallback,
+    ],
   );
 
   const handleUpdateComment = useCallback(

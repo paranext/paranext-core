@@ -72,6 +72,10 @@ export const CONFLICT_NOTE_STRING_KEYS = Object.freeze([
   '%conflict_note_summary_resolved_kept_current%',
   '%conflict_note_summary_resolved_used_other%',
   '%conflict_note_summary_resolved_combined%',
+  // The Undo control on an already-resolved conflict card: its button label and tooltip. Undo is
+  // reversible (the user can re-resolve), so there is no confirmation step to localize.
+  '%conflict_note_undo_resolution%',
+  '%conflict_note_undo_tooltip%',
 ] as const);
 
 /** Props for the ConflictNoteCard component */
@@ -101,4 +105,10 @@ export interface ConflictNoteCardProps {
   onResolve?: (resolution: ConflictResolution) => void;
   /** Disables the selector and Resolve button while a resolve call is in flight. */
   isResolving?: boolean;
+  /** Whether the current user may undo this (already-resolved) conflict's resolution. */
+  canUnresolve?: boolean;
+  /** Disables the Undo control while an unresolve call is in flight. */
+  isUnresolving?: boolean;
+  /** Called when the user clicks "Undo resolution". */
+  onUnresolve?: () => void;
 }
