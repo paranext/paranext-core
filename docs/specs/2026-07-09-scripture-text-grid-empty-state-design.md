@@ -1,7 +1,7 @@
 # A6 — Scripture Text Grid empty state (PT-4054)
 
 **Ticket:** [PT-4054](https://paratextstudio.atlassian.net/browse/PT-4054) · **Epic:** [PT-4047](https://paratextstudio.atlassian.net/browse/PT-4047) · Resolves [PT-2983](https://paratextstudio.atlassian.net/browse/PT-2983)
-**Size:** S · **Depends on:** A1 (PT-4049), A3 (PT-4051) · **Pairs with / stacked on:** A5 (PT-4053)
+**Size:** S · **Depends on:** an integrated A1–A5 base branch (see Branch strategy)
 
 ## Goal
 
@@ -18,47 +18,64 @@ blank pane. This covers **two** empty states:
 
 ## Branch strategy
 
-Rebase `pt-4054-empty-state` onto `pt-4053-view-options-panel` (A5). A6 becomes a stacked PR
-(A3 → A5 → A6) and must not merge before A5.
+**A6 is based on an integrated A1–A5 base branch** (created by the epic owner) rather than doing any
+fork reconciliation itself. `pt-4054-empty-state` rebases onto that base; the A6 PR then contains
+only the two empty states, their strings, and their tests.
 
-Rationale — A5 has already rewritten `scripture-text-grid.web-view.tsx` into its final shape and
-that shape is what A6 depends on:
+Why an integrated base rather than stacking A6 directly on A5:
 
-- **Real data.** A5 replaced A1's persisted stub (`gridContentsIds`) with
-  `useTextCollectionSources(effectiveProjectId)`, which yields the `TextCollectionSources` object
-  that A6's trigger, `getScriptureTextGridContents(sources)`, consumes. On plain A3 only the stub
-  exists, so A6 would be built against fake data and rewritten anyway.
-- **A target to point at.** A5 added the View Options gear button (`Settings2`) in the header. The
-  directional copy only makes sense with that icon present.
-- **No same-file collision.** Both A5 and A6 heavily edit the web view. Stacking A6 on A5 avoids a
-  painful merge conflict.
+- **A4 and A5 are parallel forks** — both rewrote `scripture-text-grid.web-view.tsx`, the
+  `useTextCollectionSources` hook, and the contents-util location, and neither contains the other.
+  Reconciling them is real integration engineering. Bundling it into A6 would bury a small
+  empty-state change under a large, conflict-prone diff and make the PR unreviewable.
+- **The empty state needs the real renderer to be meaningful and testable.** On the integrated
+  base, A6's non-empty branch is A4's actual `<ScriptureTextGrid>`, so the empty state is verifiable
+  end-to-end (empty → prompt; check a resource → cells) instead of against a placeholder.
 
-A5 currently sits on an older A3 tip (it is missing A3's last two review commits). That drift is
-A5's to reconcile, not A6's; A6 simply branches from A5's tip as it stands.
+The integrated base must resolve the known divergences so A6 writes against one coherent shape:
+
+- **Web view:** A5's header (View Options button, theme-adaptive icon, tooltip) **+** A4's body
+  (`<ScriptureTextGrid>`, chapter-context split, Escape handling) in one component.
+- **`useTextCollectionSources`:** keep A5's object shape `{ sources, textConnectionPdp }` (A5 needs
+  the PDP); A4's `const [sources] =` call site adapts.
+- **Contents util:** one location — A4's `scripture-text-grid/` subfolder — carrying A5's full
+  helper set (`getViewOptionsTexts`, `setUserDisplay`, `removeFromUserResources`,
+  `addToUserResources`, …), not just `getScriptureTextGridContents`.
+- **Project binding:** A5's `projectId ?? activeEditorProjectId`.
+
+Paths below are written against that integrated base: the web view is the unified A4+A5 component,
+and the contents util lives at `scripture-text-grid/scripture-text-grid-contents.utils.ts`. A6 must
+not merge before its base branch lands.
 
 ## Non-goals
 
-- The verse-cell row renderer (A4 / PT-4052). A6 renders only the empty branch of the body; A4
-  fills the non-empty branch of the same conditional later.
+- The verse-cell renderer, the View Options panel, and the A4↔A5 reconciliation — all inherited
+  from the integrated base, not authored by A6.
 - A loading spinner or a no-project-specific body message. A single message covers both the
-  "no project bound" and "project bound, nothing checked" cases; A4 owns richer body states.
-- Any change to A3's data layer (`scripture-text-grid-contents.utils.ts`) or A5's persistence /
+  "no project bound" and "project bound, nothing checked" cases; the renderer owns richer body
+  states.
+- Any change to the data layer (`scripture-text-grid-contents.utils.ts`) or the persistence /
   sources hooks.
 
 ## Part 1 — Grid body empty state
 
-**File touched:** `extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx`
-(A5's version).
+**File touched:** the unified web view
+`extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx` (from the
+integrated base). It already assembles the effective contents — via A4's mapping of
+`getScriptureTextGridContents(sources)` — and renders A4's `<ScriptureTextGrid resources={...} />`
+in the body, below A5's header.
 
 **New file:**
-`extensions/src/platform-scripture-editor/src/scripture-text-grid-empty-state.component.tsx`
-— a small presentational component that renders the centered directional copy. It takes the
-resolved prompt string as a prop and holds no PAPI/state coupling.
+`extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid-empty-state.component.tsx`
+(A4's grid-subcomponent subfolder) — a small presentational component that renders the centered
+directional copy. It takes the resolved prompt string as a prop and holds no PAPI/state coupling.
 
 Rationale for extraction: the web view binds `globalThis.webViewComponent` and uses PAPI hooks, so
 it is not unit-testable; the ticket asks for a snapshot test. A tiny presentational component is the
-clean, testable seam, and it makes the empty/non-empty branch an explicit conditional that A4 slots
-into.
+clean, testable seam, and it makes the empty/non-empty branch an explicit conditional. Verified
+against A4: its `ScriptureTextGrid` has **no** empty state (an empty `resources` list renders a
+`role="grid"` with an empty `role="row"` — a blank pane), so A6 owns the empty state outright with
+nothing to de-duplicate.
 
 **Component shape** (follows the [comment-list pattern](../../../extensions/src/legacy-comment-manager/src/comment-list.component.tsx) —
 centered `Label` in a flex container; there is no reusable `EmptyState` in platform-bible-react):
@@ -73,49 +90,24 @@ export function ScriptureTextGridEmptyState({ prompt }: { prompt: string }) {
 }
 ```
 
-**Web-view wiring:**
+**Web-view wiring:** in the unified web view, the body currently renders A4's grid unconditionally.
+A6 wraps it in the empty conditional:
 
-- Add `getScriptureTextGridContents` to the existing import from `./scripture-text-grid-contents.utils`.
-- Compute contents from the `sources` A5 already provides:
-  `const contents = useMemo(() => (sources ? getScriptureTextGridContents(sources) : []), [sources]);`
-- Replace the body seam `<div className="tw:flex-1" />` with a conditional:
-  - `contents.length === 0` (and `!isLoadingLocalizedStrings`, so a raw key never flashes — same
-    guard the title effect uses) → `<ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />`
-  - otherwise → the existing `<div className="tw:flex-1" />` placeholder (A4 replaces this with the
-    verse-cell row).
-- Add the new key to `ALL_STRING_KEYS` so `useLocalizedStrings` fetches it.
+- The web view already computes the effective list (A4 maps `getScriptureTextGridContents(sources)`
+  to `GridResource[]`). A6 branches on that list's length — no new selector call is needed.
+- Body becomes:
+  - length `0` (and `!isLoadingLocalizedStrings`, so a raw key never flashes — the same guard the
+    title uses) → `<ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />`
+  - otherwise → the existing `<ScriptureTextGrid resources={...} … />` (A4's renderer, unchanged).
+- Add the new key to the web view's `ALL_STRING_KEYS` so `useLocalizedStrings` fetches it.
 
-The header (with the View Options button) always renders above the body, so the copy has an
-on-screen target.
+A6 touches only the body branch; A5's header (with the View Options button) always renders above
+it, so the copy has an on-screen target, and A4's renderer path is untouched in the non-empty case.
 
 **New localized string** — `%webView_scriptureTextGrid_emptyState_prompt%`
 - English: **"No texts to display. Open View Options to choose which texts to show."**
 - Spanish: AI-generated to match (e.g. *"No hay textos para mostrar. Abre Opciones de vista para
   elegir qué textos mostrar."* — finalize in implementation).
-
-### Consuming A4's renderer (PT-4052)
-
-A4 (branches `pt-4052-scripture-text-grid-row-and-webview` and
-`pt-4052-scripture-text-grid-verse-cell`) is the grid renderer A6's non-empty branch will
-eventually hold. Two things were verified against those branches:
-
-- **A4 has no empty state of its own.** Its `ScriptureTextGrid` component renders exactly
-  `resources.length` cells; when the list is empty it emits a `role="grid"` with an empty
-  `role="row"` — a blank pane. So A6 genuinely owns the empty state (nothing to de-duplicate), and
-  A6's `contents.length === 0 ? <ScriptureTextGridEmptyState/> : <placeholder/>` conditional is the
-  exact seam A4's `<ScriptureTextGrid resources={...} .../>` slots into (the else branch).
-- **A4 and A5 are parallel forks** — neither contains the other; both rewrite the web view. A6
-  stacks on **A5** and follows A5's conventions. Integration reconciliation (A4 + A5 + A6 into one
-  web view) is out of A6's scope, but these known divergences should be flagged in the A6 PR so the
-  integrator is not surprised:
-  - A4 moved the contents util into a subfolder (`scripture-text-grid/scripture-text-grid-contents.utils.ts`);
-    A5/A6 keep it at `src/scripture-text-grid-contents.utils.ts`.
-  - `useTextCollectionSources` has different return shapes on the two branches (A5:
-    `{ sources, textConnectionPdp }`; A4: a tuple `[sources]`). A6 uses A5's object shape.
-  - A5 binds to the active editor's project (`projectId ?? activeEditorProjectId`); A4 uses
-    `projectId` directly.
-
-  A6 does not attempt to resolve these; it builds cleanly on A5 and leaves a note in the PR body.
 
 ## Part 2 — View Options TEXTS-list empty prompt
 
@@ -153,12 +145,14 @@ Both new keys land in
   (c) `disabled` + `disabledMessage` set → disabled message shown, empty prompt absent (no double
   message).
 - **Grid empty state (unit / snapshot):** new
-  `scripture-text-grid-empty-state.component.test.tsx` — snapshot of the rendered prompt; assert the
-  prompt text is present. The empty-vs-non-empty *decision* is `getScriptureTextGridContents(...)
-  .length === 0`, already covered by A3's `scripture-text-grid-contents.utils.test.ts`.
-- **E2E:** extend `e2e-tests/tests/enhanced-resources/scripture-text-grid.spec.ts` — first open with
-  nothing checked → grid body empty state visible and points at View Options; Spanish-locale smoke
-  renders the Spanish string.
+  `scripture-text-grid/scripture-text-grid-empty-state.component.test.tsx` — snapshot of the
+  rendered prompt; assert the prompt text is present. The empty-vs-non-empty *decision* is
+  `getScriptureTextGridContents(...).length === 0`, already covered by the contents-util test.
+- **E2E:** extend `e2e-tests/tests/enhanced-resources/scripture-text-grid.spec.ts`. Because the
+  integrated base carries A4's renderer, both branches are verifiable end-to-end: first open with
+  nothing checked → grid body empty state visible and pointing at View Options; check a resource in
+  View Options → empty state gone and cells render; empty View Options TEXTS list → panel prompt
+  visible. Plus a Spanish-locale smoke that renders the Spanish strings.
 - **Keyboard shortcuts catalog:** no keyboard handlers added → no catalog change.
 
 ## Definition of Done (from the ticket)
