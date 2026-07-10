@@ -20,7 +20,7 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   chapter: '%webView_scriptureTextGrid_viewOptions_chapter%',
   comingSoon: '%webView_scriptureTextGrid_viewOptions_comingSoon%',
   textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
-  emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyTexts%',
+  emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyState_prompt%',
   getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
   removeFromList: '%webView_scriptureTextGrid_viewOptions_removeFromList%',
   installing: '%webView_scriptureTextGrid_viewOptions_installing%',
