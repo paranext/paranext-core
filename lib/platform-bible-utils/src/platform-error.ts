@@ -107,7 +107,7 @@ export const PLATFORM_ERROR_VERSION = 1;
  */
 export type PlatformError = {
   /**
-   * The underlying cause of the error, if any. Normally this will be copied from an `Error object
+   * The underlying cause of the error, if any. Normally this will be copied from an `Error` object
    * passed to {@link newPlatformError}. If a non-Error object is passed to {@link newPlatformError},
    * it will be stored here.
    */
@@ -130,51 +130,67 @@ export type PlatformError = {
 };
 
 /**
- * Creates a new PlatformError object. If no argument is provided, a PlatformError object with an
- * empty `message` is returned.
+ * Creates a new PlatformError instance that is fully compatible with standard `Error` contracts.
  *
- * @param error The error message as a string, an Error object, or a value to assign to the `cause`
- *   property of the returned PlatformError object
+ * @param error The error source material:
+ *
+ *   - Falsy: Returns an error with an empty message.
+ *   - String: Sets the error `message`.
+ *   - Object with a string `message`: Copies all property descriptors (including `stack` and `cause`)
+ *       while safely preserving prototype chains and handling lazy stack properties.
+ *   - Fallback: Assigned directly to the `cause` property of an empty error.
+ *
  * @param code Optional machine-readable error code. See {@link PlatformErrorCode}.
- * @returns A new PlatformError object
+ * @returns A fully initialized, throw-ready PlatformError instance.
  */
 export function newPlatformError(error?: unknown, code?: PlatformErrorCode): PlatformError {
-  if (!error)
-    return {
-      message: '',
-      ...(code && { code }),
-      platformErrorVersion: PLATFORM_ERROR_VERSION,
-    };
-  if (isString(error))
-    return {
-      message: error,
-      ...(code && { code }),
-      platformErrorVersion: PLATFORM_ERROR_VERSION,
-    };
-  if (typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
-    const platformError: PlatformError = {
-      message: error.message,
-      platformErrorVersion: PLATFORM_ERROR_VERSION,
-    };
+  let platformError: any;
+
+  if (!error) {
+    platformError = new Error();
+  } else if (isString(error)) {
+    platformError = new Error(error);
+  } else if (typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    // Maintain prototype linkage so `instanceof Error` evaluates to true downstream
+    const proto = Object.getPrototypeOf(error) || Error.prototype;
+    platformError = Object.create(proto);
+
+    // Deep-copy all existing property descriptors from the source error
     Object.defineProperties(platformError, Object.getOwnPropertyDescriptors(error));
-    Object.defineProperty(platformError, 'message', { enumerable: true });
     if ('stack' in error && isString(error.stack)) {
       // stack is generated lazily, and it seems this is causing some troubles with copying it into
       // another object via property descriptors as of Node 22.14.0 (no problems in 20.18.0).
       // So we shall set the value directly on the object
-      Object.defineProperty(platformError, 'stack', { value: error.stack, enumerable: true });
+      platformError.stack = error.stack;
     }
-    if ('cause' in platformError)
-      Object.defineProperty(platformError, 'cause', { enumerable: true });
-    if (code) platformError.code = code;
-    return platformError;
+  } else {
+    // Fallback: wrap unexpected types natively via the `cause` property
+    platformError = new Error();
+    platformError.cause = error;
   }
-  return {
-    cause: error,
-    message: '',
-    ...(code && { code }),
-    platformErrorVersion: PLATFORM_ERROR_VERSION,
-  };
+
+  // Inject PlatformError-specific properties
+  platformError.platformErrorVersion = PLATFORM_ERROR_VERSION;
+  if (code) {
+    platformError.code = code;
+  }
+
+  // Centralized enumerability: Force native hidden fields to be visible to serializers
+  const descriptor: PropertyDescriptor = { configurable: true, enumerable: true, writable: true };
+  Object.defineProperty(platformError, 'message', { ...descriptor, value: platformError.message });
+  if ('stack' in platformError) {
+    Object.defineProperty(platformError, 'stack', { ...descriptor, value: platformError.stack });
+  }
+  if ('cause' in platformError) {
+    Object.defineProperty(platformError, 'cause', { ...descriptor, value: platformError.cause });
+  }
+
+  // Set the name property so standard loggers group it cleanly
+  if (!platformError.name || platformError.name === 'Error') {
+    platformError.name = 'PlatformError';
+  }
+
+  return platformError as PlatformError;
 }
 
 /**
