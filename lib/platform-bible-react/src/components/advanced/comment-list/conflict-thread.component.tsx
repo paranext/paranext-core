@@ -1,5 +1,5 @@
 import { ReactNode, useMemo } from 'react';
-import { CommentThreadProps } from './comment-list.types';
+import { ConflictThreadProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 import { ConflictNoteCard } from './conflict-note-card.component';
 import { ConflictThreadSummary } from './conflict-thread-summary.component';
@@ -19,7 +19,7 @@ import { useConflictResolution } from './use-conflict-resolution.hook';
  *
  * All conflict state and logic live in {@link useConflictResolution}.
  */
-export function ConflictThread(props: CommentThreadProps) {
+export function ConflictThread(props: ConflictThreadProps) {
   const {
     comments,
     localizedStrings,
@@ -30,7 +30,14 @@ export function ConflictThread(props: CommentThreadProps) {
   } = props;
 
   const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
-  const firstComment = activeComments[0];
+  // The conflict root is not reliably comments[0]: a fragment-merged thread (PT9 FB-22392) tail-
+  // appends the older fragment's comments, leaving the genuine root mid-list (see
+  // LegacyCommentThread.comments and C# RootCommentId). Only the root carries conflictType and the
+  // diff/result fields the card reads, so locate it by that field, not by position.
+  const rootComment = useMemo(
+    () => activeComments.find((comment) => comment.conflictType) ?? activeComments[0],
+    [activeComments],
+  );
 
   const { conflictOptions, isResolving, resolve, resolvedResolution, showResolveCheck } =
     useConflictResolution({
@@ -41,15 +48,15 @@ export function ConflictThread(props: CommentThreadProps) {
       conflictResolution,
     });
 
-  const isVerseText = isVerseTextConflictNote(firstComment);
+  const isVerseText = isVerseTextConflictNote(rootComment);
 
   // verseText conflicts render the resolution UI; other conflict types leave rootContentSlot
   // undefined so the shell renders its default CommentItem (the non-verseText chrome fix).
   let rootContentSlot: ReactNode;
-  if (isVerseText && firstComment) {
+  if (isVerseText && rootComment) {
     rootContentSlot = isSelected ? (
       <ConflictNoteCard
-        comment={firstComment}
+        comment={rootComment}
         localizedStrings={localizedStrings}
         availableActions={conflictOptions}
         resolvedResolution={resolvedResolution}
@@ -58,33 +65,34 @@ export function ConflictThread(props: CommentThreadProps) {
       />
     ) : (
       <ConflictThreadSummary
-        comment={firstComment}
+        comment={rootComment}
         localizedStrings={localizedStrings}
         resolvedResolution={resolvedResolution}
       />
     );
   }
 
-  // For a verseText conflict, override the header check with the conflict-gated resolve (or `false`
-  // to hide it when the conflict isn't resolvable). For a non-verseText conflict, leave it undefined
-  // so the shell renders its generic status-resolve check.
+  // For a verseText conflict, override the header check with the conflict-gated resolve.
+  // ResolveCheckButton self-gates on `show` (renders nothing when false), and passing the element
+  // rather than a bare `false` still overrides the shell's generic status-resolve default — so a
+  // non-resolvable verseText conflict shows no ✓. For a non-verseText conflict, leave the slot
+  // undefined so the shell renders its generic status-resolve check.
   let resolveActionSlot: ReactNode;
   if (isVerseText) {
-    resolveActionSlot = showResolveCheck ? (
+    resolveActionSlot = (
       <ResolveCheckButton
-        show
+        show={showResolveCheck}
         disabled={isResolving}
         onClick={() => resolve('accept')}
         ariaLabel={localizedStrings['%comment_aria_resolve_thread%'] ?? 'Resolve thread'}
       />
-    ) : (
-      false
     );
   }
 
   return (
     <CommentThread
       {...props}
+      activeComments={activeComments}
       rootContentSlot={rootContentSlot}
       resolveActionSlot={resolveActionSlot}
       spaceRootContentFromReplies={isVerseText && isSelected}

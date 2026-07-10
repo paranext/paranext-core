@@ -89,6 +89,7 @@ export function CommentThread({
   autoReadDelay = 5,
   onVerseRefClick,
   initialAssignedUser,
+  activeComments: providedActiveComments,
   rootContentSlot,
   resolveActionSlot,
   spaceRootContentFromReplies = false,
@@ -208,7 +209,12 @@ export function CommentThread({
     }
   }, [isSelected, initialAssignedUser, canAssign, assignedUser]);
 
-  const activeComments = useMemo(() => comments.filter((comment) => !comment.deleted), [comments]);
+  // Prefer the caller's pre-computed active comments (ConflictThread already derives them) over
+  // re-filtering, so a conflict thread doesn't run the same non-deleted filter twice per render.
+  const activeComments = useMemo(
+    () => providedActiveComments ?? comments.filter((comment) => !comment.deleted),
+    [providedActiveComments, comments],
+  );
 
   // Check edit/delete permissions for all comments when thread is selected or comments change
   useEffect(() => {

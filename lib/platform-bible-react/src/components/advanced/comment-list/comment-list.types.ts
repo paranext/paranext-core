@@ -234,10 +234,11 @@ export interface CommentThreadProps {
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
   /**
-   * Conflict-resolution callbacks (resolve + getOptions), forwarded by ConflictThread. Omitted for
-   * non-conflict threads; the generic CommentThread never reads it.
+   * Pre-computed non-deleted comments. When provided (e.g. by ConflictThread, which already derives
+   * them for its own logic), the thread uses these instead of re-filtering `comments`, avoiding a
+   * duplicate pass each render. Omitted for direct consumers, which filter `comments` themselves.
    */
-  conflictResolution?: ConflictResolutionCallbacks;
+  activeComments?: LegacyComment[];
   /**
    * Overrides the root-comment render (the collapsed root area). When omitted, the thread renders
    * the standard CommentItem for its first comment. ConflictThread uses this to show the conflict
@@ -256,6 +257,19 @@ export interface CommentThreadProps {
    * and has visible replies, so a resolution card isn't flush against its replies.
    */
   spaceRootContentFromReplies?: boolean;
+}
+
+/**
+ * Props for the ConflictThread container: the generic CommentThread shell's props plus the
+ * conflict-only resolution callbacks that ConflictThread (not the shell) consumes. Kept off
+ * CommentThreadProps so the conflict-agnostic shell's contract stays clean.
+ */
+export interface ConflictThreadProps extends CommentThreadProps {
+  /**
+   * Conflict-resolution callbacks (resolve + getOptions). When omitted, the conflict thread renders
+   * a read-only card.
+   */
+  conflictResolution?: ConflictResolutionCallbacks;
 }
 
 /** Props for the CommentItem component */

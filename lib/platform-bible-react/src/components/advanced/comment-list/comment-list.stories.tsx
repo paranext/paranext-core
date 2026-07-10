@@ -148,9 +148,11 @@ function CommentListStory({
           thread: thread.id,
           verseRef: thread.verseRef,
           status: 'Resolved',
-          // Mirror the backend: a reject writes the losing side and records 'replaced' on the
-          // resolution comment; an accept writes nothing and records no action.
+          // Mirror the backend: a reject writes the losing side and records 'replaced', a merge
+          // writes the combined text and records 'merged', and an accept writes nothing and records
+          // no action.
           ...(resolution === 'reject' && { conflictResolutionAction: 'replaced' }),
+          ...(resolution === 'merge' && { conflictResolutionAction: 'merged' }),
         };
         return {
           ...thread,

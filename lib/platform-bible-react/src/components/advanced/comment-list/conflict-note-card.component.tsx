@@ -146,30 +146,29 @@ export function ConflictNoteCard({
   // instead of an empty Result region.
   const noResultText =
     localizedStrings['%conflict_note_no_result%'] ?? 'No result preview available.';
+  // The neutral placeholder shown when a resolved conflict's Result region has no text (e.g. a reject
+  // that decoded to an empty verse, or a merge with no mergedText).
+  const noResultPreview = <p className="tw:text-muted-foreground">{noResultText}</p>;
   const renderResolvedText = (text: string | undefined) =>
-    text ? (
-      <p className="tw:whitespace-pre-wrap tw:text-foreground">{text}</p>
-    ) : (
-      <p className="tw:text-muted-foreground">{noResultText}</p>
-    );
+    text ? <p className="tw:whitespace-pre-wrap tw:text-foreground">{text}</p> : noResultPreview;
   const renderResolvedResult = () => {
     const outcome: ConflictResolutionOutcome = resolvedResolution ?? 'accept';
     if (outcome === 'merged')
-      return comment.mergedText ? (
-        <DiffHtml html={sanitizedMerged} />
-      ) : (
-        renderResolvedText(undefined)
-      );
+      return comment.mergedText ? <DiffHtml html={sanitizedMerged} /> : noResultPreview;
     if (outcome === 'reject') return renderResolvedText(comment.rejectedResultText);
     return renderResolvedText(comment.resultText);
   };
 
+  // Reject is read-only in the stale state — the verse changed after the merge, so accepting the
+  // post-merge edit is the only valid choice, and the reject option carries the explanation of why
+  // it's unavailable. Computed in one place so the option card and its tooltip wrapper can't
+  // disagree on which option is the disabled one.
+  const isStaleRejectOption = (option: ConflictOption) => isStale && option.value === 'reject';
+
   const renderOptionCard = (option: ConflictOption) => {
     const isSelected = effectiveResolution === option.value;
     const optionId = `${optionIdPrefix}-${option.value}`;
-    // Stale forces accept and disables reject (accepting the post-merge edit is the only valid
-    // choice); the reject option carries the explanation of why it's unavailable.
-    const isStaleReject = isStale && option.value === 'reject';
+    const isStaleReject = isStaleRejectOption(option);
     return (
       // The whole card is a label, so a click anywhere in it forwards to the radio and selects the
       // option (no separate click handler needed). The radio keeps role=radio / aria-checked /
@@ -255,7 +254,7 @@ export function ConflictNoteCard({
             }
           >
             {radioOptions.map((option) => {
-              const isStaleReject = isStale && option.value === 'reject';
+              const isStaleReject = isStaleRejectOption(option);
               if (!isStaleReject) return renderOptionCard(option);
               return (
                 <TooltipProvider key={option.value} delayDuration={0}>

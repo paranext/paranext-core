@@ -160,8 +160,11 @@ test('a non-verseText conflict keeps the CommentItem chrome instead of the bare 
     comments: [nonVerseTextConflict],
     thread: { ...conflictThread, comments: [nonVerseTextConflict] },
   });
-  // No resolution radios (not the verseText card); the standard comment chrome renders instead.
+  // No resolution radios (not the verseText card)...
   expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+  // ...and, positively, the standard CommentItem chrome (author header) actually renders, so a
+  // regression that rendered nothing would fail instead of passing on radio-absence alone.
+  expect(screen.getByText(verseTextConflictComment.user)).toBeInTheDocument();
 });
 
 test('does not crash when a Conflict thread has no active (non-deleted) comments', () => {
@@ -175,6 +178,27 @@ test('does not crash when a Conflict thread has no active (non-deleted) comments
       comments: [deletedConflictComment],
     }),
   ).not.toThrow();
+});
+
+test('renders the resolution card when the verseText root is not comments[0] (fragment-merged thread)', async () => {
+  // A fragment-merged conflict thread (PT9 FB-22392) tail-appends the older fragment's comments,
+  // leaving the genuine root mid-list — so comments[0] is a reply with no conflictType. The card
+  // must locate the root by the comment carrying conflictType, not by index 0.
+  const replyBeforeRoot: LegacyComment = {
+    ...verseTextConflictComment,
+    id: 'conflict-sample/Reviewer/2011-08-18T00:00:00.000Z',
+    conflictType: undefined,
+  };
+  const rootMidListThread: LegacyCommentThread = {
+    ...conflictThread,
+    comments: [replyBeforeRoot, verseTextConflictComment],
+  };
+  renderConflict({
+    thread: rootMidListThread,
+    comments: rootMidListThread.comments,
+    getOptions: async () => 'acceptOrReject',
+  });
+  expect(await screen.findByRole('radio', { name: 'Keep the current text' })).toBeInTheDocument();
 });
 
 test('a fast double-click on the resolve check fires resolve only once while the first call is in flight', async () => {
@@ -201,6 +225,23 @@ test('a fast double-click on the resolve check fires resolve only once while the
   // call was allowed to complete cleanly.
   await waitFor(() =>
     expect(screen.queryByRole('button', { name: 'Resolve thread' })).not.toBeInTheDocument(),
+  );
+});
+
+test('recovers when the resolve callback rejects: no unhandled crash, controls stay usable', async () => {
+  const user = userEvent.setup({ pointerEventsCheck: 0 });
+  const resolve = vi.fn().mockRejectedValue(new Error('backend failure'));
+  renderConflict({ resolve, getOptions: async () => 'acceptOrReject' });
+  await user.click(await screen.findByRole('radio', { name: 'Use the other change' }));
+  await user.click(screen.getByRole('button', { name: 'Save and resolve' }));
+  expect(resolve).toHaveBeenCalledWith('conflict-sample', 'reject');
+  // The rejection must be caught (a consumer resolve should return false, not throw): the card must
+  // not apply the optimistic 'none' lock, and its controls re-enable so the user can retry.
+  await waitFor(() =>
+    expect(screen.getByRole('radio', { name: 'Use the other change' })).toBeInTheDocument(),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Save and resolve' })).toBeEnabled(),
   );
 });
 
@@ -266,6 +307,32 @@ test('resolved-without-action thread shows the accepted side in the read-only ca
     getOptions: async () => 'none',
   });
   // No action recorded + Resolved -> derivation returns 'accept', so the Result is the accepted side.
+  expect(await screen.findByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
+  expect(
+    screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),
+  ).not.toBeInTheDocument();
+});
+
+test('re-accepting a previously-rejected conflict shows the accepted side, not the stale reject', async () => {
+  // reject -> reopen -> accept: the older 'replaced' resolution comment persists in the thread, but
+  // the newest resolution is the (action-less) accept. The derived outcome must follow the
+  // most-recent resolution, not the first non-accept action found scanning backwards.
+  const acceptReply: LegacyComment = {
+    ...resolutionReply(),
+    id: 'conflict-sample/Resolver/2011-08-19T00:00:00.000Z',
+    date: '2011-08-19T00:00:00.000Z',
+  };
+  const reAcceptedThread: LegacyCommentThread = {
+    ...conflictThread,
+    comments: [verseTextConflictComment, resolutionReply('replaced'), acceptReply],
+    status: 'Resolved',
+  };
+  renderConflict({
+    thread: reAcceptedThread,
+    comments: reAcceptedThread.comments,
+    threadStatus: 'Resolved',
+    getOptions: async () => 'none',
+  });
   expect(await screen.findByText(verseTextConflictComment.resultText ?? '')).toBeInTheDocument();
   expect(
     screen.queryByText(verseTextConflictComment.rejectedResultText ?? ''),

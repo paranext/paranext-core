@@ -316,6 +316,36 @@ test('resolved read-only reject shows the rejected result and no outcome line', 
   ).not.toBeInTheDocument();
 });
 
+test('renders the localized verseText description, not the English fallback', () => {
+  // Sentinel deliberately distinct from the component's English fallback ("Conflicting changes were
+  // made to the verse text."), so a dropped or renamed lookup renders the fallback and fails here.
+  const sentinel = '⟦localized verseText description⟧';
+  render(
+    <ConflictNoteCard
+      comment={verseTextConflictComment}
+      localizedStrings={{ ...localizedStrings, '%conflict_note_description_verseText%': sentinel }}
+      availableActions="acceptOrReject"
+    />,
+  );
+  expect(screen.getByText(sentinel)).toBeInTheDocument();
+});
+
+test('resolved read-only with an empty result shows the neutral no-result notice', () => {
+  // A reject that decoded to an empty verse leaves rejectedResultText blank; the Result region must
+  // show the neutral notice rather than an empty region. Sentinel distinct from any fallback so this
+  // asserts both the empty-result branch and that the lookup is used.
+  const emptyResult: LegacyComment = { ...verseTextConflictComment, rejectedResultText: '' };
+  render(
+    <ConflictNoteCard
+      comment={emptyResult}
+      localizedStrings={{ ...localizedStrings, '%conflict_note_no_result%': '⟦no result⟧' }}
+      availableActions="none"
+      resolvedResolution="reject"
+    />,
+  );
+  expect(screen.getByText('⟦no result⟧')).toBeInTheDocument();
+});
+
 test('resolved read-only merged shows the merged text and no outcome line', () => {
   render(
     <ConflictNoteCard

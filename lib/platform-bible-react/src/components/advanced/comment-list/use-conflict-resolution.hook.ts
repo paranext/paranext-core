@@ -1,11 +1,12 @@
 import { CommentStatus, LegacyComment } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ConflictResolutionCallbacks } from './comment-list.types';
 import {
   ConflictCardActions,
   ConflictResolution,
   ConflictResolutionOutcome,
 } from './conflict-note-card.types';
+import { actionToOutcome } from './comment-list.utils';
 
 /** Maps a live resolution choice to the already-resolved outcome it produces. */
 function resolutionToOutcome(resolution: ConflictResolution): ConflictResolutionOutcome {
@@ -95,9 +96,14 @@ export function useConflictResolution({
     };
   }, [isSelected, threadId, threadStatus, getOptions]);
 
+  // Reentrancy guard read/written synchronously so a second click that lands before React re-renders
+  // (and disables the button) can't fire a second resolve. `isResolving` state drives the disabled UI;
+  // this ref is the source of truth within a single tick.
+  const isResolvingRef = useRef(false);
   const resolve = useCallback(
     async (resolution: ConflictResolution) => {
-      if (!resolveCallback) return;
+      if (!resolveCallback || isResolvingRef.current) return;
+      isResolvingRef.current = true;
       setIsResolving(true);
       try {
         const success = await resolveCallback(threadId, resolution);
@@ -107,25 +113,35 @@ export function useConflictResolution({
           setOptimisticOutcome(resolutionToOutcome(resolution));
           setConflictOptions('none');
         }
+      } catch {
+        // A consumer's resolve should report failure by resolving to false, not by throwing. If it
+        // throws anyway, swallow it here: resolve() is invoked from un-awaited onClicks, so an
+        // uncaught rejection would surface as an unhandled promise rejection. The card simply stays
+        // resolvable (success never applied) so the user can retry.
       } finally {
-        // Always clear the busy state, even if a consumer's resolve rejects (contract violation),
-        // otherwise the card stays locked in its isResolving state.
+        // Always clear the busy state, even on a rejecting resolve, otherwise the card stays locked
+        // in its isResolving state.
+        isResolvingRef.current = false;
         setIsResolving(false);
       }
     },
     [resolveCallback, threadId],
   );
 
-  // The outcome an already-resolved conflict was resolved with, read off the resolution comment's
-  // conflictResolutionAction (last-to-first). Only meaningful once the thread is 'Resolved': while
-  // still 'Todo' (e.g. a reopened reject whose 'replaced' comment persists) this stays undefined so
-  // the collapsed summary and the card don't contradict the live selector.
+  // The outcome an already-resolved conflict was resolved with, read off the MOST-RECENT resolution
+  // comment's conflictResolutionAction. Only the newest resolution counts: a re-resolve leaves the
+  // earlier resolution comment in place (reject -> reopen -> accept keeps the old 'replaced'
+  // comment), and an accept stamps no action, so scanning for the first non-accept action found
+  // would report the stale reject. Match on the resolution comment (status 'Resolved') instead;
+  // absent action on it means accept. Only meaningful once the thread itself is 'Resolved' — while
+  // still 'Todo' (a reopened conflict) this stays undefined so the collapsed summary and the card
+  // don't contradict the live selector.
   const derivedResolution = useMemo<ConflictResolutionOutcome | undefined>(() => {
     if (threadStatus !== 'Resolved') return undefined;
     for (let i = activeComments.length - 1; i >= 0; i -= 1) {
-      const action = activeComments[i].conflictResolutionAction;
-      if (action === 'replaced') return 'reject';
-      if (action === 'merged') return 'merged';
+      if (activeComments[i].status === 'Resolved') {
+        return actionToOutcome(activeComments[i].conflictResolutionAction);
+      }
     }
     return 'accept';
   }, [threadStatus, activeComments]);

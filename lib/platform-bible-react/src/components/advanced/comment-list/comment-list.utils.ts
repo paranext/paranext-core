@@ -1,6 +1,6 @@
 import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
 import { KeyboardEvent } from 'react';
-import { VERSE_TEXT_CONFLICT } from './conflict-note-card.types';
+import { ConflictResolutionOutcome, VERSE_TEXT_CONFLICT } from './conflict-note-card.types';
 
 /**
  * Tailwind classes that render note-body HTML (PT9 blockquote/prose markup) the way note contents
@@ -25,6 +25,24 @@ export const COMMENT_BODY_PROSE_CLASSES = [
  */
 export function isVerseTextConflictNote(comment: LegacyComment | undefined): boolean {
   return comment?.conflictType === VERSE_TEXT_CONFLICT;
+}
+
+/**
+ * Maps a resolution comment's {@link LegacyComment.conflictResolutionAction} to the outcome it
+ * represents. The single source for this classification, shared by the read-only card, the
+ * collapsed summary (via useConflictResolution), and CommentItem's resolution banner so they cannot
+ * drift:
+ *
+ * - `'replaced'` → `'reject'` (the rejected side was written into the verse)
+ * - `'merged'` → `'merged'` (both changes combined)
+ * - Absent → `'accept'` (accepted, no text written)
+ */
+export function actionToOutcome(
+  action: LegacyComment['conflictResolutionAction'],
+): ConflictResolutionOutcome {
+  if (action === 'replaced') return 'reject';
+  if (action === 'merged') return 'merged';
+  return 'accept';
 }
 
 /**

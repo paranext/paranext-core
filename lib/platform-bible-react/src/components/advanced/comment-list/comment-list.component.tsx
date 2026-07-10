@@ -139,9 +139,35 @@ export default function CommentList({
       onKeyDown={handleKeyDownWithEscape}
     >
       {activeThreads.map((thread) => {
-        // Conflict threads render through ConflictThread (which owns the resolve UI and forwards the
-        // slots to the shared CommentThread shell); every other thread renders CommentThread directly.
-        const ThreadComponent = thread.type === 'Conflict' ? ConflictThread : CommentThread;
+        // The generic shell props both thread variants share. Conflict threads render through
+        // ConflictThread (which owns the resolve UI and forwards these slots to the shared
+        // CommentThread shell) and additionally receive the conflict-resolution callbacks; every
+        // other thread renders CommentThread directly, keeping the shell conflict-agnostic.
+        const commonThreadProps = {
+          classNameForVerseText,
+          comments: thread.comments,
+          localizedStrings,
+          verseRef: thread.verseRef,
+          handleSelectThread,
+          threadId: thread.id,
+          thread,
+          isRead: thread.isRead,
+          isSelected: expandedThreadIds.has(thread.id),
+          currentUser,
+          assignedUser: thread.assignedUser,
+          threadStatus: thread.status,
+          handleAddCommentToThread: handleAddCommentToThreadWithTracking,
+          handleUpdateComment,
+          handleDeleteComment,
+          handleReadStatusChange,
+          assignableUsers,
+          canUserAddCommentToThread,
+          canUserAssignThreadCallback,
+          canUserResolveThreadCallback,
+          canUserEditOrDeleteCommentCallback,
+          onVerseRefClick,
+          initialAssignedUser: lastAssignedUser,
+        };
         return (
           <div
             key={thread.id}
@@ -149,32 +175,11 @@ export default function CommentList({
               'tw:opacity-60': thread.status === 'Resolved',
             })}
           >
-            <ThreadComponent
-              classNameForVerseText={classNameForVerseText}
-              comments={thread.comments}
-              localizedStrings={localizedStrings}
-              verseRef={thread.verseRef}
-              handleSelectThread={handleSelectThread}
-              threadId={thread.id}
-              thread={thread}
-              isRead={thread.isRead}
-              isSelected={expandedThreadIds.has(thread.id)}
-              currentUser={currentUser}
-              assignedUser={thread.assignedUser}
-              threadStatus={thread.status}
-              handleAddCommentToThread={handleAddCommentToThreadWithTracking}
-              handleUpdateComment={handleUpdateComment}
-              handleDeleteComment={handleDeleteComment}
-              handleReadStatusChange={handleReadStatusChange}
-              assignableUsers={assignableUsers}
-              canUserAddCommentToThread={canUserAddCommentToThread}
-              canUserAssignThreadCallback={canUserAssignThreadCallback}
-              canUserResolveThreadCallback={canUserResolveThreadCallback}
-              canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-              onVerseRefClick={onVerseRefClick}
-              initialAssignedUser={lastAssignedUser}
-              conflictResolution={conflictResolution}
-            />
+            {thread.type === 'Conflict' ? (
+              <ConflictThread {...commonThreadProps} conflictResolution={conflictResolution} />
+            ) : (
+              <CommentThread {...commonThreadProps} />
+            )}
           </div>
         );
       })}

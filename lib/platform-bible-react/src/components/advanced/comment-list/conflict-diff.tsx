@@ -33,10 +33,10 @@ const trimDiffSpanWhitespace = (html: string) => html.replace(/(\s+)(<\/[us]>)/g
 export const sanitizeDiffHtml = (html: string) => trimDiffSpanWhitespace(sanitizeHtml(html));
 
 /** Renders already-sanitized PT9 diff HTML with the shared diff coloring. */
-export function DiffHtml({ html, className }: { html: string; className?: string }) {
+export function DiffHtml({ html }: { html: string }) {
   return (
     <div
-      className={cn(DIFF_HTML_CLASSES, className)}
+      className={DIFF_HTML_CLASSES}
       // The content is PT9 HTML; sanitized by the caller before injecting.
       // eslint-disable-next-line react/no-danger
       dangerouslySetInnerHTML={{ __html: html }}

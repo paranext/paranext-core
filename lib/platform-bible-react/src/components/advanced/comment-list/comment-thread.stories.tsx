@@ -240,8 +240,10 @@ function CommentThreadStory({
           : 'Resolved: replaced with the other change.',
       // Mirror the backend: a reject writes the losing side and records 'replaced' on the
       // resolution comment (which makes CommentItem render the outcome line and the card show the
-      // rejected-side Result); an accept writes nothing and records no action.
+      // rejected-side Result); a merge records 'merged'; an accept writes nothing and records no
+      // action.
       ...(resolution === 'reject' && { conflictResolutionAction: 'replaced' }),
+      ...(resolution === 'merge' && { conflictResolutionAction: 'merged' }),
     };
     setComments((prev) => [...prev, resolutionReply]);
     setStatus('Resolved');
@@ -304,38 +306,45 @@ function CommentThreadStory({
     [comments, status, threadType],
   );
 
-  // Conflict threads render through ConflictThread; everything else through CommentThread directly.
-  const ThreadComponent = threadType === 'Conflict' ? ConflictThread : CommentThread;
+  // Conflict threads render through ConflictThread (which also receives the conflict-resolution
+  // callbacks); everything else through CommentThread directly, keeping the shell conflict-agnostic.
+  const commonThreadProps = {
+    comments,
+    localizedStrings,
+    currentUser: CURRENT_USER,
+    isSelected: selectedThreadId === THREAD_ID,
+    verseRef: VERSE_REF,
+    assignedUser: CURRENT_USER,
+    handleSelectThread,
+    threadId: THREAD_ID,
+    thread,
+    threadStatus: status,
+    handleAddCommentToThread,
+    handleUpdateComment,
+    handleDeleteComment,
+    handleReadStatusChange: (threadId: string, markRead: boolean) => {
+      console.log(`Marking thread ${threadId} as ${markRead ? 'read' : 'unread'}`);
+    },
+    assignableUsers: mockAssignableUsers,
+    canUserAddCommentToThread: true,
+    canUserAssignThreadCallback: async () => true,
+    canUserResolveThreadCallback: async () => true,
+    canUserEditOrDeleteCommentCallback,
+    isRead: false,
+  };
   return (
     <div className="tw:max-w-md tw:rounded-md tw:border">
-      <ThreadComponent
-        comments={comments}
-        localizedStrings={localizedStrings}
-        currentUser={CURRENT_USER}
-        isSelected={selectedThreadId === THREAD_ID}
-        verseRef={VERSE_REF}
-        assignedUser={CURRENT_USER}
-        handleSelectThread={handleSelectThread}
-        threadId={THREAD_ID}
-        thread={thread}
-        threadStatus={status}
-        handleAddCommentToThread={handleAddCommentToThread}
-        handleUpdateComment={handleUpdateComment}
-        handleDeleteComment={handleDeleteComment}
-        handleReadStatusChange={(threadId, markRead) => {
-          console.log(`Marking thread ${threadId} as ${markRead ? 'read' : 'unread'}`);
-        }}
-        assignableUsers={mockAssignableUsers}
-        canUserAddCommentToThread
-        canUserAssignThreadCallback={async () => true}
-        canUserResolveThreadCallback={async () => true}
-        canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-        isRead={false}
-        conflictResolution={{
-          resolve: handleResolveConflict,
-          getOptions: getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject'),
-        }}
-      />
+      {threadType === 'Conflict' ? (
+        <ConflictThread
+          {...commonThreadProps}
+          conflictResolution={{
+            resolve: handleResolveConflict,
+            getOptions: getConflictResolutionOptionsCallback ?? (async () => 'acceptOrReject'),
+          }}
+        />
+      ) : (
+        <CommentThread {...commonThreadProps} />
+      )}
     </div>
   );
 }

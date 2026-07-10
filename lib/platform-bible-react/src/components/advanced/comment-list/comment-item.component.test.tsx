@@ -37,27 +37,49 @@ const baseComment: LegacyComment = {
   verseRef: 'GEN 1:1',
 };
 
-test("renders the 'used the other change' outcome line INSTEAD of the body when conflictResolutionAction is 'replaced'", () => {
+test("renders the 'used the other change' outcome line when conflictResolutionAction is 'replaced' and the body is empty", () => {
   render(
     <CommentItem
       comment={{
         ...baseComment,
         status: 'Resolved',
         conflictResolutionAction: 'replaced',
-        // Non-empty body to prove the outcome line replaces it (the real comment's body is empty).
-        contents: '<p>SHOULD NOT SHOW</p>',
+        // A platform-created resolution comment carries an empty body — the outcome line stands in.
+        contents: '<blockquote></blockquote>',
       }}
       localizedStrings={localizedStrings}
     />,
   );
   expect(screen.getByText(OUTCOME_USED_OTHER)).toBeInTheDocument();
-  expect(screen.queryByText('SHOULD NOT SHOW')).not.toBeInTheDocument();
 });
 
-test("renders the 'combined' outcome line when conflictResolutionAction is 'merged'", () => {
+test('renders a resolution comment’s typed body (not the outcome line) when it carries text', () => {
+  // A resolution synced from PT9 can carry both a resolver-typed note and the action. PT9 shows the
+  // text, so it must not be discarded for the synthesized outcome banner.
   render(
     <CommentItem
-      comment={{ ...baseComment, status: 'Resolved', conflictResolutionAction: 'merged' }}
+      comment={{
+        ...baseComment,
+        status: 'Resolved',
+        conflictResolutionAction: 'replaced',
+        contents: '<p>Resolver note that must remain visible</p>',
+      }}
+      localizedStrings={localizedStrings}
+    />,
+  );
+  expect(screen.getByText('Resolver note that must remain visible')).toBeInTheDocument();
+  expect(screen.queryByText(OUTCOME_USED_OTHER)).not.toBeInTheDocument();
+});
+
+test("renders the 'combined' outcome line when conflictResolutionAction is 'merged' and the body is empty", () => {
+  render(
+    <CommentItem
+      comment={{
+        ...baseComment,
+        status: 'Resolved',
+        conflictResolutionAction: 'merged',
+        contents: '<blockquote></blockquote>',
+      }}
       localizedStrings={localizedStrings}
     />,
   );

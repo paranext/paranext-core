@@ -208,8 +208,12 @@ internal static class CommentTestHelper
     /// Contents (parent→loser diff): town struck through, village bolded.
     /// AcceptedChangeXmlStr (parent→winner diff): town struck through, city bolded.
     /// Verse: winner plain USFM (city).
+    ///
+    /// Distinct from <see cref="CreateVerseTextConflictCommentReplacement"/> (loser-only: no
+    /// accepted-side change, so <c>AcceptedChangeXmlStr == null</c>). Both are used side by side in
+    /// the converter tests, so keep the names clearly different.
     /// </summary>
-    internal static Comment CreateVerseTextConflictCommentWithReplacement()
+    internal static Comment CreateVerseTextConflictCommentBothSidesReplaced()
     {
         XmlDocument contentsDoc = new XmlDocument();
         contentsDoc.LoadXml(

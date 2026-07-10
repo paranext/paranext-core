@@ -335,7 +335,7 @@ internal class PlatformCommentConverterTests : PapiTestBase
     {
         // Replacement: loser "town"→"village", winner "town"→"city". Both diffs show <s> (deleted
         // "town") and <u> (inserted word), so this exercises the deletion (<s>) path.
-        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentWithReplacement();
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentBothSidesReplaced();
         var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
