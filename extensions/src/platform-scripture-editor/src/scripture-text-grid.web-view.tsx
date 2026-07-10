@@ -42,6 +42,7 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { ScriptureTextGridEmptyState } from './scripture-text-grid/scripture-text-grid-empty-state.component';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -52,12 +53,14 @@ const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
+  EMPTY_STATE_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -331,19 +334,26 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           </PopoverContent>
         </Popover>
       </div>
-      {/* Grid body: verse-cell rows below the header seam, verse/chapter layout from `viewMode`. */}
+      {/* Grid body: the empty state when nothing is renderable (points at View Options), otherwise
+          the verse-cell rows. `resources` is post-`toGridResources`, so a selected-but-unresolved
+          resource counts as empty here and shows the prompt instead of a blank grid. The
+          `!isLoadingLocalizedStrings` guard avoids flashing a raw `%key%` while strings load. */}
       <div className="tw:flex-1 tw:overflow-hidden">
-        <ScriptureTextGrid
-          ariaLabel={localizedStrings[TITLE_KEY]}
-          resources={resources}
-          scrRef={scrRef}
-          setScrRef={setScrRef}
-          viewMode={viewMode}
-          chapterContext={chapterContext}
-          onChapterContextChange={setChapterContext}
-          onChapterContextClose={handleCloseChapterContext}
-          closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-        />
+        {resources.length === 0 && !isLoadingLocalizedStrings ? (
+          <ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />
+        ) : (
+          <ScriptureTextGrid
+            ariaLabel={localizedStrings[TITLE_KEY]}
+            resources={resources}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            viewMode={viewMode}
+            chapterContext={chapterContext}
+            onChapterContextChange={setChapterContext}
+            onChapterContextClose={handleCloseChapterContext}
+            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+          />
+        )}
       </div>
     </div>
   );
