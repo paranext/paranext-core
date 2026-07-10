@@ -31,6 +31,7 @@ import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
 import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
+import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -896,6 +897,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       shouldShowToolbar: false,
       projectId,
       content: scriptureTextGridWebView,
+      // The grid embeds Editorial; ship the same editor stylesheet bundle the other editor/resource
+      // web views use so the toolbar and context menu render styled (not bare/transparent).
+      styles: scriptureTextGridWebViewStyles,
       // Lucide "Library" glyph (books on a shelf) for the tab icon.
       iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
       // In simple mode, force scroll group 0 so the grid stays verse-synced with the scripture
