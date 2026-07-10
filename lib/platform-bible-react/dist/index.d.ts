@@ -3461,6 +3461,16 @@ export declare const Z_INDEX_MODAL = 500;
  *   described above
  */
 export declare function cn(...inputs: ClassValue[]): string;
+/**
+ * Whether the app is running on macOS, based on the user agent. Used to pick platform-appropriate
+ * keyboard shortcut behavior and display hints (e.g. `⌘` vs `Ctrl`)
+ */
+export declare function isMacOs(): boolean;
+/**
+ * Whether the app is running on Windows, based on the user agent. Used to pick platform-appropriate
+ * keyboard shortcut behavior and display hints (e.g. modifier ordering)
+ */
+export declare function isWindows(): boolean;
 
 export {
 	ConflictResolutionOptions,
