@@ -105,7 +105,7 @@ gh pr create \
   --body "$(cat <<'EOF'
 ## Summary
 
-[Brief description of what this PR does]
+[Brief description of what this PR does. Why review this.]
 
 ## Changes
 
@@ -128,7 +128,7 @@ gh pr create \
   --body "$(cat <<'EOF'
 ## Summary
 
-[Description of what this PR does and why]
+[Description of what this PR does and why. Why review this.]
 
 ## Changes
 
@@ -168,7 +168,7 @@ gh pr create \
 
 ## Summary
 
-Merge latest changes from paranext-extension-template.
+Merge latest changes from paranext-extension-template. [Why review this.]
 
 ## Changes
 
@@ -181,6 +181,19 @@ Merge latest changes from paranext-extension-template.
 EOF
 )"
 ```
+
+### Template for `Why review this`
+
+```
+### Why review this
+
+[Either: (a) which current epic (side fixes, tooling,
+refactors, dependency bumps, cleanup) this PR part of, xor
+(b) "Not part of current epic." then 1–2 sentences: what
+prompted this change and why it is worth reviewer time now. What the
+current epic is: .context/standards/Current-Epic.md]
+```
+
 
 ## AI Transparency
 
@@ -275,6 +288,7 @@ git push
 
 ## See Also
 
+- [Current-Epic.md](../../../.context/standards/Current-Epic.md) - What the current epic is and where it is articulated
 - [Git-Guide.md](../../../.context/standards/Git-Guide.md) - Branch naming, merge practices
 - [Code-Review-Guide.md](../../../.context/standards/Code-Review-Guide.md) - Review workflow
 - [test-runner skill](../test-runner/SKILL.md) - Run tests before PR

@@ -7,18 +7,24 @@
  * plain prose so users are not misled into clicking dead links.
  *
  * This file is imported `?inline` and appended AFTER the generated commentary
- * stylesheet in use-commentary-marker-styles.hook.ts. Equal specificity + later
- * source order means these rules win the cascade, and keeping them here (rather
- * than editing the generated `hbkeng/tnn/tnd.scss`) means they survive every
+ * stylesheet in use-commentary-marker-styles.hook.ts, and keeping it here (rather
+ * than editing the generated `hbkeng/tnn/tnd.scss`) means it survives every
  * regeneration of those files by the CSS→SCSS pipeline.
  *
  * Scope: matches the `.formatted-font .usfm_<marker>` selectors the generated
  * sheets emit for these markers, so the link appearance (color, weight, style,
  * underline) is neutralized to look like the surrounding body text.
+ *
+ * The doubled marker class (e.g. `.usfm_jmp.usfm_jmp`) raises specificity to
+ * (0,3,0) so this neutralizer wins over BOTH the generated sheet's own rule and
+ * the editor's base `_usj-nodes.scss` link rule — `.formatted-font .usfm_jmp {
+ * color: #003380; text-decoration: underline }` at (0,2,0) — regardless of the
+ * source order in which the base sheet and this injected stylesheet load. Without
+ * the bump it would win only by source order, which is fragile.
  */
-.formatted-font .usfm_jmp,
-.formatted-font .usfm_xtSee,
-.formatted-font .usfm_xtSeeAlso {
+.formatted-font .usfm_jmp.usfm_jmp,
+.formatted-font .usfm_xtSee.usfm_xtSee,
+.formatted-font .usfm_xtSeeAlso.usfm_xtSeeAlso {
   color: inherit;
   font-style: normal;
   font-weight: normal;

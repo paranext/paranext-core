@@ -70,7 +70,7 @@ describe('MarkerMenu — disallowed items', () => {
     '%markerMenu_disallowed_label%': 'Disallowed',
   };
 
-  it('renders a disallowed item as disabled and does not fire its action when selected', async () => {
+  it('reveals a disallowed item on exact marker-code match, renders it disabled, and does not fire its action when selected', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const action = vi.fn();
     render(
@@ -80,8 +80,12 @@ describe('MarkerMenu — disallowed items', () => {
       />,
     );
 
-    const item = screen.getByRole('option', { name: /Poetry/ });
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), 'q');
+
+    const item = await screen.findByRole('option', { name: /Poetry/ });
     expect(item).toHaveAttribute('aria-disabled', 'true');
+    // Disallowed markers show the "Disallowed" badge to explain why they can't be inserted.
+    expect(screen.getByText('Disallowed')).toBeInTheDocument();
 
     await user.click(item);
     expect(action).not.toHaveBeenCalled();
@@ -102,5 +106,122 @@ describe('MarkerMenu — disallowed items', () => {
 
     await user.click(item);
     expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides a disallowed item when the query is empty', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[
+          { marker: 'q', title: 'Poetry', isDisallowed: true, action: vi.fn() },
+          { marker: 'f', title: 'Footnote', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Footnote/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Poetry/ })).not.toBeInTheDocument();
+  });
+
+  it('does not reveal a disallowed item when the query is only a code substring, not exact', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[
+          { marker: 'qa', title: 'Acrostic Heading', isDisallowed: true, action: vi.fn() },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), 'q');
+
+    expect(screen.queryByRole('option', { name: /Acrostic Heading/ })).not.toBeInTheDocument();
+  });
+
+  it('reveals a disallowed item, disabled, when the query matches its title', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[{ marker: 'q', title: 'Poetry', isDisallowed: true, action: vi.fn() }]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), 'poet');
+
+    const item = await screen.findByRole('option', { name: /Poetry/ });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('still matches an allowed item by code substring', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[{ marker: 'qa', title: 'Acrostic Heading', action: vi.fn() }]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), 'q');
+
+    expect(await screen.findByRole('option', { name: /Acrostic Heading/ })).toBeInTheDocument();
+  });
+
+  it('keeps showing a deprecated item, disabled, with an empty query', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={{ ...DISALLOWED_STRINGS, '%markerMenu_deprecated_label%': 'Deprecated' }}
+        markerMenuItems={[
+          { marker: 'x', title: 'Cross Reference', isDeprecated: true, action: vi.fn() },
+        ]}
+      />,
+    );
+
+    const item = screen.getByRole('option', { name: /Cross Reference/ });
+    expect(item).toBeInTheDocument();
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('shows disallowed items disabled when the query is empty and every item is disallowed', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[
+          { marker: 'b', title: 'Blank Line', isDisallowed: true, action: vi.fn() },
+          { marker: 'mte1', title: 'Major Title Ending 1', isDisallowed: true, action: vi.fn() },
+        ]}
+      />,
+    );
+
+    // When no markers can be inserted, the menu surfaces the disallowed markers (disabled) instead
+    // of hiding everything and reading as an empty "No results" state.
+    const blankLine = screen.getByRole('option', { name: /Blank Line/ });
+    const majorTitle = screen.getByRole('option', { name: /Major Title Ending 1/ });
+    expect(blankLine).toHaveAttribute('aria-disabled', 'true');
+    expect(majorTitle).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('shows an item matching by both code and title exactly once, with a separator before the title-only matches', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MarkerMenu
+        localizedStrings={DISALLOWED_STRINGS}
+        markerMenuItems={[
+          { marker: 'p', title: 'Paragraph', action: vi.fn() },
+          { marker: 'f', title: 'Poetry', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('Type a style or search.'), 'p');
+
+    // 'p' matches "Paragraph" by both its code and its title, but the title group excludes anything
+    // already matched by code, so the item renders exactly once (in the code group).
+    expect(screen.getAllByRole('option', { name: /Paragraph/ })).toHaveLength(1);
+    // "Poetry" matches only by title, so both the code and title groups are populated and the
+    // separator between them renders.
+    expect(screen.getByRole('option', { name: /Poetry/ })).toBeInTheDocument();
+    expect(screen.getByRole('separator')).toBeInTheDocument();
   });
 });

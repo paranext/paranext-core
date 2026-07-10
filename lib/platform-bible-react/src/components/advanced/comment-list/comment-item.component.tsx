@@ -21,7 +21,12 @@ import { ArrowUp, MoreHorizontal, Pencil, Trash2, X } from 'lucide-react';
 import { formatRelativeDate, formatReplacementString, sanitizeHtml } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentItemProps } from './comment-list.types';
-import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
+import {
+  actionToOutcome,
+  COMMENT_BODY_PROSE_CLASSES,
+  didPressCtrlOrCmdEnter,
+  getAssignedUserDisplayName,
+} from './comment-list.utils';
 
 /**
  * A single comment item in the comment list.
@@ -130,6 +135,17 @@ export function CommentItem({
   );
 
   const sanitizedContent = useMemo(() => sanitizeHtml(comment.contents), [comment.contents]);
+  // Whether the body has any visible text once its PT9 blockquote/prose tags are stripped. Guards
+  // the conflict-resolution outcome banner: it stands in only for an empty resolution body, never
+  // hiding a resolver's typed note (see the banner below).
+  const hasResolutionBodyText = useMemo(
+    () => comment.contents.replace(/<[^>]*>/g, '').trim().length > 0,
+    [comment.contents],
+  );
+  // A conflict resolution comment shows the neutral outcome banner in place of its empty body. When
+  // it does, the generic "Marked as resolved" status line would stack a second italic line saying
+  // the same thing, so it is suppressed and the outcome line stands alone.
+  const showsConflictOutcome = !!comment.conflictResolutionAction && !hasResolutionBodyText;
 
   const dropdownContent = useMemo(() => {
     if (!isThreadExpanded) return undefined;
@@ -256,7 +272,7 @@ export function CommentItem({
         )}
         {!isEditing && (
           <>
-            {comment.status === 'Resolved' && (
+            {comment.status === 'Resolved' && !showsConflictOutcome && (
               <div className="tw:text-sm tw:italic">
                 {localizedStrings['%comment_status_resolved%']}
               </div>
@@ -266,27 +282,39 @@ export function CommentItem({
                 {localizedStrings['%comment_status_todo%']}
               </div>
             )}
-            <div
-              className={cn(
-                'tw:prose tw:items-start tw:gap-2 tw:break-words tw:text-sm tw:font-normal tw:text-foreground',
-                // tw:prose has a max width defined on it, that we choose to override
-                'tw:max-w-none',
-                // Don't render blockquote on the first child. All comments are wrapped in blockquote
-                // that has text-align corresponding to LTR or RTL, so the blockquote is important.
-                // But we don't want it to look like there's a blockquote there. Apply styles to the
-                // blockquote directly inside this div.
-                'tw:[&>blockquote]:border-s-0 tw:[&>blockquote]:p-0 tw:[&>blockquote]:ps-0 tw:[&>blockquote]:font-normal tw:[&>blockquote]:not-italic tw:[&>blockquote]:text-foreground',
-                // Don't render quotes on blockquotes
-                'tw:prose-quoteless',
-                {
-                  'tw:line-clamp-3': !isThreadExpanded,
-                },
-              )}
-              // The comment content is stored in HTML so it needs to be set directly. To make sure
-              // it is safe we have sanitized it first.
-              // eslint-disable-next-line react/no-danger
-              dangerouslySetInnerHTML={{ __html: sanitizedContent }}
-            />
+            {showsConflictOutcome ? (
+              // A platform-created conflict resolution comment carries an empty body — PT9 renders
+              // its banner UI-side from conflictResolutionAction, it never stores text. So render the
+              // localized, neutral outcome line here instead of the (empty) contents, styled like the
+              // italic status lines above. These are the same neutral keys ConflictNoteCard's Result
+              // region used to render inline. Only when the body IS empty: a resolution synced from
+              // PT9 can carry the resolver's typed note alongside the action, and PT9 shows that text,
+              // so the body branch below keeps it visible rather than discarding it for this banner.
+              <div className="tw:text-sm tw:italic">
+                {actionToOutcome(comment.conflictResolutionAction) === 'merged'
+                  ? (localizedStrings['%conflict_note_outcome_combined%'] ??
+                    'Combined both changes.')
+                  : (localizedStrings['%conflict_note_outcome_used_other%'] ??
+                    'Used the other change instead of the current text.')}
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  // Shared note-body prose/blockquote treatment (also used by conflict-diff's
+                  // DIFF_HTML_CLASSES). Layer this comment item's own extras on top: items-start +
+                  // gap-2 for layout, and line-clamp while the thread is collapsed.
+                  COMMENT_BODY_PROSE_CLASSES,
+                  'tw:items-start tw:gap-2',
+                  {
+                    'tw:line-clamp-3': !isThreadExpanded,
+                  },
+                )}
+                // The comment content is stored in HTML so it needs to be set directly. To make sure
+                // it is safe we have sanitized it first.
+                // eslint-disable-next-line react/no-danger
+                dangerouslySetInnerHTML={{ __html: sanitizedContent }}
+              />
+            )}
           </>
         )}
       </div>

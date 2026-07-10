@@ -83,7 +83,10 @@ test.describe('UI Interaction', () => {
 
     // The about dialog opens as a floating dock tab (same as Help menu path).
     const aboutTab = mainPage.locator('.dock-tab', { hasText: /About/i });
-    await expect(aboutTab).toBeVisible({ timeout: 10_000 });
+    // Allow 15 s: on slow CI the dock panel can take longer than 10 s to render
+    // after the PAPI command fires. Playwright itself flagged this as "1 flaky"
+    // in two separate main-branch runs (SHA 80130761, 4b2894ec).
+    await expect(aboutTab).toBeVisible({ timeout: 15_000 });
 
     // Close the About tab via dispatchEvent (see comment in first test).
     const closeButton = aboutTab.locator('.dock-tab-close-btn');
@@ -124,21 +127,24 @@ test.describe('UI Interaction', () => {
     await expect(flipButton).toBeVisible({ timeout: 10_000 });
     await flipButton.click();
 
-    // Wait for theme data provider to update the stylesheet
+    // Wait for theme data provider to update the stylesheet.
+    // Allow 10 s: on slow CI (Windows/Linux) the data provider can take
+    // longer than 5 s to propagate the change.
     await expect(async () => {
       const newThemeId = await getThemeId();
       expect(newThemeId).not.toBe(initialThemeId);
-    }).toPass({ timeout: 5_000 });
+    }).toPass({ timeout: 10_000 });
 
     // The popover stays open after an appearance click (the handler doesn't close it), so we
     // can click the restore target without re-opening the popover.
     const restoreButton = mainPage.getByTestId(`user-profile-appearance-${restoreTarget}`);
     await expect(restoreButton).toBeVisible({ timeout: 10_000 });
     await restoreButton.click();
+    // Same 10 s allowance as the flip wait above — identical propagation risk.
     await expect(async () => {
       const restoredThemeId = await getThemeId();
       expect(restoredThemeId).toBe(initialThemeId);
-    }).toPass({ timeout: 5_000 });
+    }).toPass({ timeout: 10_000 });
   });
 
   test('should have a functional toolbar with book/chapter control', async ({ mainPage }) => {

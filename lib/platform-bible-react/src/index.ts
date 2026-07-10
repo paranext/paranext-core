@@ -29,10 +29,19 @@ export {
 } from './components/advanced/comment-editor/comment-editor.types';
 export type {
   CommentListProps,
+  CommentListLocalizedStrings,
   AddCommentToThreadOptions,
 } from './components/advanced/comment-list/comment-list.types';
 export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
+export type {
+  ConflictNoteCardProps,
+  ConflictResolution,
+  ConflictResolutionOptions,
+  ConflictResolutionOutcome,
+} from './components/advanced/comment-list/conflict-note-card.types';
+export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
+export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -279,6 +288,7 @@ export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
+export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export {
   useListbox,
   type UseListboxProps,

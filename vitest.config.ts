@@ -8,6 +8,9 @@ const config = defineConfig(async () => {
     test: {
       globals: true,
       environment: 'jsdom',
+      // Warms the lazy one-time ICU init behind Intl.* so it never lands inside a test's timeout
+      // window on a slow CI worker. See vitest.setup.ts for the full rationale.
+      setupFiles: ['./vitest.setup.ts'],
       include: [
         'src/**/*.test.ts',
         'src/**/*.test.tsx',

@@ -68,4 +68,8 @@ describe('firstDifference', () => {
     expect(out).toContain('line 3');
     expect(out).toContain(JSON.stringify('extra'));
   });
+
+  it('throws when the inputs are identical (a caller-side inSync bug)', () => {
+    expect(() => firstDifference('a\nb', 'a\nb')).toThrow(/identical inputs/);
+  });
 });

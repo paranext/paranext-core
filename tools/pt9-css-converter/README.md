@@ -31,7 +31,7 @@ npx tsx tools/pt9-css-converter/src/cli.ts \
 
 ## Auditing
 
-The committed `extensions/src/platform-scripture-editor/src/marker-styles/{hbkeng,tnn,tnd}.scss` files are generated from the committed `data/pt9-css/{hbkeng,tnn,tnd}.css` snapshots. The audit re-runs the conversion and checks the result still matches what is committed — catching a hand-edit of a generated file, or a converter change that silently alters output, without needing PT9 Desktop or the C# extractor.
+The committed `extensions/src/platform-scripture-editor/src/marker-styles/<id>.scss` files (one per supported commentary resource) are generated from the committed `data/pt9-css/<id>.css` snapshots. The audit auto-discovers every `<id>.css` in `data/pt9-css/` (ignoring the `*-manual.css` references), re-runs the conversion, and checks the result still matches what is committed — catching a hand-edit of a generated file, or a converter change that silently alters output, without needing PT9 Desktop or the C# extractor.
 
 From the repo root:
 

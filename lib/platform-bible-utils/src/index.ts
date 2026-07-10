@@ -81,6 +81,7 @@ export {
 export type { FormatScrRefRangeOptions } from './scripture/scripture-util';
 export {
   areUsjContentsEqualExceptWhitespace,
+  collectUsjMarkers,
   compareScrRefs,
   formatScrRef,
   formatScrRefRange,
@@ -261,9 +262,13 @@ export type {
   VerseRefOffset,
 } from './scripture/usj-reader-writer.model';
 export { default as UsjReaderWriter } from './scripture/usj-reader-writer';
+// Re-exported so consumers can type the argument to `collectUsjMarkers` (and other USJ utilities)
+// without importing the third-party package directly.
+export type { Usj } from '@eten-tech-foundation/scripture-utilities';
 export type {
   CommentStatus,
   CommentType,
+  ConflictResolutionOptions,
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';

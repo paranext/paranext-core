@@ -232,4 +232,46 @@ internal class CommentThreadSelectorConverterTests
         Assert.That(selector!.NoteCategory, Is.EqualTo(NoteCategory.General));
         Assert.That(selector.DeduplicateThreads, Is.True);
     }
+
+    [Test]
+    public void Deserialize_IsResolvedFalse_SetsIsResolvedFalse()
+    {
+        string json = @"{ ""isResolved"": false }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.IsResolved, Is.False);
+    }
+
+    [Test]
+    public void Deserialize_IsResolvedTrue_SetsIsResolvedTrue()
+    {
+        string json = @"{ ""isResolved"": true }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.IsResolved, Is.True);
+    }
+
+    [Test]
+    public void Deserialize_IsResolvedAbsent_LeavesIsResolvedNull()
+    {
+        string json = @"{ }";
+
+        var selector = JsonSerializer.Deserialize<CommentThreadSelector>(
+            json,
+            _serializationOptions
+        );
+
+        Assert.That(selector, Is.Not.Null);
+        Assert.That(selector!.IsResolved, Is.Null);
+    }
 }

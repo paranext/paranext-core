@@ -9,7 +9,7 @@ const MOCK_SETTINGS_DATA = {
   'settingsTest.valueIsUndefined': undefined,
 };
 
-const VERSE_REF_DEFAULT = { default: { book: 'GEN', chapterNum: 1, verseNum: 1 } };
+const REQUEST_TIMEOUT_DEFAULT = { default: 30 };
 const NEW_INTERFACE_LANGUAGE = ['spa'];
 
 let settingsProviderEngine: ReturnType<
@@ -23,7 +23,7 @@ beforeEach(() => {
 
 vi.mock('@node/services/node-file-system.service', () => ({
   readFileText: () => {
-    return JSON.stringify(VERSE_REF_DEFAULT);
+    return JSON.stringify(REQUEST_TIMEOUT_DEFAULT);
   },
   writeFile: () => {
     return Promise.resolve();
@@ -40,9 +40,9 @@ vi.mock('@extension-host/data/core-settings-info.data', async () => ({
         label: '%settings_platform_name_label%',
         default: '%missing%',
       },
-      'platform.verseRef': {
-        label: '%settings_platform_verseRef_label%',
-        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      'platform.requestTimeout': {
+        label: '%settings_platform_requestTimeout_label%',
+        default: 30,
       },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
@@ -51,8 +51,8 @@ vi.mock('@extension-host/data/core-settings-info.data', async () => ({
     },
   },
   coreSettingsValidators: {
-    'platform.verseRef': async (): Promise<boolean> => {
-      // Reject all attempts to set the verse ref
+    'platform.requestTimeout': async (): Promise<boolean> => {
+      // Reject all attempts to set the request timeout
       return false;
     },
     'platform.interfaceLanguage': async (): Promise<boolean> => {
@@ -77,9 +77,9 @@ vi.mock('@extension-host/services/contribution.service', async () => ({
   waitForResyncContributions: async () => {},
 }));
 
-test('Get verseRef returns default value', async () => {
-  const result = await settingsProviderEngine.get('platform.verseRef');
-  expect(result).toEqual(VERSE_REF_DEFAULT.default);
+test('Get requestTimeout returns default value', async () => {
+  const result = await settingsProviderEngine.get('platform.requestTimeout');
+  expect(result).toEqual(REQUEST_TIMEOUT_DEFAULT.default);
 });
 
 test('Get interfaceLanguage returns stored value', async () => {
@@ -122,18 +122,14 @@ test('Reset interfaceLanguage returns true', async () => {
   expect(result).toBe(true);
 });
 
-test('Reset verseRef returns false', async () => {
-  const result = await settingsProviderEngine.reset('platform.verseRef');
+test('Reset requestTimeout returns false', async () => {
+  const result = await settingsProviderEngine.reset('platform.requestTimeout');
   expect(result).toBe(false);
 });
 
-test('Set verseRef throws', async () => {
-  const result = settingsProviderEngine.set('platform.verseRef', {
-    book: 'EXO',
-    chapterNum: 1,
-    verseNum: 1,
-  });
+test('Set requestTimeout throws', async () => {
+  const result = settingsProviderEngine.set('platform.requestTimeout', 60);
   await expect(result).rejects.toThrow(
-    "Error setting value for key 'platform.verseRef': validation failed",
+    "Error setting value for key 'platform.requestTimeout': validation failed",
   );
 });

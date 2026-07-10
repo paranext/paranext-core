@@ -1,3 +1,7 @@
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Paranext.DataProvider.JsonUtils;
 using Paratext.Data.ProjectComments;
 using PtxUtils;
@@ -75,6 +79,20 @@ public class JsonConverterUtilsTests
     {
         var result = ConvertNoteTypeToCommentType(new Enum<NoteType>(input));
         Assert.That(result, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void ConvertNoteTypeToCommentType_EmptyInternalValue_DoesNotThrow()
+    {
+        // An unknown NoteType with an empty InternalValue (corrupt/legacy XML) must not throw
+        // IndexOutOfRangeException — mirrors the guard in the sibling ConvertNoteStatusToCommentStatus.
+        // Guarding matters because, unguarded, this throw would take down a whole thread during
+        // getCommentThreads serialization.
+        Assert.That(
+            () => ConvertNoteTypeToCommentType(new Enum<NoteType>("")),
+            Throws.Nothing,
+            "empty InternalValue must be handled gracefully, not indexed into"
+        );
     }
 
     #endregion
@@ -185,6 +203,94 @@ public class JsonConverterUtilsTests
                 $"Round-trip failed for NoteType '{original}'"
             );
         }
+    }
+
+    #endregion
+
+    #region WriteIsolatedArray Tests
+
+    /// <summary>
+    /// A string converter that lets a test make specific sentinel elements fail to serialize, so
+    /// <see cref="WriteIsolatedArray{T}"/>'s isolation can be exercised with no production seam.
+    /// </summary>
+    private sealed class SentinelStringConverter : JsonConverter<string>
+    {
+        public const string ThrowAfterPartialWrite = "<<throw-after-partial>>";
+        public const string ThrowWiringError = "<<throw-wiring>>";
+
+        public override string Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        ) => throw new NotSupportedException();
+
+        public override void Write(
+            Utf8JsonWriter writer,
+            string value,
+            JsonSerializerOptions options
+        )
+        {
+            switch (value)
+            {
+                case ThrowAfterPartialWrite:
+                    // Emit a partial object into the side buffer, THEN throw: proves a partially
+                    // written element is fully discarded, not half-copied into the output.
+                    writer.WriteStartObject();
+                    writer.WriteString("partial", "should-be-discarded");
+                    throw new InvalidOperationException("boom after partial write");
+                case ThrowWiringError:
+                    throw new CommentThreadContextMissingException("no thread");
+                default:
+                    writer.WriteStringValue(value);
+                    break;
+            }
+        }
+    }
+
+    private static string WriteIsolatedArrayToJson(IEnumerable<string> items)
+    {
+        var options = new JsonSerializerOptions();
+        options.Converters.Add(new SentinelStringConverter());
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            WriteIsolatedArray(writer, items, options, s => $"item '{s}'");
+            writer.Flush();
+        }
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    [Test]
+    public void WriteIsolatedArray_HealthyItems_WritesAllInOrder()
+    {
+        Assert.That(WriteIsolatedArrayToJson(["a", "b", "c"]), Is.EqualTo("[\"a\",\"b\",\"c\"]"));
+    }
+
+    [Test]
+    public void WriteIsolatedArray_EmptyInput_WritesEmptyArray()
+    {
+        Assert.That(WriteIsolatedArrayToJson([]), Is.EqualTo("[]"));
+    }
+
+    [Test]
+    public void WriteIsolatedArray_OneItemThrowsMidWrite_DropsItAndKeepsSurvivorsInOrder()
+    {
+        // The middle item partially writes then throws; it must be fully discarded (no half-object)
+        // and the survivors kept in their original order.
+        Assert.That(
+            WriteIsolatedArrayToJson(["a", SentinelStringConverter.ThrowAfterPartialWrite, "b"]),
+            Is.EqualTo("[\"a\",\"b\"]")
+        );
+    }
+
+    [Test]
+    public void WriteIsolatedArray_WiringErrorPropagates_NotSwallowedAsDroppedItem()
+    {
+        // A CommentThreadContextMissingException is a programmer/wiring bug, not corrupt data, so it
+        // must surface rather than being silently dropped like a corrupt element.
+        Assert.Throws<CommentThreadContextMissingException>(
+            () => WriteIsolatedArrayToJson(["a", SentinelStringConverter.ThrowWiringError])
+        );
     }
 
     #endregion

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text.Json;
 using Paratext.Data.ProjectComments;
 using PtxUtils;
@@ -69,8 +70,82 @@ public static class JsonConverterUtils
         if (noteTypeEnum == NoteType.Conflict)
             return PlatformCommentWrapper.Json.Type.CONFLICT;
 
-        return char.ToUpperInvariant(noteTypeEnum.InternalValue[0])
-            + noteTypeEnum.InternalValue[1..];
+        // Guard the index like the sibling ConvertNoteStatusToCommentStatus above: an unknown
+        // NoteType with an empty InternalValue (corrupt/legacy XML) would otherwise throw
+        // IndexOutOfRangeException here and, during getCommentThreads serialization, take down the
+        // whole thread.
+        return noteTypeEnum.InternalValue.Length > 0
+            ? char.ToUpperInvariant(noteTypeEnum.InternalValue[0]) + noteTypeEnum.InternalValue[1..]
+            : PlatformCommentWrapper.Json.Type.NORMAL;
+    }
+
+    /// <summary>
+    /// Serializes <paramref name="items"/> as a JSON array in which a single element that fails to
+    /// serialize is dropped (and logged) instead of aborting the whole array. Each element is
+    /// serialized into a reused side buffer first — <see cref="Utf8JsonWriter"/> is forward-only and
+    /// cannot roll back a partial write, so an element that throws mid-serialization must never reach
+    /// <paramref name="writer"/> — and only elements that serialize cleanly are copied out.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="CommentThreadContextMissingException"/> is a wiring/programmer error, not corrupt
+    /// data, so it is allowed to propagate rather than being swallowed as a dropped element — a
+    /// wiring regression should surface loudly. The side buffer is allocated once and reused across
+    /// all elements (one allocation per array, not per element).
+    /// </remarks>
+    internal static void WriteIsolatedArray<T>(
+        Utf8JsonWriter writer,
+        IEnumerable<T> items,
+        JsonSerializerOptions options,
+        Func<T, string> describe
+    )
+    {
+        writer.WriteStartArray();
+        var buffer = new ArrayBufferWriter<byte>();
+        using var itemWriter = new Utf8JsonWriter(
+            buffer,
+            new JsonWriterOptions { Encoder = options.Encoder, SkipValidation = true }
+        );
+        foreach (T item in items)
+        {
+            buffer.Clear();
+            itemWriter.Reset();
+            try
+            {
+                JsonSerializer.Serialize(itemWriter, item, options);
+                itemWriter.Flush();
+            }
+            catch (CommentThreadContextMissingException)
+            {
+                throw;
+            }
+            catch (Exception e)
+            {
+                itemWriter.Reset();
+                Console.WriteLine(
+                    $"WARNING: dropping {SafeDescribe(item, describe)} from serialization; "
+                        + $"it could not be serialized. {e.Message}"
+                );
+                continue;
+            }
+            // The bytes came straight from Utf8JsonWriter above (already valid JSON), so skip
+            // WriteRawValue's redundant re-parse/validation.
+            writer.WriteRawValue(buffer.WrittenSpan, skipInputValidation: true);
+        }
+        writer.WriteEndArray();
+    }
+
+    /// <summary>Describes an item for a log message without throwing, so logging a failed item can't
+    /// itself throw.</summary>
+    private static string SafeDescribe<T>(T item, Func<T, string> describe)
+    {
+        try
+        {
+            return describe(item);
+        }
+        catch
+        {
+            return "<unknown>";
+        }
     }
 
     /// <summary>

@@ -1784,6 +1784,37 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * are shallow equaled.
  */
 export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+/**
+ * Collects the distinct markers actually present in a USJ document.
+ *
+ * The scripture editor warns "Unexpected <kind> marker" for any marker in the USJ it doesn't
+ * recognize as a built-in USFM marker. Handbook/commentary resources use extra markers (e.g. `pn`,
+ * `jmp`, `xtSee`) that aren't built-ins, so a consumer can pass this document-derived set to the
+ * editor as `options.nodes.extraValidMarkers` to suppress those warnings — scoped to the resource
+ * actually being displayed, never a global list.
+ *
+ * The editor's `isValidMarker` is additive (a marker is valid if it is built-in OR listed in
+ * `extraValidMarkers`), so returning markers that are already built-in valid is a harmless no-op;
+ * callers therefore don't need the editor's internal built-in list (which it doesn't export) to
+ * compute a "delta". `z`-prefixed markers are omitted because the editor already treats every
+ * `z...` custom marker as unconditionally valid.
+ *
+ * Because this returns every marker the document uses, the editor will not warn about any marker in
+ * these panels — including genuine typos or bad data in the resource. That is an accepted
+ * trade-off: the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical
+ * whether or not it fires), and these consumers are read-only resource viewers (`isReadonly:
+ * true`), not the editable authoring editor — so typo-catching still works where authors actually
+ * edit. Do not narrow this to an "extra-only" delta: that would require the editor's internal
+ * built-in marker lists, which it deliberately doesn't export, forcing either a re-coupling to the
+ * editor package or a duplicated list that drifts. Passing everything the document uses is the
+ * correct consequence of core not owning the editor's marker definitions.
+ *
+ * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
+ * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
+ *   when `usj` is undefined or contains no markers, so callers can omit the option (opt-in, no
+ *   behavior change) for content that needs nothing extra.
+ */
+export declare function collectUsjMarkers(usj: Usj | undefined): string[];
 /** WARNING: This file is generated in https://github.com/paranext/usfm-tools. Make changes there */
 /**
  * Information about a USFM marker that is just an attribute in USX/USJ. See {@link MarkerInfo} for
@@ -5895,13 +5926,27 @@ export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
  */
 export type CommentType = "Normal" | "Conflict";
 /**
+ * The resolution actions the current user may take on a `verseText` conflict thread, as reported by
+ * the legacy comment data provider's `getConflictResolutionOptions`. Defined here so the comment
+ * data provider's type declaration and the conflict-note-card UI share a single source of truth.
+ *
+ * - `'none'`: no actions available - the thread is already resolved, is not a `verseText` conflict,
+ *   or the user lacks permission. UIs should hide the accept/reject controls entirely.
+ * - `'accept'`: the verse was edited after the merge (stale), so only "accept" (keep the current
+ *   text) is available; reject/merge are disabled.
+ * - `'acceptOrReject'`: accept and reject are available, but the two sides overlap and cannot be
+ *   auto-merged, so merge is not offered.
+ * - `'acceptRejectOrMerge'`: accept, reject, and merge are all available.
+ */
+export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject" | "acceptRejectOrMerge";
+/**
  * Represents a single comment/note in a scripture text
  *
  * This is the C# Comment type from Paratext.Data.ProjectComments
  */
 export type LegacyComment = {
 	/**
-	 * Only present on the FIRST comment of a `verseText` conflict thread: HTML diff of the accepted
+	 * Only present on the ROOT comment of a `verseText` conflict thread: HTML diff of the accepted
 	 * (winning) side (same `<u>`/`<s>` markup as {@link rejectedText}). Also absent for `verseText`
 	 * conflicts that have no common ancestor (two translators independently drafted the same
 	 * previously-absent verse, so no accepted-side diff exists), and when the accepted-side diff has
@@ -5915,10 +5960,25 @@ export type LegacyComment = {
 	biblicalTermId?: string;
 	/**
 	 * Type of conflict. Only applicable for conflict notes and it used to give a more specific
-	 * message when displaying the note. Only meaningful on the first comment of a thread; never
-	 * present on replies.
+	 * message when displaying the note. Only meaningful on a thread's ROOT comment (not necessarily
+	 * `comments[0]` — see {@link LegacyCommentThread.comments}); never present on replies.
 	 */
 	conflictType?: string;
+	/**
+	 * The conflict-resolution action recorded on a conflict thread's resolution comment, present only
+	 * when text was written into the verse:
+	 *
+	 * - `'replaced'` — the conflict was rejected, so the previously-rejected side was written into the
+	 *   text (replacing what Paratext had accepted).
+	 * - `'merged'` - the conflict was resolved via PT10's merge action, which writes PT9's auto-merged
+	 *   (both-sides) text into the verse; data synced from a PT9 three-way merge may also carry it.
+	 *
+	 * Absent means the conflict was accepted (no text write) or this is not a resolution comment.
+	 * Unlike the four `verseText` decode fields, this is NOT gated on `conflictType`: the resolution
+	 * comment has type `Conflict` but no `conflictType`, so it must be read directly from this
+	 * field.
+	 */
+	conflictResolutionAction?: "replaced" | "merged";
 	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
@@ -5946,7 +6006,12 @@ export type LegacyComment = {
 	/** Language of note */
 	language: string;
 	/**
-	 * Only present on the FIRST comment of a `verseText` conflict thread (never on replies): the
+	 * The PT9 "merge all changes" diff preview (same markup as {@link acceptedText}/
+	 * {@link rejectedText}); present only when the two changes are independent.
+	 */
+	mergedText?: string;
+	/**
+	 * Only present on the ROOT comment of a `verseText` conflict thread (never on replies): the
 	 * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.
 	 * Pairs with {@link resultText} (the accepted outcome) to drive a dynamic result preview. Absent
 	 * when the reject outcome decodes to an empty verse (e.g. the losing side deleted the verse) or
@@ -5955,7 +6020,7 @@ export type LegacyComment = {
 	 */
 	rejectedResultText?: string;
 	/**
-	 * Only present on the FIRST comment of a `verseText` conflict thread, and only when the rejected
+	 * Only present on the ROOT comment of a `verseText` conflict thread, and only when the rejected
 	 * (losing) side's rendered diff has visible content: HTML diff of the rejected side, using
 	 * Paratext 9's `<u>` (inserted) and `<s>` (deleted) markup. This is full HTML,
 	 * `<blockquote>`-wrapped like {@link contents}. Coloring is applied by the UI, not carried in the
@@ -5966,7 +6031,7 @@ export type LegacyComment = {
 	/** Present in a note when it has been assigned to reply-to a particular user */
 	replyToUser?: string;
 	/**
-	 * Only present on the first comment of a `verseText` conflict thread when the merged result verse
+	 * Only present on the ROOT comment of a `verseText` conflict thread when the merged result verse
 	 * USFM is non-empty: the resulting verse USFM (plain, no diff markup) already written into the
 	 * text at merge time. Equals the accepted side in v1. Absent otherwise. On a `verseText` conflict
 	 * ROOT this value equals the serialized {@link verse} field, but the two are deliberately
@@ -6014,7 +6079,16 @@ export type LegacyComment = {
 export type LegacyCommentThread = {
 	/** Thread identifier (from first comment) */
 	id: string;
-	/** All comments in this thread */
+	/**
+	 * All comments in this thread.
+	 *
+	 * The conflict-only fields ({@link LegacyComment.conflictType}, {@link LegacyComment.rejectedText},
+	 * {@link LegacyComment.acceptedText}, {@link LegacyComment.resultText}, and
+	 * {@link LegacyComment.rejectedResultText}) live on this thread's ROOT comment — the
+	 * earliest-`date` comment — which after thread-fragment deduplication is NOT necessarily
+	 * `comments[0]`. Locate the root by earliest `date` (or simply read whichever comment carries the
+	 * fields); never assume a fixed array position.
+	 */
 	comments: LegacyComment[];
 	/** Thread status (aggregated from most recent non-Unspecified comment) */
 	status: CommentStatus;
@@ -6051,6 +6125,7 @@ export {
 	MarkerCategoryType as CategoryType,
 	USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_0,
 	USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0,
+	Usj,
 };
 
 export {};

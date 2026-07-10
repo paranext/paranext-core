@@ -7,6 +7,9 @@ const config = defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Warm the lazy one-time ICU init behind Intl.* so it never lands inside a test's timeout
+    // window on a slow CI worker. Shares the repo-root setup file. See vitest.setup.ts for rationale.
+    setupFiles: [path.resolve(__dirname, '../vitest.setup.ts')],
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'lib/**/*.test.ts', 'lib/**/*.test.tsx'],
   },
   resolve: {
