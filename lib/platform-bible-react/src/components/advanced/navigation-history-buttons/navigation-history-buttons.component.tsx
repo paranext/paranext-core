@@ -1,11 +1,11 @@
 import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
 import { ButtonGroup } from '@/components/shadcn-ui/button-group';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/shadcn-ui/dropdown-menu';
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from '@/components/shadcn-ui/context-menu';
 import { Kbd } from '@/components/shadcn-ui/kbd';
 import {
   Tooltip,
@@ -17,7 +17,7 @@ import { readDirection } from '@/utils/dir-helper.util';
 import { isMacOs } from '@/utils/platform.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { resolveReferenceHistoryDirection } from 'platform-bible-utils/experimental';
-import { ArrowLeft, ArrowRight, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -40,7 +40,7 @@ const localizeString = (
   key: keyof NavigationHistoryButtonsLocalizedStrings,
 ) => strings[key] ?? key;
 
-/** One entry in a navigation-history dropdown */
+/** One entry in a navigation-history context menu */
 export type NavigationHistoryItem = {
   /** Display label for the history entry, e.g. 'Mark 4:1' */
   label: string;
@@ -57,7 +57,7 @@ export type NavigationHistoryButtonsProps = {
   backItems?: NavigationHistoryItem[];
   /** History entries ahead of the current location, nearest first (offsets +1, +2, ...) */
   forwardItems?: NavigationHistoryItem[];
-  /** Called with the signed offset to navigate by (from a button click or a dropdown item) */
+  /** Called with the signed offset to navigate by (from a button click or a history-menu item) */
   onNavigate: (offset: number) => void;
   /** Localized strings for tooltips and aria-labels. Falls back to the key itself */
   localizedStrings?: NavigationHistoryButtonsLocalizedStrings;
@@ -74,9 +74,10 @@ export type NavigationHistoryButtonsProps = {
 };
 
 /**
- * Back/forward reference-history split buttons: each half is an action button plus a dropdown
- * listing the history entries in that direction. In RTL the pair mirrors (order, arrow icons, and
- * tooltip shortcut hints), matching Paratext 9.
+ * Back/forward reference-history buttons merged into a single button group. Left-click navigates
+ * one step; right-click (or long-press, or the keyboard context-menu key) opens a menu listing the
+ * history entries in that direction. In RTL the pair mirrors (order, arrow icons, and tooltip
+ * shortcut hints), matching Paratext 9.
  */
 export function NavigationHistoryButtons({
   canGoBack = false,
@@ -113,7 +114,7 @@ export function NavigationHistoryButtons({
     resolveReferenceHistoryDirection('left', interfaceDirection) === 'back' ? leftKey : rightKey;
   const forwardShortcut = backShortcut === leftKey ? rightKey : leftKey;
 
-  const renderSplitButton = (direction: 'back' | 'forward') => {
+  const renderNavButton = (direction: 'back' | 'forward', isFirst: boolean) => {
     const isBack = direction === 'back';
     const enabled = isBack ? canGoBack : canGoForward;
     const items = isBack ? backItems : forwardItems;
@@ -124,7 +125,7 @@ export function NavigationHistoryButtons({
     const showLeftArrow = isBack !== isRtl;
 
     return (
-      <ButtonGroup key={direction}>
+      <ContextMenu key={direction}>
         <Tooltip>
           {/* The span wrapper keeps tooltips working while the button is disabled (a disabled
               button gets pointer-events-none, so it can't be the trigger itself). The
@@ -132,17 +133,19 @@ export function NavigationHistoryButtons({
               equivalent logical rounding classes directly. */}
           <TooltipTrigger asChild>
             <span className="tw:inline-flex">
-              <Button
-                aria-label={tooltip}
-                data-testid={`navigation-history-${direction}-button`}
-                className={cn('tw:rounded-e-none', className)}
-                size="icon"
-                variant={variant}
-                disabled={!enabled}
-                onClick={() => onNavigate(isBack ? -1 : 1)}
-              >
-                {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
-              </Button>
+              <ContextMenuTrigger asChild disabled={items.length === 0}>
+                <Button
+                  aria-label={tooltip}
+                  data-testid={`navigation-history-${direction}-button`}
+                  className={cn(isFirst ? 'tw:rounded-e-none' : 'tw:rounded-s-none', className)}
+                  size="icon"
+                  variant={variant}
+                  disabled={!enabled}
+                  onClick={() => onNavigate(isBack ? -1 : 1)}
+                >
+                  {showLeftArrow ? <ArrowLeft /> : <ArrowRight />}
+                </Button>
+              </ContextMenuTrigger>
             </span>
           </TooltipTrigger>
           <TooltipContent>
@@ -157,37 +160,14 @@ export function NavigationHistoryButtons({
             </p>
           </TooltipContent>
         </Tooltip>
-        <DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="tw:inline-flex">
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    aria-label={listAriaLabel}
-                    data-testid={`navigation-history-${direction}-menu-trigger`}
-                    className={cn('tw:rounded-s-none', className)}
-                    size="icon"
-                    variant={variant}
-                    disabled={items.length === 0}
-                  >
-                    <ChevronDown />
-                  </Button>
-                </DropdownMenuTrigger>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{listAriaLabel}</p>
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenuContent>
-            {items.map((item) => (
-              <DropdownMenuItem key={item.offset} onSelect={() => onNavigate(item.offset)}>
-                {item.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </ButtonGroup>
+        <ContextMenuContent aria-label={listAriaLabel}>
+          {items.map((item) => (
+            <ContextMenuItem key={item.offset} onSelect={() => onNavigate(item.offset)}>
+              {item.label}
+            </ContextMenuItem>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
     );
   };
 
@@ -197,13 +177,13 @@ export function NavigationHistoryButtons({
 
   return (
     // One TooltipProvider for the whole pair (rather than one per tooltip) so Radix's skip-delay
-    // coordinates across all four buttons — moving the pointer between them doesn't re-incur the
+    // coordinates across both buttons — moving the pointer between them doesn't re-incur the
     // full open delay.
     <TooltipProvider>
-      <div className="tw:flex tw:items-center tw:gap-1" data-testid="navigation-history-buttons">
-        {renderSplitButton(first)}
-        {renderSplitButton(second)}
-      </div>
+      <ButtonGroup data-testid="navigation-history-buttons">
+        {renderNavButton(first, true)}
+        {renderNavButton(second, false)}
+      </ButtonGroup>
     </TooltipProvider>
   );
 }

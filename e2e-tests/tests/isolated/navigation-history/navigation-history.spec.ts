@@ -99,7 +99,7 @@ test.describe('Reference history', () => {
     await expect(forwardButton).toBeDisabled();
   });
 
-  test('back dropdown jumps multiple steps', async ({ mainPage }) => {
+  test('right-click history menu jumps multiple steps', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
     const bcvTrigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
 
@@ -113,14 +113,14 @@ test.describe('Reference history', () => {
     // Match tolerantly with `.first()` (the nearest — i.e. most recently visited — match, which is
     // also the correct one to jump to for "two steps back" here) rather than requiring a unique
     // match, per the shared-session caveat for this suite.
-    await mainPage.getByTestId('navigation-history-back-menu-trigger').click();
+    await mainPage.getByTestId('navigation-history-back-button').click({ button: 'right' });
     const twoBack = mainPage.getByRole('menuitem', { name: /Genesis 1\b/i }).first();
     await expect(twoBack).toBeVisible({ timeout: 5_000 });
     await twoBack.click();
     await expect(bcvTrigger).toContainText(/Genesis 1\b/i, { timeout: 10_000 });
 
     // The skipped entries are now on the forward stack
-    await mainPage.getByTestId('navigation-history-forward-menu-trigger').click();
+    await mainPage.getByTestId('navigation-history-forward-button').click({ button: 'right' });
     await expect(mainPage.getByRole('menuitem', { name: /Exodus 5\b/i }).first()).toBeVisible({
       timeout: 5_000,
     });

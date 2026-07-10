@@ -72,7 +72,7 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
 
   const handleNavigate = useCallback(
     (offset: number) => {
-      // Update optimistically so the buttons/dropdowns reflect the move immediately rather than
+      // Update optimistically so the buttons/menus reflect the move immediately rather than
       // waiting for the change event to round-trip back through the buffered emitter.
       if (navigateReferenceHistorySync(scrollGroupId, offset))
         setHistory(getReferenceHistorySync(scrollGroupId));

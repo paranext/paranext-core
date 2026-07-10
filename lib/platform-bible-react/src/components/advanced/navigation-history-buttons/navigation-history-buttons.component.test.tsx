@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -9,7 +9,7 @@ import {
 } from './navigation-history-buttons.component';
 
 // jsdom doesn't ship ResizeObserver. Radix's Popper positioning (used by both the Tooltip and
-// DropdownMenu content here) instantiates one on mount — with TooltipProvider's delayDuration=0,
+// ContextMenu content here) instantiates one on mount — with TooltipProvider's delayDuration=0,
 // a plain click can open the tooltip synchronously, so this is needed even for click-only tests.
 // Same stub as project-selector.component.test.tsx.
 class NoopResizeObserver implements ResizeObserver {
@@ -60,6 +60,14 @@ describe('NavigationHistoryButtons', () => {
     expect(defaultProps.onNavigate).toHaveBeenCalledWith(1);
   });
 
+  test('left-clicking navigates without opening the history menu', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    await user.click(screen.getByTestId('navigation-history-back-button'));
+    expect(defaultProps.onNavigate).toHaveBeenCalledWith(-1);
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
   test('buttons are disabled when canGoBack/canGoForward are false', () => {
     render(
       <NavigationHistoryButtons
@@ -72,17 +80,41 @@ describe('NavigationHistoryButtons', () => {
     );
     expect(screen.getByTestId('navigation-history-back-button')).toBeDisabled();
     expect(screen.getByTestId('navigation-history-forward-button')).toBeDisabled();
-    expect(screen.getByTestId('navigation-history-back-menu-trigger')).toBeDisabled();
-    expect(screen.getByTestId('navigation-history-forward-menu-trigger')).toBeDisabled();
   });
 
-  test('back dropdown lists history items and clicking one navigates by its offset', async () => {
+  test('right-clicking back opens its history menu and clicking an entry navigates by its offset', async () => {
     const user = userEvent.setup();
     render(<NavigationHistoryButtons {...defaultProps} />);
-    await user.click(screen.getByTestId('navigation-history-back-menu-trigger'));
-    const item = await screen.findByRole('menuitem', { name: 'Exodus 5:1' });
+    await user.pointer({
+      keys: '[MouseRight]',
+      target: screen.getByTestId('navigation-history-back-button'),
+    });
+    // No localizedStrings passed, so the menu's accessible name falls back to the key itself
+    const menu = await screen.findByRole('menu');
+    expect(menu).toHaveAccessibleName('%navigationHistory_backList_ariaLabel%');
+    const item = screen.getByRole('menuitem', { name: 'Exodus 5:1' });
     await user.click(item);
     expect(defaultProps.onNavigate).toHaveBeenCalledWith(-2);
+  });
+
+  test('right-clicking forward opens the forward history menu', async () => {
+    const user = userEvent.setup();
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    await user.pointer({
+      keys: '[MouseRight]',
+      target: screen.getByTestId('navigation-history-forward-button'),
+    });
+    const item = await screen.findByRole('menuitem', { name: 'Mark 4:1' });
+    await user.click(item);
+    expect(defaultProps.onNavigate).toHaveBeenCalledWith(1);
+  });
+
+  test('right-clicking a button with no history entries does not open a menu', () => {
+    render(<NavigationHistoryButtons {...defaultProps} canGoForward={false} forwardItems={[]} />);
+    // fireEvent rather than userEvent: the button is disabled, so a real pointer would hit the
+    // wrapper — this asserts the ContextMenuTrigger itself is disabled even if an event lands on it
+    fireEvent.contextMenu(screen.getByTestId('navigation-history-forward-button'));
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   test('RTL mirrors the pair order', () => {
@@ -92,7 +124,7 @@ describe('NavigationHistoryButtons', () => {
     const buttons = Array.from(group.querySelectorAll('[data-testid$="-button"]')).map((el) =>
       el.getAttribute('data-testid'),
     );
-    // In RTL the forward split button renders first (back sits on the right, like Paratext 9)
+    // In RTL the forward button renders first (back sits on the right, like Paratext 9)
     expect(buttons[0]).toBe('navigation-history-forward-button');
   });
 
@@ -137,15 +169,6 @@ describe('NavigationHistoryButtons', () => {
     await user.hover(wrapper);
     const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('%navigationHistory_forward_tooltip%');
-  });
-
-  test('hovering a dropdown chevron shows its history-list tooltip', async () => {
-    const user = userEvent.setup();
-    render(<NavigationHistoryButtons {...defaultProps} />);
-    await user.hover(screen.getByTestId('navigation-history-back-menu-trigger'));
-    // No localizedStrings passed, so the tooltip falls back to the key itself
-    const tooltip = await screen.findByRole('tooltip');
-    expect(tooltip).toHaveTextContent('%navigationHistory_backList_ariaLabel%');
   });
 
   test('showKeyboardShortcuts={false} renders no Kbd hint in the opened tooltip', async () => {
