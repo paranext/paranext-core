@@ -7,6 +7,12 @@ import {
   waitForAppReady,
   waitForPapiMethodRegistered,
 } from '../../fixtures/helpers';
+import {
+  cleanupCommentTestProject,
+  createCommentTestProject,
+  type CommentTestProject,
+} from '../../fixtures/comment-test-helpers';
+import { openScriptureEditorForProject } from '../../fixtures/scripture-editor-helpers';
 
 test.describe('UI Interaction', () => {
   // The settings service is exposed as a data-provider network object — data providers
@@ -147,26 +153,60 @@ test.describe('UI Interaction', () => {
     }).toPass({ timeout: 10_000 });
   });
 
-  test('should have a functional toolbar with book/chapter control', async ({ mainPage }) => {
+  // The top toolbar's book/chapter control is the first one in the DOM (the toolbar renders above
+  // the dock layout, and any editor's own control lives inside an iframe)
+  const BOOK_CHAPTER_TRIGGER = '[aria-label="book-chapter-trigger"]';
+
+  test('top toolbar book/chapter control is disabled with no scripture web view open', async ({
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
 
-    // The trigger button opens a popover with the book search input inside
-    const trigger = mainPage.locator('[aria-label="book-chapter-trigger"]');
+    // A fresh profile opens no scripture-navigable web view, so the top toolbar's control has
+    // nothing to navigate and is disabled. (Runs before the editor-opening test below opens one.)
+    const trigger = mainPage.locator(BOOK_CHAPTER_TRIGGER).first();
     await expect(trigger).toBeVisible({ timeout: 10_000 });
-    await trigger.click();
+    await expect(trigger).toBeDisabled();
+  });
 
-    // After the popover opens, a CommandInput (actual <input>) appears inside
-    const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
-    await expect(commandInput).toBeVisible({ timeout: 5_000 });
-    await commandInput.fill('Gen');
+  test.describe('with an open Scripture editor', () => {
+    let project: CommentTestProject;
 
-    // A list of matching books should appear
-    const listItem = mainPage.locator('[cmdk-item]');
-    await expect(listItem.first()).toBeVisible({ timeout: 5_000 });
+    test.beforeAll(async () => {
+      // Disposable project copy so a Scripture editor can be opened for it, which makes the top
+      // toolbar's control the navigation target and enables it. The helper is comment-flavored only
+      // in name — it creates a plain project copy with a unique id.
+      project = await createCommentTestProject([]);
+    });
 
-    // Close the popover to avoid leaking UI state into later tests
-    await mainPage.keyboard.press('Escape');
-    await expect(commandInput).not.toBeVisible({ timeout: 5_000 });
+    test.afterAll(() => {
+      cleanupCommentTestProject(project);
+    });
+
+    test('should have a functional toolbar with book/chapter control', async ({ mainPage }) => {
+      await waitForAppReady(mainPage);
+      // The control enables only once a scripture-navigable web view is the navigation target
+      await openScriptureEditorForProject(mainPage, project.projectId);
+
+      // The trigger button opens a popover with the book search input inside
+      const trigger = mainPage.locator(BOOK_CHAPTER_TRIGGER).first();
+      await expect(trigger).toBeVisible({ timeout: 10_000 });
+      await expect(trigger).toBeEnabled({ timeout: 15_000 });
+      await trigger.click();
+
+      // After the popover opens, a CommandInput (actual <input>) appears inside
+      const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
+      await expect(commandInput).toBeVisible({ timeout: 5_000 });
+      await commandInput.fill('Gen');
+
+      // A list of matching books should appear
+      const listItem = mainPage.locator('[cmdk-item]');
+      await expect(listItem.first()).toBeVisible({ timeout: 5_000 });
+
+      // Close the popover to avoid leaking UI state into later tests
+      await mainPage.keyboard.press('Escape');
+      await expect(commandInput).not.toBeVisible({ timeout: 5_000 });
+    });
   });
 
   test('should open Settings from the menu', async ({ papiClient, mainPage }) => {
