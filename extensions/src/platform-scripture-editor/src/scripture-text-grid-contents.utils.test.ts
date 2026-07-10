@@ -38,7 +38,6 @@ const list = (items: ResourceReference[] = []): ResourceReferenceList => ({
 });
 
 const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollectionSources => ({
-  adminModelTexts: list(),
   adminReferenced: list(),
   userReferenced: list(),
   overlay: {},
@@ -94,16 +93,6 @@ describe('getScriptureTextGridContents', () => {
           overlay: {},
         }),
       expected: ['a'],
-    },
-    {
-      label: 'flagged true only on modelTexts (proves union), overlay absent → shown',
-      sources: () =>
-        makeSources({
-          adminModelTexts: list([project('m', { isResourceShownByDefault: true })]),
-          adminReferenced: list([project('m')]), // flag-stripped download copy
-          overlay: {},
-        }),
-      expected: ['m'],
     },
     {
       label: 'admin unflagged but overlay true (past-admin, still checked) → shown',
@@ -165,11 +154,13 @@ describe('getScriptureTextGridContents', () => {
     expect(contents[0].name).toBe('Project x'); // admin metadata, not user copy
   });
 
-  it('orders admin entries (model-texts then referenced) before user entries', () => {
+  it('orders admin (referenced) entries before user entries', () => {
     const contents = getScriptureTextGridContents(
       makeSources({
-        adminModelTexts: list([project('m', { isResourceShownByDefault: true })]),
-        adminReferenced: list([project('m'), dbl('r', { isResourceShownByDefault: true })]),
+        adminReferenced: list([
+          project('m', { isResourceShownByDefault: true }),
+          dbl('r', { isResourceShownByDefault: true }),
+        ]),
         userReferenced: list([project('u', { isResourceShownForUser: true })]),
         overlay: {},
       }),
@@ -266,19 +257,6 @@ describe('getViewOptionsTexts', () => {
       isUserRemovable: false,
     },
     {
-      label: 'flagged true only on modelTexts → top (proves union)',
-      sources: () =>
-        makeSources({
-          adminModelTexts: list([project('a', { isResourceShownByDefault: true })]),
-          adminReferenced: list([project('a')]),
-          overlay: {},
-        }),
-      section: 'top' as const,
-      checked: true,
-      isAdminLocked: true,
-      isUserRemovable: false,
-    },
-    {
       label: 'admin unflagged but overlay present → bottom (past-admin), not locked, not removable',
       sources: () =>
         makeSources({
@@ -355,11 +333,13 @@ describe('getViewOptionsTexts', () => {
     expect(bottom).toHaveLength(0);
   });
 
-  it('preserves order: top in union order, bottom in user-list order', () => {
+  it('preserves order: top in referenced-list order, bottom in user-list order', () => {
     const { top, bottom } = getViewOptionsTexts(
       makeSources({
-        adminModelTexts: list([project('m', { isResourceShownByDefault: true })]),
-        adminReferenced: list([project('m'), dbl('r', { isResourceShownByDefault: true })]),
+        adminReferenced: list([
+          project('m', { isResourceShownByDefault: true }),
+          dbl('r', { isResourceShownByDefault: true }),
+        ]),
         userReferenced: list([
           project('u1', { isResourceShownForUser: true }),
           dbl('u2', { isResourceShownForUser: false }),

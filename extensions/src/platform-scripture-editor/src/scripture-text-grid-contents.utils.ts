@@ -12,15 +12,14 @@ import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
- * The four data sources that together determine what a given user sees in the Text Collection.
+ * The three data sources that together determine what a given user sees in the Text Collection.
  *
- * Two admin lists are read, not one: the auto-promote step strips the `isResourceShownByDefault`
- * flag off the download copy it adds to `referencedProjectsAndResources`, so the flag survives on
- * `modelTexts`.
+ * The admin's shown-by-default opinions live solely on `referencedProjectsAndResources`: model
+ * texts are decoupled from the shown-by-default feature (they carry no `isResourceShownByDefault`
+ * flag and the overlay is initialized only from the referenced list), so they are not a source
+ * here.
  */
 export type TextCollectionSources = {
-  /** Admin project-scope `platformScripture.modelTexts` list. */
-  adminModelTexts: ResourceReferenceList;
   /** Admin project-scope `platformScripture.referencedProjectsAndResources` list. */
   adminReferenced: ResourceReferenceList;
   /** The current user's per-user `UserReferencedProjectsAndResources` list. */
@@ -58,19 +57,20 @@ function getBibleTextId(reference: unknown): string | undefined {
 }
 
 /**
- * The Bible-text resources the admin owns for the Text Collection, decided per admin-list item: a
- * resource is owned when the admin has an opinion on it (`isResourceShownByDefault` set to `true`
- * or `false`) or the user still has an overlay slot for it from a prior admin selection.
- * Deduplicated by `id`, `modelTexts` order first.
+ * The Bible-text resources the admin owns for the Text Collection, decided per referenced-list
+ * item: a resource is owned when the admin has an opinion on it (`isResourceShownByDefault` set to
+ * `true` or `false`) or the user still has an overlay slot for it from a prior admin selection.
+ * Deduplicated by `id`, referenced-list order.
  *
- * A resource merely present in an admin list with no flag (e.g. downloaded for another feature) is
- * NOT owned — the user can add it to their own list like any other resource. An overlay slot whose
- * id is no longer in either admin list is ignored: there is no reference left to render.
+ * Only the admin `referencedProjectsAndResources` list is read — model texts are decoupled from the
+ * shown-by-default feature. A resource merely present in the referenced list with no flag (e.g.
+ * downloaded for another feature) is NOT owned — the user can add it to their own list like any
+ * other resource. An overlay slot whose id is no longer in the referenced list is ignored: there is
+ * no reference left to render.
  *
- * `adminFlagged` is `true` when the resource is currently shown-by-default in either admin list.
+ * `adminFlagged` is `true` when the resource is currently shown-by-default in the referenced list.
  */
 function getAdminOwnedEntries(
-  adminModelTexts: ResourceReferenceList,
   adminReferenced: ResourceReferenceList,
   overlay: ShownByDefaultOverlay,
 ): AdminOwnedEntry[] {
@@ -95,7 +95,6 @@ function getAdminOwnedEntries(
     entries.push(entry);
   };
 
-  adminModelTexts.items.forEach(consider);
   adminReferenced.items.forEach(consider);
   return entries;
 }
@@ -115,8 +114,8 @@ function isAdminEntryShown(overlay: ShownByDefaultOverlay, entry: AdminOwnedEntr
  * {@link getAdminOwnedEntries}).
  */
 function isAdminOwnedId(resourceId: string, sources: TextCollectionSources): boolean {
-  const { adminModelTexts, adminReferenced, overlay } = sources;
-  return getAdminOwnedEntries(adminModelTexts, adminReferenced, overlay).some(
+  const { adminReferenced, overlay } = sources;
+  return getAdminOwnedEntries(adminReferenced, overlay).some(
     (entry) => entry.reference.id === resourceId,
   );
 }
@@ -125,11 +124,11 @@ function isAdminOwnedId(resourceId: string, sources: TextCollectionSources): boo
  * Computes the Bible-text references that render in the Scripture Text Grid for the current user:
  * admin-owned entries the user has shown (overlay choice, falling back to the admin flag), followed
  * by the user's own list entries with `isResourceShownForUser === true`. Deduplicated by `id` with
- * admin precedence; admin entries keep project-list order, user entries keep user-list order.
+ * admin precedence; admin entries keep referenced-list order, user entries keep user-list order.
  */
 export function getScriptureTextGridContents(sources: TextCollectionSources): BibleTextReference[] {
-  const { adminModelTexts, adminReferenced, userReferenced, overlay } = sources;
-  const adminOwned = getAdminOwnedEntries(adminModelTexts, adminReferenced, overlay);
+  const { adminReferenced, userReferenced, overlay } = sources;
+  const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
   const seen = new Set<string>();
   const contents: BibleTextReference[] = [];
 
@@ -156,15 +155,16 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * - `bottom` — resources the user can freely toggle and remove (`isAdminLocked: false`): other
  *   admin-owned entries (opted out, or shown before) followed by the user's own list additions.
  *
- * Checkbox state comes from the overlay for admin-owned entries and from `isResourceShownForUser` for
- * the user's own entries. An admin-owned id never also appears as a user entry (admin precedence).
+ * Checkbox state comes from the overlay for admin-owned entries and from `isResourceShownForUser`
+ * for the user's own entries. An admin-owned id never also appears as a user entry (admin
+ * precedence).
  */
 export function getViewOptionsTexts(sources: TextCollectionSources): {
   top: ViewOptionsTextEntry[];
   bottom: ViewOptionsTextEntry[];
 } {
-  const { adminModelTexts, adminReferenced, userReferenced, overlay } = sources;
-  const adminOwned = getAdminOwnedEntries(adminModelTexts, adminReferenced, overlay);
+  const { adminReferenced, userReferenced, overlay } = sources;
+  const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
   const top: ViewOptionsTextEntry[] = [];
   const bottom: ViewOptionsTextEntry[] = [];
   const adminIds = new Set<string>();
