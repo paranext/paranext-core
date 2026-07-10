@@ -68,6 +68,10 @@ internal class LocalParatextProjects
         string? projectRootOverride = Environment.GetEnvironmentVariable(
             "PLATFORM_BIBLE_PROJECT_ROOT_FOLDER"
         );
+        if (!string.IsNullOrWhiteSpace(projectRootOverride))
+            Console.WriteLine(
+                $"PLATFORM_BIBLE_PROJECT_ROOT_FOLDER is set; overriding project root folder to: {projectRootOverride}"
+            );
         ProjectRootFolder = !string.IsNullOrWhiteSpace(projectRootOverride)
             ? projectRootOverride
             : Path.Join(

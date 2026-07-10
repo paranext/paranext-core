@@ -180,6 +180,24 @@ describe('findScrollContainer', () => {
 
     expect(findScrollContainer(wrapper)).toBe(wrapper);
   });
+
+  it('matches a styled-scrollable ancestor that does not overflow when requireOverflow is false', () => {
+    const { editorContainer } = buildEditorDom();
+    const verse = editorContainer.querySelector<HTMLElement>('span[data-marker="v"]');
+    if (!verse) throw new Error('test setup failed: no verse span');
+
+    // .editor-container is styled overflow-y: auto but does not overflow -> still matches
+    expect(findScrollContainer(verse, { requireOverflow: false })).toBe(editorContainer);
+  });
+
+  it('returns undefined when nothing is even styled scrollable and requireOverflow is false', () => {
+    const orphan = document.createElement('div');
+    const child = document.createElement('span');
+    orphan.append(child);
+    document.body.append(orphan);
+
+    expect(findScrollContainer(child, { requireOverflow: false })).toBeUndefined();
+  });
 });
 
 describe('scrollToVerse', () => {

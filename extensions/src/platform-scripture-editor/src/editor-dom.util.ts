@@ -59,8 +59,8 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
 
 /**
  * Finds the element that actually scrolls the given element's content: the nearest ancestor
- * (starting with the element itself) that is styled scrollable (`overflow-y: auto | scroll`) AND
- * actually overflows (`scrollHeight > clientHeight`).
+ * (starting with the element itself) that is styled scrollable (`overflow-y: auto | scroll`) and —
+ * unless `requireOverflow` is `false` — actually overflows (`scrollHeight > clientHeight`).
  *
  * The scroll container is discovered, not assumed: wrapper elements between the web view's sized
  * flex column and `.editor-container` leave `.editor-container` auto-height, so it grows to its
@@ -68,25 +68,44 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
  * wrapper is what actually scrolls (regression diagnosed 2026-07-09). If a future layout change
  * re-constrains `.editor-container`, discovery resolves there instead — correct either way.
  *
- * Note: `ParagraphMarkerTooltipOverlay` keeps its own style-only walk-up (no overflow check) — it
- * attaches its scroll listener once on mount, possibly before content has loaded and made anything
- * overflow, so "actually overflowing right now" would be the wrong criterion there.
- *
  * @param fromElement Element whose scroll container to find
- * @returns The scroll container, or undefined if nothing scrollable exists (nothing to scroll)
+ * @param options `requireOverflow` (default `true`) also requires the candidate to actually
+ *   overflow right now. Pass `false` when the lookup runs before content has loaded (e.g. once on
+ *   mount, as in `ParagraphMarkerTooltipOverlay`), where "actually overflowing right now" would be
+ *   the wrong criterion
+ * @returns The scroll container, or undefined if no qualifying ancestor exists
  */
-export function findScrollContainer(fromElement: HTMLElement): HTMLElement | undefined {
+export function findScrollContainer(
+  fromElement: HTMLElement,
+  options?: { requireOverflow?: boolean },
+): HTMLElement | undefined {
+  const requireOverflow = options?.requireOverflow ?? true;
   let candidate: HTMLElement | undefined = fromElement;
   while (candidate) {
     const { overflowY } = window.getComputedStyle(candidate);
     if (
       (overflowY === 'auto' || overflowY === 'scroll') &&
-      candidate.scrollHeight > candidate.clientHeight
+      (!requireOverflow || candidate.scrollHeight > candidate.clientHeight)
     )
       return candidate;
     candidate = candidate.parentElement ?? undefined;
   }
   return undefined;
+}
+
+/**
+ * Computes the element's top edge in the scroll container's scroll coordinate space, i.e. the
+ * `scrollTop` value at which the element's top edge sits at the container's top edge.
+ *
+ * Rect math instead of an offsetParent walk: the scroll container is not necessarily positioned, so
+ * it may not appear in the offsetParent chain at all.
+ */
+function getTopWithinScrollContainer(element: HTMLElement, scrollContainer: HTMLElement): number {
+  return (
+    scrollContainer.scrollTop +
+    element.getBoundingClientRect().top -
+    scrollContainer.getBoundingClientRect().top
+  );
 }
 
 /**
@@ -114,15 +133,9 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
   if (scrollContainerElement && (verseElement || verseRef.verseNum <= 1)) {
     let verseOffsetTop = 0;
     if (verseElement) {
-      // Rect math instead of an offsetParent walk: the scroll container is not necessarily
-      // positioned, so it may not appear in the offsetParent chain at all
-      const verseRect = verseElement.getBoundingClientRect();
-      const containerRect = scrollContainerElement.getBoundingClientRect();
       // Scroll a bit above the verse so you can see a bit of context
       verseOffsetTop =
-        scrollContainerElement.scrollTop +
-        verseRect.top -
-        containerRect.top -
+        getTopWithinScrollContainer(verseElement, scrollContainerElement) -
         VERSE_NUMBER_SCROLL_OFFSET;
     }
 
@@ -151,15 +164,11 @@ export function scrollToAnnotation(id: string): HTMLElement | undefined {
 
   // Scroll if we find the annotation
   if (scrollContainerElement && annotationElement) {
-    // Rect math instead of an offsetParent walk — see scrollToVerse
-    const annotationRect = annotationElement.getBoundingClientRect();
-    const containerRect = scrollContainerElement.getBoundingClientRect();
-
     const containerScrollTop = scrollContainerElement.scrollTop;
     const containerHeight = scrollContainerElement.clientHeight;
 
-    const annotationTop = containerScrollTop + annotationRect.top - containerRect.top;
-    const annotationBottom = annotationTop + annotationRect.height;
+    const annotationTop = getTopWithinScrollContainer(annotationElement, scrollContainerElement);
+    const annotationBottom = annotationTop + annotationElement.getBoundingClientRect().height;
 
     // If the annotation is fully visible, don't scroll
     if (

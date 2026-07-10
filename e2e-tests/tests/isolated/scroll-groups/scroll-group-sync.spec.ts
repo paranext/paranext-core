@@ -32,11 +32,10 @@ const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
 
-// DEVIATION from task brief (required, per Task 3 fixture rename): the option fixture is named
-// `electronLaunchOptions`, not `launchOptions` — Playwright's base `test` already registers a
-// worker-scoped `launchOptions` option fixture (browser launch options), so reusing that name
-// throws "Fixture ... has already been registered as a { scope: 'worker' } fixture". See
-// e2e-tests/fixtures/isolated.fixture.ts.
+// The option fixture is named `electronLaunchOptions`, not `launchOptions` — Playwright's base
+// `test` already registers a worker-scoped `launchOptions` option fixture (browser launch
+// options), so reusing that name throws "Fixture ... has already been registered as a
+// { scope: 'worker' } fixture". See e2e-tests/fixtures/isolated.fixture.ts.
 //
 // DEV_NOISY=false (fixture default is true): in noisy dev mode the renderer uses the test layout
 // (src/renderer/testing/test-layout.data.ts), which has NO Home tab — app-ready detection and a
