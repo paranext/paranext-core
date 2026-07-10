@@ -28,7 +28,13 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%mainMenu_openHome%': 'Home',
     },
   ]),
-  useScrollGroupScrRef: vi.fn(() => [{ book: 1, chapter: 1, verse: 1 }, vi.fn(), 0, vi.fn()]),
+  useScrollGroupScrRef: vi.fn(() => [
+    { book: 1, chapter: 1, verse: 1 },
+    vi.fn(),
+    0,
+    vi.fn(),
+    undefined,
+  ]),
   useRecentScriptureRefs: vi.fn(() => ({
     recentScriptureRefs: [],
     addRecentScriptureRef: vi.fn(),

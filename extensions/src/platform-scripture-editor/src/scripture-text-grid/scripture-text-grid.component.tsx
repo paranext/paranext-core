@@ -69,6 +69,24 @@ export function ScriptureTextGrid({
       ?.focus();
   }, [chapterContext]);
 
+  // Single resource: render it as a full-width whole chapter — almost the standalone resource
+  // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
+  // adding more texts). No verse-cell row chrome and no chapter-context split; the whole chapter is
+  // already shown.
+  const [onlyResource] = resources;
+  if (resources.length === 1 && onlyResource) {
+    return (
+      <div role="region" aria-label={ariaLabel} className="tw:h-full tw:min-h-0 tw:overflow-auto">
+        <ResourceCell
+          resourceRef={onlyResource}
+          scrRef={scrRef}
+          setScrRef={setScrRef}
+          viewMode="chapter"
+        />
+      </div>
+    );
+  }
+
   const verseRow = (
     <div
       ref={gridRef}

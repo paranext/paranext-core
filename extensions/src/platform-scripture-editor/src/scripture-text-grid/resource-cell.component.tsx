@@ -2,6 +2,7 @@ import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platf
 import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
+import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEffect, useMemo, useRef } from 'react';
@@ -81,9 +82,22 @@ export function ResourceCell({
   // EditorRef requires null initial value per React ref convention
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+  // Give the editor this resource's valid markers so it recognizes them (footnote/apparatus and
+  // other resource-specific markers) instead of rendering them inline as raw text. Mirrors the
+  // resource-text-panel render path this cell reuses.
+  const usj = useMemo(
+    () => (isPlatformError(usjPossiblyError) ? undefined : usjPossiblyError),
+    [usjPossiblyError],
+  );
+  const extraValidMarkers = useExtraValidMarkers(usj);
   const options: EditorOptions = useMemo(
-    () => ({ isReadonly: true, hasSpellCheck: false, textDirection }),
-    [textDirection],
+    () => ({
+      isReadonly: true,
+      hasSpellCheck: false,
+      textDirection,
+      ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
+    }),
+    [textDirection, extraValidMarkers],
   );
   // Slice depends on scrRef.verseNum (unlike the chapter fetch memo above, which intentionally
   // omits it — the chapter is identical across verses, but the slice is not).

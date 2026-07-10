@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
@@ -57,6 +57,11 @@ const resources = [
   { projectId: 'c', label: 'עברית' },
 ];
 
+// Reset between tests so per-test assertions on the mock's calls aren't polluted by prior renders.
+beforeEach(() => {
+  mockResourceCell.mockClear();
+});
+
 describe('ScriptureTextGrid', () => {
   it('renders one gridcell per resource in effective-list order', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
@@ -86,6 +91,21 @@ describe('ScriptureTextGrid', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
     expect(screen.getByRole('grid')).toBeInTheDocument();
     expect(screen.getByRole('row')).toBeInTheDocument();
+  });
+  it('renders a single resource as a whole-chapter region, not a verse grid', () => {
+    render(
+      <ScriptureTextGrid
+        resources={[{ projectId: 'a', label: 'WEB' }]}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        ariaLabel="Text Collection"
+      />,
+    );
+    // Single resource: a labeled region rendering the whole chapter — not the verse-cell grid/row.
+    expect(screen.getByRole('region', { name: 'Text Collection' })).toBeInTheDocument();
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('row')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'chapter');
   });
   it('defaults row cells to verse view mode', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);

@@ -31,6 +31,7 @@ import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
 import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
+import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
@@ -884,17 +885,21 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     return {
       ...savedWebView,
-      // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
-      // via updateWebViewDefinition once 2+ cells are displayed.
-      title: '%webView_scriptureTextGrid_title_single%',
+      // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps
+      // this in sync). The initial empty title avoids flashing a label before the web view runs.
+      title: '',
+      tooltip: '%webView_scriptureTextGrid_title_multiple%',
       // Part of the default PT10 Studio layout and must always remain open, so the tab is
-      // non-closable (PT-4049 subsumes A8). The X-button is omitted and there is no keyboard
-      // close shortcut in the app, so this covers both close paths.
+      // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
+      // so this covers both close paths.
       isClosable: false,
-      // No top toolbar in this view; the View Options icon button comes in A5.
+      // No top toolbar in this view; the View Options icon button lives in the web view's header.
       shouldShowToolbar: false,
       projectId,
       content: scriptureTextGridWebView,
+      // The grid embeds Editorial; ship the same editor stylesheet bundle the other editor/resource
+      // web views use so the toolbar and context menu render styled (not bare/transparent).
+      styles: scriptureTextGridWebViewStyles,
       // Lucide "Library" glyph (books on a shelf) for the tab icon.
       iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
       // In simple mode, force scroll group 0 so the grid stays verse-synced with the scripture
