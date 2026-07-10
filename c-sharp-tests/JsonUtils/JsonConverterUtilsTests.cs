@@ -290,6 +290,22 @@ public class JsonConverterUtilsTests
     }
 
     [Test]
+    public void WriteIsolatedArray_MultipleItemsThrow_CountsEachDrop()
+    {
+        // Two elements throw; each drop is counted and only the healthy elements are written.
+        var (json, dropped) = WriteIsolatedArrayToJson(
+            [
+                "a",
+                SentinelStringConverter.ThrowAfterPartialWrite,
+                "b",
+                SentinelStringConverter.ThrowAfterPartialWrite,
+            ]
+        );
+        Assert.That(json, Is.EqualTo("[\"a\",\"b\"]"));
+        Assert.That(dropped, Is.EqualTo(2));
+    }
+
+    [Test]
     public void WriteIsolatedArray_WiringErrorPropagates_NotSwallowedAsDroppedItem()
     {
         // A CommentThreadContextMissingException is a programmer/wiring bug, not corrupt data, so it

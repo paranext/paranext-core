@@ -50,8 +50,8 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%comment_filter_type_conflicts%',
   '%no_comments%',
   '%no_comments_match_filter%',
-  '%comment_notes_hidden_single%',
-  '%comment_notes_hidden_multiple%',
+  '%comment_hidden_single%',
+  '%comment_hidden_multiple%',
 ] as const;
 
 // Reuse the underlying CommentList prop types so this panel stays in sync with platform-bible-react.
@@ -242,8 +242,8 @@ export function CommentListPanel({
           <Alert className="tw:m-4 tw:w-auto">
             <AlertDescription>
               {hiddenCount === 1
-                ? localizedStrings['%comment_notes_hidden_single%']
-                : formatReplacementString(localizedStrings['%comment_notes_hidden_multiple%'], {
+                ? localizedStrings['%comment_hidden_single%']
+                : formatReplacementString(localizedStrings['%comment_hidden_multiple%'], {
                     count: hiddenCount,
                   })}
             </AlertDescription>

@@ -222,14 +222,10 @@ global.webViewComponent = function CommentListWebView({
     DEFAULT_LEGACY_COMMENT_THREADS_RESULT,
   );
 
-  const safeCommentThreads = useMemo<LegacyCommentThread[]>(() => {
-    if (!commentThreadsResult || isPlatformError(commentThreadsResult)) return [];
-    return commentThreadsResult.threads;
-  }, [commentThreadsResult]);
-
-  const hiddenCount = useMemo<number>(() => {
-    if (!commentThreadsResult || isPlatformError(commentThreadsResult)) return 0;
-    return commentThreadsResult.hiddenCount;
+  const { threads: safeCommentThreads, hiddenCount } = useMemo<LegacyCommentThreadsResult>(() => {
+    if (!commentThreadsResult || isPlatformError(commentThreadsResult))
+      return DEFAULT_LEGACY_COMMENT_THREADS_RESULT;
+    return commentThreadsResult;
   }, [commentThreadsResult]);
 
   // Process any pending thread selection once data finishes loading
