@@ -42,7 +42,7 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
-STRINGS['%webView_scriptureTextGrid_viewOptions_emptyTexts%'] =
+STRINGS['%webView_scriptureTextGrid_viewOptions_emptyState_prompt%'] =
   'No texts added yet. Use Get resources to add texts to your collection.';
 
 const ref = (id: string, name: string): DblResourceReference => ({
