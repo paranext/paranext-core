@@ -169,6 +169,7 @@ type DecoratorConfig = {
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
   hasEditorContext?: boolean;
+  hiddenNoteCount?: number;
 };
 
 /**
@@ -205,6 +206,7 @@ function createDecorator(config: DecoratorConfig) {
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
             hasEditorContext: config.hasEditorContext,
+            hiddenNoteCount: config.hiddenNoteCount ?? 0,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -311,4 +313,9 @@ export const EmptyFiltered: Story = {
  */
 export const NoEditorContext: Story = {
   decorators: [createDecorator({ hasEditorContext: false })],
+};
+
+/** Some threads couldn't be serialized by the backend — shows the "notes couldn't be shown" banner. */
+export const HiddenNotes: Story = {
+  decorators: [createDecorator({ hiddenNoteCount: 3 })],
 };
