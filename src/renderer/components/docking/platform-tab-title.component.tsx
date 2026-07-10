@@ -1,4 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
@@ -150,6 +151,10 @@ export function PlatformTabTitle({
 
   const lastSelectedScriptureNavigableWebViewId = useLastSelectedScriptureNavigableWebViewId();
   const lastFocusedTabId = useLastFocusedTabId();
+  // The last-selected tint is a Power-mode-only affordance. In Simple mode the toolbar is the single
+  // navigation point and every scripture view follows the same scroll group, so there is no "which
+  // tab does the toolbar target" question to answer — the tint would only add confusion there.
+  const isPowerMode = useIsPowerMode();
 
   // Attach a click listener to the tab to focus this tab. Unfortunately rc-dock doesn't expose
   // rc-tabs onTabClick https://github.com/fis-components/rc-tabs/tree/master?tab=readme-ov-file#props
@@ -214,23 +219,29 @@ export function PlatformTabTitle({
   }, [focusSubject, id]);
 
   // Handle applying and removing the CSS style that tints this tab's header when it is the
-  // navigation target (the last-selected web view driving the top toolbar's BCV controls and
-  // navigation commands), it was also the tab the user was most recently in, and focus is
-  // currently outside every tab (PT9 parity). Restricting the tint to focus-outside-all-tabs -
-  // rather than merely "not this tab" - avoids two tabs being visually marked at once: whenever
-  // any tab or web view is focused, that tab's own focus highlight is the only marker, and the
-  // tint reappears only once focus leaves all tabs (e.g. to a toolbar control or dialog).
-  // Additionally requiring this tab to be the last FOCUSED tab keeps the tint off when the user
-  // visited some other (e.g. non-navigable) tab in between: the tracked web view keeps driving
-  // navigation, but the tab the user was last in was a different one, so tinting this one would
-  // wrongly suggest the user just came from it.
+  // last-selected scripture-navigable web view, it was also the tab the user was most recently in,
+  // and focus is currently outside every tab (PT9 parity).
+  //
+  // POWER MODE ONLY: this tint disambiguates which of several independently-navigable tabs the top
+  // toolbar/commands are driving. Simple mode has a single navigation point (the toolbar) and forces
+  // every scripture view onto one scroll group (the navigation target is pinned to the main editor),
+  // so there is nothing to disambiguate and the tint is suppressed (see `isPowerMode`).
+  //
+  // Restricting the tint to focus-outside-all-tabs - rather than merely "not this tab" - avoids two
+  // tabs being visually marked at once: whenever any tab or web view is focused, that tab's own focus
+  // highlight is the only marker, and the tint reappears only once focus leaves all tabs (e.g. to a
+  // toolbar control or dialog). Additionally requiring this tab to be the last FOCUSED tab keeps the
+  // tint off when the user visited some other (e.g. non-navigable) tab in between: the tracked web
+  // view keeps driving navigation, but the tab the user was last in was a different one, so tinting
+  // this one would wrongly suggest the user just came from it.
   useEffect(() => {
     const isFocusOnATabOrWebView =
       !!focusSubject && (focusSubject.focusType === 'tab' || focusSubject.focusType === 'webView');
 
-    // do nothing if this tab is not the navigation target, was not the last focused tab, or if
-    // focus is on any tab or web view
+    // do nothing in Simple mode (the tint is Power-only), or if this tab is not the last-selected
+    // navigable tab, was not the last focused tab, or if focus is on any tab or web view
     if (
+      !isPowerMode ||
       id !== lastSelectedScriptureNavigableWebViewId ||
       id !== lastFocusedTabId ||
       isFocusOnATabOrWebView
@@ -259,7 +270,7 @@ export function PlatformTabTitle({
       activeTabHeader.classList.remove(cssClassTabHeaderLastSelected);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentLastSelected);
     };
-  }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId]);
+  }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId, isPowerMode]);
 
   const icon = (
     <div

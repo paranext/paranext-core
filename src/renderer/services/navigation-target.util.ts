@@ -73,17 +73,33 @@ function resolveMainEditorWebView(): ResolvedWebView | undefined {
 }
 
 /**
- * Resolves the web view that BCV navigation targets — shared by the `platform.goTo*` /
- * `platform.openBookChapterControl` command handlers (`scroll-group-navigation.commands.ts`) and
- * the top toolbar's controls (`platform-bible-toolbar.tsx`) so the two can never disagree on the
- * target. The chain: (1) the tracked last-selected web view, else (2) the first open Scripture
- * editor web view with a project, else (3) `undefined` (nothing to navigate).
+ * Resolves the web view that BCV navigation should DRIVE — the web view whose reference the top
+ * toolbar's book/chapter/verse controls (`platform-bible-toolbar.tsx`) and the `platform.goTo*`
+ * command handlers (`scroll-group-navigation.commands.ts`) read and write. Both consumers read the
+ * one resolved value (cached in `window.service-host`) so they can never disagree on the target.
+ *
+ * This is DISTINCT from the "last selected scripture-navigable web view"
+ * ({@link isScriptureNavigableWebViewDefinition} / `getLastSelectedScriptureNavigableWebViewId`),
+ * which is the raw tab the user most recently focused, with no fallback. The navigation target is
+ * that raw value RESOLVED into something that is always safe to drive:
+ *
+ * 1. The tracked last-selected web view, if it still exists and is still navigable; else
+ * 2. The first open Scripture editor web view with a project (the "main editor" fallback); else
+ * 3. `undefined` (nothing to navigate — the toolbar/commands disable).
  *
  * @param trackedWebViewId The currently tracked last-selected web view id (callers supply it so
  *   reactive callers can pass their subscribed value)
+ * @param pinToMainEditor When `true`, skip the tracked web view entirely and resolve straight to
+ *   the main-editor fallback (step 2). Simple interface mode passes this: there the toolbar is the
+ *   single navigation point and every scripture view follows the same scroll group, so navigation
+ *   always targets the main project editor — focusing a secondary view (the model-text panel, or a
+ *   different-project resource) must not swing the target away from it. Defaults to `false` (power
+ *   mode's normal tracked-first resolution).
  */
 export function resolveTargetWebView(
   trackedWebViewId: WebViewId | undefined,
+  pinToMainEditor = false,
 ): ResolvedWebView | undefined {
+  if (pinToMainEditor) return resolveMainEditorWebView();
   return resolveTrackedWebView(trackedWebViewId) ?? resolveMainEditorWebView();
 }

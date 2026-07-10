@@ -11,11 +11,15 @@ function subscribe(onStoreChange: () => void): () => void {
 }
 
 /**
- * Returns the id of the scripture-navigable web view the user most recently selected (the
- * navigation target of the top toolbar's book/chapter/verse controls and the navigation commands),
- * updating whenever it changes. Selecting a web view that is not scripture-navigable retains the
- * previous value. `undefined` when no scripture-navigable web view has been selected or the
- * selected one closed.
+ * Returns the id of the scripture-navigable web view the user most recently focused (selected),
+ * updating whenever it changes. Focusing a web view that is not scripture-navigable retains the
+ * previous value; `undefined` when none has been selected or the selected one closed.
+ *
+ * This is the RAW last-focused tab, with no fallback — use it only when you need "the tab the user
+ * was last in" (e.g. tinting that tab). For what BCV navigation actually DRIVES (the top toolbar's
+ * book/chapter/verse controls and the `platform.goTo*` commands), use
+ * {@link useNavigationTargetWebView} instead, which resolves this through the main-editor fallback
+ * and Simple-mode pinning.
  *
  * Uses `useSyncExternalStore`, which re-reads the current value when it subscribes — a change
  * emitted between the initial render and the subscription cannot be missed.

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { PlatformTabTitle } from './platform-tab-title.component';
@@ -31,6 +32,12 @@ vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook'
 
 vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
+}));
+
+// Default to power mode so the existing tint tests exercise the tint; the Simple-mode suppression
+// test overrides this to false.
+vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
+  useIsPowerMode: vi.fn(() => true),
 }));
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
@@ -81,7 +88,24 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     cleanup();
     vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue(undefined);
     vi.mocked(useLastFocusedTabId).mockReturnValue(undefined);
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
     mockFocusSubject = undefined;
+  });
+
+  it('does not add the last-selected class in Simple mode, even when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (the tint is Power-only)', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    vi.mocked(useLastSelectedScriptureNavigableWebViewId).mockReturnValue('web-view-1');
+    vi.mocked(useLastFocusedTabId).mockReturnValue('web-view-1');
+    mockFocusSubject = undefined;
+
+    const { container } = renderTabTitle('web-view-1');
+
+    expect(container.querySelector('.dock-tab-active')).not.toHaveClass(
+      cssClassTabHeaderLastSelected,
+    );
+    expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
+      cssClassTabContentLastSelected,
+    );
   });
 
   it('adds the last-selected class to the header and content pane when this tab is the last-selected web view, was the last focused tab, and focus is outside all tabs (undefined focus subject)', () => {

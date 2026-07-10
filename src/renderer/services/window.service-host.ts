@@ -19,6 +19,7 @@ import {
   deepEqual,
   getErrorMessage,
   debounce,
+  isPlatformError,
   PlatformEventEmitter,
 } from 'platform-bible-utils';
 import {
@@ -36,6 +37,7 @@ import {
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
+import { settingsService } from '@shared/services/settings.service';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
@@ -53,12 +55,17 @@ type FocusSubjectElement = {
 };
 
 /**
- * The scripture-navigable web view the user most recently selected (focused) — the navigation
- * target of the top toolbar's book/chapter/verse controls and the navigation commands (see
- * {@link isScriptureNavigableWebView}). Selecting a web view that is NOT scripture-navigable retains
- * the previous value, as does focus moving to something that is not a web view (the toolbar, a
- * dialog, nothing), so navigation keeps targeting the navigable tab the user was most recently
- * working in. Cleared when that web view closes.
+ * The scripture-navigable web view the user most recently focused (selected). This is the RAW
+ * tracker: it follows focus to any navigable web view (see {@link isScriptureNavigableWebView}) and
+ * has NO fallback. Focusing a web view that is not scripture-navigable retains the previous value,
+ * as does focus moving to something that is not a web view (the toolbar, a dialog, nothing).
+ * Cleared to `undefined` when that web view closes.
+ *
+ * This is NOT directly what BCV navigation drives — that is {@link navigationTargetWebView}, which
+ * RESOLVES this raw value through the main-editor fallback (and Simple-mode pinning). Use this raw
+ * tracker only where "the tab the user was last in" is what matters: the last-selected tab tint,
+ * and routing `platform.openBookChapterControl` to that tab's own control. Prefer the navigation
+ * target for anything that reads or sets the current reference.
  *
  * Note: this tracker (and {@link lastFocusedTabId} below) is deliberately renderer-internal module
  * state rather than window service PAPI data (e.g. a `WindowDataTypes` data type) — we are not yet
@@ -73,15 +80,24 @@ const onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter = new PlatformEv
 >();
 
 /**
- * Event that fires with the new id when the last selected scripture-navigable web view changes
- * (including to `undefined` when it closes)
+ * Event that fires with the new id when the last selected (most recently focused)
+ * scripture-navigable web view changes — including to `undefined` when that web view closes. See
+ * {@link getLastSelectedScriptureNavigableWebViewId} for how this raw tracker differs from the
+ * navigation target ({@link onDidChangeNavigationTargetWebView}).
  */
 export const onDidChangeLastSelectedScriptureNavigableWebViewId =
   onDidChangeLastSelectedScriptureNavigableWebViewIdEmitter.event;
 
 /**
- * Gets the id of the scripture-navigable web view the user most recently selected, if one has been
- * selected and is still open
+ * Gets the id of the scripture-navigable web view the user most recently focused (selected), if one
+ * has been selected and is still open; `undefined` otherwise.
+ *
+ * This is the RAW last-focused tab, with no fallback. Use it only when you specifically need "the
+ * navigable tab the user was last in" — e.g. tinting that tab, or routing an action to its own
+ * control. For anything that DRIVES or READS the current BCV reference (navigating, or showing the
+ * current book/chapter/verse), use {@link getNavigationTargetWebView} instead: it resolves this
+ * value through the main-editor fallback (and Simple-mode pinning) into a target that is always
+ * safe to drive, and it is the single value the top toolbar and the navigation commands share.
  */
 export function getLastSelectedScriptureNavigableWebViewId(): WebViewId | undefined {
   return lastSelectedScriptureNavigableWebViewId;
@@ -142,13 +158,14 @@ function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
 }
 
 /**
- * The web view BCV navigation currently targets, resolved via {@link resolveTargetWebView}: the
- * tracked last-selected scripture-navigable web view's saved definition or, failing that, the first
- * open Scripture editor with a project. Kept current by the web view lifecycle subscriptions below
- * so consumers (the top toolbar, the navigation commands) read ONE resolved value instead of each
- * re-deriving the chain from lifecycle events — deriving it in multiple places is how the toolbar
- * and the commands previously fell out of sync. Deliberately renderer-internal, like the trackers
- * above.
+ * The web view BCV navigation currently DRIVES — what the top toolbar's book/chapter/verse controls
+ * and the `platform.goTo*` commands read and write. RESOLVED via {@link resolveTargetWebView} from
+ * the raw {@link lastSelectedScriptureNavigableWebViewId}: the tracked last-selected web view's
+ * saved definition or, failing that (or always in Simple interface mode — see
+ * {@link currentInterfaceMode}), the first open Scripture editor with a project. Kept current by the
+ * web view lifecycle and interface-mode subscriptions below so consumers read ONE resolved value
+ * instead of each re-deriving the chain — deriving it in multiple places is how the toolbar and the
+ * commands previously fell out of sync. Deliberately renderer-internal, like the trackers above.
  */
 let navigationTargetWebView: ResolvedWebView | undefined;
 
@@ -156,21 +173,48 @@ const onDidChangeNavigationTargetWebViewEmitter = new PlatformEventEmitter<
   ResolvedWebView | undefined
 >();
 
-/** Event that fires with the new resolved target when the navigation target web view changes */
+/**
+ * Event that fires with the new resolved target when the web view BCV navigation drives changes
+ * (see {@link getNavigationTargetWebView}). Fires on raw-tracker changes, web view lifecycle
+ * changes, and interface-mode changes.
+ */
 export const onDidChangeNavigationTargetWebView = onDidChangeNavigationTargetWebViewEmitter.event;
 
-/** Gets the web view BCV navigation currently targets (with its current saved definition), if any */
+/**
+ * Gets the web view BCV navigation currently DRIVES — the resolved target (with its current saved
+ * definition) that the top toolbar's book/chapter/verse controls and the `platform.goTo*` commands
+ * read and write, or `undefined` when there is nothing to navigate.
+ *
+ * This is the value nearly all navigation code wants. It is
+ * {@link getLastSelectedScriptureNavigableWebViewId} RESOLVED through the main-editor fallback and
+ * Simple-mode pinning (see {@link resolveTargetWebView}). Reach for the raw last-selected tracker
+ * only when you specifically need the tab the user last focused, not what navigation drives.
+ */
 export function getNavigationTargetWebView(): ResolvedWebView | undefined {
   return navigationTargetWebView;
 }
 
 /**
+ * Cached `platform.interfaceMode`, kept current by the subscription below.
+ * {@link recomputeNavigationTargetWebView} reads it synchronously to decide whether to pin the
+ * target to the main editor (Simple mode). `undefined` only before the subscription's first
+ * (immediate) delivery at startup — treated as "not Simple" so power-mode users are never briefly
+ * mis-pinned; the seed's own recompute switches Simple mode on a tick later.
+ */
+let currentInterfaceMode: 'simple' | 'power' | undefined;
+
+/**
  * Recomputes the resolved navigation target and notifies subscribers when it actually changed.
- * Cheap (synchronous renderer-local reads), so it can run on every web view lifecycle event and
- * tracker change; the deepEqual gate keeps no-op events from rippling downstream.
+ * Cheap (synchronous renderer-local reads), so it can run on every web view lifecycle event, raw
+ * tracker change, and interface-mode change; the deepEqual gate keeps no-op events from rippling
+ * downstream. In Simple interface mode the target is pinned to the main project editor (see
+ * {@link currentInterfaceMode} and {@link resolveTargetWebView}).
  */
 function recomputeNavigationTargetWebView(): void {
-  const newTarget = resolveTargetWebView(lastSelectedScriptureNavigableWebViewId);
+  const newTarget = resolveTargetWebView(
+    lastSelectedScriptureNavigableWebViewId,
+    currentInterfaceMode === 'simple',
+  );
   if (deepEqual(newTarget, navigationTargetWebView)) return;
   navigationTargetWebView = newTarget;
   onDidChangeNavigationTargetWebViewEmitter.emit(navigationTargetWebView);
@@ -192,15 +236,50 @@ onDidUpdateWebView(({ webView }) => {
     recomputeNavigationTargetWebView();
 });
 
-// Clear the tracked web view when it closes. Guarded by id so a stale close event for a
-// previously selected web view does not clear a newer selection. Any other close can still change
-// the resolved target (the fallback editor may have closed), so recompute regardless — the
-// setter's own recompute covers the tracked case.
+// A closing web view can change the resolved navigation target, so BOTH branches recompute:
+// - If the CLOSED web view is the tracked last-selected one, clear the tracker; its setter
+//   (setLastSelectedScriptureNavigableWebViewId) then recomputes the target — which now falls back
+//   to the main editor. The id guard also prevents a stale close event for a previously-selected web
+//   view from clearing a newer selection.
+// - Otherwise the closed web view was not the tracked one, but it could still have been the
+//   main-editor fallback (or otherwise part of resolution), so recompute directly. This is why the
+//   non-tracked branch recomputes rather than doing nothing: a non-tracked close can still move the
+//   target.
 onDidCloseWebView(({ webView }) => {
   if (webView.id === lastSelectedScriptureNavigableWebViewId)
     setLastSelectedScriptureNavigableWebViewId(undefined);
   else recomputeNavigationTargetWebView();
 });
+
+// Keep `currentInterfaceMode` current and recompute the target when the mode flips: Simple pins the
+// target to the main project editor, Power uses tracked-first resolution (see
+// `recomputeNavigationTargetWebView`). `retrieveDataImmediately: true` seeds the mode right after
+// startup (recomputing once for it). All settings share one data provider data type, so this callback
+// also fires on unrelated settings writes — the `=== currentInterfaceMode` guard makes those no-ops.
+// Module-lived like the lifecycle subscriptions above, so its unsubscriber is intentionally discarded.
+(async () => {
+  try {
+    await settingsService.subscribe(
+      'platform.interfaceMode',
+      (newMode) => {
+        if (isPlatformError(newMode)) {
+          logger.warn(
+            `window.service-host failed to read platform.interfaceMode: ${getErrorMessage(newMode)}`,
+          );
+          return;
+        }
+        if (newMode === currentInterfaceMode) return;
+        currentInterfaceMode = newMode;
+        recomputeNavigationTargetWebView();
+      },
+      { retrieveDataImmediately: true },
+    );
+  } catch (e) {
+    logger.warn(
+      `window.service-host failed to subscribe to platform.interfaceMode: ${getErrorMessage(e)}`,
+    );
+  }
+})();
 
 class WindowDataProviderEngine
   extends DataProviderEngine<WindowDataTypes>

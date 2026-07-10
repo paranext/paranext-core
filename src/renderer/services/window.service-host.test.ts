@@ -84,6 +84,17 @@ vi.mock('@shared/services/data-provider.service', () => ({
   dataProviderService: { registerEngine: vi.fn(async (_name, engine) => engine) },
 }));
 
+// The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
+// mock never invokes the callback, so `currentInterfaceMode` stays `undefined` (treated as not
+// Simple) and these tests exercise the default tracked-first resolution. `subscribe` resolves to a
+// no-op unsubscriber so the module-load IIFE completes cleanly.
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: {
+    subscribe: vi.fn(async () => async () => true),
+    get: vi.fn(async () => 'simple'),
+  },
+}));
+
 function emitCloseWebView(id: string) {
   closeWebViewCallbacks.forEach((callback) => callback({ webView: { id } }));
 }
