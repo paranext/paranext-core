@@ -6,10 +6,7 @@ import { useSyncExternalStore } from 'react';
 
 /** Subscribe function for {@link useSyncExternalStore} — module-level so its identity is stable */
 function subscribe(onStoreChange: () => void): () => void {
-  const unsubscribe = onDidChangeLastFocusedTabId(() => onStoreChange());
-  return () => {
-    unsubscribe();
-  };
+  return onDidChangeLastFocusedTabId(onStoreChange);
 }
 
 /**

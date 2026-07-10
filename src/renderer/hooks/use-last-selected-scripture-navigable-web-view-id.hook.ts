@@ -7,10 +7,7 @@ import { useSyncExternalStore } from 'react';
 
 /** Subscribe function for {@link useSyncExternalStore} — module-level so its identity is stable */
 function subscribe(onStoreChange: () => void): () => void {
-  const unsubscribe = onDidChangeLastSelectedScriptureNavigableWebViewId(() => onStoreChange());
-  return () => {
-    unsubscribe();
-  };
+  return onDidChangeLastSelectedScriptureNavigableWebViewId(onStoreChange);
 }
 
 /**

@@ -25,9 +25,10 @@ export function getVerseNavigationCommand(
   isMacOS: boolean,
 ): CommandNames | undefined {
   const primaryModifier = isMacOS ? input.meta : input.control;
-  const otherModifierPressed = isMacOS
-    ? input.alt || input.control || input.shift
-    : input.alt || input.meta || input.shift;
+  // The primary modifier (Command on macOS, Control elsewhere) is allowed; any OTHER modifier
+  // disqualifies the chord so it stays available to the OS/renderer. Only the primary differs by
+  // platform, so factor out the shared alt/shift terms.
+  const otherModifierPressed = input.alt || input.shift || (isMacOS ? input.control : input.meta);
   if (otherModifierPressed) return undefined;
 
   switch (input.key) {

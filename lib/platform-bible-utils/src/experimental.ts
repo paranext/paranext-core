@@ -13,3 +13,13 @@ export {
   DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getBookIdsFromBooksPresent,
 } from './scripture/scripture-util';
+export {
+  findAdjacentPresentBook,
+  getNextBookRef,
+  getNextChapterRef,
+  getNextVerseRef,
+  getPreviousBookRef,
+  getPreviousChapterRef,
+  getPreviousVerseRef,
+  type ScriptureBounds,
+} from './scripture/scripture-navigation.util';

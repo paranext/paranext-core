@@ -281,25 +281,26 @@ describe('versification-aware rollover', () => {
     expect(mocks.pdpGet).not.toHaveBeenCalledWith('platformScripture.Versification', 'project-1');
   });
 
-  test('keeps the current-book bounds when the previous-book prefetch fails', async () => {
-    // GEN (bookNum 1) fetch rejects; EXO (bookNum 2) has 2 chapters ending 8/25. The current
-    // chapter is 1, so GEN is prefetched and fails — the EXO bounds must survive.
+  test('keeps a surviving book bounds when the other book fetch fails (allSettled)', async () => {
+    // goToPreviousVerse from EXO 1:0 prefetches EXO (bookNum 2, the current book) and GEN (bookNum
+    // 1, the closest previous present book it rolls into). EXO's fetch rejects while GEN's succeeds
+    // with 3 chapters ending 8/25/24 — GEN's surviving bounds must still drive the rollover.
     const getFinalVerseNumbersInBookPartial = vi.fn(async (bookNum: number) => {
-      if (bookNum === 1) throw new Error('no verse counts for GEN');
-      return [0, 8, 25];
+      if (bookNum === 2) throw new Error('no verse counts for EXO');
+      return [0, 8, 25, 24];
     });
     mocks.pdpGet.mockImplementation(async (projectInterface: string) => {
       if (projectInterface === 'platformScripture.Versification')
         return { getFinalVerseNumbersInBook: getFinalVerseNumbersInBookPartial };
       return { getSetting: vi.fn(async () => '11') };
     });
-    mocks.getScrRefForProject.mockResolvedValue({ book: 'EXO', chapterNum: 1, verseNum: 8 });
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'EXO', chapterNum: 1, verseNum: 0 });
 
-    await navigationCommandHandlers['platform.goToNextVerse']();
+    await navigationCommandHandlers['platform.goToPreviousVerse']();
 
     expect(mocks.setScrRefSync).toHaveBeenCalledWith(
       0,
-      { book: 'EXO', chapterNum: 2, verseNum: 1 },
+      { book: 'GEN', chapterNum: 3, verseNum: 24 },
       'project-1',
     );
   });
@@ -323,6 +324,31 @@ describe('books-present handling', () => {
     expect(getSetting).toHaveBeenCalledWith('platformScripture.booksPresent');
     expect(mocks.setScrRefSync).not.toHaveBeenCalled();
     expect(mocks.updateWebViewDefinitionSync).not.toHaveBeenCalled();
+  });
+
+  test('rolls to the closest present book when the current ref is a book the project lacks', async () => {
+    mocks.getNavigationTargetWebView.mockReturnValue({
+      id: 'web-view-1',
+      definition: { id: 'web-view-1', scrollGroupScrRef: 0, projectId: 'project-1' },
+    });
+    // The project has GEN and LEV present (positions 1 and 3); a shared scroll group sits at EXO
+    // (absent). goToNextChapter must roll forward to LEV rather than stepping within EXO — a book
+    // the project does not contain (regression guard for foreign-book navigation).
+    mocks.getScrRefForProject.mockResolvedValue({ book: 'EXO', chapterNum: 5, verseNum: 1 });
+    const getSetting = vi.fn(async () => '101');
+    mocks.pdpGet.mockImplementation(async (projectInterface: string) => {
+      if (projectInterface === 'platformScripture.Versification')
+        return { getFinalVerseNumbersInBook: vi.fn(async () => [0, 10]) };
+      return { getSetting };
+    });
+
+    await navigationCommandHandlers['platform.goToNextChapter']();
+
+    expect(mocks.setScrRefSync).toHaveBeenCalledWith(
+      0,
+      { book: 'LEV', chapterNum: 1, verseNum: 1 },
+      'project-1',
+    );
   });
 });
 

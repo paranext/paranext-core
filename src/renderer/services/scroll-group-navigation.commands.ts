@@ -12,7 +12,17 @@ import {
   getLastSelectedScriptureNavigableWebViewId,
   getNavigationTargetWebView,
 } from '@renderer/services/window.service-host';
-import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
+import {
+  findAdjacentPresentBook,
+  getBookIdsFromBooksPresent,
+  getNextBookRef,
+  getNextChapterRef,
+  getNextVerseRef,
+  getPreviousBookRef,
+  getPreviousChapterRef,
+  getPreviousVerseRef,
+  ScriptureBounds,
+} from 'platform-bible-utils/experimental';
 import { WebViewId } from '@shared/models/web-view.model';
 import { getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -23,17 +33,8 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { windowService } from '@shared/services/window.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { CommandNames } from 'papi-shared-types';
-import {
-  ALL_BOOK_IDS,
-  getNextBookRef,
-  getNextChapterRef,
-  getNextVerseRef,
-  getPreviousBookRef,
-  getPreviousChapterRef,
-  getPreviousVerseRef,
-  ScriptureBounds,
-} from 'platform-bible-react/experimental';
-import { getErrorMessage } from 'platform-bible-utils';
+import { ALL_BOOK_IDS } from 'platform-bible-react/experimental';
+import { getErrorMessage, Mutex } from 'platform-bible-utils';
 
 /**
  * What a navigation command mutates: the resolved target web view's scroll group ref (or its
@@ -104,9 +105,11 @@ function acquireVersificationPdp(projectId: string) {
 /**
  * Builds versification-aware chapter/verse bounds for `scrRef`'s neighborhood by prefetching the
  * project's final-verse-per-chapter arrays from the `platformScripture.Versification` provider —
- * the current book always, plus the previous available book when at chapter ≤ 1 (previous
- * verse/chapter may roll into it). Fetched fresh per command so in-session versification changes
- * are honored without subscription bookkeeping.
+ * the current book always, plus (for backward navigation only) the closest previous present book
+ * when the current position can roll back into it (at chapter ≤ 1, or when the current book is not
+ * in `availableBooks`). Forward navigation only ever lands on the START of the next book (chapter 1
+ * verse 1), which needs no versification, so it skips the previous-book prefetch. Fetched fresh per
+ * command so in-session versification changes are honored without subscription bookkeeping.
  *
  * Returns `undefined` (versification-unaware navigation, e.g. verses do not roll across chapters)
  * when the provider is unavailable. A book whose fetch fails is simply unknown to the returned
@@ -117,14 +120,15 @@ async function getScriptureBounds(
   projectId: string,
   scrRef: SerializedVerseRef,
   availableBooks: string[],
+  needsPreviousBook: boolean,
 ): Promise<ScriptureBounds | undefined> {
   try {
     const versificationPdp = await versificationPdpPromise;
 
     const booksToFetch = [scrRef.book];
-    if (scrRef.chapterNum <= 1) {
-      const currentBookIndex = availableBooks.indexOf(scrRef.book);
-      if (currentBookIndex > 0) booksToFetch.push(availableBooks[currentBookIndex - 1]);
+    if (needsPreviousBook && (scrRef.chapterNum <= 1 || !availableBooks.includes(scrRef.book))) {
+      const previousBook = findAdjacentPresentBook(scrRef.book, availableBooks, 'previous');
+      if (previousBook) booksToFetch.push(previousBook);
     }
 
     // Index n of each array is the last verse of chapter n; index 0 is filler, so length - 1 is
@@ -178,25 +182,13 @@ function writeNewRef(target: NavigationTarget, newRef: SerializedVerseRef): void
 }
 
 /**
- * The tail of the most recently enqueued go-to command run (see {@link enqueueNavigationCommand}).
- * Resolved when there is nothing in flight.
- */
-let navigationCommandQueue: Promise<void> = Promise.resolve();
-
-/**
  * Serializes go-to command executions. Each run reads the current ref, awaits several network round
  * trips, then writes the stepped ref — so overlapping runs (e.g. holding a shortcut key, whose
  * auto-repeat sends one command per repeat) would read the same starting ref and lose steps, and a
- * slow earlier run could write its stale result after a newer one, stepping backward. Chaining each
- * run behind the previous one makes N presses advance exactly N steps, in order. This is an
- * internal detail of this module; callers just await their own command as usual.
+ * slow earlier run could write its stale result after a newer one, stepping backward. Running each
+ * behind the previous one (the mutex is FIFO) makes N presses advance exactly N steps, in order.
  */
-function enqueueNavigationCommand(run: () => Promise<void>): Promise<void> {
-  const runPromise = navigationCommandQueue.then(run);
-  // Keep the queue alive when a run rejects — the rejection still reaches that run's own caller
-  navigationCommandQueue = runPromise.catch(() => {});
-  return runPromise;
-}
+const navigationCommandMutex = new Mutex();
 
 function makeGoToCommandHandler(
   getNewRef: (
@@ -204,12 +196,18 @@ function makeGoToCommandHandler(
     availableBooks: string[],
     bounds?: ScriptureBounds,
   ) => SerializedVerseRef | undefined,
-  // Book navigation (getNextBookRef/getPreviousBookRef) never reads chapter/verse bounds, so those
-  // commands skip the versification prefetch round trips entirely
-  needsBounds = true,
+  {
+    // Book navigation (getNextBookRef/getPreviousBookRef) never reads chapter/verse bounds, so
+    // those commands skip the versification prefetch round trips entirely
+    needsBounds = true,
+    // Backward navigation (previous chapter/verse) can roll into the closest previous present book,
+    // whose verse counts must be prefetched too; forward navigation never reads them (see
+    // getScriptureBounds)
+    needsPreviousBook = false,
+  }: { needsBounds?: boolean; needsPreviousBook?: boolean } = {},
 ): () => Promise<void> {
   return () =>
-    enqueueNavigationCommand(async () => {
+    navigationCommandMutex.runExclusive(async () => {
       const target = resolveNavigationTarget();
       if (!target) {
         logger.debug('Navigation command ignored: no active web view to navigate');
@@ -237,6 +235,7 @@ function makeGoToCommandHandler(
               target.projectId,
               currentRef,
               availableBooks,
+              needsPreviousBook,
             )
           : undefined;
       const newRef = getNewRef(currentRef, availableBooks, bounds);
@@ -299,11 +298,15 @@ export const navigationCommandHandlers: {
   >]: () => Promise<void>;
 } = {
   'platform.goToNextChapter': makeGoToCommandHandler(getNextChapterRef),
-  'platform.goToPreviousChapter': makeGoToCommandHandler(getPreviousChapterRef),
-  'platform.goToNextBook': makeGoToCommandHandler(getNextBookRef, false),
-  'platform.goToPreviousBook': makeGoToCommandHandler(getPreviousBookRef, false),
+  'platform.goToPreviousChapter': makeGoToCommandHandler(getPreviousChapterRef, {
+    needsPreviousBook: true,
+  }),
+  'platform.goToNextBook': makeGoToCommandHandler(getNextBookRef, { needsBounds: false }),
+  'platform.goToPreviousBook': makeGoToCommandHandler(getPreviousBookRef, { needsBounds: false }),
   'platform.goToNextVerse': makeGoToCommandHandler(getNextVerseRef),
-  'platform.goToPreviousVerse': makeGoToCommandHandler(getPreviousVerseRef),
+  'platform.goToPreviousVerse': makeGoToCommandHandler(getPreviousVerseRef, {
+    needsPreviousBook: true,
+  }),
   'platform.openBookChapterControl': openBookChapterControl,
 };
 

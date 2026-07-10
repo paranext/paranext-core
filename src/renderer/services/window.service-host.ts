@@ -34,7 +34,7 @@ import {
   resolveTargetWebView,
 } from '@renderer/services/navigation-target.util';
 import { isDirectionFromTab } from '@shared/models/docking-framework.model';
-import { WebViewId } from '@shared/models/web-view.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
@@ -176,11 +176,21 @@ function recomputeNavigationTargetWebView(): void {
   onDidChangeNavigationTargetWebViewEmitter.emit(navigationTargetWebView);
 }
 
-// Any web view opening or updating can change the resolved target: which editor is the fallback,
-// the tracked web view's own definition (e.g. its scroll group ref), or a definition's
-// navigability (see `isScriptureNavigableWebViewDefinition`)
+// A web view OPENING can change the resolved target: a new Scripture editor may become the fallback
 onDidOpenWebView(() => recomputeNavigationTargetWebView());
-onDidUpdateWebView(() => recomputeNavigationTargetWebView());
+// Updates fire far more often (every definition change — detached-ref writes, tabs loading, etc.).
+// An update changes the resolved target only when it touches the tracked web view (its own
+// definition drives the tracked resolution, e.g. its scroll group ref) or a Scripture editor (the
+// editor fallback filters by the editor webViewType, which is immutable — so a non-editor,
+// non-tracked update can never change the target). Gating on that spares the frequent update stream
+// from re-enumerating every open web view for nothing.
+onDidUpdateWebView(({ webView }) => {
+  if (
+    webView.id === lastSelectedScriptureNavigableWebViewId ||
+    webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE
+  )
+    recomputeNavigationTargetWebView();
+});
 
 // Clear the tracked web view when it closes. Guarded by id so a stale close event for a
 // previously selected web view does not clear a newer selection. Any other close can still change

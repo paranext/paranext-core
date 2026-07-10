@@ -11,8 +11,10 @@ import {
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 
 type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
-/** The service ignores open/update event payloads, so the collected callbacks take no arguments */
+/** The open event's payload is ignored, so this callback takes no arguments */
 type WebViewLifecycleCallback = () => void;
+/** The update handler reads the updated web view to decide whether to recompute the target */
+type UpdateWebViewCallback = (event: { webView: { id: string; webViewType?: string } }) => void;
 
 // vi.mock and vi.hoisted calls are hoisted by vitest above the imports above at transform time, so
 // the static imports can be written first here to satisfy import/first.
@@ -26,7 +28,7 @@ const {
 } = vi.hoisted(() => {
   const callbacks: CloseWebViewCallback[] = [];
   const openCallbacks: WebViewLifecycleCallback[] = [];
-  const updateCallbacks: WebViewLifecycleCallback[] = [];
+  const updateCallbacks: UpdateWebViewCallback[] = [];
   // Shared (not per-`getDockLayout()`-call) mock so individual tests can control what tab info
   // comes back for a given tab id, e.g. to simulate a web view tab vs. a non-web-view tab.
   const tabInfoMock = vi.fn((): { id: string; tabType: string } | undefined => undefined);
@@ -70,7 +72,7 @@ vi.mock('@renderer/services/web-view.service-host', () => ({
     openWebViewCallbacks.push(callback);
     return () => true;
   },
-  onDidUpdateWebView: (callback: WebViewLifecycleCallback) => {
+  onDidUpdateWebView: (callback: UpdateWebViewCallback) => {
     updateWebViewCallbacks.push(callback);
     return () => true;
   },
@@ -90,8 +92,8 @@ function emitOpenWebView() {
   openWebViewCallbacks.forEach((callback) => callback());
 }
 
-function emitUpdateWebView() {
-  updateWebViewCallbacks.forEach((callback) => callback());
+function emitUpdateWebView(webView: { id: string; webViewType?: string }) {
+  updateWebViewCallbacks.forEach((callback) => callback({ webView }));
 }
 
 /**
@@ -349,9 +351,9 @@ describe('navigation target web view', () => {
     // the cached target)...
     const tracked = getLastSelectedScriptureNavigableWebViewId();
     if (tracked) emitCloseWebView(tracked);
-    // ...and force a recompute regardless, since the cached target can be a fallback editor from a
-    // previous test even when nothing is tracked
-    emitUpdateWebView();
+    // ...and force a recompute regardless (an open event always recomputes), since the cached
+    // target can be a fallback editor from a previous test even when nothing is tracked
+    emitOpenWebView();
   });
 
   test('resolves the tracked web view with its saved definition once one is focused', async () => {
@@ -388,7 +390,8 @@ describe('navigation target web view', () => {
     // when focused, but it now has nothing to navigate
     getSavedWebViewDefinitionSyncMock.mockReturnValue({ id: 'web-view-nav-2' });
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
-    emitUpdateWebView();
+    // The updated web view is the tracked one, so the guarded update handler recomputes
+    emitUpdateWebView({ id: 'web-view-nav-2' });
 
     // The tracked id is retained, but resolution falls through to the main editor
     expect(getLastSelectedScriptureNavigableWebViewId()).toBe('web-view-nav-2');
@@ -405,9 +408,10 @@ describe('navigation target web view', () => {
     });
 
     getAllOpenWebViewDefinitionsSyncMock.mockReturnValue([EDITOR_DEFINITION]);
-    emitUpdateWebView();
+    // An editor update passes the recompute gate both times; the deepEqual gate dedupes the emit
+    emitUpdateWebView(EDITOR_DEFINITION);
     // Same open web views, same resolved target — must not re-emit
-    emitUpdateWebView();
+    emitUpdateWebView(EDITOR_DEFINITION);
 
     expect(received).toEqual([{ id: 'editor-1', definition: EDITOR_DEFINITION }]);
     unsubscribe();
