@@ -30,6 +30,11 @@ Capture each section that is present:
   Number them in PRD order — `NN-1…` for non-negotiables, `NTH-1…` for nice-to-haves — and
   keep the PRD's own wording. These IDs are load-bearing: the brief's work items, the
   requirement-coverage table, and the Jira tickets all reference them.
+- **PT9-behavior assertions** — while parsing, collect every individual claim the PRD makes
+  about how Paratext 9 behaves (a feature it supposedly has, a key binding, an option list, a
+  workflow). Record each one verbatim (tight paraphrase is fine) with the PRD section it appears
+  in, numbered `PC-1…`. PRDs routinely misdescribe PT9 — these claims get verified against PT9
+  source during `/investigate-prd`, or against the bundled reference during `/refine-prd`.
 - **Shaped Solution** — how it works, key interactions, **rabbit holes** (risky work + the
   decided approach).
 - **Risks** — value / usability / feasibility / viability.
@@ -91,6 +96,8 @@ For each unresolved gap, emit a CLARIFICATION block:
 **Section**: {which PRD section has the issue}
 **Issue**: {what is unclear or missing}
 **Impact**: {how this affects the investigation}
+**Audience**: {product | engineering} — product = a scope/intent/priority call someone who
+doesn't read code can make; engineering = needs code knowledge to answer.
 **Suggested resolution**: {if applicable}
 ```
 
@@ -123,6 +130,11 @@ Return one markdown block:
 ## Aspect breakdown
 | Aspect | Origin | PT9 form / category | Summary | Covers | Appetite slice |
 | … | PT9-port / net-new / hybrid | … | … | NN-1, NTH-2 | … |
+
+## PT9 claims to verify
+| # | PRD assertion about PT9 | PRD section |
+| PC-1 | … | … |
+(`None.` if the PRD asserts nothing about PT9 behavior.)
 
 ## Goals
 1. {action-verb goal} …
