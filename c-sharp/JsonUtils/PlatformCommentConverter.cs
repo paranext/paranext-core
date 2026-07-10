@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.Users;
@@ -41,6 +42,37 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     private const string USER = "user";
     private const string VERSE = "verse";
     private const string VERSE_REF = "verseRef";
+
+    // Written into a note's body when its stored content can't be rendered, so one
+    // unrenderable note doesn't fail the whole getCommentThreads response. Deliberately a fixed
+    // English literal, NOT localized: this is a stateless JsonConverter with no access to the
+    // localization service or the caller's UI language, and localizing it would mean exposing a
+    // machine-readable "degraded" flag on the wire and rendering the message TS-side — not worth that
+    // coupling for this rare corrupt-note edge case. `internal` so
+    // ParatextProjectDataProvider.UpdateComment can refuse to persist this placeholder back over a
+    // note's real content.
+    internal const string ContentsUnavailablePlaceholder =
+        "<p>This note could not be displayed.</p>";
+
+    /// <summary>
+    /// Whether <paramref name="html"/> is the "content could not be displayed" placeholder
+    /// (see <see cref="ContentsUnavailablePlaceholder"/>). Compares on stripped, whitespace-collapsed
+    /// text rather than exact HTML: the comment editor round-trips saved content through Lexical,
+    /// which can re-serialize the placeholder with different markup (added attributes, span wrappers,
+    /// whitespace) while preserving the text. An exact-HTML match would miss those variants and let
+    /// the placeholder overwrite a note's real content.
+    /// </summary>
+    internal static bool IsContentsUnavailablePlaceholder(string? html) =>
+        NormalizeToComparableText(html)
+        == NormalizeToComparableText(ContentsUnavailablePlaceholder);
+
+    // Strips tags (replacing each with a space so words aren't glued across tag boundaries) and
+    // collapses whitespace. Deliberately a blunt comparison helper for the fixed placeholder above,
+    // not a general-purpose HTML sanitizer.
+    private static string NormalizeToComparableText(string? html) =>
+        html is null
+            ? string.Empty
+            : Regex.Replace(Regex.Replace(html, "<[^>]*>", " "), @"\s+", " ").Trim();
 
     /// <summary>
     /// Deserializes a <see cref="PlatformCommentWrapper"/> from JSON.
@@ -318,35 +350,78 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
             value.ExtraHeadingInfo.ToString()
         );
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
-        writer.WriteString(CONTENTS, value.ContentsHtml);
-        // Conflict-note decode fields (verseText conflicts only; null for all other notes → skipped).
-        JsonConverterUtils.TryWriteString(writer, REJECTED_TEXT, value.RejectedText);
-        JsonConverterUtils.TryWriteString(writer, ACCEPTED_TEXT, value.AcceptedText);
-        JsonConverterUtils.TryWriteString(writer, RESULT_TEXT, value.ResultText);
-        JsonConverterUtils.TryWriteString(writer, REJECTED_RESULT_TEXT, value.RejectedResultText);
-        // MergedText is the only serialized field that runs the live USFM diff engine (GetMergedUsfm
-        // + DiffToken.GetDiffString + XmlDocument.LoadXml). An exception here would abort Write and
-        // drop the ENTIRE getCommentThreads response, not just this field, so contain it: log and
-        // omit the merge preview for the one bad conflict.
-        string? mergedText;
+        // Degrade rather than fail: a note whose stored content can't be rendered must not abort the
+        // whole getCommentThreads response. Body render failure → placeholder.
+        string contents;
         try
         {
-            mergedText = value.MergedText;
+            contents = value.ContentsHtml;
         }
         catch (Exception e)
         {
             Console.WriteLine(
-                $"Failed to compute MergedText for comment '{value.Id}'; omitting the merge preview: {e}"
+                $"WARNING: could not render contents for comment {value.Id}; using placeholder. {e}"
             );
-            mergedText = null;
+            contents = ContentsUnavailablePlaceholder;
         }
-        JsonConverterUtils.TryWriteString(writer, MERGED_TEXT, mergedText);
+        writer.WriteString(CONTENTS, contents);
+        // Conflict-note decode fields (verseText conflicts only; null for all other notes → skipped).
+        // An optional decode field that throws is omitted (same wire shape as null) rather than failing.
+        JsonConverterUtils.TryWriteString(
+            writer,
+            REJECTED_TEXT,
+            TryRender(() => value.RejectedText, value.Id, REJECTED_TEXT)
+        );
+        JsonConverterUtils.TryWriteString(
+            writer,
+            ACCEPTED_TEXT,
+            TryRender(() => value.AcceptedText, value.Id, ACCEPTED_TEXT)
+        );
+        JsonConverterUtils.TryWriteString(
+            writer,
+            RESULT_TEXT,
+            TryRender(() => value.ResultText, value.Id, RESULT_TEXT)
+        );
+        JsonConverterUtils.TryWriteString(
+            writer,
+            REJECTED_RESULT_TEXT,
+            TryRender(() => value.RejectedResultText, value.Id, REJECTED_RESULT_TEXT)
+        );
+        // MergedText runs the live USFM diff engine (GetMergedUsfm + DiffToken.GetDiffString), so
+        // route it through the same per-field isolation as the other decode getters.
+        JsonConverterUtils.TryWriteString(
+            writer,
+            MERGED_TEXT,
+            TryRender(() => value.MergedText, value.Id, MERGED_TEXT)
+        );
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
         if (value.TagsRemoved != null)
             JsonConverterUtils.TryWriteString(writer, TAG_REMOVED, TryJoin(",", value.TagsRemoved));
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Reads an optional rendered field, logging and returning null instead of throwing so one
+    /// unrenderable field can't abort serialization of the whole note.
+    /// </summary>
+    // `internal` for direct unit testing of the catch contract: reliably forcing the underlying
+    // ParatextData conflict-decode getters to throw on demand isn't readily available (they return
+    // empty rather than throwing on malformed input), so the isolation is verified on the helper.
+    internal static string? TryRender(Func<string?> get, string commentId, string field)
+    {
+        try
+        {
+            return get();
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"WARNING: could not render {field} for comment {commentId}; omitting it. {e}"
+            );
+            return null;
+        }
     }
 
     private static string? TryJoin(string? separator, string[] stringArray)

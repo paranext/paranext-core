@@ -50,6 +50,97 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_CommentWhoseBodyCannotRender_DegradesToPlaceholderAndKeepsMetadata()
+    {
+        // A wrapper with no thread makes ContentsHtml throw (the documented "Cannot get ContentsHtml
+        // without a valid thread" path) — a deterministic stand-in for any note whose stored content
+        // can't be rendered. In production the throw comes from corrupt content; the isolation is the same.
+        Comment testComment = CommentTestHelper.CreateBasicComment(); // Thread "4217dff8"
+        var wrapper = new PlatformCommentWrapper(testComment, null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(wrapper, _serializationOptions);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(
+            doc.RootElement.GetProperty("contents").GetString(),
+            Is.EqualTo("<p>This note could not be displayed.</p>")
+        );
+        // The note is not lost — only its body is degraded; metadata still serializes.
+        Assert.That(doc.RootElement.GetProperty("thread").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(doc.RootElement.GetProperty("user").GetString(), Is.EqualTo("Tim Steenwyk"));
+        Assert.That(doc.RootElement.GetProperty("verseRef").GetString(), Is.EqualTo("GEN 1:24"));
+    }
+
+    [Test]
+    public void TryRender_WhenAConflictDecodeGetterThrows_ReturnsNullInsteadOfPropagating()
+    {
+        // Layer 1 routes the four conflict-decode getters (RejectedText/AcceptedText/
+        // ResultText/RejectedResultText) through TryRender so one that throws on corrupt content is
+        // omitted (null → field dropped by TryWriteString) rather than aborting the whole note.
+        // Exercised on the helper directly because ParatextData's decoders return empty rather than
+        // throwing on the malformed inputs available to a test, so a real getter throw can't be forced.
+        string? result = "sentinel";
+        Assert.That(
+            () =>
+                result = PlatformCommentConverter.TryRender(
+                    () => throw new InvalidOperationException("decode failed"),
+                    "comment-id",
+                    "acceptedText"
+                ),
+            Throws.Nothing
+        );
+        Assert.That(result, Is.Null);
+
+        // And a getter that succeeds is returned unchanged.
+        Assert.That(
+            PlatformCommentConverter.TryRender(() => "rendered", "comment-id", "acceptedText"),
+            Is.EqualTo("rendered")
+        );
+    }
+
+    [Test]
+    public void IsContentsUnavailablePlaceholder_MatchesExactAndReserializedVariants()
+    {
+        // The byte-exact placeholder is recognized.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            ),
+            Is.True
+        );
+
+        // Editor-reserialized variants (added attributes, span wrappers, extra whitespace) that
+        // preserve the text are still recognized — this is the hardening over an exact-HTML match,
+        // since the comment editor round-trips saved content through Lexical.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p dir=\"ltr\">This note could not be displayed.</p>"
+            ),
+            Is.True
+        );
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p><span>This note could not be displayed.</span></p>"
+            ),
+            Is.True
+        );
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "  <p>This note could not be displayed.</p>  "
+            ),
+            Is.True
+        );
+
+        // Real note content and empty input are not affected.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder("<p>A real comment.</p>"),
+            Is.False
+        );
+        Assert.That(PlatformCommentConverter.IsContentsUnavailablePlaceholder(null), Is.False);
+        Assert.That(PlatformCommentConverter.IsContentsUnavailablePlaceholder(""), Is.False);
+    }
+
+    [Test]
     public void Serialize_CommentWithBasicFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();
