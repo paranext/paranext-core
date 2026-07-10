@@ -43,7 +43,7 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_emptyTexts%'] =
-  'No texts added yet. Use Get Resources to add texts to your collection.';
+  'No texts added yet. Use Get resources to add texts to your collection.';
 
 const ref = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -189,12 +189,17 @@ describe('ResourceCollectionOptions — empty TEXTS list', () => {
   it('shows the empty-texts prompt when the list is empty and enabled', () => {
     renderComponent({ top: [], bottom: [], installingResourceNames: [] });
     expect(
-      screen.getByText('No texts added yet. Use Get Resources to add texts to your collection.'),
+      screen.getByText('No texts added yet. Use Get resources to add texts to your collection.'),
     ).toBeInTheDocument();
   });
 
-  it('hides the empty-texts prompt when a row is present', () => {
+  it('hides the empty-texts prompt when a user (bottom) row is present', () => {
     renderComponent({ bottom: [row('u1', 'My Text', { isUserRemovable: true })] });
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
+  });
+
+  it('hides the empty-texts prompt when only an admin (top) row is present', () => {
+    renderComponent({ top: [row('a1', 'Admin Text', { isAdminLocked: true })] });
     expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
   });
 

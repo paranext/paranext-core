@@ -137,7 +137,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup.
-  const [cachedResources] = usePromise(
+  const [cachedResources, isLoadingCachedResources] = usePromise(
     useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
   );
@@ -334,12 +334,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           </PopoverContent>
         </Popover>
       </div>
-      {/* Grid body: the empty state when nothing is renderable (points at View Options), otherwise
-          the verse-cell rows. `resources` is post-`toGridResources`, so a selected-but-unresolved
-          resource counts as empty here and shows the prompt instead of a blank grid. The
-          `!isLoadingLocalizedStrings` guard avoids flashing a raw `%key%` while strings load. */}
+      {/* Grid body: the empty state when nothing is renderable, otherwise the verse-cell rows.
+          Gate the empty state on loading being finished so it can't flash before data arrives —
+          `sources` undefined and `cachedResources` still loading each make `resources` transiently
+          empty (a DBL ref resolves to a cell only once the cached list loads). The
+          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
       <div className="tw:flex-1 tw:overflow-hidden">
-        {resources.length === 0 && !isLoadingLocalizedStrings ? (
+        {resources.length === 0 &&
+        sources !== undefined &&
+        !isLoadingCachedResources &&
+        !isLoadingLocalizedStrings ? (
           <ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />
         ) : (
           <ScriptureTextGrid

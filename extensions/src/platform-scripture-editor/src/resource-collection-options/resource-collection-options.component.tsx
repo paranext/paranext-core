@@ -47,9 +47,8 @@ export function ResourceCollectionOptions({
   disabledMessage,
   localizedStrings = {},
 }: ResourceCollectionOptionsProps) {
-  // The TEXTS list is empty when there are no admin/user rows and nothing installing. Shown only
-  // when interactive (`!disabled`): while disabled we already show `disabledMessage` (no project)
-  // or nothing (brief load), so this never double-messages or fires prematurely.
+  // Shown only when interactive (`!disabled`): while disabled we show `disabledMessage` (no
+  // project) or nothing (brief load), so this never double-messages or fires prematurely.
   const isTextsListEmpty =
     top.length === 0 && bottom.length === 0 && installingResourceNames.length === 0;
 
