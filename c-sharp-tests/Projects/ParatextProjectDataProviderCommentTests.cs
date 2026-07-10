@@ -308,6 +308,27 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void CreateComment_WithUnavailableContentPlaceholder_ThrowsInvalidOperationException()
+        {
+            // The "content could not be displayed" placeholder is served for a note whose content
+            // can't be rendered. It must never be storable as a note's real content — otherwise the
+            // note would be created and then permanently un-editable (UpdateComment rejects the same
+            // placeholder). Mirrors the UpdateComment guard.
+            var comment = CreateTestComment(
+                "GEN",
+                1,
+                1,
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            );
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.CreateComment(new PlatformCommentWrapper(comment))
+            );
+
+            Assert.That(ex!.Message, Does.Contain("unavailable-content placeholder"));
+        }
+
+        [Test]
         public void CreateComment_AssignedUserNotAssignable_ThrowsInvalidOperationException()
         {
             // Arrange

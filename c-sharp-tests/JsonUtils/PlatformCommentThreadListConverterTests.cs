@@ -30,24 +30,14 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
         return new PlatformCommentThreadWrapper(_commentManager.FindThread(comment.Thread));
     }
 
-    /// <summary>A thread wrapper whose serialization always throws (via the virtual Id seam).</summary>
-    private sealed class ThrowingCommentThreadWrapper : PlatformCommentThreadWrapper
-    {
-        public ThrowingCommentThreadWrapper(CommentThread thread)
-            : base(thread) { }
-
-        public override string Id =>
-            throw new InvalidOperationException("simulated thread serialization failure");
-    }
-
     [Test]
     public void Serialize_ListWithOneUnserializableThread_DropsItAndKeepsTheRest()
     {
         PlatformCommentThreadWrapper goodThread = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
-        // A second real, distinct thread, wrapped so its serialization throws.
-        AddThread(CommentTestHelper.CreateConflictComment()); // 5f5ea40f
-        CommentThread realOther = _commentManager.FindThread("5f5ea40f");
-        var badThread = new ThrowingCommentThreadWrapper(realOther);
+        // An empty CommentThread (no comments) is a genuinely unserializable thread: reading its
+        // metadata (e.g. ModifiedDate, which indexes the last comment) throws mid-serialization. This
+        // exercises the real drop-and-discard path with no test-only production seam.
+        var badThread = new PlatformCommentThreadWrapper(new CommentThread { ScrText = _scrText });
 
         var list = new List<PlatformCommentThreadWrapper> { goodThread, badThread };
 
@@ -57,5 +47,34 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
         Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Array));
         Assert.That(doc.RootElement.GetArrayLength(), Is.EqualTo(1)); // bad thread dropped
         Assert.That(doc.RootElement[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
+    }
+
+    [Test]
+    public void Serialize_HealthyMultiThreadList_KeepsAllThreadsInOriginalOrder()
+    {
+        // Locks in the "byte-identical for a healthy list" claim at the structural level: every
+        // thread present, in the original order, and nothing dropped.
+        PlatformCommentThreadWrapper first = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
+        PlatformCommentThreadWrapper second = AddThread(CommentTestHelper.CreateConflictComment()); // 5f5ea40f
+
+        var list = new List<PlatformCommentThreadWrapper> { first, second };
+
+        var json = JsonSerializer.Serialize(list, _serializationOptions);
+
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(doc.RootElement[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(doc.RootElement[1].GetProperty("id").GetString(), Is.EqualTo("5f5ea40f"));
+    }
+
+    [Test]
+    public void Serialize_EmptyList_ProducesEmptyArray()
+    {
+        var json = JsonSerializer.Serialize(
+            new List<PlatformCommentThreadWrapper>(),
+            _serializationOptions
+        );
+
+        Assert.That(json, Is.EqualTo("[]"));
     }
 }

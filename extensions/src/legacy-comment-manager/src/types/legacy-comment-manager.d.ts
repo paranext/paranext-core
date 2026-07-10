@@ -305,7 +305,9 @@ declare module 'legacy-comment-manager' {
        * @param commentId The unique ID of the comment to update
        * @param updatedContent The new text content for the comment
        * @returns Promise that resolves to update instructions indicating which data types were
-       *   affected, or `false` if the comment was not found
+       *   affected, or `false` if the update was rejected — either the comment was not found, or
+       *   `updatedContent` normalizes to the "content unavailable" placeholder, which is never
+       *   persisted over a note's real content
        * @throws If an error occurs during the update, or if the comment is not owned by the current
        *   user
        */
