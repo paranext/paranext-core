@@ -1,0 +1,7 @@
+// The grid embeds the same Editorial component as the resource/editor panels, so it needs the same
+// editor stylesheet bundle. Without these the embedded editor renders unstyled inside grid cells:
+// a broken toolbar (bare gray icons + "No Style") and a transparent, unreadable context menu.
+@use './usj-nodes';
+@use './editor';
+@use './editor-overrides';
+@use './tailwind';

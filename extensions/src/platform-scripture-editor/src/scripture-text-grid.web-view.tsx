@@ -1,65 +1,121 @@
 import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
-import { LocalizeKey } from 'platform-bible-utils';
+import papi, { logger } from '@papi/frontend';
+import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  usePromise,
+} from 'platform-bible-react';
+import { Settings2 } from 'lucide-react';
+import {
+  DblResourceData,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+} from 'platform-bible-utils';
+import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
+import {
+  getScriptureTextGridContents,
+  getViewOptionsTexts,
+} from './scripture-text-grid-contents.utils';
+import {
+  persistUserAddition,
+  persistUserDisplay,
+  persistUserRemoval,
+} from './scripture-text-grid-persistence.utils';
+import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import {
+  ResourceCollectionOptions,
+  RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
+  type ResourceCollectionViewMode,
+} from './resource-collection-options/resource-collection-options.component';
 import {
   ChapterContextResource,
   ScriptureTextGrid,
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
-import { getScriptureTextGridContents } from './scripture-text-grid/scripture-text-grid-contents.utils';
-import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { toGridResources } from './scripture-text-grid/grid-resources.utils';
 
-// Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are
-// displayed, "Text Collection" when 2 or more (see `selectScriptureTextGridTitle`).
-const TITLE_SINGLE_KEY = '%webView_scriptureTextGrid_title_single%';
-const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+// The tab is icon-only; this is the hover tooltip / accessible name for it.
+const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
+// Notification keys are localized by the notification service, so they are NOT fetched via
+// `useLocalizedStrings`; only keys rendered directly in JSX go in `ALL_STRING_KEYS` below.
+const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
+const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
+const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+
 const ALL_STRING_KEYS: LocalizeKey[] = [
-  TITLE_SINGLE_KEY,
-  TITLE_MULTIPLE_KEY,
+  TITLE_KEY,
+  VIEW_OPTIONS_BUTTON_KEY,
+  NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
+  ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
-/** Sprint default; A5 View Options will wire a user toggle here. */
-const DEFAULT_ROW_VIEW_MODE = 'verse' as const;
+// The Scripture Text Grid shows Bible-text resources.
+const GRID_RESOURCE_TYPE = 'ScriptureResource';
+
+// Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
+// `currentColor` SVG can't follow the theme. Swap between a dark-stroke (light theme) and a
+// light-stroke (dark theme) variant based on the web view's themed foreground brightness.
+const LIGHT_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library.svg';
+const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library-dark.svg';
 
 /**
- * Scripture Text Grid web view (PT-4049 / A1 shell; PT-4050 / A2 first-open trigger; PT-4051 / A3
- * effective filter; PT-4052 / A4 row).
+ * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
+ * Options panel (A5), and the verse-cell grid body (A4).
  *
- * Renders one ResourceCell per shown resource in a horizontal row, all synced to the active scrRef.
- * Which resources show is decided by A3's `getScriptureTextGridContents` selector against the four
- * Text Collection sources (both admin lists, the user list, and the per-user shown-by-default
- * overlay) assembled by `useTextCollectionSources`. Keeps A2's idempotent first-open overlay-init
- * trigger. The selector returns Bible-text references; the row consumes `{ projectId, label }`.
+ * The header hosts the View Options icon button + popover wrapping the reusable
+ * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
+ * through the per-user text-connection PDP setters. Below the header, the grid body renders one
+ * `ResourceCell` per shown resource — the resources come from A3's `getScriptureTextGridContents`
+ * selector over the Text Collection sources assembled by `useTextCollectionSources`, and the row's
+ * verse/chapter layout follows the View Options `viewMode` toggle.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
-  // `ALL_STRING_KEYS` is a module-level constant, so its reference is already stable across renders
-  // (satisfying `useLocalizedStrings`'s stable-reference requirement) — no `useMemo` needed.
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
-  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid; child
-  // components cannot call this hook (it is a WebViewProps member, not a @papi/frontend/react export).
-  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
+  // 5th tuple member is the project driving the active Scripture reference (the editor's project):
+  // follow it when opened without an explicit project — e.g. from the default layout, whose tab
+  // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
+  const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
+  const effectiveProjectId = projectId ?? activeEditorProjectId;
 
+  const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
+
+  // Latest sources for the async callbacks below — reading the render-closure `sources` would let a
+  // rapid second toggle (or a toggle mid-install) compute its next-state from a pre-write snapshot
+  // and clobber the first write. A ref always hands the callbacks the freshest snapshot.
+  const sourcesRef = useRef(sources);
+  sourcesRef.current = sources;
+
+  // View Options `viewMode` toggle; also drives the grid body's verse/chapter row layout.
+  const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>('verse');
+  // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
+  // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
+  const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Chapter-context overlay opened from a verse cell; Escape closes it.
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
-
-  // `setChapterContext` is a stable useState setter, so it is passed to the grid directly (no
-  // wrapping callback needed). `handleCloseChapterContext` adapts it to a `() => void` closer used by
-  // both the Escape handler and the panel's close button.
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
   }, []);
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || chapterContext === undefined) return;
@@ -71,71 +127,224 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [chapterContext, handleCloseChapterContext]);
 
-  const textConnectionPdp = useProjectDataProvider(
-    'platformScripture.textConnectionSettings',
-    projectId,
+  const { top, bottom } = useMemo(
+    () => (sources ? getViewOptionsTexts(sources) : { top: [], bottom: [] }),
+    [sources],
   );
+
+  // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
+  // installed project id the cell fetches chapter text with; project references need no lookup.
+  const [cachedResources] = usePromise(
+    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
+    undefined,
+  );
+
+  // The grid body's cells: A3's selector over the Text Collection sources, resolved to the row's
+  // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
+  const resources = useMemo<GridResource[]>(
+    () =>
+      toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
+    [sources, cachedResources],
+  );
+
+  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
   // Fire first-open overlay init once per resolved projectId. The server-side marker makes repeated
   // calls safe; this guard just avoids redundant round-trips within a single web-view lifetime.
   const initializedProjectIds = useRef(new Set<string>());
   useEffect(() => {
-    if (!projectId || !textConnectionPdp) return;
-    if (initializedProjectIds.current.has(projectId)) return;
-    initializedProjectIds.current.add(projectId);
+    if (!effectiveProjectId || !textConnectionPdp) return;
+    if (initializedProjectIds.current.has(effectiveProjectId)) return;
+    initializedProjectIds.current.add(effectiveProjectId);
     textConnectionPdp.initializeShownByDefaultOverlay().catch((error) => {
-      // Non-fatal: drop the id from the local guard so a later open can retry; the server-side marker was never written.
-      initializedProjectIds.current.delete(projectId);
-      logger.error(`Failed to initialize shown-by-default overlay for ${projectId}: ${error}`);
+      initializedProjectIds.current.delete(effectiveProjectId);
+      logger.error(
+        `Failed to initialize shown-by-default overlay for ${effectiveProjectId}: ${error}`,
+      );
     });
-  }, [projectId, textConnectionPdp]);
+  }, [effectiveProjectId, textConnectionPdp]);
 
-  // #region Grid contents — A3 selector over the four Text Collection sources, mapped to the row's
-  // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
-  const [sources] = useTextCollectionSources(projectId);
-  const resources = useMemo<GridResource[]>(
-    () =>
-      getScriptureTextGridContents(sources).map((reference) => ({
-        projectId: reference.id,
-        label: reference.name,
-      })),
-    [sources],
-  );
-  // #endregion
+  // Icon-only tab: no visible text label, with "Text Collection" as the hover tooltip / accessible
+  // name so the tab stays identifiable.
+  useEffect(() => {
+    if (isLoadingLocalizedStrings) return;
+    updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
+  }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
-  // Count-driven tab title, flipping to "Text Collection" at 2+ shown cells and "Scripture text"
-  // otherwise. `ScriptureTextGrid` always renders exactly `resources.length` cells, so the count is
-  // read straight from `resources` here — no round-trip through a child callback. `undefined` while
-  // localization loads so we never flash a raw key into the tab or the grid's accessible name.
-  const title = useMemo(
-    () =>
-      isLoadingLocalizedStrings
-        ? undefined
-        : selectScriptureTextGridTitle(resources.length, {
-            single: localizedStrings[TITLE_SINGLE_KEY],
-            multiple: localizedStrings[TITLE_MULTIPLE_KEY],
-          }),
-    [isLoadingLocalizedStrings, localizedStrings, resources.length],
-  );
+  // Pick the tab icon variant to match the current theme. The tab icon is painted by the platform
+  // as a static background-image, so a `currentColor` SVG can't follow the theme — we swap the
+  // `iconUrl` ourselves based on the theme type from `papi.themes`.
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   useEffect(() => {
-    if (title === undefined) return;
-    updateWebViewDefinition({ title });
-  }, [title, updateWebViewDefinition]);
+    updateWebViewDefinition({ iconUrl: isDarkTheme ? DARK_THEME_ICON_URL : LIGHT_THEME_ICON_URL });
+  }, [isDarkTheme, updateWebViewDefinition]);
+
+  const handleCheckedChange = useCallback(
+    (resourceId: string, checked: boolean) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const writes = persistUserDisplay(textConnectionPdp, resourceId, checked, current);
+      // `Promise.all` rejects on the first failed write, so a failed toggle notifies once (not once
+      // per underlying list/overlay write).
+      Promise.all(writes).catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist view-options change: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const handleRemoveFromList = useCallback(
+    (resourceId: string) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      persistUserRemoval(textConnectionPdp, resourceId, current.userReferenced)?.catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist removal: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const handleResourceSelect = useCallback(
+    async (resource: DblResourceData) => {
+      if (!textConnectionPdp) return;
+
+      if (!resource.installed) {
+        if (!dblResourcesProvider) return;
+        const pending = { id: resource.dblEntryUid, name: resource.displayName };
+        setInstalling((prev) => [...prev, pending]);
+        try {
+          await dblResourcesProvider.installDblResource(resource.dblEntryUid);
+        } catch (e: unknown) {
+          papi.notifications.send({ message: INSTALL_FAILED_KEY, severity: 'error' });
+          logger.warn(`Failed to install resource ${resource.dblEntryUid}: ${getErrorMessage(e)}`);
+          return;
+        } finally {
+          setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
+        }
+      }
+
+      // Re-read after the await: the subscription may have advanced during the install.
+      const { current } = sourcesRef;
+      if (!current) return;
+      const reference: DblResourceReference = {
+        type: 'dblResource',
+        name: resource.displayName,
+        id: resource.dblEntryUid,
+      };
+      persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
+      });
+    },
+    [dblResourcesProvider, textConnectionPdp],
+  );
+
+  const selectedResourceIds = useMemo(
+    () => [...top, ...bottom].map((entry) => entry.reference.id),
+    [top, bottom],
+  );
+
+  const showResourcePicker = useDialogCallback(
+    'platform.resourcePicker',
+    useMemo(
+      () => ({ resourceType: GRID_RESOURCE_TYPE, selectedResourceIds, isModal: true }),
+      [selectedResourceIds],
+    ),
+    useCallback(
+      (resource: DblResourceData | undefined) => {
+        if (!resource) return;
+        handleResourceSelect(resource).catch((e) =>
+          logger.error(`Resource selection failed: ${getErrorMessage(e)}`),
+        );
+      },
+      [handleResourceSelect],
+    ),
+  );
+
+  const installingResourceNames = useMemo(() => installing.map((info) => info.name), [installing]);
 
   return (
-    <div className="tw:flex tw:h-screen tw:flex-col">
-      <ScriptureTextGrid
-        ariaLabel={title}
-        resources={resources}
-        scrRef={scrRef}
-        setScrRef={setScrRef}
-        viewMode={DEFAULT_ROW_VIEW_MODE}
-        chapterContext={chapterContext}
-        onChapterContextChange={setChapterContext}
-        onChapterContextClose={handleCloseChapterContext}
-        closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-      />
+    <div
+      data-testid="scripture-text-grid"
+      className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
+    >
+      <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
+        <Popover>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}
+                    // Explicit themed colors so the icon is visible in both light and dark themes; a
+                    // plain ghost button inherits the (un-themed) default color and vanishes on dark
+                    // tabs.
+                    className="tw:text-muted-foreground tw:hover:text-foreground"
+                  >
+                    <Settings2 className="tw:h-4 tw:w-4" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{localizedStrings[VIEW_OPTIONS_BUTTON_KEY]}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <PopoverContent className="tw:max-h-[70vh] tw:overflow-y-auto">
+            <ResourceCollectionOptions
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              top={top}
+              bottom={bottom}
+              installingResourceNames={installingResourceNames}
+              onCheckedChange={handleCheckedChange}
+              onRemoveFromList={handleRemoveFromList}
+              onGetResources={showResourcePicker}
+              // No project/PDP bound yet → every action would silently no-op, so disable the
+              // controls. Show the "no project" prompt only when there is genuinely no project (not
+              // during the brief load after one is bound).
+              disabled={!sources || !textConnectionPdp}
+              disabledMessage={effectiveProjectId ? undefined : localizedStrings[NO_PROJECT_KEY]}
+              localizedStrings={localizedStrings}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+      {/* Grid body: verse-cell rows below the header seam, verse/chapter layout from `viewMode`. */}
+      <div className="tw:flex-1 tw:overflow-hidden">
+        <ScriptureTextGrid
+          ariaLabel={localizedStrings[TITLE_KEY]}
+          resources={resources}
+          scrRef={scrRef}
+          setScrRef={setScrRef}
+          viewMode={viewMode}
+          chapterContext={chapterContext}
+          onChapterContextChange={setChapterContext}
+          onChapterContextClose={handleCloseChapterContext}
+          closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+        />
+      </div>
     </div>
   );
 };
