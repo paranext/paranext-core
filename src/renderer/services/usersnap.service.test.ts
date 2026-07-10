@@ -61,7 +61,7 @@ function resetLoadSpaceDeferred(): void {
   });
 }
 
-describe('initializeUsersnapApi loadSpace timeout/race logic', () => {
+describe('initializeUsersnapApi load/init timeout/race logic', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
@@ -85,19 +85,18 @@ describe('initializeUsersnapApi loadSpace timeout/race logic', () => {
     expect(spaceApi.destroy).not.toHaveBeenCalled();
   });
 
-  it('resolves after the timeout: init not called, late space destroyed', async () => {
-    const { initializeUsersnapApi, LOAD_SPACE_TIMEOUT_MS } = await importService();
+  it('resolves after the timeout: startup unblocked, late space destroyed', async () => {
+    const { initializeUsersnapApi, USERSNAP_INIT_TIMEOUT_MS } = await importService();
     const spaceApi = createMockSpaceApi();
 
     const initPromise = initializeUsersnapApi();
 
-    // Fire the timeout first; this rejects loadVar.promise so init is never reached.
-    await vi.advanceTimersByTimeAsync(LOAD_SPACE_TIMEOUT_MS);
-    await initPromise;
+    // Fire the timeout first; this rejects initVar.promise so startup settles via the outer catch
+    // rather than waiting on the load.
+    await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
+    await expect(initPromise).resolves.toBeUndefined();
 
-    expect(spaceApi.init).not.toHaveBeenCalled();
-
-    // loadSpace resolves late: the orphan is destroyed in the fire-and-forget IIFE, so wait for
+    // load + init completes late: the orphan is destroyed in the fire-and-forget IIFE, so wait for
     // that side effect. `vi.waitFor` polls on a timer, hence real timers.
     loadSpaceDeferred.resolve(spaceApi);
     vi.useRealTimers();
@@ -113,5 +112,52 @@ describe('initializeUsersnapApi loadSpace timeout/race logic', () => {
 
     // The rejection flows into the outer catch, so startup settles gracefully rather than throwing.
     await expect(initPromise).resolves.toBeUndefined();
+  });
+
+  it('rejects after the timeout: late rejection is swallowed, startup still resolves', async () => {
+    const { initializeUsersnapApi, USERSNAP_INIT_TIMEOUT_MS } = await importService();
+    const { logger } = await import('@shared/services/logger.service');
+
+    const initPromise = initializeUsersnapApi();
+
+    // Timeout fires first, so startup has already settled via the outer catch.
+    await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
+    await expect(initPromise).resolves.toBeUndefined();
+
+    // loadSpace rejects late: the IIFE catch logs it at debug rather than letting it surface as an
+    // unhandled rejection that could crash startup.
+    loadSpaceDeferred.reject(new Error('network down'));
+    vi.useRealTimers();
+    await vi.waitFor(() =>
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Usersnap load/init failed (or cleanup failed) after timeout:',
+        expect.any(Error),
+      ),
+    );
+  });
+
+  it('destroy rejecting after the timeout is swallowed, startup still resolves', async () => {
+    const { initializeUsersnapApi, USERSNAP_INIT_TIMEOUT_MS } = await importService();
+    const { logger } = await import('@shared/services/logger.service');
+    const spaceApi = createMockSpaceApi();
+    // Cleanup of the late orphan itself fails.
+    spaceApi.destroy = vi.fn().mockRejectedValue(new Error('destroy failed'));
+
+    const initPromise = initializeUsersnapApi();
+
+    await vi.advanceTimersByTimeAsync(USERSNAP_INIT_TIMEOUT_MS);
+    await expect(initPromise).resolves.toBeUndefined();
+
+    // load + init completes late; destroying the orphan throws, but the same IIFE catch keeps it
+    // from becoming an unhandled rejection.
+    loadSpaceDeferred.resolve(spaceApi);
+    vi.useRealTimers();
+    await vi.waitFor(() =>
+      expect(logger.debug).toHaveBeenCalledWith(
+        'Usersnap load/init failed (or cleanup failed) after timeout:',
+        expect.any(Error),
+      ),
+    );
+    expect(spaceApi.destroy).toHaveBeenCalledTimes(1);
   });
 });

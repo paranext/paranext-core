@@ -17,8 +17,12 @@ export const USERSNAP_PROJECT_REPORT_ISSUE_API_KEY: string = '68df6b26-c519-4829
 export const USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY: string = 'bd3bc542-1f0c-40e4-85f7-315f5138ea88';
 export const USERSNAP_SPACE_API_KEY: string = '1cf2709b-3ff0-4cff-8952-a2d2bca7590d';
 
-/** Milliseconds to wait for `loadSpace` to resolve before giving up. */
-export const LOAD_SPACE_TIMEOUT_MS = 5 * 1000;
+/**
+ * Milliseconds to wait for Usersnap's `loadSpace` + `init` to finish before giving up.
+ *
+ * Exported so the test can advance fake timers by exactly this amount.
+ */
+export const USERSNAP_INIT_TIMEOUT_MS = 5 * 1000;
 
 /** Global UserSnap API instance service */
 
@@ -169,23 +173,28 @@ export async function initializeUsersnapApi() {
     };
 
     const startTime = performance.now();
-    // Set a timeout, since `loadSpace` reaches an external server that can hang indefinitely.
-    const loadVar = new AsyncVariable<SpaceApi>('usersnapLoadSpace', LOAD_SPACE_TIMEOUT_MS);
-    // Fire-and-forget: startup awaits `loadVar.promise`, so the timeout can win even if this hangs.
+    // Bound the whole load + init: both reach an external server that can hang indefinitely, and
+    // both run on the awaited renderer startup path.
+    const initVar = new AsyncVariable<SpaceApi>('usersnapInit', USERSNAP_INIT_TIMEOUT_MS);
+    // Fire-and-forget: startup awaits `initVar.promise`, so the timeout can win even if this hangs.
     (async () => {
       try {
         const spaceApi = await loadSpace(USERSNAP_SPACE_API_KEY);
-        // If a space loads after the timeout fires, destroy it to avoid an orphaned instance.
-        if (loadVar.hasSettled) await spaceApi.destroy();
-        else loadVar.resolveToValue(spaceApi);
+        await spaceApi.init(defaultInitParams);
+        // If load + init finish after the timeout fired, destroy the space to avoid an orphan.
+        if (initVar.hasTimedOut) await spaceApi.destroy();
+        else initVar.resolveToValue(spaceApi);
       } catch (error) {
-        if (loadVar.hasSettled)
-          logger.debug('Usersnap loadSpace rejected (or cleanup failed) after timeout:', error);
-        else loadVar.rejectWithReason(getErrorMessage(error));
+        if (initVar.hasTimedOut)
+          logger.debug('Usersnap load/init failed (or cleanup failed) after timeout:', error);
+        else {
+          // `rejectWithReason` only takes a string, so log the real error here to keep its stack.
+          logger.warn('Usersnap load/init failed:', error);
+          initVar.rejectWithReason(getErrorMessage(error));
+        }
       }
     })();
-    const api = await loadVar.promise;
-    await api.init(defaultInitParams);
+    const api = await initVar.promise;
     const endTime = performance.now();
     logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
 
@@ -252,9 +261,7 @@ export async function initializeUsersnapApi() {
 
 export async function openUsersnapForm(apiKey: string) {
   if (!globalUsersnapApi) {
-    logger.warn(
-      'Cannot open Usersnap form: UserSnap API is not initialized. This may be due to network connectivity issues or blocked external requests.',
-    );
+    logger.warn('Cannot open Usersnap form: UserSnap API is not initialized.');
     await notificationService.send({
       message: '%mainMenu_feedback_unavailable%',
       severity: 'warning',
