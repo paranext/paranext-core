@@ -15,10 +15,16 @@
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs, openEnhancedResource } from './test-helpers';
-
-const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
-const SCRIPTURE_TEXT_TAB_TITLE = /^Scripture Text$/;
+import {
+  closeAllNonHomeDockTabs,
+  discoverAdminTextConnectionProject,
+  flagResourcesAndOpenScriptureTextGrid,
+  openEnhancedResource,
+  openScriptureTextGrid,
+  restoreScriptureTextGridProjectSettings,
+  SCRIPTURE_TEXT_GRID_TAB_TITLE,
+  SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+} from './test-helpers';
 
 test.describe('Scripture Text Grid (A1 scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
@@ -77,7 +83,7 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
       await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
     }, SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE);
 
-    const tab = mainPage.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_TAB_TITLE });
+    const tab = mainPage.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_GRID_TAB_TITLE });
     await expect(tab).toBeVisible({ timeout: 15_000 });
 
     // Non-closable: the grid tab renders no close button (rc-dock omits it when `closable` is false).
@@ -93,5 +99,267 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
 
     // The grid tab is still non-closable even with a closable tab now open alongside it.
     await expect(tab.locator('.dock-tab-close-btn')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A4 (PT-4052) — ScriptureTextGrid renderer (verse default + chapter-context split).
+//
+// Honest runnability: there is NO dev-fixture plumbing for web-view content (a web view is a
+// renderer iframe with no injected env), and most scenarios need real flagged resources. Data-mutating
+// specs skip in CI and discover an admin-writable project locally (mirroring the A2 spec).
+//
+// Env vars:
+// - E2E_TEST_PROJECT_ID — pin an admin-writable text-connection project (optional)
+// - E2E_TEST_RESOURCE_IDS — comma-separated downloaded Bible-text project IDs for multi-resource tests
+// ---------------------------------------------------------------------------
+const SYNTHETIC_BAD_ID = 'aabbccddeeff00112233';
+const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
+
+test.describe('Scripture Text Grid renderer (A4)', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('non-negotiable #1: a shown resource renders a gridcell (no blank-out, no empty toolbar)', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      {
+        type: 'project',
+        name: 'STG A4 smoke',
+        id: SYNTHETIC_BAD_ID,
+        isResourceShownByDefault: true,
+      },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.locator('[role="grid"]')).toBeVisible({ timeout: 15_000 });
+    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
+    await expect(frame.locator('[role="toolbar"]')).toHaveCount(0);
+  });
+
+  test('verse-click opens chapter-context panel beside the row', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      {
+        type: 'project',
+        name: 'STG A4 split',
+        id: SYNTHETIC_BAD_ID,
+        isResourceShownByDefault: true,
+      },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const firstCell = frame.locator('[role="gridcell"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+
+    await firstCell.click();
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2);
+    await expect(frame.locator('[role="grid"]')).toBeVisible();
+  });
+
+  test('Escape closes the chapter-context panel without blanking the row', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      {
+        type: 'project',
+        name: 'STG A4 esc',
+        id: SYNTHETIC_BAD_ID,
+        isResourceShownByDefault: true,
+      },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await frame.locator('[role="gridcell"]').first().click();
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await mainPage.keyboard.press('Escape');
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible();
+  });
+
+  test('RTL UI locale reverses the row via logical flex properties', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'WEB', id: 'rtl001', isResourceShownByDefault: true },
+      { type: 'project', name: 'KJV', id: 'rtl002', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.locator('[role="row"]')).toBeVisible({ timeout: 15_000 });
+
+    const directions = await frame.locator('[role="row"]').evaluate((row) => {
+      document.documentElement.dir = 'ltr';
+      const ltr = getComputedStyle(row).flexDirection;
+      document.documentElement.dir = 'rtl';
+      const rtl = getComputedStyle(row).flexDirection;
+      return { ltr, rtl };
+    });
+    expect(directions.ltr).toBe('row');
+    expect(directions.rtl).toBe('row-reverse');
+  });
+
+  test('partial failure: valid and invalid resources render side by side', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    const validIds = REAL_RESOURCE_IDS.slice(0, 2);
+    test.skip(
+      validIds.length < 1,
+      'Set E2E_TEST_RESOURCE_IDS with at least one downloaded resource',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      ...validIds.map((id, index) => ({
+        type: 'project' as const,
+        name: `Valid ${index + 1}`,
+        id,
+        isResourceShownByDefault: true,
+      })),
+      {
+        type: 'project',
+        name: 'Bad resource',
+        id: SYNTHETIC_BAD_ID,
+        isResourceShownByDefault: true,
+      },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(validIds.length + 1, {
+      timeout: 15_000,
+    });
+    await expect(frame.getByText(/Resource unavailable|Downloading/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('scrRef sync: all row cells remain visible after reference change', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    test.skip(
+      REAL_RESOURCE_IDS.length < 2,
+      'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2).map((id, index) => ({
+        type: 'project' as const,
+        name: `Sync ${index + 1}`,
+        id,
+        isResourceShownByDefault: true,
+      })),
+    );
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
+
+    await mainPage.evaluate(async () => {
+      // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
+      const { papi } = window as unknown as {
+        papi: {
+          scrollGroups: {
+            setScrRef: (groupId: number, scrRef: unknown) => Promise<void>;
+          };
+        };
+      };
+      await papi.scrollGroups.setScrRef(0, {
+        book: 'MAT',
+        chapterNum: 5,
+        verseNum: 4,
+        versificationStr: 'English',
+      });
+    });
+
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2);
+    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible();
+    await expect(frame.locator('[role="gridcell"]').nth(1)).toBeVisible();
+  });
+
+  test('frame budget: verse row renders >=5 cells under threshold (split closed)', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    test.skip(
+      REAL_RESOURCE_IDS.length < 5,
+      'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5).map((id, index) => ({
+        type: 'project' as const,
+        name: `Perf ${index + 1}`,
+        id,
+        isResourceShownByDefault: true,
+      })),
+    );
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const elapsedMs = await frame.evaluate(async () => {
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (document.querySelectorAll('[role="gridcell"]').length >= 5) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        if (document.querySelectorAll('[role="gridcell"]').length >= 5) resolve();
+      });
+      return performance.now() - start;
+    });
+
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(5, { timeout: 15_000 });
+    expect(elapsedMs).toBeLessThan(220);
   });
 });

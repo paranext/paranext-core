@@ -130,6 +130,24 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'scripture-text-grid-open-chapter-context',
+    purpose: 'Open the chapter-context view for the focused cell',
+    category: 'View',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-close-chapter-context',
+    purpose: 'Close the chapter-context view',
+    category: 'View',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
+  },
+  {
     id: 'enhanced-resources-toggle-footnotes',
     purpose: 'Toggle the footnotes panel',
     category: 'View',
