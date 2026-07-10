@@ -14,7 +14,6 @@ public static class ProjectDataType
     public const string USER_MODEL_TEXTS = "UserModelTexts";
     public const string USER_REFERENCED_PROJECTS_AND_RESOURCES =
         "UserReferencedProjectsAndResources";
-    public const string SHOWN_BY_DEFAULT_OVERLAY = "ShownByDefaultOverlay";
     public const string USER_STRUCTURE_PROTECTED = "UserStructureProtected";
     public const string VERSE_USFM = "VerseUSFM";
     public const string VERSE_USX = "VerseUSX";
