@@ -31,12 +31,11 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
     }
 
     [Test]
-    public void Serialize_ListWithOneUnserializableThread_DropsItAndKeepsTheRest()
+    public void Serialize_ListWithOneUnserializableThread_DropsItAndReportsHiddenCount()
     {
         PlatformCommentThreadWrapper goodThread = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
-        // An empty CommentThread (no comments) is a genuinely unserializable thread: reading its
-        // metadata (e.g. ModifiedDate, which indexes the last comment) throws mid-serialization. This
-        // exercises the real drop-and-discard path with no test-only production seam.
+        // An empty CommentThread (no comments) is genuinely unserializable: reading its metadata
+        // (e.g. ModifiedDate, which indexes the last comment) throws mid-serialization.
         var badThread = new PlatformCommentThreadWrapper(new CommentThread { ScrText = _scrText });
 
         var list = new List<PlatformCommentThreadWrapper> { goodThread, badThread };
@@ -44,16 +43,16 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
         var json = JsonSerializer.Serialize(list, _serializationOptions);
 
         using var doc = JsonDocument.Parse(json);
-        Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Array));
-        Assert.That(doc.RootElement.GetArrayLength(), Is.EqualTo(1)); // bad thread dropped
-        Assert.That(doc.RootElement[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        JsonElement threads = doc.RootElement.GetProperty("threads");
+        Assert.That(threads.GetArrayLength(), Is.EqualTo(1)); // bad thread dropped
+        Assert.That(threads[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(doc.RootElement.GetProperty("hiddenCount").GetInt32(), Is.EqualTo(1));
     }
 
     [Test]
-    public void Serialize_HealthyMultiThreadList_KeepsAllThreadsInOriginalOrder()
+    public void Serialize_HealthyMultiThreadList_KeepsAllThreadsInOrderWithZeroHidden()
     {
-        // Locks in the "byte-identical for a healthy list" claim at the structural level: every
-        // thread present, in the original order, and nothing dropped.
         PlatformCommentThreadWrapper first = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
         PlatformCommentThreadWrapper second = AddThread(CommentTestHelper.CreateConflictComment()); // 5f5ea40f
 
@@ -62,19 +61,21 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
         var json = JsonSerializer.Serialize(list, _serializationOptions);
 
         using var doc = JsonDocument.Parse(json);
-        Assert.That(doc.RootElement.GetArrayLength(), Is.EqualTo(2));
-        Assert.That(doc.RootElement[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
-        Assert.That(doc.RootElement[1].GetProperty("id").GetString(), Is.EqualTo("5f5ea40f"));
+        JsonElement threads = doc.RootElement.GetProperty("threads");
+        Assert.That(threads.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(threads[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(threads[1].GetProperty("id").GetString(), Is.EqualTo("5f5ea40f"));
+        Assert.That(doc.RootElement.GetProperty("hiddenCount").GetInt32(), Is.EqualTo(0));
     }
 
     [Test]
-    public void Serialize_EmptyList_ProducesEmptyArray()
+    public void Serialize_EmptyList_ProducesEmptyThreadsAndZeroHidden()
     {
         var json = JsonSerializer.Serialize(
             new List<PlatformCommentThreadWrapper>(),
             _serializationOptions
         );
 
-        Assert.That(json, Is.EqualTo("[]"));
+        Assert.That(json, Is.EqualTo("{\"threads\":[],\"hiddenCount\":0}"));
     }
 }
