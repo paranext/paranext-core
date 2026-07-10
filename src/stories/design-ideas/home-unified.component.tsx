@@ -73,7 +73,7 @@ import {
   Star,
   X,
 } from 'lucide-react';
-import { ReactNode, UIEvent, useEffect, useMemo, useState } from 'react';
+import { ReactNode, UIEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 // User-facing strings collected in one place. In production these would be pulled from the
 // localization store; the prototype uses English defaults so the design idea is legible in isolation.
@@ -87,7 +87,7 @@ const STRINGS = {
   onlyMyLanguages: 'Only my languages',
   onlyMyLanguagesTooltip:
     'Filter to languages that are already installed among your projects and resources.',
-  clearAll: 'Clear all filters',
+  clearAll: 'Clear filters',
   filtersActive: 'Filters:',
   shortName: 'Short name',
   fullName: 'Full name',
@@ -106,22 +106,27 @@ const STRINGS = {
   itemsSuffix: 'items',
   ofSuffix: 'of',
   selectionSuffix: 'selected',
-  clearSelection: 'Clear',
-  clearSelectionAria: 'Clear selection',
-  presetProjectsLabel: 'Projects:',
-  presetResourcesLabel: 'Resources:',
-  presetAll: 'All',
-  presetNone: 'None',
+  clearSelection: 'Select None',
+  clearSelectionAria: 'Select None',
+  presetLabel: 'Select & filter:',
   presetEdited: 'Edited',
+  presetEditedTooltip: 'Projects edited by you or others',
+  presetUpdated: 'Updated',
+  presetUpdatedTooltip: 'Updated resources',
   presetNew: 'New',
-  presetInstalled: 'Installed',
-  presetHasUpdate: 'Has update',
+  presetNewTooltip: 'Projects new for you',
+  presetOnComputer: 'On this computer',
+  presetOnComputerTooltip: 'Projects and resources installed on this computer',
+  hiddenSelectedSingular: 'selected item is hidden by the current filter',
+  hiddenSelectedPlural: 'selected items are hidden by the current filter',
   badgeEdited: 'Edited',
   badgeUpdate: 'Update',
   badgeNew: 'New',
   badgeDbl: 'DBL',
   languageSelectedSingular: 'language selected',
   languageSelectedPlural: 'languages selected',
+  typeSelectedSingular: 'type selected',
+  typeSelectedPlural: 'types selected',
   noResults: 'No projects or resources match your filters.',
   clearFiltersCta: 'Clear filters',
   browseDblCta: 'Nothing local yet — search or browse resources on DBL to get started.',
@@ -231,7 +236,7 @@ export type HomeUnifiedProps = {
   variant?: 'default' | 'buttons';
 };
 
-type SortKey = 'shortName' | 'fullName' | 'language' | 'type' | 'lastUsed' | 'status';
+type SortKey = 'shortName' | 'fullName' | 'language' | 'type' | 'lastUsed' | 'status' | 'action';
 type SortConfig = { key: SortKey; direction: 'ascending' | 'descending' };
 
 const TYPE_LABEL: Record<UnifiedItemType, string> = {
@@ -363,6 +368,21 @@ function isLocallyInstalled(status: UnifiedStatus): boolean {
   );
 }
 
+// "Select & filter" preset ids. Ones that mirror a status use the status name; `onComputer` is a
+// synthetic id whose matcher spans every locally-installed status.
+type PresetFilterId =
+  | 'installedNeedsSync'
+  | 'installedNeedsUpdate'
+  | 'sharedNotInstalled'
+  | 'onComputer';
+// Module-scope matchers so the filter useMemo has a stable dependency reference.
+const presetMatchers: Record<PresetFilterId, (item: UnifiedItem) => boolean> = {
+  installedNeedsSync: (item) => item.status === 'installedNeedsSync',
+  installedNeedsUpdate: (item) => item.status === 'installedNeedsUpdate',
+  sharedNotInstalled: (item) => item.status === 'sharedNotInstalled',
+  onComputer: (item) => isLocallyInstalled(item.status),
+};
+
 /**
  * The prototype UI. Combines Home + GetResources into a single searchable/filterable table with
  * per-row status, primary action, and overflow menu.
@@ -380,6 +400,11 @@ export function HomeUnified({
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  // "Select & filter" presets (buttons variant only) both select the matching subset and narrow
+  // the list to it. Only one preset can be active at a time; undefined = no preset applied.
+  const [presetStatusFilter, setPresetStatusFilter] = useState<PresetFilterId | undefined>(
+    undefined,
+  );
   // `onlyMyLanguages` is a "sticky" UI marker for the language toggle: it's only true right after
   // the user clicked the toggle ON. Any subsequent language removal turns it off (per user story),
   // even though selectedLanguages may still be non-empty.
@@ -390,6 +415,11 @@ export function HomeUnified({
     key: 'lastUsed',
     direction: 'descending',
   });
+  // Declared up here so scroll/fetch-more handlers can consult it — the full hover machinery
+  // (rowMatchesBatchKind, enterHover, leaveHover) is defined further down where the batch-action
+  // logic sits.
+  type BatchHoverKind = 'get' | 'sync' | 'update' | 'install' | 'open';
+  const [hoveredBatchKind, setHoveredBatchKind] = useState<BatchHoverKind | undefined>(undefined);
 
   // Track whether we're at the narrowest breakpoint (below Tailwind's `sm` = 640px), where the
   // table shows only the short-name and action columns and there's no room on the left of the
@@ -411,9 +441,14 @@ export function HomeUnified({
     [items],
   );
 
-  // Any filter/search interaction pages in the rest so filtering runs against the full catalog.
-  // The scroll-to-bottom trigger below handles the "just browsing" case.
+  // Search / type / language / only-my-languages interactions eagerly page in the rest so
+  // filtering runs against the full catalog — the user needs to see *all* matching resources
+  // for a language or type, not just what happened to be paged in already. The scroll-to-bottom
+  // trigger below handles the "just browsing" case. The preset status filter (Edited / Updated
+  // / New) is excluded: those categories only touch already-known local + S/R items, so pulling
+  // more DBL pages would be wasted work.
   useEffect(() => {
+    if (presetStatusFilter) return;
     if (
       hasMore &&
       onFetchMore &&
@@ -424,10 +459,20 @@ export function HomeUnified({
     ) {
       onFetchMore();
     }
-  }, [hasMore, onFetchMore, textFilter, selectedTypes, selectedLanguages, onlyMyLanguages]);
+  }, [
+    hasMore,
+    onFetchMore,
+    textFilter,
+    selectedTypes,
+    selectedLanguages,
+    onlyMyLanguages,
+    presetStatusFilter,
+  ]);
 
   const handleContentScroll = (e: UIEvent<HTMLDivElement>) => {
-    if (!hasMore || !onFetchMore) return;
+    // Skip fetch-more while a batch button is being hovered — the table is showing a preview of
+    // the click's scope, not the actual list, so pulling more DBL results in would be misleading.
+    if (!hasMore || !onFetchMore || presetStatusFilter || hoveredBatchKind !== undefined) return;
     const el = e.currentTarget;
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
       onFetchMore();
@@ -467,9 +512,10 @@ export function HomeUnified({
       }
       if (selectedTypes.length > 0 && !selectedTypes.includes(item.type)) return false;
       if (selectedLanguages.length > 0 && !selectedLanguages.includes(item.language)) return false;
+      if (presetStatusFilter && !presetMatchers[presetStatusFilter](item)) return false;
       return true;
     });
-  }, [items, textFilter, selectedTypes, selectedLanguages]);
+  }, [items, textFilter, selectedTypes, selectedLanguages, presetStatusFilter]);
 
   const sorted = useMemo(() => {
     const clone = [...filtered];
@@ -495,6 +541,22 @@ export function HomeUnified({
         case 'lastUsed':
           cmp = (a.lastUsedIso ?? '').localeCompare(b.lastUsedIso ?? '');
           break;
+        case 'action': {
+          // Action-column ordering (ascending): Sync → Update → Get → Open → Install. Sync +
+          // Update float to the top because they're the ones the user most likely wants to
+          // triage; Install goes last since DBL rows are the largest bucket and are usually the
+          // "browse later" pile.
+          const rank: Record<ReturnType<typeof primaryActionFor>, number> = {
+            sync: 0,
+            update: 1,
+            get: 2,
+            open: 3,
+            install: 4,
+            remove: 5,
+          };
+          cmp = rank[primaryActionFor(a.status)] - rank[primaryActionFor(b.status)];
+          break;
+        }
         default:
           cmp = 0;
       }
@@ -510,7 +572,11 @@ export function HomeUnified({
 
   // `onlyMyLanguages` isn't counted separately here — when it's on, the languages it seeded are
   // already reflected in `selectedLanguages.length`.
-  const activeFilterCount = (textFilter ? 1 : 0) + selectedTypes.length + selectedLanguages.length;
+  const activeFilterCount =
+    (textFilter ? 1 : 0) +
+    selectedTypes.length +
+    selectedLanguages.length +
+    (presetStatusFilter ? 1 : 0);
 
   const handleSort = (key: SortKey) => {
     setSortConfig((prev) => {
@@ -526,11 +592,19 @@ export function HomeUnified({
     setSelectedTypes([]);
     setSelectedLanguages([]);
     setOnlyMyLanguages(false);
+    setPresetStatusFilter(undefined);
   };
 
   // Selected language values are stored (and rendered as badges) in alphabetical order so the
   // badge strip stays readable no matter what order the user picked things in.
   const sortLanguages = (langs: string[]) => [...langs].sort((a, b) => a.localeCompare(b));
+
+  // Controls the language combobox's own tooltip so that toggling "Only my languages" ON
+  // programmatically shows the list of languages that were just seeded. Left uncontrolled at rest
+  // so normal hover/focus still works.
+  const [isLanguageTooltipOpen, setIsLanguageTooltipOpen] = useState<boolean | undefined>(
+    undefined,
+  );
 
   // Selecting "Only my languages" seeds the language filter with the languages of the user's
   // locally-installed items. Turning it off always clears the language filter.
@@ -538,9 +612,13 @@ export function HomeUnified({
     if (checked) {
       setSelectedLanguages(sortLanguages(Array.from(myLanguages)));
       setOnlyMyLanguages(true);
+      // Pop the language tooltip open so the user immediately sees which languages were seeded.
+      // Hover-out (or any interaction that fires onOpenChange) hands control back over.
+      setIsLanguageTooltipOpen(true);
     } else {
       setSelectedLanguages([]);
       setOnlyMyLanguages(false);
+      setIsLanguageTooltipOpen(undefined);
     }
   };
 
@@ -589,39 +667,61 @@ export function HomeUnified({
     return items.some((item) => selectedIds.has(item.id) && isLocallyInstalled(item.status));
   }, [items, selectedIds]);
 
-  // While the user hovers a batch button, dim the rows that won't participate (unselected rows AND
-  // selected rows whose primary action doesn't match). The dimming is a visual preview only — the
-  // click always runs on the matching subset and the selection is preserved.
-  type BatchHoverKind = 'get' | 'sync' | 'update' | 'install' | 'open';
-  const [hoveredBatchKind, setHoveredBatchKind] = useState<BatchHoverKind | undefined>(undefined);
+  // Hover state is declared near the other state hooks at the top of the component (scroll and
+  // fetch-more handlers consult it). This helper is defined here where the batch-action logic
+  // lives — it keys off the primary action for non-Open kinds and "locally installed" for Open.
   const rowMatchesBatchKind = (item: UnifiedItem, kind: BatchHoverKind): boolean =>
     kind === 'open' ? isLocallyInstalled(item.status) : primaryActionFor(item.status) === kind;
 
-  // Batch dispatch: awaits each matching item's callback, deselects the ones that succeeded, and
-  // keeps the ones that either didn't match or failed. Rows the batch didn't touch (unselected or
-  // non-matching) stay in the selection untouched. Also clears the hover preview so opacity resets
-  // even if the pointer stays parked on the button.
-  const runBatchAction = async (
+  // Delay clearing the hover state on mouse-leave so sweeping the pointer between adjacent
+  // batch buttons doesn't flicker the table back and forth. If the pointer lands on another
+  // batch button within the grace period, `enterHover` cancels the pending reset before it
+  // fires and the table transitions straight from one preview to the next.
+  const hoverLeaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const enterHover = (kind: BatchHoverKind) => {
+    if (hoverLeaveTimeoutRef.current !== undefined) {
+      clearTimeout(hoverLeaveTimeoutRef.current);
+      hoverLeaveTimeoutRef.current = undefined;
+    }
+    setHoveredBatchKind(kind);
+  };
+  const leaveHover = () => {
+    if (hoverLeaveTimeoutRef.current !== undefined) {
+      clearTimeout(hoverLeaveTimeoutRef.current);
+    }
+    hoverLeaveTimeoutRef.current = setTimeout(() => {
+      setHoveredBatchKind(undefined);
+      hoverLeaveTimeoutRef.current = undefined;
+    }, 100);
+  };
+  useEffect(
+    () => () => {
+      if (hoverLeaveTimeoutRef.current !== undefined) {
+        clearTimeout(hoverLeaveTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  // Batch dispatch: fires the action for every selected row that matches the predicate. Selection
+  // is preserved wholesale — including succeeded items — so the user can chain more batch actions
+  // on the same set (e.g. Sync all, then Update the same rows once statuses shift) without having
+  // to re-select. Also clears the hover preview so opacity resets even if the pointer stays
+  // parked on the button.
+  const runBatchAction = (
     kind: Exclude<UnifiedItemAction['kind'], 'remove'>,
     predicate: (item: UnifiedItem) => boolean,
   ) => {
-    const matching = items.filter((item) => selectedIds.has(item.id) && predicate(item));
     setHoveredBatchKind(undefined);
-    const settled = await Promise.allSettled(
-      matching.map(async (item) => {
-        await onItemAction(item, { kind, batch: true });
-        return item.id;
-      }),
-    );
-    const succeededIds = new Set<string>();
-    settled.forEach((result) => {
-      if (result.status === 'fulfilled') succeededIds.add(result.value);
-    });
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      succeededIds.forEach((id) => next.delete(id));
-      return next;
-    });
+    items
+      .filter((item) => selectedIds.has(item.id) && predicate(item))
+      .forEach((item) => {
+        // Wrap in Promise.resolve() so both sync (void) and async (Promise<void>) callback
+        // return types can be handled uniformly. Rejections are swallowed here since the
+        // selection is preserved either way — per-item failure surfacing would need a dedicated
+        // channel (out of scope for this design idea).
+        Promise.resolve(onItemAction(item, { kind, batch: true })).catch(() => {});
+      });
   };
 
   const runOpenBatch = () => runBatchAction('open', (item) => isLocallyInstalled(item.status));
@@ -694,25 +794,28 @@ export function HomeUnified({
     const inFlight = inFlightIds.includes(item.id);
     const isPrimaryVariant =
       kind === 'update' || kind === 'sync' || kind === 'get' || kind === 'install';
+    const button = (
+      <Button
+        size="sm"
+        disabled={inFlight}
+        variant={isPrimaryVariant ? 'default' : 'ghost'}
+        className={cn('tw:h-7', kind === 'open' ? 'tw:bg-muted' : '')}
+        onClick={(e) => {
+          e.stopPropagation();
+          onItemAction(item, { kind });
+        }}
+      >
+        {inFlight ? <Spinner className="tw:h-4" /> : actionLabel(kind)}
+      </Button>
+    );
+    // In the "buttons" variant the explanatory tooltip lives on the row's status badge (see the
+    // name-cell rendering), so the action button is bare. Everywhere else the tooltip anchors to
+    // the button itself, flipping from left → top at the narrowest breakpoint (sm-) where the
+    // table only shows short-name + action columns.
+    if (variant === 'buttons') return button;
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            size="sm"
-            disabled={inFlight}
-            variant={isPrimaryVariant ? 'default' : 'ghost'}
-            className={cn('tw:h-7', kind === 'open' ? 'tw:bg-muted' : '')}
-            onClick={(e) => {
-              e.stopPropagation();
-              onItemAction(item, { kind });
-            }}
-          >
-            {inFlight ? <Spinner className="tw:h-4" /> : actionLabel(kind)}
-          </Button>
-        </TooltipTrigger>
-        {/* At the narrowest breakpoint (sm-) the table collapses to just the short-name + action
-            columns; there's no room on the left of the action button, so flip the tooltip to the
-            top there. Everywhere else it stays anchored to the left of the button. */}
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
         <TooltipContent side={isNarrow ? 'top' : 'left'}>{actionTooltip(item)}</TooltipContent>
       </Tooltip>
     );
@@ -766,17 +869,20 @@ export function HomeUnified({
               />
             </div>
           </div>
-          {variant === 'buttons' ? (
-            /* Buttons variant — row 1: type filter rendered as a horizontal row of "big" toggle
-               buttons, one per type present in the catalog. Selected types render as the primary
-               button variant; unselected as outline. */
+          {variant === 'buttons' && !isNarrow && (
+            /* Wide-buttons variant: individual toggle buttons per type (outline, aria-pressed).
+               In narrow mode the type filter collapses into row 2 (inlined with the language
+               combobox) — see the row-2 block below. */
             <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
               {typeOptions.map((option) => {
                 const isSelected = selectedTypes.includes(option.value);
                 return (
                   <Button
                     key={option.value}
-                    variant={isSelected ? 'default' : 'outline'}
+                    variant="outline"
+                    aria-pressed={isSelected}
+                    data-state={isSelected ? 'on' : 'off'}
+                    className="tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
                     onClick={() => {
                       setSelectedTypes(
                         isSelected
@@ -786,14 +892,12 @@ export function HomeUnified({
                     }}
                   >
                     {option.label}
-                    <span className="tw:ms-1 tw:text-muted-foreground">
-                      {option.secondaryLabel}
-                    </span>
                   </Button>
                 );
               })}
             </div>
-          ) : (
+          )}
+          {variant !== 'buttons' && (
             <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-3">
               {/* Scoped muted color only on the badgesPlaceholder (a shadcn Label with
                   data-slot="label"). The trigger button inside MultiSelectComboBox uses a native
@@ -823,15 +927,69 @@ export function HomeUnified({
             </div>
           )}
           <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            {variant === 'buttons' && (
-              /* Buttons variant — row 2: language selector is now a plain combobox whose trigger
-                 shows only a count (no badges). A Tooltip on the whole trigger enumerates the
-                 selected language names on hover so the info is still one gesture away. */
+            {variant === 'buttons' && isNarrow && (
+              /* Narrow-buttons variant: type filter is inlined here as a count-only combobox
+                 (same style as the language combobox to its right). The popover entries drop
+                 secondaryLabel so no per-type counts appear inside the dropdown itself — the
+                 count is only surfaced in the trigger and the hover tooltip. */
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div>
                     <MultiSelectComboBox
-                      entries={languageOptions}
+                      entries={typeOptions.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        starred: option.starred,
+                      }))}
+                      selected={selectedTypes}
+                      onChange={setSelectedTypes}
+                      placeholder={STRINGS.filterType}
+                      icon={<Shapes />}
+                      customSelectedText={
+                        selectedTypes.length > 0
+                          ? `${STRINGS.filterType} · ${selectedTypes.length}`
+                          : undefined
+                      }
+                    />
+                  </div>
+                </TooltipTrigger>
+                {selectedTypes.length > 0 && (
+                  <TooltipContent side="bottom">
+                    <div className="tw:flex tw:flex-col tw:gap-0.5">
+                      <div className="tw:text-xs tw:opacity-70">
+                        {selectedTypes.length}{' '}
+                        {selectedTypes.length === 1
+                          ? STRINGS.typeSelectedSingular
+                          : STRINGS.typeSelectedPlural}
+                      </div>
+                      {selectedTypes.map((typeValue) => (
+                        <div key={typeValue}>
+                          {typeOptions.find((opt) => opt.value === typeValue)?.label ?? typeValue}
+                        </div>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            )}
+            {variant === 'buttons' && (
+              /* Buttons variant — row 2: language selector is now a plain combobox whose trigger
+                 shows only a count (no badges). A Tooltip on the whole trigger enumerates the
+                 selected language names on hover — and pops open programmatically when the user
+                 toggles "Only my languages" on, so they immediately see which languages were
+                 seeded. Any hover/focus change hands control back over via onOpenChange. */
+              <Tooltip
+                open={isLanguageTooltipOpen}
+                onOpenChange={(open) => setIsLanguageTooltipOpen(open ? true : undefined)}
+              >
+                <TooltipTrigger asChild>
+                  <div>
+                    <MultiSelectComboBox
+                      entries={languageOptions.map((option) => ({
+                        value: option.value,
+                        label: option.label,
+                        starred: option.starred,
+                      }))}
                       selected={selectedLanguages}
                       onChange={handleLanguagesChange}
                       placeholder={STRINGS.filterLanguage}
@@ -870,25 +1028,87 @@ export function HomeUnified({
                     checked={onlyMyLanguages}
                     onCheckedChange={handleOnlyMyLanguagesToggle}
                   />
-                  <Label htmlFor="only-my-langs" className="tw:flex tw:items-center tw:gap-1">
-                    <Star className="tw:h-3.5 tw:w-3.5" /> {STRINGS.onlyMyLanguages}
-                  </Label>
+                  <Label htmlFor="only-my-langs">{STRINGS.onlyMyLanguages}</Label>
                 </div>
               </TooltipTrigger>
               <TooltipContent side="bottom">{STRINGS.onlyMyLanguagesTooltip}</TooltipContent>
             </Tooltip>
             {activeFilterCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="tw:h-6 tw:text-xs"
-                onClick={clearFilters}
-              >
+              <Button size="sm" className="tw:h-6 tw:text-xs" onClick={clearFilters}>
                 {STRINGS.clearAll}
               </Button>
             )}
           </div>
         </CardHeader>
+
+        {/* Preselection row lives outside the scrollable CardContent so it never scrolls away.
+            `-mb-4` cancels the Card's default `gap-4` between children so the preset row sits
+            flush against the list below. */}
+        {variant === 'buttons' && !isLoading && sorted.length > 0 && (
+          <div className="tw:-mb-4 tw:flex tw:shrink-0 tw:flex-wrap tw:items-center tw:justify-end tw:gap-x-1 tw:gap-y-1 tw:px-3 tw:pb-2">
+            <Label className="tw:me-2 tw:text-xs tw:text-muted-foreground tw:uppercase">
+              {STRINGS.presetLabel}
+            </Label>
+            {(() => {
+              // "Select & filter" presets: each button both selects the matching subset AND
+              // narrows the visible list to that same subset. Counts are *global* — computed
+              // from the whole catalog, not the current filter — so the user can see the true
+              // category size before clicking. `data-state=on` marks the active preset so its
+              // pressed styling reads at a glance. Clicking an already-active preset toggles it
+              // off (same behavior as None for that filter).
+              const renderPreset = (label: string, tooltip: string, presetId: PresetFilterId) => {
+                const matches = items.filter(presetMatchers[presetId]);
+                const isActive = presetStatusFilter === presetId;
+                return (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-pressed={isActive}
+                        data-state={isActive ? 'on' : 'off'}
+                        className="tw:h-6 tw:data-[state=on]:bg-muted tw:data-[state=on]:text-foreground"
+                        onClick={() => {
+                          if (isActive) {
+                            setPresetStatusFilter(undefined);
+                            setSelectedIds(new Set());
+                            return;
+                          }
+                          setPresetStatusFilter(presetId);
+                          setSelectedIds(new Set(matches.map((item) => item.id)));
+                        }}
+                      >
+                        {label}
+                        <span className="tw:ms-1 tw:text-muted-foreground">{matches.length}</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{tooltip}</TooltipContent>
+                  </Tooltip>
+                );
+              };
+              return (
+                <>
+                  {renderPreset(
+                    STRINGS.presetEdited,
+                    STRINGS.presetEditedTooltip,
+                    'installedNeedsSync',
+                  )}
+                  {renderPreset(
+                    STRINGS.presetUpdated,
+                    STRINGS.presetUpdatedTooltip,
+                    'installedNeedsUpdate',
+                  )}
+                  {renderPreset(STRINGS.presetNew, STRINGS.presetNewTooltip, 'sharedNotInstalled')}
+                  {renderPreset(
+                    STRINGS.presetOnComputer,
+                    STRINGS.presetOnComputerTooltip,
+                    'onComputer',
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
 
         {isLoading ? (
           <CardContent className="tw:flex tw:flex-grow tw:items-center tw:justify-center">
@@ -899,110 +1119,6 @@ export function HomeUnified({
             className="tw:flex-grow tw:overflow-auto tw:px-0"
             onScroll={handleContentScroll}
           >
-            {/* Preselection rows: quick selection presets split by scope. Each row's "All" and
-                "None" operate on its own scope — Projects (type === 'Project') or Resources
-                (everything else) — so the user can compose e.g. "all new projects + all
-                has-update resources" by clicking two buttons. `addToSelection` merges the preset
-                into the current selection; `removeFromSelection` subtracts by scope. */}
-            {variant === 'buttons' && sorted.length > 0 && (
-              <div className="tw:flex tw:flex-col tw:items-end tw:gap-1 tw:px-3 tw:pb-2">
-                {(() => {
-                  const projectItems = sorted.filter((item) => item.type === 'Project');
-                  const resourceItems = sorted.filter((item) => item.type !== 'Project');
-                  const addToSelection = (ids: string[]) =>
-                    setSelectedIds((prev) => {
-                      const next = new Set(prev);
-                      ids.forEach((id) => next.add(id));
-                      return next;
-                    });
-                  const removeFromSelection = (ids: string[]) =>
-                    setSelectedIds((prev) => {
-                      const next = new Set(prev);
-                      ids.forEach((id) => next.delete(id));
-                      return next;
-                    });
-                  const renderPresetRow = (
-                    label: string,
-                    scopeItems: UnifiedItem[],
-                    extras: { label: string; matcher: (item: UnifiedItem) => boolean }[],
-                    includeAllButton: boolean,
-                  ) => (
-                    <div className="tw:flex tw:items-center tw:gap-1">
-                      {/* Fixed-width label so the button strips in both preset rows start at the
-                          same x-position and read as a stacked grid. */}
-                      <Label className="tw:me-2 tw:w-24 tw:text-xs tw:text-muted-foreground tw:uppercase">
-                        {label}
-                      </Label>
-                      {includeAllButton && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="tw:h-6"
-                          onClick={() => addToSelection(scopeItems.map((item) => item.id))}
-                        >
-                          {STRINGS.presetAll}
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="tw:h-6"
-                        onClick={() => removeFromSelection(scopeItems.map((item) => item.id))}
-                      >
-                        {STRINGS.presetNone}
-                      </Button>
-                      {extras.map((extra) => (
-                        <Button
-                          key={extra.label}
-                          variant="ghost"
-                          size="sm"
-                          className="tw:h-6"
-                          onClick={() =>
-                            addToSelection(scopeItems.filter(extra.matcher).map((item) => item.id))
-                          }
-                        >
-                          {extra.label}
-                        </Button>
-                      ))}
-                    </div>
-                  );
-                  return (
-                    <>
-                      {renderPresetRow(
-                        STRINGS.presetProjectsLabel,
-                        projectItems,
-                        [
-                          {
-                            label: STRINGS.presetEdited,
-                            matcher: (item) => item.status === 'installedNeedsSync',
-                          },
-                          {
-                            label: STRINGS.presetNew,
-                            matcher: (item) => item.status === 'sharedNotInstalled',
-                          },
-                        ],
-                        true,
-                      )}
-                      {renderPresetRow(
-                        STRINGS.presetResourcesLabel,
-                        resourceItems,
-                        [
-                          {
-                            label: STRINGS.presetInstalled,
-                            matcher: (item) => item.status === 'installedResource',
-                          },
-                          {
-                            label: STRINGS.presetHasUpdate,
-                            matcher: (item) => item.status === 'installedNeedsUpdate',
-                          },
-                        ],
-                        false,
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            )}
             {sorted.length === 0 ? (
               <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:p-8 tw:text-center">
                 <Label className="tw:text-muted-foreground">
@@ -1043,11 +1159,30 @@ export function HomeUnified({
                     {buildHead('language', STRINGS.language, 'tw:hidden tw:sm:!table-cell')}
                     {buildHead('type', STRINGS.type, 'tw:hidden tw:lg:!table-cell')}
                     {buildHead('lastUsed', STRINGS.lastUsed, 'tw:hidden tw:xl:!table-cell')}
-                    <TableHead className="tw:px-2 tw:text-start">{STRINGS.action}</TableHead>
+                    {buildHead('action', STRINGS.action)}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sorted.map((item) => {
+                  {(() => {
+                    // While a batch button is hovered, collapse the list to only *selected* rows —
+                    // unselected rows are hidden. Matching selections (the ones the click will run
+                    // on) come first at full opacity; non-matching selections come below, styled
+                    // as disabled (dimmed + non-interactive) so the user sees what stays untouched
+                    // in the same selection. Hidden-by-filter selections are folded in too so the
+                    // preview covers the entire selection regardless of the current filter.
+                    if (!hoveredBatchKind) return sorted;
+                    const visibleIdsForHover = new Set(sorted.map((item) => item.id));
+                    const allSelected = [
+                      ...sorted.filter((item) => selectedIds.has(item.id)),
+                      ...items.filter(
+                        (item) => selectedIds.has(item.id) && !visibleIdsForHover.has(item.id),
+                      ),
+                    ];
+                    return [
+                      ...allSelected.filter((item) => rowMatchesBatchKind(item, hoveredBatchKind)),
+                      ...allSelected.filter((item) => !rowMatchesBatchKind(item, hoveredBatchKind)),
+                    ];
+                  })().map((item) => {
                     const kind = primaryActionFor(item.status);
                     return (
                       <TableRow
@@ -1063,16 +1198,27 @@ export function HomeUnified({
                           if (e.detail > 1) e.preventDefault();
                         }}
                         className={cn('tw:cursor-pointer', {
-                          'tw:text-muted-foreground/80': rowIsDim(item.status),
-                          'tw:bg-muted/40': selectedIds.has(item.id),
-                          // Hover preview: when a batch button is hovered, fade every row that
-                          // won't participate — that's unselected rows AND selected rows whose
-                          // primary action doesn't match. What's left at full opacity is exactly
-                          // the set of rows the click will act on.
-                          'tw:opacity-40':
+                          // Not-locally-available rows dim by default, but a selected row overrides
+                          // that back to full foreground so it visually asserts the user's choice.
+                          'tw:text-muted-foreground/80':
+                            rowIsDim(item.status) && !selectedIds.has(item.id),
+                          // Selected-row highlight — suppressed for the "disabled" state below so
+                          // non-matching selections read as inert, not merely dimmed.
+                          'tw:bg-muted/40':
+                            selectedIds.has(item.id) &&
+                            !(
+                              hoveredBatchKind !== undefined &&
+                              !rowMatchesBatchKind(item, hoveredBatchKind)
+                            ),
+                          // While a batch button is hovered, non-matching selected rows are shown
+                          // as disabled — grayscale to strip color from the checkbox / action
+                          // button / status badge, half opacity, strikethrough, and no pointer
+                          // interaction so hover state on the batch button isn't lost when the
+                          // pointer crosses one. Together these make it unambiguous that those
+                          // rows are being *excluded* from the batch, not just de-emphasized.
+                          'tw:pointer-events-none tw:line-through tw:opacity-50 tw:grayscale':
                             hoveredBatchKind !== undefined &&
-                            (!selectedIds.has(item.id) ||
-                              !rowMatchesBatchKind(item, hoveredBatchKind)),
+                            !rowMatchesBatchKind(item, hoveredBatchKind),
                         })}
                       >
                         {/* Clicks inside the checkbox cell already toggle via `onCheckedChange`;
@@ -1095,25 +1241,46 @@ export function HomeUnified({
                             <span className="tw:font-medium tw:whitespace-nowrap">
                               {item.shortName}
                             </span>
-                            {variant === 'buttons' && (
-                              /* S/R-style status badges next to the short name — mirrors the
-                                 badges shown in the send/receive dialog so users can spot new,
-                                 edited, and update-available items at a glance. */
-                              <>
-                                {item.status === 'installedNeedsSync' && (
-                                  <Badge variant="default">{STRINGS.badgeEdited}</Badge>
-                                )}
-                                {item.status === 'installedNeedsUpdate' && (
-                                  <Badge variant="default">{STRINGS.badgeUpdate}</Badge>
-                                )}
-                                {item.status === 'sharedNotInstalled' && (
-                                  <Badge variant="default">{STRINGS.badgeNew}</Badge>
-                                )}
-                                {item.status === 'dblNotInstalled' && (
-                                  <Badge variant="muted">{STRINGS.badgeDbl}</Badge>
-                                )}
-                              </>
-                            )}
+                            {variant === 'buttons' &&
+                              (() => {
+                                /* S/R-style status badges next to the short name — mirrors the
+                                   badges shown in the send/receive dialog. Each badge carries the
+                                   same explanatory tooltip that used to live on the row's action
+                                   button (Sync date pair, install size, etc.) so the info follows
+                                   the visual indicator. Anchored to the top of the badge so it
+                                   doesn't compete with the wider row content on the sides. */
+                                let badge: ReactNode;
+                                switch (item.status) {
+                                  case 'installedNeedsSync':
+                                    badge = (
+                                      <Badge variant="secondary">{STRINGS.badgeEdited}</Badge>
+                                    );
+                                    break;
+                                  case 'installedNeedsUpdate':
+                                    badge = (
+                                      <Badge variant="secondary">{STRINGS.badgeUpdate}</Badge>
+                                    );
+                                    break;
+                                  case 'sharedNotInstalled':
+                                    badge = <Badge variant="secondary">{STRINGS.badgeNew}</Badge>;
+                                    break;
+                                  case 'dblNotInstalled':
+                                    badge = <Badge variant="muted">{STRINGS.badgeDbl}</Badge>;
+                                    break;
+                                  default:
+                                    return undefined;
+                                }
+                                return (
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="tw:inline-flex">{badge}</div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      {actionTooltip(item)}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                );
+                              })()}
                           </div>
                         </TableCell>
                         <TableCell className="tw:hidden tw:wrap-anywhere tw:whitespace-normal tw:md:!table-cell">
@@ -1156,75 +1323,167 @@ export function HomeUnified({
                 </TableBody>
               </Table>
             )}
-            {hasMore && sorted.length > 0 && (
-              <div className="tw:flex tw:items-center tw:justify-center tw:gap-2 tw:py-4 tw:text-muted-foreground">
-                <Spinner className="tw:h-4" />
-                <Label className="tw:text-xs tw:text-muted-foreground">{STRINGS.loadingMore}</Label>
-              </div>
-            )}
+            {hasMore &&
+              sorted.length > 0 &&
+              !presetStatusFilter &&
+              hoveredBatchKind === undefined && (
+                <div className="tw:flex tw:items-center tw:justify-center tw:gap-2 tw:py-4 tw:text-muted-foreground">
+                  <Spinner className="tw:h-4" />
+                  <Label className="tw:text-xs tw:text-muted-foreground">
+                    {STRINGS.loadingMore}
+                  </Label>
+                </div>
+              )}
           </CardContent>
         )}
 
-        <CardFooter className="tw:grid tw:shrink-0 tw:grid-cols-3 tw:items-center tw:gap-2 tw:border-t tw:p-3">
-          <div className="tw:flex tw:items-center tw:gap-2">
-            {selectedIds.size > 0 && (
-              <>
-                <Label className="tw:text-xs">
-                  {selectedIds.size} {STRINGS.selectionSuffix}
-                </Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="tw:h-7 tw:bg-muted"
-                  onClick={() => setSelectedIds(new Set())}
-                  aria-label={STRINGS.clearSelectionAria}
-                >
-                  <X className="tw:h-4 tw:w-4" />
-                  {STRINGS.clearSelection}
-                </Button>
-              </>
-            )}
-          </div>
-          {/* Center: batch actions for the current selection. One button per needed kind (Get,
-              Sync, Update, Install) — any subset can appear depending on what's in the selection.
-              The Open button, when applicable, is rendered last so it sits at the right of the
-              centered group. */}
-          <div className="tw:flex tw:items-center tw:justify-center tw:gap-2">
-            {neededKinds.map((kind) => (
-              <Button
-                key={kind}
-                size="sm"
-                onMouseEnter={() => setHoveredBatchKind(kind)}
-                onMouseLeave={() => setHoveredBatchKind(undefined)}
-                onFocus={() => setHoveredBatchKind(kind)}
-                onBlur={() => setHoveredBatchKind(undefined)}
-                onClick={() =>
-                  runBatchAction(kind, (item) => primaryActionFor(item.status) === kind)
-                }
-              >
-                {actionLabel(kind)}
+        {(() => {
+          // Count selections that are currently outside the filtered/sorted view. Batch buttons
+          // in the footer act on the whole selection (visible or not), so surfacing this so the
+          // user isn't surprised when a batch touches rows they can't see. Suppressed when:
+          //   - a batch button is being hovered (table already shows the exact scope), OR
+          //   - the list is empty (the "no matches" placeholder already tells the same story more
+          //     clearly, so a second warning would be noise).
+          if (hoveredBatchKind !== undefined) return undefined;
+          if (sorted.length === 0) return undefined;
+          const visibleIds = new Set(sorted.map((item) => item.id));
+          const hiddenSelectedCount = Array.from(selectedIds).filter(
+            (id) => !visibleIds.has(id),
+          ).length;
+          if (hiddenSelectedCount === 0) return undefined;
+          return (
+            /* -mb-4 cancels the Card's default `gap-4` between its direct children so the banner
+               sits flush with the footer, reading as one composite bar. The X button next to it
+               clears every filter so the hidden selections become visible — the fastest way out
+               of the "why are my batch actions touching rows I can't see?" surprise. */
+            <div className="tw:-mb-4 tw:flex tw:shrink-0 tw:items-center tw:justify-center tw:gap-2 tw:border-t tw:bg-muted tw:px-3 tw:py-2 tw:text-xs tw:text-muted-foreground">
+              <span>
+                {hiddenSelectedCount}{' '}
+                {hiddenSelectedCount === 1
+                  ? STRINGS.hiddenSelectedSingular
+                  : STRINGS.hiddenSelectedPlural}
+              </span>
+              <Button variant="ghost" size="sm" className="tw:h-6" onClick={clearFilters}>
+                <X className="tw:h-3.5 tw:w-3.5" />
+                {STRINGS.clearAll}
               </Button>
-            ))}
-            {canOpenSome && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="tw:bg-muted"
-                onMouseEnter={() => setHoveredBatchKind('open')}
-                onMouseLeave={() => setHoveredBatchKind(undefined)}
-                onFocus={() => setHoveredBatchKind('open')}
-                onBlur={() => setHoveredBatchKind(undefined)}
-                onClick={runOpenBatch}
-              >
-                {STRINGS.open}
-              </Button>
-            )}
-          </div>
-          <Label className="tw:justify-self-end tw:text-xs tw:text-muted-foreground">
-            {sorted.length} {STRINGS.ofSuffix} {items.length}
-            {hasMore ? '+' : ''} {STRINGS.itemsSuffix}
-          </Label>
-        </CardFooter>
+            </div>
+          );
+        })()}
+
+        {(() => {
+          // Extract the three footer chunks so the wide (single-row, 3-col) and narrow (two-row:
+          // batch on top, selection + count below) layouts can share the exact same content.
+          const selectionContent = selectedIds.size > 0 && (
+            <div className="tw:flex tw:items-center tw:gap-2">
+              <Label className="tw:text-xs">
+                {selectedIds.size} {STRINGS.selectionSuffix}
+              </Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw:h-7 tw:w-7 tw:bg-muted"
+                    onClick={() => setSelectedIds(new Set())}
+                    aria-label={STRINGS.clearSelectionAria}
+                  >
+                    <X className="tw:h-4 tw:w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{STRINGS.clearSelection}</TooltipContent>
+              </Tooltip>
+            </div>
+          );
+          // Batch actions for the current selection. One button per needed kind (Get, Sync,
+          // Update, Install) — any subset can appear depending on what's in the selection. The
+          // Open button, when applicable, is rendered last so it sits at the right. Hidden when
+          // the list is empty ("no filter matches") since there's nothing to act on.
+          const batchContent = (
+            <div className="tw:flex tw:items-center tw:justify-center tw:gap-2">
+              {sorted.length > 0 &&
+                neededKinds.map((kind) => {
+                  const affectedCount = items.filter(
+                    (item) => selectedIds.has(item.id) && primaryActionFor(item.status) === kind,
+                  ).length;
+                  return (
+                    <Button
+                      key={kind}
+                      size="sm"
+                      onMouseEnter={() => enterHover(kind)}
+                      onMouseLeave={leaveHover}
+                      onFocus={() => enterHover(kind)}
+                      onBlur={leaveHover}
+                      onClick={() =>
+                        runBatchAction(kind, (item) => primaryActionFor(item.status) === kind)
+                      }
+                    >
+                      {actionLabel(kind)}
+                      <span className="tw:ms-1">{affectedCount}</span>
+                    </Button>
+                  );
+                })}
+              {sorted.length > 0 &&
+                canOpenSome &&
+                (() => {
+                  const affectedOpenCount = items.filter(
+                    (item) => selectedIds.has(item.id) && isLocallyInstalled(item.status),
+                  ).length;
+                  return (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="tw:bg-muted"
+                      onMouseEnter={() => enterHover('open')}
+                      onMouseLeave={leaveHover}
+                      onFocus={() => enterHover('open')}
+                      onBlur={leaveHover}
+                      onClick={runOpenBatch}
+                    >
+                      {STRINGS.open}
+                      <span className="tw:ms-1">{affectedOpenCount}</span>
+                    </Button>
+                  );
+                })()}
+            </div>
+          );
+          // With a preset status filter active the list is already restricted to local + S/R
+          // items — a bounded set with no "hasMore" pull-in — so the "x of y items" framing
+          // (which contrasts current view against the full catalog) no longer applies. Show a
+          // simple "x items" instead.
+          const countContent = (
+            <Label className="tw:text-xs tw:text-muted-foreground">
+              {presetStatusFilter ? (
+                <>
+                  {sorted.length} {STRINGS.itemsSuffix}
+                </>
+              ) : (
+                <>
+                  {sorted.length} {STRINGS.ofSuffix} {items.length}
+                  {hasMore ? '+' : ''} {STRINGS.itemsSuffix}
+                </>
+              )}
+            </Label>
+          );
+          if (isNarrow) {
+            return (
+              <CardFooter className="tw:flex tw:shrink-0 tw:flex-col tw:gap-2 tw:border-t tw:p-3">
+                {batchContent}
+                <div className="tw:flex tw:w-full tw:items-center tw:justify-between tw:gap-2">
+                  <div>{selectionContent}</div>
+                  {countContent}
+                </div>
+              </CardFooter>
+            );
+          }
+          return (
+            <CardFooter className="tw:grid tw:shrink-0 tw:grid-cols-3 tw:items-center tw:gap-2 tw:border-t tw:p-3">
+              <div>{selectionContent}</div>
+              {batchContent}
+              <div className="tw:justify-self-end">{countContent}</div>
+            </CardFooter>
+          );
+        })()}
 
         <Dialog
           open={pendingRemove !== undefined}
