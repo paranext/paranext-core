@@ -880,6 +880,8 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     // A2 seam: the grid is project-bound so it can fire first-open overlay init and (in A3+) select
     // its contents. The PT10 default-layout open passes no projectId (dormant until A3).
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId;
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
     return {
       ...savedWebView,
       // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
@@ -895,6 +897,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       content: scriptureTextGridWebView,
       // Lucide "Library" glyph (books on a shelf) for the tab icon.
       iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+      // In simple mode, force scroll group 0 so the grid stays verse-synced with the scripture
+      // editor (which is also forced to 0 in simple mode). Power mode preserves the saved value.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
     };
   },
 };

@@ -2,40 +2,74 @@ import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectDataProvider } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectScriptureTextGridTitle } from './scripture-text-grid.utils';
+import {
+  ChapterContextResource,
+  ScriptureTextGrid,
+} from './scripture-text-grid/scripture-text-grid.component';
+import { GridResource } from './scripture-text-grid/resource-cell.component';
+import { getScriptureTextGridContents } from './scripture-text-grid/scripture-text-grid-contents.utils';
+import { useTextCollectionSources } from './use-text-collection-sources.hook';
 
 // Tab-title localized keys. The label is count-driven: "Scripture text" when 0-1 cells are
 // displayed, "Text Collection" when 2 or more (see `selectScriptureTextGridTitle`).
 const TITLE_SINGLE_KEY = '%webView_scriptureTextGrid_title_single%';
 const TITLE_MULTIPLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
-const ALL_STRING_KEYS: LocalizeKey[] = [TITLE_SINGLE_KEY, TITLE_MULTIPLE_KEY];
+const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+const ALL_STRING_KEYS: LocalizeKey[] = [
+  TITLE_SINGLE_KEY,
+  TITLE_MULTIPLE_KEY,
+  CHAPTER_CONTEXT_CLOSE_KEY,
+];
+
+/** Sprint default; A5 View Options will wire a user toggle here. */
+const DEFAULT_ROW_VIEW_MODE = 'verse' as const;
 
 /**
- * Scripture Text Grid web view (PT-4049 / A1 scaffold; PT-4050 / A2 first-open trigger).
+ * Scripture Text Grid web view (PT-4049 / A1 shell; PT-4050 / A2 first-open trigger; PT-4051 / A3
+ * effective filter; PT-4052 / A4 row).
  *
- * A1 shell: no toolbar, a placeholder body, and a dynamic tab title driven by the number of
- * displayed cells (the `VerseCell` row renderer lands in A4 / PT-4052). A2 adds a minimal
- * first-open trigger that initializes the per-user shown-by-default overlay once per project.
- * Correctness (no double-init) is enforced server-side by an idempotent per-user-per-project
- * marker; this effect is a thin trigger. Richer UI wiring (contents selector, project selection)
- * lands in A3/A5.
+ * Renders one ResourceCell per shown resource in a horizontal row, all synced to the active scrRef.
+ * Which resources show is decided by A3's `getScriptureTextGridContents` selector against the four
+ * Text Collection sources (both admin lists, the user list, and the per-user shown-by-default
+ * overlay) assembled by `useTextCollectionSources`. Keeps A2's idempotent first-open overlay-init
+ * trigger. The selector returns Bible-text references; the row consumes `{ projectId, label }`.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
-  useWebViewState,
+  useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   // `ALL_STRING_KEYS` is a module-level constant, so its reference is already stable across renders
   // (satisfying `useLocalizedStrings`'s stable-reference requirement) — no `useMemo` needed.
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
-  // A1 SCAFFOLD SEAM: the real grid contents (checked resources) come from A3's
-  // `getScriptureTextGridContents` effective-list selector. Until A3 lands, this persisted stub
-  // both drives the dynamic-title threshold and exercises restart-persistence (`useWebViewState`
-  // round-trips across app restart). Replace this state with the A3 selector when it lands.
-  const [gridContentsIds] = useWebViewState<string[]>('gridContentsIds', []);
-  const displayedCellCount = gridContentsIds.length;
+  // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid; child
+  // components cannot call this hook (it is a WebViewProps member, not a @papi/frontend/react export).
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
+    undefined,
+  );
+
+  // `setChapterContext` is a stable useState setter, so it is passed to the grid directly (no
+  // wrapping callback needed). `handleCloseChapterContext` adapts it to a `() => void` closer used by
+  // both the Escape handler and the panel's close button.
+  const handleCloseChapterContext = useCallback(() => {
+    setChapterContext(undefined);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || chapterContext === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleCloseChapterContext();
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [chapterContext, handleCloseChapterContext]);
 
   const textConnectionPdp = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -61,19 +95,52 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     });
   }, [projectId, textConnectionPdp]);
 
-  // Dynamic tab title: flips to "Text Collection" at 2+ displayed cells, "Scripture text" otherwise.
-  useEffect(() => {
-    // Wait for localization so we never flash a raw key into the tab. `useLocalizedStrings` returns
-    // the key itself while loading, so gate on `isLoading` (a truthiness check couldn't detect that).
-    if (isLoadingLocalizedStrings) return;
-    updateWebViewDefinition({
-      title: selectScriptureTextGridTitle(displayedCellCount, {
-        single: localizedStrings[TITLE_SINGLE_KEY],
-        multiple: localizedStrings[TITLE_MULTIPLE_KEY],
-      }),
-    });
-  }, [displayedCellCount, isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+  // #region Grid contents — A3 selector over the four Text Collection sources, mapped to the row's
+  // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
+  const [sources] = useTextCollectionSources(projectId);
+  const resources = useMemo<GridResource[]>(
+    () =>
+      getScriptureTextGridContents(sources).map((reference) => ({
+        projectId: reference.id,
+        label: reference.name,
+      })),
+    [sources],
+  );
+  // #endregion
 
-  // Placeholder body. The empty-state directional copy (A6) and the VerseCell row (A4) replace this.
-  return <div data-testid="scripture-text-grid" />;
+  // Count-driven tab title, flipping to "Text Collection" at 2+ shown cells and "Scripture text"
+  // otherwise. `ScriptureTextGrid` always renders exactly `resources.length` cells, so the count is
+  // read straight from `resources` here — no round-trip through a child callback. `undefined` while
+  // localization loads so we never flash a raw key into the tab or the grid's accessible name.
+  const title = useMemo(
+    () =>
+      isLoadingLocalizedStrings
+        ? undefined
+        : selectScriptureTextGridTitle(resources.length, {
+            single: localizedStrings[TITLE_SINGLE_KEY],
+            multiple: localizedStrings[TITLE_MULTIPLE_KEY],
+          }),
+    [isLoadingLocalizedStrings, localizedStrings, resources.length],
+  );
+
+  useEffect(() => {
+    if (title === undefined) return;
+    updateWebViewDefinition({ title });
+  }, [title, updateWebViewDefinition]);
+
+  return (
+    <div className="tw:flex tw:h-screen tw:flex-col">
+      <ScriptureTextGrid
+        ariaLabel={title}
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode={DEFAULT_ROW_VIEW_MODE}
+        chapterContext={chapterContext}
+        onChapterContextChange={setChapterContext}
+        onChapterContextClose={handleCloseChapterContext}
+        closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+      />
+    </div>
+  );
 };
