@@ -50,25 +50,49 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
-    public void Serialize_CommentWhoseBodyCannotRender_DegradesToPlaceholderAndKeepsMetadata()
+    public void Serialize_CommentWithoutThread_ThrowsWiringErrorInsteadOfSilentlyDegrading()
     {
-        // A wrapper with no thread makes ContentsHtml throw (the documented "Cannot get ContentsHtml
-        // without a valid thread" path) — a deterministic stand-in for any note whose stored content
-        // can't be rendered. In production the throw comes from corrupt content; the isolation is the same.
+        // A wrapper with no thread is a wiring/programmer bug — a comment serialized in
+        // getCommentThreads always has a thread — not corrupt content. It must surface as a
+        // CommentThreadContextMissingException rather than being masked as a placeholder body, so a
+        // future regression that builds thread-less wrappers fails loudly instead of blanking notes.
         Comment testComment = CommentTestHelper.CreateBasicComment(); // Thread "4217dff8"
         var wrapper = new PlatformCommentWrapper(testComment, null);
 
-        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(wrapper, _serializationOptions);
-
-        using var doc = JsonDocument.Parse(json);
-        Assert.That(
-            doc.RootElement.GetProperty("contents").GetString(),
-            Is.EqualTo("<p>This note could not be displayed.</p>")
+        Assert.Throws<CommentThreadContextMissingException>(
+            () => JsonSerializer.Serialize<PlatformCommentWrapper>(wrapper, _serializationOptions)
         );
-        // The note is not lost — only its body is degraded; metadata still serializes.
-        Assert.That(doc.RootElement.GetProperty("thread").GetString(), Is.EqualTo("4217dff8"));
-        Assert.That(doc.RootElement.GetProperty("user").GetString(), Is.EqualTo("Tim Steenwyk"));
-        Assert.That(doc.RootElement.GetProperty("verseRef").GetString(), Is.EqualTo("GEN 1:24"));
+    }
+
+    [Test]
+    public void TryRenderContents_GenuineRenderFailureDegrades_WiringErrorPropagates()
+    {
+        // A genuine render failure (corrupt content) degrades the body to the placeholder so one
+        // unrenderable note doesn't abort the whole response. Real ParatextData render throws can't
+        // be forced from a test (decoders return empty rather than throwing), so the contract is
+        // proven on the helper directly, mirroring the TryRender conflict-field test below.
+        Assert.That(
+            PlatformCommentConverter.TryRenderContents(
+                () => throw new InvalidOperationException("render failed"),
+                "comment-id"
+            ),
+            Is.EqualTo(PlatformCommentConverter.ContentsUnavailablePlaceholder)
+        );
+
+        // A missing-thread wiring error is NOT masked as a placeholder — it propagates.
+        Assert.Throws<CommentThreadContextMissingException>(
+            () =>
+                PlatformCommentConverter.TryRenderContents(
+                    () => throw new CommentThreadContextMissingException("no thread"),
+                    "comment-id"
+                )
+        );
+
+        // A successful render is returned unchanged.
+        Assert.That(
+            PlatformCommentConverter.TryRenderContents(() => "<p>real body</p>", "comment-id"),
+            Is.EqualTo("<p>real body</p>")
+        );
     }
 
     [Test]
@@ -127,6 +151,15 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(
             PlatformCommentConverter.IsContentsUnavailablePlaceholder(
                 "  <p>This note could not be displayed.</p>  "
+            ),
+            Is.True
+        );
+        // HTML-entity variant: a re-serialized &nbsp; between words decodes to the same text. This is
+        // the entity-decode hardening (strip tags, THEN HtmlDecode) over the previous tag-strip-only
+        // normalization, which would have left "&nbsp;" in place and failed to match.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p>This&nbsp;note could not be displayed.</p>"
             ),
             Is.True
         );

@@ -510,6 +510,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         VerifyUserCanCreateComments();
 
+        // Never let the "content could not be displayed" placeholder become a note's real content.
+        // A degraded note is served with PlatformCommentConverter.ContentsUnavailablePlaceholder;
+        // planting that text here would create a note that UpdateComment then permanently refuses to
+        // edit (it rejects the same placeholder). Mirrors the guard in UpdateComment.
+        if (PlatformCommentConverter.IsContentsUnavailablePlaceholder(comment.Contents?.OuterXml))
+            throw new InvalidOperationException(
+                "Cannot create a comment whose content is the unavailable-content placeholder."
+            );
+
         if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
         {
             throw new InvalidOperationException(

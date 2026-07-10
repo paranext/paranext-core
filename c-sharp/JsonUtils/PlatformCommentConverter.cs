@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -54,25 +55,37 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
     internal const string ContentsUnavailablePlaceholder =
         "<p>This note could not be displayed.</p>";
 
+    private static readonly Regex CollapseWhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+
+    // The placeholder normalized once (not on every UpdateComment). Declared after the regex it
+    // depends on so static field initialization order is correct.
+    private static readonly string NormalizedPlaceholder = NormalizeToComparableText(
+        ContentsUnavailablePlaceholder
+    );
+
     /// <summary>
     /// Whether <paramref name="html"/> is the "content could not be displayed" placeholder
     /// (see <see cref="ContentsUnavailablePlaceholder"/>). Compares on stripped, whitespace-collapsed
     /// text rather than exact HTML: the comment editor round-trips saved content through Lexical,
     /// which can re-serialize the placeholder with different markup (added attributes, span wrappers,
-    /// whitespace) while preserving the text. An exact-HTML match would miss those variants and let
-    /// the placeholder overwrite a note's real content.
+    /// whitespace, HTML entities) while preserving the text. An exact-HTML match would miss those
+    /// variants and let the placeholder overwrite a note's real content.
     /// </summary>
     internal static bool IsContentsUnavailablePlaceholder(string? html) =>
-        NormalizeToComparableText(html)
-        == NormalizeToComparableText(ContentsUnavailablePlaceholder);
+        NormalizeToComparableText(html) == NormalizedPlaceholder;
 
-    // Strips tags (replacing each with a space so words aren't glued across tag boundaries) and
-    // collapses whitespace. Deliberately a blunt comparison helper for the fixed placeholder above,
-    // not a general-purpose HTML sanitizer.
+    // Strips tags with the codebase's canonical PasteUtils.RemoveHtmlTags, then decodes HTML entities
+    // (so a re-serialized "&nbsp;"/"&#39;" variant still compares equal), then collapses whitespace.
+    // Order matters: strip before decode — decoding first could turn "&lt;p&gt;" into "<p>", which the
+    // stripper would then eat, changing the compared text. Deliberately a blunt comparison helper for
+    // the fixed placeholder above, not a general-purpose HTML sanitizer (a "&gt;" inside an attribute
+    // value is not handled — acceptable for the fixed, attribute-free placeholder).
     private static string NormalizeToComparableText(string? html) =>
         html is null
             ? string.Empty
-            : Regex.Replace(Regex.Replace(html, "<[^>]*>", " "), @"\s+", " ").Trim();
+            : CollapseWhitespaceRegex
+                .Replace(WebUtility.HtmlDecode(PasteUtils.RemoveHtmlTags(html)), " ")
+                .Trim();
 
     /// <summary>
     /// Deserializes a <see cref="PlatformCommentWrapper"/> from JSON.
@@ -352,48 +365,44 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         writer.WriteBoolean(HIDE_IN_TEXT_WINDOW, value.HideInTextWindow);
         // Degrade rather than fail: a note whose stored content can't be rendered must not abort the
         // whole getCommentThreads response. Body render failure → placeholder.
-        string contents;
-        try
-        {
-            contents = value.ContentsHtml;
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(
-                $"WARNING: could not render contents for comment {value.Id}; using placeholder. {e}"
-            );
-            contents = ContentsUnavailablePlaceholder;
-        }
+        string contents = TryRenderContents(() => value.ContentsHtml, value.Id);
+        bool bodyDegraded = contents == ContentsUnavailablePlaceholder;
         writer.WriteString(CONTENTS, contents);
-        // Conflict-note decode fields (verseText conflicts only; null for all other notes → skipped).
-        // An optional decode field that throws is omitted (same wire shape as null) rather than failing.
-        JsonConverterUtils.TryWriteString(
-            writer,
-            REJECTED_TEXT,
-            TryRender(() => value.RejectedText, value.Id, REJECTED_TEXT)
-        );
-        JsonConverterUtils.TryWriteString(
-            writer,
-            ACCEPTED_TEXT,
-            TryRender(() => value.AcceptedText, value.Id, ACCEPTED_TEXT)
-        );
-        JsonConverterUtils.TryWriteString(
-            writer,
-            RESULT_TEXT,
-            TryRender(() => value.ResultText, value.Id, RESULT_TEXT)
-        );
-        JsonConverterUtils.TryWriteString(
-            writer,
-            REJECTED_RESULT_TEXT,
-            TryRender(() => value.RejectedResultText, value.Id, REJECTED_RESULT_TEXT)
-        );
-        // MergedText runs the live USFM diff engine (GetMergedUsfm + DiffToken.GetDiffString), so
-        // route it through the same per-field isolation as the other decode getters.
-        JsonConverterUtils.TryWriteString(
-            writer,
-            MERGED_TEXT,
-            TryRender(() => value.MergedText, value.Id, MERGED_TEXT)
-        );
+        // Conflict-note decode fields (verseText conflicts only). Gated on Type == Conflict so the
+        // common non-conflict note allocates none of the closures below. Also skipped when the body
+        // itself degraded, so a "could not be displayed" note never ships a placeholder body
+        // alongside populated conflict data. An optional decode field that throws is omitted (same
+        // wire shape as null) rather than failing.
+        if (!bodyDegraded && value.Type == NoteType.Conflict)
+        {
+            JsonConverterUtils.TryWriteString(
+                writer,
+                REJECTED_TEXT,
+                TryRender(() => value.RejectedText, value.Id, REJECTED_TEXT)
+            );
+            JsonConverterUtils.TryWriteString(
+                writer,
+                ACCEPTED_TEXT,
+                TryRender(() => value.AcceptedText, value.Id, ACCEPTED_TEXT)
+            );
+            JsonConverterUtils.TryWriteString(
+                writer,
+                RESULT_TEXT,
+                TryRender(() => value.ResultText, value.Id, RESULT_TEXT)
+            );
+            JsonConverterUtils.TryWriteString(
+                writer,
+                REJECTED_RESULT_TEXT,
+                TryRender(() => value.RejectedResultText, value.Id, REJECTED_RESULT_TEXT)
+            );
+            // MergedText runs the live USFM diff engine (GetMergedUsfm + DiffToken.GetDiffString), so
+            // route it through the same per-field isolation as the other decode getters.
+            JsonConverterUtils.TryWriteString(
+                writer,
+                MERGED_TEXT,
+                TryRender(() => value.MergedText, value.Id, MERGED_TEXT)
+            );
+        }
         JsonConverterUtils.TryWriteString(writer, BIBLICAL_TERM_ID, value.BiblicalTermId);
         if (value.TagsAdded != null)
             JsonConverterUtils.TryWriteString(writer, TAG_ADDED, TryJoin(",", value.TagsAdded));
@@ -418,9 +427,35 @@ public class PlatformCommentConverter : JsonConverter<PlatformCommentWrapper>
         catch (Exception e)
         {
             Console.WriteLine(
-                $"WARNING: could not render {field} for comment {commentId}; omitting it. {e}"
+                $"WARNING: could not render {field} for comment {commentId}; omitting it. {e.Message}"
             );
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Renders a note's body, degrading to <see cref="ContentsUnavailablePlaceholder"/> if the stored
+    /// content can't be rendered so one unrenderable note doesn't abort the whole getCommentThreads
+    /// response. A <see cref="CommentThreadContextMissingException"/> is a wiring error, not corrupt
+    /// content, so it is rethrown rather than masked as a placeholder — a comment without a thread is
+    /// a programmer bug that should surface, not silently blank every note.
+    /// </summary>
+    internal static string TryRenderContents(Func<string> renderContents, string commentId)
+    {
+        try
+        {
+            return renderContents();
+        }
+        catch (CommentThreadContextMissingException)
+        {
+            throw;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(
+                $"WARNING: could not render contents for comment {commentId}; using placeholder. {e.Message}"
+            );
+            return ContentsUnavailablePlaceholder;
         }
     }
 

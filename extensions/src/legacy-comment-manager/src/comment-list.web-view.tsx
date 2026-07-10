@@ -260,8 +260,13 @@ global.webViewComponent = function CommentListWebView({
     async (commentId: string, contents: string): Promise<boolean> =>
       withPdp(commentsPdp, 'handleUpdateComment', false, async (pdp) => {
         try {
-          await pdp.updateComment(commentId, contents);
-          return true;
+          // `false` means the update was rejected (comment not found, or its content normalizes to
+          // the "content unavailable" placeholder, which is never persisted over real content).
+          // Surface it so the editor stays open instead of closing as if the edit had saved.
+          const updateSucceeded = (await pdp.updateComment(commentId, contents)) !== false;
+          if (!updateSucceeded)
+            logger.warn(`Update of comment ${commentId} was rejected and not saved.`);
+          return updateSucceeded;
         } catch (error) {
           logger.error(`Failed to update comment ${commentId}:`, error);
           return false;
