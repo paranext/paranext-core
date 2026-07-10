@@ -33,6 +33,8 @@ import {
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
+import { resolveReferenceHistoryDirection } from 'platform-bible-utils/experimental';
+import { readDirection } from 'platform-bible-react/experimental';
 import type { NetworkEventTypes } from 'papi-shared-types';
 
 /**
@@ -71,6 +73,9 @@ const onDidChangeReferenceHistoryBufferedEmitter = createBufferedNetworkEventEmi
   EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   {
     notification: {
+      // Experimental to match the `@experimental` TSDoc on `onDidChangeReferenceHistory` in
+      // papi-shared-types; surfaces `x-experimental` in the live OpenRPC document.
+      'x-experimental': true,
       summary: "Emitted when a scroll group's reference history changes.",
       params: [
         {
@@ -260,18 +265,36 @@ export function navigateReferenceHistorySync(
   const history = getOrCreateReferenceHistory(groupId);
   // `navigateHistory` mutates the stacks before `setScrRefSync` runs. Safe for the verse position:
   // adjacent entries always differ in book+chapter, so a single-step move is never a no-op and the
-  // stored ref ends up matching `current`. CAVEAT: a multi-step jump can land on a NON-adjacent entry
-  // with the same book/chapter/verse but a different `sourceProjectId` (e.g. a sourceless
-  // duplicate); setScrRefSync's no-op guard then returns without rewriting the stored source frame,
-  // so it can briefly lag this entry's. Low impact — no onDidUpdateScrRef emit, self-heals on the
-  // next navigation, and only affects a versification-divergent ref read by a freshly-mounted
-  // follower. See PR #2520 review finding #6.
+  // stored ref ends up matching `current`. CAVEAT (sourceless-only): a multi-step jump can land on a
+  // NON-adjacent entry with the same book/chapter/verse whose `sourceProjectId` is `undefined` while
+  // the stored ref has a defined source. setScrRefSync's no-op guard skips only when the incoming
+  // source is `undefined` or equal to the stored one, so this sourceless case returns without
+  // rewriting the stored source frame, briefly lagging `current`. A jump onto an entry with a
+  // DIFFERENT DEFINED source (the real cross-versification case) does NOT hit the guard —
+  // setScrRefSync updates the frame normally — so this is not a versification-correctness problem.
+  // Sourceless entries are rare historical-compatibility artifacts, and the impact is low (no
+  // onDidUpdateScrRef emit, self-heals on the next navigation), so we accept it.
   const destination = navigateHistory(history, offset);
   if (!destination) return false;
   // The stacks already reflect the navigation; skip recording so it is not double-pushed.
   setScrRefSync(groupId, destination.scrRef, destination.sourceProjectId, false);
   emitReferenceHistoryChange(groupId, history);
   return true;
+}
+
+/**
+ * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
+ * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
+ * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
+ * commands so the main-process keyboard handler can dispatch the physical key directly and stay
+ * direction-agnostic.
+ */
+export function navigateReferenceHistoryPhysicalSync(
+  scrollGroupId: ScrollGroupId | undefined,
+  physicalDirection: 'left' | 'right',
+): boolean {
+  const logicalDirection = resolveReferenceHistoryDirection(physicalDirection, readDirection());
+  return navigateReferenceHistorySync(scrollGroupId, logicalDirection === 'back' ? -1 : 1);
 }
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
@@ -632,7 +655,15 @@ export function setScrRefSync(
   });
 
   if (referenceHistory) {
-    recordNavigation(referenceHistory, { scrRef: scrRefClone, sourceProjectId });
+    // deepClone the ref into history so the recorded entry never aliases the object stored in
+    // `scrRefs` above (which the module-load migration mutates in place — an in-place edit must not
+    // silently reach through into history).
+    recordNavigation(referenceHistory, { scrRef: deepClone(scrRefClone), sourceProjectId });
+    // Always emit, even for a verse-only move that changed only `current` and not the back/forward
+    // stacks: `current` is part of the published history and a consumer may render it. We could skip
+    // the emit (and its clone + broadcast) on a verse-only change to save work on the verse-scroll
+    // hot path, but that would assume no consumer needs the updated current ref — not worth the risk
+    // until a real performance problem shows up.
     emitReferenceHistoryChange(scrollGroupIdDefaulted, referenceHistory);
   }
 
@@ -670,41 +701,88 @@ const scrollGroupService: IScrollGroupRemoteService = {
 export async function startScrollGroupService(): Promise<void> {
   // Registering the network object and the history-navigation commands are independent, so run
   // them concurrently.
+  // Shared OpenRPC doc fragments so the three navigate commands can't drift. `x-experimental`
+  // mirrors the `@experimental` TSDoc on these commands in papi-shared-types.
+  const scrollGroupIdParam = {
+    name: 'scrollGroupId',
+    required: true,
+    summary: 'Scroll group whose history to navigate',
+    schema: { type: 'number' },
+  } as const;
+  const offsetParam = {
+    name: 'offset',
+    required: true,
+    summary: 'Signed number of steps: negative = back, positive = forward',
+    schema: { type: 'number' },
+  } as const;
+  const didNavigateResult = { name: 'didNavigate', schema: { type: 'boolean' } } as const;
+
   await Promise.all([
-    networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService),
+    // Mark ONLY the two experimental methods on the (otherwise stable) scroll group network object,
+    // via per-method `x-experimental` in documentation.methods[] — NOT the whole-object 5th-param
+    // fanout, which would wrongly mark the stable getScrRef/setScrRef methods too. Mirrors the
+    // `@experimental` TSDoc on these methods in IScrollGroupRemoteService.
+    networkObjectService.set(
+      NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+      scrollGroupService,
+      'object',
+      undefined,
+      {
+        methods: [
+          {
+            name: 'getReferenceHistory',
+            'x-experimental': true,
+            summary: 'Get a copy of the reference history for the provided scroll group',
+            params: [
+              {
+                name: 'scrollGroupId',
+                required: true,
+                summary: 'Scroll group whose history to get',
+                schema: { type: 'number' },
+              },
+            ],
+            result: { name: 'referenceHistory', schema: { type: 'object' } },
+          },
+          {
+            name: 'navigateReferenceHistory',
+            'x-experimental': true,
+            summary:
+              'Navigate within the reference history of the provided scroll group ' +
+              '(negative offset = back, positive = forward)',
+            params: [scrollGroupIdParam, offsetParam],
+            result: didNavigateResult,
+          },
+        ],
+      },
+    ),
+    // Physical left/right (not logical back/forward): the renderer resolves the direction for the
+    // current UI layout, so the main-process keyboard handler dispatches the physical key directly
+    // without a separate direction round-trip. In RTL the pair swaps meaning.
     registerCommand(
-      'platform.navigateBackInReferenceHistory',
-      async (scrollGroupId) => navigateReferenceHistorySync(scrollGroupId, -1),
+      'platform.navigateLeftInReferenceHistory',
+      async (scrollGroupId) => navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left'),
       {
         method: {
-          summary: 'Navigate one step back in the reference history of the given scroll group',
-          params: [
-            {
-              name: 'scrollGroupId',
-              required: true,
-              summary: 'Scroll group whose history to navigate',
-              schema: { type: 'number' },
-            },
-          ],
-          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+          'x-experimental': true,
+          summary:
+            'Navigate the reference history of the given scroll group in the physical "left" ' +
+            'direction (back in LTR, forward in RTL)',
+          params: [scrollGroupIdParam],
+          result: didNavigateResult,
         },
       },
     ),
     registerCommand(
-      'platform.navigateForwardInReferenceHistory',
-      async (scrollGroupId) => navigateReferenceHistorySync(scrollGroupId, 1),
+      'platform.navigateRightInReferenceHistory',
+      async (scrollGroupId) => navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right'),
       {
         method: {
-          summary: 'Navigate one step forward in the reference history of the given scroll group',
-          params: [
-            {
-              name: 'scrollGroupId',
-              required: true,
-              summary: 'Scroll group whose history to navigate',
-              schema: { type: 'number' },
-            },
-          ],
-          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+          'x-experimental': true,
+          summary:
+            'Navigate the reference history of the given scroll group in the physical "right" ' +
+            'direction (forward in LTR, back in RTL)',
+          params: [scrollGroupIdParam],
+          result: didNavigateResult,
         },
       },
     ),
@@ -713,24 +791,12 @@ export async function startScrollGroupService(): Promise<void> {
       async (scrollGroupId, offset) => navigateReferenceHistorySync(scrollGroupId, offset),
       {
         method: {
+          'x-experimental': true,
           summary:
             'Navigate multiple steps in the reference history of the given scroll group ' +
             '(negative offset = back, positive = forward)',
-          params: [
-            {
-              name: 'scrollGroupId',
-              required: true,
-              summary: 'Scroll group whose history to navigate',
-              schema: { type: 'number' },
-            },
-            {
-              name: 'offset',
-              required: true,
-              summary: 'Signed number of steps: negative = back, positive = forward',
-              schema: { type: 'number' },
-            },
-          ],
-          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+          params: [scrollGroupIdParam, offsetParam],
+          result: didNavigateResult,
         },
       },
     ),

@@ -1067,7 +1067,7 @@ Pass `'x-experimental': true` in the registration's documentation object. The ma
 | Surface | TSDoc location | Wire field path |
 |---|---|---|
 | Commands | `CommandHandlers` entry in `papi-shared-types` augmentation | `commandDocs.method['x-experimental']: true` |
-| Network objects | (TSDoc on the interface registered) | `networkObjectService.set(..., { 'x-experimental': true })` (5th param) |
+| Network objects | (TSDoc on the interface + each experimental method) | Whole object: `networkObjectService.set(..., { 'x-experimental': true })` (5th-param documentation object; fans out to every method). Only specific methods: give the 5th-param documentation a `methods: [{ name, 'x-experimental': true, params, result }]` entry per method — a per-method value wins over the object-level default, so omit the top-level flag to mark a subset of an otherwise-stable object. |
 | Data providers | (TSDoc on the data type interface) | `dataProviderService.registerEngine(..., { 'x-experimental': true })` (5th param) |
 | WebView providers | (TSDoc on the provider type) | `webViewProviderService.registerWebViewProvider(..., undefined, { 'x-experimental': true })` |
 | Project data providers | `ProjectDataProviderInterfaces` entry; factory return envelope | `registerProjectDataProviderEngineFactory(..., undefined, { 'x-experimental': true })` |

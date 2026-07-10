@@ -16,6 +16,7 @@ import {
 import { readDirection } from '@/utils/dir-helper.util';
 import { isMacOs } from '@/utils/platform.util';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { resolveReferenceHistoryDirection } from 'platform-bible-utils/experimental';
 import { ArrowLeft, ArrowRight, ChevronDown } from 'lucide-react';
 
 /**
@@ -89,7 +90,8 @@ export function NavigationHistoryButtons({
   variant = 'ghost',
 }: NavigationHistoryButtonsProps) {
   const isMac = isMacOs();
-  const isRtl = readDirection() === 'rtl';
+  const interfaceDirection = readDirection();
+  const isRtl = interfaceDirection === 'rtl';
 
   const backLocalized = localizeString(localizedStrings, '%navigationHistory_back_tooltip%');
   const forwardLocalized = localizeString(localizedStrings, '%navigationHistory_forward_tooltip%');
@@ -102,15 +104,14 @@ export function NavigationHistoryButtons({
     '%navigationHistory_forwardList_ariaLabel%',
   );
 
-  // Physical back/forward shortcut keys for this OS. In RTL the pair swaps meaning
-  // (physical-direction preserving), so the hint shown for "back" in RTL is the physically-right
-  // key. This swap MUST stay in sync with `resolveHistoryNavigationDirection` in
-  // src/main/reference-history-keyboard.util.ts, which applies the same swap to the real keypress.
-  // Expressed as one pair-pick + one swap so the rule lives in a single place here.
-  const [physicalBackKey, physicalForwardKey] = isMac ? ['⌘[', '⌘]'] : ['Alt+←', 'Alt+→'];
-  const [backShortcut, forwardShortcut] = isRtl
-    ? [physicalForwardKey, physicalBackKey]
-    : [physicalBackKey, physicalForwardKey];
+  // Shortcut hints for this OS. Which physical arrow triggers back vs forward depends on the UI
+  // layout direction (RTL swaps the pair, physical-direction preserving). resolveReferenceHistoryDirection
+  // is the single source of truth for that swap — the same helper the renderer uses to resolve the
+  // real keypress — so the displayed hint can never disagree with the key that actually navigates.
+  const [leftKey, rightKey] = isMac ? ['⌘[', '⌘]'] : ['Alt+←', 'Alt+→'];
+  const backShortcut =
+    resolveReferenceHistoryDirection('left', interfaceDirection) === 'back' ? leftKey : rightKey;
+  const forwardShortcut = backShortcut === leftKey ? rightKey : leftKey;
 
   const renderSplitButton = (direction: 'back' | 'forward') => {
     const isBack = direction === 'back';

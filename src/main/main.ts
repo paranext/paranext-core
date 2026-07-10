@@ -15,10 +15,7 @@ import '@main/global-this.model';
 import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import { getVerseNavigationCommand } from '@main/verse-navigation-shortcuts.util';
-import {
-  getPhysicalHistoryNavigationDirection,
-  resolveHistoryNavigationDirection,
-} from '@main/reference-history-keyboard.util';
+import { getPhysicalHistoryNavigationDirection } from '@main/reference-history-keyboard.util';
 import chroma from 'chroma-js';
 import {
   APP_NAME,
@@ -675,10 +672,12 @@ async function main() {
         return;
       }
 
-      // Reference history navigation (PT-4033). Key detection and the RTL swap live in
-      // reference-history-keyboard.util.ts so they can be unit tested (synthesized CDP input
-      // cannot reach this handler — see the skipped keyboard test in
-      // e2e-tests/tests/isolated/navigation-history/navigation-history.spec.ts).
+      // Reference history navigation (PT-4033). Key detection lives in
+      // reference-history-keyboard.util.ts (unit tested there); the physical→logical RTL swap is
+      // resolved in the renderer (resolveReferenceHistoryDirection in platform-bible-utils). This
+      // handler only maps the physical key to a left/right command — it never needs the UI
+      // direction. Synthesized CDP input cannot reach this handler; see the skipped keyboard test in
+      // e2e-tests/tests/isolated/navigation-history/navigation-history.spec.ts.
       const physicalHistoryDirection = getPhysicalHistoryNavigationDirection(
         input,
         process.platform,
@@ -690,15 +689,18 @@ async function main() {
         // future editor/extension binding ⌘[ / ⌘] or Alt+Arrow would be silently swallowed here.
         // Tracked in PT-4143.
         event.preventDefault();
+        // Dispatch the PHYSICAL direction (left/right). The renderer resolves it to a logical
+        // back/forward for the current UI layout direction (RTL swaps the pair — see
+        // resolveReferenceHistoryDirection in platform-bible-utils, shared with the toolbar's hint
+        // display), so the main process stays direction-agnostic and sends a single command rather
+        // than also round-tripping to read the UI direction. Auto-repeat is intentional: holding the
+        // key steps through history entry-by-entry, matching Paratext 9.
         (async () => {
           try {
-            const direction = await commandService.sendCommand('platform.getInterfaceDirection');
-            const isBack =
-              resolveHistoryNavigationDirection(physicalHistoryDirection, direction) === 'back';
             await commandService.sendCommand(
-              isBack
-                ? 'platform.navigateBackInReferenceHistory'
-                : 'platform.navigateForwardInReferenceHistory',
+              physicalHistoryDirection === 'left'
+                ? 'platform.navigateLeftInReferenceHistory'
+                : 'platform.navigateRightInReferenceHistory',
               INTERIM_KEYBOARD_HISTORY_SCROLL_GROUP_ID,
             );
           } catch (e) {

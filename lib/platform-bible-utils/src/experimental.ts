@@ -23,3 +23,4 @@ export {
   getPreviousVerseRef,
   type ScriptureBounds,
 } from './scripture/scripture-navigation.util';
+export { resolveReferenceHistoryDirection } from './reference-history-direction.util';

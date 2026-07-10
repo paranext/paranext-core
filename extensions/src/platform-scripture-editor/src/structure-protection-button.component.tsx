@@ -3,6 +3,7 @@ import {
   Button,
   ButtonGroup,
   isMacOs,
+  isWindows,
   Kbd,
   Tooltip,
   TooltipContent,
@@ -221,7 +222,7 @@ export function StructureProtectionButton({
   const isMac = isMacOs();
   // Windows orders modifiers Ctrl, Shift, Alt; Linux/GNOME orders them Ctrl, Alt, Shift. This only
   // affects the project shortcut, which is the one combo with both Shift and Alt.
-  const isWindows = useMemo(() => /Windows/i.test(navigator.userAgent), []);
+  const isWin = isWindows();
 
   // When the admin (project-level) setting failed to load, the protection values fall back to
   // treating the admin layer as unset, so we can't trust them. Disable both toggles and surface the
@@ -256,7 +257,7 @@ export function StructureProtectionButton({
   const projectShortcut = useMemo<ShortcutSpec>(() => {
     let hint = 'Ctrl+Alt+Shift+L'; // Linux/GNOME modifier order
     if (isMac) hint = '⌥⇧⌘L';
-    else if (isWindows) hint = 'Ctrl+Shift+Alt+L'; // Windows modifier order
+    else if (isWin) hint = 'Ctrl+Shift+Alt+L'; // Windows modifier order
     return {
       matches: (event) =>
         (event.ctrlKey || event.metaKey) &&
@@ -265,7 +266,7 @@ export function StructureProtectionButton({
         event.key.toLowerCase() === 'l',
       hint,
     };
-  }, [isMac, isWindows]);
+  }, [isMac, isWin]);
 
   // The structure-protection feature applies in simple mode only; render nothing when inactive.
   if (!isProtectionActive) return undefined;

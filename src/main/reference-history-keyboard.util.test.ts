@@ -1,7 +1,4 @@
-import {
-  getPhysicalHistoryNavigationDirection,
-  resolveHistoryNavigationDirection,
-} from './reference-history-keyboard.util';
+import { getPhysicalHistoryNavigationDirection } from './reference-history-keyboard.util';
 
 /** Build a `HistoryKeyInput` with all modifiers off, then apply overrides */
 function key(
@@ -13,16 +10,16 @@ function key(
 
 describe('getPhysicalHistoryNavigationDirection', () => {
   describe('on Windows/Linux', () => {
-    it.each(['win32', 'linux'] as const)('detects Alt+Left as back on %s', (platform) => {
+    it.each(['win32', 'linux'] as const)('detects Alt+Left as left on %s', (platform) => {
       expect(getPhysicalHistoryNavigationDirection(key('ArrowLeft', { alt: true }), platform)).toBe(
-        'back',
+        'left',
       );
     });
 
-    it.each(['win32', 'linux'] as const)('detects Alt+Right as forward on %s', (platform) => {
+    it.each(['win32', 'linux'] as const)('detects Alt+Right as right on %s', (platform) => {
       expect(
         getPhysicalHistoryNavigationDirection(key('ArrowRight', { alt: true }), platform),
-      ).toBe('forward');
+      ).toBe('right');
     });
 
     it('requires an exact modifier match', () => {
@@ -61,15 +58,15 @@ describe('getPhysicalHistoryNavigationDirection', () => {
   });
 
   describe('on macOS', () => {
-    it('detects Cmd+[ as back', () => {
+    it('detects Cmd+[ as left', () => {
       expect(getPhysicalHistoryNavigationDirection(key('[', { meta: true }), 'darwin')).toBe(
-        'back',
+        'left',
       );
     });
 
-    it('detects Cmd+] as forward', () => {
+    it('detects Cmd+] as right', () => {
       expect(getPhysicalHistoryNavigationDirection(key(']', { meta: true }), 'darwin')).toBe(
-        'forward',
+        'right',
       );
     });
 
@@ -100,17 +97,5 @@ describe('getPhysicalHistoryNavigationDirection', () => {
         getPhysicalHistoryNavigationDirection(key('ArrowRight', { alt: true }), 'darwin'),
       ).toBeUndefined();
     });
-  });
-});
-
-describe('resolveHistoryNavigationDirection', () => {
-  it('passes the physical direction through in LTR', () => {
-    expect(resolveHistoryNavigationDirection('back', 'ltr')).toBe('back');
-    expect(resolveHistoryNavigationDirection('forward', 'ltr')).toBe('forward');
-  });
-
-  it('swaps the physical direction in RTL', () => {
-    expect(resolveHistoryNavigationDirection('back', 'rtl')).toBe('forward');
-    expect(resolveHistoryNavigationDirection('forward', 'rtl')).toBe('back');
   });
 });

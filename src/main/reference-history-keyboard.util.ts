@@ -10,15 +10,19 @@ type HistoryKeyInput = Pick<Input, 'key' | 'alt' | 'control' | 'shift' | 'meta'>
  * move-by-word shortcut and must not be intercepted. An exact modifier match is required — e.g. the
  * shift guard keeps Cmd+Shift+[/] free for tab focus navigation.
  *
- * @returns `'back'` or `'forward'` in _physical_ terms (`'back'` = the left/`[` key), or
- *   `undefined` if this is not a history navigation key. Pass the result through
- *   {@link resolveHistoryNavigationDirection} to get the logical direction in the current UI layout
- *   direction.
+ * Returns a _physical_ direction only. The main process dispatches the matching physical command
+ * (`platform.navigateLeftInReferenceHistory` / `...Right...`); the renderer resolves physical →
+ * logical back/forward for the current UI layout direction via `resolveReferenceHistoryDirection`
+ * in platform-bible-utils (shared with the toolbar's shortcut-hint display). This keeps the RTL
+ * swap in one place and means the main process never needs to know the UI direction.
+ *
+ * @returns `'left'` (the Left / `[` key) or `'right'` (the Right / `]` key), or `undefined` if this
+ *   is not a history navigation key
  */
 export function getPhysicalHistoryNavigationDirection(
   input: HistoryKeyInput,
   platform: typeof process.platform,
-): 'back' | 'forward' | undefined {
+): 'left' | 'right' | undefined {
   const isHistoryNavigationKey =
     platform === 'darwin'
       ? input.meta &&
@@ -32,18 +36,5 @@ export function getPhysicalHistoryNavigationDirection(
         !input.meta &&
         (input.key === 'ArrowLeft' || input.key === 'ArrowRight');
   if (!isHistoryNavigationKey) return undefined;
-  return input.key === 'ArrowLeft' || input.key === '[' ? 'back' : 'forward';
-}
-
-/**
- * Resolve a physical history navigation direction to the logical one for the current UI layout
- * direction. In RTL the key pairs swap meaning (physical-direction-preserving, like Paratext 9 and
- * Chromium — see docs/specs/2026-07-06-reference-history-design.md).
- */
-export function resolveHistoryNavigationDirection(
-  physicalDirection: 'back' | 'forward',
-  interfaceDirection: 'ltr' | 'rtl',
-): 'back' | 'forward' {
-  if (interfaceDirection !== 'rtl') return physicalDirection;
-  return physicalDirection === 'back' ? 'forward' : 'back';
+  return input.key === 'ArrowLeft' || input.key === '[' ? 'left' : 'right';
 }

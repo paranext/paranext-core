@@ -455,7 +455,8 @@ export function PlatformBibleToolbar() {
         </Select>
       )}
       {typeof scrollGroupId === 'number' && (
-        <ReferenceHistoryButtons scrollGroupId={scrollGroupId} />
+        // Key on the scroll group so switching groups remounts and re-seeds the history state.
+        <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
       )}
       <BookChapterControl
         ref={registerTopBookChapterControl}

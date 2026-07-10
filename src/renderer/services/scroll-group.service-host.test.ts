@@ -29,6 +29,15 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: (...args: unknown[]) => sendCommand(...args),
 }));
 
+// The host resolves the physical left/right keyboard direction to a logical back/forward using the
+// current UI layout direction from `readDirection`. Mock it so tests can drive the RTL swap.
+const { mockReadDirection } = vi.hoisted(() => ({
+  mockReadDirection: vi.fn((): 'ltr' | 'rtl' => 'ltr'),
+}));
+vi.mock('platform-bible-react/experimental', () => ({
+  readDirection: () => mockReadDirection(),
+}));
+
 // getScrRefForProject reads each project's versification via a base-PDP setting subscription. Mock
 // it: by default every project reports a unique versification (its own id) so conversions fire;
 // tests set `projectVersifications[id]` to make projects share a base versification identifier, or
@@ -405,5 +414,44 @@ describe('reference history integration', () => {
         ],
       },
     });
+  });
+});
+
+describe('reference history physical (keyboard) navigation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+    mockReadDirection.mockReturnValue('ltr');
+  });
+
+  it('resolves left = back and right = forward in LTR', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // Seed group 1: current MRK 4, back [GEN 1:1]
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'left')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'right')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+  });
+
+  it('swaps the pair in RTL: right = back and left = forward', async () => {
+    mockReadDirection.mockReturnValue('rtl');
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'right')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'left')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+  });
+
+  it('returns false when there is no history in the resolved direction', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // Fresh group: only the seeded current entry, nothing behind or ahead
+    expect(host.navigateReferenceHistoryPhysicalSync(3, 'left')).toBe(false);
+    expect(host.navigateReferenceHistoryPhysicalSync(3, 'right')).toBe(false);
   });
 });

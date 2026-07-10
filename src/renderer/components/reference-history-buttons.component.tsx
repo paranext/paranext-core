@@ -12,7 +12,7 @@ import {
   NavigationHistoryItem,
 } from 'platform-bible-react/experimental';
 import { useEvent } from 'platform-bible-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 const LOCALIZED_STRING_KEYS = [...NAVIGATION_HISTORY_BUTTONS_STRING_KEYS];
 
@@ -32,11 +32,9 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
   );
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
-  // The useState lazy initializer above only runs once, on mount, so a later change to which
-  // scroll group we're displaying needs an explicit re-sync.
-  useEffect(() => {
-    setHistory(getReferenceHistorySync(scrollGroupId));
-  }, [scrollGroupId]);
+  // The useState lazy initializer above runs once per mount. The toolbar keys this component on
+  // `scrollGroupId` (see platform-bible-toolbar.tsx), so switching scroll groups remounts and the
+  // initializer re-seeds for the new group — no separate resync effect needed.
 
   // Keep history current as it changes for this scroll group specifically. Other scroll groups'
   // updates are ignored so this component only re-renders for changes that affect it.
@@ -74,7 +72,10 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
 
   const handleNavigate = useCallback(
     (offset: number) => {
-      navigateReferenceHistorySync(scrollGroupId, offset);
+      // Update optimistically so the buttons/dropdowns reflect the move immediately rather than
+      // waiting for the change event to round-trip back through the buffered emitter.
+      if (navigateReferenceHistorySync(scrollGroupId, offset))
+        setHistory(getReferenceHistorySync(scrollGroupId));
     },
     [scrollGroupId],
   );

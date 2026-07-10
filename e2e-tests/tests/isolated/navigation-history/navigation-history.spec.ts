@@ -134,7 +134,7 @@ test.describe('Reference history', () => {
     // `Input.dispatchKeyEvent` (what `cdp.fixture`'s `connectOverCDP` + `page.keyboard.press` use)
     // do not reliably surface to that listener with correct modifier state. Verified directly:
     // (1) the identical PAPI command invoked over the WebSocket
-    // (`command:platform.navigateBackInReferenceHistory`) DOES navigate scroll group 0 and the
+    // (`command:platform.navigateLeftInReferenceHistory`) DOES navigate scroll group 0 and the
     // toolbar DOES reflect it — so the feature itself and the scroll-group wiring are correct;
     // (2) the pre-existing, unrelated Ctrl+Tab tab-switch shortcut (same `before-input-event`
     // handler, `src/main/main.ts`) ALSO has no effect when sent via `page.keyboard.press` in this

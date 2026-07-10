@@ -165,23 +165,29 @@ declare module 'papi-shared-types' {
 
     // These commands are provided in `src/renderer/services/scroll-group.service-host.ts`
     /**
-     * Navigate one step back in the reference history of the given scroll group.
+     * Navigate the reference history of the given scroll group in the physical "left" direction.
+     * The renderer resolves the physical direction to a logical one for the current UI layout
+     * direction: left = back in LTR, forward in RTL (the pair swaps, physical-direction
+     * preserving). The main-process keyboard handler dispatches this directly so it never needs to
+     * know the UI direction.
      *
      * @param scrollGroupId Scroll group whose history to navigate
-     * @returns `true` if navigation happened; `false` when there is no history to go back to
+     * @returns `true` if navigation happened; `false` when there is no history in that direction
      * @experimental
      */
-    'platform.navigateBackInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
+    'platform.navigateLeftInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
     /**
-     * Navigate one step forward in the reference history of the given scroll group.
+     * Navigate the reference history of the given scroll group in the physical "right" direction.
+     * The renderer resolves the physical direction to a logical one for the current UI layout
+     * direction: right = forward in LTR, back in RTL (the pair swaps, physical-direction
+     * preserving). The main-process keyboard handler dispatches this directly so it never needs to
+     * know the UI direction.
      *
      * @param scrollGroupId Scroll group whose history to navigate
-     * @returns `true` if navigation happened; `false` when there is no history to go forward to
+     * @returns `true` if navigation happened; `false` when there is no history in that direction
      * @experimental
      */
-    'platform.navigateForwardInReferenceHistory': (
-      scrollGroupId: ScrollGroupId,
-    ) => Promise<boolean>;
+    'platform.navigateRightInReferenceHistory': (scrollGroupId: ScrollGroupId) => Promise<boolean>;
     /**
      * Navigate multiple steps within the reference history of the given scroll group,
      * browser-`history.go` style.
@@ -196,15 +202,6 @@ declare module 'papi-shared-types' {
       scrollGroupId: ScrollGroupId,
       offset: number,
     ) => Promise<boolean>;
-
-    // This command is provided in `src/renderer/services/interface-direction.command.ts`
-    /**
-     * Get the current UI layout direction ('ltr' or 'rtl'). This is the user's global UI direction
-     * preference (the same source RTL-aware components use), NOT any project's text direction.
-     *
-     * @experimental
-     */
-    'platform.getInterfaceDirection': () => Promise<'ltr' | 'rtl'>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
