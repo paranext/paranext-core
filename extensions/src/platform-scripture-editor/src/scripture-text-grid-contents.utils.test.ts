@@ -38,7 +38,6 @@ const list = (items: ResourceReference[] = []): ResourceReferenceList => ({
 });
 
 const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollectionSources => ({
-  adminModelTexts: list(),
   adminReferenced: list(),
   userReferenced: list(),
   overlay: {},
@@ -51,7 +50,7 @@ const ids = (refs: ResourceReference[]): string[] =>
 /** Reads a Bible-text flag off a reference without a type assertion. */
 const flagOf = (
   ref: ResourceReference | undefined,
-  key: 'isResourceShownByDefault' | 'inTextCollectionUser',
+  key: 'isResourceShownByDefault' | 'isResourceShownForUser',
 ): boolean | undefined =>
   ref && (isProjectReference(ref) || isDblResourceReference(ref)) ? ref[key] : undefined;
 
@@ -96,16 +95,6 @@ describe('getScriptureTextGridContents', () => {
       expected: ['a'],
     },
     {
-      label: 'flagged true only on modelTexts (proves union), overlay absent → shown',
-      sources: () =>
-        makeSources({
-          adminModelTexts: list([project('m', { isResourceShownByDefault: true })]),
-          adminReferenced: list([project('m')]), // flag-stripped download copy
-          overlay: {},
-        }),
-      expected: ['m'],
-    },
-    {
       label: 'admin unflagged but overlay true (past-admin, still checked) → shown',
       sources: () =>
         makeSources({
@@ -133,15 +122,15 @@ describe('getScriptureTextGridContents', () => {
       expected: ['a'],
     },
     {
-      label: 'user entry inTextCollectionUser true → shown',
+      label: 'user entry isResourceShownForUser true → shown',
       sources: () =>
-        makeSources({ userReferenced: list([dbl('u', { inTextCollectionUser: true })]) }),
+        makeSources({ userReferenced: list([dbl('u', { isResourceShownForUser: true })]) }),
       expected: ['u'],
     },
     {
-      label: 'user entry inTextCollectionUser false → hidden',
+      label: 'user entry isResourceShownForUser false → hidden',
       sources: () =>
-        makeSources({ userReferenced: list([dbl('u', { inTextCollectionUser: false })]) }),
+        makeSources({ userReferenced: list([dbl('u', { isResourceShownForUser: false })]) }),
       expected: [],
     },
     {
@@ -157,7 +146,7 @@ describe('getScriptureTextGridContents', () => {
     const contents = getScriptureTextGridContents(
       makeSources({
         adminReferenced: list([project('x', { isResourceShownByDefault: true })]),
-        userReferenced: list([project('x', { inTextCollectionUser: true })]),
+        userReferenced: list([project('x', { isResourceShownForUser: true })]),
         overlay: { x: true },
       }),
     );
@@ -165,12 +154,14 @@ describe('getScriptureTextGridContents', () => {
     expect(contents[0].name).toBe('Project x'); // admin metadata, not user copy
   });
 
-  it('orders admin entries (model-texts then referenced) before user entries', () => {
+  it('orders admin (referenced) entries before user entries', () => {
     const contents = getScriptureTextGridContents(
       makeSources({
-        adminModelTexts: list([project('m', { isResourceShownByDefault: true })]),
-        adminReferenced: list([project('m'), dbl('r', { isResourceShownByDefault: true })]),
-        userReferenced: list([project('u', { inTextCollectionUser: true })]),
+        adminReferenced: list([
+          project('m', { isResourceShownByDefault: true }),
+          dbl('r', { isResourceShownByDefault: true }),
+        ]),
+        userReferenced: list([project('u', { isResourceShownForUser: true })]),
         overlay: {},
       }),
     );
@@ -195,7 +186,7 @@ describe('getScriptureTextGridContents', () => {
       makeSources({
         userReferenced: list([
           { type: 'enhancedResource', name: 'Enhanced' },
-          dbl('u', { inTextCollectionUser: true }),
+          dbl('u', { isResourceShownForUser: true }),
         ]),
       }),
     );
@@ -208,7 +199,7 @@ describe('getScriptureTextGridContents', () => {
     const contents = getScriptureTextGridContents(
       makeSources({
         adminReferenced: list([project('x')]),
-        userReferenced: list([project('x', { inTextCollectionUser: true })]),
+        userReferenced: list([project('x', { isResourceShownForUser: true })]),
         overlay: {},
       }),
     );
@@ -219,7 +210,7 @@ describe('getScriptureTextGridContents', () => {
     const sources = deepFreeze(
       makeSources({
         adminReferenced: list([project('a', { isResourceShownByDefault: true })]),
-        userReferenced: list([dbl('u', { inTextCollectionUser: true })]),
+        userReferenced: list([dbl('u', { isResourceShownForUser: true })]),
         overlay: { a: true },
       }),
     );
@@ -266,19 +257,6 @@ describe('getViewOptionsTexts', () => {
       isUserRemovable: false,
     },
     {
-      label: 'flagged true only on modelTexts → top (proves union)',
-      sources: () =>
-        makeSources({
-          adminModelTexts: list([project('a', { isResourceShownByDefault: true })]),
-          adminReferenced: list([project('a')]),
-          overlay: {},
-        }),
-      section: 'top' as const,
-      checked: true,
-      isAdminLocked: true,
-      isUserRemovable: false,
-    },
-    {
       label: 'admin unflagged but overlay present → bottom (past-admin), not locked, not removable',
       sources: () =>
         makeSources({
@@ -315,18 +293,18 @@ describe('getViewOptionsTexts', () => {
       isUserRemovable: false,
     },
     {
-      label: 'user entry inTextCollectionUser true → bottom, checked, removable',
+      label: 'user entry isResourceShownForUser true → bottom, checked, removable',
       sources: () =>
-        makeSources({ userReferenced: list([dbl('u', { inTextCollectionUser: true })]) }),
+        makeSources({ userReferenced: list([dbl('u', { isResourceShownForUser: true })]) }),
       section: 'bottom' as const,
       checked: true,
       isAdminLocked: false,
       isUserRemovable: true,
     },
     {
-      label: 'user entry inTextCollectionUser false → bottom, unchecked, removable',
+      label: 'user entry isResourceShownForUser false → bottom, unchecked, removable',
       sources: () =>
-        makeSources({ userReferenced: list([dbl('u', { inTextCollectionUser: false })]) }),
+        makeSources({ userReferenced: list([dbl('u', { isResourceShownForUser: false })]) }),
       section: 'bottom' as const,
       checked: false,
       isAdminLocked: false,
@@ -355,14 +333,16 @@ describe('getViewOptionsTexts', () => {
     expect(bottom).toHaveLength(0);
   });
 
-  it('preserves order: top in union order, bottom in user-list order', () => {
+  it('preserves order: top in referenced-list order, bottom in user-list order', () => {
     const { top, bottom } = getViewOptionsTexts(
       makeSources({
-        adminModelTexts: list([project('m', { isResourceShownByDefault: true })]),
-        adminReferenced: list([project('m'), dbl('r', { isResourceShownByDefault: true })]),
+        adminReferenced: list([
+          project('m', { isResourceShownByDefault: true }),
+          dbl('r', { isResourceShownByDefault: true }),
+        ]),
         userReferenced: list([
-          project('u1', { inTextCollectionUser: true }),
-          dbl('u2', { inTextCollectionUser: false }),
+          project('u1', { isResourceShownForUser: true }),
+          dbl('u2', { isResourceShownForUser: false }),
         ]),
         overlay: {},
       }),
@@ -375,7 +355,7 @@ describe('getViewOptionsTexts', () => {
     const { top, bottom } = getViewOptionsTexts(
       makeSources({
         adminReferenced: list([project('x', { isResourceShownByDefault: true })]),
-        userReferenced: list([project('x', { inTextCollectionUser: true })]),
+        userReferenced: list([project('x', { isResourceShownForUser: true })]),
         overlay: { x: true },
       }),
     );
@@ -387,7 +367,7 @@ describe('getViewOptionsTexts', () => {
     const { top, bottom } = getViewOptionsTexts(
       makeSources({
         adminReferenced: list([project('x')]),
-        userReferenced: list([project('x', { inTextCollectionUser: true })]),
+        userReferenced: list([project('x', { isResourceShownForUser: true })]),
         overlay: {},
       }),
     );
@@ -416,12 +396,12 @@ describe('setUserDisplay', () => {
   it('routes a user-added, unflagged (download-only) admin id to the user entry, not the overlay', () => {
     const sources = makeSources({
       adminReferenced: list([project('x')]),
-      userReferenced: list([project('x', { inTextCollectionUser: true })]),
+      userReferenced: list([project('x', { isResourceShownForUser: true })]),
       overlay: {},
     });
     const { overlay, userReferenced } = setUserDisplay('x', false, sources);
     expect(overlay).toEqual({}); // not admin-owned, so the overlay is untouched
-    expect(flagOf(userReferenced.items[0], 'inTextCollectionUser')).toBe(false);
+    expect(flagOf(userReferenced.items[0], 'isResourceShownForUser')).toBe(false);
   });
 
   it('routes an explicitly-disabled (flag false) admin entry to the overlay', () => {
@@ -441,21 +421,21 @@ describe('setUserDisplay', () => {
     expect(userReferenced.items).toEqual([]);
   });
 
-  it('flips inTextCollectionUser for a user entry, leaving the overlay untouched', () => {
+  it('flips isResourceShownForUser for a user entry, leaving the overlay untouched', () => {
     const sources = makeSources({
-      userReferenced: list([dbl('u', { inTextCollectionUser: false })]),
+      userReferenced: list([dbl('u', { isResourceShownForUser: false })]),
       overlay: { z: true },
     });
     const { overlay, userReferenced } = setUserDisplay('u', true, sources);
-    expect(flagOf(userReferenced.items[0], 'inTextCollectionUser')).toBe(true);
+    expect(flagOf(userReferenced.items[0], 'isResourceShownForUser')).toBe(true);
     expect(overlay).toEqual({ z: true });
-    expect(flagOf(sources.userReferenced.items[0], 'inTextCollectionUser')).toBe(false);
+    expect(flagOf(sources.userReferenced.items[0], 'isResourceShownForUser')).toBe(false);
   });
 
   it('is a no-op for an unknown id', () => {
     const sources = makeSources({
       adminReferenced: list([project('a', { isResourceShownByDefault: true })]),
-      userReferenced: list([dbl('u', { inTextCollectionUser: true })]),
+      userReferenced: list([dbl('u', { isResourceShownForUser: true })]),
       overlay: { a: true },
     });
     const { overlay, userReferenced } = setUserDisplay('missing', true, sources);
@@ -467,7 +447,7 @@ describe('setUserDisplay', () => {
     const sources = deepFreeze(
       makeSources({
         adminReferenced: list([project('a', { isResourceShownByDefault: true })]),
-        userReferenced: list([dbl('u', { inTextCollectionUser: false })]),
+        userReferenced: list([dbl('u', { isResourceShownForUser: false })]),
         overlay: { a: true },
       }),
     );
@@ -479,8 +459,8 @@ describe('setUserDisplay', () => {
 describe('removeFromUserResources', () => {
   it('removes a matching user entry', () => {
     const userReferenced = list([
-      dbl('u1', { inTextCollectionUser: true }),
-      project('u2', { inTextCollectionUser: true }),
+      dbl('u1', { isResourceShownForUser: true }),
+      project('u2', { isResourceShownForUser: true }),
     ]);
     const result = removeFromUserResources('u1', userReferenced);
     expect(ids(result.items)).toEqual(['u2']);
@@ -488,34 +468,34 @@ describe('removeFromUserResources', () => {
   });
 
   it('is a no-op when the id is not in the user list (defense-in-depth on admin entries)', () => {
-    const userReferenced = list([dbl('u1', { inTextCollectionUser: true })]);
+    const userReferenced = list([dbl('u1', { isResourceShownForUser: true })]);
     const result = removeFromUserResources('adminOnlyId', userReferenced);
     expect(ids(result.items)).toEqual(['u1']);
   });
 
   it('does not mutate its input', () => {
-    const userReferenced = deepFreeze(list([dbl('u1', { inTextCollectionUser: true })]));
+    const userReferenced = deepFreeze(list([dbl('u1', { isResourceShownForUser: true })]));
     expect(() => removeFromUserResources('u1', userReferenced)).not.toThrow();
   });
 });
 
 describe('addToUserResources', () => {
-  it('appends a new reference with inTextCollectionUser true', () => {
-    const userReferenced = list([dbl('u1', { inTextCollectionUser: true })]);
+  it('appends a new reference with isResourceShownForUser true', () => {
+    const userReferenced = list([dbl('u1', { isResourceShownForUser: true })]);
     const result = addToUserResources(project('new'), userReferenced);
     expect(ids(result.items)).toEqual(['u1', 'new']);
-    expect(flagOf(result.items[1], 'inTextCollectionUser')).toBe(true);
+    expect(flagOf(result.items[1], 'isResourceShownForUser')).toBe(true);
     expect(result.dataVersion).toBe(CURRENT_DATA_VERSION);
   });
 
   it('is idempotent when the id is already present', () => {
-    const userReferenced = list([dbl('u1', { inTextCollectionUser: true })]);
+    const userReferenced = list([dbl('u1', { isResourceShownForUser: true })]);
     const result = addToUserResources(dbl('u1'), userReferenced);
     expect(ids(result.items)).toEqual(['u1']);
   });
 
   it('does not mutate its input', () => {
-    const userReferenced = deepFreeze(list([dbl('u1', { inTextCollectionUser: true })]));
+    const userReferenced = deepFreeze(list([dbl('u1', { isResourceShownForUser: true })]));
     expect(() => addToUserResources(project('new'), userReferenced)).not.toThrow();
   });
 });
