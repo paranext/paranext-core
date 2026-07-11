@@ -35,6 +35,9 @@ const config = defineConfig({
       testDir: './tests/smoke',
     },
     {
+      // The common set of locally-runnable tests, organized in subdirectories by feature.
+      // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
+      // `npm run test:e2e:isolated <subset>` runs one; `... all` runs everything.
       name: 'isolated',
       testDir: './tests/isolated',
     },

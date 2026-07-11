@@ -58,7 +58,63 @@ export function runOnFirstLoad(callback: () => void): Unsubscriber {
 }
 
 /**
- * Scrolls to the verse marker at the specified verse ref within the editor container.
+ * Finds the element that actually scrolls the given element's content: the nearest ancestor
+ * (starting with the element itself) that is styled scrollable (`overflow-y: auto | scroll`) and —
+ * unless `requireOverflow` is `false` — actually overflows (`scrollHeight > clientHeight`).
+ *
+ * The scroll container is discovered, not assumed: wrapper elements between the web view's sized
+ * flex column and `.editor-container` leave `.editor-container` auto-height, so it grows to its
+ * content height and scrolling it is a silent no-op — the web view's outer `tw:overflow-auto`
+ * wrapper is what actually scrolls (regression diagnosed 2026-07-09). If a future layout change
+ * re-constrains `.editor-container`, discovery resolves there instead — correct either way.
+ *
+ * @param fromElement Element whose scroll container to find
+ * @param options `requireOverflow` (default `true`) also requires the candidate to actually
+ *   overflow right now. Pass `false` when the lookup runs before content has loaded (e.g. once on
+ *   mount, as in `ParagraphMarkerTooltipOverlay`), where "actually overflowing right now" would be
+ *   the wrong criterion
+ * @returns The scroll container, or undefined if no qualifying ancestor exists
+ */
+export function findScrollContainer(
+  fromElement: HTMLElement,
+  options?: { requireOverflow?: boolean },
+): HTMLElement | undefined {
+  const requireOverflow = options?.requireOverflow ?? true;
+  let candidate: HTMLElement | undefined = fromElement;
+  while (candidate) {
+    const { overflowY } = window.getComputedStyle(candidate);
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll') &&
+      (!requireOverflow || candidate.scrollHeight > candidate.clientHeight)
+    )
+      return candidate;
+    candidate = candidate.parentElement ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Computes the top edge of the element with the given bounding rect in the scroll container's
+ * scroll coordinate space, i.e. the `scrollTop` value at which that top edge sits at the
+ * container's content top edge.
+ *
+ * Rect math instead of an offsetParent walk: the scroll container is not necessarily positioned, so
+ * it may not appear in the offsetParent chain at all. Takes the element's already-measured rect so
+ * a caller that also needs the element's height reads `getBoundingClientRect()` only once.
+ * Subtracting the container's `clientTop` (its top border width) targets the content edge rather
+ * than the border edge, so the math stays correct if the container ever gains a top border.
+ */
+function getTopWithinScrollContainer(elementRect: DOMRect, scrollContainer: HTMLElement): number {
+  return (
+    scrollContainer.scrollTop +
+    elementRect.top -
+    scrollContainer.getBoundingClientRect().top -
+    scrollContainer.clientTop
+  );
+}
+
+/**
+ * Scrolls to the verse marker at the specified verse ref within the editor content.
  *
  * @param verseRef The verse ref whose matching verse marker to scroll to
  * @returns The verse marker's DOM element if found; otherwise undefined
@@ -71,66 +127,66 @@ export function scrollToVerse(verseRef: SerializedVerseRef): HTMLElement | undef
           `.editor-container span[data-marker="v"][data-number="${verseRef.verseNum}"]`,
         ) ?? undefined);
 
-  const scrollContainerElement =
-    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+  // Scroll if we find the verse or we're at the start of the chapter. Discovering the scroll
+  // container (a getComputedStyle + reflow ancestor walk) is deferred until inside this guard so the
+  // rAF retry loop in model-text-panel does no layout work on frames where the verse marker has not
+  // painted yet (verseNum > 1, no marker).
+  if (verseElement || verseRef.verseNum <= 1) {
+    // Fall back to the editor container for the chapter-start case where no verse marker exists
+    const scrollStartElement =
+      verseElement ?? document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+    const scrollContainerElement = scrollStartElement
+      ? findScrollContainer(scrollStartElement)
+      : undefined;
 
-  // Scroll if we find the verse or we're at the start of the chapter
-  if (scrollContainerElement && (verseElement || verseRef.verseNum <= 1)) {
-    // Get the scroll position all the way up to the scroll container
-    let offsetElement = verseElement;
-    let verseOffsetTop = 0;
-    if (verseRef.verseNum >= 1) {
-      // Find the y offset from the scrolling container
-      while (offsetElement && offsetElement !== scrollContainerElement) {
-        verseOffsetTop += offsetElement.offsetTop;
-        offsetElement =
-          offsetElement.offsetParent instanceof HTMLElement
-            ? offsetElement.offsetParent
-            : undefined;
-      }
-      // Scroll a bit above the verse so you can see a bit of context
-      verseOffsetTop -= VERSE_NUMBER_SCROLL_OFFSET;
+    if (scrollContainerElement) {
+      // Scroll a bit above the verse so you can see a bit of context; the chapter-start case (no
+      // verse marker) scrolls to the top.
+      const verseOffsetTop = verseElement
+        ? getTopWithinScrollContainer(
+            verseElement.getBoundingClientRect(),
+            scrollContainerElement,
+          ) - VERSE_NUMBER_SCROLL_OFFSET
+        : 0;
+
+      scrollContainerElement.scrollTo({
+        behavior: 'smooth',
+        top: verseOffsetTop,
+      });
     }
-
-    scrollContainerElement?.scrollTo({
-      behavior: 'smooth',
-      top: verseOffsetTop,
-    });
   }
 
   return verseElement;
 }
 
 /**
- * Scrolls to the annotation with the given ID within the editor container.
+ * Scrolls to the annotation with the given ID within the editor content.
  *
  * @param id The ID of the annotation to scroll to
  * @returns The DOM element of the annotation if found; otherwise undefined
  */
 export function scrollToAnnotation(id: string): HTMLElement | undefined {
+  // annotation/comment ids can contain CSS metacharacters (":", ".", etc.); escaping the whole
+  // class token via CSS.escape keeps the selector valid (same approach as selectorForAnnotationIds
+  // in platform-enhanced-resources' scripture-pane.component.tsx).
+  const escapedAnnotationClass = CSS.escape(`annotationId-${id}`);
   const annotationElement =
-    document.querySelector<HTMLElement>(`.editor-container .annotationId-${id}`) ?? undefined;
+    document.querySelector<HTMLElement>(`.editor-container .${escapedAnnotationClass}`) ??
+    undefined;
 
-  const scrollContainerElement =
-    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
+  const scrollContainerElement = annotationElement
+    ? findScrollContainer(annotationElement)
+    : undefined;
 
   // Scroll if we find the annotation
   if (scrollContainerElement && annotationElement) {
-    // Compute the annotation's offset relative to the scrolling container
-    let offsetElement: HTMLElement | undefined = annotationElement;
-    let annotationOffsetTop = 0;
-    while (offsetElement && offsetElement !== scrollContainerElement) {
-      annotationOffsetTop += offsetElement.offsetTop;
-      offsetElement =
-        offsetElement.offsetParent instanceof HTMLElement ? offsetElement.offsetParent : undefined;
-    }
-
     const containerScrollTop = scrollContainerElement.scrollTop;
     const containerHeight = scrollContainerElement.clientHeight;
-    const annotationHeight = annotationElement.offsetHeight;
 
-    const annotationTop = annotationOffsetTop;
-    const annotationBottom = annotationTop + annotationHeight;
+    // Read the annotation's rect once; both its top-within-container and its height derive from it.
+    const annotationRect = annotationElement.getBoundingClientRect();
+    const annotationTop = getTopWithinScrollContainer(annotationRect, scrollContainerElement);
+    const annotationBottom = annotationTop + annotationRect.height;
 
     // If the annotation is fully visible, don't scroll
     if (

@@ -90,6 +90,13 @@ export interface LaunchElectronAppOptions {
    * defaults. Keys present here override the defaults (e.g. `{ DEV_NOISY: 'false' }`).
    */
   envOverrides?: Record<string, string>;
+  /**
+   * When true, point the app's Paratext project root at an empty temp folder inside the isolated
+   * user-data dir (via the PLATFORM_BIBLE_PROJECT_ROOT_FOLDER env var). The C# backend installs the
+   * bundled sample WEB project into an empty root, so tests get an identical project on any
+   * developer's machine and never read or write the developer's real projects.
+   */
+  isolatedProjectRoot?: boolean;
 }
 
 /**
@@ -103,26 +110,33 @@ export async function launchElectronApp(
 
   console.log(`Launching Electron app from project root: ${rootDir}`);
 
+  // Use an isolated user-data directory so the singleton instance lock does not
+  // conflict with any already-running Platform.Bible instance.
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
+
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
   // binary to run as plain Node.js. We must omit it (do not set it to undefined:
   // Playwright's env type is Record<string, string>).
   // NODE_ENV=development so the renderer loads from the webpack dev server.
   // Omit ELECTRON_RUN_AS_NODE so the Electron child does not inherit it.
+  // Also strip PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: the C# backend honors it, so an ambient value
+  // from the dev/CI shell would silently redirect the project root of suites that did not opt into
+  // isolatedProjectRoot. Only the isolatedProjectRoot branch (or an explicit envOverride) below sets it.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { ELECTRON_RUN_AS_NODE, ...restEnv } = process.env;
+  const { ELECTRON_RUN_AS_NODE, PLATFORM_BIBLE_PROJECT_ROOT_FOLDER, ...restEnv } = process.env;
   const env = {
     ...restEnv,
     NODE_ENV: 'development',
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
     // Only set if not already defined, so other E2E suites can override.
     DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
+    ...(opts.isolatedProjectRoot
+      ? { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: path.join(userDataDir, 'projects') }
+      : {}),
     // Caller-supplied overrides take precedence over all defaults above.
     ...opts.envOverrides,
   };
-
-  // Use an isolated user-data directory so the singleton instance lock does not
-  // conflict with any already-running Platform.Bible instance.
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
 
   let electronApp: ElectronApplication;
   try {

@@ -98,7 +98,7 @@
     "test:core": "vitest",
     "test:e2e-cdp": "playwright test --config e2e-tests/playwright-cdp.config.ts",
     "test:e2e:all": "playwright test --config e2e-tests/playwright.config.ts",
-    "test:e2e:isolated": "playwright test --config e2e-tests/playwright.config.ts --project=isolated",
+    "test:e2e:isolated": "node e2e-tests/run-isolated.mjs",
     "test:e2e:smoke": "playwright test --config e2e-tests/playwright.config.ts --project=smoke",
     "test:e2e:smoke-wsl": "e2e-tests/run-e2e-wsl.sh",
     "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",

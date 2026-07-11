@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
+import { findScrollContainer } from '../editor-dom.util';
 import { blockMarkerToBlockNames } from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
 
@@ -17,7 +18,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   // eslint-disable-next-line no-null/no-null
   const positionAnchorRef = useRef<HTMLDivElement>(null);
   // scrollContainerRef: the ancestor element whose scroll causes content to move.
-  // Assigned in useEffect by walking parentElement ancestors until overflow-y: auto/scroll is found.
+  // Assigned in useEffect via findScrollContainer (style-only mode).
   const scrollContainerRef = useRef<HTMLElement | undefined>(undefined);
   const currentParaRef = useRef<HTMLElement | undefined>(undefined);
   const rafIdRef = useRef<number>(0);
@@ -111,22 +112,13 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     const positionAnchor = positionAnchorRef.current;
     if (!positionAnchor) return;
 
-    // Find the scroll container by walking UP through parentElement ancestors until we reach
-    // an element with overflow-y: auto or scroll. The editor's scroll container is an ancestor
-    // of positionAnchor — walking DOWN into children never reaches it.
+    // The editor's scroll container is an ancestor of positionAnchor — walking DOWN into children
+    // never reaches it. Style-only matching (requireOverflow: false): this lookup runs once on
+    // mount, possibly before content has loaded and made anything overflow, so "actually
+    // overflowing right now" would be the wrong criterion here.
     // Falls back to positionAnchor if no scrolling ancestor is found.
-    let scrollContainer: HTMLElement = positionAnchor;
-    // parentElement is typed as HTMLElement | null; null terminates the walk
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    let candidate: HTMLElement | null = positionAnchor.parentElement;
-    while (candidate) {
-      const { overflowY } = window.getComputedStyle(candidate);
-      if (overflowY === 'auto' || overflowY === 'scroll') {
-        scrollContainer = candidate;
-        break;
-      }
-      candidate = candidate.parentElement;
-    }
+    const scrollContainer =
+      findScrollContainer(positionAnchor, { requireOverflow: false }) ?? positionAnchor;
     scrollContainerRef.current = scrollContainer;
 
     const handleKeyDown = () => {
