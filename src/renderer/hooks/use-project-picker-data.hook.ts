@@ -4,8 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
-import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { type ProjectMetadata } from '@shared/models/project-metadata.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -38,31 +37,20 @@ function resolveLanguage(
   return { tag: language, displayName: language };
 }
 
-async function fetchProjectDetails(projectId: string): Promise<{
-  fullName: string;
-  shortName: string;
-  language?: string;
-  languageDisplayName?: string;
-  isEditable: boolean;
-}> {
-  const pdp = await papiFrontendProjectDataProviderService.get(
-    PROJECT_INTERFACE_PLATFORM_BASE,
-    projectId,
-  );
-  const [fullName, shortName, language, languageTag, isEditable] = await Promise.all([
-    pdp.getSetting('platform.fullName'),
-    pdp.getSetting('platform.name'),
-    pdp.getSetting('platform.language'),
-    pdp.getSetting('platform.languageTag'),
-    pdp.getSetting('platform.isEditable'),
-  ]);
-  const resolved = resolveLanguage(language, languageTag);
+/**
+ * Converts cheap project metadata (already fetched via `projectLookupService`) into a `ProjectItem`
+ * for display, without opening a project data provider. `fullName`/`name` are optional on
+ * `ProjectMetadata`, so both fall back to the project id to guarantee non-empty, defined display
+ * strings (and a safe sort key for callers that sort by `fullName`).
+ */
+function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
+  const resolved = resolveLanguage(m.language ?? '', m.languageTag ?? '');
   return {
-    fullName,
-    shortName,
+    id: m.id,
+    fullName: m.fullName ?? m.name ?? m.id,
+    shortName: m.name ?? m.id,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
-    isEditable: !!isEditable,
   };
 }
 
@@ -113,11 +101,13 @@ export function useProjectPickerData(): ProjectPickerData {
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       if (!editorDef?.projectId) return undefined;
       try {
-        const { fullName, shortName, language, languageDisplayName } = await fetchProjectDetails(
-          editorDef.projectId,
-        );
+        const metadata = await projectLookupService.getMetadataForAllProjects({
+          includeProjectIds: editorDef.projectId,
+        });
+        const m = metadata[0];
+        if (!m) throw new Error(`No project metadata found for ${editorDef.projectId}`);
         setCurrentProjectError(undefined);
-        return { id: editorDef.projectId, fullName, shortName, language, languageDisplayName };
+        return metadataToProjectItem(m);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${editorDef.projectId}: ${getErrorMessage(e)}`,
@@ -138,21 +128,24 @@ export function useProjectPickerData(): ProjectPickerData {
       // Referenced so this callback re-runs whenever refresh() is called
       // eslint-disable-next-line no-unused-expressions
       refreshCounter;
-      const results = await Promise.all(
-        safeRecentIds.map(async (id: string): Promise<ProjectItem | undefined> => {
-          try {
-            const { isEditable, ...details } = await fetchProjectDetails(id);
-            if (!isEditable) return undefined;
-            return { id, ...details };
-          } catch (e) {
-            logger.warn(
-              `ProjectPicker: could not fetch name for project ${id}: ${getErrorMessage(e)}`,
-            );
-            return undefined;
-          }
-        }),
-      );
-      return results.filter((p: ProjectItem | undefined): p is ProjectItem => p !== undefined);
+      if (safeRecentIds.length === 0) return [];
+      try {
+        const metadata = await projectLookupService.getMetadataForAllProjects({
+          includeProjectIds: safeRecentIds,
+        });
+        const metadataById = new Map<string, ProjectMetadata>(metadata.map((m) => [m.id, m]));
+        // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
+        // and non-editable projects, matching the previous per-id fetch-and-skip behavior.
+        return safeRecentIds
+          .map((id: string) => metadataById.get(id))
+          .filter((m: ProjectMetadata | undefined): m is ProjectMetadata => !!m?.isEditable)
+          .map(metadataToProjectItem);
+      } catch (e) {
+        logger.warn(
+          `ProjectPicker: could not fetch recent project metadata: ${getErrorMessage(e)}`,
+        );
+        return [];
+      }
     }, [safeRecentIds, refreshCounter]),
     [],
   );
@@ -165,38 +158,7 @@ export function useProjectPickerData(): ProjectPickerData {
       const metadata = await projectLookupService.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
       });
-      const settled = await Promise.all(
-        metadata.map(async (m) => {
-          try {
-            const pdp = await papiFrontendProjectDataProviderService.get(
-              PROJECT_INTERFACE_PLATFORM_BASE,
-              m.id,
-            );
-            const [fullName, shortName, language, languageTag, isEditable] = await Promise.all([
-              pdp.getSetting('platform.fullName'),
-              pdp.getSetting('platform.name'),
-              pdp.getSetting('platform.language'),
-              pdp.getSetting('platform.languageTag'),
-              pdp.getSetting('platform.isEditable'),
-            ]);
-            if (!isEditable) return undefined;
-            const resolved = resolveLanguage(language, languageTag);
-            return {
-              id: m.id,
-              fullName,
-              shortName,
-              language: resolved?.tag,
-              languageDisplayName: resolved?.displayName,
-            };
-          } catch (e) {
-            logger.warn(
-              `ProjectPicker: could not fetch details for project ${m.id}: ${getErrorMessage(e)}`,
-            );
-            return undefined;
-          }
-        }),
-      );
-      return settled.flatMap((p) => (p !== undefined ? [p] : []));
+      return metadata.filter((m) => m.isEditable).map(metadataToProjectItem);
     }, [refreshCounter]),
     [],
   );
