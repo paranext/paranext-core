@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.NetworkObjects.Documentation;
@@ -9,10 +10,15 @@ namespace TestParanextDataProvider
     {
         private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
 
-        private readonly Dictionary<
+        // ConcurrentDictionary (not Dictionary): RegisterRequestHandlerAsync writes this on every
+        // PDP registration, and per-project PDP creation now registers PDPs concurrently (fire-
+        // and-forget, no longer serialized behind a single creation lock - see
+        // ParatextProjectDataProviderFactoryBase.GetProjectDataProviderID), so concurrent tests can
+        // legitimately hit this from multiple threads at once.
+        private readonly ConcurrentDictionary<
             string,
             OpenRpcSingleMethodDocumentation?
-        > _documentationByRequestType = [];
+        > _documentationByRequestType = new();
 
         #region Overrides of PapiClient
 

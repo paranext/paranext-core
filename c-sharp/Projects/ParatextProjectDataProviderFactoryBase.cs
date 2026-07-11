@@ -16,15 +16,14 @@ namespace Paranext.DataProvider.Projects;
 ///     (<see cref="GetCrossFactoryRejectionMessage"/>,
 ///     <see cref="GetRegistrationTaskDescription"/>).</item>
 /// </list>
-/// All other plumbing - the per-factory PDP cache, double-checked-locking creation, and existing-PDP
+/// All other plumbing - the per-factory PDP cache, per-project lazy creation, and existing-PDP
 /// lookup - lives here so fixes and improvements apply to every Paratext PDP factory automatically.
 /// </summary>
 internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProviderFactory
 {
     protected readonly LocalParatextProjects _paratextProjects;
-    private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
-    private readonly object _creationLock = new();
-    private readonly Random _random = new((int)DateTime.Now.Ticks);
+    private readonly ConcurrentDictionary<string, Lazy<ParatextProjectDataProvider>> _pdpMap =
+        new();
 
     protected ParatextProjectDataProviderFactoryBase(
         PapiClient papiClient,
@@ -81,59 +80,56 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
     public override string GetProjectDataProviderID(string projectID)
     {
         projectID = projectID.ToUpperInvariant();
+        // GetOrAdd with Lazy => the engine is constructed at most once per project even under
+        // concurrency, and distinct projects never contend on a shared lock.
+        var lazy = _pdpMap.GetOrAdd(
+            projectID,
+            id => new Lazy<ParatextProjectDataProvider>(
+                () =>
+                {
+                    ScrText scrText;
+                    try
+                    {
+                        scrText = LocalParatextProjects.GetParatextProject(id);
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        throw new KeyNotFoundException("Unknown project ID: " + id);
+                    }
 
-        // If we already have a PDP for this project, just return it
-        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return existingPdp.DataProviderName;
+                    if (!ShouldServeProject(scrText))
+                        throw new KeyNotFoundException(GetCrossFactoryRejectionMessage(id));
 
-        // Prevent multiple threads from trying to create PDPs at the same time
-        // This could probably be relaxed to be scoped per project ID, but this is more conservative
-        lock (_creationLock)
-        {
-            // If the PDP was created while we were locked, use it
-            if (_pdpMap.TryGetValue(projectID, out var existingPdpInLock))
-                return existingPdpInLock.DataProviderName;
+                    var details = scrText.GetProjectDetails();
 
-            ScrText scrText;
-            try
-            {
-                scrText = LocalParatextProjects.GetParatextProject(projectID);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new KeyNotFoundException("Unknown project ID: " + projectID);
-            }
-
-            if (!ShouldServeProject(scrText))
-            {
-                throw new KeyNotFoundException(GetCrossFactoryRejectionMessage(projectID));
-            }
-
-            var details = scrText.GetProjectDetails();
-
-            // Create a random 30 character string containing letters A-Z
-            var name = new string(
-                Enumerable.Range(0, 30).Select(_ => (char)_random.Next(65, 90)).ToArray()
-            );
-
-            // Create and store the PDP in the map for future lookups
-            var newPdp = new ParatextProjectDataProvider(
-                name,
-                PapiClient,
-                details,
-                _paratextProjects
-            );
-            if (!_pdpMap.TryAdd(projectID, newPdp))
-                throw new InvalidOperationException("Internal error adding project data provider");
-
-            // Once the PDP has been registered, return the name of it so callers can get it
-            ThreadingUtils.RunTask(
-                newPdp.RegisterDataProviderAsync(),
-                GetRegistrationTaskDescription(newPdp, details),
-                ThreadingUtils.DefaultTimeout
-            );
-            return newPdp.DataProviderName;
-        }
+                    // Create a random 30 character string containing letters A-Z. Random.Shared
+                    // (not an instance Random) because concurrent Lazy factories for distinct
+                    // projects can run this at the same time, and Random is not thread-safe.
+                    var name = new string(
+                        Enumerable
+                            .Range(0, 30)
+                            .Select(_ => (char)Random.Shared.Next(65, 90))
+                            .ToArray()
+                    );
+                    var pdp = new ParatextProjectDataProvider(
+                        name,
+                        PapiClient,
+                        details,
+                        _paratextProjects
+                    );
+                    // Register in the background; the name is already known so callers don't
+                    // wait on the ~40-53 network round-trips (previously blocked under the
+                    // global lock).
+                    ThreadingUtils.RunTask(
+                        pdp.RegisterDataProviderAsync(),
+                        GetRegistrationTaskDescription(pdp, details)
+                    );
+                    return pdp;
+                },
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        );
+        return lazy.Value.DataProviderName;
     }
 
     /// <summary>
@@ -143,8 +139,10 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
     {
         projectID = projectID.ToUpperInvariant();
 
-        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return existingPdp;
-        return null;
+        // IsValueCreated guards against forcing creation (or re-throwing a cached creation
+        // failure) from what is meant to be a "does one exist yet?" query.
+        return _pdpMap.TryGetValue(projectID, out var lazy) && lazy.IsValueCreated
+            ? lazy.Value
+            : null;
     }
 }
