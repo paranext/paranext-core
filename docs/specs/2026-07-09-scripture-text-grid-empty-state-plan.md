@@ -41,10 +41,12 @@
 ## Task 1: `ScriptureTextGridEmptyState` component
 
 **Files:**
+
 - Create: `extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid-empty-state.component.tsx`
 - Test: `extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid-empty-state.component.test.tsx`
 
 **Interfaces:**
+
 - Produces: `ScriptureTextGridEmptyState(props: { prompt: string }): JSX.Element` — renders the localized `prompt` centered in the grid body, with a stable `data-testid="scripture-text-grid-empty-state"`. Consumed by the web view in Task 2.
 
 - [ ] **Step 1: Write the failing test**
@@ -97,7 +99,8 @@ export type ScriptureTextGridEmptyStateProps = {
 /**
  * Centered directional copy shown in the Scripture Text Grid body when there is nothing renderable.
  * Points the user at the View Options button in the header. Purely presentational — the web view
- * owns the decision of when to render it (see the empty conditional in `scripture-text-grid.web-view`).
+ * owns the decision of when to render it (see the empty conditional in
+ * `scripture-text-grid.web-view`).
  */
 export function ScriptureTextGridEmptyState({ prompt }: ScriptureTextGridEmptyStateProps) {
   return (
@@ -131,11 +134,13 @@ git commit -m "PT-4054 (A6): add ScriptureTextGridEmptyState component"
 ## Task 2: Wire the empty state into the web view + add its localized string
 
 **Files:**
+
 - Modify: `extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx`
 - Modify: `extensions/src/platform-scripture-editor/contributions/localizedStrings.json`
 - Modify (test): `e2e-tests/tests/enhanced-resources/scripture-text-grid.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `ScriptureTextGridEmptyState` from Task 1; the existing `resources: GridResource[]`, `localizedStrings`, and `isLoadingLocalizedStrings` already computed in the web view.
 
 - [ ] **Step 1: Add the localized string (en + es)**
@@ -186,46 +191,50 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
 Replace the body block (currently, ~lines 334-347):
 
 ```tsx
-      {/* Grid body: verse-cell rows below the header seam, verse/chapter layout from `viewMode`. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
-        <ScriptureTextGrid
-          ariaLabel={localizedStrings[TITLE_KEY]}
-          resources={resources}
-          scrRef={scrRef}
-          setScrRef={setScrRef}
-          viewMode={viewMode}
-          chapterContext={chapterContext}
-          onChapterContextChange={setChapterContext}
-          onChapterContextClose={handleCloseChapterContext}
-          closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-        />
-      </div>
+{
+  /* Grid body: verse-cell rows below the header seam, verse/chapter layout from `viewMode`. */
+}
+<div className="tw:flex-1 tw:overflow-hidden">
+  <ScriptureTextGrid
+    ariaLabel={localizedStrings[TITLE_KEY]}
+    resources={resources}
+    scrRef={scrRef}
+    setScrRef={setScrRef}
+    viewMode={viewMode}
+    chapterContext={chapterContext}
+    onChapterContextChange={setChapterContext}
+    onChapterContextClose={handleCloseChapterContext}
+    closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+  />
+</div>;
 ```
 
 with:
 
 ```tsx
-      {/* Grid body: the empty state when nothing is renderable (points at View Options), otherwise
+{
+  /* Grid body: the empty state when nothing is renderable (points at View Options), otherwise
           the verse-cell rows. `resources` is post-`toGridResources`, so a selected-but-unresolved
           resource counts as empty here and shows the prompt instead of a blank grid. The
-          `!isLoadingLocalizedStrings` guard avoids flashing a raw `%key%` while strings load. */}
-      <div className="tw:flex-1 tw:overflow-hidden">
-        {resources.length === 0 && !isLoadingLocalizedStrings ? (
-          <ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />
-        ) : (
-          <ScriptureTextGrid
-            ariaLabel={localizedStrings[TITLE_KEY]}
-            resources={resources}
-            scrRef={scrRef}
-            setScrRef={setScrRef}
-            viewMode={viewMode}
-            chapterContext={chapterContext}
-            onChapterContextChange={setChapterContext}
-            onChapterContextClose={handleCloseChapterContext}
-            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-          />
-        )}
-      </div>
+          `!isLoadingLocalizedStrings` guard avoids flashing a raw `%key%` while strings load. */
+}
+<div className="tw:flex-1 tw:overflow-hidden">
+  {resources.length === 0 && !isLoadingLocalizedStrings ? (
+    <ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />
+  ) : (
+    <ScriptureTextGrid
+      ariaLabel={localizedStrings[TITLE_KEY]}
+      resources={resources}
+      scrRef={scrRef}
+      setScrRef={setScrRef}
+      viewMode={viewMode}
+      chapterContext={chapterContext}
+      onChapterContextChange={setChapterContext}
+      onChapterContextClose={handleCloseChapterContext}
+      closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+    />
+  )}
+</div>;
 ```
 
 - [ ] **Step 4: Typecheck and lint the changed files**
@@ -283,12 +292,14 @@ git commit -m "PT-4054 (A6): grid body empty state pointing at View Options"
 ## Task 3: View Options TEXTS-list empty prompt
 
 **Files:**
+
 - Modify: `extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.types.ts`
 - Modify: `extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.component.tsx`
 - Modify (test): `extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.component.test.tsx`
 - Modify: `extensions/src/platform-scripture-editor/contributions/localizedStrings.json`
 
 **Interfaces:**
+
 - Consumes: the existing `ResourceCollectionOptionsProps` (`top`, `bottom`, `installingResourceNames`, `disabled`, `disabledMessage`, `localizedStrings`) and the `localize` helper + `RESOURCE_COLLECTION_OPTIONS_KEYS` registry.
 - Produces: a new `emptyTexts` entry in `RESOURCE_COLLECTION_OPTIONS_KEYS` / `RESOURCE_COLLECTION_OPTIONS_STRING_KEYS` (key `%webView_scriptureTextGrid_viewOptions_emptyTexts%`), auto-included in the web view's `ALL_STRING_KEYS` via the existing spread.
 
@@ -358,25 +369,31 @@ And add it to `RESOURCE_COLLECTION_OPTIONS_STRING_KEYS` (after `textsHeader`):
 In `resource-collection-options.component.tsx`, compute the empty flag near the top of the component body (after the props destructure, before `renderRow`):
 
 ```tsx
-  // The TEXTS list is empty when there are no admin/user rows and nothing installing. Shown only
-  // when interactive (`!disabled`): while disabled we already show `disabledMessage` (no project)
-  // or nothing (brief load), so this never double-messages or fires prematurely.
-  const isTextsListEmpty =
-    top.length === 0 && bottom.length === 0 && installingResourceNames.length === 0;
+// The TEXTS list is empty when there are no admin/user rows and nothing installing. Shown only
+// when interactive (`!disabled`): while disabled we already show `disabledMessage` (no project)
+// or nothing (brief load), so this never double-messages or fires prematurely.
+const isTextsListEmpty =
+  top.length === 0 && bottom.length === 0 && installingResourceNames.length === 0;
 ```
 
 In the TEXTS `<section>`, add the prompt immediately after the existing `disabledMessage` block and before `{top.map(renderRow)}`:
 
 ```tsx
-        {disabled && disabledMessage && (
-          <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
-        )}
-        {!disabled && isTextsListEmpty && (
-          <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">
-            {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts)}
-          </p>
-        )}
-        {top.map(renderRow)}
+{
+  disabled && disabledMessage && (
+    <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
+  );
+}
+{
+  !disabled && isTextsListEmpty && (
+    <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">
+      {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts)}
+    </p>
+  );
+}
+{
+  top.map(renderRow);
+}
 ```
 
 - [ ] **Step 5: Add the localized string (en + es)**
@@ -434,8 +451,9 @@ Expected: all PASS.
 - [ ] **Step 4: Manual smoke (local app)**
 
 Start the app (`npm start` or the `app-runner` skill) and verify:
-- Open the Scripture Text Grid with no texts shown → the grid body shows *"No texts to display. Open View Options to choose which texts to show."* with the View Options gear icon visible above it.
-- Open View Options with an empty TEXTS list → *"No texts added yet. Use Get Resources to add texts to your collection."* appears above the Get Resources button.
+
+- Open the Scripture Text Grid with no texts shown → the grid body shows _"No texts to display. Open View Options to choose which texts to show."_ with the View Options gear icon visible above it.
+- Open View Options with an empty TEXTS list → _"No texts added yet. Use Get Resources to add texts to your collection."_ appears above the Get Resources button.
 - Check a resource in View Options → the empty state disappears and cells render; uncheck all → the empty state returns.
 - Switch app locale to `es` → both strings render in Spanish.
 
