@@ -32,7 +32,10 @@ export type ResourceCellLocalizedStrings = {
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
-  /** Resource label shown in the header; also the fallback accessible name when `ariaLabel` is unset. */
+  /**
+   * Resource label shown in the header; also the fallback accessible name when `ariaLabel` is
+   * unset.
+   */
   label: string;
   /** Accessible name for the gridcell (resource label + reference). Falls back to `label`. */
   ariaLabel?: string;
