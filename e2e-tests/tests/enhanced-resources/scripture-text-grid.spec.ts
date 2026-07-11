@@ -131,7 +131,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await restoreScriptureTextGridProjectSettings(mainPage);
   });
 
-  test('non-negotiable #1: a shown resource renders a gridcell (no blank-out, no empty toolbar)', async ({
+  test('non-negotiable #1: a shown resource renders a list item (no blank-out, no empty toolbar)', async ({
     mainPage,
   }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
