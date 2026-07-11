@@ -129,7 +129,7 @@ export function ScriptureTextGrid({
   }
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0">
+    <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0 tw:rtl:flex-row-reverse">
       <ResizablePanel defaultSize={55} minSize={30} className="tw:min-h-0">
         {verseRow}
       </ResizablePanel>
