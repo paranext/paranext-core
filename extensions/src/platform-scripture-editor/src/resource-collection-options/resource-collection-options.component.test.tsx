@@ -41,6 +41,7 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
+STRINGS['%webView_scriptureTextGrid_viewOptions_adminSharedLock%'] = 'Shared by administrator';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
 
 const ref = (id: string, name: string): DblResourceReference => ({
@@ -188,5 +189,35 @@ describe('ResourceCollectionOptions — truncated names', () => {
     const longName = 'A Very Long Digital Bible Library Resource Display Name';
     renderComponent({ bottom: [row('u1', longName)] });
     expect(screen.getByText(longName)).toHaveAttribute('title', longName);
+  });
+});
+
+describe('ResourceCollectionOptions locked-admin indicator', () => {
+  it('shows a lock (not a remove button) on the admin-shared row', () => {
+    renderComponent({
+      top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
+      bottom: [row('b', 'My NIV', { isUserRemovable: true })],
+    });
+    expect(screen.getByLabelText('Shared by administrator')).toBeInTheDocument();
+    // Admin row has no "Remove ... from list" control.
+    expect(screen.queryByLabelText('Remove Admin ESV from list')).not.toBeInTheDocument();
+  });
+
+  it('shows a remove button (not a lock) on the user row', () => {
+    renderComponent({
+      top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
+      bottom: [row('b', 'My NIV', { isUserRemovable: true })],
+    });
+    expect(screen.getByLabelText('Remove My NIV from list')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Shared by administrator')).toBeInTheDocument(); // from admin row only
+  });
+
+  it('the lock is not a focusable/tab-stop button', () => {
+    renderComponent({
+      top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
+      bottom: [],
+    });
+    const lock = screen.getByLabelText('Shared by administrator');
+    expect(lock.tagName).not.toBe('BUTTON');
   });
 });

@@ -1,5 +1,5 @@
 import { Button, Checkbox, Label, ToggleGroup, ToggleGroupItem } from 'platform-bible-react';
-import { X } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
   RESOURCE_COLLECTION_OPTIONS_KEYS,
@@ -83,6 +83,14 @@ export function ResourceCollectionOptions({
           >
             <X className="tw:h-4 tw:w-4" />
           </Button>
+        )}
+        {!row.isUserRemovable && (
+          <span
+            aria-label={localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.adminSharedLock)}
+            className="tw:flex tw:h-8 tw:w-8 tw:items-center tw:justify-center tw:text-muted-foreground tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:group-focus-within:opacity-100"
+          >
+            <Lock className="tw:h-4 tw:w-4" />
+          </span>
         )}
       </div>
     );

@@ -21,6 +21,7 @@ export const RESOURCE_COLLECTION_OPTIONS_KEYS = {
   comingSoon: '%webView_scriptureTextGrid_viewOptions_comingSoon%',
   textsHeader: '%webView_scriptureTextGrid_viewOptions_textsHeader%',
   getResources: '%webView_scriptureTextGrid_viewOptions_getResources%',
+  adminSharedLock: '%webView_scriptureTextGrid_viewOptions_adminSharedLock%',
   removeFromList: '%webView_scriptureTextGrid_viewOptions_removeFromList%',
   installing: '%webView_scriptureTextGrid_viewOptions_installing%',
 } as const;
@@ -33,6 +34,7 @@ export const RESOURCE_COLLECTION_OPTIONS_STRING_KEYS = Object.freeze([
   RESOURCE_COLLECTION_OPTIONS_KEYS.comingSoon,
   RESOURCE_COLLECTION_OPTIONS_KEYS.textsHeader,
   RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
+  RESOURCE_COLLECTION_OPTIONS_KEYS.adminSharedLock,
   RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList,
   RESOURCE_COLLECTION_OPTIONS_KEYS.installing,
 ] as const);
