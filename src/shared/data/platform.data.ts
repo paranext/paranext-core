@@ -10,6 +10,9 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
+/** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+
 /** ID of the default theme family for use in the application */
 export const DEFAULT_THEME_FAMILY = '';
 /** Type of the default theme for use in the application */

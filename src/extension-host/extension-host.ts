@@ -21,11 +21,13 @@ import { gracefulShutdownMessage } from '@node/models/interprocess-messages.mode
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
+import { markStartup } from '@shared/utils/startup-timing.util';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
 );
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
+markStartup('process-start');
 
 // Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
 process.on('message', (message) => {

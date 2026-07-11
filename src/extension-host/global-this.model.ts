@@ -8,7 +8,7 @@ import {
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
 import { ProcessType } from '@shared/global-this.model';
-import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
+import { isNoisyDevModeEnvVariableSet, isStartupMarksEnvVariableSet } from '@node/utils/util';
 
 // #region command-line arguments
 
@@ -28,6 +28,7 @@ globalThis.processType = ProcessType.ExtensionHost;
 globalThis.isPackaged = isPackaged;
 globalThis.resourcesPath = resourcesPath;
 globalThis.logLevel = logLevel;
+globalThis.startupMarks = isStartupMarksEnvVariableSet();
 
 // #endregion
 

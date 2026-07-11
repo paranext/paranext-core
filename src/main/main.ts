@@ -45,6 +45,7 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  STARTUP_MARKS_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -56,6 +57,7 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
@@ -197,6 +199,8 @@ async function openExternal(url: string) {
 }
 
 async function main() {
+  markStartup('process-start');
+
   // The network service has to start first, and it uses the shared store after initialization
   await networkService.initialize();
   await initializeSharedStoreService(networkService);
@@ -637,6 +641,7 @@ async function main() {
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+    if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;

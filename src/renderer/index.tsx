@@ -26,6 +26,7 @@ import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import {
   applyThemeStylesheet,
   getErrorMessage,
@@ -33,6 +34,8 @@ import {
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
+
+markStartup('bundle-eval-start');
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
