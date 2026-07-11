@@ -418,14 +418,21 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
+    const firstCell = frame.locator('[role="gridcell"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
 
-    // Focus the first cell, then Tab — focus should land on a gridcell (the next cell), never inside
-    // the readonly editor.
-    await frame.locator('[role="gridcell"]').first().focus();
+    // Capture the first cell's aria-label to verify Tab moves focus to a different cell.
+    const firstLabel = await firstCell.getAttribute('aria-label');
+    await firstCell.focus();
     await mainPage.keyboard.press('Tab');
-    const focusedRole = await frame.evaluate(() => document.activeElement?.getAttribute('role'));
-    expect(focusedRole).toBe('gridcell');
+    // Read the active element from INSIDE the frame document so focus escaping the iframe
+    // fails the test rather than passing vacuously.
+    const focused = await frame.evaluate(() => ({
+      role: document.activeElement?.getAttribute('role') ?? undefined,
+      label: document.activeElement?.getAttribute('aria-label') ?? undefined,
+    }));
+    expect(focused.role).toBe('gridcell');
+    expect(focused.label).not.toBe(firstLabel);
   });
 
   test('focused gridcell shows a focus ring', async ({ mainPage }) => {
