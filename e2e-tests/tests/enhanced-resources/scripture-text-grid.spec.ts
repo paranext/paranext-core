@@ -153,8 +153,8 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await expect(frame.locator('[role="grid"]')).toBeVisible({ timeout: 15_000 });
-    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
+    await expect(frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
+    await expect(frame.locator('[role="listitem"]').first()).toBeVisible({ timeout: 15_000 });
     await expect(frame.locator('[role="toolbar"]')).toHaveCount(0);
   });
 
@@ -175,7 +175,7 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    const firstCell = frame.locator('[role="gridcell"]').first();
+    const firstCell = frame.locator('[role="listitem"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
 
@@ -183,8 +183,11 @@ test.describe('Scripture Text Grid renderer', () => {
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
       timeout: 15_000,
     });
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2);
-    await expect(frame.locator('[role="grid"]')).toBeVisible();
+    // The split panel's inner cell is presentational (no listitem role); only verse list items are
+    // listitems. Assert the chapter-context region is visible and the verse list still shows its
+    // single flagged-resource listitem.
+    await expect(frame.locator('[role="listitem"]')).toHaveCount(1);
+    await expect(frame.locator('[role="list"]')).toBeVisible();
   });
 
   test('Escape closes the chapter-context panel without blanking the row', async ({ mainPage }) => {
@@ -204,14 +207,14 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await frame.locator('[role="gridcell"]').first().click();
+    await frame.locator('[role="listitem"]').first().click();
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
       timeout: 15_000,
     });
 
     await mainPage.keyboard.press('Escape');
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
-    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible();
+    await expect(frame.locator('[role="listitem"]').first()).toBeVisible();
   });
 
   test('RTL UI locale reverses the row via logical flex properties', async ({ mainPage }) => {
@@ -227,9 +230,9 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await expect(frame.locator('[role="row"]')).toBeVisible({ timeout: 15_000 });
+    await expect(frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
 
-    const directions = await frame.locator('[role="row"]').evaluate((row) => {
+    const directions = await frame.locator('[role="list"]').evaluate((row) => {
       document.documentElement.dir = 'ltr';
       const ltr = getComputedStyle(row).flexDirection;
       document.documentElement.dir = 'rtl';
@@ -269,7 +272,7 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(validIds.length + 1, {
+    await expect(frame.locator('[role="listitem"]')).toHaveCount(validIds.length + 1, {
       timeout: 15_000,
     });
     await expect(frame.getByText(/Resource unavailable|Downloading/i).first()).toBeVisible({
@@ -300,7 +303,7 @@ test.describe('Scripture Text Grid renderer', () => {
     );
 
     const frame = await openScriptureTextGrid(mainPage);
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
+    await expect(frame.locator('[role="listitem"]')).toHaveCount(2, { timeout: 15_000 });
 
     await mainPage.evaluate(async () => {
       // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
@@ -320,9 +323,9 @@ test.describe('Scripture Text Grid renderer', () => {
       });
     });
 
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2);
-    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible();
-    await expect(frame.locator('[role="gridcell"]').nth(1)).toBeVisible();
+    await expect(frame.locator('[role="listitem"]')).toHaveCount(2);
+    await expect(frame.locator('[role="listitem"]').first()).toBeVisible();
+    await expect(frame.locator('[role="listitem"]').nth(1)).toBeVisible();
   });
 
   test('frame budget: verse row renders >=5 cells under threshold (split closed)', async ({
@@ -354,18 +357,18 @@ test.describe('Scripture Text Grid renderer', () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
         const observer = new MutationObserver(() => {
-          if (document.querySelectorAll('[role="gridcell"]').length >= 5) {
+          if (document.querySelectorAll('[role="listitem"]').length >= 5) {
             observer.disconnect();
             resolve();
           }
         });
         observer.observe(document.body, { childList: true, subtree: true });
-        if (document.querySelectorAll('[role="gridcell"]').length >= 5) resolve();
+        if (document.querySelectorAll('[role="listitem"]').length >= 5) resolve();
       });
       return performance.now() - start;
     });
 
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(5, { timeout: 15_000 });
+    await expect(frame.locator('[role="listitem"]')).toHaveCount(5, { timeout: 15_000 });
     expect(elapsedMs).toBeLessThan(220);
   });
 
@@ -387,14 +390,14 @@ test.describe('Scripture Text Grid renderer', () => {
     // Close the popover so it does not overlay the grid body.
     await frame.locator('body').press('Escape');
 
-    // The chapter grid lays out as a column and shows no chapter-context split.
-    const grid = frame.locator('[role="grid"]');
+    // The chapter group lays out as a column and shows no chapter-context split.
+    const grid = frame.locator('[role="group"]');
     await expect(grid).toBeVisible({ timeout: 15_000 });
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
     const flexDirection = await grid.evaluate((el) => getComputedStyle(el).flexDirection);
     expect(flexDirection).toBe('column');
-    // Each resource is its own row in the stack.
-    await expect(frame.locator('[role="row"]')).toHaveCount(2);
+    // Each resource is its own region in the stack.
+    await expect(frame.locator('[role="region"]')).toHaveCount(2);
   });
 
   test('chapter mode: clicking a cell opens no chapter-context split (selection sync is delegated to the shared scrRef)', async ({
@@ -426,13 +429,13 @@ test.describe('Scripture Text Grid renderer', () => {
     await frame.getByRole('radio', { name: /Chapter/ }).click();
     await frame.locator('body').press('Escape');
 
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
-    // Clicking inside a chapter cell must NOT open the verse-view chapter-context split, and both
-    // cells stay visible (selection sync keeps every column mounted and navigated).
-    await frame.locator('[role="gridcell"]').first().click();
+    await expect(frame.locator('[role="region"]')).toHaveCount(2, { timeout: 15_000 });
+    // Clicking inside a chapter region must NOT open the verse-view chapter-context split, and both
+    // regions stay visible (selection sync keeps every column mounted and navigated).
+    await frame.locator('[role="region"]').first().click();
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2);
-    await expect(frame.locator('[role="gridcell"]').nth(1)).toBeVisible();
+    await expect(frame.locator('[role="region"]')).toHaveCount(2);
+    await expect(frame.locator('[role="region"]').nth(1)).toBeVisible();
   });
 
   test('chapter frame budget: >=5 stacked chapters render under the chapter-mode baseline', async ({
@@ -468,18 +471,18 @@ test.describe('Scripture Text Grid renderer', () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
         const observer = new MutationObserver(() => {
-          if (document.querySelectorAll('[role="gridcell"]').length >= 5) {
+          if (document.querySelectorAll('[role="region"]').length >= 5) {
             observer.disconnect();
             resolve();
           }
         });
         observer.observe(document.body, { childList: true, subtree: true });
-        if (document.querySelectorAll('[role="gridcell"]').length >= 5) resolve();
+        if (document.querySelectorAll('[role="region"]').length >= 5) resolve();
       });
       return performance.now() - start;
     });
 
-    await expect(frame.locator('[role="gridcell"]')).toHaveCount(5, { timeout: 15_000 });
+    await expect(frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
     // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
     // NOT apply. Baseline established here; tighten once real measurements are collected (see Step 6).
     // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
@@ -504,7 +507,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await frame.getByRole('radio', { name: /Chapter/ }).click();
     await frame.locator('body').press('Escape');
 
-    const grid = frame.locator('[role="grid"]');
+    const grid = frame.locator('[role="group"]');
     await expect(grid).toBeVisible({ timeout: 15_000 });
     const directions = await grid.evaluate((el) => {
       document.documentElement.dir = 'ltr';
