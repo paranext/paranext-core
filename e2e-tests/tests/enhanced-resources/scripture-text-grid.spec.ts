@@ -366,3 +366,112 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     expect(elapsedMs).toBeLessThan(220);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A12 (PT-4057) — Scripture Text Grid accessibility pass.
+//
+// Covers: accessible name on gridcells, Tab-key focus order stays within
+// gridcells, focus-visible ring renders a non-zero box-shadow, and the
+// chapter-context split panel positions to the left (inline-end) under RTL.
+//
+// All specs are local-only (they mutate real project settings) and self-skip
+// in CI or when no admin-writable project is available.
+// ---------------------------------------------------------------------------
+test.describe('Scripture Text Grid accessibility (A12)', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('gridcell accessible name includes the resource label and verse reference', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'AccName A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
+      { type: 'project', name: 'AccName B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const firstCell = frame.locator('[role="gridcell"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // Accessible name is "<label>, <BOOK C:V>" — assert the comma-joined shape.
+    await expect(firstCell).toHaveAttribute('aria-label', /.+,\s+[A-Z1-9]{3}\s+\d+:\d+/);
+  });
+
+  test('Tab moves focus between gridcells, not into editor content', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'Tab A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
+      { type: 'project', name: 'Tab B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
+
+    // Focus the first cell, then Tab — focus should land on a gridcell (the next cell), never inside
+    // the readonly editor.
+    await frame.locator('[role="gridcell"]').first().focus();
+    await mainPage.keyboard.press('Tab');
+    const focusedRole = await frame.evaluate(() => document.activeElement?.getAttribute('role'));
+    expect(focusedRole).toBe('gridcell');
+  });
+
+  test('focused gridcell shows a focus ring', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'Ring A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
+      { type: 'project', name: 'Ring B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const firstCell = frame.locator('[role="gridcell"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    await firstCell.focus();
+    // Tailwind focus-visible ring renders a non-zero box-shadow on the focused cell.
+    const boxShadow = await firstCell.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(boxShadow).not.toBe('none');
+  });
+
+  test('chapter-context split opens on the inline-end (visual-left) side under RTL', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'RtlSplit A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
+      { type: 'project', name: 'RtlSplit B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await frame.evaluate(() => {
+      document.documentElement.dir = 'rtl';
+    });
+    await frame.locator('[role="gridcell"]').first().click();
+    const context = frame.getByTestId('scripture-text-grid-chapter-context');
+    await expect(context).toBeVisible({ timeout: 15_000 });
+
+    // Under RTL the chapter-context panel sits to the LEFT of the verse row.
+    const contextBox = await context.boundingBox();
+    const rowBox = await frame.locator('[role="grid"]').boundingBox();
+    expect(contextBox && rowBox && contextBox.x < rowBox.x).toBe(true);
+  });
+});
