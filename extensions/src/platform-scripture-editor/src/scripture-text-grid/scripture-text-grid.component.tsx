@@ -1,5 +1,6 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
+import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
@@ -10,10 +11,10 @@ type ScriptureTextGridProps = {
   resources: GridResource[];
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
-  /** Accessible name for the grid region (the web view passes the localized tab title). */
+  /** Accessible name for the list/group region (the web view passes the localized tab title). */
   ariaLabel?: string;
   /**
-   * Selects the layout: `'verse'` → horizontal verse-cell row (with the chapter-context split);
+   * Selects the layout: `'verse'` → horizontal verse-cell list (with the chapter-context split);
    * `'chapter'` → vertical full-chapter stack. Defaults to `'verse'` because the row is
    * verse-priority (the product default); `ResourceCell` defaults to `'chapter'` because it is the
    * generic cell reused by the chapter-context panel and the stack. The two defaults intentionally
@@ -29,19 +30,24 @@ type ScriptureTextGridProps = {
   onChapterContextClose?: () => void;
   /** Localized accessible name for the chapter-context close button. */
   closeChapterContextLabel?: string;
+  /**
+   * Localized `"{resourceName}, {reference}"` template for each verse listitem's accessible name.
+   * When omitted, the accessible name falls back to the resource label alone.
+   */
+  cellAccessibleNameTemplate?: string;
 };
 
 /**
  * Renders the effective-list resources in one of two layouts (selected by `viewMode`), all synced
- * to the active scrRef: `verse` → a horizontal row of verse cells (described below); `chapter` → a
- * vertical stack of full-chapter cells, one per resource, each scrolling independently and with no
+ * to the active scrRef: `verse` → a horizontal list of verse listitems (described below); `chapter`
+ * → a vertical group of labeled regions, one per resource, each scrolling independently and with no
  * split. The active scrRef is owned by the web-view root (via
  * `WebViewProps.useWebViewScrollGroupScrRef`) and passed in — this component is presentational and
  * calls no scroll-group hook.
  *
- * In verse mode, clicking (or pressing Enter on) a row cell opens a resizable chapter-context panel
- * beside the row showing that resource's full chapter. When the panel closes, focus returns to the
- * cell that opened it (WCAG 2.4.3).
+ * In verse mode, clicking (or pressing Enter/Space on) a listitem opens a resizable chapter-context
+ * panel beside the list showing that resource's full chapter. When the panel closes, focus returns
+ * to the listitem that opened it (WCAG 2.4.3).
  */
 export function ScriptureTextGrid({
   resources,
@@ -53,29 +59,37 @@ export function ScriptureTextGrid({
   onChapterContextChange,
   onChapterContextClose,
   closeChapterContextLabel,
+  cellAccessibleNameTemplate,
 }: ScriptureTextGridProps) {
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const gridRef = useRef<HTMLDivElement>(null);
-  // projectId of the cell that opened the split, so focus can return to it when the split closes.
+  // projectId of the listitem that opened the split, so focus can return to it when the split closes.
   const focusRestoreProjectIdRef = useRef<string | undefined>(undefined);
 
-  // On close, return focus to the cell that opened the split (WCAG 2.4.3). The row remounts when the
-  // split toggles, so restore by identity (projectId) against the freshly-rendered DOM, not by a
-  // stale element reference.
+  // On close, return focus to the listitem that opened the split (WCAG 2.4.3). The list remounts
+  // when the split toggles, so restore by identity (projectId) against the freshly-rendered DOM,
+  // not by a stale element reference.
   useEffect(() => {
     if (chapterContext) return;
     const projectId = focusRestoreProjectIdRef.current;
     if (!projectId) return;
     focusRestoreProjectIdRef.current = undefined;
-    gridRef.current
-      ?.querySelector<HTMLElement>(`[data-project-id="${projectId}"] [role="gridcell"]`)
-      ?.focus();
+    gridRef.current?.querySelector<HTMLElement>(`[data-project-id="${projectId}"]`)?.focus();
   }, [chapterContext]);
+
+  /** Builds the accessible name for a verse listitem: `"{name}, {ref}"` when template is set. */
+  const verseItemName = (label: string) =>
+    cellAccessibleNameTemplate
+      ? formatReplacementString(cellAccessibleNameTemplate, {
+          resourceName: label,
+          reference: formatScrRef(scrRef),
+        })
+      : label;
 
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
   // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
-  // adding more texts). No verse-cell row chrome and no chapter-context split; the whole chapter is
+  // adding more texts). No verse-cell list chrome and no chapter-context split; the whole chapter is
   // already shown.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
@@ -91,19 +105,20 @@ export function ScriptureTextGrid({
     );
   }
 
-  // Chapter view: a vertical stack of full-chapter cells, one per resource, each bounded-height so it
-  // scrolls independently. Selection stays in sync across columns via the shared scrRef — each cell's
-  // read-only Editorial reports clicks through onScrRefChange -> setScrRef, and every cell re-navigates
-  // to the new ref. No chapter-context split and no per-cell activation here (that is verse-only).
+  // Chapter view: a vertical group of labeled regions (full-chapter cells), one per resource, each
+  // bounded-height so it scrolls independently. Selection stays in sync across columns via the
+  // shared scrRef — each cell's read-only Editorial reports clicks through onScrRefChange ->
+  // setScrRef, and every cell re-navigates to the new ref. No chapter-context split and no per-cell
+  // activation here (that is verse-only).
   //
-  // `layout` is derived from viewMode only. B4 hard-codes the default; PT-4168 (deferred single-flag
-  // orientation override) will later make this `orientation ?? deriveLayout(viewMode)` — a seam, not
-  // the feature.
+  // `layout` is derived from viewMode only. B4 hard-codes the default; PT-4168 (deferred
+  // single-flag orientation override) will later make this `orientation ?? deriveLayout(viewMode)`
+  // — a seam, not the feature.
   const layout: 'row' | 'column' = viewMode === 'chapter' ? 'column' : 'row';
   if (layout === 'column') {
     return (
       <div
-        role="grid"
+        role="group"
         aria-label={ariaLabel}
         className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:divide-y tw:overflow-hidden"
       >
@@ -113,7 +128,8 @@ export function ScriptureTextGrid({
           // the stack past the viewport. Block-direction flow is dir-agnostic (no RTL reversal).
           <div
             key={resource.projectId}
-            role="row"
+            role="region"
+            aria-label={resource.label}
             data-project-id={resource.projectId}
             className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-1 tw:shrink-0"
           >
@@ -132,37 +148,55 @@ export function ScriptureTextGrid({
   const verseRow = (
     <div
       ref={gridRef}
-      role="grid"
+      role="list"
       aria-label={ariaLabel}
-      className="tw:h-full tw:overflow-x-auto tw:overflow-y-hidden"
+      className="tw:flex tw:h-full tw:flex-row tw:divide-x tw:overflow-x-auto tw:overflow-y-hidden"
     >
-      <div role="row" className="tw:flex tw:h-full tw:flex-row tw:divide-x">
-        {resources.map((resource) => (
-          // `flex-1` lets cells share width evenly when the row fits; `min-inline-size` floors each
-          // cell so a many-resource row scrolls horizontally (grid `overflow-x-auto`) instead of
-          // collapsing cells into unreadable slivers in a narrow tab.
-          <div
-            key={resource.projectId}
-            data-project-id={resource.projectId}
-            className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
-          >
-            <ResourceCell
-              resourceRef={resource}
-              scrRef={scrRef}
-              setScrRef={setScrRef}
-              viewMode={viewMode}
-              onActivate={
-                onChapterContextChange
-                  ? () => {
-                      focusRestoreProjectIdRef.current = resource.projectId;
-                      onChapterContextChange(resource);
-                    }
-                  : undefined
-              }
-            />
-          </div>
-        ))}
-      </div>
+      {resources.map((resource) => (
+        // `flex-1` lets cells share width evenly when the list fits; `min-inline-size` floors each
+        // cell so a many-resource list scrolls horizontally instead of collapsing cells into
+        // unreadable slivers in a narrow tab.
+        // The listitem represents an interactive resource entry in the verse list. jsx-a11y flags
+        // role="listitem" with tabIndex/handlers as "non-interactive", but this listitem IS keyboard-
+        // accessible (Tab to focus, Enter/Space to activate) per WCAG 2.1 §2.1.1 and the A12 ARIA
+        // spec — suppression is justified by the explicit keyboard handler and tabIndex below.
+        /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
+        <div
+          key={resource.projectId}
+          role="listitem"
+          data-project-id={resource.projectId}
+          aria-label={verseItemName(resource.label)}
+          tabIndex={onChapterContextChange ? 0 : undefined}
+          onClick={
+            onChapterContextChange
+              ? () => {
+                  focusRestoreProjectIdRef.current = resource.projectId;
+                  onChapterContextChange(resource);
+                }
+              : undefined
+          }
+          onKeyDown={
+            onChapterContextChange
+              ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    focusRestoreProjectIdRef.current = resource.projectId;
+                    onChapterContextChange(resource);
+                  }
+                }
+              : undefined
+          }
+          className={`tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0 tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${onChapterContextChange ? ' tw:cursor-pointer' : ''}`}
+        >
+          <ResourceCell
+            resourceRef={resource}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            viewMode={viewMode}
+          />
+        </div>
+        /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
+      ))}
     </div>
   );
 

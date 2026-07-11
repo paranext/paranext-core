@@ -52,12 +52,14 @@ const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
+  CELL_ACCESSIBLE_NAME_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -348,6 +350,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           onChapterContextChange={setChapterContext}
           onChapterContextClose={handleCloseChapterContext}
           closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+          cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
         />
       </div>
     </div>
