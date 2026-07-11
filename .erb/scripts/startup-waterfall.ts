@@ -26,6 +26,10 @@ function defaultLogPath(): string {
 
 function main(): void {
   const logArgIndex = process.argv.indexOf('--log');
+  if (logArgIndex >= 0 && process.argv[logArgIndex + 1] === undefined) {
+    console.error('--log requires a path');
+    process.exit(1);
+  }
   const logPath = logArgIndex >= 0 ? process.argv[logArgIndex + 1] : defaultLogPath();
   if (!fs.existsSync(logPath)) {
     console.error(`Log file not found: ${logPath}\nPass --log <path> or run the app first.`);
