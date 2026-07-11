@@ -87,6 +87,45 @@ export function ScriptureTextGrid({
     );
   }
 
+  // Chapter view: a vertical stack of full-chapter cells, one per resource, each bounded-height with
+  // its own scroll so all resources stay on screen and scroll independently. Selection stays in sync
+  // across columns through the shared scrRef — each cell's read-only Editorial reports clicks via
+  // onScrRefChange -> setScrRef, and every cell re-navigates to the new ref. No chapter-context split
+  // and no per-cell activation in this mode (chapter context is a verse-view affordance).
+  //
+  // `layout` is derived here from viewMode only. B4 hard-codes the default; PT-4168 (deferred
+  // single-flag orientation override) will make this `orientation ?? deriveLayout(viewMode)` without
+  // re-architecting the branch. This is a seam, not the override feature.
+  const layout: 'row' | 'column' = viewMode === 'chapter' ? 'column' : 'row';
+  if (layout === 'column') {
+    return (
+      <div
+        role="grid"
+        aria-label={ariaLabel}
+        className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:divide-y tw:overflow-hidden"
+      >
+        {resources.map((resource) => (
+          // `flex-1 min-h-0` shares the height evenly and floors each cell so its inner
+          // `overflow-auto` (in ResourceCellView) scrolls the chapter internally instead of pushing
+          // the stack past the viewport. Block-direction flow is dir-agnostic (no RTL reversal).
+          <div
+            key={resource.projectId}
+            role="row"
+            data-project-id={resource.projectId}
+            className="tw:flex tw:min-h-0 tw:min-w-0 tw:flex-1 tw:shrink-0"
+          >
+            <ResourceCell
+              resourceRef={resource}
+              scrRef={scrRef}
+              setScrRef={setScrRef}
+              viewMode="chapter"
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const verseRow = (
     <div
       ref={gridRef}

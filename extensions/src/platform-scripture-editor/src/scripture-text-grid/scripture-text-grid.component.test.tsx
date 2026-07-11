@@ -9,11 +9,16 @@ const mockResourceCell = vi.fn(
   ({
     resourceRef,
     scrRef,
+    // Captured in mock.calls for assertion (tests call mockResourceCell.mock.calls[n][0].setScrRef
+    // to verify the shared setter was wired through); not rendered in the fake cell JSX.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    setScrRef,
     viewMode,
     onActivate,
   }: {
     resourceRef: { label: string; projectId: string };
     scrRef: { verseNum: number };
+    setScrRef: (scrRef: unknown) => void;
     viewMode?: string;
     onActivate?: () => void;
   }) => (
@@ -206,5 +211,70 @@ describe('ScriptureTextGrid', () => {
       />,
     );
     expect(screen.getByTestId('cell-b')).toHaveFocus();
+  });
+});
+
+describe('ScriptureTextGrid — chapter view', () => {
+  it('stacks one chapter cell per resource, each in its own row', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        ariaLabel="Text Collection"
+      />,
+    );
+    // A grid of N single-cell rows (vertical stack), not one row of N cells.
+    expect(screen.getByRole('grid', { name: 'Text Collection' })).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(resources.length);
+    const cells = screen.getAllByRole('gridcell');
+    expect(cells.map((c) => c.getAttribute('aria-label'))).toEqual(['WEB', 'KJV', 'עברית']);
+    cells.forEach((c) => expect(c).toHaveAttribute('data-view-mode', 'chapter'));
+  });
+
+  it('does not open a chapter-context split in chapter mode, even when a handler is provided', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    // Cells are not activatable (no chapter-context affordance in chapter mode).
+    expect(screen.getByTestId('cell-a')).not.toHaveAttribute('tabindex');
+    expect(screen.queryByTestId('resizable-panel-group')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
+  });
+
+  it('gives every chapter cell the shared scrRef setter (selection stays in sync)', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+      />,
+    );
+    const setters = mockResourceCell.mock.calls.map((call) => call[0].setScrRef);
+    expect(setters).toHaveLength(resources.length);
+    setters.forEach((setter) => expect(setter).toBe(setScrRef));
+  });
+
+  it('renders a single resource as a whole-chapter region in chapter mode too', () => {
+    render(
+      <ScriptureTextGrid
+        resources={[{ projectId: 'a', label: 'WEB' }]}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        ariaLabel="Text Collection"
+      />,
+    );
+    expect(screen.getByRole('region', { name: 'Text Collection' })).toBeInTheDocument();
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'chapter');
   });
 });
