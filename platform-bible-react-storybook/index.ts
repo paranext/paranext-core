@@ -5,6 +5,7 @@ export { default as BookChapterControl } from './components/advanced/book-chapte
 export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export {
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
+  type BookChapterControlHandle,
   type BookChapterControlLocalizedStrings,
 } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export { default as BookSelector } from './components/advanced/book-selector.component';
