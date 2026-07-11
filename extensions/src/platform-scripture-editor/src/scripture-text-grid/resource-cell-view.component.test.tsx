@@ -66,7 +66,7 @@ describe('ResourceCellView row smoke', () => {
   });
 
   it('mixed direction: LTR and RTL cells apply independent dir', () => {
-    renderCells(
+    const { container } = renderCells(
       <>
         <ResourceCellView
           state="ready"
@@ -95,16 +95,12 @@ describe('ResourceCellView row smoke', () => {
     // No gridcell role — purely presentational.
     expect(screen.queryByRole('gridcell')).not.toBeInTheDocument();
 
-    const container = screen.getByText('WEB').closest('div')?.parentElement;
-    const ltrDirs = document.querySelectorAll('[dir="ltr"]');
-    const rtlDirs = document.querySelectorAll('[dir="rtl"]');
-    expect(ltrDirs).toHaveLength(1);
-    expect(rtlDirs).toHaveLength(2);
+    // Scope the direction counts to the rendered subtree (not the whole document).
+    expect(container.querySelectorAll('[dir="ltr"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[dir="rtl"]')).toHaveLength(2);
 
     expect(screen.getByText('Blessed are the poor in spirit')).toBeInTheDocument();
     expect(screen.getByText('אַשְׁרֵי הָאִישׁ')).toBeInTheDocument();
     expect(screen.getByText('طُوبَى لِلْمَسَاكِينِ')).toBeInTheDocument();
-    // Suppress unused variable lint
-    expect(container).toBeDefined();
   });
 });
