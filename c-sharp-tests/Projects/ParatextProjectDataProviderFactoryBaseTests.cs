@@ -16,17 +16,15 @@ namespace TestParanextDataProvider.Projects
     [ExcludeFromCodeCoverage]
     internal class ParatextProjectDataProviderFactoryBaseTests : PapiTestBase
     {
-        [SetUp]
-        public override async Task TestSetupAsync()
-        {
-            await base.TestSetupAsync();
-        }
-
         [Test]
         public void GetProjectDataProviderID_ConcurrentDistinctProjects_CreatesEachExactlyOnceWithoutSerializing()
         {
             const int projectCount = 4;
-            var perThreadBarrierTimeout = TimeSpan.FromSeconds(3);
+            // Generous so a core-starved CI box that's slow to schedule the last thread onto the
+            // barrier doesn't read as serialization. The barrier only needs to prove threads run
+            // concurrently, so waiting longer is safe - under real serialization the blocked
+            // threads never reach the checkpoint no matter how long we wait.
+            var perThreadBarrierTimeout = TimeSpan.FromSeconds(10);
 
             var projectIds = Enumerable
                 .Range(0, projectCount)
@@ -162,7 +160,7 @@ namespace TestParanextDataProvider.Projects
             ParatextProjects.FakeAddProject(CreateProjectDetails(projectId, "SiblingProject"));
 
             // Simulates a project that belongs to a sibling factory (ShouldServeProject == false),
-            // which is the deterministic failure path GetProjectDataProviderID can hit.
+            // a deterministic failure path GetProjectDataProviderID can hit.
             var factory = new TestableParatextProjectDataProviderFactory(Client, ParatextProjects)
             {
                 ShouldServe = false,
@@ -170,20 +168,62 @@ namespace TestParanextDataProvider.Projects
 
             Assert.Throws<KeyNotFoundException>(() => factory.GetProjectDataProviderID(projectId));
 
-            // The faulted Lazy stays cached in the map (LazyThreadSafetyMode.ExecutionAndPublication
-            // caches and rethrows the exception), but GetExistingProjectDataProvider is a "does one
-            // exist yet?" query - it must not force creation and must not re-throw the cached fault.
+            // GetExistingProjectDataProvider is a "does one exist yet?" query: after a creation that
+            // threw, it must return null without re-throwing the failure and without forcing
+            // creation. (Both guards cover this: the faulted entry is evicted on throw, and even a
+            // present-but-still-creating Lazy is skipped via IsValueCreated rather than blocking on
+            // or re-throwing from .Value.)
             ParatextProjectDataProvider? existing = null;
             Assert.DoesNotThrow(() => existing = factory.GetExistingProjectDataProvider(projectId));
             Assert.That(existing, Is.Null);
+        }
 
-            // A second call still deterministically re-throws the cached fault rather than silently
-            // retrying creation.
-            Assert.Throws<KeyNotFoundException>(() => factory.GetProjectDataProviderID(projectId));
+        [Test]
+        public void GetProjectDataProviderID_AfterTransientFailure_RetrySelfHeals()
+        {
+            var projectId = HexId.CreateNew().ToString();
+            ParatextProjects.FakeAddProject(CreateProjectDetails(projectId, "FlakyProject"));
+
+            var factory = new TestableParatextProjectDataProviderFactory(Client, ParatextProjects);
+
+            // Fail the first creation attempt with a transient (recoverable) error - the kind
+            // GetParatextProject throws when a resource is requested before Paratext registration
+            // completes (RegistrationRequiredException) or a project is requested mid-clone
+            // (ProjectNotFoundException) - then let later attempts succeed. Calls here are
+            // sequential, so a plain counter is sufficient.
+            var attempts = 0;
+            factory.OnCreating = _ =>
+            {
+                if (attempts++ == 0)
+                    throw new InvalidOperationException("transient creation failure");
+            };
+
+            // First call faults. A faulted Lazy caches its exception forever, so it must be evicted
+            // from the map rather than left to poison every future lookup until process restart.
+            Assert.Throws<InvalidOperationException>(
+                () => factory.GetProjectDataProviderID(projectId)
+            );
+
+            // Second call (condition cleared) must retry creation and return a real PDP name rather
+            // than re-throwing the previously-cached exception. This is the falsifiable guard for
+            // the eviction fix: without eviction, this call re-throws InvalidOperationException.
+            string? pdpName = null;
+            Assert.DoesNotThrow(() => pdpName = factory.GetProjectDataProviderID(projectId));
+            Assert.That(pdpName, Is.Not.Null.And.Not.Empty);
             Assert.That(
                 factory.CreationInvocationCount,
-                Is.EqualTo(1),
-                "A cached (faulted) Lazy must not re-run creation on retry"
+                Is.EqualTo(2),
+                "The faulted entry must be evicted so the second call retries creation"
+            );
+
+            // The now-successful PDP is cached: a third call reuses it without a third creation, so
+            // eviction on failure does not weaken success-path dedup.
+            var pdpNameAgain = factory.GetProjectDataProviderID(projectId);
+            Assert.That(pdpNameAgain, Is.EqualTo(pdpName));
+            Assert.That(
+                factory.CreationInvocationCount,
+                Is.EqualTo(2),
+                "Success-path dedup: no re-creation once a PDP exists"
             );
         }
     }

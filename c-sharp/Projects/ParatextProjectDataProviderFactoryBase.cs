@@ -129,7 +129,24 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
                 LazyThreadSafetyMode.ExecutionAndPublication
             )
         );
-        return lazy.Value.DataProviderName;
+        try
+        {
+            return lazy.Value.DataProviderName;
+        }
+        catch
+        {
+            // A faulted Lazy caches its exception forever. Evict it so a later call retries
+            // (e.g. a resource requested before Paratext registration completes, or a project
+            // requested mid-clone) instead of staying broken until process restart. The old
+            // (pre-Lazy) code cached nothing on failure, so failed lookups self-healed; preserve
+            // that. Compare-and-remove by the exact Lazy so we never clobber a different,
+            // successful entry created for this project in the meantime. Eviction runs only on
+            // throw, so the success path still creates exactly one PDP per project.
+            _pdpMap.TryRemove(
+                new KeyValuePair<string, Lazy<ParatextProjectDataProvider>>(projectID, lazy)
+            );
+            throw;
+        }
     }
 
     /// <summary>
