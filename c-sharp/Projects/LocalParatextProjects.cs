@@ -92,6 +92,7 @@ internal class LocalParatextProjects
 
     public virtual void Initialize()
     {
+        Services.StartupTiming.Mark("project-scan-start");
         if (_isInitialized)
             return;
 
@@ -121,6 +122,7 @@ internal class LocalParatextProjects
 
             _isInitialized = true;
         }
+        Services.StartupTiming.Mark("project-scan-end");
     }
 
     /// <summary>

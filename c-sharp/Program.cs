@@ -22,6 +22,7 @@ public static class Program
     public static async Task Main()
     {
         Console.WriteLine("Paranext data provider starting up");
+        StartupTiming.Mark("process-start");
         Thread.CurrentThread.Name = "Main";
 
         var listener = new ConsoleTraceListener
@@ -57,6 +58,7 @@ public static class Program
                 Console.WriteLine("Paranext data provider could not connect");
                 return;
             }
+            StartupTiming.Mark("papi-connected");
 
             // Initialize the shared store early since papi uses it
             await SharedStoreService.InitializeAsync(papi);
@@ -106,6 +108,7 @@ public static class Program
                 new MarbleDataLoader()
             );
             var versificationConversionService = new VersificationConversionService(papi);
+            StartupTiming.Mark("init-barrier-start");
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
@@ -119,6 +122,7 @@ public static class Program
                 manageBooksService.RegisterNetworkObjectAsync(),
                 enhancedResourceFactory.InitializeAsync()
             );
+            StartupTiming.Mark("init-barrier-end");
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

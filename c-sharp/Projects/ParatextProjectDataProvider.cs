@@ -86,6 +86,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private const string CellOrderSettingName = ProjectDataType.CELL_ORDER;
     private const string CellOrderSchemaVersion = "1.0.0";
 
+    // One-shot guard so we time the first chapter served without spamming every navigation.
+    private bool _firstChapterMarked;
+
     #endregion
 
     #region Constructors
@@ -2574,6 +2577,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetChapterUsx(VerseRef verseRef)
     {
+        if (!_firstChapterMarked)
+        {
+            _firstChapterMarked = true;
+            Services.StartupTiming.Mark("first-get-chapter-usx");
+        }
         return GetFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, true)
