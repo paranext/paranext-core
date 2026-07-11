@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type React from 'react';
-import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import {
   DOWNLOADING_KEY,
   FAILED_KEY,
@@ -39,6 +39,49 @@ describe('ResourceCellView', () => {
       />,
     );
     expect(screen.getByRole('gridcell')).toHaveAttribute('aria-label', 'ESV');
+  });
+
+  it('is a keyboard tab stop (tabIndex 0) only when activatable', () => {
+    const { rerender } = render(
+      <ResourceCellView
+        state="ready"
+        label="ESV"
+        textDirection="ltr"
+        localizedStrings={{}}
+        editor={<div>editor</div>}
+        onActivate={() => {}}
+      />,
+    );
+    expect(screen.getByRole('gridcell')).toHaveAttribute('tabindex', '0');
+
+    rerender(
+      <ResourceCellView
+        state="ready"
+        label="ESV"
+        textDirection="ltr"
+        localizedStrings={{}}
+        editor={<div>editor</div>}
+      />,
+    );
+    expect(screen.getByRole('gridcell')).not.toHaveAttribute('tabindex');
+  });
+
+  it('activates on both Enter and Space when activatable', () => {
+    const onActivate = vi.fn();
+    render(
+      <ResourceCellView
+        state="ready"
+        label="ESV"
+        textDirection="ltr"
+        localizedStrings={{}}
+        editor={<div>editor</div>}
+        onActivate={onActivate}
+      />,
+    );
+    const cell = screen.getByRole('gridcell');
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    fireEvent.keyDown(cell, { key: ' ' });
+    expect(onActivate).toHaveBeenCalledTimes(2);
   });
 });
 

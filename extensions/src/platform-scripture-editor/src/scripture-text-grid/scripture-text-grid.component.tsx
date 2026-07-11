@@ -129,10 +129,10 @@ export function ScriptureTextGrid({
   }
 
   return (
-    <ResizablePanelGroup
-      direction="horizontal"
-      className="tw:h-full tw:min-h-0 tw:rtl:flex-row-reverse"
-    >
+    // Panel order is [verse row, chapter context]. The group's flex row is laid out along the UI's
+    // inline axis, so the chapter-context panel already lands on the inline-end side — visual right
+    // in LTR, visual left in RTL — with no direction-specific CSS needed.
+    <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0">
       <ResizablePanel defaultSize={55} minSize={30} className="tw:min-h-0">
         {verseRow}
       </ResizablePanel>

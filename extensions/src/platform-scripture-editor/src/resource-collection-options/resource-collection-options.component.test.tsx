@@ -264,7 +264,16 @@ describe('ResourceCollectionOptions locked-admin indicator', () => {
       bottom: [row('b', 'My NIV', { isUserRemovable: true })],
     });
     expect(screen.getByLabelText('Remove My NIV from list')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Shared by administrator')).toBeInTheDocument(); // from admin row only
+  });
+
+  it('shows neither a lock nor a remove control on an opted-out admin row', () => {
+    // Opted-out admin entries land in the bottom section: not shared (isAdminLocked false) and not
+    // user-removable. They must show no lock (not currently shared) and no remove (✕) control.
+    renderComponent({
+      bottom: [row('a2', 'Opted-out Admin', { isAdminLocked: false, isUserRemovable: false })],
+    });
+    expect(screen.queryByLabelText('Shared by administrator')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove Opted-out Admin from list')).not.toBeInTheDocument();
   });
 
   it('the lock is not a focusable/tab-stop button', () => {

@@ -208,7 +208,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Open the chapter-context view for the focused cell',
     category: 'View',
     context: 'Scripture Text Grid web view',
-    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
       'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
     ],
