@@ -204,6 +204,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
   },
   {
+    id: 'scripture-text-grid-move-between-cells',
+    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    category: 'Navigation',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
+    ],
+  },
+  {
     id: 'enhanced-resources-toggle-footnotes',
     purpose: 'Toggle the footnotes panel',
     category: 'View',
