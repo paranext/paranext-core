@@ -10,6 +10,38 @@ import {
   ResourceCellView,
 } from './resource-cell-view.component';
 
+describe('ResourceCellView', () => {
+  it('uses ariaLabel for the gridcell accessible name but keeps label visible', () => {
+    render(
+      <ResourceCellView
+        state="ready"
+        label="ESV"
+        ariaLabel="ESV, MAT 5:3"
+        textDirection="ltr"
+        localizedStrings={{}}
+        editor={<div>editor</div>}
+        onActivate={() => {}}
+      />,
+    );
+    expect(screen.getByRole('gridcell')).toHaveAttribute('aria-label', 'ESV, MAT 5:3');
+    // Visible header still shows the plain label.
+    expect(screen.getByText('ESV')).toBeInTheDocument();
+  });
+
+  it('falls back to label when ariaLabel is omitted', () => {
+    render(
+      <ResourceCellView
+        state="ready"
+        label="ESV"
+        textDirection="ltr"
+        localizedStrings={{}}
+        editor={<div>editor</div>}
+      />,
+    );
+    expect(screen.getByRole('gridcell')).toHaveAttribute('aria-label', 'ESV');
+  });
+});
+
 const localizedStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
   [DOWNLOADING_KEY]: 'Downloading…',

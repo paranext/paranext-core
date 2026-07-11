@@ -1,7 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { deriveCellState } from './resource-cell.utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { buildCellAccessibleName, deriveCellState } from './resource-cell.utils';
 
 const platformError = { platformErrorVersion: 1, message: 'boom' };
+
+describe('buildCellAccessibleName', () => {
+  const scrRef: SerializedVerseRef = {
+    book: 'MAT',
+    chapterNum: 5,
+    verseNum: 3,
+    versificationStr: 'English',
+  };
+
+  it('combines the resource label and the formatted reference', () => {
+    expect(buildCellAccessibleName('ESV', scrRef)).toBe('ESV, MAT 5:3');
+  });
+
+  it('still returns the reference when the label is empty', () => {
+    expect(buildCellAccessibleName('', scrRef)).toBe(', MAT 5:3');
+  });
+});
 
 describe('deriveCellState', () => {
   it('is failed for a PlatformError', () => {
