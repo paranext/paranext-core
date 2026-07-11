@@ -153,7 +153,7 @@ export function ScriptureTextGrid({
       className="tw:flex tw:h-full tw:flex-row tw:divide-x tw:overflow-x-auto tw:overflow-y-hidden"
     >
       {resources.map((resource) => (
-        // `flex-1` lets cells share width evenly when the list fits; `min-inline-size` floors each
+        // `flex-1` lets cells share width evenly when the list fits; `min-w-3xs` floors each
         // cell so a many-resource list scrolls horizontally instead of collapsing cells into
         // unreadable slivers in a narrow tab.
         // The listitem represents an interactive resource entry in the verse list. jsx-a11y flags
