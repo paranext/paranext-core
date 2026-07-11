@@ -1014,6 +1014,33 @@ BookUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
 
 ---
 
+## Scripture References Across Projects (Versification)
+
+A `SerializedVerseRef` is only meaningful in the **versification** of the project that produced it:
+the same book/chapter/verse numbers can point to a different verse — or to no verse — under another
+project's versification. **Any time a Scripture reference moves from one project to another** —
+scroll-group sync, cross-project navigation, showing one project's current reference in another
+project's editor or resource — the reference **must be converted into the target project's
+versification**. Never assume two projects share a versification.
+
+- **In React (renderer and web views), use the scroll-group hooks — they convert for you, given
+  your project.** `useScrollGroupScrRef(scrollGroupScrRef, setScrollGroupScrRef, projectId)` only
+  converts when you pass the consuming project's `projectId` as the third argument; omit it and the
+  hook returns the raw verse reference with no conversion and no error. Pass `projectId` whenever
+  conversion may be needed. Its web-view counterpart `useWebViewScrollGroupScrRef()` is unaffected —
+  it reads `projectId` from the web view definition automatically. Prefer these hooks over
+  converting by hand.
+- **Elsewhere (C#/Node, or non-React callers), use the PAPI command**
+  `platformScripture.mapVerseRefBetweenProjects` directly. See its TSDoc/OpenRPC documentation for
+  the exact contract.
+
+**Do not skip the conversion just because both projects report the same
+`platformScripture.versification` setting.** That setting is only the base `ScrVersType` and does not
+capture `custom.vrs`, so two projects can report the same base type yet map differently. Let the
+hook or command decide with the real `ScrVers`; a genuinely identical versification is a cheap no-op.
+
+---
+
 ## Experimental APIs
 
 The `@experimental` marker applies to any PAPI surface — whether built into the platform or contributed by an extension. Mark an API experimental when it is not a confident, solid, general-purpose contract. Common cases:
