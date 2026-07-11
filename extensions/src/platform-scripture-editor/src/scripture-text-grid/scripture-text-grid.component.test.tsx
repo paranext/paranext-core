@@ -9,10 +9,8 @@ const mockResourceCell = vi.fn(
   ({
     resourceRef,
     scrRef,
-    // Captured in mock.calls for assertion (tests call mockResourceCell.mock.calls[n][0].setScrRef
-    // to verify the shared setter was wired through); not rendered in the fake cell JSX.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    setScrRef,
+    // setScrRef stays in the type (so mock.calls[n][0].setScrRef type-checks in the setter-sync test)
+    // but is not destructured here because it is not used in the rendered JSX.
     viewMode,
     onActivate,
   }: {
