@@ -41,7 +41,7 @@ hook shape, and `projectId ?? activeEditorProjectId` binding. The body computes
 
 **File-location note (differs from the standalone A4 branch):** the contents util is at top-level
 `src/scripture-text-grid-contents.utils.ts` (A5's location won in the merge). Only the grid
-*components* live in the `scripture-text-grid/` subfolder (`resource-cell.component.tsx`,
+_components_ live in the `scripture-text-grid/` subfolder (`resource-cell.component.tsx`,
 `scripture-text-grid.component.tsx`, `grid-resources.utils.ts`). A6's new empty-state component
 joins that subfolder alongside the other grid components.
 
@@ -111,13 +111,15 @@ A6 touches only the body branch; the header (with the View Options button) alway
 so the copy has an on-screen target, and the renderer path is untouched in the non-empty case.
 
 **New localized string** — `%webView_scriptureTextGrid_emptyState_prompt%`
+
 - English: **"No texts to display. Open View Options to choose which texts to show."**
-- Spanish: AI-generated to match (e.g. *"No hay textos para mostrar. Abre Opciones de vista para
-  elegir qué textos mostrar."* — finalize in implementation).
+- Spanish: AI-generated to match (e.g. _"No hay textos para mostrar. Abre Opciones de vista para
+  elegir qué textos mostrar."_ — finalize in implementation).
 
 ## Part 2 — View Options TEXTS-list empty prompt
 
 **Files touched (A5's):**
+
 - `extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.component.tsx`
 - `extensions/src/platform-scripture-editor/src/resource-collection-options/resource-collection-options.types.ts`
 
@@ -132,6 +134,7 @@ the list is empty) → else the rows. The two never show together.
 
 **New key** — added to the component's own key registry so the reusable component stays
 self-contained (the coworker's dialog that consumes it inherits the prompt):
+
 - `emptyTexts: '%webView_scriptureTextGrid_viewOptions_emptyTexts%'` added to
   `RESOURCE_COLLECTION_OPTIONS_KEYS` and `RESOURCE_COLLECTION_OPTIONS_STRING_KEYS`.
 - English: **"No texts added yet. Use Get Resources to add texts to your collection."**
@@ -152,7 +155,7 @@ Both new keys land in
   message).
 - **Grid empty state (unit / snapshot):** new
   `scripture-text-grid/scripture-text-grid-empty-state.component.test.tsx` — snapshot of the
-  rendered prompt; assert the prompt text is present. The empty-vs-non-empty *decision* is
+  rendered prompt; assert the prompt text is present. The empty-vs-non-empty _decision_ is
   `getScriptureTextGridContents(...).length === 0`, already covered by the contents-util test.
 - **E2E:** extend `e2e-tests/tests/enhanced-resources/scripture-text-grid.spec.ts`. Because the
   integrated base carries A4's renderer, both branches are verifiable end-to-end: first open with
