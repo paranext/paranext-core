@@ -8,6 +8,15 @@ const SAMPLE = [
   '[2026-07-10 14:23:02.500] [info]  [.net] STARTUP_MARK .net project-scan-end 2500',
 ].join('\n');
 
+// TypeScript log lines that don't already start with a "[...]" prefix get a caller annotation
+// (" [at <fn> <file>:<line>:<col>]") appended by the shared logger hook
+// (src/shared/utils/logger.utils.ts:122-166). These fixtures cover that shape so the parser
+// regression (dropping every caller-suffixed TS mark) stays caught.
+const CALLER_SUFFIXED_SAMPLE = [
+  '[2026-07-10 14:23:01.050] [info]  [main] STARTUP_MARK main process-start 1050 [at markStartup file:///home/x/src/shared/utils/startup-timing.util.ts:22:10]',
+  '[2026-07-10 14:23:01.950] [info]  [exth] STARTUP_MARK extension-host activate-start platformScripture 1950 [at file:///home/x/src/extension-host/services/extension.service.ts:1388:20]',
+].join('\n');
+
 describe('parseStartupMarks', () => {
   it('extracts only STARTUP_MARK lines with proc/name/epoch, including multi-word names', () => {
     const marks = parseStartupMarks(SAMPLE);
@@ -22,6 +31,23 @@ describe('parseStartupMarks', () => {
 
   it('returns [] when there are no marks', () => {
     expect(parseStartupMarks('nothing here')).toEqual([]);
+  });
+
+  it('extracts the epoch from before a trailing "[at ...]" caller annotation, including when the annotation itself contains digits (e.g. line:col)', () => {
+    const marks = parseStartupMarks(CALLER_SUFFIXED_SAMPLE);
+    expect(marks).toEqual([
+      { proc: 'main', name: 'process-start', t: 1050 },
+      // Multi-word <name> plus a caller-suffix containing digits (1388:20) must not confuse the
+      // epoch extraction: the epoch is the digit run immediately before " [at ...]".
+      { proc: 'extension-host', name: 'activate-start platformScripture', t: 1950 },
+    ]);
+  });
+
+  it('handles a mix of bare (C#-style) and caller-suffixed (TS-style) lines in the same log', () => {
+    const marks = parseStartupMarks([SAMPLE, CALLER_SUFFIXED_SAMPLE].join('\n'));
+    expect(marks).toHaveLength(6);
+    expect(marks).toContainEqual({ proc: '.net', name: 'project-scan-end', t: 2500 });
+    expect(marks).toContainEqual({ proc: 'main', name: 'process-start', t: 1050 });
   });
 });
 
