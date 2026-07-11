@@ -19,9 +19,9 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 import {
   getScriptureTextGridContents,
   getViewOptionsTexts,
