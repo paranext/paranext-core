@@ -111,7 +111,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
 
-  // Chapter-context overlay opened from a verse cell; Escape closes it.
+  // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
+  // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
+  // returns to verse mode.
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
