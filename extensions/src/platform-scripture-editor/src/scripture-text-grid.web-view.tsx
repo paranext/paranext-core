@@ -85,6 +85,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
@@ -103,8 +104,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
 
-  // View Options `viewMode` toggle; also drives the grid body's verse/chapter row layout.
-  const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>('verse');
+  // View Options `viewMode` toggle; drives the grid body's verse/chapter layout. Persisted per web
+  // view via useWebViewState so the choice survives an app restart (mirrors resource-text-panel).
+  const [viewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>('viewMode', 'verse');
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
@@ -315,6 +317,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             <ResourceCollectionOptions
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              isChapterEnabled
               top={top}
               bottom={bottom}
               installingResourceNames={installingResourceNames}
