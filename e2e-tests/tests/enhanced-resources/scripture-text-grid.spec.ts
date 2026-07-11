@@ -417,8 +417,18 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'AccName A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
-      { type: 'project', name: 'AccName B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+      {
+        type: 'project',
+        name: 'AccName A',
+        id: 'aabbccddeeff00112233',
+        isResourceShownByDefault: true,
+      },
+      {
+        type: 'project',
+        name: 'AccName B',
+        id: 'bbccddeeff0011223344',
+        isResourceShownByDefault: true,
+      },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
@@ -437,8 +447,18 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Tab A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
-      { type: 'project', name: 'Tab B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+      {
+        type: 'project',
+        name: 'Tab A',
+        id: 'aabbccddeeff00112233',
+        isResourceShownByDefault: true,
+      },
+      {
+        type: 'project',
+        name: 'Tab B',
+        id: 'bbccddeeff0011223344',
+        isResourceShownByDefault: true,
+      },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
@@ -466,8 +486,18 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'Ring A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
-      { type: 'project', name: 'Ring B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+      {
+        type: 'project',
+        name: 'Ring A',
+        id: 'aabbccddeeff00112233',
+        isResourceShownByDefault: true,
+      },
+      {
+        type: 'project',
+        name: 'Ring B',
+        id: 'bbccddeeff0011223344',
+        isResourceShownByDefault: true,
+      },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
@@ -494,8 +524,18 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     test.skip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'RtlSplit A', id: 'aabbccddeeff00112233', isResourceShownByDefault: true },
-      { type: 'project', name: 'RtlSplit B', id: 'bbccddeeff0011223344', isResourceShownByDefault: true },
+      {
+        type: 'project',
+        name: 'RtlSplit A',
+        id: 'aabbccddeeff00112233',
+        isResourceShownByDefault: true,
+      },
+      {
+        type: 'project',
+        name: 'RtlSplit B',
+        id: 'bbccddeeff0011223344',
+        isResourceShownByDefault: true,
+      },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
