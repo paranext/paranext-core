@@ -121,18 +121,21 @@ public static class Program
             StartupTiming.Mark("init-barrier-end");
 
             // Non-critical: register in the background so they don't gate "ready".
-            _ = Task.Run(
-                () =>
-                    ThreadingUtils.RunTask(
+            // Wrap the work in Task.Run FIRST so a synchronous throw (e.g. from the non-async
+            // ManageBooksService.RegisterNetworkObjectAsync before its first await) is captured
+            // into the task RunTask observes, rather than escaping unobserved.
+            ThreadingUtils.RunTask(
+                Task.Run(
+                    () =>
                         Task.WhenAll(
                             inventoryDataProvider.RegisterDataProviderAsync(),
                             checkRunner.RegisterDataProviderAsync(),
                             checklistNetworkObject.InitializeAsync(),
                             manageBooksService.RegisterNetworkObjectAsync(),
                             enhancedResourceFactory.InitializeAsync()
-                        ),
-                        "background service registration"
-                    )
+                        )
+                ),
+                "background service registration"
             );
 
             // Things that only run in our "noisy dev mode" go here
