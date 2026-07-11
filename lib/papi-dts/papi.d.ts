@@ -945,6 +945,12 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
+    /**
+     * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+     * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+     * as `isNoisyDevModeEnabled`.
+     */
+    var startupMarks: boolean;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -6659,6 +6665,8 @@ declare module 'node/utils/util' {
    * @returns True if the process is running in noisy dev mode, false otherwise
    */
   export const isNoisyDevModeEnvVariableSet: () => boolean;
+  /** Whether the `PT_STARTUP_MARKS` environment variable requests startup timing marks */
+  export const isStartupMarksEnvVariableSet: () => boolean;
 }
 declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
@@ -8374,6 +8382,8 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
