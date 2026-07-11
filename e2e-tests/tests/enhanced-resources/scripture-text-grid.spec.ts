@@ -394,7 +394,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await expect(frame.locator('[role="row"]')).toHaveCount(2);
   });
 
-  test('chapter mode: clicking a cell syncs selection without opening a split', async ({
+  test('chapter mode: clicking a cell opens no chapter-context split (selection sync is delegated to the shared scrRef)', async ({
     mainPage,
   }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');

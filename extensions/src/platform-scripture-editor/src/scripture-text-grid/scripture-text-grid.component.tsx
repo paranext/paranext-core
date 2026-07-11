@@ -13,11 +13,12 @@ type ScriptureTextGridProps = {
   /** Accessible name for the grid region (the web view passes the localized tab title). */
   ariaLabel?: string;
   /**
-   * Row cell view mode; the chapter-context panel always renders full chapters. Defaults to
-   * `'verse'` because the row is verse-priority (the product default); `ResourceCell` defaults to
-   * `'chapter'` because it is the generic cell reused by the chapter-context panel. The two
-   * defaults intentionally differ — every caller here passes `viewMode` explicitly, so the defaults
-   * only document each component's own primary use.
+   * Selects the layout: `'verse'` → horizontal verse-cell row (with the chapter-context split);
+   * `'chapter'` → vertical full-chapter stack. Defaults to `'verse'` because the row is
+   * verse-priority (the product default); `ResourceCell` defaults to `'chapter'` because it is the
+   * generic cell reused by the chapter-context panel and the stack. The two defaults intentionally
+   * differ — every caller here passes `viewMode` explicitly, so the defaults only document each
+   * component's own primary use.
    */
   viewMode?: 'chapter' | 'verse';
   /** When set, the chapter-context split is open for this resource. */
@@ -31,13 +32,16 @@ type ScriptureTextGridProps = {
 };
 
 /**
- * Horizontal row of one ResourceCell per effective-list resource, all synced to the active scrRef.
- * The active scrRef is owned by the web-view root (via `WebViewProps.useWebViewScrollGroupScrRef`)
- * and passed in — this component is presentational and calls no scroll-group hook.
+ * Renders the effective-list resources in one of two layouts (selected by `viewMode`), all synced
+ * to the active scrRef: `verse` → a horizontal row of verse cells (described below); `chapter` → a
+ * vertical stack of full-chapter cells, one per resource, each scrolling independently and with no
+ * split. The active scrRef is owned by the web-view root (via
+ * `WebViewProps.useWebViewScrollGroupScrRef`) and passed in — this component is presentational and
+ * calls no scroll-group hook.
  *
- * Clicking (or pressing Enter on) a row cell opens a resizable chapter-context panel beside the row
- * showing that resource's full chapter. When the panel closes, focus returns to the cell that
- * opened it (WCAG 2.4.3).
+ * In verse mode, clicking (or pressing Enter on) a row cell opens a resizable chapter-context panel
+ * beside the row showing that resource's full chapter. When the panel closes, focus returns to the
+ * cell that opened it (WCAG 2.4.3).
  */
 export function ScriptureTextGrid({
   resources,
@@ -87,15 +91,14 @@ export function ScriptureTextGrid({
     );
   }
 
-  // Chapter view: a vertical stack of full-chapter cells, one per resource, each bounded-height with
-  // its own scroll so all resources stay on screen and scroll independently. Selection stays in sync
-  // across columns through the shared scrRef — each cell's read-only Editorial reports clicks via
-  // onScrRefChange -> setScrRef, and every cell re-navigates to the new ref. No chapter-context split
-  // and no per-cell activation in this mode (chapter context is a verse-view affordance).
+  // Chapter view: a vertical stack of full-chapter cells, one per resource, each bounded-height so it
+  // scrolls independently. Selection stays in sync across columns via the shared scrRef — each cell's
+  // read-only Editorial reports clicks through onScrRefChange -> setScrRef, and every cell re-navigates
+  // to the new ref. No chapter-context split and no per-cell activation here (that is verse-only).
   //
-  // `layout` is derived here from viewMode only. B4 hard-codes the default; PT-4168 (deferred
-  // single-flag orientation override) will make this `orientation ?? deriveLayout(viewMode)` without
-  // re-architecting the branch. This is a seam, not the override feature.
+  // `layout` is derived from viewMode only. B4 hard-codes the default; PT-4168 (deferred single-flag
+  // orientation override) will later make this `orientation ?? deriveLayout(viewMode)` — a seam, not
+  // the feature.
   const layout: 'row' | 'column' = viewMode === 'chapter' ? 'column' : 'row';
   if (layout === 'column') {
     return (
