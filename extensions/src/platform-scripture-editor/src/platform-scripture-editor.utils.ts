@@ -1,6 +1,6 @@
 /* Small utility helpers for the platform-scripture-editor extension. */
 
-import { LocalizationSelectors } from '@papi/core';
+import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
 import {
@@ -438,6 +438,32 @@ export type OpenEditorDispatch =
   | { kind: 'focus-existing'; existingId: string }
   | { kind: 'replace-tab'; targetTabId: string }
   | { kind: 'open-new' };
+
+/** Scripture Editor tab info consumed by {@link resolveOpenEditorDispatch}. */
+export type ScriptureEditorInfo = { id: string; projectId?: string; isReadOnly: boolean };
+
+/**
+ * Convert open web view definitions to the Scripture Editor info shape consumed by
+ * {@link resolveOpenEditorDispatch}: filters to Scripture Editor web views and extracts `id`,
+ * `projectId`, and `isReadOnly` from each definition.
+ *
+ * Pure function — does not touch PAPI. The caller is responsible for fetching the definitions
+ * (`papi.webViews.getAllOpenWebViewDefinitions`).
+ */
+export function toScriptureEditorInfos(
+  allOpenDefs: readonly SavedWebViewDefinition[],
+): ScriptureEditorInfo[] {
+  return allOpenDefs
+    .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
+    .map((def) => ({
+      id: def.id,
+      projectId: def.projectId,
+      // WebView state isn't statically typed, but `getWebViewDefinition` always stores
+      // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
+    }));
+}
 
 /**
  * Decide where to route a Scripture Editor open request based on what's currently in the dock and
@@ -944,12 +970,13 @@ export async function syncOnProjectSwitch(
 // #region Text Connection Panels
 
 /**
- * Opens or updates the model text, commentary, and scripture resource panels for a project.
+ * Opens or updates the model text and the various views to be displayed in tabs in "column 3" (
+ * reference texts, commentaries, comments, etc.) for a project.
  *
  * @param papi The instance of papi to send the commands
  * @param projectId The id of the project to open the text connections for
  */
-export async function openTextConnectionPanels(
+export async function openOrUpdateRelatedPanels(
   papi: typeof PapiBackend,
   projectId: string,
 ): Promise<void> {
@@ -975,6 +1002,11 @@ export async function openTextConnectionPanels(
     );
   } catch (e) {
     papi.logger.warn(`Error opening scripture resource text panel: ${getErrorMessage(e)}`);
+  }
+  try {
+    await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
+  } catch (e) {
+    papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
 }
 

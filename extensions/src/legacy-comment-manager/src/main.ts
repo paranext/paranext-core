@@ -23,8 +23,10 @@ import {
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
 } from './project-data-provider/legacy-comment-manager-usj-pdpef.model';
 import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
+import { resolveCommentListPanelProjectId } from './comment-list-panel.utils';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
+const commentListPanelWebViewType = 'legacyCommentManager.commentListPanel';
 
 // #region Comment List WebView
 
@@ -54,7 +56,7 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== commentListWebViewType)
       throw new Error(
-        `${commentListWebViewType} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${commentListWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
@@ -144,6 +146,88 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
 const commentListWebViewProvider: IWebViewProvider = new CommentListWebViewFactory();
 
 // #endregion Comment List WebView
+
+// #region Comment List Panel WebView (Column 3 fixed tab)
+
+interface CommentListPanelOptions extends OpenWebViewOptions {
+  projectId?: string;
+}
+
+/**
+ * Pending projectId consumed by commentListPanelProvider.getWebView() after reloadWebView().
+ *
+ * Note: `undefined` doubles as the "no pending value" sentinel, so a pending `undefined` cannot
+ * clear an already-open panel's project — resolution falls back to the saved projectId. This is an
+ * accepted limitation; see {@link openCommentListPanel}.
+ */
+let currentCommentListPanelProjectId: string | undefined;
+
+const commentListPanelProvider: IWebViewProvider = {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    openWebViewOptions: CommentListPanelOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== commentListPanelWebViewType)
+      throw new Error(
+        `${commentListPanelWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+
+    const projectId = resolveCommentListPanelProjectId(
+      currentCommentListPanelProjectId,
+      openWebViewOptions.projectId,
+      savedWebView.projectId,
+    );
+    currentCommentListPanelProjectId = undefined;
+
+    const title = await papi.localization.getLocalizedString({
+      localizeKey: '%webView_legacyCommentManager_commentListPanel_title%',
+    });
+
+    return {
+      ...savedWebView,
+      title,
+      projectId,
+      content: commentListWebView,
+      styles: tailwindStyles,
+    };
+  },
+};
+
+/**
+ * Opens or updates the fixed Comment List Panel in Column 3 for the given project. If the panel is
+ * already open, reloads it in place without bringing it to the front.
+ *
+ * This implements the `legacyCommentManager.openCommentListPanel` command.
+ *
+ * @param projectId The project whose comments to display. If `undefined`, a newly created panel
+ *   opens empty, but an already-open panel keeps its current project (`undefined` is
+ *   indistinguishable from "no pending value" in the sentinel, so resolution falls back to the
+ *   saved projectId). This is an accepted limitation: in Simple mode there is no scenario where an
+ *   active project needs to be cleared after having been set.
+ * @returns The webView ID of the panel, or `undefined` if opening failed
+ */
+async function openCommentListPanel(projectId: string | undefined): Promise<string | undefined> {
+  // Use existingId: '?' to passively probe for the existing Column 3 tab (returns its id, or
+  // undefined if not found) without bringing it to front or creating one if absent.
+  const existingId = await papi.webViews.openWebView(
+    commentListPanelWebViewType,
+    { type: 'tab' },
+    { existingId: '?', createNewIfNotFound: false, bringToFront: false },
+  );
+
+  if (existingId) {
+    currentCommentListPanelProjectId = projectId;
+    return papi.webViews.reloadWebView(commentListPanelWebViewType, existingId, {
+      bringToFront: false, // Don't steal focus from the scripture editor on project switch
+    });
+  }
+
+  // Panel not yet open (shouldn't happen in Simple mode where it's always in the layout).
+  const openOptions: CommentListPanelOptions = { projectId };
+  return papi.webViews.openWebView(commentListPanelWebViewType, { type: 'tab' }, openOptions);
+}
+
+// #endregion Comment List Panel WebView
 
 /**
  * Open or focus the Comment List WebView for the project ID associated with the specified WebView
@@ -300,6 +384,34 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     commentListWebViewProvider,
   );
 
+  const commentListPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    commentListPanelWebViewType,
+    commentListPanelProvider,
+  );
+
+  const openCommentListPanelPromise = papi.commands.registerCommand(
+    'legacyCommentManager.openCommentListPanel',
+    openCommentListPanel,
+    {
+      method: {
+        summary: 'Open or update the fixed Comment List panel in Column 3',
+        params: [
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project whose comments to display',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The webView ID of the panel',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
   // Subscribe to web view updates to clean up tracking when comment list is closed
   const webViewUpdateUnsub = papi.webViews.onDidCloseWebView((event) => {
     // Check if this was one of our tracked comment lists
@@ -393,7 +505,9 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   context.registrations.add(
     await commentListWebViewProviderPromise,
+    await commentListPanelWebViewProviderPromise,
     await openCommentListPromise,
+    await openCommentListPanelPromise,
     await commentsUsjPdpefPromise,
     webViewUpdateUnsub,
   );

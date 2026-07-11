@@ -579,6 +579,17 @@ declare module 'papi-shared-types' {
       webViewId?: string | undefined,
       options?: OpenCommentListWebViewOptions,
     ) => Promise<string | undefined>;
+
+    /**
+     * Opens or updates the fixed Comment List panel in Column 3 for the given project. If the panel
+     * is already open, reloads it in place without bringing it to the front.
+     *
+     * @param projectId The project whose comments to display
+     * @returns The webView ID of the panel, or `undefined` if opening failed
+     */
+    'legacyCommentManager.openCommentListPanel': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface WebViewControllers {
