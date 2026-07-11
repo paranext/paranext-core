@@ -155,18 +155,22 @@ async function openScriptureEditor(
  * If the tab title is scrolled outside the visible portion of the tab bar (clipped by the rc-tabs
  * overflow container), hover the `.dock-nav-more` overflow button to open the dropdown, then click
  * the Comments option via its UUID attribute.
+ *
+ * `actionTimeoutMs` bounds the click/hover actions — pass a short value when calling inside a retry
+ * loop so a blocked click (e.g. the workspace-updating overlay intercepting pointer events) fails
+ * fast and the loop can retry, instead of burning the default 30 s action timeout.
  */
-async function clickCommentsTab(mainPage: Page): Promise<void> {
+async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promise<void> {
   const tabTitle = mainPage.locator(
     `.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`,
   );
   if (await tabTitle.isVisible()) {
-    await tabTitle.click();
+    await tabTitle.click({ timeout: actionTimeoutMs });
     return;
   }
   // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
   const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
-  await dockBar.locator('.dock-nav-more').hover();
+  await dockBar.locator('.dock-nav-more').hover({ timeout: actionTimeoutMs });
   // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
   await mainPage
     .locator('[role="listbox"] [role="option"]')
@@ -212,10 +216,26 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await waitForAppReady(mainPage, 180_000);
     await waitForSimpleLayout(mainPage);
 
-    await clickCommentsTab(mainPage);
-
+    // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
+    // the frame element exists, which would pass even for an empty or errored WebView. The panel
+    // renders skeleton placeholders while loading (this test opens no project, so it stays in the
+    // loading state) and the filter toolbar dropdowns once loaded — either proves the
+    // CommentListPanel component actually rendered.
+    //
+    // Click and assert inside ONE retry loop: a workspace rebuild ("Updating project view"
+    // overlay) can still fire after waitForSimpleLayout. It recreates the Column 3 tabs and resets
+    // the active tab, unmounting the comments iframe — so a single click-then-assert sequence
+    // flakes. Each attempt first waits out any in-progress rebuild (the overlay also intercepts
+    // pointer events, so clicking during one always fails), then clicks and asserts with short
+    // timeouts so the loop can retry promptly if another rebuild lands mid-attempt.
     const commentsFrame = commentsFrameLocator(mainPage);
-    await commentsFrame.locator('body').waitFor({ state: 'attached', timeout: 15_000 });
+    await expect(async () => {
+      await waitForOverlayGone(mainPage, 60_000);
+      await clickCommentsTab(mainPage, 5_000);
+      await expect(
+        commentsFrame.locator('[data-slot="skeleton"], [data-slot="select-trigger"]').first(),
+      ).toBeVisible({ timeout: 10_000 });
+    }).toPass({ timeout: 180_000 });
   });
 
   test('when a project has comments, at least one is visible in the Comments tab', async ({
