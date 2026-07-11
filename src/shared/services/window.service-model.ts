@@ -5,7 +5,7 @@ import {
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 import { IDataProvider } from '@shared/models/data-provider.interface';
-import { DirectionFromTab } from '@shared/models/docking-framework.model';
+import { DirectionFromTab, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 
 /** JSDOC DESTINATION windowServiceProviderName */
 export const windowServiceProviderName = 'platform.windowServiceDataProvider';
@@ -47,6 +47,24 @@ export type FocusSubjectOther = {
 
 /** Current item that is the subject of top-level app window focus */
 export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+
+/**
+ * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+ * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+ * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+ * for focus subjects that do not refer to a web view.
+ *
+ * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+ * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+ * focus subject shapes change.
+ */
+export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined {
+  if (focusSubject.focusType === 'webView') return focusSubject.id;
+  if (focusSubject.focusType === 'tab' && focusSubject.tabType === TAB_TYPE_WEBVIEW)
+    return focusSubject.id;
+  return undefined;
+}
+
 /** Specific item that is intended to be focused in the top-level app window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 

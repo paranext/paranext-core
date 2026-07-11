@@ -2,7 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useSetting } from '@renderer/hooks/papi-hooks';
+import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { ResolvedWebView } from '@renderer/services/navigation-target.util';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
@@ -48,6 +51,22 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useDataProvider: vi.fn(() => undefined),
   useDialogCallback: vi.fn(() => vi.fn()),
   useSetting: vi.fn(() => ['simple', vi.fn(), vi.fn(), false]),
+  useProjectSetting: vi.fn(() => ['', vi.fn(), vi.fn(), false]),
+}));
+
+vi.mock('@renderer/hooks/use-navigation-target-web-view.hook', () => ({
+  // Typed so tests can mockReturnValue a resolved target (the factory's inferred return type
+  // would otherwise be plain `undefined`)
+  useNavigationTargetWebView: vi.fn((): ResolvedWebView | undefined => undefined),
+}));
+
+vi.mock('@renderer/services/web-view.service-host', () => ({
+  updateWebViewDefinitionSync: vi.fn(() => true),
+}));
+
+vi.mock('@renderer/services/book-chapter-control.registry', () => ({
+  registerBookChapterControlHandle: vi.fn(() => vi.fn()),
+  TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID: 'top-toolbar',
 }));
 
 vi.mock('@renderer/services/papi-frontend.service', () => ({
@@ -119,7 +138,17 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
     ),
-    BookChapterControl: () => <div data-testid="book-chapter-control" />,
+    // Mirrors the real BookChapterControl's trigger (aria-label + disabled) so tests can assert on
+    // the disabled state that platform-bible-toolbar.tsx wires up, without pulling in the real
+    // component's Radix Popover/Command internals.
+    BookChapterControl: ({ disabled }: { disabled?: boolean }) => (
+      <button
+        type="button"
+        aria-label="book-chapter-trigger"
+        disabled={disabled}
+        data-testid="book-chapter-control"
+      />
+    ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
     Select: ({ children, disabled }: { children?: React.ReactNode; disabled?: boolean }) => (
       <div data-testid="project-picker-select" aria-disabled={disabled}>
@@ -457,5 +486,183 @@ describe('PlatformBibleToolbar — project picker Select visibility by interface
     await waitFor(() => {
       expect(screen.queryByTestId('project-picker-select')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('PlatformBibleToolbar — top BookChapterControl mirrors the resolved navigation target', () => {
+  const getTrigger = () => screen.getByRole('button', { name: 'book-chapter-trigger' });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
+    // defaults explicitly to prevent a per-test `mockReturnValue` from leaking (see the
+    // "Scroll group selector visibility" describe block above for precedent).
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useNavigationTargetWebView).mockReturnValue(undefined);
+    vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
+    mockSendCommand(true);
+  });
+
+  it('disables the trigger when there is no navigation target, in power mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeDisabled();
+    });
+  });
+
+  it('disables the trigger when there is no navigation target, in simple mode', async () => {
+    // The resolved target (and therefore disabled state) does not depend on interface mode — the
+    // control is disabled only when there is no target, in either mode.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeDisabled();
+    });
+  });
+
+  it('enables the trigger when the resolved target is the tracked web view', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'wv1',
+      definition: {
+        id: 'wv1',
+        webViewType: 'testWebViewType',
+        scrollGroupScrRef: 2,
+        projectId: 'proj1',
+      },
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeEnabled();
+    });
+  });
+
+  it('enables the trigger and mirrors the main editor when it is the resolved target', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'editor-1',
+      definition: {
+        id: 'editor-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj1',
+        scrollGroupScrRef: 2,
+      },
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(getTrigger()).toBeEnabled();
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — scroll group write-back to the resolved target', () => {
+  // The toolbar hands `setScrollGroupScrRefTarget` to `useScrollGroupScrRef` as its second
+  // argument. `useScrollGroupScrRef` is mocked in this file (see the papi-hooks mock above), so the
+  // real hook's internal wiring from ScrollGroupSelector -> setScrollGroupId -> setScrollGroupScrRef
+  // isn't exercised here. Instead, capture that second argument directly and invoke it — this is
+  // `setScrollGroupScrRefTarget` itself, the function under test, without needing to drive the
+  // (also mocked) ScrollGroupSelector's Radix Select through jsdom.
+  const getLatestScrollGroupScrRefSetter = () => {
+    const { calls } = vi.mocked(useScrollGroupScrRef).mock;
+    const lastCall = calls.at(-1);
+    if (!lastCall) throw new Error('useScrollGroupScrRef was not called');
+    const [, setScrollGroupScrRefTarget] = lastCall;
+    return setScrollGroupScrRefTarget;
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    // No navigation target by default — individual tests arrange the resolved target they need
+    vi.mocked(useNavigationTargetWebView).mockReturnValue(undefined);
+    vi.mocked(updateWebViewDefinitionSync).mockReturnValue(true);
+    mockSendCommand(true);
+  });
+
+  it('writes the new scroll group to the tracked web view definition', async () => {
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'wv1',
+      definition: {
+        id: 'wv1',
+        webViewType: 'testWebViewType',
+        scrollGroupScrRef: 2,
+        projectId: 'proj1',
+      },
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('scroll-group-selector')).toBeInTheDocument();
+    });
+
+    const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
+    let result: boolean | undefined;
+    act(() => {
+      result = setScrollGroupScrRefTarget(3);
+    });
+
+    expect(result).toBe(true);
+    expect(vi.mocked(updateWebViewDefinitionSync)).toHaveBeenCalledWith('wv1', {
+      scrollGroupScrRef: 3,
+    });
+  });
+
+  it('writes the new scroll group to the main editor definition when it is the resolved target', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useNavigationTargetWebView).mockReturnValue({
+      id: 'editor-1',
+      definition: {
+        id: 'editor-1',
+        webViewType: 'platformScriptureEditor.react',
+        projectId: 'proj1',
+        scrollGroupScrRef: 2,
+      },
+    });
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'book-chapter-trigger' })).toBeEnabled();
+    });
+
+    const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
+    let result: boolean | undefined;
+    act(() => {
+      result = setScrollGroupScrRefTarget(3);
+    });
+
+    expect(result).toBe(true);
+    expect(vi.mocked(updateWebViewDefinitionSync)).toHaveBeenCalledWith('editor-1', {
+      scrollGroupScrRef: 3,
+    });
+  });
+
+  it('does not write and returns false when there is no navigation target', async () => {
+    vi.mocked(useNavigationTargetWebView).mockReturnValue(undefined);
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'book-chapter-trigger' })).toBeDisabled();
+    });
+
+    const setScrollGroupScrRefTarget = getLatestScrollGroupScrRefSetter();
+    let result: boolean | undefined;
+    act(() => {
+      result = setScrollGroupScrRefTarget(3);
+    });
+
+    expect(result).toBe(false);
+    expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
   });
 });

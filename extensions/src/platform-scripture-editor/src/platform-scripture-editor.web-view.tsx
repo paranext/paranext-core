@@ -77,6 +77,10 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
+import {
   AnnotationActionHandler,
   EditorDecorations,
   EditorMessageSetAnnotation,
@@ -164,8 +168,6 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
-
-const BOOKS_PRESENT_DEFAULT = '';
 
 const DEFAULT_WEBVIEW_MENU = {
   topMenu: undefined,
@@ -1663,15 +1665,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = useCallback(() => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  }, [booksPresent]);
+  const fetchActiveBooks = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 

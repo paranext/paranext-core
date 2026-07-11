@@ -395,5 +395,7 @@ export type LinkedScrRefButtonProps = {
  * read-only contexts where the reference should not be navigable but should still be readable).
  */
 export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
+/** Book IDs for all books that are not considered obsolete in the SIL Canon library */
+export declare const ALL_BOOK_IDS: string[];
 
 export {};

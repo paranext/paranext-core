@@ -1540,7 +1540,9 @@ export declare const getChaptersForBook: (bookNum: number) => number;
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
  *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
- *   to the nearest valid book.
+ *   to the nearest valid book. For books-present-aware stepping that rolls across chapter/book
+ *   boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1550,7 +1552,9 @@ export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) =>
  * @param offset The number of chapters to offset the current chapter by. Positive values move
  *   forward, negative values move backward.
  * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
- *   chapter number is clamped to stay within valid bounds for the book.
+ *   chapter number is clamped to stay within valid bounds for the book. For books-present-aware
+ *   stepping that rolls across chapter/book boundaries (Paratext 9 style), see the `get*Ref`
+ *   navigation functions in `platform-bible-react/experimental`.
  */
 export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1560,7 +1564,9 @@ export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number)
  * @param offset The number of verses to offset the current verse by. Positive values move forward,
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
- *   within valid bounds for the chapter.
+ *   within valid bounds for the chapter. For books-present-aware stepping that rolls across
+ *   chapter/book boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export declare const offsetVerse: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**

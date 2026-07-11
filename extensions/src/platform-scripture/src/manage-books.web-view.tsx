@@ -28,6 +28,7 @@ import type {
   ProjectSelectorProject,
 } from 'platform-bible-react/experimental';
 import { formatReplacementString, getErrorMessage } from 'platform-bible-utils';
+import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
   AlertEntry,
@@ -225,15 +226,7 @@ interface ManageBooksNetworkObject {
  * (`ManageBooksDialogBookInfo[]`). Each '1' bit at index N means book number N+1 is present.
  */
 function decodeBooksPresent(booksPresent: string): ManageBooksDialogBookInfo[] {
-  const out: ManageBooksDialogBookInfo[] = [];
-  for (let i = 0; i < booksPresent.length; i += 1) {
-    if (booksPresent[i] === '1') {
-      const bookNumber = i + 1;
-      const bookId = Canon.bookNumberToId(bookNumber);
-      if (bookId) out.push({ id: bookId });
-    }
-  }
-  return out;
+  return getBookIdsFromBooksPresent(booksPresent).map((bookId) => ({ id: bookId }));
 }
 
 /**

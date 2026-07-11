@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { defaultScrRef, LanguageStrings } from 'platform-bible-utils';
 import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControlHandle } from '@/components/advanced/book-chapter-control/book-chapter-control.types';
 import { useRecentSearches } from '@/components/advanced/recent-searches.component';
 
 type BookChapterControlWrapperProps = {
@@ -13,6 +14,7 @@ type BookChapterControlWrapperProps = {
   getActiveBookIds?: () => string[];
   getEndVerse?: (bookId: string, chapterNum: number) => number;
   onOpenChange?: (open: boolean) => void;
+  disabled?: boolean;
 };
 
 /**
@@ -107,6 +109,43 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
+  args: {
+    scrRef: defaultScrRef,
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    scrRef: defaultScrRef,
+    disabled: true,
+  },
+};
+
+/** Demonstrates opening the control (with the search input focused) via its imperative handle */
+export const ImperativeOpen: Story = {
+  render: (args) => {
+    const controlRef = useRef<BookChapterControlHandle | undefined>(undefined);
+    const [scrRef, setScrRef] = useState<SerializedVerseRef>(args.scrRef);
+    return (
+      <div className="tw:flex tw:items-center tw:gap-2 tw:p-4">
+        <BookChapterControl
+          {...args}
+          ref={(handle) => {
+            controlRef.current = handle ?? undefined;
+          }}
+          scrRef={scrRef}
+          handleSubmit={setScrRef}
+        />
+        <button
+          type="button"
+          className="tw:rounded tw:border tw:px-2 tw:py-1"
+          onClick={() => controlRef.current?.open()}
+        >
+          Open via handle
+        </button>
+      </div>
+    );
+  },
   args: {
     scrRef: defaultScrRef,
   },

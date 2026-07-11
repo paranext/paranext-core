@@ -443,6 +443,22 @@ declare module 'shared/models/web-view.model' {
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /**
+   * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
+   * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in `platform-scripture-editor.utils.ts` —
+   * core code cannot import extension source, so the value is mirrored here as the single core-side
+   * copy.
+   */
+  export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+  /**
+   * Finds the first open Scripture editor web view that has a project (first match in the given
+   * order, which is dock-layout order for the open web view lists) — the shared "current project
+   * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
+   * never disagree on which editor is primary.
+   */
+  export function findFirstEditorWebViewDefinition(
+    definitions: SavedWebViewDefinition[],
+  ): SavedWebViewDefinition | undefined;
+  /**
    * The keys of properties on a WebViewDefinition that may be updated when that webview is already
    * displayed
    */
@@ -3216,6 +3232,8 @@ declare module 'shared/models/docking-framework.model' {
     /** Data needed to load the tab */
     data?: unknown;
   };
+  /** {@link SavedTabInfo.tabType} for web view tabs. A web view tab's id matches its `WebViewId` */
+  export const TAB_TYPE_WEBVIEW = 'webView';
   /**
    * Information that Platform.Bible uses to create a tab in the dock layout.
    *
@@ -4293,6 +4311,49 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next chapter (rolls into the next book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous chapter (rolls into the previous book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextVerse': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousVerse': () => Promise<void>;
+    /**
+     * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
+     * toolbar's) and focus its input, ready for typing a reference
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openBookChapterControl': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -9793,6 +9854,17 @@ declare module 'shared/services/window.service-model' {
   };
   /** Current item that is the subject of top-level app window focus */
   export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
   /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the app window focus */

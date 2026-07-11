@@ -10,7 +10,7 @@ import { LucideProps } from 'lucide-react';
 import { CommentStatus, ConflictResolutionOptions, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -70,6 +70,19 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
 	[localizedKey in (typeof BOOK_CHAPTER_CONTROL_STRING_KEYS)[number]]?: string;
+};
+/**
+ * Imperative handle for controlling a {@link BookChapterControl} from outside React — e.g. the
+ * `platform.openBookChapterControl` command opening it in response to Ctrl+B
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type BookChapterControlHandle = {
+	/**
+	 * Opens the reference dropdown and focuses its search input, ready for typing. No-op while the
+	 * control is disabled.
+	 */
+	open: () => void;
 };
 export type BookChapterControlProps = {
 	/** The current scripture reference */
@@ -164,6 +177,18 @@ export type BookChapterControlProps = {
 	 * keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
 	 */
 	align?: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>["align"];
+	/**
+	 * Ref that receives a {@link BookChapterControlHandle} for imperative control
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	ref?: React$1.Ref<BookChapterControlHandle>;
+	/**
+	 * When true, the control is disabled (e.g. no target to navigate): the trigger button cannot be
+	 * clicked, an already-open dropdown closes, and the imperative
+	 * {@link BookChapterControlHandle.open} is a no-op
+	 */
+	disabled?: boolean;
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -173,7 +198,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -1723,9 +1748,11 @@ export type ScrollGroupSelectorProps = {
 	className?: string;
 	/** Optional id for the select element */
 	id?: string;
+	/** When true, the selector is disabled */
+	disabled?: boolean;
 };
 /** Selector component for choosing a scroll group */
-export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, id, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, id, disabled, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div

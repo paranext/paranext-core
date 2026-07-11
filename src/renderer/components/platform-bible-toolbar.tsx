@@ -6,12 +6,23 @@ import {
   useLocalizedStrings,
   useScrollGroupScrRef,
   useRecentScriptureRefs,
+  useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
+import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import {
+  registerBookChapterControlHandle,
+  TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
+} from '@renderer/services/book-chapter-control.registry';
+import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
@@ -21,6 +32,7 @@ import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
+  BookChapterControlHandle,
   Button,
   cn,
   getToolbarOSReservedSpaceClassName,
@@ -43,8 +55,8 @@ import {
 import {
   getErrorMessage,
   getLocalizeKeysForScrollGroupIds,
+  isPlatformError,
   LocalizeKey,
-  ScrollGroupId,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -55,14 +67,7 @@ const TOOLTIP_DELAY = 300;
 // after that initial window, so a single retry here is sufficient.
 const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
 
-const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
-
-// Exclude no scroll group in the top selector because it would be pointless
-const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
-  (scrollGroupId) => scrollGroupId !== undefined,
-);
-
-const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
+const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
@@ -76,31 +81,87 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 export function PlatformBibleToolbar() {
-  // Internal state tracker for scroll group in local storage
-  const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
-    JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
-  );
-  const updateScrollGroupIdInternal = useCallback((newScrollGroupId: ScrollGroupScrRef) => {
-    if (typeof newScrollGroupId !== 'number')
-      throw new Error(
-        `Top Scroll Group ID cannot be anything but a number! Trying to set to ${newScrollGroupId}`,
-      );
-    setScrollGroupIdInternal(newScrollGroupId);
-    localStorage.setItem(scrollGroupIdLocalStorageKey, JSON.stringify(newScrollGroupId));
-
-    return true;
-  }, []);
-
   const { currentProject, recentProjects, allProjects, currentProjectError } =
     useProjectPickerData();
 
-  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
-    scrollGroupIdInternal,
-    updateScrollGroupIdInternal,
-    currentProject?.id,
+  const isPowerMode = useIsPowerMode();
+
+  // The resolved navigation target: the tracked (last-selected) web view's saved definition or,
+  // failing that, the main project editor's — same rule `useProjectPickerData` uses to find the
+  // current project. The window service resolves it and keeps it current from web view lifecycle
+  // events, so the toolbar and the navigation commands can never disagree on the target.
+  const resolvedWebView = useNavigationTargetWebView();
+
+  // No resolved target (no eligible tracked tab and no main-project editor open): nothing to
+  // navigate — controls are disabled
+  const isBookChapterControlDisabled = !resolvedWebView;
+
+  const scrollGroupScrRefTarget: ScrollGroupScrRef =
+    resolvedWebView?.definition.scrollGroupScrRef ?? 0;
+
+  const setScrollGroupScrRefTarget = useCallback(
+    (newScrollGroupScrRef: ScrollGroupScrRef) => {
+      if (!resolvedWebView) return false;
+      try {
+        return updateWebViewDefinitionSync(resolvedWebView.id, {
+          scrollGroupScrRef: newScrollGroupScrRef,
+        });
+      } catch (e) {
+        logger.warn(
+          `Toolbar could not update scroll group for web view ${resolvedWebView.id}: ${getErrorMessage(e)}`,
+        );
+        return false;
+      }
+    },
+    [resolvedWebView],
   );
 
-  const isPowerMode = useIsPowerMode();
+  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
+    scrollGroupScrRefTarget,
+    setScrollGroupScrRefTarget,
+    resolvedWebView?.definition.projectId,
+  );
+
+  const [booksPresentPossiblyError] = useProjectSetting(
+    resolvedWebView?.definition.projectId,
+    'platformScripture.booksPresent',
+    BOOKS_PRESENT_DEFAULT,
+  );
+  const booksPresent = useMemo(() => {
+    if (isPlatformError(booksPresentPossiblyError)) {
+      logger.warn(
+        `Toolbar failed to get books present: ${getErrorMessage(booksPresentPossiblyError)}`,
+      );
+      return BOOKS_PRESENT_DEFAULT;
+    }
+    return booksPresentPossiblyError;
+  }, [booksPresentPossiblyError]);
+  // Stable identity per booksPresent value — BookChapterControl memoizes its book list (and the
+  // filtering/matching derived from it) on this function's identity, so a fresh closure every
+  // render would recompute all of that on every toolbar render
+  const fetchActiveBookIds = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
+  const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
+
+  // Register the top BookChapterControl's imperative handle only while it is enabled — a React 19
+  // cleanup callback ref so registration tracks both mount/unmount and the enabled state. When
+  // isBookChapterControlDisabled flips, this callback's identity changes, so React runs the old
+  // cleanup (unregistering) and invokes the new callback (registering only if now enabled).
+  const registerTopBookChapterControl = useCallback(
+    (handle: BookChapterControlHandle | null) => {
+      if (!handle || isBookChapterControlDisabled) return undefined;
+      const unsubscribe = registerBookChapterControlHandle(
+        TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
+        handle,
+      );
+      return () => {
+        unsubscribe();
+      };
+    },
+    [isBookChapterControlDisabled],
+  );
 
   const openProject = useCallback(async (projectId: string) => {
     // This command comes from an extension and is not typed in CommandHandlers.
@@ -393,19 +454,23 @@ export function PlatformBibleToolbar() {
         </Select>
       )}
       <BookChapterControl
+        ref={registerTopBookChapterControl}
         scrRef={scrRef}
         handleSubmit={setScrRef}
         className="tw:w-96"
+        disabled={isBookChapterControlDisabled}
+        getActiveBookIds={getActiveBookIds}
         recentSearches={recentScriptureRefs}
         onAddRecentSearch={addRecentScriptureRef}
       />
       {isPowerMode && (
         <ScrollGroupSelector
-          availableScrollGroupIds={availableScrollGroupIdsTop}
+          availableScrollGroupIds={availableScrollGroupIds}
           scrollGroupId={scrollGroupId}
           onChangeScrollGroupId={setScrollGroupId}
           localizedStrings={scrollGroupLocalizedStrings}
           className="tw:h-8"
+          disabled={isBookChapterControlDisabled}
         />
       )}
     </Toolbar>

@@ -34,3 +34,8 @@ export {
 } from './components/basics/linked-scr-ref-button.component';
 export type { ScopeWithRange } from './components/utils/scripture.util';
 export { Z_INDEX_TOOLTIP } from './components/z-index';
+// The books-present-aware scripture navigation math (get*Ref, ScriptureBounds) lives in
+// `platform-bible-utils/experimental` (it is pure scripture math, alongside the sibling `offset*`
+// helpers); import it from there. `useQuickNavButtons` (the React hook that wraps it) stays in
+// `./components/advanced/book-chapter-control/book-chapter-control.navigation`.
+export { ALL_BOOK_IDS } from './components/shared/book.utils';

@@ -35,6 +35,25 @@ export const Default: Story = {
   },
 };
 
+export const Disabled: Story = {
+  render: (args) => {
+    const [selected, setSelected] = useState<number | undefined>(args.scrollGroupId);
+    return (
+      <ScrollGroupSelector
+        {...args}
+        scrollGroupId={selected}
+        onChangeScrollGroupId={setSelected}
+        disabled
+      />
+    );
+  },
+  args: {
+    availableScrollGroupIds,
+    scrollGroupId: 1,
+    localizedStrings,
+  },
+};
+
 export const WithCustomSize: Story = {
   render: (args) => {
     const [selected, setSelected] = useState<number | undefined>(args.scrollGroupId);
