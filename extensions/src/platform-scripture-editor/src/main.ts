@@ -249,13 +249,13 @@ async function open(
     // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
     // getAllOpenWebViewDefinitions can time out under load; fall back to an empty list so that
-    // openResourceViewer still succeeds (opening a new editor tab) rather than throwing.
+    // open still succeeds (opening a new editor tab) rather than throwing.
     let allOpenDefs: SavedWebViewDefinition[] = [];
     try {
       allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
     } catch (e) {
       logger.warn(
-        `openResourceViewer: getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); opening as new tab`,
+        `open: getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); opening as new tab`,
       );
     }
     const allScriptureEditors = toScriptureEditorInfos(allOpenDefs);
@@ -352,7 +352,7 @@ async function open(
         }
       } catch (e) {
         logger.warn(
-          `openResourceViewer: re-check getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); using original dispatch`,
+          `open: re-check getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); using original dispatch`,
         );
       }
     }

@@ -1,5 +1,4 @@
-import { TabInfo } from '@shared/models/docking-framework.model';
-import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
+import { TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 
 import { TAB_GROUP } from './platform-dock-layout-positioning.util';
 import { PlatformPanel } from './platform-panel.component';
