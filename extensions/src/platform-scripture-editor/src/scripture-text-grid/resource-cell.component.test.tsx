@@ -128,10 +128,11 @@ describe('ResourceCell', () => {
     render(<ResourceCell {...props} />);
     expect(document.querySelector('[dir="ltr"]')).toBeInTheDocument();
   });
-  it('exposes the resource label as a gridcell (not a button)', () => {
+  it('exposes the resource label + reference as a gridcell accessible name (not a button)', () => {
     setUsjResult(chapter, false);
     render(<ResourceCell {...props} />);
-    const cell = screen.getByRole('gridcell', { name: 'WEB' });
+    // Accessible name is "{label}, {reference}" (see buildCellAccessibleName); props' scrRef is MAT 5:3.
+    const cell = screen.getByRole('gridcell', { name: 'WEB, MAT 5:3' });
     expect(cell.tagName).not.toBe('BUTTON');
   });
 });
