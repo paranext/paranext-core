@@ -32,7 +32,7 @@ export type ResourceCellLocalizedStrings = {
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
-  /** Resource label shown in the header and used as the gridcell aria-label. */
+  /** Resource label shown in the header; also the fallback accessible name when `ariaLabel` is unset. */
   label: string;
   /** Accessible name for the gridcell (resource label + reference). Falls back to `label`. */
   ariaLabel?: string;
@@ -88,7 +88,8 @@ export function ResourceCellView({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
+      // Enter and Space both activate — Space is the conventional partner key for a click action.
+      if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
         onActivate?.();
       }

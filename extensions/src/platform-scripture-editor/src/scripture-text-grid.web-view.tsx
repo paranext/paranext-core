@@ -118,6 +118,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
+  // Live-region message announced when the chapter-context panel opens or closes (rendered into the
+  // `role="status"` region below).
   const [announcement, setAnnouncement] = useState('');
   const handleChapterContextChange = useCallback(
     (context: ChapterContextResource) => {

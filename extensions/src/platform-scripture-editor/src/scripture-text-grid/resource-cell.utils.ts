@@ -5,9 +5,9 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 export type ResourceCellState = 'downloading' | 'ready' | 'failed';
 
 /**
- * Accessible name for a grid cell: the resource's short label plus the active reference, e.g. "ESV,
- * MAT 5:3". Screen readers read this when the cell receives focus. Uses the default `formatScrRef`
- * output (3-letter book id, space book/chapter separator, colon chapter/verse).
+ * Accessible name for a grid cell: the resource's short label plus the active reference, e.g.
+ * "ESV, MAT 5:3". Read by screen readers when the cell receives focus. The reference uses the
+ * stable 3-letter book id (not localized) for a terse, unambiguous spoken form.
  */
 export function buildCellAccessibleName(label: string, scrRef: SerializedVerseRef): string {
   return `${label}, ${formatScrRef(scrRef)}`;

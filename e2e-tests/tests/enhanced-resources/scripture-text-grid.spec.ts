@@ -367,16 +367,8 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A12 (PT-4057) — Scripture Text Grid accessibility pass.
-//
-// Covers: accessible name on gridcells, Tab-key focus order stays within
-// gridcells, focus-visible ring renders a non-zero box-shadow, and the
-// chapter-context split panel positions to the left (inline-end) under RTL.
-//
-// All specs are local-only (they mutate real project settings) and self-skip
-// in CI or when no admin-writable project is available.
-// ---------------------------------------------------------------------------
+// A12 (PT-4057) — Scripture Text Grid accessibility specs. Local-only (they mutate real project
+// settings): each test self-skips in CI and when no admin-writable project is available.
 test.describe('Scripture Text Grid accessibility (A12)', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);
@@ -402,8 +394,10 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     const frame = await openScriptureTextGrid(mainPage);
     const firstCell = frame.locator('[role="gridcell"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
-    // Accessible name is "<label>, <BOOK C:V>" — assert the comma-joined shape.
-    await expect(firstCell).toHaveAttribute('aria-label', /.+,\s+[A-Z1-9]{3}\s+\d+:\d+/);
+    // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
+    // The book id is a 3-char USFM code; it may start with a digit (e.g. 1SA, 2KI), so digits
+    // are allowed in the class.
+    await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z0-9]{3}\s\d+:\d+$/);
   });
 
   test('Tab moves focus between gridcells, not into editor content', async ({ mainPage }) => {
@@ -449,9 +443,15 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     const frame = await openScriptureTextGrid(mainPage);
     const firstCell = frame.locator('[role="gridcell"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
+    // a programmatic `.focus()` would not trigger it. Land on the cell, then leave and re-enter via
+    // the keyboard so the focus is keyboard-originated.
     await firstCell.focus();
-    // Tailwind focus-visible ring renders a non-zero box-shadow on the focused cell.
-    const boxShadow = await firstCell.evaluate((el) => getComputedStyle(el).boxShadow);
+    await mainPage.keyboard.press('Shift+Tab');
+    await mainPage.keyboard.press('Tab');
+    const boxShadow = await frame
+      .locator('[role="gridcell"]:focus')
+      .evaluate((el) => getComputedStyle(el).boxShadow);
     expect(boxShadow).not.toBe('none');
   });
 
@@ -476,9 +476,11 @@ test.describe('Scripture Text Grid accessibility (A12)', () => {
     const context = frame.getByTestId('scripture-text-grid-chapter-context');
     await expect(context).toBeVisible({ timeout: 15_000 });
 
-    // Under RTL the chapter-context panel sits to the LEFT of the verse row.
+    // Under RTL the chapter-context panel sits to the LEFT of the verse row. Assert the boxes exist
+    // separately from the geometry so a null box (timing/off-screen) gives an interpretable failure.
     const contextBox = await context.boundingBox();
     const rowBox = await frame.locator('[role="grid"]').boundingBox();
-    expect(contextBox && rowBox && contextBox.x < rowBox.x).toBe(true);
+    if (!contextBox || !rowBox) throw new Error('expected bounding boxes for both split panels');
+    expect(contextBox.x).toBeLessThan(rowBox.x);
   });
 });
