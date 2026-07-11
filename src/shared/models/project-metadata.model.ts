@@ -16,6 +16,18 @@ export type ProjectMetadataWithoutFactoryInfo = {
    * project.
    */
   projectInterfaces: ProjectInterfaces[];
+  /** Short display name of the project, if available. */
+  name?: string;
+  /** Full display name of the project, if available. */
+  fullName?: string;
+  /** Language of the project (raw setting value), if available. */
+  language?: string;
+  /** BCP-47 language tag of the project, if available. */
+  languageTag?: string;
+  /** Whether the project is editable (false for read-only published resources), if available. */
+  isEditable?: boolean;
+  /** Whether the project is a published (read-only) resource, if available. */
+  isPublished?: boolean;
 };
 
 export type ProjectDataProviderFactoryMetadataInfo = {
