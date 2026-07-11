@@ -105,7 +105,11 @@ export function ResourceCellView({
       onClick={onActivate}
       // `cursor-pointer` signals the cell is clickable (opens the chapter-context split) so the
       // affordance is discoverable; only when activation is wired.
-      className={`tw:flex tw:min-w-0 tw:flex-col ${onActivate ? 'tw:cursor-pointer' : ''}`}
+      className={`tw:flex tw:min-w-0 tw:flex-col ${
+        onActivate
+          ? 'tw:cursor-pointer tw:outline-hidden tw:focus-visible:ring-2 tw:focus-visible:ring-ring tw:focus-visible:ring-inset'
+          : ''
+      }`}
     >
       <TooltipProvider>
         <Tooltip open={isHeaderTooltipOpen}>
