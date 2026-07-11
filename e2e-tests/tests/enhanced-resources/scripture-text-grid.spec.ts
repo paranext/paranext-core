@@ -350,10 +350,7 @@ test.describe('Scripture Text Grid renderer', () => {
     );
 
     const frame = await openScriptureTextGrid(mainPage);
-    // `FrameLocator` has no `.evaluate()` — at runtime the CDP fixture exposes `evaluate` on the
-    // underlying Frame object, so the call works; TypeScript just doesn't know about it here.
-    // @ts-expect-error ts(2339) — FrameLocator lacks .evaluate(); runtime Frame object has it
-    const elapsedMs = await frame.evaluate(async () => {
+    const elapsedMs = await frame.locator('body').evaluate(async () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
         const observer = new MutationObserver(() => {
@@ -388,7 +385,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await frame.getByRole('button', { name: 'View Options' }).click();
     await frame.getByRole('radio', { name: /Chapter/ }).click();
     // Close the popover so it does not overlay the grid body.
-    await mainPage.keyboard.press('Escape');
+    await frame.locator('body').press('Escape');
 
     // The chapter grid lays out as a column and shows no chapter-context split.
     const grid = frame.locator('[role="grid"]');
@@ -427,7 +424,7 @@ test.describe('Scripture Text Grid renderer', () => {
     const frame = await openScriptureTextGrid(mainPage);
     await frame.getByRole('button', { name: 'View Options' }).click();
     await frame.getByRole('radio', { name: /Chapter/ }).click();
-    await mainPage.keyboard.press('Escape');
+    await frame.locator('body').press('Escape');
 
     await expect(frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
     // Clicking inside a chapter cell must NOT open the verse-view chapter-context split, and both
@@ -465,12 +462,9 @@ test.describe('Scripture Text Grid renderer', () => {
     const frame = await openScriptureTextGrid(mainPage);
     await frame.getByRole('button', { name: 'View Options' }).click();
     await frame.getByRole('radio', { name: /Chapter/ }).click();
-    await mainPage.keyboard.press('Escape');
+    await frame.locator('body').press('Escape');
 
-    // `FrameLocator` has no `.evaluate()` — at runtime the CDP fixture exposes `evaluate` on the
-    // underlying Frame object, so the call works; TypeScript just doesn't know about it here.
-    // @ts-expect-error ts(2339) — FrameLocator lacks .evaluate(); runtime Frame object has it
-    const elapsedMs = await frame.evaluate(async () => {
+    const elapsedMs = await frame.locator('body').evaluate(async () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
         const observer = new MutationObserver(() => {
@@ -508,7 +502,7 @@ test.describe('Scripture Text Grid renderer', () => {
     const frame = await openScriptureTextGrid(mainPage);
     await frame.getByRole('button', { name: 'View Options' }).click();
     await frame.getByRole('radio', { name: /Chapter/ }).click();
-    await mainPage.keyboard.press('Escape');
+    await frame.locator('body').press('Escape');
 
     const grid = frame.locator('[role="grid"]');
     await expect(grid).toBeVisible({ timeout: 15_000 });
