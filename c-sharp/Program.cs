@@ -109,20 +109,31 @@ public static class Program
             );
             var versificationConversionService = new VersificationConversionService(papi);
             StartupTiming.Mark("init-barrier-start");
+            // Critical path: everything the renderer needs to list projects and open an editor.
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
                 versificationConversionService.InitializeAsync(),
-                inventoryDataProvider.RegisterDataProviderAsync(),
-                checkRunner.RegisterDataProviderAsync(),
-                dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
-                checklistNetworkObject.InitializeAsync(),
-                manageBooksService.RegisterNetworkObjectAsync(),
-                enhancedResourceFactory.InitializeAsync()
+                dblResources.RegisterDataProviderAsync()
             );
             StartupTiming.Mark("init-barrier-end");
+
+            // Non-critical: register in the background so they don't gate "ready".
+            _ = Task.Run(
+                () =>
+                    ThreadingUtils.RunTask(
+                        Task.WhenAll(
+                            inventoryDataProvider.RegisterDataProviderAsync(),
+                            checkRunner.RegisterDataProviderAsync(),
+                            checklistNetworkObject.InitializeAsync(),
+                            manageBooksService.RegisterNetworkObjectAsync(),
+                            enhancedResourceFactory.InitializeAsync()
+                        ),
+                        "background service registration"
+                    )
+            );
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");
