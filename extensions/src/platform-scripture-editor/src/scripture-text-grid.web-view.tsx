@@ -21,6 +21,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
+import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -55,6 +56,8 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+const A11Y_OPENED_KEY = '%webView_scriptureTextGrid_a11y_chapterContextOpened%';
+const A11Y_CLOSED_KEY = '%webView_scriptureTextGrid_a11y_chapterContextClosed%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
@@ -62,6 +65,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  A11Y_OPENED_KEY,
+  A11Y_CLOSED_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -117,9 +122,20 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
+  const [announcement, setAnnouncement] = useState('');
+  const handleChapterContextChange = useCallback(
+    (context: ChapterContextResource) => {
+      setChapterContext(context);
+      setAnnouncement(
+        buildChapterContextOpenedMessage(localizedStrings[A11Y_OPENED_KEY] ?? '', context.label),
+      );
+    },
+    [localizedStrings],
+  );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-  }, []);
+    setAnnouncement(localizedStrings[A11Y_CLOSED_KEY] ?? '');
+  }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || chapterContext === undefined) return;
@@ -294,6 +310,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       data-testid="scripture-text-grid"
       className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
     >
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {announcement}
+      </div>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
           <TooltipProvider>
@@ -365,7 +384,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             setScrRef={setScrRef}
             viewMode={viewMode}
             chapterContext={chapterContext}
-            onChapterContextChange={setChapterContext}
+            onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
             closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
           />
