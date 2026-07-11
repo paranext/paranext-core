@@ -347,6 +347,9 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     );
 
     const frame = await openScriptureTextGrid(mainPage);
+    // `FrameLocator` has no `.evaluate()` — at runtime the CDP fixture exposes `evaluate` on the
+    // underlying Frame object, so the call works; TypeScript just doesn't know about it here.
+    // @ts-expect-error ts(2339) — FrameLocator lacks .evaluate(); runtime Frame object has it
     const elapsedMs = await frame.evaluate(async () => {
       const start = performance.now();
       await new Promise<void>((resolve) => {
@@ -364,5 +367,158 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
 
     await expect(frame.locator('[role="gridcell"]')).toHaveCount(5, { timeout: 15_000 });
     expect(elapsedMs).toBeLessThan(220);
+  });
+
+  test('chapter mode stacks resources vertically (column layout)', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'WEB', id: 'chap001', isResourceShownByDefault: true },
+      { type: 'project', name: 'KJV', id: 'chap002', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await frame.getByRole('button', { name: 'View Options' }).click();
+    await frame.getByRole('radio', { name: /Chapter/ }).click();
+    // Close the popover so it does not overlay the grid body.
+    await mainPage.keyboard.press('Escape');
+
+    // The chapter grid lays out as a column and shows no chapter-context split.
+    const grid = frame.locator('[role="grid"]');
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    const flexDirection = await grid.evaluate((el) => getComputedStyle(el).flexDirection);
+    expect(flexDirection).toBe('column');
+    // Each resource is its own row in the stack.
+    await expect(frame.locator('[role="row"]')).toHaveCount(2);
+  });
+
+  test('chapter mode: clicking a cell syncs selection without opening a split', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    test.skip(
+      REAL_RESOURCE_IDS.length < 2,
+      'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 2).map((id, index) => ({
+        type: 'project' as const,
+        name: `ChapSync ${index + 1}`,
+        id,
+        isResourceShownByDefault: true,
+      })),
+    );
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await frame.getByRole('button', { name: 'View Options' }).click();
+    await frame.getByRole('radio', { name: /Chapter/ }).click();
+    await mainPage.keyboard.press('Escape');
+
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2, { timeout: 15_000 });
+    // Clicking inside a chapter cell must NOT open the verse-view chapter-context split, and both
+    // cells stay visible (selection sync keeps every column mounted and navigated).
+    await frame.locator('[role="gridcell"]').first().click();
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(2);
+    await expect(frame.locator('[role="gridcell"]').nth(1)).toBeVisible();
+  });
+
+  test('chapter frame budget: >=5 stacked chapters render under the chapter-mode baseline', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    test.skip(
+      REAL_RESOURCE_IDS.length < 5,
+      'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
+    );
+
+    await flagResourcesAndOpenScriptureTextGrid(
+      mainPage,
+      projectId,
+      REAL_RESOURCE_IDS.slice(0, 5).map((id, index) => ({
+        type: 'project' as const,
+        name: `ChapPerf ${index + 1}`,
+        id,
+        isResourceShownByDefault: true,
+      })),
+    );
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await frame.getByRole('button', { name: 'View Options' }).click();
+    await frame.getByRole('radio', { name: /Chapter/ }).click();
+    await mainPage.keyboard.press('Escape');
+
+    // `FrameLocator` has no `.evaluate()` — at runtime the CDP fixture exposes `evaluate` on the
+    // underlying Frame object, so the call works; TypeScript just doesn't know about it here.
+    // @ts-expect-error ts(2339) — FrameLocator lacks .evaluate(); runtime Frame object has it
+    const elapsedMs = await frame.evaluate(async () => {
+      const start = performance.now();
+      await new Promise<void>((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (document.querySelectorAll('[role="gridcell"]').length >= 5) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        if (document.querySelectorAll('[role="gridcell"]').length >= 5) resolve();
+      });
+      return performance.now() - start;
+    });
+
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(5, { timeout: 15_000 });
+    // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
+    // NOT apply. Baseline established here; tighten once real measurements are collected (see Step 6).
+    // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
+    console.log(`[chapter frame budget] ${elapsedMs.toFixed(1)}ms for 5 stacked chapters`);
+    expect(elapsedMs).toBeLessThan(2000);
+  });
+
+  test('chapter mode: vertical stack is unaffected by RTL UI locale', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'WEB', id: 'chaprtl1', isResourceShownByDefault: true },
+      { type: 'project', name: 'KJV', id: 'chaprtl2', isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await frame.getByRole('button', { name: 'View Options' }).click();
+    await frame.getByRole('radio', { name: /Chapter/ }).click();
+    await mainPage.keyboard.press('Escape');
+
+    const grid = frame.locator('[role="grid"]');
+    await expect(grid).toBeVisible({ timeout: 15_000 });
+    const directions = await grid.evaluate((el) => {
+      document.documentElement.dir = 'ltr';
+      const ltr = getComputedStyle(el).flexDirection;
+      document.documentElement.dir = 'rtl';
+      const rtl = getComputedStyle(el).flexDirection;
+      document.documentElement.dir = 'ltr';
+      return { ltr, rtl };
+    });
+    // Column in both directions — vertical stacking does not reverse under RTL.
+    expect(directions.ltr).toBe('column');
+    expect(directions.rtl).toBe('column');
   });
 });
