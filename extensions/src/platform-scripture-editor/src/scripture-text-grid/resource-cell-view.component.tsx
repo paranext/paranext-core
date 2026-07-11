@@ -34,6 +34,8 @@ export type ResourceCellViewProps = {
   state: ResourceCellState;
   /** Resource label shown in the header and used as the gridcell aria-label. */
   label: string;
+  /** Accessible name for the gridcell (resource label + reference). Falls back to `label`. */
+  ariaLabel?: string;
   /** This resource's own text direction ('ltr' | 'rtl'), applied to the content area. */
   textDirection: string;
   /** Localized strings; import `RESOURCE_CELL_STRING_KEYS` to resolve them. */
@@ -54,6 +56,7 @@ export type ResourceCellViewProps = {
 export function ResourceCellView({
   state,
   label,
+  ariaLabel,
   textDirection,
   localizedStrings,
   editor,
@@ -96,7 +99,7 @@ export function ResourceCellView({
   return (
     <div
       role="gridcell"
-      aria-label={label}
+      aria-label={ariaLabel ?? label}
       tabIndex={onActivate ? 0 : undefined}
       onKeyDown={onActivate ? handleKeyDown : undefined}
       onClick={onActivate}

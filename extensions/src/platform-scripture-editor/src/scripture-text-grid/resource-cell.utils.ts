@@ -1,7 +1,17 @@
-import { isPlatformError } from 'platform-bible-utils';
+import { formatScrRef, isPlatformError } from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** The three visual states a ResourceCell can be in; only `ready` renders Editorial. */
 export type ResourceCellState = 'downloading' | 'ready' | 'failed';
+
+/**
+ * Accessible name for a grid cell: the resource's short label plus the active reference, e.g.
+ * "ESV, MAT 5:3". Screen readers read this when the cell receives focus. Uses the default
+ * `formatScrRef` output (3-letter book id, space book/chapter separator, colon chapter/verse).
+ */
+export function buildCellAccessibleName(label: string, scrRef: SerializedVerseRef): string {
+  return `${label}, ${formatScrRef(scrRef)}`;
+}
 
 /**
  * Derives a cell's offline state from observable data. A2/A13 own the actual download; this only

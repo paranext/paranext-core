@@ -6,7 +6,7 @@ import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEffect, useMemo, useRef } from 'react';
-import { deriveCellState } from './resource-cell.utils';
+import { deriveCellState, buildCellAccessibleName } from './resource-cell.utils';
 import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
 import { sliceUsjToVerse } from './verse-display.utils';
 
@@ -121,6 +121,7 @@ export function ResourceCell({
     <ResourceCellView
       state={state}
       label={resourceRef.label}
+      ariaLabel={buildCellAccessibleName(resourceRef.label, scrRef)}
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
