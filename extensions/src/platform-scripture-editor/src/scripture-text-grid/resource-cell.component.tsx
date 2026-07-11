@@ -13,7 +13,7 @@ import { sliceUsjToVerse } from './verse-display.utils';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
 
-export type GridResource = { projectId: string; label: string };
+export type GridResource = { resourceId: string; projectId: string; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;

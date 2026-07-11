@@ -28,13 +28,13 @@ describe('toGridResources', () => {
     ];
 
     expect(toGridResources(references, dblResources)).toEqual([
-      { projectId: 'project-abc', label: 'DBL dblUid-1' },
+      { resourceId: 'dblUid-1', projectId: 'project-abc', label: 'DBL dblUid-1' },
     ]);
   });
 
   it('uses a project reference id directly (it already is the project id)', () => {
     expect(toGridResources([project('proj-1')], [])).toEqual([
-      { projectId: 'proj-1', label: 'Proj proj-1' },
+      { resourceId: 'proj-1', projectId: 'proj-1', label: 'Proj proj-1' },
     ]);
   });
 
@@ -54,8 +54,23 @@ describe('toGridResources', () => {
     ];
 
     expect(toGridResources(references, dblResources)).toEqual([
-      { projectId: 'p1', label: 'Proj p1' },
-      { projectId: 'installed-u1', label: 'DBL u1' },
+      { resourceId: 'p1', projectId: 'p1', label: 'Proj p1' },
+      { resourceId: 'u1', projectId: 'installed-u1', label: 'DBL u1' },
+    ]);
+  });
+
+  it('carries the stable resourceId (reference.id) onto each cell', () => {
+    const projectRef = { type: 'project', id: 'proj-1', name: 'WEB' } as const;
+    const dblRef = { type: 'dblResource', id: 'dbl-uid-9', name: 'NIV' } as const;
+    const dblResources = [
+      { dblEntryUid: 'dbl-uid-9', installed: true, projectId: 'installed-proj-42' },
+    ] as unknown as Parameters<typeof toGridResources>[1];
+
+    const cells = toGridResources([projectRef, dblRef], dblResources);
+
+    expect(cells).toEqual([
+      { resourceId: 'proj-1', projectId: 'proj-1', label: 'WEB' },
+      { resourceId: 'dbl-uid-9', projectId: 'installed-proj-42', label: 'NIV' },
     ]);
   });
 });

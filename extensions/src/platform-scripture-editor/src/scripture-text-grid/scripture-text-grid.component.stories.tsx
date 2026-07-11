@@ -28,9 +28,9 @@ const scrRef: SerializedVerseRef = {
 };
 
 const resources = [
-  { projectId: 'web', label: 'WEB' },
-  { projectId: 'kjv', label: 'KJV' },
-  { projectId: 'heb', label: 'עברית' },
+  { resourceId: 'web', projectId: 'web', label: 'WEB' },
+  { resourceId: 'kjv', projectId: 'kjv', label: 'KJV' },
+  { resourceId: 'heb', projectId: 'heb', label: 'עברית' },
 ];
 
 /** Bounds the grid so its `h-full` layout behaves like a real web-view pane. */
