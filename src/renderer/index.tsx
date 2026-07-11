@@ -92,6 +92,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   try {
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    markStartup('papi-connected');
     await initializeSharedStoreService(networkService);
 
     // This needs to run before web views start running and after the network service is running
@@ -144,6 +145,7 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<App />);
+markStartup('root-render');
 
 // #endregion
 

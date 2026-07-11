@@ -14,6 +14,7 @@ import {
   UNZIPPED_EXTENSIONS_CACHE_DIR,
 } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
@@ -1381,15 +1382,22 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // This is a case where we want to run through the array in order sequentially
   // eslint-disable-next-line no-restricted-syntax
   for (const extensionWithCheck of extensionsWithCheck) {
+    // The extension name is embedded in the mark token; sanitize spaces since manifest `name` is a
+    // free-form string (core extensions are camelCase/space-free, but third-party extensions are not
+    // guaranteed to be).
+    const sanitizedExtensionName = extensionWithCheck.extension.name.replace(/ /g, '-');
     try {
+      markStartup(`activate-start ${sanitizedExtensionName}`);
       // Extensions must be activated in dependency order, so sequential awaiting is intentional.
       // eslint-disable-next-line no-await-in-loop
       const extension = await activateExtension(extensionWithCheck.extension);
+      markStartup(`activate-end ${sanitizedExtensionName}`);
       extensionsActive.push(extension);
     } catch (e) {
       logger.error(`Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`);
     }
   }
+  markStartup('all-extensions-activated');
 
   return extensionsActive;
 }

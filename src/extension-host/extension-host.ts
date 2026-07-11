@@ -98,9 +98,11 @@ process.on('unhandledRejection', (reason) => {
       initializeDatabaseService(),
       startLocalOAuthServer(),
     ]);
+    markStartup('host-services-ready');
 
     // The extension service locks down importing other modules, so be careful what runs after it
     await extensionService.initialize();
+    markStartup('extensions-initialized');
   } catch (error) {
     logger.error(error);
   }

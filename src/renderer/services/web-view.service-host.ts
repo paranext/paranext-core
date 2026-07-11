@@ -68,6 +68,7 @@ import {
   OpenWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
 import memoizeOne from 'memoize-one';
@@ -1479,6 +1480,14 @@ function applyAndLogLegacyColorVarTransforms(
 }
 
 /**
+ * Whether the `first-webview-content` startup mark has already been emitted. Guards
+ * {@link openOrReloadWebView} so the mark fires only once per renderer session, at the first web
+ * view whose content comes back from `getWebView` (i.e. the Home view during startup), not on every
+ * subsequent web view open/reload.
+ */
+let hasMarkedFirstWebViewContent = false;
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -1514,6 +1523,11 @@ async function openOrReloadWebView(
   if (!webView) {
     deleteWebViewNonce(savedWebViewDefinition.id);
     return undefined;
+  }
+
+  if (!hasMarkedFirstWebViewContent) {
+    hasMarkedFirstWebViewContent = true;
+    markStartup('first-webview-content');
   }
 
   // Set up WebViewDefinition default values
