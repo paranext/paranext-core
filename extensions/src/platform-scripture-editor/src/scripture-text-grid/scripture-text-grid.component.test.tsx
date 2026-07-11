@@ -12,24 +12,15 @@ const mockResourceCell = vi.fn(
     // setScrRef stays in the type (so mock.calls[n][0].setScrRef type-checks in the setter-sync test)
     // but is not destructured here because it is not used in the rendered JSX.
     viewMode,
-    onActivate,
   }: {
     resourceRef: { label: string; projectId: string };
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
     viewMode?: string;
-    onActivate?: () => void;
   }) => (
     <div
-      role="gridcell"
-      aria-label={resourceRef.label}
-      data-view-mode={viewMode}
       data-testid={`cell-${resourceRef.projectId}`}
-      tabIndex={onActivate ? 0 : undefined}
-      onClick={onActivate}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') onActivate?.();
-      }}
+      data-view-mode={viewMode}
     >{`${resourceRef.label}@${scrRef.verseNum}`}</div>
   ),
 );
@@ -66,12 +57,19 @@ beforeEach(() => {
 });
 
 describe('ScriptureTextGrid', () => {
-  it('renders one gridcell per resource in effective-list order', () => {
-    render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
-    expect(screen.getAllByRole('gridcell').map((c) => c.getAttribute('aria-label'))).toEqual([
-      'WEB',
-      'KJV',
-      'עברית',
+  it('renders one listitem per resource in effective-list order', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        cellAccessibleNameTemplate="{resourceName}, {reference}"
+      />,
+    );
+    expect(screen.getAllByRole('listitem').map((c) => c.getAttribute('aria-label'))).toEqual([
+      'WEB, MAT 5:3',
+      'KJV, MAT 5:3',
+      'עברית, MAT 5:3',
     ]);
   });
   it('feeds the same scrRef to every cell', () => {
@@ -79,7 +77,7 @@ describe('ScriptureTextGrid', () => {
     expect(screen.getByText('WEB@3')).toBeInTheDocument();
     expect(screen.getByText('KJV@3')).toBeInTheDocument();
   });
-  it('names the grid region with the provided accessible label', () => {
+  it('names the list region with the provided accessible label', () => {
     render(
       <ScriptureTextGrid
         resources={resources}
@@ -88,14 +86,16 @@ describe('ScriptureTextGrid', () => {
         ariaLabel="Text Collection"
       />,
     );
-    expect(screen.getByRole('grid', { name: 'Text Collection' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Text Collection' })).toBeInTheDocument();
   });
-  it('has grid and row roles', () => {
+  it('has list and listitem roles, no grid or row', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
-    expect(screen.getByRole('grid')).toBeInTheDocument();
-    expect(screen.getByRole('row')).toBeInTheDocument();
+    expect(screen.getByRole('list')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(resources.length);
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('row')).not.toBeInTheDocument();
   });
-  it('renders a single resource as a whole-chapter region, not a verse grid', () => {
+  it('renders a single resource as a whole-chapter region, not a verse list', () => {
     render(
       <ScriptureTextGrid
         resources={[{ projectId: 'a', label: 'WEB' }]}
@@ -104,9 +104,9 @@ describe('ScriptureTextGrid', () => {
         ariaLabel="Text Collection"
       />,
     );
-    // Single resource: a labeled region rendering the whole chapter — not the verse-cell grid/row.
+    // Single resource: a labeled region rendering the whole chapter — not the verse-cell list.
     expect(screen.getByRole('region', { name: 'Text Collection' })).toBeInTheDocument();
-    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
     expect(screen.queryByRole('row')).not.toBeInTheDocument();
     expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'chapter');
   });
@@ -127,7 +127,7 @@ describe('ScriptureTextGrid', () => {
     expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
     expect(screen.queryByTestId('resizable-panel-group')).not.toBeInTheDocument();
   });
-  it('opens the chapter-context split for the activated resource', () => {
+  it('opens the chapter-context split for the activated listitem', () => {
     const onChapterContextChange = vi.fn();
     render(
       <ScriptureTextGrid
@@ -137,7 +137,9 @@ describe('ScriptureTextGrid', () => {
         onChapterContextChange={onChapterContextChange}
       />,
     );
-    fireEvent.click(screen.getByTestId('cell-b'));
+    // Click the listitem wrapper (not the mock cell inside it).
+    const listitems = screen.getAllByRole('listitem');
+    fireEvent.click(listitems[1]);
     expect(onChapterContextChange).toHaveBeenCalledWith(resources[1]);
   });
   it('renders the chapter-context region when split is open', () => {
@@ -179,7 +181,7 @@ describe('ScriptureTextGrid', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close chapter view' }));
     expect(onChapterContextClose).toHaveBeenCalledTimes(1);
   });
-  it('restores focus to the opening cell when the split closes', () => {
+  it('restores focus to the opening listitem when the split closes', () => {
     const { rerender } = render(
       <ScriptureTextGrid
         resources={resources}
@@ -188,8 +190,9 @@ describe('ScriptureTextGrid', () => {
         onChapterContextChange={vi.fn()}
       />,
     );
-    // Activating a cell records it as the focus-restore target.
-    fireEvent.click(screen.getByTestId('cell-b'));
+    // Activating a listitem records it as the focus-restore target.
+    const listitems = screen.getAllByRole('listitem');
+    fireEvent.click(listitems[1]);
     // Open, then close the split (the parent controls `chapterContext`).
     rerender(
       <ScriptureTextGrid
@@ -208,12 +211,14 @@ describe('ScriptureTextGrid', () => {
         onChapterContextChange={vi.fn()}
       />,
     );
-    expect(screen.getByTestId('cell-b')).toHaveFocus();
+    // The listitem with data-project-id="b" should receive focus.
+    const focusedListitem = document.querySelector('[data-project-id="b"]');
+    expect(focusedListitem).toHaveFocus();
   });
 });
 
 describe('ScriptureTextGrid — chapter view', () => {
-  it('stacks one chapter cell per resource, each in its own row', () => {
+  it('stacks one chapter cell per resource, each in its own region', () => {
     render(
       <ScriptureTextGrid
         resources={resources}
@@ -223,12 +228,16 @@ describe('ScriptureTextGrid — chapter view', () => {
         ariaLabel="Text Collection"
       />,
     );
-    // A grid of N single-cell rows (vertical stack), not one row of N cells.
-    expect(screen.getByRole('grid', { name: 'Text Collection' })).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(resources.length);
-    const cells = screen.getAllByRole('gridcell');
-    expect(cells.map((c) => c.getAttribute('aria-label'))).toEqual(['WEB', 'KJV', 'עברית']);
-    cells.forEach((c) => expect(c).toHaveAttribute('data-view-mode', 'chapter'));
+    // A group of N labeled regions (vertical stack), not a verse list.
+    expect(screen.getByRole('group', { name: 'Text Collection' })).toBeInTheDocument();
+    const regions = screen.getAllByRole('region');
+    expect(regions).toHaveLength(resources.length);
+    expect(regions.map((r) => r.getAttribute('aria-label'))).toEqual(['WEB', 'KJV', 'עברית']);
+    regions.forEach((r) => {
+      // The cell inside each region is in chapter mode.
+      const cell = r.querySelector('[data-view-mode]');
+      expect(cell).toHaveAttribute('data-view-mode', 'chapter');
+    });
   });
 
   it('does not open a chapter-context split in chapter mode, even when a handler is provided', () => {
@@ -241,8 +250,8 @@ describe('ScriptureTextGrid — chapter view', () => {
         onChapterContextChange={vi.fn()}
       />,
     );
-    // Cells are not activatable (no chapter-context affordance in chapter mode).
-    expect(screen.getByTestId('cell-a')).not.toHaveAttribute('tabindex');
+    // No listitem in chapter mode — not activatable.
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
     expect(screen.queryByTestId('resizable-panel-group')).not.toBeInTheDocument();
     expect(screen.queryByTestId('scripture-text-grid-chapter-context')).not.toBeInTheDocument();
   });
@@ -272,7 +281,7 @@ describe('ScriptureTextGrid — chapter view', () => {
       />,
     );
     expect(screen.getByRole('region', { name: 'Text Collection' })).toBeInTheDocument();
-    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group')).not.toBeInTheDocument();
     expect(screen.getByTestId('cell-a')).toHaveAttribute('data-view-mode', 'chapter');
   });
 });

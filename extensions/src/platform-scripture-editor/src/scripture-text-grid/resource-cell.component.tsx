@@ -19,8 +19,6 @@ type ResourceCellProps = {
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
-  /** Opens the chapter-context split for this cell (pointer-down / Enter on the gridcell). */
-  onActivate?: () => void;
 };
 
 /**
@@ -34,7 +32,6 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
-  onActivate,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -124,7 +121,6 @@ export function ResourceCell({
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
-      onActivate={onActivate}
       editor={
         <Editorial
           ref={editorRef}

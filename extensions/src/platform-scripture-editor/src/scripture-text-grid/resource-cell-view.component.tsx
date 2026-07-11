@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { LocalizedStringValue } from 'platform-bible-utils';
-import { ReactNode, useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import { ReactNode, useCallback, useRef, useState } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -32,7 +32,7 @@ export type ResourceCellLocalizedStrings = {
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
-  /** Resource label shown in the header and used as the gridcell aria-label. */
+  /** Resource label shown in the header. */
   label: string;
   /** This resource's own text direction ('ltr' | 'rtl'), applied to the content area. */
   textDirection: string;
@@ -42,14 +42,15 @@ export type ResourceCellViewProps = {
   editor: ReactNode;
   /** When true (verse mode, slice empty), render the empty label instead of the editor. */
   isVerseEmpty?: boolean;
-  /** Fired on click anywhere in the cell or Enter while the gridcell is focused. */
-  onActivate?: () => void;
 };
 
 /**
  * Presentational ResourceCell: renders the header, per-cell text direction, and either the editor
  * (`ready`) or the offline placeholder (`downloading`/`failed`). Data-free so Storybook can drive
  * every state; `ResourceCell` wraps it with the PAPI fetch/direction/offline wiring.
+ *
+ * All role, focus, activation, and accessible-name concerns are handled by the parent verse
+ * `listitem` in `ScriptureTextGrid` — this component is purely presentational.
  */
 export function ResourceCellView({
   state,
@@ -58,7 +59,6 @@ export function ResourceCellView({
   localizedStrings,
   editor,
   isVerseEmpty,
-  onActivate,
 }: ResourceCellViewProps) {
   // The tooltip only repeats the visible label, so it should show only when the label is actually
   // truncated. Radix's auto-detection cannot know that, so control `open` manually and measure the
@@ -83,27 +83,8 @@ export function ResourceCellView({
     );
   }
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        onActivate?.();
-      }
-    },
-    [onActivate],
-  );
-
   return (
-    <div
-      role="gridcell"
-      aria-label={label}
-      tabIndex={onActivate ? 0 : undefined}
-      onKeyDown={onActivate ? handleKeyDown : undefined}
-      onClick={onActivate}
-      // `cursor-pointer` signals the cell is clickable (opens the chapter-context split) so the
-      // affordance is discoverable; only when activation is wired.
-      className={`tw:flex tw:min-w-0 tw:flex-col ${onActivate ? 'tw:cursor-pointer' : ''}`}
-    >
+    <div className="tw:flex tw:min-w-0 tw:flex-col">
       <TooltipProvider>
         <Tooltip open={isHeaderTooltipOpen}>
           <TooltipTrigger asChild>

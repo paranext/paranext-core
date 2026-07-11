@@ -8,6 +8,9 @@ import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-vie
  * connected `ResourceCell` fetches the chapter USJ and feeds a read-only `Editorial`; these stories
  * drive the presentational `ResourceCellView` directly so every state — downloading, failed, and
  * ready (LTR and RTL) — is reachable without a backend.
+ *
+ * `ResourceCellView` is purely presentational — role, focus, and accessible name live on the parent
+ * verse `listitem` in `ScriptureTextGrid`. Stories wrap it in a plain bounded box.
  */
 const meta: Meta<typeof ResourceCellView> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceCell',
@@ -36,26 +39,17 @@ const ROW_BOX_STYLE: React.CSSProperties = {
 };
 
 /**
- * Supplies the `grid` → `row` ARIA ancestors that `role="gridcell"` requires (in the app, PR-2's
- * `ScriptureTextGrid` row container provides these).
+ * A plain flex container that frames multiple presentational cells side by side (no ARIA role
+ * needed since ResourceCellView is purely presentational — the verse listitem role in
+ * ScriptureTextGrid provides the accessible landmark).
  */
-function GridRowBox({ children }: { children: React.ReactNode }) {
-  return (
-    <div role="grid" aria-label="Scripture text grid story preview">
-      <div role="row" style={ROW_BOX_STYLE}>
-        {children}
-      </div>
-    </div>
-  );
+function CellRowBox({ children }: { children: React.ReactNode }) {
+  return <div style={ROW_BOX_STYLE}>{children}</div>;
 }
 
-/** Wraps one cell in a bounded column inside a single-row grid (preserves single-cell stories). */
-function GridCellBox({ children }: { children: React.ReactNode }) {
-  return (
-    <GridRowBox>
-      <div style={CELL_BOX_STYLE}>{children}</div>
-    </GridRowBox>
-  );
+/** Wraps one cell in a bounded column (preserves single-cell stories). */
+function CellBox({ children }: { children: React.ReactNode }) {
+  return <div style={CELL_BOX_STYLE}>{children}</div>;
 }
 
 /** Stand-in for the read-only `Editorial` the connected cell supplies once the chapter is ready. */
@@ -94,7 +88,7 @@ function SampleVerse({ rtl = false }: { rtl?: boolean }) {
 /** Chapter USJ is still downloading — a Spinner plus the localized "Downloading…" subtitle. */
 export const Downloading: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="downloading"
         label="WEB"
@@ -102,7 +96,7 @@ export const Downloading: Story = {
         localizedStrings={localizedStrings}
         editor={undefined}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
@@ -112,7 +106,7 @@ export const Downloading: Story = {
  */
 export const Failed: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="failed"
         label="WEB"
@@ -120,14 +114,14 @@ export const Failed: Story = {
         localizedStrings={localizedStrings}
         editor={undefined}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** The chapter is ready — the editor slot renders (here a stand-in for the read-only `Editorial`). */
 export const Ready: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -135,14 +129,14 @@ export const Ready: Story = {
         localizedStrings={localizedStrings}
         editor={<SampleChapter />}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** A right-to-left resource: the cell honors the resource's own `dir`, independent of the UI locale. */
 export const ReadyRightToLeft: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="עברית"
@@ -150,14 +144,14 @@ export const ReadyRightToLeft: Story = {
         localizedStrings={localizedStrings}
         editor={<SampleChapter rtl />}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** Verse mode, ready — the editor slot shows a single verse (stand-in). */
 export const VerseReady: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -165,14 +159,14 @@ export const VerseReady: Story = {
         localizedStrings={localizedStrings}
         editor={<SampleVerse />}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** Verse mode, empty — no text for the focused verse (e.g. verse 0). */
 export const VerseEmpty: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -181,14 +175,14 @@ export const VerseEmpty: Story = {
         isVerseEmpty
         editor={undefined}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** Single-cell RTL verse: the resource's own `dir`, independent of the UI locale. */
 export const VerseRightToLeft: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="עברית"
@@ -196,17 +190,17 @@ export const VerseRightToLeft: Story = {
         localizedStrings={localizedStrings}
         editor={<SampleVerse rtl />}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /**
- * PR-1 partial-failure row smoke: ready, failed, and downloading cells side by side in one row.
- * Neighbors stay independent — one offline cell does not blank its siblings.
+ * Partial-failure row smoke: ready, failed, and downloading cells side by side. Neighbors stay
+ * independent — one offline cell does not blank its siblings.
  */
 export const PartialFailureRow: Story = {
   render: () => (
-    <GridRowBox>
+    <CellRowBox>
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
@@ -234,17 +228,17 @@ export const PartialFailureRow: Story = {
           editor={undefined}
         />
       </div>
-    </GridRowBox>
+    </CellRowBox>
   ),
 };
 
 /**
- * PR-1 mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic in one row. Each cell
- * applies its own `dir` on the content area, independent of the UI locale.
+ * Mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic. Each cell applies its own
+ * `dir` on the content area, independent of the UI locale.
  */
 export const MixedDirectionRow: Story = {
   render: () => (
-    <GridRowBox>
+    <CellRowBox>
       <div style={CELL_BOX_STYLE}>
         <ResourceCellView
           state="ready"
@@ -278,6 +272,6 @@ export const MixedDirectionRow: Story = {
           }
         />
       </div>
-    </GridRowBox>
+    </CellRowBox>
   ),
 };

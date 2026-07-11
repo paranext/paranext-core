@@ -12,6 +12,13 @@ const { mockUseProjectData, mockUseProjectSetting, setUsjSpy } = vi.hoisted(() =
   setUsjSpy: vi.fn(),
 }));
 
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const original = await importOriginal<typeof import('platform-bible-react')>();
+  return {
+    ...original,
+    useExtraValidMarkers: () => [],
+  };
+});
 vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@papi/frontend/react', () => ({
   useProjectData: (...a: unknown[]) => mockUseProjectData(...a),
@@ -128,11 +135,12 @@ describe('ResourceCell', () => {
     render(<ResourceCell {...props} />);
     expect(document.querySelector('[dir="ltr"]')).toBeInTheDocument();
   });
-  it('exposes the resource label as a gridcell (not a button)', () => {
+  it('shows the resource label (presentational, no landmark role)', () => {
     setUsjResult(chapter, false);
     render(<ResourceCell {...props} />);
-    const cell = screen.getByRole('gridcell', { name: 'WEB' });
-    expect(cell.tagName).not.toBe('BUTTON');
+    expect(screen.getByText('WEB')).toBeInTheDocument();
+    expect(screen.queryByRole('gridcell')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });
 
