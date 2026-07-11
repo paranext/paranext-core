@@ -460,6 +460,12 @@ async function internalGetMetadata(
             .pdpFactoryInfo;
 
           // Type assert to add the factory info to the object
+          // Note: `enrichedMd` is seeded from whichever factory reports this project id FIRST, so
+          // display fields (name/fullName/language/languageTag/isEditable/isPublished) are
+          // first-factory-wins and are NOT merged across factories below (only `projectInterfaces`
+          // is). This is safe today because each scripture project is served by exactly one
+          // Paratext factory; a future layering PDPF that omits these fields would need to
+          // populate them itself, since a later factory's values for the same id are dropped.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           const enrichedMd = allProjectsMetadata.get(md.id) ?? (md as ProjectMetadata);
           if (!enrichedMd.pdpFactoryInfo) enrichedMd.pdpFactoryInfo = {};

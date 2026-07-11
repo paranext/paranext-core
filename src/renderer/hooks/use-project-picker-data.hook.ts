@@ -133,11 +133,15 @@ export function useProjectPickerData(): ProjectPickerData {
         const metadata = await projectLookupService.getMetadataForAllProjects({
           includeProjectIds: safeRecentIds,
         });
-        const metadataById = new Map<string, ProjectMetadata>(metadata.map((m) => [m.id, m]));
+        // Project ids compare case-insensitively (C# canonicalizes to uppercase), so normalize
+        // both the map keys and the lookup key to avoid dropping recent ids on case mismatch.
+        const metadataById = new Map<string, ProjectMetadata>(
+          metadata.map((m) => [m.id.toUpperCase(), m]),
+        );
         // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
         // and non-editable projects, matching the previous per-id fetch-and-skip behavior.
         return safeRecentIds
-          .map((id: string) => metadataById.get(id))
+          .map((id: string) => metadataById.get(id.toUpperCase()))
           .filter((m: ProjectMetadata | undefined): m is ProjectMetadata => !!m?.isEditable)
           .map(metadataToProjectItem);
       } catch (e) {

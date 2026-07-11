@@ -73,18 +73,13 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
         excludePdpFactoryIds,
       });
-      const projectInfo = await Promise.all(
-        projectMetadata.map(async (data) => {
-          const pdp = await papi.projectDataProviders.get('platform.base', data.id);
-          return {
-            projectId: data.id,
-            isPublished: await pdp.getSetting('platform.isPublished'),
-            fullName: await pdp.getSetting('platform.fullName'),
-            name: await pdp.getSetting('platform.name'),
-            language: await pdp.getSetting('platform.language'),
-          };
-        }),
-      );
+      const projectInfo = projectMetadata.map((data) => ({
+        projectId: data.id,
+        isPublished: data.isPublished ?? false,
+        fullName: data.fullName ?? data.name ?? data.id,
+        name: data.name ?? data.id,
+        language: data.language ?? '',
+      }));
 
       if (promiseIsCurrent && isMounted.current) {
         setIsLoadingLocalProjects(false);
