@@ -78,15 +78,6 @@ export function ScriptureTextGrid({
     gridRef.current?.querySelector<HTMLElement>(`[data-project-id="${projectId}"]`)?.focus();
   }, [chapterContext]);
 
-  /** Builds the accessible name for a verse listitem: `"{name}, {ref}"` when template is set. */
-  const verseItemName = (label: string) =>
-    cellAccessibleNameTemplate
-      ? formatReplacementString(cellAccessibleNameTemplate, {
-          resourceName: label,
-          reference: formatScrRef(scrRef),
-        })
-      : label;
-
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
   // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
   // adding more texts). No verse-cell list chrome and no chapter-context split; the whole chapter is
@@ -126,6 +117,8 @@ export function ScriptureTextGrid({
           // `flex-1 min-h-0` shares the height evenly and floors each cell so its inner
           // `overflow-auto` (in ResourceCellView) scrolls the chapter internally instead of pushing
           // the stack past the viewport. Block-direction flow is dir-agnostic (no RTL reversal).
+          // Each resource is its own landmark region (may be rotor-heavy at very high counts —
+          // flagged for AT validation, PT-4057).
           <div
             key={resource.projectId}
             role="region"
@@ -145,6 +138,14 @@ export function ScriptureTextGrid({
     );
   }
 
+  // The Scripture reference is constant across verse items in a render, so format it once. The
+  // accessible name is `"{name}, {ref}"` when the localized template is provided (else just the name).
+  const reference = formatScrRef(scrRef);
+  const verseItemName = (label: string) =>
+    cellAccessibleNameTemplate
+      ? formatReplacementString(cellAccessibleNameTemplate, { resourceName: label, reference })
+      : label;
+
   const verseRow = (
     <div
       ref={gridRef}
@@ -153,13 +154,12 @@ export function ScriptureTextGrid({
       className="tw:flex tw:h-full tw:flex-row tw:divide-x tw:overflow-x-auto tw:overflow-y-hidden"
     >
       {resources.map((resource) => (
-        // `flex-1` lets cells share width evenly when the list fits; `min-w-3xs` floors each
-        // cell so a many-resource list scrolls horizontally instead of collapsing cells into
-        // unreadable slivers in a narrow tab.
-        // The listitem represents an interactive resource entry in the verse list. jsx-a11y flags
-        // role="listitem" with tabIndex/handlers as "non-interactive", but this listitem IS keyboard-
-        // accessible (Tab to focus, Enter/Space to activate) per WCAG 2.1 §2.1.1 and the A12 ARIA
-        // spec — suppression is justified by the explicit keyboard handler and tabIndex below.
+        // `flex-1` shares width evenly when the list fits; `min-w-3xs` floors each cell so a
+        // many-resource list scrolls horizontally instead of collapsing into unreadable slivers.
+        // The listitem is an interactive resource entry. jsx-a11y flags role="listitem" with
+        // tabIndex/handlers as "non-interactive", but it IS keyboard-accessible (Tab to focus,
+        // Enter/Space to activate) per WCAG 2.1 §2.1.1 and the A12 ARIA spec — the suppression is
+        // justified by the explicit handler and tabIndex below.
         /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
         <div
           key={resource.projectId}
