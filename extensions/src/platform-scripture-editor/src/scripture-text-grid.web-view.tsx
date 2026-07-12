@@ -117,7 +117,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // follow it when opened without an explicit project — e.g. from the default layout, whose tab
   // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
   const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
-  const effectiveProjectId = projectId ?? activeEditorProjectId;
+  // Latch the last resolved project. When opened without an explicit `projectId`, the grid follows
+  // the active editor's project — but that value is momentarily undefined during initial mount
+  // (before the active editor reports in) and when the chapter-context split closes, which would
+  // otherwise blank the grid and empty View Options. Holding the last known project bridges those
+  // gaps; switching to a different valid project still updates it, so it keeps following.
+  const resolvedProjectId = projectId ?? activeEditorProjectId;
+  const lastResolvedProjectIdRef = useRef(resolvedProjectId);
+  if (resolvedProjectId) lastResolvedProjectIdRef.current = resolvedProjectId;
+  const effectiveProjectId = resolvedProjectId ?? lastResolvedProjectIdRef.current;
 
   const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
