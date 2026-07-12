@@ -1,8 +1,4 @@
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -73,7 +69,7 @@ export type ResourceCellViewProps = {
   canZoomOut?: boolean;
   /** False when the factor is already at the default (1). Defaults to true. */
   canReset?: boolean;
-  /** Zoom action callbacks; invoked by both the kebab dropdown and the right-click context menu. */
+  /** Zoom action callbacks; invoked by the kebab dropdown. */
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
@@ -89,7 +85,6 @@ function ZoomItemsShared({
   onZoomIn,
   onZoomOut,
   onResetZoom,
-  variant,
 }: {
   labels: ZoomMenuLabels;
   canZoomIn: boolean;
@@ -98,20 +93,18 @@ function ZoomItemsShared({
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
-  variant: 'context' | 'dropdown';
 }) {
-  const Item = variant === 'context' ? ContextMenuItem : DropdownMenuItem;
   return (
     <>
-      <Item disabled={!canZoomIn} onSelect={onZoomIn}>
+      <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
         {labels.zoomIn}
-      </Item>
-      <Item disabled={!canZoomOut} onSelect={onZoomOut}>
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
-      </Item>
-      <Item disabled={!canReset} onSelect={onResetZoom}>
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
         {labels.reset}
-      </Item>
+      </DropdownMenuItem>
     </>
   );
 }
@@ -176,22 +169,6 @@ export function ResourceCellView({
     ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
     : undefined;
 
-  const zoomMenuItems = zoomMenuLabels ? (
-    <>
-      {/* onSelect fires for click + keyboard (Enter/Space); disabled items are skipped by Radix. */}
-      <ZoomItemsShared
-        labels={zoomMenuLabels}
-        canZoomIn={canZoomIn}
-        canZoomOut={canZoomOut}
-        canReset={canReset}
-        onZoomIn={onZoomIn}
-        onZoomOut={onZoomOut}
-        onResetZoom={onResetZoom}
-        variant="context"
-      />
-    </>
-  ) : undefined;
-
   const contentStyle: CSSProperties | undefined =
     zoomFactor !== undefined && zoomFactor !== 1 ? { zoom: zoomFactor } : undefined;
 
@@ -247,7 +224,6 @@ export function ResourceCellView({
                     onZoomIn={onZoomIn}
                     onZoomOut={onZoomOut}
                     onResetZoom={onResetZoom}
-                    variant="dropdown"
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -274,14 +250,7 @@ export function ResourceCellView({
     </div>
   );
 
-  if (!zoomMenuItems) return gridcell;
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{gridcell}</ContextMenuTrigger>
-      <ContextMenuContent>{zoomMenuItems}</ContextMenuContent>
-    </ContextMenu>
-  );
+  return gridcell;
 }
 
 export default ResourceCellView;

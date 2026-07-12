@@ -537,41 +537,6 @@ export const LongLabelWithZoom: Story = {
 };
 
 /**
- * Right-click the cell to open the context menu and assert "Zoom In" is present. Documents the
- * right-click zoom path alongside the kebab path.
- */
-export const ZoomContextMenu: Story = {
-  render: () => (
-    <GridCellBox>
-      <ResourceCellView
-        state="ready"
-        label="WEB"
-        textDirection="ltr"
-        localizedStrings={localizedStrings}
-        editor={<SampleChapter />}
-        zoomFactor={1}
-        canZoomIn
-        canZoomOut
-        zoomMenuLabels={zoomMenuLabels}
-      />
-    </GridCellBox>
-  ),
-  play: async ({ canvas, userEvent, step }) => {
-    const user = userEvent.setup({ pointerEventsCheck: 0 });
-
-    await step('Right-click the gridcell to open the context menu', async () => {
-      const cell = canvas.getByRole('gridcell', { name: 'WEB' });
-      await user.pointer({ target: cell, keys: '[MouseRight]' });
-    });
-
-    await step('Assert the Zoom In context menu item appears', async () => {
-      const contextMenu = canvas.getByRole('menu');
-      await expect(within(contextMenu).getByRole('menuitem', { name: 'Zoom In' })).toBeVisible();
-    });
-  },
-};
-
-/**
  * PR-1 mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic in one row. Each cell
  * applies its own `dir` on the content area, independent of the UI locale.
  */

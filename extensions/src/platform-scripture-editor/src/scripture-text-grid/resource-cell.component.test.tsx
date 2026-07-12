@@ -6,11 +6,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { ResourceCell } from './resource-cell.component';
 
-const { mockUseProjectData, mockUseProjectSetting, setUsjSpy } = vi.hoisted(() => ({
-  mockUseProjectData: vi.fn(),
-  mockUseProjectSetting: vi.fn(),
-  setUsjSpy: vi.fn(),
-}));
+const { mockUseProjectData, mockUseProjectSetting, setUsjSpy, capturedEditorOptions } =
+  vi.hoisted(() => ({
+    mockUseProjectData: vi.fn(),
+    mockUseProjectSetting: vi.fn(),
+    setUsjSpy: vi.fn(),
+    /** Collects the `options` prop passed to each Editorial render. */
+    capturedEditorOptions: vi.fn(),
+  }));
 
 vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@papi/frontend/react', () => ({
@@ -28,7 +31,8 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 vi.mock('@eten-tech-foundation/platform-editor', () => {
   return {
-    Editorial: React.forwardRef((_p: unknown, ref: React.Ref<unknown>) => {
+    Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+      capturedEditorOptions(props.options);
       React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
       return <div data-testid="editorial" />;
     }),
@@ -229,5 +233,68 @@ describe('ResourceCell zoom', () => {
     const contentWrapper = document.querySelector('[dir="ltr"]');
     expect(contentWrapper).not.toBeNull();
     expect(contentWrapper instanceof HTMLElement && contentWrapper.style.zoom).toBe('1.4');
+  });
+
+  it('forwards zoom items into the editor options.contextMenu when zoom and zoomMenuLabels are provided', () => {
+    // The editor's built-in ContextMenuPlugin owns `contextmenu` events over the editor
+    // content, so a wrapping Radix ContextMenu cannot intercept right-clicks there.
+    // Instead, ResourceCell appends zoom actions to the editor's own context menu via
+    // EditorOptions.contextMenu so they appear alongside the editor's native items.
+    const adjustZoom = vi.fn();
+    const resetZoom = vi.fn();
+    const zoom = {
+      getZoom: () => 1, // at default — canReset should be false
+      setZoomForResource: vi.fn(),
+      adjustZoom,
+      resetZoom,
+      pruneToResourceIds: vi.fn(),
+    };
+    setUsjResult(chapter, false);
+    render(
+      <div role="grid">
+        <div role="row">
+          <ResourceCell
+            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
+            scrRef={scrRef}
+            setScrRef={() => {}}
+            viewMode="chapter"
+            zoom={zoom}
+            zoomMenuLabels={{
+              zoomIn: 'Zoom In',
+              zoomOut: 'Zoom Out',
+              reset: 'Reset Zoom',
+              options: 'Zoom options',
+            }}
+          />
+        </div>
+      </div>,
+    );
+
+    // Editorial should have been rendered; grab the options it was called with.
+    expect(capturedEditorOptions).toHaveBeenCalled();
+    const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
+    const contextMenu: { title: string; onSelect: () => void; isDisabled: boolean }[] =
+      lastOptions?.contextMenu ?? [];
+
+    // Three items: Zoom In, Zoom Out, Reset Zoom.
+    expect(contextMenu).toHaveLength(3);
+    expect(contextMenu[0].title).toBe('Zoom In');
+    expect(contextMenu[1].title).toBe('Zoom Out');
+    expect(contextMenu[2].title).toBe('Reset Zoom');
+
+    // At factor = 1 (default): both Zoom In and Zoom Out are enabled; Reset is disabled.
+    expect(contextMenu[0].isDisabled).toBe(false); // canZoomIn: 1 < MAX_ZOOM_FACTOR (3)
+    expect(contextMenu[1].isDisabled).toBe(false); // canZoomOut: 1 > MIN_ZOOM_FACTOR (0.5)
+    expect(contextMenu[2].isDisabled).toBe(true); // canReset: factor === DEFAULT (1) → false
+
+    // Invoking onSelect calls the zoom controller with the correct resource id.
+    contextMenu[0].onSelect(); // Zoom In
+    expect(adjustZoom).toHaveBeenCalledWith('r1', 1);
+
+    contextMenu[1].onSelect(); // Zoom Out
+    expect(adjustZoom).toHaveBeenCalledWith('r1', -1);
+
+    contextMenu[2].onSelect(); // Reset
+    expect(resetZoom).toHaveBeenCalledWith('r1');
   });
 });
