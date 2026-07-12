@@ -204,6 +204,36 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
   },
   {
+    id: 'scripture-text-grid-zoom-in',
+    purpose: 'Zoom in the focused (or last-interacted) resource in the Scripture Text Grid',
+    category: 'Scripture Text Grid',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⌘+', windows: 'Ctrl++', linux: 'Ctrl++' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-zoom-out',
+    purpose: 'Zoom out the focused (or last-interacted) resource in the Scripture Text Grid',
+    category: 'Scripture Text Grid',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⌘-', windows: 'Ctrl+-', linux: 'Ctrl+-' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-zoom-reset',
+    purpose: 'Reset zoom on the focused (or last-interacted) resource in the Scripture Text Grid',
+    category: 'Scripture Text Grid',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⌘0', windows: 'Ctrl+0', linux: 'Ctrl+0' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/use-resource-zoom-input.hook.ts',
+    ],
+  },
+  {
     id: 'enhanced-resources-toggle-footnotes',
     purpose: 'Toggle the footnotes panel',
     category: 'View',
