@@ -459,6 +459,13 @@ async function internalGetMetadata(
           delete (md as ProjectMetadataWithoutFactoryInfo & Partial<ProjectMetadata>)
             .pdpFactoryInfo;
 
+          // Aggregate under a case-insensitive key: project ids are case-insensitive (the
+          // contract and `areProjectIdsEqual` treat them so, and C# canonicalizes to uppercase),
+          // so two factories reporting the same project with different casing must merge into one
+          // entry rather than produce two un-merged ones. Only the key is normalized; the displayed
+          // `md.id` keeps the casing of whichever factory reported it first.
+          const projectIdKey = md.id.toUpperCase();
+
           // Type assert to add the factory info to the object
           // Note: `enrichedMd` is seeded from whichever factory reports this project id FIRST
           // (factories' responses are processed in `Promise.all` resolution order, which is
@@ -467,7 +474,7 @@ async function internalGetMetadata(
           // strip values another factory provided; when multiple factories provide the same
           // field, the first-resolved one wins.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          const enrichedMd = allProjectsMetadata.get(md.id) ?? (md as ProjectMetadata);
+          const enrichedMd = allProjectsMetadata.get(projectIdKey) ?? (md as ProjectMetadata);
           if (!enrichedMd.pdpFactoryInfo) enrichedMd.pdpFactoryInfo = {};
 
           if (pdpFactoryId in enrichedMd.pdpFactoryInfo) {
@@ -491,7 +498,7 @@ async function internalGetMetadata(
           };
           // If there is metadata already in the map, add the new `projectInterface`s and fill in
           // any display fields the earlier-resolved factory left unset
-          if (allProjectsMetadata.has(md.id)) {
+          if (allProjectsMetadata.has(projectIdKey)) {
             md.projectInterfaces.forEach((newProjectInterface) => {
               if (!enrichedMd.projectInterfaces.includes(newProjectInterface))
                 enrichedMd.projectInterfaces.push(newProjectInterface);
@@ -502,7 +509,7 @@ async function internalGetMetadata(
             enrichedMd.languageTag ??= md.languageTag;
             enrichedMd.isEditable ??= md.isEditable;
             enrichedMd.isPublished ??= md.isPublished;
-          } else allProjectsMetadata.set(md.id, enrichedMd);
+          } else allProjectsMetadata.set(projectIdKey, enrichedMd);
         });
       }
     }),

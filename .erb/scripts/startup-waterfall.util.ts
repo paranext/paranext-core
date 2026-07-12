@@ -1,7 +1,11 @@
 // Relative (not @shared/*) import: this CLI/test corpus lives outside the root tsconfig's
 // `include`, so path aliases don't resolve here under vitest. platform.data is import-free, so
 // pulling it in drags no logger side effects into the CLI.
-import { STARTUP_MARK_PREFIX } from '../../src/shared/data/platform.data';
+import {
+  STARTUP_MARK_MAIN_PROCESS_TAG,
+  STARTUP_MARK_PREFIX,
+  STARTUP_MARK_PROCESS_START,
+} from '../../src/shared/data/platform.data';
 
 export interface StartupMark {
   proc: string;
@@ -10,8 +14,7 @@ export interface StartupMark {
 }
 
 // Matches a startup mark anywhere in a log line: "STARTUP_MARK <proc> <name> <epochMs>".
-// The prefix comes from the shared constant the emitters use (platform.data is import-free, so
-// this CLI can import it without dragging in logger side effects).
+// The prefix comes from the shared constant the emitters use.
 // <name> may itself contain spaces (e.g. "activate-start platformScripture"), so <epochMs> is
 // anchored as the trailing run of digits and <name> is everything between proc and that.
 // TypeScript log lines that don't already start with a "[...]" prefix get a caller annotation
@@ -49,7 +52,7 @@ export function selectLatestRun(marks: StartupMark[]): {
   let runCount = 0;
   let lastBoundaryIndex = -1;
   marks.forEach((mark, i) => {
-    if (mark.proc === 'main' && mark.name === 'process-start') {
+    if (mark.proc === STARTUP_MARK_MAIN_PROCESS_TAG && mark.name === STARTUP_MARK_PROCESS_START) {
       runCount += 1;
       lastBoundaryIndex = i;
     }

@@ -5831,17 +5831,34 @@ declare module 'shared/models/project-metadata.model' {
      * project.
      */
     projectInterfaces: ProjectInterfaces[];
-    /** Short display name of the project, if available. */
+    /**
+     * Short display name of the project. Absent when the producing Project Data Provider Factory does
+     * not supply it; consumers should fall back to {@link id}.
+     */
     name?: string;
-    /** Full display name of the project, if available. */
+    /**
+     * Full display name of the project. Absent when not supplied; consumers should fall back to
+     * {@link name}, then {@link id}.
+     */
     fullName?: string;
-    /** Language of the project (raw setting value), if available. */
+    /** Language of the project (raw setting value). Absent when not supplied (no language to show). */
     language?: string;
-    /** BCP-47 language tag of the project, if available. */
+    /** BCP-47 language tag of the project. Absent when not supplied (no language to show). */
     languageTag?: string;
-    /** Whether the project is editable (false for read-only published resources), if available. */
+    /**
+     * Whether the project's primary content (e.g. Scripture text) is editable.
+     *
+     * **Absence is NOT the same as `false`.** An absent value means the registered default of
+     * `platform.isEditable`, which is `true` - i.e. a factory that omits this field means "editable".
+     * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
+     * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
+     * false`.
+     */
     isEditable?: boolean;
-    /** Whether the project is a published (read-only) resource, if available. */
+    /**
+     * Whether the project is a published (read-only) resource. An absent value means the registered
+     * default of `platform.isPublished`, which is `false` (not a published resource).
+     */
     isPublished?: boolean;
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
@@ -8408,6 +8425,21 @@ declare module 'shared/data/platform.data' {
    * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
    */
   export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+  /**
+   * Name of the mark each process emits first, right after start. The main process's copy is the
+   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+   * and `src/extension-host/extension-host.ts`.
+   */
+  export const STARTUP_MARK_PROCESS_START = 'process-start';
+  /**
+   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+   * can identify the run boundary without importing `global-this.model` (which pulls in React and
+   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+   * `src/shared/global-this.model.ts`.
+   */
+  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */

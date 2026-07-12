@@ -3,7 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { Plus } from 'lucide-react';
 import { CardTitle, Label } from 'platform-bible-react';
-import { isPlatformError } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Home,
@@ -66,15 +66,21 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
-      const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds,
-      });
-      const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
+      try {
+        const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+          includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+          excludePdpFactoryIds,
+        });
+        const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
 
-      if (promiseIsCurrent && isMounted.current) {
-        setIsLoadingLocalProjects(false);
-        setLocalProjectsInfo(projectInfo);
+        if (promiseIsCurrent && isMounted.current) {
+          setIsLoadingLocalProjects(false);
+          setLocalProjectsInfo(projectInfo);
+        }
+      } catch (e) {
+        // A metadata fetch rejection must still clear the loading flag, or New Tab spins forever.
+        logger.warn(`New Tab web view failed to load local projects: ${getErrorMessage(e)}`);
+        if (promiseIsCurrent && isMounted.current) setIsLoadingLocalProjects(false);
       }
     };
 

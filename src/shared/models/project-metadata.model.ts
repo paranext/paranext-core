@@ -16,17 +16,34 @@ export type ProjectMetadataWithoutFactoryInfo = {
    * project.
    */
   projectInterfaces: ProjectInterfaces[];
-  /** Short display name of the project, if available. */
+  /**
+   * Short display name of the project. Absent when the producing Project Data Provider Factory does
+   * not supply it; consumers should fall back to {@link id}.
+   */
   name?: string;
-  /** Full display name of the project, if available. */
+  /**
+   * Full display name of the project. Absent when not supplied; consumers should fall back to
+   * {@link name}, then {@link id}.
+   */
   fullName?: string;
-  /** Language of the project (raw setting value), if available. */
+  /** Language of the project (raw setting value). Absent when not supplied (no language to show). */
   language?: string;
-  /** BCP-47 language tag of the project, if available. */
+  /** BCP-47 language tag of the project. Absent when not supplied (no language to show). */
   languageTag?: string;
-  /** Whether the project is editable (false for read-only published resources), if available. */
+  /**
+   * Whether the project's primary content (e.g. Scripture text) is editable.
+   *
+   * **Absence is NOT the same as `false`.** An absent value means the registered default of
+   * `platform.isEditable`, which is `true` - i.e. a factory that omits this field means "editable".
+   * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
+   * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
+   * false`.
+   */
   isEditable?: boolean;
-  /** Whether the project is a published (read-only) resource, if available. */
+  /**
+   * Whether the project is a published (read-only) resource. An absent value means the registered
+   * default of `platform.isPublished`, which is `false` (not a published resource).
+   */
   isPublished?: boolean;
 };
 

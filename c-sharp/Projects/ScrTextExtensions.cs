@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
+using Paratext.Data.Languages;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -63,19 +64,46 @@ internal static class ScrTextExtensions
             : fallback;
 
     /// <summary>
-    /// The BCP 47 language tag for the project's writing system - same value as the
-    /// platform.languageTag getter (ParatextProjectDataProvider.cs ~1591-1594), which reads
-    /// <c>scrText.Language.LanguageId.Id</c>. Do NOT read <c>scrText.Language</c> here: forcing it
-    /// constructs <c>ScrLanguage</c>, whose constructor opens and XML-parses the project's LDML
-    /// file (zip-decompressed for resources), and whose failure path mutates and saves settings -
-    /// unacceptable I/O during read-only project enumeration. <c>ScrLanguage.LanguageId</c>
-    /// short-circuits to <c>Settings.LanguageID</c> anyway; the only behavior the
-    /// <c>scrText.Language</c> path adds is coercing a null/empty LanguageID to English
-    /// (ScrText.CreateLayoutEngine), replicated here so the value still matches the getter.
+    /// The BCP 47 language tag for the project's writing system - the value the platform.languageTag
+    /// getter (ParatextProjectDataProvider.cs ~1591-1594) reads via
+    /// <c>scrText.Language.LanguageId.Id</c>, computed here without the getter's side effects.
+    ///
+    /// Do NOT read <c>scrText.Language</c>: forcing it constructs <c>ScrLanguage</c>, whose
+    /// constructor opens and XML-parses the project's LDML file (zip-decompressed for resources),
+    /// unacceptable I/O during read-only enumeration.
+    ///
+    /// We also avoid the <c>Settings.LanguageID</c> getter, which is NOT side-effect-free: for
+    /// legacy/migrated projects whose stored <c>LanguageIsoCode</c> is absent/empty/":::" it
+    /// resolves the language <em>name</em> via <c>LanguageIdHelper.FromCommonLanguageName</c> (the
+    /// expensive one-time SIL <c>LanguageLookup</c> construction) AND persists the result back with
+    /// <c>SetSetting</c>, mutating settings mid-enumeration (a later unrelated Save would then write
+    /// it). Instead we read the raw <c>LanguageIsoCode</c> directly and reproduce the getter's
+    /// resolution WITHOUT the persist. For the common case (a present, non-":::" code) this is a
+    /// cheap string read; only legacy projects still incur the <c>FromCommonLanguageName</c> lookup
+    /// - accepted here to keep the value correct (matching the getter) rather than diverge for speed.
+    ///
+    /// Divergences from the getter's final value, both preferable during enumeration:
+    /// <list type="number">
+    ///   <item>No LDML is loaded, so an unloadable/corrupt LDML file does not trigger
+    ///     <c>ScrText.CreateLayoutEngine</c>'s catch, which would coerce a project with an otherwise
+    ///     valid LanguageID to English (and, if writable, save an English LDML). Enumeration reports
+    ///     the stored/resolved tag; the PDP's <c>platform.languageTag</c> would report "en".</item>
+    ///   <item>A null/empty resolved id is coerced to "en" here (matching
+    ///     <c>CreateLayoutEngine</c>'s null/empty-code coercion) without persisting the change.</item>
+    /// </list>
     /// </summary>
     private static string GetLanguageTag(ScrText scrText)
     {
-        var languageId = scrText.Settings.LanguageID;
+        string? isoCode = scrText.GetRawParatextSetting(ProjectSettingsNames.PT_LANGUAGE_ISO_CODE);
+        // Mirror ProjectSettings.LanguageID: a present, non-":::" code is used directly; otherwise
+        // resolve from the language name (without the getter's SetSetting persist).
+        LanguageId? languageId =
+            !string.IsNullOrEmpty(isoCode) && isoCode != ":::"
+                ? new LanguageId(isoCode)
+                : LanguageIdHelper.FromCommonLanguageName(
+                    scrText.GetRawParatextSetting(ProjectSettingsNames.PT_LANGUAGE, "")
+                );
+        // Match ScrText.CreateLayoutEngine's null/empty-code -> English coercion.
         return languageId == null || languageId.Code == "" ? "en" : languageId.Id;
     }
 

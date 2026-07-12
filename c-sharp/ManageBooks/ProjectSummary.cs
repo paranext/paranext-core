@@ -83,10 +83,12 @@ public record ProjectSummary(
             IsResource: scrText.IsResourceProject,
             // I2: surface fullName + versification on the list so the frontend drops its
             // per-project pdp.getSetting fan-out (the source of the slow initial load).
-            // GetRawParatextSetting keeps these cheap, exception-free, parity-faithful lookups
-            // (see its doc for the getSetting-parity reasoning); the fallbacks are the same
-            // contribution defaults the old getSetting path returned via
-            // ProjectSettingsService.GetDefault.
+            // GetRawParatextSetting keeps these cheap, exception-free, parity-faithful lookups (see
+            // its doc for the getSetting-parity reasoning). Only the Versification fallback "4"
+            // reproduces that setting's contribution default (see below). The FullName fallback is
+            // string.Empty, which does NOT reproduce platform.fullName's default - a localized
+            // "%project_full_name_missing%" placeholder resolved from live extension-host state,
+            // named by GetRawParatextSetting's doc as the non-reproducible case.
             FullName: scrText.GetRawParatextSetting(
                 ProjectSettingsNames.PT_FULL_NAME,
                 string.Empty

@@ -17,11 +17,14 @@ namespace Paranext.DataProvider.Projects;
 ///
 /// Canonical parity invariant (other docs point here): each populated value matches what the
 /// corresponding <c>platform.*</c> project setting getter in
-/// <c>ParatextProjectDataProvider.GetProjectSetting</c> returns today, with two deliberate, narrow
-/// divergences documented on <c>ScrTextExtensions</c>: enumeration must not load LDML files
-/// (LanguageTag reads Settings directly) nor throw per-field (a malformed Editable reports false).
-/// The fields default to <c>null</c>/<c>false</c> so existing construction call sites (which don't
-/// know about display data) are unaffected.
+/// <c>ParatextProjectDataProvider.GetProjectSetting</c> returns today, with narrow, deliberate
+/// divergences documented on <c>ScrTextExtensions</c>: enumeration never loads LDML files, so
+/// LanguageTag is derived from the stored language settings directly and side-effect-free (a
+/// project whose LDML is missing/corrupt keeps its stored tag instead of the getter's English
+/// fallback, and no settings are mutated); and enumeration never throws per-field (a malformed
+/// Editable reports false). The optional fields are omitted from the wire when unset (see each
+/// property) so existing construction call sites (which don't know about display data) are
+/// unaffected.
 /// </remarks>
 public class ProjectMetadata(
     string id,
@@ -30,8 +33,8 @@ public class ProjectMetadata(
     string? fullName = null,
     string? language = null,
     string? languageTag = null,
-    bool isEditable = false,
-    bool isPublished = false
+    bool? isEditable = null,
+    bool? isPublished = null
 )
 {
     /// <summary>
@@ -83,13 +86,25 @@ public class ProjectMetadata(
     /// <c>platform.isEditable</c> project setting: always <c>false</c> for resource projects,
     /// otherwise the project's <c>Editable</c> Paratext setting.
     /// </summary>
-    public bool IsEditable { get; } = isEditable;
+    /// <remarks>
+    /// Nullable and omitted from the wire when unset (like the display strings above): the TS
+    /// contract declares it optional (<c>isEditable?: boolean</c>) with "absent means the
+    /// registered default (true)" semantics, which is distinct from an explicit <c>false</c>. A
+    /// bare <c>new ProjectMetadata(id, interfaces)</c> therefore leaves it absent rather than
+    /// silently wire-encoding <c>false</c> (which TS would read as explicitly non-editable and hide
+    /// the project). See <c>ProjectMetadataWithoutFactoryInfo</c> in
+    /// <c>project-metadata.model.ts</c> for the per-field absence semantics.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsEditable { get; } = isEditable;
 
     /// <summary>
     /// Whether the project has been published as a read-only reference/resource. Same source as the
     /// <c>platform.isPublished</c> project setting (<c>scrText.IsResourceProject</c>).
     /// </summary>
-    public bool IsPublished { get; } = isPublished;
+    /// <remarks>Nullable and omitted from the wire when unset; see <see cref="IsEditable"/>.</remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? IsPublished { get; } = isPublished;
 
     public override string ToString()
     {

@@ -86,11 +86,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private const string CellOrderSettingName = ProjectDataType.CELL_ORDER;
     private const string CellOrderSchemaVersion = "1.0.0";
 
-    // One-shot guard so we time the first chapter served without spamming every navigation.
-    // Static (process-wide), not per-instance: each project's PDP would otherwise emit its own
-    // "first" mark, injecting a bogus startup mark whenever another project opens mid-session.
-    private static bool s_firstChapterMarked;
-
     #endregion
 
     #region Constructors
@@ -2575,11 +2570,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetChapterUsx(VerseRef verseRef)
     {
-        if (!s_firstChapterMarked)
-        {
-            s_firstChapterMarked = true;
-            Services.StartupTiming.Mark("first-get-chapter-usx");
-        }
+        // Time the first chapter served process-wide, without spamming every navigation. MarkOnce is
+        // process-wide and thread-safe, so a mid-session open of another project (or two concurrent
+        // first calls) can't inject a duplicate mark.
+        Services.StartupTiming.MarkOnce("first-get-chapter-usx");
         return GetFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, true)

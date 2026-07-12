@@ -21,6 +21,23 @@ export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
  */
 export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
 
+/**
+ * Name of the mark each process emits first, right after start. The main process's copy is the
+ * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+ * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+ * and `src/extension-host/extension-host.ts`.
+ */
+export const STARTUP_MARK_PROCESS_START = 'process-start';
+
+/**
+ * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+ * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+ * can identify the run boundary without importing `global-this.model` (which pulls in React and
+ * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+ * `src/shared/global-this.model.ts`.
+ */
+export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
+
 /** ID of the default theme family for use in the application */
 export const DEFAULT_THEME_FAMILY = '';
 /** Type of the default theme for use in the application */

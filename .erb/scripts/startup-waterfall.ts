@@ -24,11 +24,43 @@ function defaultLogPath(): string {
   }
 }
 
+/**
+ * Resolve the `--log` path from argv, supporting both `--log <path>` and the common `--log=<path>`
+ * single-token form. Returns an error string (rather than silently falling back to the default log
+ * and analyzing the wrong run) for a bare `--log` with no value or any other unrecognized `--log*`
+ * token. Returns `undefined` path with no error when no `--log` arg is present (caller uses the
+ * default).
+ */
+function parseLogPathArg(argv: string[]): { logPath?: string; error?: string } {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--log') {
+      const next = args[i + 1];
+      if (!next) return { error: '--log requires a path (use --log <path> or --log=<path>)' };
+      return { logPath: next };
+    }
+    if (arg.startsWith('--log=')) {
+      const value = arg.slice('--log='.length);
+      if (!value) return { error: '--log= requires a path (use --log <path> or --log=<path>)' };
+      return { logPath: value };
+    }
+    if (arg.startsWith('--log')) {
+      return { error: `Unrecognized argument "${arg}" (use --log <path> or --log=<path>)` };
+    }
+  }
+  return {};
+}
+
 function main(): void {
-  const logArgIndex = process.argv.indexOf('--log');
-  const logPath = logArgIndex >= 0 ? process.argv[logArgIndex + 1] : defaultLogPath();
+  const { logPath: logPathArg, error: argError } = parseLogPathArg(process.argv);
+  if (argError) {
+    console.error(argError);
+    process.exit(1);
+  }
+  const logPath = logPathArg ?? defaultLogPath();
   if (!logPath) {
-    console.error('--log requires a path');
+    console.error('Could not determine a log path. Pass --log <path>.');
     process.exit(1);
   }
   if (!fs.existsSync(logPath)) {

@@ -67,7 +67,12 @@ namespace TestParanextDataProvider.Projects
                     {
                         errors[index] = ex;
                     }
-                });
+                })
+                {
+                    // Background so a worker left blocked on the barrier on a failure path can't
+                    // outlive the test run.
+                    IsBackground = true,
+                };
             }
 
             foreach (var thread in threads)
@@ -122,15 +127,38 @@ namespace TestParanextDataProvider.Projects
                 var index = i;
                 threads[index] = new Thread(() =>
                 {
-                    allThreadsReady.Signal();
-                    proceed.Wait();
-                    results[index] = factory.GetProjectDataProviderID(projectId);
-                });
+                    try
+                    {
+                        allThreadsReady.Signal();
+                        // Bounded so a worker abandoned on a failure path doesn't block forever.
+                        proceed.Wait(TimeSpan.FromSeconds(30));
+                        results[index] = factory.GetProjectDataProviderID(projectId);
+                    }
+                    catch
+                    {
+                        // On a failure path the test may dispose these sync primitives while this
+                        // leaked worker is still running; swallow the resulting
+                        // ObjectDisposedException so it can't crash the test host and mask the real
+                        // Join-timeout assertion. A genuine happy-path failure still surfaces via
+                        // the null results[index] asserted below.
+                    }
+                })
+                {
+                    IsBackground = true,
+                };
                 threads[index].Start();
             }
 
-            // Release every caller together to maximize the race window onto the shared Lazy.
-            allThreadsReady.Wait(TimeSpan.FromSeconds(5));
+            // Release every caller together to maximize the race window onto the shared Lazy. Assert
+            // the barrier was actually reached: on a starved CI box that scheduled workers late,
+            // proceed.Set() must not fire before all callers are parked on it, or the test would
+            // pass with reduced/zero contention on the shared Lazy - the exact race it exists to
+            // prove. 10s matches the sibling test's timeout.
+            Assert.That(
+                allThreadsReady.Wait(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "All caller threads must reach the start line before they are released"
+            );
             proceed.Set();
 
             foreach (var thread in threads)

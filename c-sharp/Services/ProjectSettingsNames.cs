@@ -17,6 +17,15 @@ public sealed class ProjectSettingsNames
     public const string PB_LANGUAGE_TAG = "platform.languageTag";
     public const string PT_LANGUAGE_TAG = "LanguageTag";
 
+    /// <summary>
+    /// Paratext-only: the raw colon-delimited language id storage ("code:script:region:variant",
+    /// e.g. "en:::"). Not mapped to a <c>platform.*</c> setting. Read directly during project
+    /// enumeration to derive <c>platform.languageTag</c> without going through the
+    /// <c>ProjectSettings.LanguageID</c> getter, which resolves-and-persists for legacy projects
+    /// (see <c>ScrTextExtensions.GetLanguageTag</c>).
+    /// </summary>
+    public const string PT_LANGUAGE_ISO_CODE = "LanguageIsoCode";
+
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 

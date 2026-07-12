@@ -234,15 +234,21 @@ globalThis.webViewComponent = function HomeWebView() {
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
-      const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds,
-      });
-      const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
+      try {
+        const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+          includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+          excludePdpFactoryIds,
+        });
+        const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
 
-      if (promiseIsCurrent && isMounted.current) {
-        setIsLoadingLocalProjects(false);
-        setLocalProjectsInfo(projectInfo);
+        if (promiseIsCurrent && isMounted.current) {
+          setIsLoadingLocalProjects(false);
+          setLocalProjectsInfo(projectInfo);
+        }
+      } catch (e) {
+        // A metadata fetch rejection must still clear the loading flag, or Home spins forever.
+        logger.warn(`Home web view failed to load local projects: ${getErrorMessage(e)}`);
+        if (promiseIsCurrent && isMounted.current) setIsLoadingLocalProjects(false);
       }
     };
 

@@ -5,6 +5,7 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
+import { type ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -15,7 +16,29 @@ import { logger } from '@shared/services/logger.service';
 import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
+/**
+ * `projectInterface` a project must support to belong in the picker: it can be opened in the
+ * scripture editor. This filter is applied service-side so the service's retry-until-non-empty
+ * startup grace period keeps retrying until a factory that provides this interface has registered
+ * (a bare unfiltered fetch settles as soon as any project - possibly a non-scripture one - appears,
+ * before the layering PDPF that provides this interface registers). Published resources also carry
+ * this interface via the Scripture Extender layering PDPF, so the current project and recent
+ * projects (both always scripture or resource projects) resolve from the same filtered fetch.
+ */
+const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
+const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
+  includeProjectInterfaces: [PICKER_PROJECT_INTERFACE],
+};
+
 const EMPTY_RECENT_IDS: string[] = [];
+
+/**
+ * Canonical comparison key for a project id. Project ids are case-insensitive (C# canonicalizes to
+ * uppercase hex); normalize to a single form before comparing ids or using them as Map/Set keys so
+ * a case mismatch never drops a project. A pairwise comparator can't key Maps/Sets, so a normalizer
+ * is needed regardless.
+ */
+const toProjectIdKey = (id: string): string => id.toUpperCase();
 
 /**
  * Resolves a project's language for display: the localized display name of the BCP-47 language tag
@@ -68,22 +91,31 @@ export type ProjectPickerData = {
 };
 
 export function useProjectPickerData(): ProjectPickerData {
-  // Incrementing this triggers a refresh of usePromise calls
-  const [refreshCounter, setRefreshCounter] = useState(0);
+  // Two independent refresh generations, so cheap "which project is active?" updates don't drag in
+  // the expensive project-metadata fan-out:
+  // - metadataRefreshCounter invalidates the shared metadata fetch. Bumped only by events that can
+  //   change the SET of available projects (extensions reloading), plus a targeted bump when the
+  //   active editor references a project our cached snapshot doesn't yet include (see below).
+  // - webViewRefreshCounter re-derives the current project from the open web views. Bumped by web
+  //   view open/update/close - frequent during startup tab restoration - which re-runs only the
+  //   cheap getAllOpenWebViewDefinitions query and reuses the cached metadata.
+  const [metadataRefreshCounter, setMetadataRefreshCounter] = useState(0);
+  const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
   const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
-  const refresh = useCallback(() => setRefreshCounter((n) => n + 1), []);
+  const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
+  const refreshActiveEditor = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
 
   const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
-  useEvent(onDidOpenWebView, refresh);
+  useEvent(onDidOpenWebView, refreshActiveEditor);
   const onDidUpdateWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW), []);
-  useEvent(onDidUpdateWebView, refresh);
+  useEvent(onDidUpdateWebView, refreshActiveEditor);
   const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
-  useEvent(onDidCloseWebView, refresh);
+  useEvent(onDidCloseWebView, refreshActiveEditor);
   const onDidReloadExtensions = useMemo(
     () => getNetworkEvent('platform.onDidReloadExtensions'),
     [],
   );
-  useEvent(onDidReloadExtensions, refresh);
+  useEvent(onDidReloadExtensions, refreshMetadata);
 
   // Recent project IDs from the service — reactive, updates when user opens projects
   const [rawRecentIds, , isRecentIdsLoading] = useData(
@@ -95,38 +127,70 @@ export function useProjectPickerData(): ProjectPickerData {
     [rawRecentIds],
   );
 
-  // All three data sections below derive from ONE unfiltered metadata fetch per refresh. The
-  // service applies id/interface filters client-side after contacting every PDP factory anyway,
-  // so per-section filtered calls would repeat the same full fan-out three times per refresh.
-  // The promise is created lazily inside whichever usePromise callback runs first and cached by
-  // refresh generation, so the others await the same in-flight fetch. Each section still handles
-  // its own errors, preserving the per-section failure behavior below.
+  // All three data sections below derive from ONE service call per metadata refresh generation. The
+  // call is filtered to the picker's `projectInterface` (see PICKER_METADATA_FILTER) so the
+  // service's startup grace period retries until a matching factory registers. The promise is
+  // created lazily inside whichever usePromise callback runs first and cached by generation, so the
+  // others await the same in-flight fetch. A rejected fetch is dropped from the cache so a later
+  // section (or refresh) issues a fresh call instead of awaiting the poisoned promise; each section
+  // still catches its own errors, preserving the per-section failure behavior below.
   const metadataFetchRef = useRef<
     { counter: number; promise: Promise<ProjectMetadata[]> } | undefined
   >(undefined);
   const getAllMetadata = useCallback(() => {
-    if (metadataFetchRef.current?.counter !== refreshCounter) {
-      metadataFetchRef.current = {
-        counter: refreshCounter,
-        promise: projectLookupService.getMetadataForAllProjects(),
-      };
-    }
-    return metadataFetchRef.current.promise;
-  }, [refreshCounter]);
+    const cached = metadataFetchRef.current;
+    if (cached?.counter === metadataRefreshCounter) return cached.promise;
+    const entry = {
+      counter: metadataRefreshCounter,
+      promise: projectLookupService.getMetadataForAllProjects(PICKER_METADATA_FILTER),
+    };
+    // Invalidate this generation if its fetch rejects, but only if it's still the current entry so
+    // a newer generation isn't clobbered.
+    entry.promise.catch(() => {
+      if (metadataFetchRef.current === entry) metadataFetchRef.current = undefined;
+    });
+    metadataFetchRef.current = entry;
+    return entry.promise;
+  }, [metadataRefreshCounter]);
+
+  // The active editor's project id from the last miss-triggered metadata refresh. Guards against
+  // refreshing metadata forever when the id is genuinely absent (vs. merely not-yet-fetched).
+  const missRefreshedProjectIdRef = useRef<string | undefined>(undefined);
 
   const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
+      // Referenced so this callback re-runs on web view events (open/update/close) to pick up the
+      // active editor, without invalidating the metadata cache.
+      // eslint-disable-next-line no-unused-expressions
+      webViewRefreshCounter;
       const allDefs = await webViews.getAllOpenWebViewDefinitions();
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       const currentProjectId = editorDef?.projectId;
-      if (!currentProjectId) return undefined;
+      if (!currentProjectId) {
+        setCurrentProjectError(undefined);
+        return undefined;
+      }
       try {
         const metadata = await getAllMetadata();
-        // Project ids compare case-insensitively (C# canonicalizes to uppercase)
-        const m = metadata.find((md) => md.id.toUpperCase() === currentProjectId.toUpperCase());
-        if (!m) throw new Error(`No project metadata found for ${currentProjectId}`);
-        setCurrentProjectError(undefined);
-        return metadataToProjectItem(m);
+        const key = toProjectIdKey(currentProjectId);
+        const m = metadata.find((md) => toProjectIdKey(md.id) === key);
+        if (m) {
+          missRefreshedProjectIdRef.current = undefined;
+          setCurrentProjectError(undefined);
+          return metadataToProjectItem(m);
+        }
+        if (missRefreshedProjectIdRef.current !== key) {
+          // The active editor references a project our cached metadata doesn't include - usually one
+          // registered after the last fetch (web view events don't invalidate the metadata cache on
+          // their own). Refresh metadata once for this id; the re-run resolves it. Stay neutral
+          // meanwhile rather than flashing the error card.
+          missRefreshedProjectIdRef.current = key;
+          setCurrentProjectError(undefined);
+          refreshMetadata();
+          return undefined;
+        }
+        // Still absent after a targeted refresh: treat as a genuine lookup failure.
+        throw new Error(`No project metadata found for ${currentProjectId}`);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
@@ -138,7 +202,7 @@ export function useProjectPickerData(): ProjectPickerData {
           shortName: '???',
         };
       }
-    }, [getAllMetadata]),
+    }, [getAllMetadata, refreshMetadata, webViewRefreshCounter]),
     undefined,
   );
 
@@ -147,10 +211,8 @@ export function useProjectPickerData(): ProjectPickerData {
       if (safeRecentIds.length === 0) return [];
       try {
         const metadata = await getAllMetadata();
-        // Project ids compare case-insensitively (C# canonicalizes to uppercase), so normalize
-        // both the map keys and the lookup key to avoid dropping recent ids on case mismatch.
         const metadataById = new Map<string, ProjectMetadata>(
-          metadata.map((m) => [m.id.toUpperCase(), m]),
+          metadata.map((m) => [toProjectIdKey(m.id), m]),
         );
         // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
         // and non-editable projects, matching the previous per-id fetch-and-skip behavior.
@@ -158,7 +220,7 @@ export function useProjectPickerData(): ProjectPickerData {
         // editable to match the registered default (true) that `getSetting('platform.isEditable')`
         // would have resolved.
         return safeRecentIds
-          .map((id: string) => metadataById.get(id.toUpperCase()))
+          .map((id: string) => metadataById.get(toProjectIdKey(id)))
           .filter(
             (m: ProjectMetadata | undefined): m is ProjectMetadata => !!m && m.isEditable !== false,
           )
@@ -175,30 +237,32 @@ export function useProjectPickerData(): ProjectPickerData {
 
   const [allProjectsWithRecent, isAllProjectsLoading] = usePromise<ProjectItem[]>(
     useCallback(async () => {
-      const metadata = await getAllMetadata();
-      return (
-        metadata
-          // Only projects that can be opened in the scripture editor belong in the picker -
-          // previously expressed as the service-side `includeProjectInterfaces` filter.
-          .filter((m) => m.projectInterfaces.includes('platformScripture.USJ_Chapter'))
-          // Treat a missing `isEditable` as editable - the registered default is true (see the
-          // recents filter above for the full reasoning).
-          .filter((m) => m.isEditable !== false)
-          .map(metadataToProjectItem)
-      );
+      try {
+        const metadata = await getAllMetadata();
+        return (
+          metadata
+            // The service already filtered to PICKER_PROJECT_INTERFACE, so only the editability
+            // filter is left. Treat a missing `isEditable` as editable - the registered default is
+            // true (see the recents filter above for the full reasoning).
+            .filter((m) => m.isEditable !== false)
+            .map(metadataToProjectItem)
+        );
+      } catch (e) {
+        logger.warn(`ProjectPicker: could not fetch project metadata: ${getErrorMessage(e)}`);
+        return [];
+      }
     }, [getAllMetadata]),
     [],
   );
 
-  // Uppercased like the recents metadata lookup above - project ids compare case-insensitively
   const recentIdSet = useMemo(
-    () => new Set(safeRecentIds.map((id: string) => id.toUpperCase())),
+    () => new Set(safeRecentIds.map((id: string) => toProjectIdKey(id))),
     [safeRecentIds],
   );
   const allProjects = useMemo(
     () =>
       allProjectsWithRecent
-        .filter((p) => !recentIdSet.has(p.id.toUpperCase()))
+        .filter((p) => !recentIdSet.has(toProjectIdKey(p.id)))
         .sort((a, b) => a.fullName.localeCompare(b.fullName)),
     [allProjectsWithRecent, recentIdSet],
   );

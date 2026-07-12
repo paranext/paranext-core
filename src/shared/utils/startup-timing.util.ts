@@ -15,11 +15,35 @@ export { STARTUP_MARK_PREFIX };
  * production code.
  *
  * @param name Kebab-case token naming the moment (e.g. `'window-created'`). May contain spaces (the
- *   waterfall parser treats everything between the process tag and the trailing epoch as the name)
- *   but must not contain line terminators, which would split the log line and silently lose the
- *   mark - sanitize dynamic values at the call site (see `activateExtensions`).
+ *   waterfall parser treats everything between the process tag and the trailing epoch as the name).
+ *   Line terminators are stripped here (see below), so dynamic values are safe to pass without
+ *   pre-sanitizing.
  */
 export function markStartup(name: string): void {
   if (!globalThis.startupMarks) return;
-  logger.info(`${STARTUP_MARK_PREFIX} ${globalThis.processType} ${name} ${Date.now()}`);
+  // Strip line terminators from the name: the log hook splits newline-containing messages across
+  // physical lines and the waterfall parser matches per line, so a newline would silently lose the
+  // mark (or, if the fragment ends in digits, corrupt the waterfall's zero point). Enforce the
+  // invariant here - the one place that owns the mark format - rather than as a per-call-site
+  // burden. Names legitimately contain spaces, so only line terminators are replaced.
+  const safeName = name.replace(/[\r\n\u2028\u2029]+/g, '-');
+  logger.info(`${STARTUP_MARK_PREFIX} ${globalThis.processType} ${safeName} ${Date.now()}`);
+}
+
+/** Names already emitted via {@link markStartupOnce} this process. TS processes are single-threaded. */
+const emittedOnceMarkNames = new Set<string>();
+
+/**
+ * Like {@link markStartup}, but emits the named mark at most once per process. Use for "first time X
+ * happens" marks reached from code that can run many times (e.g. the first web view rendered, the
+ * first chapter served) so re-runs don't inject duplicate or dangling marks into the waterfall.
+ * Replaces hand-rolled per-site `boolean` guards.
+ *
+ * @param name See {@link markStartup}.
+ */
+export function markStartupOnce(name: string): void {
+  if (!globalThis.startupMarks) return;
+  if (emittedOnceMarkNames.has(name)) return;
+  emittedOnceMarkNames.add(name);
+  markStartup(name);
 }

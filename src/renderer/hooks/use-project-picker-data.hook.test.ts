@@ -71,8 +71,8 @@ type MetadataFixture = {
   projectInterfaces?: string[];
 };
 
-// Fixtures provide the scripture-editor projectInterface by default because the hook filters
-// allProjects by it locally (the service is called unfiltered, once per refresh).
+// Fixtures provide the scripture-editor projectInterface by default because that is what the
+// (service-side-filtered) metadata fetch returns; the hook derives all three sections from it.
 function metadata(fixture: MetadataFixture) {
   return {
     projectInterfaces: ['platformScripture.USJ_Chapter'],
@@ -82,13 +82,13 @@ function metadata(fixture: MetadataFixture) {
 }
 
 /**
- * Builds a `getMetadataForAllProjects` mock over a fixed project list. The hook fetches the full
- * unfiltered list once per refresh and derives currentProject/recents/allProjects locally, so the
- * mock just returns everything.
+ * Maps fixtures to the metadata list `getMetadataForAllProjects` resolves. The hook fetches the
+ * list once per refresh (filtered service-side to the picker's projectInterface) and derives
+ * currentProject/recents/allProjects locally, so tests resolve the mapped list directly via
+ * `mockResolvedValue` - the same idiom `beforeEach` uses for this mock.
  */
-function metadataProvider(items: MetadataFixture[]) {
-  const all = items.map(metadata);
-  return vi.fn(async () => all);
+function metadataList(items: MetadataFixture[]) {
+  return items.map(metadata);
 }
 
 async function importMocks() {
@@ -178,8 +178,8 @@ describe('useProjectPickerData', () => {
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
     ] as never);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([{ id: 'proj-abc', fullName: 'Genesis Project', name: 'Genesis' }]) as never,
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-abc', fullName: 'Genesis Project', name: 'Genesis' }]) as never,
     );
 
     const { result } = renderHook(() => useProjectPickerData());
@@ -192,8 +192,8 @@ describe('useProjectPickerData', () => {
 
   it('returns allProjects from projectLookupService metadata, without opening any project data provider', async () => {
     const { projectLookupService } = await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         { id: 'p1', fullName: 'Full p1', name: 'Short p1', language: 'English', isEditable: true },
         { id: 'p2', fullName: 'Full p2', name: 'Short p2', language: 'English', isEditable: true },
       ]) as never,
@@ -219,8 +219,8 @@ describe('useProjectPickerData', () => {
 
   it('falls back to the project id for fullName/shortName when metadata name/fullName are missing', async () => {
     const { projectLookupService } = await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([{ id: 'proj-no-names', isEditable: true }]) as never,
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-no-names', isEditable: true }]) as never,
     );
 
     const { result } = renderHook(() => useProjectPickerData());
@@ -239,8 +239,8 @@ describe('useProjectPickerData', () => {
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1_R2, vi.fn(), false]),
     }));
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
         { id: 'proj-r2', fullName: 'Full proj-r2', name: 'Short proj-r2', isEditable: true },
       ]) as never,
@@ -265,8 +265,8 @@ describe('useProjectPickerData', () => {
 
   it('excludes non-editable projects from allProjects', async () => {
     const { projectLookupService } = await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         { id: 'editable', fullName: 'Full editable', name: 'Short editable', isEditable: true },
         { id: 'readonly', fullName: 'Full readonly', name: 'Short readonly', isEditable: false },
       ]) as never,
@@ -288,8 +288,8 @@ describe('useProjectPickerData', () => {
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-r1' },
     ] as never);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
       ]) as never,
     );
@@ -306,18 +306,15 @@ describe('useProjectPickerData', () => {
     expect(result.current.recentProjects).toHaveLength(1);
   });
 
-  it('excludes projects without the scripture editor projectInterface from allProjects', async () => {
+  it('requests only scripture-editor projects from the service (interface filter is service-side)', async () => {
+    // The hook delegates the projectInterface filter to the service so the service's
+    // retry-until-non-empty startup grace period keeps retrying until a factory providing that
+    // interface registers. It must therefore pass the filter on every metadata fetch and render
+    // whatever the (already-filtered) service returns without re-filtering by interface locally.
     const { projectLookupService } = await importMocks();
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         { id: 'usj', fullName: 'Full usj', name: 'Short usj', isEditable: true },
-        {
-          id: 'other',
-          fullName: 'Full other',
-          name: 'Short other',
-          isEditable: true,
-          projectInterfaces: ['platformNotes.notes'],
-        },
       ]) as never,
     );
 
@@ -326,6 +323,9 @@ describe('useProjectPickerData', () => {
     await settle(result);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.allProjects.map((p) => p.id)).toEqual(['usj']);
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledWith({
+      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+    });
   });
 
   it('treats projects with missing isEditable as editable, matching the registered default', async () => {
@@ -333,8 +333,8 @@ describe('useProjectPickerData', () => {
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1, vi.fn(), false]),
     }));
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         // isEditable omitted on both: the registered default for platform.isEditable is true, so
         // a factory that leaves the optional metadata field unset must not have its projects
         // silently dropped from either list.
@@ -357,8 +357,8 @@ describe('useProjectPickerData', () => {
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1, vi.fn(), false]),
     }));
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
         { id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1', isEditable: true },
         {
           id: 'proj-other',
@@ -394,8 +394,8 @@ describe('useProjectPickerData', () => {
       .mockResolvedValue([
         { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
       ] as never);
-    vi.mocked(projectLookupService.getMetadataForAllProjects).mockImplementation(
-      metadataProvider([{ id: 'proj-xyz', fullName: 'Updated Project', name: 'Updated' }]) as never,
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-xyz', fullName: 'Updated Project', name: 'Updated' }]) as never,
     );
 
     const { result } = renderHook(() => useProjectPickerData());
@@ -408,6 +408,66 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.currentProject?.fullName).toBe('Updated Project');
+  });
+
+  it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {
+    // Restoring N tabs at startup fires a burst of web view events; each must re-derive only the
+    // active editor from the cached metadata, not launch a fresh full PDPF fan-out.
+    const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
+    let webViewCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-r1' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-r1', fullName: 'Full proj-r1', name: 'Short proj-r1' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    expect(result.current.currentProject?.id).toBe('proj-r1');
+
+    expect(webViewCallback).toBeDefined();
+    act(() => webViewCallback!());
+    await settle(result);
+
+    // The web view event re-ran currentProject but reused the cached metadata: still one fetch.
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+    expect(result.current.currentProject?.id).toBe('proj-r1');
+  });
+
+  it('re-fetches metadata when onDidReloadExtensions fires (project set may have changed)', async () => {
+    const { getNetworkEvent, projectLookupService } = await importMocks();
+    let reloadCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === 'platform.onDidReloadExtensions') reloadCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+
+    expect(reloadCallback).toBeDefined();
+    act(() => reloadCallback!());
+    await settle(result);
+
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
   });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */

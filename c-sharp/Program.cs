@@ -119,7 +119,8 @@ public static class Program
             // into the observed task, rather than escaping unobserved. Log faults to stderr so
             // they surface at error level in the main process log - a fault here means these
             // features are missing for the whole session.
-            _ = Task.Run(
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.Run(
                     () =>
                         Task.WhenAll(
                             inventoryDataProvider.RegisterDataProviderAsync(),
@@ -128,16 +129,9 @@ public static class Program
                             manageBooksService.RegisterNetworkObjectAsync(),
                             enhancedResourceFactory.InitializeAsync()
                         )
-                )
-                .ContinueWith(
-                    t =>
-                        Console.Error.WriteLine(
-                            $"Background service registration failed: {t.Exception}"
-                        ),
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted,
-                    TaskScheduler.Default
-                );
+                ),
+                "Background service registration"
+            );
 
             StartupTiming.Mark("init-barrier-start");
             // Critical path: everything the renderer needs to list projects and open an editor.

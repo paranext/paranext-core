@@ -1387,17 +1387,22 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
 
   // Import the extensions and run their activate() functions
   const extensionsActive: ActiveExtension[] = [];
-  // Only the first activation pass is part of startup; see startupActivationMarksEmitted
-  const shouldEmitStartupMarks = !startupActivationMarksEmitted;
+  // Only the first activation pass is part of startup (startupActivationMarksEmitted), and only
+  // when marks are enabled for this launch. Gating on globalThis.startupMarks too keeps the
+  // per-extension mark-token building and no-op markStartup calls off the production default path.
+  const shouldEmitStartupMarks = !startupActivationMarksEmitted && globalThis.startupMarks;
   startupActivationMarksEmitted = true;
   // This is a case where we want to run through the array in order sequentially
   // eslint-disable-next-line no-restricted-syntax
   for (const extensionWithCheck of extensionsWithCheck) {
     // The extension name is embedded in the mark token; collapse whitespace runs to '-' since
     // manifest `name` is a free-form string (core extensions are camelCase/space-free, but
-    // third-party extensions are not guaranteed to be) and a line terminator in a mark would
-    // split the log line, silently losing the mark.
-    const extensionMarkName = extensionWithCheck.extension.name.replace(/\s+/g, '-');
+    // third-party extensions are not guaranteed to be) so the token stays a single readable word.
+    // (markStartup strips line terminators itself, so this is now purely cosmetic.) Built only when
+    // a mark will actually be emitted.
+    const extensionMarkName = shouldEmitStartupMarks
+      ? extensionWithCheck.extension.name.replace(/\s+/g, '-')
+      : '';
     try {
       if (shouldEmitStartupMarks) markStartup(`activate-start ${extensionMarkName}`);
       // Extensions must be activated in dependency order, so sequential awaiting is intentional.
