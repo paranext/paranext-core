@@ -42,6 +42,13 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
+import {
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+} from './scripture-text-grid/resource-cell-view.component';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -58,6 +65,10 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -85,8 +96,20 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
+
+  const zoom = useResourceZoom(useWebViewState);
+  const zoomMenuLabels = useMemo(
+    () => ({
+      zoomIn: localizedStrings[ZOOM_IN_KEY],
+      zoomOut: localizedStrings[ZOOM_OUT_KEY],
+      reset: localizedStrings[RESET_ZOOM_KEY],
+      options: localizedStrings[ZOOM_OPTIONS_KEY],
+    }),
+    [localizedStrings],
+  );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
   // 5th tuple member is the project driving the active Scripture reference (the editor's project):
@@ -339,6 +362,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           scrRef={scrRef}
           setScrRef={setScrRef}
           viewMode={viewMode}
+          zoom={zoom}
+          zoomMenuLabels={zoomMenuLabels}
           chapterContext={chapterContext}
           onChapterContextChange={setChapterContext}
           onChapterContextClose={handleCloseChapterContext}
