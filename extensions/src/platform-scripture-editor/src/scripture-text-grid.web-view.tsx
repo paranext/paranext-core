@@ -74,14 +74,14 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
- * Options panel (A5), and the verse-cell grid body (A4).
+ * Options panel (A5), and the resource body (A4 verse mode / B4 chapter mode).
  *
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
- * through the per-user text-connection PDP setters. Below the header, the grid body renders one
+ * through the per-user text-connection PDP setters. Below the header, the body renders one
  * `ResourceCell` per shown resource — the resources come from A3's `getScriptureTextGridContents`
- * selector over the Text Collection sources assembled by `useTextCollectionSources`, and the row's
- * verse/chapter layout follows the View Options `viewMode` toggle.
+ * selector over the Text Collection sources assembled by `useTextCollectionSources`. The `viewMode`
+ * toggle selects the layout: a horizontal verse list, or a vertical stack of full-chapter regions.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
