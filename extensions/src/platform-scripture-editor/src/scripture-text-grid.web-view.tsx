@@ -27,6 +27,7 @@ import {
   getScriptureTextGridContents,
   getViewOptionsTexts,
 } from './scripture-text-grid-contents.utils';
+import { resolveDblLongName } from './view-options-long-name.utils';
 import {
   persistUserAddition,
   persistUserDisplay,
@@ -131,16 +132,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [chapterContext, handleCloseChapterContext]);
 
-  const { top, bottom } = useMemo(
-    () => (sources ? getViewOptionsTexts(sources) : { top: [], bottom: [] }),
-    [sources],
-  );
-
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
-  // installed project id the cell fetches chapter text with; project references need no lookup.
+  // installed project id the cell fetches chapter text with; project references need no lookup. It
+  // also supplies the DBL `fullName` shown as the long name in the View Options list.
   const [cachedResources, isLoadingCachedResources] = usePromise(
     useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
+  );
+
+  const { top, bottom } = useMemo(
+    () =>
+      sources
+        ? getViewOptionsTexts(sources, (reference) =>
+            resolveDblLongName(reference, cachedResources ?? []),
+          )
+        : { top: [], bottom: [] },
+    [sources, cachedResources],
   );
 
   // The grid body's cells: the `getScriptureTextGridContents` selector over the Text Collection
