@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { expect, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import {
   RESET_ZOOM_KEY,
@@ -340,6 +341,236 @@ export const AtMinZoom: Story = {
       />
     </GridCellBox>
   ),
+};
+
+// ---------------------------------------------------------------------------
+// Zoom interaction stories — play functions exercise the kebab dropdown and
+// the right-click context menu so reviewers can verify the affordance + ARIA
+// state without running the full app.
+//
+// Radix DropdownMenu and ContextMenu rely on PointerEvent sequences that a
+// plain `userEvent.click()` without setup does not synthesise. Using
+// `userEvent.setup({ pointerEventsCheck: 0 })` (the same pattern as the
+// unit tests) keeps things reliable in both jsdom and Storybook's browser
+// test-runner.
+// ---------------------------------------------------------------------------
+
+/**
+ * Opens the kebab dropdown and asserts all three menu items are visible. Lets reviewers confirm
+ * the affordance appears on hover and the menu renders with the correct labels.
+ */
+export const ZoomKebabOpen: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Hover the cell to reveal the kebab', async () => {
+      const cell = canvas.getByRole('gridcell', { name: 'WEB' });
+      await userEvent.hover(cell);
+    });
+
+    await step('Click the kebab to open the zoom menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert all three menu items are visible', async () => {
+      // Radix renders the menu portal at the document root; use `within(document.body)`.
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Zoom In' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Reset Zoom' })).toBeVisible();
+    });
+  },
+};
+
+/**
+ * At maximum zoom: "Zoom In" is disabled in the dropdown while "Zoom Out" remains enabled. Lets
+ * reviewers confirm the bound-guarding is reflected in the menu affordance.
+ */
+export const AtMaxZoomMenuOpen: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={3}
+        canZoomIn={false}
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Open the kebab menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert Zoom In is disabled and Zoom Out is enabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Zoom In' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * At minimum zoom: "Zoom Out" is disabled in the dropdown while "Zoom In" remains enabled.
+ */
+export const AtMinZoomMenuOpen: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={0.5}
+        canZoomIn
+        canZoomOut={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Open the kebab menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert Zoom Out is disabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * At the default factor (= 1), `canReset` is false: "Reset Zoom" is disabled. Documents the
+ * disable-at-default behavior so reviewers can verify it is reflected in the menu affordance.
+ */
+export const ResetDisabledAtDefault: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        canReset={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Open the kebab menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert Reset Zoom is disabled at the default factor', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Reset Zoom' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * A very long resource label: shows how the header truncates and the kebab coexists without
+ * overflowing. No interaction needed — a visual smoke check for the layout.
+ */
+export const LongLabelWithZoom: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="World English Bible Revised 2023 Study Edition"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+};
+
+/**
+ * Right-click the cell to open the context menu and assert "Zoom In" is present. Documents the
+ * right-click zoom path alongside the kebab path.
+ */
+export const ZoomContextMenu: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Right-click the gridcell to open the context menu', async () => {
+      const cell = canvas.getByRole('gridcell', { name: 'WEB' });
+      await user.pointer({ target: cell, keys: '[MouseRight]' });
+    });
+
+    await step('Assert the Zoom In context menu item appears', async () => {
+      const contextMenu = canvas.getByRole('menu');
+      await expect(within(contextMenu).getByRole('menuitem', { name: 'Zoom In' })).toBeVisible();
+    });
+  },
 };
 
 /**
