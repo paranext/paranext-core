@@ -1,4 +1,4 @@
-import { parseStartupMarks, formatWaterfall } from './startup-waterfall.util';
+import { parseStartupMarks, formatWaterfall, selectLatestRun } from './startup-waterfall.util';
 
 const SAMPLE = [
   '[2026-07-10 14:23:01.000] [info]  [main] STARTUP_MARK main process-start 1000',
@@ -48,6 +48,52 @@ describe('parseStartupMarks', () => {
     expect(marks).toHaveLength(6);
     expect(marks).toContainEqual({ proc: '.net', name: 'project-scan-end', t: 2500 });
     expect(marks).toContainEqual({ proc: 'main', name: 'process-start', t: 1050 });
+  });
+});
+
+describe('selectLatestRun', () => {
+  // electron-log's main.log appends across launches, so two instrumented runs land in one file.
+  const TWO_RUN_LOG = [
+    '[2026-07-10 14:23:01.000] [info]  [main] STARTUP_MARK main process-start 1000',
+    '[2026-07-10 14:23:01.500] [info]  [.net] STARTUP_MARK .net process-start 1500',
+    '[2026-07-10 14:23:02.000] [info]  [rend] STARTUP_MARK renderer root-render 2000',
+    // Second launch, an hour later:
+    '[2026-07-10 15:23:01.000] [info]  [main] STARTUP_MARK main process-start 3601000',
+    '[2026-07-10 15:23:01.400] [info]  [.net] STARTUP_MARK .net process-start 3601400',
+    '[2026-07-10 15:23:02.100] [info]  [rend] STARTUP_MARK renderer root-render 3602100',
+  ].join('\n');
+
+  it('keeps only the marks from the last `main process-start` onward and reports the run count', () => {
+    const { marks, runCount } = selectLatestRun(parseStartupMarks(TWO_RUN_LOG));
+    expect(runCount).toBe(2);
+    expect(marks).toEqual([
+      { proc: 'main', name: 'process-start', t: 3601000 },
+      { proc: '.net', name: 'process-start', t: 3601400 },
+      { proc: 'renderer', name: 'root-render', t: 3602100 },
+    ]);
+    // The rendered Total span must cover the latest run only, not the inter-launch gap.
+    expect(formatWaterfall(marks)).toContain('Total span: 1100ms');
+  });
+
+  it('does not treat non-main process-start marks as run boundaries', () => {
+    const marks = parseStartupMarks(
+      [
+        '[t] [info] [main] STARTUP_MARK main process-start 1000',
+        '[t] [info] [exth] STARTUP_MARK extension-host process-start 1300',
+        // e.g. the extension host restarting mid-session is still the same app run
+        '[t] [info] [exth] STARTUP_MARK extension-host process-start 9000',
+      ].join('\n'),
+    );
+    const result = selectLatestRun(marks);
+    expect(result.runCount).toBe(1);
+    expect(result.marks).toHaveLength(3);
+  });
+
+  it('returns all marks unchanged when no main process-start exists (rotated log)', () => {
+    const marks = parseStartupMarks('[t] [info] [rend] STARTUP_MARK renderer root-render 2000');
+    const result = selectLatestRun(marks);
+    expect(result.runCount).toBe(0);
+    expect(result.marks).toEqual(marks);
   });
 });
 

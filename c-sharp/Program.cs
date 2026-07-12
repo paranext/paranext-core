@@ -108,6 +108,37 @@ public static class Program
                 new MarbleDataLoader()
             );
             var versificationConversionService = new VersificationConversionService(papi);
+
+            // Non-critical: register in the background - started BEFORE the critical barrier is
+            // awaited so these services run concurrently with it (as they did when they were part
+            // of the single startup WhenAll) without gating "ready". Starting them after the
+            // barrier would shrink the head start TS consumers with bounded one-shot acquisition
+            // (e.g. the checklist and manage-books web views) rely on.
+            // Wrap the work in Task.Run FIRST so a synchronous throw (e.g. from the non-async
+            // ManageBooksService.RegisterNetworkObjectAsync before its first await) is captured
+            // into the observed task, rather than escaping unobserved. Log faults to stderr so
+            // they surface at error level in the main process log - a fault here means these
+            // features are missing for the whole session.
+            _ = Task.Run(
+                    () =>
+                        Task.WhenAll(
+                            inventoryDataProvider.RegisterDataProviderAsync(),
+                            checkRunner.RegisterDataProviderAsync(),
+                            checklistNetworkObject.InitializeAsync(),
+                            manageBooksService.RegisterNetworkObjectAsync(),
+                            enhancedResourceFactory.InitializeAsync()
+                        )
+                )
+                .ContinueWith(
+                    t =>
+                        Console.Error.WriteLine(
+                            $"Background service registration failed: {t.Exception}"
+                        ),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted,
+                    TaskScheduler.Default
+                );
+
             StartupTiming.Mark("init-barrier-start");
             // Critical path: everything the renderer needs to list projects and open an editor.
             await Task.WhenAll(
@@ -119,24 +150,6 @@ public static class Program
                 dblResources.RegisterDataProviderAsync()
             );
             StartupTiming.Mark("init-barrier-end");
-
-            // Non-critical: register in the background so they don't gate "ready".
-            // Wrap the work in Task.Run FIRST so a synchronous throw (e.g. from the non-async
-            // ManageBooksService.RegisterNetworkObjectAsync before its first await) is captured
-            // into the task RunTask observes, rather than escaping unobserved.
-            ThreadingUtils.RunTask(
-                Task.Run(
-                    () =>
-                        Task.WhenAll(
-                            inventoryDataProvider.RegisterDataProviderAsync(),
-                            checkRunner.RegisterDataProviderAsync(),
-                            checklistNetworkObject.InitializeAsync(),
-                            manageBooksService.RegisterNetworkObjectAsync(),
-                            enhancedResourceFactory.InitializeAsync()
-                        )
-                ),
-                "background service registration"
-            );
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

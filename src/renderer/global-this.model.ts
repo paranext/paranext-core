@@ -38,6 +38,7 @@ globalThis.logLevel = (searchParams.get(LOG_LEVEL_QUERY_PARAMETER) as LogLevel) 
 globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !== null;
 
 // Check if the main process indicated startup marks are enabled
+// null is used in this API meaning the param is not present
 // eslint-disable-next-line no-null/no-null
 globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
 

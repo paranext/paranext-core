@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
@@ -12,11 +14,14 @@ namespace Paranext.DataProvider.Projects;
 /// <see cref="LanguageTag"/>, <see cref="IsEditable"/>, <see cref="IsPublished"/>) are populated at
 /// project enumeration time (see <c>ScrTextExtensions.GetProjectDetails</c>) so the renderer can show
 /// project lists (e.g. the project picker, Home) without opening a project data provider per project.
-/// Each is sourced from the exact same <see cref="ScrText"/> expression the corresponding
-/// <c>platform.*</c> project setting getter in <c>ParatextProjectDataProvider.GetProjectSetting</c>
-/// uses, so a populated value matches what <c>pdp.getSetting('platform.*')</c> would return today.
-/// They default to <c>null</c>/<c>false</c> so existing construction call sites (which don't know
-/// about display data) are unaffected.
+///
+/// Canonical parity invariant (other docs point here): each populated value matches what the
+/// corresponding <c>platform.*</c> project setting getter in
+/// <c>ParatextProjectDataProvider.GetProjectSetting</c> returns today, with two deliberate, narrow
+/// divergences documented on <c>ScrTextExtensions</c>: enumeration must not load LDML files
+/// (LanguageTag reads Settings directly) nor throw per-field (a malformed Editable reports false).
+/// The fields default to <c>null</c>/<c>false</c> so existing construction call sites (which don't
+/// know about display data) are unaffected.
 /// </remarks>
 public class ProjectMetadata(
     string id,
@@ -43,6 +48,12 @@ public class ProjectMetadata(
     /// Short display name of the project. Same source as the <c>platform.name</c> project setting
     /// (<c>scrText.Name</c>).
     /// </summary>
+    /// <remarks>
+    /// The four nullable display fields are omitted from the wire (not serialized as JSON
+    /// <c>null</c>) when unset: the TS contract declares them as optional (<c>fullName?: string</c>
+    /// etc.), and the repo bans <c>null</c> in TS.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Name { get; } = name;
 
     /// <summary>
@@ -50,18 +61,21 @@ public class ProjectMetadata(
     /// setting. Null if that Paratext setting is not present (matching what the PDP's default would
     /// return requires live, localized extension-host state not available at enumeration time).
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FullName { get; } = fullName;
 
     /// <summary>
     /// Human-readable language name of the project. Same source as the <c>platform.language</c>
     /// project setting. Null if that Paratext setting is not present (see <see cref="FullName"/>).
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Language { get; } = language;
 
     /// <summary>
-    /// BCP-47 language tag of the project's writing system. Same source as the
-    /// <c>platform.languageTag</c> project setting (<c>scrText.Language.LanguageId.Id</c>).
+    /// BCP-47 language tag of the project's writing system. Same value as the
+    /// <c>platform.languageTag</c> project setting (see <c>ScrTextExtensions.GetLanguageTag</c>).
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LanguageTag { get; } = languageTag;
 
     /// <summary>

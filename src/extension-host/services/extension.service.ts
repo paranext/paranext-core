@@ -1291,6 +1291,14 @@ async function callActivateOnExtension(
 }
 
 /**
+ * Whether the startup marks in {@link activateExtensions} have already been emitted this session.
+ * Activation re-runs whenever extensions are installed/updated/removed mid-session (the watcher
+ * calls `reloadExtensions`), and re-emitting the marks then would inject duplicate rows and a
+ * session-length span into the startup waterfall.
+ */
+let startupActivationMarksEmitted = false;
+
+/**
  * Load extensions and runs their activate functions.
  *
  * @param extensions Extension info for the extensions we want to activate
@@ -1379,26 +1387,29 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
 
   // Import the extensions and run their activate() functions
   const extensionsActive: ActiveExtension[] = [];
+  // Only the first activation pass is part of startup; see startupActivationMarksEmitted
+  const shouldEmitStartupMarks = !startupActivationMarksEmitted;
+  startupActivationMarksEmitted = true;
   // This is a case where we want to run through the array in order sequentially
   // eslint-disable-next-line no-restricted-syntax
   for (const extensionWithCheck of extensionsWithCheck) {
+    // The extension name is embedded in the mark token; collapse whitespace runs to '-' since
+    // manifest `name` is a free-form string (core extensions are camelCase/space-free, but
+    // third-party extensions are not guaranteed to be) and a line terminator in a mark would
+    // split the log line, silently losing the mark.
+    const extensionMarkName = extensionWithCheck.extension.name.replace(/\s+/g, '-');
     try {
-      // The extension name is embedded in the mark token; sanitize spaces since manifest `name` is
-      // a free-form string (core extensions are camelCase/space-free, but third-party extensions
-      // are not guaranteed to be). Guarded so no string work happens when marks are disabled.
-      if (globalThis.startupMarks)
-        markStartup(`activate-start ${extensionWithCheck.extension.name.replace(/ /g, '-')}`);
+      if (shouldEmitStartupMarks) markStartup(`activate-start ${extensionMarkName}`);
       // Extensions must be activated in dependency order, so sequential awaiting is intentional.
       // eslint-disable-next-line no-await-in-loop
       const extension = await activateExtension(extensionWithCheck.extension);
-      if (globalThis.startupMarks)
-        markStartup(`activate-end ${extensionWithCheck.extension.name.replace(/ /g, '-')}`);
+      if (shouldEmitStartupMarks) markStartup(`activate-end ${extensionMarkName}`);
       extensionsActive.push(extension);
     } catch (e) {
       logger.error(`Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`);
     }
   }
-  markStartup('all-extensions-activated');
+  if (shouldEmitStartupMarks) markStartup('all-extensions-activated');
 
   return extensionsActive;
 }

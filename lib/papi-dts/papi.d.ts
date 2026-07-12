@@ -6677,7 +6677,12 @@ declare module 'node/utils/util' {
    * @returns True if the process is running in noisy dev mode, false otherwise
    */
   export const isNoisyDevModeEnvVariableSet: () => boolean;
-  /** Whether the `PT_STARTUP_MARKS` environment variable requests startup timing marks */
+  /**
+   * Determines if startup timing marks are requested for this launch
+   *
+   * @returns True if the `PT_STARTUP_MARKS` environment variable requests startup timing marks, false
+   *   otherwise
+   */
   export const isStartupMarksEnvVariableSet: () => boolean;
 }
 declare module 'node/services/node-file-system.service' {
@@ -8396,6 +8401,13 @@ declare module 'shared/data/platform.data' {
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
   /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Prefix that identifies a startup timing mark in the logs (see
+   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+   */
+  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */

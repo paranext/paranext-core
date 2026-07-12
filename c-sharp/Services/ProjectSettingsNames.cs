@@ -199,4 +199,31 @@ public sealed class ProjectSettingsNames
     {
         return s_ptSettingBooleans.Contains(ptSettingName);
     }
+
+    /// <summary>
+    /// Parses a raw Paratext boolean setting value: "T"/"TRUE" and "F"/"FALSE"
+    /// (case-insensitive). This is the single shared parser for such values; each caller applies
+    /// its own malformed-value policy on a false return (e.g. the project setting getter throws,
+    /// the setter refuses to write, metadata enumeration falls back to a default).
+    /// </summary>
+    /// <param name="rawValue">Raw setting value to parse</param>
+    /// <param name="value">The parsed boolean; false when parsing failed</param>
+    /// <returns>True if <paramref name="rawValue"/> was a well-formed boolean value</returns>
+    public static bool TryParseParatextBoolean(string rawValue, out bool value)
+    {
+        switch (rawValue.ToUpperInvariant())
+        {
+            case "T"
+            or "TRUE":
+                value = true;
+                return true;
+            case "F"
+            or "FALSE":
+                value = false;
+                return true;
+            default:
+                value = false;
+                return false;
+        }
+    }
 }

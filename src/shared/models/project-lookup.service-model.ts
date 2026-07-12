@@ -460,12 +460,12 @@ async function internalGetMetadata(
             .pdpFactoryInfo;
 
           // Type assert to add the factory info to the object
-          // Note: `enrichedMd` is seeded from whichever factory reports this project id FIRST, so
-          // display fields (name/fullName/language/languageTag/isEditable/isPublished) are
-          // first-factory-wins and are NOT merged across factories below (only `projectInterfaces`
-          // is). This is safe today because each scripture project is served by exactly one
-          // Paratext factory; a future layering PDPF that omits these fields would need to
-          // populate them itself, since a later factory's values for the same id are dropped.
+          // Note: `enrichedMd` is seeded from whichever factory reports this project id FIRST
+          // (factories' responses are processed in `Promise.all` resolution order, which is
+          // nondeterministic). Display fields (name/fullName/language/languageTag/isEditable/
+          // isPublished) are merged fill-if-absent below, so a factory that omits them cannot
+          // strip values another factory provided; when multiple factories provide the same
+          // field, the first-resolved one wins.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           const enrichedMd = allProjectsMetadata.get(md.id) ?? (md as ProjectMetadata);
           if (!enrichedMd.pdpFactoryInfo) enrichedMd.pdpFactoryInfo = {};
@@ -489,12 +489,19 @@ async function internalGetMetadata(
           enrichedMd.pdpFactoryInfo[pdpFactoryId] = {
             projectInterfaces: [...md.projectInterfaces],
           };
-          // If there is metadata already in the map, add the new `projectInterface`s
+          // If there is metadata already in the map, add the new `projectInterface`s and fill in
+          // any display fields the earlier-resolved factory left unset
           if (allProjectsMetadata.has(md.id)) {
             md.projectInterfaces.forEach((newProjectInterface) => {
               if (!enrichedMd.projectInterfaces.includes(newProjectInterface))
                 enrichedMd.projectInterfaces.push(newProjectInterface);
             });
+            enrichedMd.name ??= md.name;
+            enrichedMd.fullName ??= md.fullName;
+            enrichedMd.language ??= md.language;
+            enrichedMd.languageTag ??= md.languageTag;
+            enrichedMd.isEditable ??= md.isEditable;
+            enrichedMd.isPublished ??= md.isPublished;
           } else allProjectsMetadata.set(md.id, enrichedMd);
         });
       }

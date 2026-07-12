@@ -13,6 +13,14 @@ export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 
+/**
+ * Prefix that identifies a startup timing mark in the logs (see
+ * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+ * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+ * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+ */
+export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+
 /** ID of the default theme family for use in the application */
 export const DEFAULT_THEME_FAMILY = '';
 /** Type of the default theme for use in the application */

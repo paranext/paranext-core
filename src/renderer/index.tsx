@@ -35,7 +35,11 @@ import {
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
 
-markStartup('bundle-eval-start');
+// This runs only after the ENTIRE static import graph above has been downloaded, parsed, and
+// evaluated, so it marks the end of bundle evaluation - the window-created -> bundle-eval-end gap
+// contains download+parse+eval. It cannot simply move up: globalThis.startupMarks is set by
+// '@renderer/global-this.model', itself the second import (the first pulls in React).
+markStartup('bundle-eval-end');
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;

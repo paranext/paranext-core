@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { parseStartupMarks, formatWaterfall } from './startup-waterfall.util';
+import { parseStartupMarks, formatWaterfall, selectLatestRun } from './startup-waterfall.util';
 
 /**
  * Default dev `main.log` location per platform (packaged uses 'platform-bible' instead of
@@ -26,18 +26,23 @@ function defaultLogPath(): string {
 
 function main(): void {
   const logArgIndex = process.argv.indexOf('--log');
-  if (logArgIndex >= 0 && process.argv[logArgIndex + 1] === undefined) {
+  const logPath = logArgIndex >= 0 ? process.argv[logArgIndex + 1] : defaultLogPath();
+  if (!logPath) {
     console.error('--log requires a path');
     process.exit(1);
   }
-  const logPath = logArgIndex >= 0 ? process.argv[logArgIndex + 1] : defaultLogPath();
   if (!fs.existsSync(logPath)) {
     console.error(`Log file not found: ${logPath}\nPass --log <path> or run the app first.`);
     process.exit(1);
   }
   const text = fs.readFileSync(logPath, 'utf8');
   console.log(`Startup waterfall from ${logPath}\n`);
-  console.log(formatWaterfall(parseStartupMarks(text)));
+  const { marks, runCount } = selectLatestRun(parseStartupMarks(text));
+  if (runCount > 1)
+    console.warn(
+      `Note: the log contains marks from ${runCount} app runs; showing only the latest. Delete the log and relaunch for a clean capture.\n`,
+    );
+  console.log(formatWaterfall(marks));
 }
 
 main();

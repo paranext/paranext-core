@@ -92,7 +92,6 @@ internal class LocalParatextProjects
 
     public virtual void Initialize()
     {
-        Services.StartupTiming.Mark("project-scan-start");
         if (_isInitialized)
             return;
 
@@ -100,6 +99,12 @@ internal class LocalParatextProjects
         {
             if (_isInitialized)
                 return;
+
+            // Both marks live inside the double-checked critical section so they bracket the one
+            // real scan: Initialize is re-entered by the second factory at startup and by every
+            // first PDP creation per project, and marking outside the guards would emit a
+            // dangling/duplicate mark on each of those calls, corrupting the startup waterfall.
+            Services.StartupTiming.Mark("project-scan-start");
 
             // Make sure the necessary directory and files exist for the project root folder
             SetUpProjectRootFolder();
@@ -121,8 +126,8 @@ internal class LocalParatextProjects
             }
 
             _isInitialized = true;
+            Services.StartupTiming.Mark("project-scan-end");
         }
-        Services.StartupTiming.Mark("project-scan-end");
     }
 
     /// <summary>

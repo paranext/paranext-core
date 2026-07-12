@@ -87,7 +87,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private const string CellOrderSchemaVersion = "1.0.0";
 
     // One-shot guard so we time the first chapter served without spamming every navigation.
-    private bool _firstChapterMarked;
+    // Static (process-wide), not per-instance: each project's PDP would otherwise emit its own
+    // "first" mark, injecting a bogus startup mark whenever another project opens mid-session.
+    private static bool s_firstChapterMarked;
 
     #endregion
 
@@ -1708,16 +1710,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // Paratext project setting value found, so return the value with the appropriate type
             if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
             {
-                return settingValue.ToUpperInvariant() switch
-                {
-                    "F" => false,
-                    "FALSE" => false,
-                    "T" => true,
-                    "TRUE" => true,
-                    _ => throw new InvalidDataException(
+                if (!ProjectSettingsNames.TryParseParatextBoolean(settingValue, out bool boolValue))
+                    throw new InvalidDataException(
                         $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
-                    ),
-                };
+                    );
+                return boolValue;
             }
             return settingValue;
         }
@@ -1878,16 +1875,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         )
                         {
                             var stringValue = value?.ToString() ?? "";
-                            value = stringValue.ToUpperInvariant() switch
-                            {
-                                "F" => "F",
-                                "FALSE" => "F",
-                                "T" => "T",
-                                "TRUE" => "T",
-                                _ => throw new InvalidDataException(
+                            if (
+                                !ProjectSettingsNames.TryParseParatextBoolean(
+                                    stringValue,
+                                    out bool boolValue
+                                )
+                            )
+                                throw new InvalidDataException(
                                     $"Failed to convert Paratext setting {settingName} to boolean. Value was \"{stringValue}\""
-                                ),
-                            };
+                                );
+                            // Normalize to the canonical single-letter form Paratext stores
+                            value = boolValue ? "T" : "F";
                         }
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
@@ -2577,9 +2575,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetChapterUsx(VerseRef verseRef)
     {
-        if (!_firstChapterMarked)
+        if (!s_firstChapterMarked)
         {
-            _firstChapterMarked = true;
+            s_firstChapterMarked = true;
             Services.StartupTiming.Mark("first-get-chapter-usx");
         }
         return GetFromScrText(

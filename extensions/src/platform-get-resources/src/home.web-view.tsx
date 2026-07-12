@@ -12,7 +12,12 @@ import {
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
+import {
+  Home,
+  HOME_STRING_KEYS,
+  LocalProjectInfo,
+  metadataToLocalProjectInfo,
+} from './home.component';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -233,13 +238,7 @@ globalThis.webViewComponent = function HomeWebView() {
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
         excludePdpFactoryIds,
       });
-      const projectInfo = projectMetadata.map((data) => ({
-        projectId: data.id,
-        isPublished: data.isPublished ?? false,
-        fullName: data.fullName ?? data.name ?? data.id,
-        name: data.name ?? data.id,
-        language: data.language ?? '',
-      }));
+      const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
 
       if (promiseIsCurrent && isMounted.current) {
         setIsLoadingLocalProjects(false);

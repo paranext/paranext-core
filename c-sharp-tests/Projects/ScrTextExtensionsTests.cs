@@ -7,10 +7,8 @@ namespace TestParanextDataProvider.Projects;
 
 /// <summary>
 /// Characterizes <see cref="ScrTextExtensions.GetProjectDetails"/>'s population of the six display
-/// fields on <see cref="ProjectMetadata"/> (Name/FullName/Language/LanguageTag/IsEditable/
-/// IsPublished). Each assertion pins the field to the exact same source expression the
-/// corresponding <c>platform.*</c> setting getter in
-/// <c>ParatextProjectDataProvider.GetProjectSetting</c> uses, so a regression here would mean the
+/// fields on <see cref="ProjectMetadata"/>, pinning the metadata-vs-getter parity invariant
+/// documented in <see cref="ProjectMetadata"/>'s remarks. A regression here means the
 /// project-picker/Home lists (fed straight from this metadata, no PDP round-trip) disagree with
 /// what <c>pdp.getSetting('platform.*')</c> returns.
 /// </summary>
@@ -102,6 +100,44 @@ internal class ScrTextExtensionsTests
     }
 
     [Test]
+    public void GetProjectDetails_MalformedEditableSetting_IsEditableFalse()
+    {
+        // A present-but-malformed raw Editable value makes pdp.getSetting('platform.isEditable')
+        // throw, and the old per-project picker fetch excluded such projects from the editable
+        // lists via its per-project catch. Metadata enumeration cannot throw per-field, so it must
+        // report false - preserving that exclusion and matching ParatextData's own IsEditableText
+        // (GetSetting == "T"). It must NOT report true (the absent-setting default), which would
+        // newly show the project as editable and error downstream on open.
+        using var scrText = new DummyScrText();
+        scrText.Settings.SetSetting("Editable", "yes");
+
+        var details = scrText.GetProjectDetails();
+
+        Assert.That(details.Metadata.IsEditable, Is.False);
+    }
+
+    [Test]
+    public void GetProjectDetails_LanguageIdUnset_LanguageTagIsEnglish()
+    {
+        // GetProjectDetails must read Settings.LanguageID directly (forcing scrText.Language
+        // loads and parses the project's LDML file - unacceptable I/O during enumeration), so it
+        // replicates the one behavior the scrText.Language path would add: coercing a null/empty
+        // LanguageID to English (ScrText.CreateLayoutEngine), which is what the
+        // platform.languageTag getter returns for such a project.
+        using var scrText = new DummyScrText();
+        scrText.Settings.LanguageID = null;
+
+        var details = scrText.GetProjectDetails();
+
+        Assert.That(
+            details.Metadata.LanguageTag,
+            Is.EqualTo("en"),
+            "an unset LanguageID must coerce to English, matching ScrText.CreateLayoutEngine and "
+                + "therefore the platform.languageTag getSetting path"
+        );
+    }
+
+    [Test]
     public void GetProjectDetails_ResourceProject_IsPublishedTrueAndIsEditableFalse()
     {
         // ResourceDummyScrText overrides IsResourceProject so we can exercise resource-project
@@ -121,13 +157,5 @@ internal class ScrTextExtensionsTests
             Is.False,
             "a resource project must never report IsEditable = true, even with raw Editable = T"
         );
-    }
-
-    // ScrText.IsResourceProject is `virtual` and defaults to false on DummyScrText. Resources in
-    // production override it to true (see ResourceScrText.cs / JoinedScrText.cs). This subclass
-    // mirrors the identical pattern in ManageBooks/ProjectFilterServiceTests.cs.
-    private sealed class ResourceDummyScrText : DummyScrText
-    {
-        public override bool IsResourceProject => true;
     }
 }

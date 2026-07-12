@@ -8,7 +8,12 @@ namespace TestParanextDataProvider
     [ExcludeFromCodeCoverage]
     internal class DummyPapiClient : PapiClient
     {
-        private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
+        // ConcurrentQueue (not Queue): PDP registration ends in SendEventAsync, and per-project
+        // PDP creation now registers PDPs concurrently (same motivation as
+        // _documentationByRequestType below), so concurrent tests can enqueue from multiple
+        // threads at once.
+        private readonly ConcurrentQueue<(string eventType, object? eventParameters)> _sentEvents =
+            new();
 
         // ConcurrentDictionary (not Dictionary): RegisterRequestHandlerAsync writes this on every
         // PDP registration, and per-project PDP creation now registers PDPs concurrently (fire-
@@ -74,7 +79,13 @@ namespace TestParanextDataProvider
 
         public (string eventType, object? eventParameters) NextSentEvent
         {
-            get { return _sentEvents.Dequeue(); }
+            get
+            {
+                // Same contract as Queue.Dequeue: throw when empty
+                return _sentEvents.TryDequeue(out var sentEvent)
+                    ? sentEvent
+                    : throw new InvalidOperationException("No sent events to dequeue.");
+            }
         }
 
         /// <summary>

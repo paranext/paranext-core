@@ -108,7 +108,7 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
                     var name = new string(
                         Enumerable
                             .Range(0, 30)
-                            .Select(_ => (char)Random.Shared.Next(65, 90))
+                            .Select(_ => (char)Random.Shared.Next(65, 91))
                             .ToArray()
                     );
                     var pdp = new ParatextProjectDataProvider(
@@ -119,11 +119,21 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
                     );
                     // Register in the background; the name is already known so callers don't
                     // wait on the ~40-53 network round-trips (previously blocked under the
-                    // global lock).
-                    ThreadingUtils.RunTask(
-                        pdp.RegisterDataProviderAsync(),
-                        GetRegistrationTaskDescription(pdp, details)
-                    );
+                    // global lock). A registration fault leaves this PDP unusable (TS callers
+                    // exhaust their MethodNotFound retry budget and never see the fault), so
+                    // surface it at error level (stderr reaches the main process log as
+                    // logger.error) with the project id, rather than the info-level stdout
+                    // logging ThreadingUtils.RunTask would do.
+                    _ = pdp.RegisterDataProviderAsync()
+                        .ContinueWith(
+                            t =>
+                                Console.Error.WriteLine(
+                                    $"Task \"{GetRegistrationTaskDescription(pdp, details)}\" failed for project {id}: {t.Exception}"
+                                ),
+                            CancellationToken.None,
+                            TaskContinuationOptions.OnlyOnFaulted,
+                            TaskScheduler.Default
+                        );
                     return pdp;
                 },
                 LazyThreadSafetyMode.ExecutionAndPublication
@@ -145,6 +155,32 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
             _pdpMap.TryRemove(
                 new KeyValuePair<string, Lazy<ParatextProjectDataProvider>>(projectID, lazy)
             );
+
+            // If another caller already evicted this faulted Lazy and a NEWER entry replaced it
+            // (e.g. the transient failure cleared and a later call succeeded while this thread
+            // held the stale reference), don't rethrow the stale cached exception - defer to the
+            // current entry, evicting it too if it faults. One bounded retry only; if the map has
+            // no newer entry, rethrow.
+            if (
+                _pdpMap.TryGetValue(projectID, out var currentLazy)
+                && !ReferenceEquals(currentLazy, lazy)
+            )
+            {
+                try
+                {
+                    return currentLazy.Value.DataProviderName;
+                }
+                catch
+                {
+                    _pdpMap.TryRemove(
+                        new KeyValuePair<string, Lazy<ParatextProjectDataProvider>>(
+                            projectID,
+                            currentLazy
+                        )
+                    );
+                    throw;
+                }
+            }
             throw;
         }
     }

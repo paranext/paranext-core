@@ -5,15 +5,12 @@ import { Plus } from 'lucide-react';
 import { CardTitle, Label } from 'platform-bible-react';
 import { isPlatformError } from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS } from './home.component';
-
-type LocalProjectInfo = {
-  projectId: string;
-  isPublished: boolean;
-  fullName: string;
-  name: string;
-  language: string;
-};
+import {
+  Home,
+  HOME_STRING_KEYS,
+  LocalProjectInfo,
+  metadataToLocalProjectInfo,
+} from './home.component';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 
@@ -73,13 +70,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
         excludePdpFactoryIds,
       });
-      const projectInfo = projectMetadata.map((data) => ({
-        projectId: data.id,
-        isPublished: data.isPublished ?? false,
-        fullName: data.fullName ?? data.name ?? data.id,
-        name: data.name ?? data.id,
-        language: data.language ?? '',
-      }));
+      const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
 
       if (promiseIsCurrent && isMounted.current) {
         setIsLoadingLocalProjects(false);
