@@ -1,7 +1,14 @@
 import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import {
+  RESET_ZOOM_KEY,
+  RESOURCE_CELL_STRING_KEYS,
+  ResourceCellView,
+  ZOOM_IN_KEY,
+  ZOOM_OPTIONS_KEY,
+  ZOOM_OUT_KEY,
+} from './resource-cell-view.component';
 
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
@@ -235,6 +242,103 @@ export const PartialFailureRow: Story = {
         />
       </div>
     </GridRowBox>
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Zoom states — each story supplies `zoomMenuLabels` so the context menu and
+// kebab button are both rendered (the component hides both when it is absent).
+// ---------------------------------------------------------------------------
+
+const zoomMenuLabels = {
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom In',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom Out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset Zoom',
+  options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options',
+};
+
+/**
+ * Default zoom (factor = 1): both Zoom In and Zoom Out are available, and the kebab / context menu
+ * are visible because `zoomMenuLabels` is provided.
+ */
+export const ZoomDefault: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+};
+
+/** Zoomed in (factor = 1.4): the content area is enlarged; both actions remain enabled. */
+export const ZoomedIn: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1.4}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+};
+
+/**
+ * At maximum zoom (factor = 3): `canZoomIn` is false so the Zoom In menu item is disabled; Zoom Out
+ * and Reset are still enabled.
+ */
+export const AtMaxZoom: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={3}
+        canZoomIn={false}
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
+  ),
+};
+
+/**
+ * At minimum zoom (factor = 0.5): `canZoomOut` is false so the Zoom Out menu item is disabled; Zoom
+ * In and Reset are still enabled.
+ */
+export const AtMinZoom: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={0.5}
+        canZoomIn
+        canZoomOut={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </GridCellBox>
   ),
 };
 
