@@ -6,14 +6,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { ResourceCell } from './resource-cell.component';
 
-const { mockUseProjectData, mockUseProjectSetting, setUsjSpy, capturedEditorOptions } =
-  vi.hoisted(() => ({
+const { mockUseProjectData, mockUseProjectSetting, setUsjSpy, capturedEditorOptions } = vi.hoisted(
+  () => ({
     mockUseProjectData: vi.fn(),
     mockUseProjectSetting: vi.fn(),
     setUsjSpy: vi.fn(),
     /** Collects the `options` prop passed to each Editorial render. */
     capturedEditorOptions: vi.fn(),
-  }));
+  }),
+);
 
 vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@papi/frontend/react', () => ({
@@ -22,7 +23,7 @@ vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
-      '%webView_scriptureTextGrid_cell_status_downloading%': 'Downloading…',
+      '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
     },
@@ -116,11 +117,11 @@ beforeEach(() => {
 });
 
 describe('ResourceCell', () => {
-  it('shows the label + Spinner while downloading', () => {
+  it('shows the Spinner and neutral loading message while downloading', () => {
     setUsjResult(undefined, true);
     render(<ResourceCell {...props} />);
-    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
-    expect(screen.getByText('Downloading…')).toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+    expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
   });
   it('shows the failed subtitle for a PlatformError', () => {

@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
-  DOWNLOADING_KEY,
+  LOADING_KEY,
   FAILED_KEY,
   UNAVAILABLE_KEY,
   ResourceCellView,
@@ -47,7 +47,7 @@ beforeAll(() => {
 
 const localizedStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
-  [DOWNLOADING_KEY]: 'Downloading…',
+  [LOADING_KEY]: 'Resource is loading…',
   [FAILED_KEY]: 'Download failed',
 };
 
@@ -98,8 +98,8 @@ describe('ResourceCellView row smoke', () => {
     expect(within(asvCell).getByText('Download failed')).toBeInTheDocument();
 
     const kjvCell = screen.getByRole('gridcell', { name: 'KJV' });
-    expect(within(kjvCell).getByText('Downloading…')).toBeInTheDocument();
-    expect(within(kjvCell).getByText('Resource unavailable')).toBeInTheDocument();
+    expect(within(kjvCell).getByText('Resource is loading…')).toBeInTheDocument();
+    expect(within(kjvCell).queryByText('Resource unavailable')).not.toBeInTheDocument();
 
     // Ready cell still shows content when a neighbor is offline.
     expect(within(webCell).queryByText('Download failed')).not.toBeInTheDocument();
@@ -148,7 +148,7 @@ describe('ResourceCellView row smoke', () => {
 
 const zoomLabels = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
-  [DOWNLOADING_KEY]: 'Downloading…',
+  [LOADING_KEY]: 'Resource is loading…',
   [FAILED_KEY]: 'Download failed',
   [ZOOM_IN_KEY]: 'Zoom In',
   [ZOOM_OUT_KEY]: 'Zoom Out',
@@ -243,6 +243,33 @@ describe('ResourceCellView zoom UI', () => {
     await user.click(screen.getByRole('button', { name: 'Zoom options' }));
     await user.click(screen.getByRole('menuitem', { name: 'Zoom In' }));
     expect(onZoomIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('clicking the kebab button does NOT trigger onActivate (stopPropagation)', async () => {
+    // The kebab lives inside the gridcell's onClick handler. Without stopPropagation, clicking the
+    // kebab would also open the chapter-context panel. The Button's onClick stops the event so
+    // onActivate is never called — the dropdown still opens via Radix's pointerdown handler.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onActivate = vi.fn();
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        onActivate={onActivate}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
+    // onActivate must NOT have been called — the kebab stops click propagation.
+    expect(onActivate).not.toHaveBeenCalled();
+    // The dropdown menu should have opened (the menu is rendered by Radix).
+    expect(screen.getByRole('menu')).toBeInTheDocument();
   });
 
   it('disables Zoom In at max and Zoom Out at min', async () => {

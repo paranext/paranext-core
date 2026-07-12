@@ -344,11 +344,13 @@ export const AtMinZoom: Story = {
 };
 
 // ---------------------------------------------------------------------------
-// Zoom interaction stories — play functions exercise the kebab dropdown and
-// the right-click context menu so reviewers can verify the affordance + ARIA
-// state without running the full app.
+// Zoom interaction stories — play functions exercise the kebab dropdown so
+// reviewers can verify the affordance + ARIA state without running the full
+// app. (Right-click zoom is delivered through the editor's own context menu
+// via `EditorOptions.contextMenu`, which needs the real editor, so it is
+// verified manually in the app rather than in a story.)
 //
-// Radix DropdownMenu and ContextMenu rely on PointerEvent sequences that a
+// Radix DropdownMenu relies on PointerEvent sequences that a
 // plain `userEvent.click()` without setup does not synthesise. Using
 // `userEvent.setup({ pointerEventsCheck: 0 })` (the same pattern as the
 // unit tests) keeps things reliable in both jsdom and Storybook's browser

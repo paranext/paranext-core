@@ -20,7 +20,7 @@ import { ResourceCellState } from './resource-cell.utils';
  * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
  */
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
-export const DOWNLOADING_KEY = '%webView_scriptureTextGrid_cell_status_downloading%';
+export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
 export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
@@ -29,7 +29,7 @@ export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
 export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
 export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   UNAVAILABLE_KEY,
-  DOWNLOADING_KEY,
+  LOADING_KEY,
   FAILED_KEY,
   EMPTY_KEY,
   ZOOM_IN_KEY,
@@ -43,7 +43,10 @@ export type ResourceCellLocalizedStrings = {
   [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
 };
 
-/** Localized copy for the per-resource zoom menus (context menu + kebab). */
+/**
+ * Localized copy for the zoom actions (the kebab dropdown here, and the editor's right-click
+ * context menu wired in `ResourceCell`).
+ */
 export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
 
 export type ResourceCellViewProps = {
@@ -205,6 +208,11 @@ export function ResourceCellView({
                         variant="ghost"
                         size="icon"
                         aria-label={zoomOptionsAriaLabel}
+                        // Stop the click from bubbling to the gridcell's `onActivate` handler.
+                        // Radix opens the dropdown on pointerdown, so this does not prevent the
+                        // menu from opening — it only prevents the chapter-context panel from
+                        // opening simultaneously.
+                        onClick={(e) => e.stopPropagation()}
                         // Hidden until hover/focus for pointer users; always visible on touch
                         // (`hover: none`) where there is no hover to reveal it.
                         className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:[@media(hover:none)]:opacity-100"
@@ -237,13 +245,21 @@ export function ResourceCellView({
           readyContent
         ) : (
           <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
-            {state === 'downloading' && <Spinner />}
-            <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {state === 'failed'
-                ? localizedStrings[FAILED_KEY]
-                : localizedStrings[DOWNLOADING_KEY]}
-            </span>
+            {state === 'downloading' ? (
+              <>
+                <Spinner />
+                <span className="tw:text-sm tw:text-muted-foreground">
+                  {localizedStrings[LOADING_KEY]}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
+                <span className="tw:text-sm tw:text-muted-foreground">
+                  {localizedStrings[FAILED_KEY]}
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
