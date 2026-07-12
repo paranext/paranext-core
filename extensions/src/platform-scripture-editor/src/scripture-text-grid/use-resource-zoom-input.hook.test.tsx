@@ -88,4 +88,19 @@ describe('useResourceZoomInput', () => {
     );
     expect(handlers.adjustZoom).toHaveBeenCalledWith('r1', 1);
   });
+
+  it('prevents default on Ctrl+wheel even when the event target is outside any [data-resource-id], but does not call adjustZoom', () => {
+    const { getByTestId } = render(<Harness handlers={handlers} />);
+    // Fire directly on the bare container — it has no [data-resource-id] attribute itself.
+    const container = getByTestId('grid');
+    const event = new WheelEvent('wheel', {
+      deltaY: -100,
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    container.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(handlers.adjustZoom).not.toHaveBeenCalled();
+  });
 });

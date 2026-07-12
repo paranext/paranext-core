@@ -89,7 +89,10 @@ export function ScriptureTextGrid({
   const resourceIds = useMemo(() => resources.map((r) => r.resourceId), [resources]);
 
   // Drop zoom entries for resources removed from the list so the map never orphans entries.
+  // Skip pruning while the list is empty: during source loading the parent temporarily passes
+  // resources=[], which would wipe all persisted zoom data before any cell renders (data loss).
   useEffect(() => {
+    if (resourceIds.length === 0) return;
     zoom?.pruneToResourceIds(resourceIds);
   }, [zoom, resourceIds]);
 
@@ -113,13 +116,26 @@ export function ScriptureTextGrid({
   // adding more texts). No verse-cell row chrome and no chapter-context split; the whole chapter is
   // already shown.
   //
-  // Note: this branch has no `data-resource-id` wrapper element, so the pointer/focus capture
-  // handlers on the multi-resource wrappers are absent. The keyboard zoom path therefore relies on
-  // `getFallbackResourceId` (last-interacted) to resolve the target resource id for this cell.
+  // `gridRef` is attached here so `useResourceZoomInput` has a non-null container and can wire its
+  // wheel/keyboard listeners. `data-resource-id` lets target resolution in the hook identify the
+  // resource from any event target inside the cell. The pointer/focus capture handlers mirror the
+  // multi-resource wrappers so `lastInteractedResourceIdRef` is always current.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     return (
-      <div role="region" aria-label={ariaLabel} className="tw:h-full tw:min-h-0 tw:overflow-auto">
+      <div
+        ref={gridRef}
+        role="region"
+        aria-label={ariaLabel}
+        data-resource-id={onlyResource.resourceId}
+        onPointerDownCapture={() => {
+          lastInteractedResourceIdRef.current = onlyResource.resourceId;
+        }}
+        onFocusCapture={() => {
+          lastInteractedResourceIdRef.current = onlyResource.resourceId;
+        }}
+        className="tw:h-full tw:min-h-0 tw:overflow-auto"
+      >
         <ResourceCell
           resourceRef={onlyResource}
           scrRef={scrRef}

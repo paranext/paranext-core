@@ -266,4 +266,21 @@ describe('ScriptureTextGrid', () => {
     rerender([{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }], { zoom });
     expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1']);
   });
+
+  it('does not call pruneToResourceIds when the resource list is empty (prevents data loss during source loading)', () => {
+    const zoom: ResourceZoomController = {
+      getZoom: () => 1,
+      setZoomForResource: vi.fn(),
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+      pruneToResourceIds: vi.fn(),
+    };
+    renderGrid([], { zoom });
+    expect(zoom.pruneToResourceIds).not.toHaveBeenCalled();
+  });
+
+  it('single-resource container exposes data-resource-id so the zoom input hook can resolve the target', () => {
+    renderGrid([{ resourceId: 'r-solo', projectId: 'p-solo', label: 'SOLO' }]);
+    expect(document.querySelector('[data-resource-id="r-solo"]')).not.toBeNull();
+  });
 });
