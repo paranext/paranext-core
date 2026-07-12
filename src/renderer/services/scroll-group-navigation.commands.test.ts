@@ -1,6 +1,9 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { navigationCommandHandlers } from '@renderer/services/scroll-group-navigation.commands';
+import {
+  navigationCommandHandlers,
+  startScrollGroupNavigationCommands,
+} from '@renderer/services/scroll-group-navigation.commands';
 
 // vi.mock and vi.hoisted calls are hoisted by vitest above the imports above at transform time, so
 // the static imports can be written first here to satisfy import/first.
@@ -12,9 +15,16 @@ const mocks = vi.hoisted(() => ({
   getScrRefForProject: vi.fn(),
   // Typed to accept args so tests can read written refs back out of `mock.calls`
   setScrRefSync: vi.fn<(...args: unknown[]) => boolean>(() => true),
+  navigateReferenceHistoryPhysicalSync: vi.fn<(...args: unknown[]) => boolean>(() => false),
   getBookChapterControlHandle: vi.fn(),
   pdpGet: vi.fn(),
   windowServiceGetFocus: vi.fn(),
+}));
+
+// Capture the handlers `startScrollGroupNavigationCommands` registers so the reference-history
+// keyboard commands (registered inline there, not via `navigationCommandHandlers`) can be invoked.
+const { registeredCommandHandlers } = vi.hoisted(() => ({
+  registeredCommandHandlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
 }));
 
 vi.mock('@renderer/services/window.service-host', () => ({
@@ -28,6 +38,7 @@ vi.mock('@renderer/services/scroll-group.service-host', () => ({
   getScrRefSync: mocks.getScrRefSync,
   getScrRefForProject: mocks.getScrRefForProject,
   setScrRefSync: mocks.setScrRefSync,
+  navigateReferenceHistoryPhysicalSync: mocks.navigateReferenceHistoryPhysicalSync,
 }));
 vi.mock('@renderer/services/book-chapter-control.registry', () => ({
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID: 'top-toolbar',
@@ -37,7 +48,12 @@ vi.mock('@shared/services/project-data-provider.service', () => ({
   papiFrontendProjectDataProviderService: { get: mocks.pdpGet },
 }));
 vi.mock('@shared/services/command.service', () => ({
-  registerCommand: vi.fn(async () => () => Promise.resolve(true)),
+  registerCommand: vi.fn(
+    async (name: string, handler: (...args: unknown[]) => Promise<unknown>) => {
+      registeredCommandHandlers.set(name, handler);
+      return () => Promise.resolve(true);
+    },
+  ),
 }));
 vi.mock('@shared/services/window.service', () => ({
   windowService: { getFocus: mocks.windowServiceGetFocus },
@@ -48,8 +64,10 @@ const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  registeredCommandHandlers.clear();
   mocks.updateWebViewDefinitionSync.mockReturnValue(true);
   mocks.setScrRefSync.mockReturnValue(true);
+  mocks.navigateReferenceHistoryPhysicalSync.mockReturnValue(false);
   // No resolved navigation target by default — individual describe blocks override.
   mocks.getNavigationTargetWebView.mockReturnValue(undefined);
   mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
@@ -462,5 +480,53 @@ describe('platform.openBookChapterControl', () => {
     await expect(
       navigationCommandHandlers['platform.openBookChapterControl'](),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('reference-history keyboard commands resolve the active toolbar scroll group', () => {
+  async function getRegisteredHandler(commandName: string) {
+    await startScrollGroupNavigationCommands();
+    const handler = registeredCommandHandlers.get(commandName);
+    if (!handler) throw new Error(`${commandName} was not registered`);
+    return handler;
+  }
+
+  test('navigates the scroll group the toolbar follows, not a hardcoded one', async () => {
+    // The active web view (what the toolbar mirrors) follows scroll group 2
+    mocks.getNavigationTargetWebView.mockReturnValue({
+      id: 'web-view-1',
+      definition: { scrollGroupScrRef: 2 },
+    });
+    mocks.navigateReferenceHistoryPhysicalSync.mockReturnValue(true);
+    const handler = await getRegisteredHandler('platform.navigateLeftInReferenceHistory');
+
+    const result = await handler();
+
+    expect(mocks.navigateReferenceHistoryPhysicalSync).toHaveBeenCalledWith(2, 'left');
+    expect(result).toBe(true);
+  });
+
+  test('defaults to scroll group 0 when there is no active target (matching the toolbar)', async () => {
+    // getNavigationTargetWebView returns undefined by default → the toolbar follows scroll group 0
+    const handler = await getRegisteredHandler('platform.navigateRightInReferenceHistory');
+
+    await handler();
+
+    expect(mocks.navigateReferenceHistoryPhysicalSync).toHaveBeenCalledWith(0, 'right');
+  });
+
+  test('no-ops when the active web view has no scroll group (a detached ref)', async () => {
+    // Active web view carries its own independent ref rather than following a numbered scroll group;
+    // the toolbar hides its history buttons in that case, so the keyboard command must not navigate.
+    mocks.getNavigationTargetWebView.mockReturnValue({
+      id: 'web-view-1',
+      definition: { scrollGroupScrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 } },
+    });
+    const handler = await getRegisteredHandler('platform.navigateLeftInReferenceHistory');
+
+    const result = await handler();
+
+    expect(result).toBe(false);
+    expect(mocks.navigateReferenceHistoryPhysicalSync).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import logo from '@assets/icon.png';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
+import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useDialogCallback,
@@ -452,6 +453,10 @@ export function PlatformBibleToolbar() {
             </SelectContent>
           )}
         </Select>
+      )}
+      {typeof scrollGroupId === 'number' && (
+        // Key on the scroll group so switching groups remounts and re-seeds the history state.
+        <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
       )}
       <BookChapterControl
         ref={registerTopBookChapterControl}

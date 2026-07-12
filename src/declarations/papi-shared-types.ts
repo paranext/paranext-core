@@ -21,7 +21,10 @@ declare module 'papi-shared-types' {
     NetworkableObject,
     NetworkObjectDetails,
   } from '@shared/models/network-object.model';
-  import type { ScrollGroupUpdateInfo } from '@shared/services/scroll-group.service-model';
+  import type {
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from '@shared/services/scroll-group.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -159,6 +162,34 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.openBookChapterControl': () => Promise<void>;
+    /**
+     * Navigate the reference history in the physical "left" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate the reference history in the physical "right" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
@@ -864,6 +895,12 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
     /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */

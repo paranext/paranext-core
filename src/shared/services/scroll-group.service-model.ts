@@ -31,6 +31,19 @@ export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION = serializeRequestType(
 ) as 'scrollGroup:onDidChangeVersification';
 
 /**
+ * Name to use when creating a network event that is fired when a scroll group's reference history
+ * changes
+ */
+// serializeRequestType returns SerializedRequestType (an opaque branded string), but we know the
+// actual value matches this NetworkEvents key. Cast to the literal so consumers can use this
+// constant directly without re-casting at every usage site.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY = serializeRequestType(
+  CATEGORY_SCROLL_GROUP,
+  'onDidChangeReferenceHistory',
+) as 'scrollGroup:onDidChangeReferenceHistory';
+
+/**
  * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
  * means this should be synced with the scroll group sharing that number. If this value is an
  * object, that means it is an independent Scripture reference and should not be synced with any
@@ -51,6 +64,48 @@ export type ScrollGroupUpdateInfo = {
   scrRef: SerializedVerseRef;
   scrollGroupId: ScrollGroupId;
   sourceProjectId?: string;
+};
+
+/**
+ * One visited location in a scroll group's reference history
+ *
+ * @experimental
+ */
+export type ReferenceHistoryEntry = {
+  /** The visited Scripture reference */
+  scrRef: SerializedVerseRef;
+  /**
+   * Project whose versification `scrRef` is expressed in. `undefined` = unknown. Preserved so
+   * navigating back restores the reference in its original versification context
+   */
+  sourceProjectId?: string;
+};
+
+/**
+ * Back/forward reference history for one scroll group. Session-only (in-memory; resets on app
+ * restart)
+ *
+ * @experimental
+ */
+export type ReferenceHistory = {
+  /** The current location, or `undefined` when nothing has been recorded yet */
+  current: ReferenceHistoryEntry | undefined;
+  /** Entries strictly behind the current location, nearest first (offsets -1, -2, ...) */
+  back: ReferenceHistoryEntry[];
+  /** Entries strictly ahead of the current location, nearest first (offsets +1, +2, ...) */
+  forward: ReferenceHistoryEntry[];
+};
+
+/**
+ * Information about a change to a scroll group's reference history
+ *
+ * @experimental
+ */
+export type ReferenceHistoryUpdateInfo = {
+  /** The scroll group whose history changed */
+  scrollGroupId: ScrollGroupId;
+  /** The new history state (a copy, safe to keep) */
+  history: ReferenceHistory;
 };
 
 /** Parts of the Scroll Group Service that are exposed through the network object */
@@ -100,6 +155,24 @@ export interface IScrollGroupRemoteService {
     scrollGroupId: ScrollGroupId | undefined,
     projectId: string,
   ): Promise<SerializedVerseRef>;
+  /**
+   * Get a copy of the reference history for the provided scroll group
+   *
+   * @param scrollGroupId Scroll group whose history to get
+   * @returns Copy of the scroll group's reference history
+   * @experimental
+   */
+  getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
+  /**
+   * Navigate within the reference history of the provided scroll group, browser-`history.go` style:
+   * negative offset = back that many steps, positive = forward that many steps.
+   *
+   * @param scrollGroupId Scroll group whose history to navigate
+   * @param offset Signed number of steps. -1 = back one, +1 = forward one
+   * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+   * @experimental
+   */
+  navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
 }
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object
@@ -112,4 +185,10 @@ export interface IScrollGroupService extends IScrollGroupRemoteService {
    * versification should call {@link getScrRefForProject} for that project.
    */
   onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  /**
+   * Event that emits when a scroll group's reference history changes
+   *
+   * @experimental
+   */
+  onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
 }

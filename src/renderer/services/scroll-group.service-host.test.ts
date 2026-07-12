@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { EVENT_NAME_ON_DID_CHANGE_VERSIFICATION } from '@shared/services/scroll-group.service-model';
+import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
+  EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
+} from '@shared/services/scroll-group.service-model';
 
 // The host module reads localStorage and creates a network emitter at import time; stub those.
 // Emitters are captured by event name so tests can assert on a specific event (e.g.
@@ -24,6 +27,15 @@ vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn(), err
 const sendCommand = vi.fn();
 vi.mock('@shared/services/command.service', () => ({
   sendCommand: (...args: unknown[]) => sendCommand(...args),
+}));
+
+// The host resolves the physical left/right keyboard direction to a logical back/forward using the
+// current UI layout direction from `readDirection`. Mock it so tests can drive the RTL swap.
+const { mockReadDirection } = vi.hoisted(() => ({
+  mockReadDirection: vi.fn((): 'ltr' | 'rtl' => 'ltr'),
+}));
+vi.mock('platform-bible-react/experimental', () => ({
+  readDirection: () => mockReadDirection(),
 }));
 
 // getScrRefForProject reads each project's versification via a base-PDP setting subscription. Mock
@@ -305,5 +317,158 @@ describe('scroll-group.service-host source project tracking', () => {
     callbacks.sourceProj('a-different-versification'); // genuine mid-session change
     expect(emit).toHaveBeenCalledTimes(1);
     expect(emit).toHaveBeenCalledWith({ projectId: 'sourceProj' });
+  });
+});
+
+describe('reference history integration', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+  });
+
+  it('setScrRefSync records history seeded with the starting reference', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    const history = host.getReferenceHistorySync(1);
+    // Seeded with the group's starting ref (default GEN 1:1); MRK 4 is now current, GEN 1:1 is back
+    expect(history.current).toEqual({
+      scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+      sourceProjectId: undefined,
+    });
+    expect(history.back).toEqual([
+      { scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined },
+    ]);
+    expect(history.forward).toEqual([]);
+  });
+
+  it('navigateReferenceHistorySync(-1) restores the previous ref without re-recording', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    const didNavigate = host.navigateReferenceHistorySync(1, -1);
+    expect(didNavigate).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    const history = host.getReferenceHistorySync(1);
+    expect(history.current).toEqual({
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      sourceProjectId: undefined,
+    });
+    expect(history.back).toEqual([]);
+    expect(history.forward).toEqual([
+      { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
+    ]);
+  });
+
+  it('navigateReferenceHistorySync returns false when there is nothing to navigate to', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    expect(host.navigateReferenceHistorySync(1, -1)).toBe(false);
+    expect(host.navigateReferenceHistorySync(1, 1)).toBe(false);
+  });
+
+  it('a multi-step jump onto a same-numbers entry applies the destination source frame', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // Build history whose oldest back entry is the seeded GEN 1:1 with an UNKNOWN source, while the
+    // current stored ref is a same-numbers GEN 1:1 with a KNOWN source:
+    //   seed GEN 1:1 (source undefined) -> MAT (projNT) -> GEN 1:1 (projOT)
+    host.setScrRefSync(0, { book: 'MAT', chapterNum: 1, verseNum: 1 }, 'projNT');
+    host.setScrRefSync(0, { book: 'GEN', chapterNum: 1, verseNum: 1 }, 'projOT');
+    expect(host.getScrRefSourceProjectIdSync(0)).toBe('projOT');
+
+    // Jump back two entries, landing on the sourceless GEN 1:1. Its numbers equal the current stored
+    // ref, which previously tripped setScrRefSync's no-op guard and left the source frame lagging at
+    // 'projOT'. Writing through writeScrRef (no guard) applies the destination frame.
+    expect(host.navigateReferenceHistorySync(0, -2)).toBe(true);
+    expect(host.getScrRefSync(0)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(host.getScrRefSourceProjectIdSync(0)).toBeUndefined();
+  });
+
+  it('histories are per scroll group', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    host.setScrRefSync(2, { book: 'LUK', chapterNum: 2, verseNum: 1 });
+    expect(host.getReferenceHistorySync(1).current?.scrRef.book).toBe('MRK');
+    expect(host.getReferenceHistorySync(2).current?.scrRef.book).toBe('LUK');
+    expect(host.getReferenceHistorySync(1).back).toHaveLength(1);
+  });
+
+  it('getReferenceHistorySync returns copies, not live state', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    const history = host.getReferenceHistorySync(1);
+    history.back.length = 0;
+    expect(host.getReferenceHistorySync(1).back).toHaveLength(1);
+  });
+
+  it('emits the reference-history-changed event on record and on navigation', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    const { emit } = emitters[EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY];
+
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenLastCalledWith({
+      scrollGroupId: 1,
+      history: {
+        current: {
+          scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+          sourceProjectId: undefined,
+        },
+        back: [{ scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 }, sourceProjectId: undefined }],
+        forward: [],
+      },
+    });
+
+    host.navigateReferenceHistorySync(1, -1);
+    expect(emit).toHaveBeenCalledTimes(2);
+    expect(emit).toHaveBeenLastCalledWith({
+      scrollGroupId: 1,
+      history: {
+        current: {
+          scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+          sourceProjectId: undefined,
+        },
+        back: [],
+        forward: [
+          { scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 }, sourceProjectId: undefined },
+        ],
+      },
+    });
+  });
+});
+
+describe('reference history physical (keyboard) navigation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+    mockReadDirection.mockReturnValue('ltr');
+  });
+
+  it('resolves left = back and right = forward in LTR', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // Seed group 1: current MRK 4, back [GEN 1:1]
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'left')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'right')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+  });
+
+  it('swaps the pair in RTL: right = back and left = forward', async () => {
+    mockReadDirection.mockReturnValue('rtl');
+    const host = await import('@renderer/services/scroll-group.service-host');
+    host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'right')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+
+    expect(host.navigateReferenceHistoryPhysicalSync(1, 'left')).toBe(true);
+    expect(host.getScrRefSync(1)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+  });
+
+  it('returns false when there is no history in the resolved direction', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // Fresh group: only the seeded current entry, nothing behind or ahead
+    expect(host.navigateReferenceHistoryPhysicalSync(3, 'left')).toBe(false);
+    expect(host.navigateReferenceHistoryPhysicalSync(3, 'right')).toBe(false);
   });
 });

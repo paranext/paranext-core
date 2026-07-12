@@ -1,3 +1,4 @@
+import { isMacOs } from '@/utils/platform.util';
 import { LanguageStrings, LegacyComment } from 'platform-bible-utils';
 import { KeyboardEvent } from 'react';
 import { ConflictResolutionOutcome, VERSE_TEXT_CONFLICT } from './conflict-note-card.types';
@@ -74,6 +75,6 @@ export function getAssignedUserDisplayName(
  * @returns `true` if Ctrl+Enter or Cmd+Enter was pressed, otherwise `false`
  */
 export function didPressCtrlOrCmdEnter(event: KeyboardEvent): boolean {
-  const isMac = /Macintosh/i.test(navigator.userAgent);
+  const isMac = isMacOs();
   return event.key === 'Enter' && ((isMac && event.metaKey) || (!isMac && event.ctrlKey));
 }
