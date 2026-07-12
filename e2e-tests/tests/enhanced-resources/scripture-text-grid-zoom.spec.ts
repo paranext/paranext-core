@@ -5,12 +5,12 @@
  * - Kebab path: hover a cell, click its "Zoom options" dropdown trigger, click "Zoom In", assert
  *   the first cell's content wrapper receives a `zoom` style > 1 while a second resource's cell
  *   remains unzoomed.
- * - Keyboard path: focus the first cell, press Ctrl+= to zoom in (zoom style applied), press
- *   Ctrl+0 to reset (zoom style removed).
  *
  * Not covered (need an app relaunch the CDP fixture can't do, plus real resource fixtures;
  * verify manually): Ctrl+wheel zoom, context-menu path, persistence across restarts,
  * chapter-context split rendering at the zoomed factor, boundary disabled states (max/min).
+ * - Keyboard zoom (Ctrl/Cmd +/-/0): deferred pending PT-4143 — the main-process before-input-event
+ *   handler claims those chords before the WebView iframe sees them.
  *
  * Honest runnability: these tests require a running Platform.Bible instance with 2+ resources
  * flagged and visible in the Scripture Text Grid. They are skipped in CI (no real resource
@@ -137,38 +137,5 @@ test.describe('Scripture Text Grid — per-resource zoom', () => {
 
     // The second resource must NOT have a zoom style — it is independent of the first.
     await expect(secondCell.locator('[style*="zoom"]')).toHaveCount(0);
-  });
-
-  test('keyboard Ctrl+= zooms, Ctrl+0 resets', async ({ mainPage }) => {
-    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
-    await waitForAppReady(mainPage);
-
-    const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-
-    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, twoResources());
-    const frame = await openScriptureTextGrid(mainPage);
-
-    await expect(frame.locator('[role="gridcell"]').first()).toBeVisible({ timeout: 15_000 });
-
-    const firstCell = frame.locator('[role="gridcell"]').first();
-
-    // Focus the first gridcell so the keyboard handler resolves it as the zoom target.
-    // `focus()` triggers the `onFocusCapture` on the `[data-resource-id]` wrapper, which
-    // updates `lastInteractedResourceIdRef` — the keyboard handler's fallback resource id.
-    await firstCell.focus();
-
-    // Ctrl+= fires the zoom-in branch in `useResourceZoomInput` (key "=" without shift).
-    // Playwright sends this as "Control+Equal" on all platforms.
-    await frame.locator('[role="grid"]').press('Control+Equal');
-
-    // After one step the content wrapper has zoom: 1.1.
-    const zoomedWrapper = firstCell.locator('[style*="zoom"]');
-    await expect(zoomedWrapper).toBeVisible({ timeout: 5_000 });
-    await expect(zoomedWrapper).toHaveAttribute('style', /zoom:\s*1\.1/);
-
-    // Ctrl+0 resets the zoom — the style attribute is removed entirely (resetZoom deletes the key).
-    await frame.locator('[role="grid"]').press('Control+0');
-    await expect(firstCell.locator('[style*="zoom"]')).toHaveCount(0);
   });
 });
