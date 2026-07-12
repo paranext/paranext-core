@@ -8,12 +8,23 @@ export type ZoomByResourceId = Record<string, number>;
 /** The web view's state hook, injected so this controller is unit-testable. */
 export type UseWebViewStateHook = WebViewProps['useWebViewState'];
 
-/** The single mutation/read surface all four zoom input paths funnel through. */
+/**
+ * The single mutation/read surface the zoom input paths (context menu, kebab, Ctrl/Cmd+wheel)
+ * funnel through.
+ */
 export type ResourceZoomController = {
+  /** Returns the stored factor for `resourceId`, or `DEFAULT_ZOOM_FACTOR` if unset. */
   getZoom: (resourceId: string) => number;
+  /** Stores a clamped, rounded factor for `resourceId`. */
   setZoomForResource: (resourceId: string, factor: number) => void;
+  /** Steps the factor by `deltaSteps * ZOOM_STEP` (+1 = zoom in, −1 = zoom out). */
   adjustZoom: (resourceId: string, deltaSteps: number) => void;
+  /** Removes the stored factor so `getZoom` returns the default. */
   resetZoom: (resourceId: string) => void;
+  /**
+   * Drops entries for resourceIds not in the list; call when the resource set changes to avoid
+   * orphaned entries.
+   */
   pruneToResourceIds: (resourceIds: readonly string[]) => void;
 };
 

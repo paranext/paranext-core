@@ -15,7 +15,7 @@ export function resolveResourceIdFromElement(
   return host?.dataset.resourceId;
 }
 
-function hasZoomModifier(event: WheelEvent | KeyboardEvent): boolean {
+function hasZoomModifier(event: WheelEvent): boolean {
   return event.ctrlKey || event.metaKey;
 }
 
@@ -27,14 +27,11 @@ function hasZoomModifier(event: WheelEvent | KeyboardEvent): boolean {
  *
  * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) is deferred pending PT-4143. The main-process
  * before-input-event handler in main.ts claims those chords for window zoom before the WebView
- * iframe sees them, so the keyboard path cannot function correctly until PT-4143 makes that
- * handler focus-aware. B8 ships three working paths: right-click context menu, hover/touch
- * kebab, and Ctrl/Cmd+wheel.
+ * iframe sees them, so the keyboard path cannot function correctly until PT-4143 makes that handler
+ * focus-aware. B8 ships three working paths: right-click context menu, hover/touch kebab, and
+ * Ctrl/Cmd+wheel.
  */
-export function useResourceZoomInput({
-  containerRef,
-  adjustZoom,
-}: ResourceZoomInputOptions): void {
+export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomInputOptions): void {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return undefined;

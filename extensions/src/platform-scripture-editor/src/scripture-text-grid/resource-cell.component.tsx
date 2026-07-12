@@ -7,7 +7,11 @@ import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-ut
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { deriveCellState } from './resource-cell.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import {
+  RESOURCE_CELL_STRING_KEYS,
+  ResourceCellView,
+  type ZoomMenuLabels,
+} from './resource-cell-view.component';
 import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { sliceUsjToVerse } from './verse-display.utils';
@@ -26,7 +30,7 @@ type ResourceCellProps = {
   /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
   zoom?: ResourceZoomController;
   /** Localized zoom menu copy, passed straight to the view. */
-  zoomMenuLabels?: { zoomIn: string; zoomOut: string; reset: string; options: string };
+  zoomMenuLabels?: ZoomMenuLabels;
 };
 
 /**

@@ -3,6 +3,7 @@ import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'pl
 import { X } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
+import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 
@@ -37,7 +38,7 @@ type ScriptureTextGridProps = {
   /** Per-resource zoom controller; when omitted the grid renders without zoom. */
   zoom?: ResourceZoomController;
   /** Localized labels for the zoom menus; passed through to each ResourceCell. */
-  zoomMenuLabels?: { zoomIn: string; zoomOut: string; reset: string; options: string };
+  zoomMenuLabels?: ZoomMenuLabels;
 };
 
 /**

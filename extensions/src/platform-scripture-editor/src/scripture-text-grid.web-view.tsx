@@ -48,6 +48,7 @@ import {
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
+  type ZoomMenuLabels,
 } from './scripture-text-grid/resource-cell-view.component';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
@@ -101,7 +102,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
   const zoom = useResourceZoom(useWebViewState);
-  const zoomMenuLabels = useMemo(
+  const zoomMenuLabels = useMemo<ZoomMenuLabels>(
     () => ({
       zoomIn: localizedStrings[ZOOM_IN_KEY],
       zoomOut: localizedStrings[ZOOM_OUT_KEY],

@@ -47,6 +47,9 @@ export type ResourceCellLocalizedStrings = {
   [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/** Localized copy for the per-resource zoom menus (context menu + kebab). */
+export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
+
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
@@ -64,14 +67,16 @@ export type ResourceCellViewProps = {
   onActivate?: () => void;
   /** Current zoom factor for this resource (1 = default). */
   zoomFactor?: number;
-  /** Whether the Zoom In / Zoom Out actions are still available (false at the max/min bound). */
+  /** False when the factor is at MAX_ZOOM_FACTOR. */
   canZoomIn?: boolean;
+  /** False when the factor is at MIN_ZOOM_FACTOR. */
   canZoomOut?: boolean;
+  /** Zoom action callbacks; invoked by both the kebab dropdown and the right-click context menu. */
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
   /** Localized menu copy; when omitted the zoom surfaces are not rendered. */
-  zoomMenuLabels?: { zoomIn: string; zoomOut: string; reset: string; options: string };
+  zoomMenuLabels?: ZoomMenuLabels;
 };
 
 function ZoomItemsShared({
@@ -83,7 +88,7 @@ function ZoomItemsShared({
   onResetZoom,
   variant,
 }: {
-  labels: { zoomIn: string; zoomOut: string; reset: string; options: string };
+  labels: ZoomMenuLabels;
   canZoomIn: boolean;
   canZoomOut: boolean;
   onZoomIn?: () => void;
@@ -210,7 +215,7 @@ export function ResourceCellView({
                     aria-label={zoomMenuLabels.options}
                     // Hidden until hover/focus for pointer users; always visible on touch
                     // (`hover: none`) where there is no hover to reveal it.
-                    className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:focus-visible:opacity-100 tw:[@media(hover:none)]:opacity-100"
+                    className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:[@media(hover:none)]:opacity-100"
                   >
                     <EllipsisVertical className="tw:h-4 tw:w-4" />
                   </Button>
