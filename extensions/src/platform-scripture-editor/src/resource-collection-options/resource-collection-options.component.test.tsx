@@ -43,7 +43,7 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
 STRINGS['%webView_scriptureTextGrid_viewOptions_emptyState_prompt%'] =
-  'No texts added yet. Use Get resources to add texts to your collection.';
+  'No texts added yet. Use {getResourcesLabel} to add them.';
 
 const ref = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -186,10 +186,11 @@ describe('ResourceCollectionOptions — disabled (no project/PDP bound)', () => 
 });
 
 describe('ResourceCollectionOptions — empty TEXTS list', () => {
-  it('shows the empty-texts prompt when the list is empty and enabled', () => {
+  it('shows the empty-texts prompt with the Get Resources label interpolated (ellipsis dropped)', () => {
     renderComponent({ top: [], bottom: [], installingResourceNames: [] });
+    // The button label is 'Get resources…'; embedded mid-sentence the trailing ellipsis is dropped.
     expect(
-      screen.getByText('No texts added yet. Use Get resources to add texts to your collection.'),
+      screen.getByText('No texts added yet. Use Get resources to add them.'),
     ).toBeInTheDocument();
   });
 

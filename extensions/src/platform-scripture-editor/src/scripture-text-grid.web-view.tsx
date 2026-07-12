@@ -3,6 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
+  EmptyState,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -15,6 +16,7 @@ import {
 import { Settings2 } from 'lucide-react';
 import {
   DblResourceData,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -42,7 +44,6 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
-import { ScriptureTextGridEmptyState } from './scripture-text-grid/scripture-text-grid-empty-state.component';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -75,12 +76,12 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
- * Options panel (A5), and the verse-cell grid body (A4).
+ * Options panel (NN5), and the verse-cell grid body (NN4).
  *
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. Below the header, the grid body renders one
- * `ResourceCell` per shown resource — the resources come from A3's `getScriptureTextGridContents`
+ * `ResourceCell` per shown resource — the resources come from NN3's `getScriptureTextGridContents`
  * selector over the Text Collection sources assembled by `useTextCollectionSources`, and the row's
  * verse/chapter layout follows the View Options `viewMode` toggle.
  */
@@ -142,7 +143,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     undefined,
   );
 
-  // The grid body's cells: A3's selector over the Text Collection sources, resolved to the row's
+  // The grid body's cells: NN3's selector over the Text Collection sources, resolved to the row's
   // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
@@ -344,7 +345,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         sources !== undefined &&
         !isLoadingCachedResources &&
         !isLoadingLocalizedStrings ? (
-          <ScriptureTextGridEmptyState prompt={localizedStrings[EMPTY_STATE_KEY]} />
+          // Centered in the grid body; the message names the View Options button by interpolating
+          // its own localized label so a rename can't desync the copy.
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <EmptyState
+              id="scripture-text-grid-empty-state"
+              className="tw:text-center"
+              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
+                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+              })}
+            />
+          </div>
         ) : (
           <ScriptureTextGrid
             ariaLabel={localizedStrings[TITLE_KEY]}

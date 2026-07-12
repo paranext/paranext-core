@@ -4,7 +4,7 @@ import { isPlatformError } from 'platform-bible-utils';
 export type ResourceCellState = 'downloading' | 'ready' | 'failed';
 
 /**
- * Derives a cell's offline state from observable data. A2/A13 own the actual download; this only
+ * Derives a cell's offline state from observable data. NN2/NN13 own the actual download; this only
  * visualizes it: PlatformError → `failed`; still loading / no value → `downloading`; else `ready`.
  */
 export function deriveCellState(args: {

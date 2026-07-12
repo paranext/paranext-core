@@ -1,4 +1,11 @@
-import { Button, Checkbox, Label, ToggleGroup, ToggleGroupItem } from 'platform-bible-react';
+import {
+  Button,
+  Checkbox,
+  EmptyState,
+  Label,
+  ToggleGroup,
+  ToggleGroupItem,
+} from 'platform-bible-react';
 import { X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
@@ -51,6 +58,16 @@ export function ResourceCollectionOptions({
   // project) or nothing (brief load), so this never double-messages or fires prematurely.
   const isTextsListEmpty =
     top.length === 0 && bottom.length === 0 && installingResourceNames.length === 0;
+
+  const getResourcesLabel = localize(
+    localizedStrings,
+    RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
+  );
+  // The Get Resources button label ends with an ellipsis (the dialog-opening affordance
+  // convention); drop it when the label is embedded mid-sentence in the empty prompt so it reads
+  // cleanly. Interpolating the label (rather than hardcoding it in the message) keeps the prompt in
+  // sync if the button is ever renamed.
+  const getResourcesLabelInProse = getResourcesLabel.replace(/(?:…|\.{3})$/u, '');
 
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
@@ -129,9 +146,13 @@ export function ResourceCollectionOptions({
           <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
         )}
         {!disabled && isTextsListEmpty && (
-          <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">
-            {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts)}
-          </p>
+          <EmptyState
+            className="tw:py-1 tw:italic"
+            message={formatReplacementString(
+              localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts),
+              { getResourcesLabel: getResourcesLabelInProse },
+            )}
+          />
         )}
         {top.map(renderRow)}
         {bottom.map(renderRow)}
@@ -149,7 +170,7 @@ export function ResourceCollectionOptions({
       </section>
 
       <Button variant="outline" disabled={disabled} onClick={onGetResources}>
-        {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.getResources)}
+        {getResourcesLabel}
       </Button>
     </div>
   );
