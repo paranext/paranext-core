@@ -57,6 +57,24 @@ const USER_ROWS: ViewOptionsTextEntry[] = [
   },
 ];
 
+/** DBL rows carrying long names — the B9 (PT-4156) display: `short — long`. */
+const LONG_NAME_ROWS: ViewOptionsTextEntry[] = [
+  {
+    reference: dblRef('niv', 'NIV'),
+    checked: true,
+    isAdminLocked: true,
+    isUserRemovable: false,
+    longName: 'New International Version',
+  },
+  {
+    reference: dblRef('web', 'WEB'),
+    checked: true,
+    isAdminLocked: false,
+    isUserRemovable: true,
+    longName: 'World English Bible',
+  },
+];
+
 /** Interactive harness: holds the view mode + row checked-state locally. */
 function Harness({
   initialTop,
@@ -128,4 +146,21 @@ export const Installing: Story = {
 /** With Chapter enabled (the state a later chapter renderer unlocks) — both modes selectable. */
 export const ChapterEnabled: Story = {
   render: () => <Harness initialTop={ADMIN_ROWS} initialBottom={USER_ROWS} isChapterEnabled />,
+};
+
+/** Long names shown after the short name (`NIV — New International Version`) at the normal width. */
+export const LongNames: Story = {
+  render: () => <Harness initialTop={[LONG_NAME_ROWS[0]]} initialBottom={[LONG_NAME_ROWS[1]]} />,
+};
+
+/**
+ * The same rows constrained to a narrow container: the short name stays visible and the long name
+ * truncates with an ellipsis (pure CSS). Demonstrates the responsive fallback the ticket requires.
+ */
+export const LongNamesNarrow: Story = {
+  render: () => (
+    <div className="tw:w-48">
+      <Harness initialTop={[LONG_NAME_ROWS[0]]} initialBottom={[LONG_NAME_ROWS[1]]} />
+    </div>
+  ),
 };
