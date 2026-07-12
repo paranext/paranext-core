@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ScriptureTextGrid } from './scripture-text-grid.component';
+import type { ResourceZoomController } from './use-resource-zoom.hook';
 
 const mockResourceCell = vi.fn(
   ({
@@ -12,7 +13,7 @@ const mockResourceCell = vi.fn(
     viewMode,
     onActivate,
   }: {
-    resourceRef: { label: string; projectId: string };
+    resourceRef: { label: string; projectId: string; resourceId: string };
     scrRef: { verseNum: number };
     viewMode?: string;
     onActivate?: () => void;
@@ -35,6 +36,10 @@ vi.mock('./resource-cell.component', () => ({
   ResourceCell: (props: Parameters<typeof mockResourceCell>[0]) => mockResourceCell(props),
 }));
 
+vi.mock('./use-resource-zoom-input.hook', () => ({
+  useResourceZoomInput: vi.fn(),
+}));
+
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
   return {
@@ -52,10 +57,38 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 const scrRef = { book: 'MAT', chapterNum: 5, verseNum: 3, versificationStr: 'English' };
 const setScrRef = vi.fn();
 const resources = [
-  { projectId: 'a', label: 'WEB' },
-  { projectId: 'b', label: 'KJV' },
-  { projectId: 'c', label: 'עברית' },
+  { resourceId: 'r-a', projectId: 'a', label: 'WEB' },
+  { resourceId: 'r-b', projectId: 'b', label: 'KJV' },
+  { resourceId: 'r-c', projectId: 'c', label: 'עברית' },
 ];
+
+type RenderOptions = { zoom?: ResourceZoomController };
+
+function renderGrid(
+  gridResources: typeof resources,
+  options: RenderOptions = {},
+) {
+  const result = render(
+    <ScriptureTextGrid
+      resources={gridResources}
+      scrRef={scrRef}
+      setScrRef={setScrRef}
+      {...(options.zoom ? { zoom: options.zoom } : {})}
+    />,
+  );
+  return {
+    ...result,
+    rerender: (nextResources: typeof resources, nextOptions: RenderOptions = {}) =>
+      result.rerender(
+        <ScriptureTextGrid
+          resources={nextResources}
+          scrRef={scrRef}
+          setScrRef={setScrRef}
+          {...(nextOptions.zoom ? { zoom: nextOptions.zoom } : {})}
+        />,
+      ),
+  };
+}
 
 // Reset between tests so per-test assertions on the mock's calls aren't polluted by prior renders.
 beforeEach(() => {
@@ -206,5 +239,34 @@ describe('ScriptureTextGrid', () => {
       />,
     );
     expect(screen.getByTestId('cell-b')).toHaveFocus();
+  });
+
+  it('tags each cell with its stable data-resource-id', () => {
+    renderGrid([
+      { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
+      { resourceId: 'r2', projectId: 'p2', label: 'NIV' },
+    ]);
+    expect(document.querySelector('[data-resource-id="r1"]')).not.toBeNull();
+    expect(document.querySelector('[data-resource-id="r2"]')).not.toBeNull();
+  });
+
+  it('prunes zoom entries for resources no longer present', () => {
+    const zoom: ResourceZoomController = {
+      getZoom: () => 1,
+      setZoomForResource: vi.fn(),
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+      pruneToResourceIds: vi.fn(),
+    };
+    const { rerender } = renderGrid(
+      [
+        { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
+        { resourceId: 'r2', projectId: 'p2', label: 'NIV' },
+      ],
+      { zoom },
+    );
+    expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1', 'r2']);
+    rerender([{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }], { zoom });
+    expect(zoom.pruneToResourceIds).toHaveBeenLastCalledWith(['r1']);
   });
 });

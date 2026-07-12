@@ -1,8 +1,10 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
 import { X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
+import { useResourceZoomInput } from './use-resource-zoom-input.hook';
+import type { ResourceZoomController } from './use-resource-zoom.hook';
 
 export type ChapterContextResource = GridResource;
 
@@ -28,6 +30,9 @@ type ScriptureTextGridProps = {
   onChapterContextClose?: () => void;
   /** Localized accessible name for the chapter-context close button. */
   closeChapterContextLabel?: string;
+  /** Per-resource zoom controller; when omitted the grid renders without zoom. */
+  zoom?: ResourceZoomController;
+  zoomMenuLabels?: { zoomIn: string; zoomOut: string; reset: string; options: string };
 };
 
 /**
@@ -49,6 +54,8 @@ export function ScriptureTextGrid({
   onChapterContextChange,
   onChapterContextClose,
   closeChapterContextLabel,
+  zoom,
+  zoomMenuLabels,
 }: ScriptureTextGridProps) {
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
@@ -69,6 +76,25 @@ export function ScriptureTextGrid({
       ?.focus();
   }, [chapterContext]);
 
+  // The resource the user last pointed at or focused; the keyboard zoom path targets it when focus
+  // is not on a cell (e.g. it moved into the editor content). Satisfies the ticket's
+  // "last-interacted" requirement and backstops focus resolution.
+  const lastInteractedResourceIdRef = useRef<string | undefined>(undefined);
+
+  const resourceIds = useMemo(() => resources.map((r) => r.resourceId), [resources]);
+
+  // Drop zoom entries for resources removed from the list so the map never orphans entries.
+  useEffect(() => {
+    zoom?.pruneToResourceIds(resourceIds);
+  }, [zoom, resourceIds]);
+
+  useResourceZoomInput({
+    containerRef: gridRef,
+    adjustZoom: zoom ? zoom.adjustZoom : () => {},
+    resetZoom: zoom ? zoom.resetZoom : () => {},
+    getFallbackResourceId: () => lastInteractedResourceIdRef.current,
+  });
+
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
   // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
   // adding more texts). No verse-cell row chrome and no chapter-context split; the whole chapter is
@@ -82,6 +108,8 @@ export function ScriptureTextGrid({
           scrRef={scrRef}
           setScrRef={setScrRef}
           viewMode="chapter"
+          zoom={zoom}
+          zoomMenuLabels={zoomMenuLabels}
         />
       </div>
     );
@@ -102,6 +130,13 @@ export function ScriptureTextGrid({
           <div
             key={resource.projectId}
             data-project-id={resource.projectId}
+            data-resource-id={resource.resourceId}
+            onPointerDownCapture={() => {
+              lastInteractedResourceIdRef.current = resource.resourceId;
+            }}
+            onFocusCapture={() => {
+              lastInteractedResourceIdRef.current = resource.resourceId;
+            }}
             className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
           >
             <ResourceCell
@@ -109,6 +144,8 @@ export function ScriptureTextGrid({
               scrRef={scrRef}
               setScrRef={setScrRef}
               viewMode={viewMode}
+              zoom={zoom}
+              zoomMenuLabels={zoomMenuLabels}
               onActivate={
                 onChapterContextChange
                   ? () => {
@@ -157,6 +194,8 @@ export function ScriptureTextGrid({
               scrRef={scrRef}
               setScrRef={setScrRef}
               viewMode="chapter"
+              zoom={zoom}
+              zoomMenuLabels={zoomMenuLabels}
             />
           </div>
         </div>
