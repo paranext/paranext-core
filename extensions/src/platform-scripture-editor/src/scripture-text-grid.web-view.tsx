@@ -1,6 +1,11 @@
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
+import {
+  useDataProvider,
+  useDialogCallback,
+  useLocalizedStrings,
+  useProjectDataProvider,
+} from '@papi/frontend/react';
 import {
   Button,
   EmptyState,
@@ -33,6 +38,7 @@ import {
   persistUserRemoval,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -100,7 +106,30 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // follow it when opened without an explicit project — e.g. from the default layout, whose tab
   // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
   const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
-  const effectiveProjectId = projectId ?? activeEditorProjectId;
+  const candidateProjectId = projectId ?? activeEditorProjectId;
+
+  // Each grid resource cell is itself a Scripture editor, so focusing one makes it the "active
+  // editor" even though a plain resource has no text collection. Probe whether the candidate exposes
+  // the text-connection PDP, and latch the last real text-collection project (see
+  // `resolveTextCollectionProjectId`) so clicking into a resource cell no longer switches the grid to
+  // that resource and blanks it — while still following the active editor to a genuine text-collection
+  // project.
+  const candidateTextConnectionPdp = useProjectDataProvider(
+    'platformScripture.textConnectionSettings',
+    candidateProjectId,
+  );
+  const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
+    candidateProjectId,
+  );
+  useEffect(() => {
+    setEffectiveProjectId((previous) =>
+      resolveTextCollectionProjectId(previous, {
+        explicitProjectId: projectId,
+        candidateProjectId,
+        candidateHasTextConnection: !!candidateTextConnectionPdp,
+      }),
+    );
+  }, [projectId, candidateProjectId, candidateTextConnectionPdp]);
 
   const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
