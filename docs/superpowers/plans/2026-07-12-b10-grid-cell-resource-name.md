@@ -21,6 +21,16 @@
 - **No keyboard-handler changes** → the keyboard-shortcuts catalog (`src/stories/keyboard-shortcuts.data.ts`) is untouched.
 - Tests use `// @vitest-environment jsdom` and `@testing-library/react`, matching the existing files.
 
+## Verified assumptions (adversarial review, 2026-07-12)
+
+These load-bearing claims were checked against the real code before finalizing:
+
+- **Tooltip adds no DOM wrapper.** `TooltipProvider`/`Tooltip` are Radix context (no element); `TooltipTrigger` with `asChild` uses Radix `Slot` (merges props onto the child `<span>`, no wrapper); `TooltipContent` is portaled and only mounts when `open`. So `name.parentElement` is genuinely the flex row (inline) or the gridcell (header) — the structural assertions are valid. This is the same controlled-tooltip pattern already in `resource-cell-view.component.tsx`.
+- **Grid tests can't regress.** `scripture-text-grid.component.test.tsx` fully mocks `ResourceCell` (`vi.mock('./resource-cell.component')`) and only asserts on `data-view-mode`, which this change does not touch.
+- **Test command.** `platform-scripture-editor` is its own npm workspace with a `test: vitest` script; the reliable single-file invocation is `npm test --workspace=platform-scripture-editor -- --run <file>` (verified: runs only the named file). Root `npm test` does NOT filter workspace tests via a bare `-- <file>`.
+- **Lint/rules.** ESLint uses legacy `.eslintrc.js`. `no-multi-comp` is not configured, so the private `ResourceNameLabel` helper is allowed. `tw:max-w-24` is valid (repo uses spacing-scale `max-w-56`/`max-w-72`). `tw:text-primary` is an in-use theme token.
+- **`aria-hidden` + `getByText`.** Testing Library's `getByText` still finds `aria-hidden` elements, so the visible-name assertions work; the gridcell's accessible name comes from its own `aria-label`, unaffected by hiding the visible copy.
+
 ---
 
 ### Task 1: `ResourceCellView` — `nameDisplay` prop + two layouts
@@ -60,11 +70,10 @@ describe('ResourceCellView name display', () => {
       />,
     );
     const cell = screen.getByRole('gridcell', { name: 'NIV' });
-    const name = within(cell).getByText('NIV');
-    const verse = within(cell).getByText('In the beginning');
-    // Name precedes the verse text in DOM (reading) order.
-    // eslint-disable-next-line no-bitwise
-    expect(name.compareDocumentPosition(verse) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Name precedes the verse text in DOM (reading) order — assert via text order in the cell.
+    const text = cell.textContent ?? '';
+    expect(text.indexOf('NIV')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('NIV')).toBeLessThan(text.indexOf('In the beginning'));
   });
 
   it('inline mode puts the name and verse text in one row (name beside text, not a header band)', () => {
@@ -158,7 +167,7 @@ describe('ResourceCellView name display', () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `npm test -- resource-cell-view.component.test.tsx`
+Run: `npm test --workspace=platform-scripture-editor -- --run resource-cell-view.component.test.tsx`
 Expected: the new `name display` tests FAIL — `nameDisplay` is not a prop yet, the visible name is not `aria-hidden`, and there is no intermediate inline row (the "inline" tests fail on `row).not.toBe(cell)` / `firstElementChild`). The existing `row smoke` tests still PASS.
 
 - [ ] **Step 3: Implement — replace the file contents**
@@ -355,15 +364,15 @@ export default ResourceCellView;
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `npm test -- resource-cell-view.component.test.tsx`
+Run: `npm test --workspace=platform-scripture-editor -- --run resource-cell-view.component.test.tsx`
 Expected: PASS — both the existing `row smoke` tests and the new `name display` tests.
 
 - [ ] **Step 5: Typecheck & lint the change**
 
-Run: `npm run typecheck`
+Run: `npm run typecheck --workspace=platform-scripture-editor`
 Expected: no errors.
 Run: `npx eslint extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.test.tsx`
-Expected: no errors. (The `no-bitwise` and `no-null/no-null` disables in the test/impl are intentional and carry inline justifications.)
+Expected: no errors. (The `no-null/no-null` disable in the impl is intentional and matches the existing pattern in this file. The repo-wide `npm run lint` in Task 4 is the authoritative gate.)
 
 - [ ] **Step 6: Commit**
 
@@ -429,7 +438,7 @@ describe('ResourceCell name display', () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `npm test -- resource-cell.component.test.tsx`
+Run: `npm test --workspace=platform-scripture-editor -- --run resource-cell.component.test.tsx`
 Expected: the `verse mode uses the inline hanging name` test FAILS — `ResourceCell` does not pass `nameDisplay` yet, so verse mode still renders the header band and `name.parentElement` IS the gridcell. The `chapter mode` test PASSES (header is the default).
 
 - [ ] **Step 3: Implement — pass `nameDisplay`**
@@ -461,7 +470,7 @@ return (
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `npm test -- resource-cell.component.test.tsx`
+Run: `npm test --workspace=platform-scripture-editor -- --run resource-cell.component.test.tsx`
 Expected: PASS — all existing `ResourceCell` / `ResourceCell viewMode` tests plus the two new `name display` tests.
 
 - [ ] **Step 5: Commit**
@@ -544,7 +553,7 @@ export const VerseInlineWrapping: Story = {
 
 - [ ] **Step 3: Typecheck & lint the stories**
 
-Run: `npm run typecheck`
+Run: `npm run typecheck --workspace=platform-scripture-editor`
 Expected: no errors.
 Run: `npx eslint extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.stories.tsx`
 Expected: no errors.
@@ -566,7 +575,7 @@ git commit -m "docs: B10 Storybook stories for the inline resource-name layout"
 
 - [ ] **Step 1: Run the full grid test suite**
 
-Run: `npm test -- scripture-text-grid`
+Run: `npm test --workspace=platform-scripture-editor -- --run scripture-text-grid`
 Expected: PASS — all `scripture-text-grid` tests (view, cell, utils, grid) green, confirming no regression in the existing row/viewMode/chapter-context behavior.
 
 - [ ] **Step 2: Repo-wide typecheck and lint (the CI commands)**
