@@ -221,18 +221,23 @@ export function ResourceCellView({
             </TooltipTrigger>
             {zoomMenuLabels ? (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label={zoomOptionsAriaLabel}
-                    // Hidden until hover/focus for pointer users; always visible on touch
-                    // (`hover: none`) where there is no hover to reveal it.
-                    className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:[@media(hover:none)]:opacity-100"
-                  >
-                    <EllipsisVertical className="tw:h-4 tw:w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={zoomOptionsAriaLabel}
+                        // Hidden until hover/focus for pointer users; always visible on touch
+                        // (`hover: none`) where there is no hover to reveal it.
+                        className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:[@media(hover:none)]:opacity-100"
+                      >
+                        <EllipsisVertical className="tw:h-4 tw:w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{zoomOptionsAriaLabel}</TooltipContent>
+                </Tooltip>
                 <DropdownMenuContent>
                   <ZoomItemsShared
                     labels={zoomMenuLabels}

@@ -356,8 +356,8 @@ export const AtMinZoom: Story = {
 // ---------------------------------------------------------------------------
 
 /**
- * Opens the kebab dropdown and asserts all three menu items are visible. Lets reviewers confirm
- * the affordance appears on hover and the menu renders with the correct labels.
+ * Opens the kebab dropdown and asserts all three menu items are visible. Lets reviewers confirm the
+ * affordance appears on hover and the menu renders with the correct labels.
  */
 export const ZoomKebabOpen: Story = {
   render: () => (
@@ -440,9 +440,7 @@ export const AtMaxZoomMenuOpen: Story = {
   },
 };
 
-/**
- * At minimum zoom: "Zoom Out" is disabled in the dropdown while "Zoom In" remains enabled.
- */
+/** At minimum zoom: "Zoom Out" is disabled in the dropdown while "Zoom In" remains enabled. */
 export const AtMinZoomMenuOpen: Story = {
   render: () => (
     <GridCellBox>

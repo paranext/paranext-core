@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { useState } from 'react';
 import { renderHook, act } from '@testing-library/react';
 import { useResourceZoom, type ZoomByResourceId } from './use-resource-zoom.hook';
-import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 
 // Minimal stand-in for WebViewProps['useWebViewState']: real React state so re-renders happen,
 // standing in for the synchronous localStorage-backed hook.

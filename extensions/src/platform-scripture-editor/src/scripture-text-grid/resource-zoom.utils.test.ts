@@ -6,9 +6,9 @@ import {
   clampZoom,
   roundZoom,
   adjustZoomFactor,
-} from './resource-zoom.util';
+} from './resource-zoom.utils';
 
-describe('resource-zoom.util', () => {
+describe('resource-zoom.utils', () => {
   it('exposes the agreed constants', () => {
     expect(DEFAULT_ZOOM_FACTOR).toBe(1);
     expect(MIN_ZOOM_FACTOR).toBe(0.5);

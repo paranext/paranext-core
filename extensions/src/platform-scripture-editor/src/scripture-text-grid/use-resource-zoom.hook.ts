@@ -1,6 +1,6 @@
 import type { WebViewProps } from '@papi/core';
 import { useCallback, useMemo, useRef } from 'react';
-import { DEFAULT_ZOOM_FACTOR, adjustZoomFactor, clampZoom, roundZoom } from './resource-zoom.util';
+import { DEFAULT_ZOOM_FACTOR, adjustZoomFactor, clampZoom, roundZoom } from './resource-zoom.utils';
 
 /** Per-resource zoom factors keyed by the stable resourceId. */
 export type ZoomByResourceId = Record<string, number>;
@@ -33,7 +33,7 @@ const EMPTY_ZOOM_MAP: ZoomByResourceId = {};
 /**
  * Owns the per-resource zoom map, persisted in the grid web view's `useWebViewState` (synchronous
  * localStorage — no debounce needed, so no pending write can be lost on close). Reads fall back to
- * `DEFAULT_ZOOM_FACTOR`; writes clamp+round via `resource-zoom.util`.
+ * `DEFAULT_ZOOM_FACTOR`; writes clamp+round via `resource-zoom.utils`.
  */
 export function useResourceZoom(useWebViewState: UseWebViewStateHook): ResourceZoomController {
   const [zoomByResourceId, setZoomByResourceId] = useWebViewState<ZoomByResourceId>(

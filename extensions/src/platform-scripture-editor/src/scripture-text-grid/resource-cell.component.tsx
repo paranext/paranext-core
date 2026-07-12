@@ -12,7 +12,7 @@ import {
   ResourceCellView,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
-import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
+import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { sliceUsjToVerse } from './verse-display.utils';
 
