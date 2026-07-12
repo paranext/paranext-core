@@ -34,6 +34,16 @@ vi.mock('@eten-tech-foundation/platform-editor', () => {
     }),
   };
 });
+// Mock platform-bible-react: stub useExtraValidMarkers (used by ResourceCell) and pass through
+// the UI components that ResourceCellView needs to render properly in jsdom.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const original = await importOriginal<typeof import('platform-bible-react')>();
+  return {
+    ...original,
+    useExtraValidMarkers: () => [],
+  };
+});
+
 vi.mock('@eten-tech-foundation/scripture-utilities', async (importOriginal) => {
   // Keep the real usxStringToUsj (used to build test fixtures below) alongside the existing
   // lightweight EMPTY_USJ/USJ_TYPE stand-ins.
@@ -60,7 +70,7 @@ const chapter = {
     },
   ],
 };
-const props = { resourceRef: { projectId: 'p1', label: 'WEB' }, scrRef, setScrRef: vi.fn() };
+const props = { resourceRef: { resourceId: 'r1', projectId: 'p1', label: 'WEB' }, scrRef, setScrRef: vi.fn() };
 
 // Two-verse chapter fixture for viewMode tests: verse 1 "verse one" + verse 2 "verse two" in one
 // <para style="p">, so a chapter-vs-verse slice is unambiguous.
@@ -119,7 +129,7 @@ describe('ResourceCell', () => {
   it('applies the resource own text direction', () => {
     setUsjResult(chapter, false);
     mockUseProjectSetting.mockReturnValue(['rtl', vi.fn(), vi.fn(), false]);
-    render(<ResourceCell {...props} resourceRef={{ projectId: 'p1', label: 'עברית' }} />);
+    render(<ResourceCell {...props} resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'עברית' }} />);
     expect(document.querySelector('[dir="rtl"]')).toBeInTheDocument();
   });
   it('defaults direction to ltr when the setting is a PlatformError', () => {
@@ -172,5 +182,43 @@ describe('ResourceCell viewMode', () => {
     expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
     expect(setUsjSpy).not.toHaveBeenCalled();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceCell zoom', () => {
+  it('passes the controller factor to the cell content as a zoom style', () => {
+    const zoom = {
+      getZoom: () => 1.4,
+      setZoomForResource: vi.fn(),
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+      pruneToResourceIds: vi.fn(),
+    };
+    setUsjResult(chapter, false);
+    render(
+      <div role="grid">
+        <div role="row">
+          <ResourceCell
+            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
+            scrRef={scrRef}
+            setScrRef={() => {}}
+            viewMode="chapter"
+            zoom={zoom}
+            zoomMenuLabels={{
+              zoomIn: 'Zoom In',
+              zoomOut: 'Zoom Out',
+              reset: 'Reset Zoom',
+              options: 'Zoom options',
+            }}
+          />
+        </div>
+      </div>,
+    );
+    // jsdom does not serialize CSS `zoom` into the style attribute string, so
+    // `[style*="zoom"]` selectors fail. Instead check the CSSOM property directly on
+    // the content wrapper element (the div with dir="ltr" that carries the zoom style).
+    const contentWrapper = document.querySelector('[dir="ltr"]');
+    expect(contentWrapper).not.toBeNull();
+    expect((contentWrapper as HTMLElement).style.zoom).toBe('1.4');
   });
 });

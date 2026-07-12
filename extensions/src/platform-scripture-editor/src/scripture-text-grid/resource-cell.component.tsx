@@ -5,9 +5,11 @@ import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/fr
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
+import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { sliceUsjToVerse } from './verse-display.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -21,6 +23,10 @@ type ResourceCellProps = {
   viewMode?: 'chapter' | 'verse';
   /** Opens the chapter-context split for this cell (pointer-down / Enter on the gridcell). */
   onActivate?: () => void;
+  /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
+  zoom?: ResourceZoomController;
+  /** Localized zoom menu copy, passed straight to the view. */
+  zoomMenuLabels?: { zoomIn: string; zoomOut: string; reset: string; options: string };
 };
 
 /**
@@ -35,6 +41,8 @@ export function ResourceCell({
   setScrRef,
   viewMode = 'chapter',
   onActivate,
+  zoom,
+  zoomMenuLabels,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -117,6 +125,20 @@ export function ResourceCell({
 
   const isVerseEmpty = viewMode === 'verse' && state === 'ready' && (verseSlice?.isEmpty ?? false);
 
+  const zoomFactor = zoom ? zoom.getZoom(resourceRef.resourceId) : undefined;
+  const handleZoomIn = useCallback(
+    () => zoom?.adjustZoom(resourceRef.resourceId, 1),
+    [zoom, resourceRef.resourceId],
+  );
+  const handleZoomOut = useCallback(
+    () => zoom?.adjustZoom(resourceRef.resourceId, -1),
+    [zoom, resourceRef.resourceId],
+  );
+  const handleResetZoom = useCallback(
+    () => zoom?.resetZoom(resourceRef.resourceId),
+    [zoom, resourceRef.resourceId],
+  );
+
   return (
     <ResourceCellView
       state={state}
@@ -125,6 +147,13 @@ export function ResourceCell({
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
       onActivate={onActivate}
+      zoomFactor={zoomFactor}
+      canZoomIn={zoomFactor === undefined || zoomFactor < MAX_ZOOM_FACTOR}
+      canZoomOut={zoomFactor === undefined || zoomFactor > MIN_ZOOM_FACTOR}
+      onZoomIn={handleZoomIn}
+      onZoomOut={handleZoomOut}
+      onResetZoom={handleResetZoom}
+      zoomMenuLabels={zoom ? zoomMenuLabels : undefined}
       editor={
         <Editorial
           ref={editorRef}
