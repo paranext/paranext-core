@@ -9,7 +9,7 @@ import { isDblResourceReference, isProjectReference } from './resource-reference
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 
 /** A Bible-text reference — the only reference types that carry `id` and `isResourceShownForUser`. */
-export type BibleTextReference = ProjectReference | DblResourceReference;
+type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
  * The three data sources that together determine what a given user sees in the Text Collection.

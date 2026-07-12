@@ -155,12 +155,50 @@ export const LongNames: Story = {
 
 /**
  * The same rows constrained to a narrow container: the short name stays visible and the long name
- * truncates with an ellipsis (pure CSS). Demonstrates the responsive fallback the ticket requires.
+ * truncates with an ellipsis (pure CSS).
  */
 export const LongNamesNarrow: Story = {
   render: () => (
     <div className="tw:w-48">
       <Harness initialTop={[LONG_NAME_ROWS[0]]} initialBottom={[LONG_NAME_ROWS[1]]} />
     </div>
+  ),
+};
+
+/**
+ * A realistic mix: one row has a long name, another has none — the latter renders its short name
+ * alone.
+ */
+export const MixedLongAndShort: Story = {
+  render: () => (
+    <Harness
+      initialTop={[LONG_NAME_ROWS[0]]}
+      initialBottom={[
+        {
+          reference: dblRef('esv', 'ESV'),
+          checked: true,
+          isAdminLocked: false,
+          isUserRemovable: true,
+        },
+      ]}
+    />
+  ),
+};
+
+/** RTL: a Hebrew resource name. `dir="auto"` flips the row to right-to-left from the name's script. */
+export const RightToLeftLongName: Story = {
+  render: () => (
+    <Harness
+      initialTop={[]}
+      initialBottom={[
+        {
+          reference: dblRef('wlc', 'תנ״ך'),
+          checked: true,
+          isAdminLocked: false,
+          isUserRemovable: true,
+          longName: 'כתבי הקודש העבריים',
+        },
+      ]}
+    />
   ),
 };

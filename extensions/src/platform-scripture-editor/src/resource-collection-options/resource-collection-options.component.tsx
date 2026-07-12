@@ -81,7 +81,7 @@ export function ResourceCollectionOptions({
     const { id, name } = row.reference;
     const { longName } = row;
     // Composed in JS (not a raw JSX text node) so the em-dash separator does not trip
-    // no-hardcoded-jsx-strings. This is the untruncated label shown as the native tooltip.
+    // no-hardcoded-jsx-strings.
     const fullLabel = longName ? `${name} — ${longName}` : name;
     return (
       <div key={id} className="tw:group tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:py-1">
@@ -95,13 +95,13 @@ export function ResourceCollectionOptions({
               panel (native tooltip on overflow). `dir="auto"` lets an RTL resource name render RTL. */}
           {longName ? (
             <span
-              className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-1"
+              className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline"
               title={fullLabel}
               dir="auto"
             >
               {/* Short name never truncates; only the long name ellipsizes when the row is tight. */}
               <span className="tw:shrink-0">{name}</span>
-              <span className="tw:min-w-0 tw:flex-1 tw:truncate">{`— ${longName}`}</span>
+              <span className="tw:min-w-0 tw:flex-1 tw:truncate">{` — ${longName}`}</span>
             </span>
           ) : (
             <span className="tw:min-w-0 tw:flex-1 tw:truncate" title={name} dir="auto">
