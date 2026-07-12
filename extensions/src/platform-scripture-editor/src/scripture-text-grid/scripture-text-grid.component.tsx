@@ -1,10 +1,14 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
 import { X } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
+
+// Stable no-op for optional zoom callbacks so `useResourceZoomInput`'s effect deps don't change
+// when `zoom` is undefined.
+const NO_OP = () => {};
 
 export type ChapterContextResource = GridResource;
 
@@ -32,6 +36,7 @@ type ScriptureTextGridProps = {
   closeChapterContextLabel?: string;
   /** Per-resource zoom controller; when omitted the grid renders without zoom. */
   zoom?: ResourceZoomController;
+  /** Localized labels for the zoom menus; passed through to each ResourceCell. */
   zoomMenuLabels?: { zoomIn: string; zoomOut: string; reset: string; options: string };
 };
 
@@ -88,17 +93,29 @@ export function ScriptureTextGrid({
     zoom?.pruneToResourceIds(resourceIds);
   }, [zoom, resourceIds]);
 
+  // Stable identities for `useResourceZoomInput` deps — prevents tearing down and re-attaching
+  // wheel/keydown listeners on every render. `zoom.adjustZoom` / `zoom.resetZoom` are already
+  // stable (the controller is memoized upstream); NO_OP is module-stable; `getFallbackResourceId`
+  // is stabilized via `useCallback`.
+  const adjustZoom = zoom ? zoom.adjustZoom : NO_OP;
+  const resetZoom = zoom ? zoom.resetZoom : NO_OP;
+  const getFallbackResourceId = useCallback(() => lastInteractedResourceIdRef.current, []);
+
   useResourceZoomInput({
     containerRef: gridRef,
-    adjustZoom: zoom ? zoom.adjustZoom : () => {},
-    resetZoom: zoom ? zoom.resetZoom : () => {},
-    getFallbackResourceId: () => lastInteractedResourceIdRef.current,
+    adjustZoom,
+    resetZoom,
+    getFallbackResourceId,
   });
 
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
   // viewer, minus its resource-selector dropdown (the web view header's View Options button covers
   // adding more texts). No verse-cell row chrome and no chapter-context split; the whole chapter is
   // already shown.
+  //
+  // Note: this branch has no `data-resource-id` wrapper element, so the pointer/focus capture
+  // handlers on the multi-resource wrappers are absent. The keyboard zoom path therefore relies on
+  // `getFallbackResourceId` (last-interacted) to resolve the target resource id for this cell.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     return (
