@@ -23,7 +23,7 @@ import type {
 const meta: Meta<typeof ResourceCollectionOptions> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceCollectionOptions',
   component: ResourceCollectionOptions,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
 };
 export default meta;
 

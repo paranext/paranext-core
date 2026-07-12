@@ -368,7 +368,10 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
 });
 
 // A12 (PT-4057) — Scripture Text Grid accessibility specs. Local-only (they mutate real project
-// settings): each test self-skips in CI and when no admin-writable project is available.
+// settings): each test self-skips in CI and when no admin-writable project is available. The
+// synthetic resource IDs (e.g. 'aabbccddeeff00112233') need not resolve to installed resources —
+// these specs assert ARIA roles, accessible names, focus, and layout, which render from the cell's
+// offline state and don't require real chapter text.
 test.describe('Scripture Text Grid accessibility (A12)', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);

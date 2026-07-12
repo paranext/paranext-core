@@ -53,16 +53,16 @@ const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
-const A11Y_OPENED_KEY = '%webView_scriptureTextGrid_a11y_chapterContextOpened%';
-const A11Y_CLOSED_KEY = '%webView_scriptureTextGrid_a11y_chapterContextClosed%';
+const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
+const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
-  A11Y_OPENED_KEY,
-  A11Y_CLOSED_KEY,
+  ARIA_OPENED_KEY,
+  ARIA_CLOSED_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -125,14 +125,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     (context: ChapterContextResource) => {
       setChapterContext(context);
       setAnnouncement(
-        buildChapterContextOpenedMessage(localizedStrings[A11Y_OPENED_KEY] ?? '', context.label),
+        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
       );
     },
     [localizedStrings],
   );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-    setAnnouncement(localizedStrings[A11Y_CLOSED_KEY] ?? '');
+    setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
   }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
