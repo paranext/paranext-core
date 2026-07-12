@@ -1,5 +1,5 @@
 declare module 'papi-shared-types' {
-  import type { PlatformError, ScrollGroupId, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -190,22 +190,6 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
-
-    // This command is provided in `src/renderer/services/scroll-group.service-host.ts`
-    /**
-     * Navigate multiple steps within the reference history of the given scroll group,
-     * browser-`history.go` style.
-     *
-     * @param scrollGroupId Scroll group whose history to navigate
-     * @param offset Signed number of steps: negative = back, positive = forward
-     * @returns `true` if navigation happened; `false` if the offset was 0, non-integer, or out of
-     *   range
-     * @experimental
-     */
-    'platform.navigateReferenceHistoryByOffset': (
-      scrollGroupId: ScrollGroupId,
-      offset: number,
-    ) => Promise<boolean>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see

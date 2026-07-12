@@ -4281,7 +4281,7 @@ declare module 'shared/models/web-view-factory.model' {
   }
 }
 declare module 'papi-shared-types' {
-  import type { PlatformError, ScrollGroupId, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -4453,20 +4453,6 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
-    /**
-     * Navigate multiple steps within the reference history of the given scroll group,
-     * browser-`history.go` style.
-     *
-     * @param scrollGroupId Scroll group whose history to navigate
-     * @param offset Signed number of steps: negative = back, positive = forward
-     * @returns `true` if navigation happened; `false` if the offset was 0, non-integer, or out of
-     *   range
-     * @experimental
-     */
-    'platform.navigateReferenceHistoryByOffset': (
-      scrollGroupId: ScrollGroupId,
-      offset: number,
-    ) => Promise<boolean>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -8118,19 +8104,28 @@ declare module 'renderer/services/scroll-group.service-host' {
   /**
    * See {@link IScrollGroupRemoteService.setScrRef}
    *
+   * The user-facing setter: writes the ref (via {@link writeScrRef}) AND records the change in the
+   * scroll group's reference history. Reference-history navigation itself does NOT go through here —
+   * it calls {@link writeScrRef} directly, since its stacks already reflect the move.
+   *
    * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
    *   unknown / canonical English.
-   * @param shouldRecordHistory If `true`, record this change in the scroll group's reference history.
-   *   Defaults to `true`. Only set to `false` when navigating within the history itself, where the
-   *   stacks already reflect the move.
    */
   export function setScrRefSync(
     scrollGroupId: ScrollGroupId | undefined,
     scrRef: SerializedVerseRef,
     sourceProjectId?: string,
-    shouldRecordHistory?: boolean,
   ): boolean;
-  /** Register the network object and PAPI commands that back the scroll group service */
+  /**
+   * Register the network object that backs the scroll group service.
+   *
+   * The reference-history navigation commands are NOT registered here: the physical left/right
+   * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
+   * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
+   * the window service this state module deliberately does not import). Programmatic offset navigation
+   * is exposed through this network object's `navigateReferenceHistory` method below rather than a
+   * duplicate command.
+   */
   export function startScrollGroupService(): Promise<void>;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {

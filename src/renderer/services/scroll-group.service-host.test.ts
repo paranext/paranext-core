@@ -364,6 +364,23 @@ describe('reference history integration', () => {
     expect(host.navigateReferenceHistorySync(1, 1)).toBe(false);
   });
 
+  it('a multi-step jump onto a same-numbers entry applies the destination source frame', async () => {
+    const host = await import('@renderer/services/scroll-group.service-host');
+    // Build history whose oldest back entry is the seeded GEN 1:1 with an UNKNOWN source, while the
+    // current stored ref is a same-numbers GEN 1:1 with a KNOWN source:
+    //   seed GEN 1:1 (source undefined) -> MAT (projNT) -> GEN 1:1 (projOT)
+    host.setScrRefSync(0, { book: 'MAT', chapterNum: 1, verseNum: 1 }, 'projNT');
+    host.setScrRefSync(0, { book: 'GEN', chapterNum: 1, verseNum: 1 }, 'projOT');
+    expect(host.getScrRefSourceProjectIdSync(0)).toBe('projOT');
+
+    // Jump back two entries, landing on the sourceless GEN 1:1. Its numbers equal the current stored
+    // ref, which previously tripped setScrRefSync's no-op guard and left the source frame lagging at
+    // 'projOT'. Writing through writeScrRef (no guard) applies the destination frame.
+    expect(host.navigateReferenceHistorySync(0, -2)).toBe(true);
+    expect(host.getScrRefSync(0)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(host.getScrRefSourceProjectIdSync(0)).toBeUndefined();
+  });
+
   it('histories are per scroll group', async () => {
     const host = await import('@renderer/services/scroll-group.service-host');
     host.setScrRefSync(1, { book: 'MRK', chapterNum: 4, verseNum: 1 });
