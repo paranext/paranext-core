@@ -2,23 +2,25 @@
  * E2E checks for the Scripture Text Grid per-resource zoom feature (PT-4155 / B8).
  *
  * Covered:
- * - Kebab path: hover a cell, click its "Zoom options" dropdown trigger, click "Zoom In", assert
- *   the first cell's content wrapper receives a `zoom` style > 1 while a second resource's cell
- *   remains unzoomed.
  *
- * Not covered (need an app relaunch the CDP fixture can't do, plus real resource fixtures;
- * verify manually): Ctrl+wheel zoom, context-menu path, persistence across restarts,
- * chapter-context split rendering at the zoomed factor, boundary disabled states (max/min).
+ * - Kebab path: hover a cell, click its "Zoom options" dropdown trigger, click "Zoom In", assert the
+ *   first cell's content wrapper receives a `zoom` style > 1 while a second resource's cell remains
+ *   unzoomed.
+ *
+ * Not covered (need an app relaunch the CDP fixture can't do, plus real resource fixtures; verify
+ * manually): Ctrl+wheel zoom, context-menu path, persistence across restarts, chapter-context split
+ * rendering at the zoomed factor, boundary disabled states (max/min).
+ *
  * - Keyboard zoom (Ctrl/Cmd +/-/0): deferred pending PT-4143 — the main-process before-input-event
  *   handler claims those chords before the WebView iframe sees them.
  *
  * Honest runnability: these tests require a running Platform.Bible instance with 2+ resources
  * flagged and visible in the Scripture Text Grid. They are skipped in CI (no real resource
- * fixtures) and must be run locally after opening the app with
- * --remote-debugging-port=9223 and configuring at least two resources via View Options.
+ * fixtures) and must be run locally after opening the app with --remote-debugging-port=9223 and
+ * configuring at least two resources via View Options.
  *
- * The zoom CSS property is applied inline (`style="zoom: 1.1"`) on the content wrapper div.
- * In a real Chromium (unlike jsdom), `locator('[style*="zoom"]')` reliably matches this element.
+ * The zoom CSS property is applied inline (`style="zoom: 1.1"`) on the content wrapper div. In a
+ * real Chromium (unlike jsdom), `locator('[style*="zoom"]')` reliably matches this element.
  */
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
@@ -34,8 +36,8 @@ import {
 /**
  * Two synthetic resource IDs for seeding the grid. The `id` values do not need to resolve to
  * downloadable projects for the zoom surfaces to render — the zoom menu is present even when a
- * resource is in the "unavailable" state. Using synthetic IDs avoids real Paratext project
- * fixtures and keeps the test self-contained.
+ * resource is in the "unavailable" state. Using synthetic IDs avoids real Paratext project fixtures
+ * and keeps the test self-contained.
  *
  * If you have real downloaded resources, set `E2E_TEST_RESOURCE_IDS=id1,id2` and the tests will
  * prefer them (no "unavailable" banner).
