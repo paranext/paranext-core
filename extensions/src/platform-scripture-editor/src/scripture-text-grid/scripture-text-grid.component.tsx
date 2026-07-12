@@ -1,7 +1,7 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Button, ResizableHandle, ResizablePanel, ResizablePanelGroup } from 'platform-bible-react';
 import { X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ResourceCell, GridResource } from './resource-cell.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
@@ -81,11 +81,6 @@ export function ScriptureTextGrid({
       ?.focus();
   }, [chapterContext]);
 
-  // The resource the user last pointed at or focused; the keyboard zoom path targets it when focus
-  // is not on a cell (e.g. it moved into the editor content). Satisfies the ticket's
-  // "last-interacted" requirement and backstops focus resolution.
-  const lastInteractedResourceIdRef = useRef<string | undefined>(undefined);
-
   const resourceIds = useMemo(() => resources.map((r) => r.resourceId), [resources]);
 
   // Drop zoom entries for resources removed from the list so the map never orphans entries.
@@ -96,19 +91,14 @@ export function ScriptureTextGrid({
     zoom?.pruneToResourceIds(resourceIds);
   }, [zoom, resourceIds]);
 
-  // Stable identities for `useResourceZoomInput` deps — prevents tearing down and re-attaching
-  // wheel/keydown listeners on every render. `zoom.adjustZoom` / `zoom.resetZoom` are already
-  // stable (the controller is memoized upstream); NO_OP is module-stable; `getFallbackResourceId`
-  // is stabilized via `useCallback`.
+  // Stable identity for `useResourceZoomInput` dep — prevents tearing down and re-attaching the
+  // wheel listener on every render. `zoom.adjustZoom` is already stable (the controller is
+  // memoized upstream); NO_OP is module-stable.
   const adjustZoom = zoom ? zoom.adjustZoom : NO_OP;
-  const resetZoom = zoom ? zoom.resetZoom : NO_OP;
-  const getFallbackResourceId = useCallback(() => lastInteractedResourceIdRef.current, []);
 
   useResourceZoomInput({
     containerRef: gridRef,
     adjustZoom,
-    resetZoom,
-    getFallbackResourceId,
   });
 
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
@@ -117,9 +107,8 @@ export function ScriptureTextGrid({
   // already shown.
   //
   // `gridRef` is attached here so `useResourceZoomInput` has a non-null container and can wire its
-  // wheel/keyboard listeners. `data-resource-id` lets target resolution in the hook identify the
-  // resource from any event target inside the cell. The pointer/focus capture handlers mirror the
-  // multi-resource wrappers so `lastInteractedResourceIdRef` is always current.
+  // wheel listener. `data-resource-id` lets target resolution in the hook identify the resource
+  // from any event target inside the cell.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     return (
@@ -128,12 +117,6 @@ export function ScriptureTextGrid({
         role="region"
         aria-label={ariaLabel}
         data-resource-id={onlyResource.resourceId}
-        onPointerDownCapture={() => {
-          lastInteractedResourceIdRef.current = onlyResource.resourceId;
-        }}
-        onFocusCapture={() => {
-          lastInteractedResourceIdRef.current = onlyResource.resourceId;
-        }}
         className="tw:h-full tw:min-h-0 tw:overflow-auto"
       >
         <ResourceCell
@@ -164,12 +147,6 @@ export function ScriptureTextGrid({
             key={resource.projectId}
             data-project-id={resource.projectId}
             data-resource-id={resource.resourceId}
-            onPointerDownCapture={() => {
-              lastInteractedResourceIdRef.current = resource.resourceId;
-            }}
-            onFocusCapture={() => {
-              lastInteractedResourceIdRef.current = resource.resourceId;
-            }}
             className="tw:flex tw:min-w-3xs tw:flex-1 tw:shrink-0"
           >
             <ResourceCell
