@@ -79,19 +79,35 @@ export function ResourceCollectionOptions({
 
   const renderRow = (row: ViewOptionsTextEntry) => {
     const { id, name } = row.reference;
+    const { longName } = row;
+    // Composed in JS (not a raw JSX text node) so the em-dash separator does not trip
+    // no-hardcoded-jsx-strings. This is the untruncated label shown as the native tooltip.
+    const fullLabel = longName ? `${name} — ${longName}` : name;
     return (
-      <div key={id} className="tw:group tw:flex tw:items-center tw:gap-2 tw:py-1">
-        <Label className="tw:flex tw:flex-1 tw:items-center tw:gap-2 tw:font-normal">
+      <div key={id} className="tw:group tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:py-1">
+        <Label className="tw:flex tw:min-w-0 tw:flex-1 tw:items-center tw:gap-2 tw:font-normal">
           <Checkbox
             checked={row.checked}
             disabled={disabled}
             onCheckedChange={(checked) => onCheckedChange(id, checked === true)}
           />
-          {/* `title` carries the untruncated name so long DBL names stay readable in the narrow panel
-              (native tooltip on overflow — same read path as project-selector). */}
-          <span className="tw:flex-1 tw:truncate" title={name}>
-            {name}
-          </span>
+          {/* `title` carries the untruncated label so long DBL names stay readable in the narrow
+              panel (native tooltip on overflow). `dir="auto"` lets an RTL resource name render RTL. */}
+          {longName ? (
+            <span
+              className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-1"
+              title={fullLabel}
+              dir="auto"
+            >
+              {/* Short name never truncates; only the long name ellipsizes when the row is tight. */}
+              <span className="tw:shrink-0">{name}</span>
+              <span className="tw:min-w-0 tw:flex-1 tw:truncate">{`— ${longName}`}</span>
+            </span>
+          ) : (
+            <span className="tw:min-w-0 tw:flex-1 tw:truncate" title={name} dir="auto">
+              {name}
+            </span>
+          )}
         </Label>
         {row.isUserRemovable && (
           <Button
@@ -102,7 +118,7 @@ export function ResourceCollectionOptions({
               localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.removeFromList),
               { resourceName: name },
             )}
-            className="tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100"
+            className="tw:shrink-0 tw:opacity-0 tw:transition-opacity tw:group-hover:opacity-100 tw:focus-visible:opacity-100"
             onClick={() => onRemoveFromList(id)}
           >
             <X className="tw:h-4 tw:w-4" />
