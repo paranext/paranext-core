@@ -1,0 +1,5 @@
+import{r,j as a}from"./iframe-BGA3HOn9.js";import{c as s}from"./utils-BPbySc-g.js";import{P as d}from"./index-DOLCxvXT.js";var l="Label",i=r.forwardRef((e,n)=>a.jsx(d.label,{...e,ref:n,onMouseDown:t=>{var o;t.target.closest("button, input, select, textarea")||((o=e.onMouseDown)==null||o.call(e,t),!t.defaultPrevented&&t.detail>1&&t.preventDefault())}}));i.displayName=l;var c=i;function m({className:e,...n}){return a.jsx(c,{"data-slot":"label",className:s("pr-twp tw:flex tw:items-center tw:gap-2 tw:text-sm tw:leading-none tw:font-medium tw:select-none tw:group-data-[disabled=true]:pointer-events-none tw:group-data-[disabled=true]:opacity-50 tw:peer-disabled:cursor-not-allowed tw:peer-disabled:opacity-50",e),...n})}m.__docgenInfo={description:`The Label component renders an accessible label associated with controls. This component is built
+on Radix UI primitives and styled with Shadcn UI.
+
+@see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
+@see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}`,methods:[],displayName:"Label"};export{m as L};
