@@ -1,5 +1,5 @@
 /**
- * E2E scaffold checks for the Scripture Text Grid web view (PT-4049 / A1).
+ * E2E scaffold checks for the Scripture Text Grid web view (PT-4049).
  *
  * Covered: the view opens as a non-closable, icon-only dock tab (located by the opened web view id,
  * since the tab has no text label) — no `.dock-tab-close-btn`, checked against a positive-control
@@ -25,7 +25,7 @@ import {
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './test-helpers';
 
-test.describe('Scripture Text Grid (A1 scaffold)', () => {
+test.describe('Scripture Text Grid (scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);
   });
@@ -106,11 +106,12 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// A4 (PT-4052) — ScriptureTextGrid renderer (verse default + chapter-context split).
+// PT-4052 — ScriptureTextGrid renderer (verse default + chapter-context split).
 //
 // Honest runnability: there is NO dev-fixture plumbing for web-view content (a web view is a
 // renderer iframe with no injected env), and most scenarios need real flagged resources. Data-mutating
-// specs skip in CI and discover an admin-writable project locally (mirroring the A2 spec).
+// specs skip in CI and discover an admin-writable project locally (mirroring the other
+// data-mutating enhanced-resources specs).
 //
 // Env vars:
 // - E2E_TEST_PROJECT_ID — pin an admin-writable text-connection project (optional)
@@ -122,7 +123,7 @@ const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .map((id) => id.trim())
   .filter(Boolean);
 
-test.describe('Scripture Text Grid renderer (A4)', () => {
+test.describe('Scripture Text Grid renderer', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);
   });
@@ -143,7 +144,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
         type: 'project',
-        name: 'STG A4 smoke',
+        name: 'STG renderer smoke',
         id: SYNTHETIC_BAD_ID,
         isResourceShownByDefault: true,
       },
@@ -165,7 +166,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
         type: 'project',
-        name: 'STG A4 split',
+        name: 'STG renderer split',
         id: SYNTHETIC_BAD_ID,
         isResourceShownByDefault: true,
       },
@@ -194,7 +195,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
         type: 'project',
-        name: 'STG A4 esc',
+        name: 'STG renderer esc',
         id: SYNTHETIC_BAD_ID,
         isResourceShownByDefault: true,
       },
@@ -367,7 +368,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
   });
 });
 
-test.describe('Scripture Text Grid empty state (A6)', () => {
+test.describe('Scripture Text Grid empty state', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);
   });
