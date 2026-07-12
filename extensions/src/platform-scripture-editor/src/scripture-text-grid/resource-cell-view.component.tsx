@@ -167,6 +167,15 @@ export function ResourceCellView({
     [onActivate],
   );
 
+  // A zoom-menu interaction (opening the kebab or selecting an item) can surface a click on the
+  // cell after the portaled menu closes. Track the menu's open state and hold it briefly across the
+  // closing click so cell activation ignores it — using the kebab must not open the chapter split.
+  const zoomMenuOpenRef = useRef(false);
+  const handleActivateClick = useCallback(() => {
+    if (zoomMenuOpenRef.current) return;
+    onActivate?.();
+  }, [onActivate]);
+
   // Format the kebab aria-label with the resource name (the template uses {resourceName}).
   const zoomOptionsAriaLabel = zoomMenuLabels
     ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
@@ -181,7 +190,7 @@ export function ResourceCellView({
       aria-label={label}
       tabIndex={onActivate ? 0 : undefined}
       onKeyDown={onActivate ? handleKeyDown : undefined}
-      onClick={onActivate}
+      onClick={onActivate ? handleActivateClick : undefined}
       // `group` powers the hover/focus-visible kebab; `cursor-pointer` signals the cell opens the
       // chapter-context split (only when activation is wired).
       className={`tw:group tw:flex tw:min-w-0 tw:flex-col ${onActivate ? 'tw:cursor-pointer' : ''}`}
@@ -200,7 +209,18 @@ export function ResourceCellView({
               </div>
             </TooltipTrigger>
             {zoomMenuLabels ? (
-              <DropdownMenu>
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  // Hold the flag through the closing click (defer clearing by a macrotask) so the
+                  // fall-through click the portaled menu surfaces on the cell is ignored by
+                  // `handleActivateClick` and the chapter-context panel does not open.
+                  if (open) zoomMenuOpenRef.current = true;
+                  else
+                    window.setTimeout(() => {
+                      zoomMenuOpenRef.current = false;
+                    }, 0);
+                }}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
