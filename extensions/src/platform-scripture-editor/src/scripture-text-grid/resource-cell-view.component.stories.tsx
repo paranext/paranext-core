@@ -185,6 +185,29 @@ export const VerseEmpty: Story = {
   ),
 };
 
+/**
+ * An interactive row cell: `onActivate` is wired, so the cell becomes a keyboard tab stop with a
+ * pointer cursor, and its accessible name includes the reference ("{label}, {ref}"). Tab to the
+ * cell to reveal the focus-visible ring; Enter or Space (or a click) opens the chapter-context
+ * split in the app. The non-interactive stories above omit `onActivate` (single-resource and
+ * chapter-context cells aren't activatable).
+ */
+export const Activatable: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        ariaLabel="WEB, MAT 5:3"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleVerse />}
+        onActivate={() => {}}
+      />
+    </GridCellBox>
+  ),
+};
+
 /** Single-cell RTL verse: the resource's own `dir`, independent of the UI locale. */
 export const VerseRightToLeft: Story = {
   render: () => (
