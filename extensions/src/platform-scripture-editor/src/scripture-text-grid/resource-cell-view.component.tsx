@@ -29,10 +29,13 @@ export type ResourceCellLocalizedStrings = {
   [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
 };
 
+/** How the cell shows its resource name: a hanging inline label, or a header band. */
+export type ResourceNameDisplay = 'inline' | 'header';
+
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
-  /** Resource label shown in the header and used as the gridcell aria-label. */
+  /** Resource label shown in the header/inline label and used as the gridcell aria-label. */
   label: string;
   /** This resource's own text direction ('ltr' | 'rtl'), applied to the content area. */
   textDirection: string;
@@ -44,12 +47,59 @@ export type ResourceCellViewProps = {
   isVerseEmpty?: boolean;
   /** Fired on click anywhere in the cell or Enter while the gridcell is focused. */
   onActivate?: () => void;
+  /**
+   * How to show the resource name. `'header'` (default) is a compact band above the content, used
+   * by chapter contexts (single-resource full-width + chapter-context split). `'inline'` hangs the
+   * name at the resource's inline-start beside the verse text, used by verse-row cells. Both render
+   * outside `Editorial` (paranext-core only).
+   */
+  nameDisplay?: ResourceNameDisplay;
 };
 
 /**
- * Presentational ResourceCell: renders the header, per-cell text direction, and either the editor
- * (`ready`) or the offline placeholder (`downloading`/`failed`). Data-free so Storybook can drive
- * every state; `ResourceCell` wraps it with the PAPI fetch/direction/offline wiring.
+ * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
+ * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
+ * measure-on-pointer-enter pattern as `ProjectRowView` in platform-bible-react). `aria-hidden`
+ * because the enclosing gridcell already exposes the name via `aria-label`, so the visible copy
+ * must not be announced a second time (reading order stays name → verse text).
+ */
+function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+  // React's ref API requires `null` as the initial value for DOM refs.
+  // eslint-disable-next-line no-null/no-null
+  const ref = useRef<HTMLSpanElement>(null);
+
+  const handlePointerEnter = useCallback(() => {
+    const element = ref.current;
+    if (!element) return;
+    if (element.scrollWidth > element.clientWidth) setIsTooltipOpen(true);
+  }, []);
+
+  return (
+    <TooltipProvider>
+      <Tooltip open={isTooltipOpen}>
+        <TooltipTrigger asChild>
+          <span
+            ref={ref}
+            aria-hidden
+            onPointerEnter={handlePointerEnter}
+            onPointerLeave={() => setIsTooltipOpen(false)}
+            className={`tw:truncate tw:font-medium tw:text-primary ${className ?? ''}`}
+          >
+            {label}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
+ * Presentational ResourceCell: renders the resource name (inline label or header band), per-cell
+ * text direction, and either the editor (`ready`) or the offline placeholder
+ * (`downloading`/`failed`). Data-free so Storybook can drive every state; `ResourceCell` wraps it
+ * with the PAPI fetch/direction/offline wiring.
  */
 export function ResourceCellView({
   state,
@@ -59,20 +109,17 @@ export function ResourceCellView({
   editor,
   isVerseEmpty,
   onActivate,
+  nameDisplay = 'header',
 }: ResourceCellViewProps) {
-  // The tooltip only repeats the visible label, so it should show only when the label is actually
-  // truncated. Radix's auto-detection cannot know that, so control `open` manually and measure the
-  // header on pointer enter (same pattern as `ProjectRowView` in platform-bible-react).
-  const [isHeaderTooltipOpen, setIsHeaderTooltipOpen] = useState(false);
-  // React's ref API requires `null` as the initial value for DOM refs.
-  // eslint-disable-next-line no-null/no-null
-  const headerRef = useRef<HTMLDivElement>(null);
-
-  const handleHeaderPointerEnter = useCallback(() => {
-    const headerElement = headerRef.current;
-    if (!headerElement) return;
-    if (headerElement.scrollWidth > headerElement.clientWidth) setIsHeaderTooltipOpen(true);
-  }, []);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        onActivate?.();
+      }
+    },
+    [onActivate],
+  );
 
   let readyContent: ReactNode = editor;
   if (isVerseEmpty) {
@@ -83,15 +130,18 @@ export function ResourceCellView({
     );
   }
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        onActivate?.();
-      }
-    },
-    [onActivate],
-  );
+  const stateContent =
+    state === 'ready' ? (
+      readyContent
+    ) : (
+      <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
+        {state === 'downloading' && <Spinner />}
+        <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
+        <span className="tw:text-sm tw:text-muted-foreground">
+          {state === 'failed' ? localizedStrings[FAILED_KEY] : localizedStrings[DOWNLOADING_KEY]}
+        </span>
+      </div>
+    );
 
   return (
     <div
@@ -104,38 +154,30 @@ export function ResourceCellView({
       // affordance is discoverable; only when activation is wired.
       className={`tw:flex tw:min-w-0 tw:flex-col ${onActivate ? 'tw:cursor-pointer' : ''}`}
     >
-      <TooltipProvider>
-        <Tooltip open={isHeaderTooltipOpen}>
-          <TooltipTrigger asChild>
-            {/* Single-line header; long labels truncate. The tooltip reveals the full name and
-                shows only when the label is actually clipped. */}
-            <div
-              ref={headerRef}
-              onPointerEnter={handleHeaderPointerEnter}
-              onPointerLeave={() => setIsHeaderTooltipOpen(false)}
-              className="tw:truncate tw:border-b tw:px-2 tw:py-1 tw:text-sm tw:font-medium"
-            >
-              {label}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <div className="tw:flex-1 tw:overflow-auto tw:p-2" dir={textDirection}>
-        {state === 'ready' ? (
-          readyContent
-        ) : (
-          <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
-            {state === 'downloading' && <Spinner />}
-            <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {state === 'failed'
-                ? localizedStrings[FAILED_KEY]
-                : localizedStrings[DOWNLOADING_KEY]}
-            </span>
+      {nameDisplay === 'inline' ? (
+        // Verse-row cell: hang the name at the inline-start beside the verse text. `dir` on the row
+        // makes flex place the name on the resource's own inline-start (right in RTL). The name is a
+        // shrink-0, width-capped column; the verse text flows in the remaining min-w-0 column.
+        <div
+          className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:overflow-auto tw:p-2"
+          dir={textDirection}
+        >
+          <ResourceNameLabel label={label} className="tw:max-w-24 tw:shrink-0 tw:text-sm" />
+          <div className="tw:min-w-0 tw:flex-1">{stateContent}</div>
+        </div>
+      ) : (
+        // Chapter context: a compact band above the content, in the resource color. Long labels
+        // truncate; the tooltip reveals the full name only when actually clipped.
+        <>
+          <ResourceNameLabel
+            label={label}
+            className="tw:block tw:border-b tw:px-2 tw:py-0.5 tw:text-xs"
+          />
+          <div className="tw:flex-1 tw:overflow-auto tw:p-2" dir={textDirection}>
+            {stateContent}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 }
