@@ -217,7 +217,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await expect(frame.locator('[role="listitem"]').first()).toBeVisible();
   });
 
-  test('RTL UI locale reverses the row via logical flex properties', async ({ mainPage }) => {
+  test('verse view is a vertical column, unaffected by RTL UI locale', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
 
@@ -232,15 +232,17 @@ test.describe('Scripture Text Grid renderer', () => {
     const frame = await openScriptureTextGrid(mainPage);
     await expect(frame.locator('[role="list"]')).toBeVisible({ timeout: 15_000 });
 
-    const directions = await frame.locator('[role="list"]').evaluate((row) => {
+    const directions = await frame.locator('[role="list"]').evaluate((list) => {
       document.documentElement.dir = 'ltr';
-      const ltr = getComputedStyle(row).flexDirection;
+      const ltr = getComputedStyle(list).flexDirection;
       document.documentElement.dir = 'rtl';
-      const rtl = getComputedStyle(row).flexDirection;
+      const rtl = getComputedStyle(list).flexDirection;
+      document.documentElement.dir = 'ltr';
       return { ltr, rtl };
     });
-    expect(directions.ltr).toBe('row');
-    expect(directions.rtl).toBe('row-reverse');
+    // Column in both directions — the verse view stacks vertically, which does not reverse under RTL.
+    expect(directions.ltr).toBe('column');
+    expect(directions.rtl).toBe('column');
   });
 
   test('partial failure: valid and invalid resources render side by side', async ({ mainPage }) => {
@@ -372,7 +374,7 @@ test.describe('Scripture Text Grid renderer', () => {
     expect(elapsedMs).toBeLessThan(220);
   });
 
-  test('chapter mode stacks resources vertically (column layout)', async ({ mainPage }) => {
+  test('chapter mode arranges resources side-by-side (row layout)', async ({ mainPage }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
 
@@ -390,13 +392,13 @@ test.describe('Scripture Text Grid renderer', () => {
     // Close the popover so it does not overlay the grid body.
     await frame.locator('body').press('Escape');
 
-    // The chapter group lays out as a column and shows no chapter-context split.
+    // The chapter group lays out as a horizontal row of columns and shows no chapter-context split.
     const grid = frame.locator('[role="group"]');
     await expect(grid).toBeVisible({ timeout: 15_000 });
     await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
     const flexDirection = await grid.evaluate((el) => getComputedStyle(el).flexDirection);
-    expect(flexDirection).toBe('column');
-    // Each resource is its own region in the stack.
+    expect(flexDirection).toBe('row');
+    // Each resource is its own region (side-by-side column).
     await expect(frame.locator('[role="region"]')).toHaveCount(2);
   });
 
@@ -438,7 +440,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await expect(frame.locator('[role="region"]').nth(1)).toBeVisible();
   });
 
-  test('chapter frame budget: >=5 stacked chapters render under the chapter-mode baseline', async ({
+  test('chapter frame budget: >=5 side-by-side chapters render under the chapter-mode baseline', async ({
     mainPage,
   }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
@@ -486,11 +488,13 @@ test.describe('Scripture Text Grid renderer', () => {
     // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
     // NOT apply. Baseline established here; tighten once real measurements are collected (see Step 6).
     // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
-    console.log(`[chapter frame budget] ${elapsedMs.toFixed(1)}ms for 5 stacked chapters`);
+    console.log(`[chapter frame budget] ${elapsedMs.toFixed(1)}ms for 5 side-by-side chapters`);
     expect(elapsedMs).toBeLessThan(2000);
   });
 
-  test('chapter mode: vertical stack is unaffected by RTL UI locale', async ({ mainPage }) => {
+  test('chapter mode: horizontal row is RTL-safe (flex-direction row, not a hardcoded axis)', async ({
+    mainPage,
+  }) => {
     test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
     await waitForAppReady(mainPage);
 
@@ -517,9 +521,12 @@ test.describe('Scripture Text Grid renderer', () => {
       document.documentElement.dir = 'ltr';
       return { ltr, rtl };
     });
-    // Column in both directions — vertical stacking does not reverse under RTL.
-    expect(directions.ltr).toBe('column');
-    expect(directions.rtl).toBe('column');
+    // `flex-direction: row` follows `dir`: under RTL the columns flow right-to-left visually while
+    // the computed value stays `row` (it does NOT become `row-reverse`). Asserting it stays `row`
+    // both ways confirms the row is RTL-safe (no hardcoded left/right axis). Visual RTL column order
+    // is confirmed in the manual AT pass.
+    expect(directions.ltr).toBe('row');
+    expect(directions.rtl).toBe('row');
   });
 });
 
