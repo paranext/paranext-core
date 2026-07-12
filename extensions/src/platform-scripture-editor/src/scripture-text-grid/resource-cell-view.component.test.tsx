@@ -1,14 +1,49 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import type React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import {
   DOWNLOADING_KEY,
   FAILED_KEY,
   UNAVAILABLE_KEY,
   ResourceCellView,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
 } from './resource-cell-view.component';
+
+// jsdom doesn't ship a ResizeObserver (needed by Radix portal content), or PointerCapture APIs.
+// Stubs are sufficient since the tests don't inspect layout behavior.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+  if (typeof Element.prototype.hasPointerCapture !== 'function') {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (typeof Element.prototype.scrollIntoView !== 'function') {
+    Element.prototype.scrollIntoView = () => {};
+  }
+});
 
 const localizedStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
@@ -108,5 +143,91 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.getByText('Blessed are the poor in spirit')).toBeInTheDocument();
     expect(screen.getByText('אַשְׁרֵי הָאִישׁ')).toBeInTheDocument();
     expect(screen.getByText('طُوبَى لِلْمَسَاكِينِ')).toBeInTheDocument();
+  });
+});
+
+const zoomLabels = {
+  [UNAVAILABLE_KEY]: 'Resource unavailable',
+  [DOWNLOADING_KEY]: 'Downloading…',
+  [FAILED_KEY]: 'Download failed',
+  [ZOOM_IN_KEY]: 'Zoom In',
+  [ZOOM_OUT_KEY]: 'Zoom Out',
+  [RESET_ZOOM_KEY]: 'Reset Zoom',
+  [ZOOM_OPTIONS_KEY]: 'Zoom options',
+};
+
+describe('ResourceCellView zoom UI', () => {
+  const menuLabels = {
+    zoomIn: 'Zoom In',
+    zoomOut: 'Zoom Out',
+    reset: 'Reset Zoom',
+    options: 'Zoom options',
+  };
+
+  it('applies the zoom factor to the content wrapper', () => {
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1.4}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    // jsdom doesn't serialize `zoom` into the style attribute string, so we use parentElement
+    // to reach the content wrapper directly and read its CSSOM style.zoom property.
+    const content = screen.getByText('verse').parentElement;
+    expect(content).not.toBeNull();
+    expect(content?.style.zoom).toBe('1.4');
+  });
+
+  it('opens the kebab menu and fires zoom callbacks', async () => {
+    // Radix DropdownMenu relies on PointerEvent sequences that fireEvent.click() does not
+    // synthesize. userEvent v14 with pointerEventsCheck: 0 works reliably in jsdom.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onZoomIn = vi.fn();
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        onZoomIn={onZoomIn}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom In' }));
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables Zoom In at max and Zoom Out at min', async () => {
+    // Radix DropdownMenu relies on PointerEvent sequences that fireEvent.click() does not
+    // synthesize. userEvent v14 with pointerEventsCheck: 0 works reliably in jsdom.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={3}
+        canZoomIn={false}
+        canZoomOut
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
+    expect(screen.getByRole('menuitem', { name: 'Zoom In' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 });
