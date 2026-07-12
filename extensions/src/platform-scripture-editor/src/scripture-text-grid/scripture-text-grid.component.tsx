@@ -155,48 +155,50 @@ export function ScriptureTextGrid({
       aria-label={ariaLabel}
       className="tw:flex tw:h-full tw:min-h-0 tw:flex-col tw:divide-y tw:overflow-y-auto"
     >
-      {resources.map((resource) => (
-        // The listitem is an interactive resource entry. jsx-a11y flags role="listitem" with
-        // tabIndex/handlers as "non-interactive", but it IS keyboard-accessible (Tab to focus,
-        // Enter/Space to activate) per WCAG 2.1 §2.1.1 and the A12 ARIA spec — the suppression is
-        // justified by the explicit handler and tabIndex below.
-        /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
-        <div
-          key={resource.projectId}
-          role="listitem"
-          data-project-id={resource.projectId}
-          aria-label={verseItemName(resource.label)}
-          tabIndex={onChapterContextChange ? 0 : undefined}
-          onClick={
-            onChapterContextChange
-              ? () => {
-                  focusRestoreProjectIdRef.current = resource.projectId;
-                  onChapterContextChange(resource);
-                }
-              : undefined
-          }
-          onKeyDown={
-            onChapterContextChange
-              ? (event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    focusRestoreProjectIdRef.current = resource.projectId;
-                    onChapterContextChange(resource);
+      {resources.map((resource) => {
+        // Activating a verse item latches the focus-restore target and reports the chapter context
+        // change. Shared by the click and keyboard paths so they can never drift apart.
+        const activate = onChapterContextChange
+          ? () => {
+              focusRestoreProjectIdRef.current = resource.projectId;
+              onChapterContextChange(resource);
+            }
+          : undefined;
+        return (
+          // The listitem is an interactive resource entry. jsx-a11y flags role="listitem" with
+          // tabIndex/handlers as "non-interactive", but it IS keyboard-accessible (Tab to focus,
+          // Enter/Space to activate) per WCAG 2.1 §2.1.1 and the A12 ARIA spec — the suppression is
+          // justified by the explicit handler and tabIndex below.
+          /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
+          <div
+            key={resource.projectId}
+            role="listitem"
+            data-project-id={resource.projectId}
+            aria-label={verseItemName(resource.label)}
+            tabIndex={activate ? 0 : undefined}
+            onClick={activate}
+            onKeyDown={
+              activate
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      activate();
+                    }
                   }
-                }
-              : undefined
-          }
-          className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${onChapterContextChange ? ' tw:cursor-pointer' : ''}`}
-        >
-          <ResourceCell
-            resourceRef={resource}
-            scrRef={scrRef}
-            setScrRef={setScrRef}
-            viewMode={viewMode}
-          />
-        </div>
-        /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
-      ))}
+                : undefined
+            }
+            className={`tw:flex tw:min-h-0 tw:min-w-0 tw:shrink-0 tw:flex-col tw:focus-visible:outline-none tw:focus-visible:ring-2 tw:focus-visible:ring-ring${activate ? ' tw:cursor-pointer' : ''}`}
+          >
+            <ResourceCell
+              resourceRef={resource}
+              scrRef={scrRef}
+              setScrRef={setScrRef}
+              viewMode={viewMode}
+            />
+          </div>
+          /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
+        );
+      })}
     </div>
   );
 
