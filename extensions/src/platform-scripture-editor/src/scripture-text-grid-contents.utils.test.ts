@@ -409,6 +409,17 @@ describe('getViewOptionsTexts', () => {
     );
     expect(top[0]).not.toHaveProperty('longName');
   });
+
+  it('stamps longName onto a user-referenced (bottom) row when the resolver returns one', () => {
+    const { bottom } = getViewOptionsTexts(
+      makeSources({
+        userReferenced: list([dbl('esv', { isResourceShownForUser: true })]),
+      }),
+      (reference) => (reference.id === 'esv' ? 'English Standard Version' : undefined),
+    );
+    expect(bottom).toHaveLength(1);
+    expect(bottom[0].longName).toBe('English Standard Version');
+  });
 });
 
 describe('setUserDisplay', () => {

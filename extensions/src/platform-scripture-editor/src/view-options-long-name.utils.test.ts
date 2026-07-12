@@ -31,6 +31,9 @@ describe('resolveDblLongName', () => {
   });
 
   it('returns undefined for a project reference', () => {
+    // The cache entry intentionally shares the same id as the projectRef to prove that the
+    // isDblResourceReference type guard rejects the reference before any cache lookup runs —
+    // the matching cache hit is never consulted.
     const list = [cached({ dblEntryUid: 'p1', displayName: 'P1', fullName: 'Project One' })];
     expect(resolveDblLongName(projectRef('p1', 'P1'), list)).toBeUndefined();
   });
