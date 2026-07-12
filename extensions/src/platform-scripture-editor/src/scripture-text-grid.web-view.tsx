@@ -86,7 +86,8 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
  * through the per-user text-connection PDP setters. Below the header, the body renders one
  * `ResourceCell` per shown resource — the resources come from the `getScriptureTextGridContents`
  * selector over the Text Collection sources assembled by `useTextCollectionSources`. The `viewMode`
- * toggle selects the layout: a horizontal verse list, or a vertical stack of full-chapter regions.
+ * toggle selects the layout: a vertical list of stacked verse rows (verse mode), or a horizontal
+ * row of side-by-side full-chapter columns (chapter mode).
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
