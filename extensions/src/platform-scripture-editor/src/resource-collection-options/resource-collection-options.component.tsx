@@ -92,16 +92,20 @@ export function ResourceCollectionOptions({
             onCheckedChange={(checked) => onCheckedChange(id, checked === true)}
           />
           {/* `title` carries the untruncated label so long DBL names stay readable in the narrow
-              panel (native tooltip on overflow). `dir="auto"` lets an RTL resource name render RTL. */}
+              panel (native tooltip on overflow). `dir="auto"` per name span keeps each name's
+              direction (and the separator) correct for RTL resources. */}
           {longName ? (
-            <span
-              className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline"
-              title={fullLabel}
-              dir="auto"
-            >
-              {/* Short name never truncates; only the long name ellipsizes when the row is tight. */}
-              <span className="tw:shrink-0">{name}</span>
-              <span className="tw:min-w-0 tw:flex-1 tw:truncate">{` — ${longName}`}</span>
+            <span className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline" title={fullLabel}>
+              {/* Short name never truncates; only the long name ellipsizes when the row is tight.
+                  `dir="auto"` per name span keeps each name's direction (and the separator) correct
+                  for RTL resources. */}
+              <span className="tw:shrink-0" dir="auto">
+                {name}
+              </span>
+              <span
+                className="tw:min-w-0 tw:flex-1 tw:truncate"
+                dir="auto"
+              >{` — ${longName}`}</span>
             </span>
           ) : (
             <span className="tw:min-w-0 tw:flex-1 tw:truncate" title={name} dir="auto">

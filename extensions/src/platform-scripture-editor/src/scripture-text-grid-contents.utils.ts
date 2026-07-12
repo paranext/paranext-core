@@ -8,8 +8,11 @@ import type {
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 
-/** A Bible-text reference — the only reference types that carry `id` and `isResourceShownForUser`. */
-type BibleTextReference = ProjectReference | DblResourceReference;
+/**
+ * A Bible-text reference — the only reference types that carry `id` and `isResourceShownForUser`.
+ * Shared union used by both the grid-contents logic and the View Options long-name helpers.
+ */
+export type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
  * The three data sources that together determine what a given user sees in the Text Collection.

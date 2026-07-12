@@ -27,7 +27,7 @@ import {
   getScriptureTextGridContents,
   getViewOptionsTexts,
 } from './scripture-text-grid-contents.utils';
-import { resolveDblLongName } from './view-options-long-name.utils';
+import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
   persistUserAddition,
   persistUserDisplay,
