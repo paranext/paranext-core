@@ -8122,9 +8122,9 @@ declare module 'renderer/services/scroll-group.service-host' {
    * The reference-history navigation commands are NOT registered here: the physical left/right
    * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
    * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
-   * the window service this state module deliberately does not import). Programmatic offset navigation
-   * is exposed through this network object's `navigateReferenceHistory` method below rather than a
-   * duplicate command.
+   * the window service this state module deliberately does not import). Programmatic offset
+   * navigation is exposed through this network object's `navigateReferenceHistory` method below
+   * rather than a duplicate command.
    */
   export function startScrollGroupService(): Promise<void>;
 }
