@@ -1,11 +1,6 @@
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import {
-  useDataProvider,
-  useDialogCallback,
-  useLocalizedStrings,
-  useProjectDataProvider,
-} from '@papi/frontend/react';
+import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
   Popover,
@@ -104,28 +99,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
   const candidateProjectId = projectId ?? activeEditorProjectId;
 
-  // Each grid resource cell is itself a Scripture editor, so focusing one makes it the "active
-  // editor" even though a plain resource has no text collection. Probe whether the candidate exposes
-  // the text-connection PDP, and latch the last real text-collection project (see
-  // `resolveTextCollectionProjectId`) so clicking into a resource cell no longer switches the grid to
-  // that resource and blanks it — while still following the active editor to a genuine text-collection
-  // project.
-  const candidateTextConnectionPdp = useProjectDataProvider(
-    'platformScripture.textConnectionSettings',
-    candidateProjectId,
-  );
+  // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
+  // active editor and is refined by a latch effect (below, once `resources` is known) so that
+  // focusing one of the grid's own resource cells doesn't hijack it. See resolveTextCollectionProjectId.
   const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
     candidateProjectId,
   );
-  useEffect(() => {
-    setEffectiveProjectId((previous) =>
-      resolveTextCollectionProjectId(previous, {
-        explicitProjectId: projectId,
-        candidateProjectId,
-        candidateHasTextConnection: !!candidateTextConnectionPdp,
-      }),
-    );
-  }, [projectId, candidateProjectId, candidateTextConnectionPdp]);
 
   const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
@@ -181,6 +160,23 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
     [sources, cachedResources],
   );
+
+  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
+  // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
+  // the grid to one of its own displayed resources — that project has no text collection and would
+  // blank the grid; keep the current project instead. Still follow the active editor to a genuinely
+  // different text-collection project.
+  useEffect(() => {
+    setEffectiveProjectId((previous) =>
+      resolveTextCollectionProjectId(previous, {
+        explicitProjectId: projectId,
+        candidateProjectId,
+        candidateIsOwnResource: resources.some(
+          (resource) => resource.projectId === candidateProjectId,
+        ),
+      }),
+    );
+  }, [projectId, candidateProjectId, resources]);
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 

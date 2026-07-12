@@ -3,7 +3,7 @@ import { resolveTextCollectionProjectId } from './scripture-text-grid-project.ut
 
 const CONNECTION_PROJECT = 'text-connection-project';
 const OTHER_CONNECTION_PROJECT = 'another-text-connection-project';
-const RESOURCE_PROJECT = 'plain-bible-resource';
+const RESOURCE_PROJECT = 'displayed-bible-resource';
 
 describe('resolveTextCollectionProjectId', () => {
   it('always uses an explicit projectId, ignoring the active-editor candidate', () => {
@@ -11,39 +11,39 @@ describe('resolveTextCollectionProjectId', () => {
       resolveTextCollectionProjectId(undefined, {
         explicitProjectId: CONNECTION_PROJECT,
         candidateProjectId: RESOURCE_PROJECT,
-        candidateHasTextConnection: false,
+        candidateIsOwnResource: true,
       }),
     ).toBe(CONNECTION_PROJECT);
   });
 
-  it('adopts the active-editor candidate when it is a text-collection project', () => {
+  it('adopts the active-editor candidate when it is not one of the displayed resources', () => {
     expect(
       resolveTextCollectionProjectId(undefined, {
         explicitProjectId: undefined,
         candidateProjectId: CONNECTION_PROJECT,
-        candidateHasTextConnection: true,
+        candidateIsOwnResource: false,
       }),
     ).toBe(CONNECTION_PROJECT);
   });
 
-  it('follows the active editor to a different text-collection project', () => {
+  it('follows the active editor to a different (non-resource) text-collection project', () => {
     expect(
       resolveTextCollectionProjectId(CONNECTION_PROJECT, {
         explicitProjectId: undefined,
         candidateProjectId: OTHER_CONNECTION_PROJECT,
-        candidateHasTextConnection: true,
+        candidateIsOwnResource: false,
       }),
     ).toBe(OTHER_CONNECTION_PROJECT);
   });
 
-  it('keeps the latched project when the active editor is a resource with no text connection', () => {
-    // The core fix: focusing a grid resource cell makes it the active editor, but it has no text
-    // collection — the grid must keep showing the previously-resolved project, not blank out.
+  it('keeps the latched project when the active editor is one of the grid’s own resources', () => {
+    // The core fix: clicking a verse in a resource cell makes that resource the active editor. The
+    // grid must keep showing the current project instead of switching to the resource and blanking.
     expect(
       resolveTextCollectionProjectId(CONNECTION_PROJECT, {
         explicitProjectId: undefined,
         candidateProjectId: RESOURCE_PROJECT,
-        candidateHasTextConnection: false,
+        candidateIsOwnResource: true,
       }),
     ).toBe(CONNECTION_PROJECT);
   });
@@ -53,18 +53,8 @@ describe('resolveTextCollectionProjectId', () => {
       resolveTextCollectionProjectId(CONNECTION_PROJECT, {
         explicitProjectId: undefined,
         candidateProjectId: undefined,
-        candidateHasTextConnection: false,
+        candidateIsOwnResource: false,
       }),
     ).toBe(CONNECTION_PROJECT);
-  });
-
-  it('is undefined before any text-collection project has been resolved', () => {
-    expect(
-      resolveTextCollectionProjectId(undefined, {
-        explicitProjectId: undefined,
-        candidateProjectId: RESOURCE_PROJECT,
-        candidateHasTextConnection: false,
-      }),
-    ).toBeUndefined();
   });
 });
