@@ -74,6 +74,11 @@ declare module 'shared/services/scroll-group.service-model' {
    */
   export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION: 'scrollGroup:onDidChangeVersification';
   /**
+   * Name to use when creating a network event that is fired when a scroll group's reference history
+   * changes
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY: 'scrollGroup:onDidChangeReferenceHistory';
+  /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
@@ -93,6 +98,45 @@ declare module 'shared/services/scroll-group.service-model' {
     scrRef: SerializedVerseRef;
     scrollGroupId: ScrollGroupId;
     sourceProjectId?: string;
+  };
+  /**
+   * One visited location in a scroll group's reference history
+   *
+   * @experimental
+   */
+  export type ReferenceHistoryEntry = {
+    /** The visited Scripture reference */
+    scrRef: SerializedVerseRef;
+    /**
+     * Project whose versification `scrRef` is expressed in. `undefined` = unknown. Preserved so
+     * navigating back restores the reference in its original versification context
+     */
+    sourceProjectId?: string;
+  };
+  /**
+   * Back/forward reference history for one scroll group. Session-only (in-memory; resets on app
+   * restart)
+   *
+   * @experimental
+   */
+  export type ReferenceHistory = {
+    /** The current location, or `undefined` when nothing has been recorded yet */
+    current: ReferenceHistoryEntry | undefined;
+    /** Entries strictly behind the current location, nearest first (offsets -1, -2, ...) */
+    back: ReferenceHistoryEntry[];
+    /** Entries strictly ahead of the current location, nearest first (offsets +1, +2, ...) */
+    forward: ReferenceHistoryEntry[];
+  };
+  /**
+   * Information about a change to a scroll group's reference history
+   *
+   * @experimental
+   */
+  export type ReferenceHistoryUpdateInfo = {
+    /** The scroll group whose history changed */
+    scrollGroupId: ScrollGroupId;
+    /** The new history state (a copy, safe to keep) */
+    history: ReferenceHistory;
   };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
@@ -141,6 +185,24 @@ declare module 'shared/services/scroll-group.service-model' {
       scrollGroupId: ScrollGroupId | undefined,
       projectId: string,
     ): Promise<SerializedVerseRef>;
+    /**
+     * Get a copy of the reference history for the provided scroll group
+     *
+     * @param scrollGroupId Scroll group whose history to get
+     * @returns Copy of the scroll group's reference history
+     * @experimental
+     */
+    getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
+    /**
+     * Navigate within the reference history of the provided scroll group, browser-`history.go` style:
+     * negative offset = back that many steps, positive = forward that many steps.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @param offset Signed number of steps. -1 = back one, +1 = forward one
+     * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+     * @experimental
+     */
+    navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
   }
   /**
    *
@@ -154,6 +216,12 @@ declare module 'shared/services/scroll-group.service-model' {
      * versification should call {@link getScrRefForProject} for that project.
      */
     onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+    /**
+     * Event that emits when a scroll group's reference history changes
+     *
+     * @experimental
+     */
+    onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
   }
 }
 declare module 'shared/models/web-view.model' {
@@ -4213,7 +4281,7 @@ declare module 'shared/models/web-view-factory.model' {
   }
 }
 declare module 'papi-shared-types' {
-  import type { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { PlatformError, ScrollGroupId, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -4232,7 +4300,10 @@ declare module 'papi-shared-types' {
   } from 'shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject, NetworkObjectDetails } from 'shared/models/network-object.model';
-  import type { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import type {
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -4354,6 +4425,48 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.openBookChapterControl': () => Promise<void>;
+    /**
+     * Navigate the reference history in the physical "left" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate the reference history in the physical "right" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate multiple steps within the reference history of the given scroll group,
+     * browser-`history.go` style.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @param offset Signed number of steps: negative = back, positive = forward
+     * @returns `true` if navigation happened; `false` if the offset was 0, non-integer, or out of
+     *   range
+     * @experimental
+     */
+    'platform.navigateReferenceHistoryByOffset': (
+      scrollGroupId: ScrollGroupId,
+      offset: number,
+    ) => Promise<boolean>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -5026,6 +5139,12 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
     /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */
@@ -7866,8 +7985,46 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export const useData: UseDataHook;
   export default useData;
 }
+declare module 'renderer/services/reference-history.util' {
+  import {
+    ReferenceHistory,
+    ReferenceHistoryEntry,
+  } from 'shared/services/scroll-group.service-model';
+  /**
+   * Maximum number of entries a scroll group's history keeps in total, counting the current location
+   * (matches Paratext 9). The back stack therefore holds at most this many minus one.
+   */
+  export const REFERENCE_HISTORY_MAX_DEPTH = 20;
+  /** Create a new, empty reference history */
+  export function createEmptyReferenceHistory(): ReferenceHistory;
+  /**
+   * Record a navigation to `entry` in `history` (mutates `history`). Matches Paratext 9
+   * `WindowCollectionBase.AddVerseRefToHistory`: a move within the current book+chapter replaces the
+   * current entry in place (preserving the forward stack); a genuinely new chapter pushes the old
+   * current onto the back stack, clears the forward stack, caps same-book runs, and trims to
+   * {@link REFERENCE_HISTORY_MAX_DEPTH} total entries.
+   */
+  export function recordNavigation(history: ReferenceHistory, entry: ReferenceHistoryEntry): void;
+  /**
+   * Navigate within `history` by a signed `offset` (mutates `history`), browser-`history.go` style:
+   * negative = back that many steps, positive = forward that many steps. The entries passed over
+   * transfer to the opposite stack, and the old current moves one step in the opposite direction
+   * (matches Paratext 9's dropdown jump).
+   *
+   * @returns The destination entry (the new current), or `undefined` (history unchanged) when
+   *   `offset` is 0, non-integer, or out of range
+   */
+  export function navigateHistory(
+    history: ReferenceHistory,
+    offset: number,
+  ): ReferenceHistoryEntry | undefined;
+}
 declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import {
+    ReferenceHistory,
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   /**
@@ -7892,6 +8049,26 @@ declare module 'renderer/services/scroll-group.service-host' {
   export const onDidChangeVersification: PlatformEvent<{
     projectId: string;
   }>;
+  /** Event that emits when a scroll group's reference history changes */
+  export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
+  export function getReferenceHistorySync(scrollGroupId?: ScrollGroupId): ReferenceHistory;
+  /** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
+  export function navigateReferenceHistorySync(
+    scrollGroupId: ScrollGroupId | undefined,
+    offset: number,
+  ): boolean;
+  /**
+   * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
+   * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
+   * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
+   * commands so the main-process keyboard handler can dispatch the physical key directly and stay
+   * direction-agnostic.
+   */
+  export function navigateReferenceHistoryPhysicalSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    physicalDirection: 'left' | 'right',
+  ): boolean;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
@@ -7943,13 +8120,17 @@ declare module 'renderer/services/scroll-group.service-host' {
    *
    * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
    *   unknown / canonical English.
+   * @param shouldRecordHistory If `true`, record this change in the scroll group's reference history.
+   *   Defaults to `true`. Only set to `false` when navigating within the history itself, where the
+   *   stacks already reflect the move.
    */
   export function setScrRefSync(
     scrollGroupId: ScrollGroupId | undefined,
     scrRef: SerializedVerseRef,
     sourceProjectId?: string,
+    shouldRecordHistory?: boolean,
   ): boolean;
-  /** Register the network object that backs the scroll group service */
+  /** Register the network object and PAPI commands that back the scroll group service */
   export function startScrollGroupService(): Promise<void>;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
@@ -10064,6 +10245,9 @@ declare module '@papi/core' {
     ProjectSettingValidator,
   } from 'shared/services/project-settings.service-model';
   export type {
+    ReferenceHistory,
+    ReferenceHistoryEntry,
+    ReferenceHistoryUpdateInfo,
     ScrollGroupScrRef,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
