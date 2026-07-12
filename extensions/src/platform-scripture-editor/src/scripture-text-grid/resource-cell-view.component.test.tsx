@@ -230,4 +230,72 @@ describe('ResourceCellView zoom UI', () => {
       'true',
     );
   });
+
+  it('disables Reset Zoom when canReset is false', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        canReset={false}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
+    expect(screen.getByRole('menuitem', { name: 'Reset Zoom' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('enables Reset Zoom when canReset is true (default)', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1.4}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
+    expect(screen.getByRole('menuitem', { name: 'Reset Zoom' })).not.toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('uses a resource-specific aria-label for the kebab button when options label contains a template', async () => {
+    const templateMenuLabels = {
+      zoomIn: 'Zoom In',
+      zoomOut: 'Zoom Out',
+      reset: 'Reset Zoom',
+      options: 'Zoom options for {resourceName}',
+    };
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={templateMenuLabels}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
+  });
 });

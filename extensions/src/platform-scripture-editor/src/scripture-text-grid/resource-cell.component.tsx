@@ -12,7 +12,7 @@ import {
   ResourceCellView,
   type ZoomMenuLabels,
 } from './resource-cell-view.component';
-import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
+import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { sliceUsjToVerse } from './verse-display.utils';
 
@@ -154,6 +154,7 @@ export function ResourceCell({
       zoomFactor={zoomFactor}
       canZoomIn={zoomFactor === undefined || zoomFactor < MAX_ZOOM_FACTOR}
       canZoomOut={zoomFactor === undefined || zoomFactor > MIN_ZOOM_FACTOR}
+      canReset={zoomFactor !== undefined && zoomFactor !== DEFAULT_ZOOM_FACTOR}
       onZoomIn={handleZoomIn}
       onZoomOut={handleZoomOut}
       onResetZoom={handleResetZoom}

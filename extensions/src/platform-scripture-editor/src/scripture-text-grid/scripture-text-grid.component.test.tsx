@@ -283,4 +283,18 @@ describe('ScriptureTextGrid', () => {
     renderGrid([{ resourceId: 'r-solo', projectId: 'p-solo', label: 'SOLO' }]);
     expect(document.querySelector('[data-resource-id="r-solo"]')).not.toBeNull();
   });
+
+  it('chapter-context region exposes data-resource-id for its resource so Ctrl+wheel zoom works over the split panel', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        chapterContext={resources[1]}
+        onChapterContextChange={vi.fn()}
+      />,
+    );
+    const chapterContextRegion = screen.getByTestId('scripture-text-grid-chapter-context');
+    expect(chapterContextRegion).toHaveAttribute('data-resource-id', resources[1].resourceId);
+  });
 });

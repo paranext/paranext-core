@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { EllipsisVertical } from 'lucide-react';
-import { LocalizedStringValue } from 'platform-bible-utils';
+import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
 import { CSSProperties, ReactNode, useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
@@ -71,6 +71,8 @@ export type ResourceCellViewProps = {
   canZoomIn?: boolean;
   /** False when the factor is at MIN_ZOOM_FACTOR. */
   canZoomOut?: boolean;
+  /** False when the factor is already at the default (1). Defaults to true. */
+  canReset?: boolean;
   /** Zoom action callbacks; invoked by both the kebab dropdown and the right-click context menu. */
   onZoomIn?: () => void;
   onZoomOut?: () => void;
@@ -83,6 +85,7 @@ function ZoomItemsShared({
   labels,
   canZoomIn,
   canZoomOut,
+  canReset = true,
   onZoomIn,
   onZoomOut,
   onResetZoom,
@@ -91,6 +94,7 @@ function ZoomItemsShared({
   labels: ZoomMenuLabels;
   canZoomIn: boolean;
   canZoomOut: boolean;
+  canReset?: boolean;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
@@ -105,7 +109,9 @@ function ZoomItemsShared({
       <Item disabled={!canZoomOut} onSelect={onZoomOut}>
         {labels.zoomOut}
       </Item>
-      <Item onSelect={onResetZoom}>{labels.reset}</Item>
+      <Item disabled={!canReset} onSelect={onResetZoom}>
+        {labels.reset}
+      </Item>
     </>
   );
 }
@@ -126,6 +132,7 @@ export function ResourceCellView({
   zoomFactor,
   canZoomIn = true,
   canZoomOut = true,
+  canReset = true,
   onZoomIn,
   onZoomOut,
   onResetZoom,
@@ -164,6 +171,11 @@ export function ResourceCellView({
     [onActivate],
   );
 
+  // Format the kebab aria-label with the resource name (the template uses {resourceName}).
+  const zoomOptionsAriaLabel = zoomMenuLabels
+    ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
+    : undefined;
+
   const zoomMenuItems = zoomMenuLabels ? (
     <>
       {/* onSelect fires for click + keyboard (Enter/Space); disabled items are skipped by Radix. */}
@@ -171,6 +183,7 @@ export function ResourceCellView({
         labels={zoomMenuLabels}
         canZoomIn={canZoomIn}
         canZoomOut={canZoomOut}
+        canReset={canReset}
         onZoomIn={onZoomIn}
         onZoomOut={onZoomOut}
         onResetZoom={onResetZoom}
@@ -212,7 +225,7 @@ export function ResourceCellView({
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={zoomMenuLabels.options}
+                    aria-label={zoomOptionsAriaLabel}
                     // Hidden until hover/focus for pointer users; always visible on touch
                     // (`hover: none`) where there is no hover to reveal it.
                     className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:[@media(hover:none)]:opacity-100"
@@ -225,6 +238,7 @@ export function ResourceCellView({
                     labels={zoomMenuLabels}
                     canZoomIn={canZoomIn}
                     canZoomOut={canZoomOut}
+                    canReset={canReset}
                     onZoomIn={onZoomIn}
                     onZoomOut={onZoomOut}
                     onResetZoom={onResetZoom}

@@ -134,7 +134,6 @@ export function ScriptureTextGrid({
 
   const verseRow = (
     <div
-      ref={gridRef}
       role="grid"
       aria-label={ariaLabel}
       className="tw:h-full tw:overflow-x-auto tw:overflow-y-hidden"
@@ -173,44 +172,51 @@ export function ScriptureTextGrid({
   );
 
   if (!chapterContext) {
-    return verseRow;
+    return (
+      <div ref={gridRef} className="tw:h-full tw:min-h-0">
+        {verseRow}
+      </div>
+    );
   }
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0">
-      <ResizablePanel defaultSize={55} minSize={30} className="tw:min-h-0">
-        {verseRow}
-      </ResizablePanel>
-      <ResizableHandle withHandle />
-      <ResizablePanel defaultSize={45} minSize={25} className="tw:min-h-0">
-        <div
-          role="region"
-          aria-label={chapterContext.label}
-          data-testid="scripture-text-grid-chapter-context"
-          className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
-        >
-          <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:px-1 tw:py-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={closeChapterContextLabel}
-              onClick={onChapterContextClose}
-            >
-              <X className="tw:h-4 tw:w-4" />
-            </Button>
+    <div ref={gridRef} className="tw:h-full tw:min-h-0">
+      <ResizablePanelGroup direction="horizontal" className="tw:h-full tw:min-h-0">
+        <ResizablePanel defaultSize={55} minSize={30} className="tw:min-h-0">
+          {verseRow}
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={45} minSize={25} className="tw:min-h-0">
+          <div
+            role="region"
+            aria-label={chapterContext.label}
+            data-testid="scripture-text-grid-chapter-context"
+            data-resource-id={chapterContext.resourceId}
+            className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
+          >
+            <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:px-1 tw:py-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={closeChapterContextLabel}
+                onClick={onChapterContextClose}
+              >
+                <X className="tw:h-4 tw:w-4" />
+              </Button>
+            </div>
+            <div className="tw:flex tw:min-h-0 tw:flex-1">
+              <ResourceCell
+                resourceRef={chapterContext}
+                scrRef={scrRef}
+                setScrRef={setScrRef}
+                viewMode="chapter"
+                zoom={zoom}
+                zoomMenuLabels={zoomMenuLabels}
+              />
+            </div>
           </div>
-          <div className="tw:flex tw:min-h-0 tw:flex-1">
-            <ResourceCell
-              resourceRef={chapterContext}
-              scrRef={scrRef}
-              setScrRef={setScrRef}
-              viewMode="chapter"
-              zoom={zoom}
-              zoomMenuLabels={zoomMenuLabels}
-            />
-          </div>
-        </div>
-      </ResizablePanel>
-    </ResizablePanelGroup>
+        </ResizablePanel>
+      </ResizablePanelGroup>
+    </div>
   );
 }
