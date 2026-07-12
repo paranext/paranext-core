@@ -9,6 +9,7 @@ import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 type Handlers = { adjustZoom: ReturnType<typeof vi.fn>; resetZoom: ReturnType<typeof vi.fn> };
 
 function Harness({ handlers, fallback }: { handlers: Handlers; fallback?: string }) {
+  // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const containerRef = useRef<HTMLDivElement>(null);
   useResourceZoomInput({

@@ -11,7 +11,9 @@ export type ResourceZoomInputOptions = {
 };
 
 /** Walks up from an element to the nearest `[data-resource-id]`, returning its value. */
-export function resolveResourceIdFromElement(element: Element | null): string | undefined {
+export function resolveResourceIdFromElement(
+  element: Element | null | undefined,
+): string | undefined {
   const host = element?.closest<HTMLElement>('[data-resource-id]');
   return host?.dataset.resourceId;
 }
@@ -41,7 +43,9 @@ export function useResourceZoomInput({
       // Prevent the OS/browser page zoom even if no cell resolves, so Ctrl+wheel never desyncs.
       event.preventDefault();
       event.stopPropagation();
-      const resourceId = resolveResourceIdFromElement(event.target as Element | null);
+      const resourceId = resolveResourceIdFromElement(
+        event.target instanceof Element ? event.target : undefined,
+      );
       if (!resourceId) return;
       adjustZoom(resourceId, event.deltaY < 0 ? 1 : -1);
     };

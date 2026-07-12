@@ -8,9 +8,9 @@ import { MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.util';
 // Minimal stand-in for WebViewProps['useWebViewState']: real React state so re-renders happen,
 // standing in for the synchronous localStorage-backed hook.
 function makeFakeUseWebViewState() {
-  return function useFakeWebViewState<T>(_key: string, defaultValue: T) {
+  return function useFakeWebViewState<T>(_key: string, defaultValue: T): [T, (next: T) => void] {
     const [value, setValue] = useState<T>(defaultValue);
-    return [value, setValue] as [T, (next: T) => void];
+    return [value, setValue];
   };
 }
 

@@ -64,10 +64,7 @@ const resources = [
 
 type RenderOptions = { zoom?: ResourceZoomController };
 
-function renderGrid(
-  gridResources: typeof resources,
-  options: RenderOptions = {},
-) {
+function renderGrid(gridResources: typeof resources, options: RenderOptions = {}) {
   const result = render(
     <ScriptureTextGrid
       resources={gridResources}

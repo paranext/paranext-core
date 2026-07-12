@@ -62,9 +62,9 @@ describe('toGridResources', () => {
   it('carries the stable resourceId (reference.id) onto each cell', () => {
     const projectRef = { type: 'project', id: 'proj-1', name: 'WEB' } as const;
     const dblRef = { type: 'dblResource', id: 'dbl-uid-9', name: 'NIV' } as const;
-    const dblResources = [
-      { dblEntryUid: 'dbl-uid-9', installed: true, projectId: 'installed-proj-42' },
-    ] as unknown as Parameters<typeof toGridResources>[1];
+    const dblResources: DblResourceData[] = [
+      cached({ dblEntryUid: 'dbl-uid-9', installed: true, projectId: 'installed-proj-42' }),
+    ];
 
     const cells = toGridResources([projectRef, dblRef], dblResources);
 
