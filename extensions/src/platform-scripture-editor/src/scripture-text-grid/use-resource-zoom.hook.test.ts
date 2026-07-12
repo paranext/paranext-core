@@ -73,4 +73,25 @@ describe('useResourceZoom', () => {
     act(() => result.current.pruneToResourceIds(['r1']));
     expect(result.current.getZoom('r1')).toBe(before.r1);
   });
+
+  it('pruneToResourceIds([]) drops all entries (controller does not special-case empty)', () => {
+    // NOTE: the empty-list SAFETY GUARD lives in the grid component
+    // (scripture-text-grid.component.tsx skips calling prune when resources.length === 0,
+    // preventing data loss during source loading). This test documents that the controller itself
+    // does NOT special-case an empty list — if called with [], it drops everything.
+    const { result } = renderController();
+    act(() => result.current.setZoomForResource('a', 1.5));
+    act(() => result.current.setZoomForResource('b', 1.2));
+    act(() => result.current.pruneToResourceIds([]));
+    expect(result.current.getZoom('a')).toBe(1);
+    expect(result.current.getZoom('b')).toBe(1);
+  });
+
+  it('setting one resource zoom does not affect another (per-resource independence)', () => {
+    const { result } = renderController();
+    act(() => result.current.setZoomForResource('a', 1.5));
+    // 'b' was never touched; it must still return the default.
+    expect(result.current.getZoom('a')).toBe(1.5);
+    expect(result.current.getZoom('b')).toBe(1);
+  });
 });

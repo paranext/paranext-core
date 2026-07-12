@@ -56,12 +56,15 @@ describe('useResourceZoomInput', () => {
     expect(handlers.adjustZoom).toHaveBeenCalledWith('r1', -1);
   });
 
-  it('ignores wheel without the ctrl/meta modifier', () => {
+  it('plain wheel without modifier: does not call adjustZoom AND does not preventDefault (normal scrolling preserved)', () => {
     const { getByTestId } = render(<Harness handlers={handlers} />);
-    getByTestId('cell-r1').dispatchEvent(
-      new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }),
-    );
+    const target = getByTestId('cell-r1');
+    const event = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    // No zoom action taken.
     expect(handlers.adjustZoom).not.toHaveBeenCalled();
+    // Normal scroll must not be consumed — the browser's default scroll behavior is preserved.
+    expect(event.defaultPrevented).toBe(false);
   });
 
   it('prevents default on Ctrl+wheel even when the event target is outside any [data-resource-id], but does not call adjustZoom', () => {

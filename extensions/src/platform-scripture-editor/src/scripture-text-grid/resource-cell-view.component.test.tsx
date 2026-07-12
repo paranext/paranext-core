@@ -183,6 +183,44 @@ describe('ResourceCellView zoom UI', () => {
     expect(content?.style.zoom).toBe('1.4');
   });
 
+  it('has no zoom style on the content wrapper when zoomFactor is 1', () => {
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse-reset</span>}
+        zoomFactor={1}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    // contentStyle is undefined when zoomFactor === 1, so React removes the style attribute.
+    // jsdom does not serialize `zoom` into the attribute string; read the CSSOM property directly.
+    // An unset CSSOM property is falsy (empty string or undefined depending on jsdom version).
+    const content = screen.getByText('verse-reset').parentElement;
+    expect(content).not.toBeNull();
+    expect(content?.style.zoom).toBeFalsy();
+  });
+
+  it('has no zoom style on the content wrapper when zoomFactor is undefined', () => {
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse-no-zoom</span>}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+    // No zoomFactor prop → contentStyle is undefined → React omits the style attribute entirely.
+    // An unset CSSOM property is falsy (empty string or undefined depending on jsdom version).
+    const content = screen.getByText('verse-no-zoom').parentElement;
+    expect(content).not.toBeNull();
+    expect(content?.style.zoom).toBeFalsy();
+  });
+
   it('opens the kebab menu and fires zoom callbacks', async () => {
     // Radix DropdownMenu relies on PointerEvent sequences that fireEvent.click() does not
     // synthesize. userEvent v14 with pointerEventsCheck: 0 works reliably in jsdom.
