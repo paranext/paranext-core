@@ -49,32 +49,9 @@ test.describe('Reference history', () => {
   // `pointer-events: none` on <body>, so an overlay left behind by a previous (possibly failed)
   // test would make every later click time out with "<html> intercepts pointer events". Same
   // guard pattern as manage-books-functional-WP-002.spec.ts.
-  //
-  // Then close all non-Home dock tabs. An open scripture editor shares the toolbar's scroll
-  // group; when the toolbar navigates to a book the editor's project does not contain, the editor
-  // echoes back a clamped reference (current book + new chapter) ~250ms later, overwriting the
-  // just-committed navigation and polluting the history under test (observed: "EXO 5" committed
-  // EXO 5:1, then an echo set GEN 5:1). Closing the tabs removes the echo source; the toolbar's
-  // own history behavior is what these tests cover. dispatchEvent('click') on the close button
-  // avoids pointer-interception issues (same pattern as ui-interaction.spec.ts).
   test.beforeEach(async ({ mainPage }) => {
     await mainPage.keyboard.press('Escape');
     await mainPage.keyboard.press('Escape');
-
-    // Closing a tab re-layouts the dock, so close one at a time and re-query.
-    const closeButtons = mainPage.locator('.dock-tab:not(:has-text("Home")) .dock-tab-close-btn');
-    for (let i = 0; i < 20; i += 1) {
-      // Sequential by nature: each close changes the tab list the next iteration queries.
-      // eslint-disable-next-line no-await-in-loop
-      const remaining = await closeButtons.count();
-      if (remaining === 0) break;
-      // Sequential by nature: each close changes the tab list the next iteration queries.
-      // eslint-disable-next-line no-await-in-loop
-      await closeButtons.first().dispatchEvent('click');
-      // Wait for the dock to actually drop the tab before re-querying.
-      // eslint-disable-next-line no-await-in-loop
-      await expect(closeButtons).toHaveCount(remaining - 1, { timeout: 5_000 });
-    }
   });
 
   test('back/forward buttons navigate the visited references', async ({ mainPage }) => {
