@@ -6,6 +6,7 @@ import {
   useLocalizedStrings,
   useProjectDataProvider,
   useProjectSetting,
+  useScrollGroupScrRef,
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { usePromise } from 'platform-bible-react';
@@ -49,12 +50,10 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
   projectId,
+  scrollGroupScrRef,
   updateWebViewDefinition,
-  useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
-
-  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
   // --- Raw data sources ---
 
@@ -110,6 +109,28 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     ? dblResources.find((r) => r.dblEntryUid === dblRef.id && r.installed)
     : undefined;
   const modelTextSmallName = matchedInstalledResource?.displayName;
+
+  // Follow the scroll group in the RESOLVED MODEL RESOURCE's versification, not this panel's own
+  // (editable) project's. This web view's definition `projectId` is the editable project (it reads
+  // that project's `platformScripture.modelTexts` setting), but it renders the model resource — so
+  // passing the resource's id as the conversion project makes `scrRef` come back converted into the
+  // resource's versification and makes a verse click here stamp the resource as the scroll group's
+  // source project (other web views then convert FROM it). We call `useScrollGroupScrRef` directly
+  // (rather than the `useWebViewScrollGroupScrRef` prop) so we can pass that resource id instead of
+  // this web view's own `projectId`; the `scrollGroupScrRef` prop is kept live by the web-view host
+  // re-rendering the component on definition updates. `undefined` until a resource resolves — no
+  // conversion, and nothing is displayed yet anyway.
+  const modelResourceProjectId = matchedInstalledResource?.projectId;
+  const [scrRef, setScrRef] = useScrollGroupScrRef(
+    scrollGroupScrRef,
+    useCallback(
+      (newScrollGroupScrRef) =>
+        updateWebViewDefinition({ scrollGroupScrRef: newScrollGroupScrRef }),
+      [updateWebViewDefinition],
+    ),
+    modelResourceProjectId,
+  );
+
   useEffect(() => {
     const baseTitle = localizedStrings['%webView_modelTextPanel_title%'];
     if (!baseTitle) return;
