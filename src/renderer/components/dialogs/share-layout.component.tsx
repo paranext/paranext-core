@@ -354,15 +354,15 @@ export function ShareLayoutDialogContent({
             commentaryResources,
             '%shareLayoutDialog_commentaryResources_label%',
           )}
-        </div>
 
-        <div className="tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
-          <div className="tw:border-b tw:border-border tw:px-4 tw:py-3">
+          <div className="tw:px-4 tw:py-3">
             <span className="tw:font-medium">
               {localizeString(strings, '%shareLayoutDialog_textCollectionResources_label%')}
             </span>
           </div>
-          <div className="tw:divide-y tw:divide-border">
+          {/* Bounded + independently scrollable so a long resource list scrolls within this
+          section instead of growing (and squishing) the rest of the dialog. */}
+          <div className="tw:max-h-64 tw:divide-y tw:divide-border tw:overflow-y-auto">
             {scriptureResources.map((ref) => (
               <div
                 key={referenceKey(ref)}
