@@ -6,9 +6,11 @@
  * tab so a class rename can't make the assertion pass vacuously. The app has no keyboard close
  * shortcut, so the missing button covers both close paths.
  *
- * There is no menu/command for this view (it ships in the PT10 Studio default layout), so the test
- * opens it directly via `window.papi.webViews.openWebView` (renderer exposes `papi` on
- * `globalThis`).
+ * There is no menu/command for this view (it is injected into the default Simple-mode layout via
+ * the dock-layout supplement), so the test opens it directly via `window.papi.webViews.openWebView`
+ * (renderer exposes `papi` on `globalThis`). Opening it directly makes these tests independent of
+ * the interface mode and the default layout — they neither assume nor assert Simple mode; the
+ * `closeAllNonHomeDockTabs` calls are just per-test dock hygiene, not a mode requirement.
  *
  * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
  * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).

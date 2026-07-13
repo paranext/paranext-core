@@ -924,7 +924,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       // this in sync). The initial empty title avoids flashing a label before the web view runs.
       title: '',
       tooltip: '%webView_scriptureTextGrid_title_multiple%',
-      // Part of the default PT10 Studio layout and must always remain open, so the tab is
+      // Part of the default Simple-mode layout and must always remain open, so the tab is
       // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
       // so this covers both close paths.
       isClosable: false,
