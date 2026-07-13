@@ -189,6 +189,12 @@ const commentListPanelProvider: IWebViewProvider = {
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
+      state: {
+        ...savedWebView.state,
+        // Marks this as the Column 3 panel, which follows the active project's scroll group. The web
+        // view uses this to offer the "current chapter" scope option even though no editor is wired.
+        isCommentListPanel: true,
+      },
     };
   },
 };

@@ -77,6 +77,9 @@ global.webViewComponent = function CommentListWebView({
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+  // The Column 3 comment-list panel (seeded by its provider) follows the active project's scroll
+  // group, so it always has a current chapter even though no editor is wired to it.
+  const [isCommentListPanel] = useWebViewState<boolean>('isCommentListPanel', false);
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
@@ -520,9 +523,10 @@ global.webViewComponent = function CommentListWebView({
         onFiltersChange={setFilters}
         scopeFilter={scopeFilter}
         onScopeFilterChange={setScopeFilter}
-        // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
-        // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
-        hasEditorContext={!!editorWebViewId}
+        // "Current chapter" needs a live reference to follow: the Column 3 panel follows the active
+        // project's scroll group, and an editor-anchored list follows its wired editor. A cross-project
+        // open has neither, so the option stays hidden rather than scoping to an unrelated ref.
+        canScopeToCurrentChapter={isCommentListPanel || !!editorWebViewId}
         handleAddCommentToThread={handleAddCommentToThread}
         handleUpdateComment={handleUpdateComment}
         handleDeleteComment={handleDeleteComment}

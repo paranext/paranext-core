@@ -83,11 +83,12 @@ export type CommentListPanelProps = Pick<
   /** Called when the scope filter changes. */
   onScopeFilterChange: (filter: ScopeFilter) => void;
   /**
-   * Whether an editor is wired to this list. When false (e.g. a cross-project open), the "current
-   * chapter" scope option is hidden because there is no editor to derive the chapter from. Defaults
-   * to `true`.
+   * Whether this list can scope to the "current chapter". True when it follows a live Scripture
+   * reference — an editor-anchored list via its wired editor, or the Column 3 panel via the active
+   * project's scroll group. When false (e.g. a cross-project open with no matching reference), the
+   * "current chapter" scope option is hidden. Defaults to `true`.
    */
-  hasEditorContext?: boolean;
+  canScopeToCurrentChapter?: boolean;
 };
 
 /**
@@ -156,7 +157,7 @@ export function CommentListPanel({
   onFiltersChange,
   scopeFilter,
   onScopeFilterChange,
-  hasEditorContext = true,
+  canScopeToCurrentChapter = true,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -227,7 +228,7 @@ export function CommentListPanel({
           isValue={isScopeFilter}
           onChange={onScopeFilterChange}
           localizedStrings={localizedStrings}
-          hiddenValues={hasEditorContext ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
+          hiddenValues={canScopeToCurrentChapter ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
         />
       </div>
 
