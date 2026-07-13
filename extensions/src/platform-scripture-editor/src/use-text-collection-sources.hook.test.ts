@@ -16,7 +16,17 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 
 vi.mock('@papi/frontend', () => ({
+  default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
   logger: { warn: vi.fn() },
+}));
+
+// The admin layer is read through `useBufferedProjectSetting`, which re-arms on a captured
+// `useEvent` handler. Capture it here so a test can drive the re-arm.
+let capturedApplyHandler: ((payload: { projectId: string }) => void) | undefined;
+vi.mock('platform-bible-react', () => ({
+  useEvent: vi.fn((_event, handler) => {
+    capturedApplyHandler = handler;
+  }),
 }));
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
@@ -129,6 +139,7 @@ function makeControllablePdp() {
 describe('useTextCollectionSources', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedApplyHandler = undefined;
   });
 
   it('returns sources undefined while the admin setting is still loading', () => {
@@ -171,6 +182,28 @@ describe('useTextCollectionSources', () => {
       userReferenced,
       overlay,
     });
+  });
+
+  it('buffers the admin layer: holds an admin change until the shared-layout re-arm fires', async () => {
+    const adminV1 = list('admin-v1');
+    mockSettings(settingTuple(adminV1, false));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+
+    const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), { 'res-1': true });
+    expect(result.current.sources?.adminReferenced).toEqual(adminV1);
+
+    // The admin setting changes (as if a manual sync landed) — it must be HELD, not applied.
+    const adminV2 = list('admin-v2');
+    mockSettings(settingTuple(adminV2, false));
+    rerender();
+    expect(result.current.sources?.adminReferenced).toEqual(adminV1);
+
+    // A shared-layout re-arm for this project applies the new admin layout.
+    act(() => capturedApplyHandler?.({ projectId: 'proj-1' }));
+    expect(result.current.sources?.adminReferenced).toEqual(adminV2);
   });
 
   it('keeps sources undefined until BOTH subscriptions have delivered', async () => {
