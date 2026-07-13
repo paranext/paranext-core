@@ -190,8 +190,9 @@ export function CommentListPanel({
 
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
-      {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown */}
-      <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
+      {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Sticky so it stays
+          pinned to the top of whichever ancestor scrolls (PT-4070). */}
+      <div className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0 tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
         <FilterDropdown
           value={filters.resolved}
           labelKeys={resolvedFilterToLabelKey}

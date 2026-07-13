@@ -190,17 +190,20 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // GetProjectDataProviderID throws "Project not found".
   let projectA: CommentTestProject;
   let projectB: CommentTestProject;
+  let projectScroll: CommentTestProject;
 
   test.beforeAll(async () => {
     project = await createCommentTestProject([]);
     projectA = await createCommentTestProject([]);
     projectB = await createCommentTestProject([]);
+    projectScroll = await createCommentTestProject([]);
   });
 
   test.afterAll(() => {
     cleanupCommentTestProject(project);
     cleanupCommentTestProject(projectA);
     cleanupCommentTestProject(projectB);
+    cleanupCommentTestProject(projectScroll);
   });
 
   test('Comments tab is visible in Column 3 in the English UI', async ({ mainPage }) => {
@@ -270,6 +273,61 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(commentsFrame.locator('body')).toContainText('Visible comment for PT-4068 test', {
       timeout: 90_000,
     });
+  });
+
+  test('filter toolbar stays visible when the comment list is scrolled to the bottom (PT-4070)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage, 180_000);
+    await waitForSimpleLayout(mainPage);
+
+    // Seed enough threads to force the comment list to scroll. GEN 1 has 31 verses, so 30
+    // distinct single-verse threads are all valid and comfortably overflow the panel height.
+    const COMMENT_COUNT = 30;
+    const verseRefs = Array.from({ length: COMMENT_COUNT }, (_, i) => `GEN 1:${i + 1}`);
+    const contents = Array.from(
+      { length: COMMENT_COUNT },
+      (_, i) => `PT-4070 scroll comment ${i + 1}`,
+    );
+    await createCommentThreads(projectScroll, verseRefs, contents);
+
+    // Point the Column 3 Comments tab at the seeded project (same direct-open path the
+    // "has comments" test uses — see that test for why we avoid openScriptureEditor here).
+    await waitForPapiMethodRegistered(
+      'command:legacyCommentManager.openCommentListPanel',
+      DEFAULT_WEBSOCKET_PORT,
+      SETTINGS_TIMEOUT_MS,
+    );
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+
+    await clickCommentsTab(mainPage);
+
+    const commentsFrame = commentsFrameLocator(mainPage);
+    // The filter dropdowns are the toolbar; the first one is the resolved-status filter. Its
+    // visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
+    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    const threads = commentsFrame.locator('#comment-list [role="option"]');
+
+    // Wait for the seeded threads to render, then confirm the toolbar starts out visible.
+    await expect(threads.first()).toBeVisible({ timeout: 90_000 });
+    await expect(firstFilter).toBeInViewport();
+
+    // Scroll the LAST thread into view. scrollIntoViewIfNeeded scrolls whichever element is the
+    // real scroll container, so this is robust whether the inner list or an ancestor scrolls.
+    await threads.last().scrollIntoViewIfNeeded();
+
+    // Guard against a false green: if the list actually scrolled, the FIRST thread is no longer
+    // within the comments-iframe viewport. If this fails, the list did not overflow — raise
+    // COMMENT_COUNT (e.g. spread across GEN 1 + GEN 2) until it does.
+    await expect(threads.first()).not.toBeInViewport();
+
+    // The point of PT-4070: the filter row must remain on-screen after scrolling to the bottom.
+    await expect(firstFilter).toBeInViewport();
   });
 
   test('Comments tab updates when the active project changes (PT-4069)', async ({ mainPage }) => {
