@@ -912,8 +912,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
-    // NN2 seam: the grid is project-bound so it can fire first-open overlay init and (in NN3+) select
-    // its contents. The PT10 default-layout open passes no projectId (dormant until NN3).
+    // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
+    // once content selection lands, select its contents. The PT10 default-layout open passes no
+    // projectId (dormant until content selection lands).
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
