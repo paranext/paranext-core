@@ -113,6 +113,10 @@ describe('ResourceCollectionOptions — VIEW toggle', () => {
 });
 
 describe('ResourceCollectionOptions — TEXTS list', () => {
+  // Per UX: admin-chosen resources always stay visible in the top grouping of View Options — a user
+  // can never remove them from the list. But a user may still hide an admin resource from the grid
+  // (e.g. to save space) by unchecking it. So admin (top) rows render WITH a checkbox (hide/show)
+  // but WITHOUT a remove (✕) control (can't be dropped from the list).
   it('renders admin (top) rows with checkboxes and no remove control', () => {
     renderComponent({
       top: [row('a1', 'Admin Text', { isAdminLocked: true, checked: true })],

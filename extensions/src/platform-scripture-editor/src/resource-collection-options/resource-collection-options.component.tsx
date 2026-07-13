@@ -39,6 +39,11 @@ const localize = (
  *
  * Chapter is disabled with a "coming soon" hint unless `isChapterEnabled` is set. The hover-✕
  * renders only on rows with `isUserRemovable === true`.
+ *
+ * Per UX: admin-chosen resources always stay visible in the top grouping of View Options — a user
+ * can never remove them from the list (so admin rows get no remove-✕ control). But a user may still
+ * hide an admin resource from the grid (e.g. to save space) by unchecking it, so admin rows keep
+ * their checkbox.
  */
 export function ResourceCollectionOptions({
   viewMode,
