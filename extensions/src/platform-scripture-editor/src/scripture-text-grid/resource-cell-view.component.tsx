@@ -2,6 +2,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Button,
   Spinner,
@@ -35,6 +36,7 @@ export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
 export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
 export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
 export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
+export const COPY_KEY = '%webView_scriptureTextGrid_cell_copy%';
 export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   UNAVAILABLE_KEY,
   LOADING_KEY,
@@ -44,6 +46,7 @@ export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
+  COPY_KEY,
 ] as const);
 
 type ResourceCellLocalizedStringKey = (typeof RESOURCE_CELL_STRING_KEYS)[number];
@@ -184,6 +187,7 @@ export function ResourceCellView({
   const [rightClickMenuPos, setRightClickMenuPos] = useState<{ x: number; y: number } | undefined>(
     undefined,
   );
+  const [selectedText, setSelectedText] = useState('');
 
   const handleCellContextMenu = useCallback(
     (event: MouseEvent) => {
@@ -193,6 +197,10 @@ export function ResourceCellView({
       // our own portaled, collision-aware menu at the cursor instead.
       event.preventDefault();
       event.stopPropagation();
+      // Capture selection now — focus moves to the menu when it opens, which clears the DOM
+      // selection, so we must grab it before setRightClickMenuPos triggers the re-render.
+      const selection = window.getSelection()?.toString().trim() ?? '';
+      setSelectedText(selection);
       zoomMenuOpenRef.current = true;
       setRightClickMenuPos({ x: event.clientX, y: event.clientY });
     },
@@ -329,6 +337,15 @@ export function ResourceCellView({
             />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
+            <DropdownMenuItem
+              disabled={!selectedText}
+              onSelect={() => {
+                if (selectedText) navigator.clipboard?.writeText(selectedText).catch(() => {});
+              }}
+            >
+              {localizedStrings[COPY_KEY]}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <ZoomItemsShared
               labels={zoomMenuLabels}
               canZoomIn={canZoomIn}

@@ -13,6 +13,7 @@ import {
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
+  COPY_KEY,
 } from './resource-cell-view.component';
 
 // jsdom doesn't ship a ResizeObserver (needed by Radix portal content), or PointerCapture APIs.
@@ -154,6 +155,7 @@ const zoomLabels = {
   [ZOOM_OUT_KEY]: 'Zoom Out',
   [RESET_ZOOM_KEY]: 'Reset Zoom',
   [ZOOM_OPTIONS_KEY]: 'Zoom options',
+  [COPY_KEY]: 'Copy',
 };
 
 describe('ResourceCellView zoom UI', () => {
@@ -392,5 +394,136 @@ describe('ResourceCellView zoom UI', () => {
 
     // onActivate must NOT have been called — the right-click menu suppresses cell activation.
     expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('right-click shows an enabled Copy item when text is selected', async () => {
+    // Spy on window.getSelection to simulate selected text at the time of right-click.
+    // The component only calls toString() on the Selection; implementing the full ~30-member
+    // Selection interface in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'selected text',
+    } as Selection);
+
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole('gridcell'));
+
+    const copyItem = screen.getByRole('menuitem', { name: 'Copy' });
+    expect(copyItem).toBeInTheDocument();
+    expect(copyItem).not.toHaveAttribute('aria-disabled', 'true');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('right-click shows a disabled Copy item when no text is selected', async () => {
+    // Spy on window.getSelection to simulate no selection.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => '',
+    } as Selection);
+
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole('gridcell'));
+
+    const copyItem = screen.getByRole('menuitem', { name: 'Copy' });
+    expect(copyItem).toBeInTheDocument();
+    expect(copyItem).toHaveAttribute('aria-disabled', 'true');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('selecting Copy writes the selected text to the clipboard', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    // Stub navigator.clipboard (not available in jsdom by default).
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      writable: true,
+      configurable: true,
+    });
+
+    // The component only calls toString() on the Selection; a full ~30-member implementation
+    // in a test fixture would be far worse than this single cast.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const getSelectionSpy = vi.spyOn(window, 'getSelection').mockReturnValue({
+      toString: () => 'selected text',
+    } as Selection);
+
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByRole('gridcell'));
+    await user.click(screen.getByRole('menuitem', { name: 'Copy' }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith('selected text');
+
+    getSelectionSpy.mockRestore();
+  });
+
+  it('right-click menu shows Copy above zoom items (not in kebab)', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+
+    // Right-click menu has both Copy and zoom items.
+    fireEvent.contextMenu(screen.getByRole('gridcell'));
+    expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Zoom In' })).toBeInTheDocument();
+
+    // Close the right-click menu and open the kebab — Copy must NOT appear there.
+    const menu = screen.getByRole('menu');
+    fireEvent.keyDown(menu, { key: 'Escape' });
+
+    await user.click(screen.getByRole('button', { name: 'Zoom options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
   });
 });
