@@ -155,9 +155,9 @@ export class SharedLayoutReceiver {
       return;
     }
 
-    // Fail-open: this read intentionally relies on the outer catch (subscription handler). Unlike
+    // This read intentionally relies on the outer catch (the subscription handler). Unlike
     // `applyForProject`'s signature read — caught locally so an apply still completes — a failure
-    // here should abort the notify path entirely rather than notify with an unknown signature.
+    // here should suppress the notify path entirely rather than notify with an unknown signature.
     const signature = await readLayoutSignature(this.papi, projectId);
     if (signature === this.lastAppliedSignatureByProjectId.get(projectId)) return; // unchanged
     if (signature === this.pendingNotifiedSignatureByProjectId.get(projectId)) return; // already asked
