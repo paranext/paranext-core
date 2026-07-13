@@ -232,7 +232,14 @@ global.webViewComponent = function CommentListWebView({
   );
 
   const { threads: safeCommentThreads, hiddenCount } = useMemo<LegacyCommentThreadsResult>(() => {
-    if (!commentThreadsResult || isPlatformError(commentThreadsResult))
+    // Guard the shape, not just error/undefined: a payload without a `threads` array (e.g. an older
+    // C# provider still returning a bare list) would otherwise leave `threads` undefined and crash
+    // the panel on `threads.length`. Fall back to the empty result instead.
+    if (
+      !commentThreadsResult ||
+      isPlatformError(commentThreadsResult) ||
+      !Array.isArray(commentThreadsResult.threads)
+    )
       return DEFAULT_LEGACY_COMMENT_THREADS_RESULT;
     return commentThreadsResult;
   }, [commentThreadsResult]);

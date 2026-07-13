@@ -241,7 +241,10 @@ export function CommentListPanel({
       {/* Hidden-notes banner — kept OUTSIDE the scroll region below so it stays pinned in view on a
           long thread list instead of scrolling out of sight above the comments. */}
       {hiddenCount > 0 && (
-        <Alert className="tw:m-4 tw:w-auto">
+        // role="status" (polite) instead of the Alert default role="alert" (assertive): "some
+        // comments couldn't be shown" is informational, and the panel remounts this banner on every
+        // filter reload — a polite live region announces without interrupting or re-announcing loudly.
+        <Alert role="status" className="tw:m-4 tw:w-auto">
           <AlertDescription>
             {hiddenCount === 1
               ? localizedStrings['%comment_hidden_single%']
