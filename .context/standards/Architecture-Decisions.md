@@ -219,3 +219,31 @@ step, no automation. Just a record.
   it lands — do not re-solve it per tool.
 - **Source:** punctuation-checklist port (markers-consumption verdict); see `08_Checklists.md` in the
   PT9 feature inventory for the per-tool behavior and the verse-range divergence.
+
+## ADR-0007: Ship the stylesheet-based marker pipeline with custom-marker support deliberately partial
+
+- **Date:** 2026-07-13
+- **Status:** Accepted
+- **Context:** The Standard-view epic's PRD says marker validity comes from "the hardcoded list"
+  and no-goes custom project tags. PT9's actual behavior is stylesheet-based: validity = the merged
+  project stylesheet (usfm.sty variant + custom.sty), so custom-tagged text renders styled, not
+  red. The `standard-view` branches implemented the PT9-faithful pipeline — C# `getStyleInfo`
+  serializes the merged `ScrStylesheet` over PAPI, `generateUsjCss` ports PT9's CSSCreator, and a
+  `TagValidator` port drives red highlighting — and use it for **both** styling and validation.
+- **Decision:** Keep the stylesheet pipeline as built. Custom-marker support remains **partial**
+  and is not being finished in the Standard-view epic; the finish-or-remove decision is deferred
+  until it becomes a problem. What full support still needs (tracked by the epic's backlog work
+  item): custom tags surfaced in the extension's marker menus (the hardcoded `usfmMarkers` dataset
+  in `lib/platform-bible-utils/src/markers/usfm-markers.ts` does not include them — see its
+  existing customization TODO), a decided validation stance for custom-tagged text (currently
+  valid-if-in-stylesheet, PT9-faithful, which contradicts the PRD's no-go wording — product
+  confirmation pending), rendering + round-trip corpus tests for custom-tagged content, and
+  possibly custom.sty editing UI.
+- **Alternatives:** (a) Validate against the hardcoded USFM set only and drop the C# pipeline —
+  rejected: discards working, tested code that would be rebuilt later. (b) Finish custom-marker
+  support now — rejected: not a priority for this epic's appetite.
+- **Consequences:** In v1 Standard view, custom-tagged text is **not** flagged red (matches PT9,
+  diverges from the PRD's wording). Docs noting the partial state, to update when the work is
+  picked up: this entry, and the Standard-view investigation brief
+  (`.context/research/investigations/donna-edits-standard-view/brief.md` §2a, §3, §6, WI-12).
+- **Source:** Standard-view investigation + implementation-owner decisions, 2026-07-13.
