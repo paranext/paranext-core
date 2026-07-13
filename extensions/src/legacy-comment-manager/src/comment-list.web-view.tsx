@@ -122,7 +122,7 @@ global.webViewComponent = function CommentListWebView({
     selfInitiatedNavigationRef.current = undefined;
     if (
       !shouldArmSyncScroll(selfInitiatedNavigation, {
-        // TODO: Handle versification
+        // TODO (PT-4031): Handle versification
         book: scrRef.book,
         chapterNum: scrRef.chapterNum,
         verseNum: scrRef.verseNum,
