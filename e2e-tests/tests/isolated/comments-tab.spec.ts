@@ -414,4 +414,41 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await mainPage.keyboard.press('Enter');
     await expect(dropdown).toBeHidden({ timeout: 10_000 });
   });
+
+  test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage, 180_000);
+    await waitForSimpleLayout(mainPage);
+
+    await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
+
+    await waitForPapiMethodRegistered(
+      'command:legacyCommentManager.openCommentListPanel',
+      DEFAULT_WEBSOCKET_PORT,
+      SETTINGS_TIMEOUT_MS,
+    );
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+
+    await clickCommentsTab(mainPage);
+
+    const commentsFrame = commentsFrameLocator(mainPage);
+    // The scope dropdown is the last of the five filter triggers (resolved, read, type, assignment,
+    // scope). Open it and confirm the Column 3 panel offers BOTH "all books" and "current chapter" —
+    // before this fix it offered only "all books" (the option was gated on a wired editor, which the
+    // Column 3 panel does not have even though it follows the active project's scroll group).
+    const scopeTrigger = commentsFrame.locator('[data-slot="select-trigger"]').nth(4);
+    await expect(scopeTrigger).toBeVisible({ timeout: 90_000 });
+    await scopeTrigger.click();
+
+    const scopeOptions = commentsFrame.locator(
+      '[data-slot="select-content"] [data-slot="select-item"]',
+    );
+    await expect(scopeOptions).toHaveCount(2, { timeout: 10_000 });
+  });
 });

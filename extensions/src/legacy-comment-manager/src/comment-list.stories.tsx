@@ -187,7 +187,7 @@ type DecoratorConfig = {
   isLoading?: boolean;
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
-  hasEditorContext?: boolean;
+  canScopeToCurrentChapter?: boolean;
 };
 
 /**
@@ -223,7 +223,7 @@ function createDecorator(config: DecoratorConfig) {
             onFiltersChange: setFilters,
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
-            hasEditorContext: config.hasEditorContext,
+            canScopeToCurrentChapter: config.canScopeToCurrentChapter,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -334,9 +334,9 @@ export const EmptyFiltered: Story = {
 };
 
 /**
- * Opened without an editor (e.g. a cross-project open from the Send/Receive results link): the
- * scope dropdown omits "current chapter" because there is no editor to derive the chapter from.
+ * A list with no current chapter to follow (e.g. a cross-project open from the Send/Receive results
+ * link): the scope dropdown omits "current chapter" and offers only "all books".
  */
-export const NoEditorContext: Story = {
-  decorators: [createDecorator({ hasEditorContext: false })],
+export const NoCurrentChapter: Story = {
+  decorators: [createDecorator({ canScopeToCurrentChapter: false })],
 };
