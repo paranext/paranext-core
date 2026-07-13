@@ -318,14 +318,22 @@ global.webViewComponent = function CommentListWebView({
     }
     const target = findScrollTarget(safeCommentThreads, scrRef);
     if (target?.type === 'thread') {
-      document
-        .getElementById(target.threadId)
-        ?.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'start' });
+      const threadElement = document.getElementById(target.threadId);
+      if (threadElement)
+        threadElement.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'start' });
+      else logger.debug(`BCV-sync scroll: thread element not found: ${target.threadId}`);
     } else if (target?.type === 'bottom') {
-      // Past every loaded thread: show the end of the list (the user can scroll up).
-      document
-        .getElementById('comment-list')
-        ?.lastElementChild?.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'end' });
+      // Past every loaded thread: show the end of the list (the user can scroll up). A 'bottom'
+      // target guarantees at least one loaded thread, so the list and its children should exist;
+      // either miss below means the DOM contract with platform-bible-react's CommentList broke.
+      const listElement = document.getElementById('comment-list');
+      const lastThreadElement = listElement?.lastElementChild;
+      if (lastThreadElement)
+        lastThreadElement.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'end' });
+      else
+        logger.debug(
+          `BCV-sync scroll: #comment-list ${listElement ? 'has no children to scroll to' : 'element not found'}`,
+        );
     }
     setPendingSyncScrollBehavior(undefined);
   }, [
