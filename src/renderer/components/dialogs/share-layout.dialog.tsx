@@ -6,7 +6,8 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { isPlatformError } from 'platform-bible-utils';
-import { Spinner, usePromise, RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react';
+import { Spinner, usePromise } from 'platform-bible-react';
+import { RESOURCE_PICKER_DIALOG_STRING_KEYS } from 'platform-bible-react/experimental';
 import type { ResourceReference, ResourceReferenceList } from 'platform-scripture';
 import { DIALOG_BASE, DialogProps } from '@renderer/components/dialogs/dialog-base.data';
 import {

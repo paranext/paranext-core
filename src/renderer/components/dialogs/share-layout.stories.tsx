@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Dialog } from 'platform-bible-react';
-import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
+import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { ResourceReference } from 'platform-scripture';
 import {

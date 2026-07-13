@@ -12,7 +12,6 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  ResourcePickerDialog,
   Select,
   SelectContent,
   SelectItem,
@@ -23,7 +22,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react';
+import { ResourcePickerDialog } from 'platform-bible-react/experimental';
+import type { ResourcePickerDialogLocalizedStrings } from 'platform-bible-react/experimental';
 import { ChevronDown, X } from 'lucide-react';
 
 // Tailwind arbitrary-value width overrides on PopoverContent (`tw:w-[32rem]`, with or without the
