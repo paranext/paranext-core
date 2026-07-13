@@ -8,10 +8,6 @@ import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
 
-// Stable no-op for optional zoom callbacks so `useResourceZoomInput`'s effect deps don't change
-// when `zoom` is undefined.
-const NO_OP = () => {};
-
 export type ChapterContextResource = GridResource;
 
 type ScriptureTextGridProps = {
@@ -104,14 +100,11 @@ export function ScriptureTextGrid({
     zoom?.pruneToResourceIds(resourceIds);
   }, [zoom, resourceIds]);
 
-  // Stable identity for `useResourceZoomInput` dep — prevents tearing down and re-attaching the
-  // wheel listener on every render. `zoom.adjustZoom` is already stable (the controller is
-  // memoized upstream); NO_OP is module-stable.
-  const adjustZoom = zoom ? zoom.adjustZoom : NO_OP;
-
+  // `zoom?.adjustZoom` is a stable identity across renders (the controller is memoized upstream, and
+  // `undefined` is constant), so the wheel listener isn't torn down and re-attached each render.
   useResourceZoomInput({
     containerRef: gridRef,
-    adjustZoom,
+    adjustZoom: zoom?.adjustZoom,
   });
 
   // Single resource: render it as a full-width whole chapter — almost the standalone resource
