@@ -269,7 +269,7 @@ export function ShareLayoutDialogContent({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="tw:flex tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
+      <div className="tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
         <div className="tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
           <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
             <span>{localizeString(strings, '%shareLayoutDialog_modelText_label%')}</span>
@@ -354,15 +354,15 @@ export function ShareLayoutDialogContent({
             commentaryResources,
             '%shareLayoutDialog_commentaryResources_label%',
           )}
+        </div>
 
-          <div className="tw:px-4 tw:py-3">
+        <div className="tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
+          <div className="tw:border-b tw:border-border tw:px-4 tw:py-3">
             <span className="tw:font-medium">
               {localizeString(strings, '%shareLayoutDialog_textCollectionResources_label%')}
             </span>
           </div>
-          {/* Bounded + independently scrollable so a long resource list scrolls within this
-          section instead of growing (and squishing) the rest of the dialog. */}
-          <div className="tw:max-h-64 tw:divide-y tw:divide-border tw:overflow-y-auto">
+          <div className="tw:divide-y tw:divide-border">
             {scriptureResources.map((ref) => (
               <div
                 key={referenceKey(ref)}
