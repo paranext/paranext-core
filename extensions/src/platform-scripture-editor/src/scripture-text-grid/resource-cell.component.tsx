@@ -5,20 +5,30 @@ import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/fr
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { deriveCellState } from './resource-cell.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import {
+  RESOURCE_CELL_STRING_KEYS,
+  ResourceCellView,
+  type ZoomMenuLabels,
+} from './resource-cell-view.component';
+import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
+import type { ResourceZoomController } from './use-resource-zoom.hook';
 import { sliceUsjToVerse } from './verse-display.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
 
-export type GridResource = { projectId: string; label: string };
+export type GridResource = { resourceId: string; projectId: string; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
+  /** Per-resource zoom controller; when omitted the cell renders without zoom surfaces. */
+  zoom?: ResourceZoomController;
+  /** Localized zoom menu copy, passed straight to the view. */
+  zoomMenuLabels?: ZoomMenuLabels;
 };
 
 /**
@@ -32,6 +42,8 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
+  zoom,
+  zoomMenuLabels,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -74,6 +86,26 @@ export function ResourceCell({
     () => deriveCellState({ usjPossiblyError, isLoading }),
     [usjPossiblyError, isLoading],
   );
+
+  // #region Zoom — computed here so the callbacks and bound-state are available for the view's
+  // kebab dropdown and the right-click zoom menu rendered by ResourceCellView.
+  const zoomFactor = zoom ? zoom.getZoom(resourceRef.resourceId) : undefined;
+  const canZoomIn = zoomFactor === undefined || zoomFactor < MAX_ZOOM_FACTOR;
+  const canZoomOut = zoomFactor === undefined || zoomFactor > MIN_ZOOM_FACTOR;
+  const canReset = zoomFactor !== undefined && zoomFactor !== DEFAULT_ZOOM_FACTOR;
+  const handleZoomIn = useCallback(
+    () => zoom?.adjustZoom(resourceRef.resourceId, 1),
+    [zoom, resourceRef.resourceId],
+  );
+  const handleZoomOut = useCallback(
+    () => zoom?.adjustZoom(resourceRef.resourceId, -1),
+    [zoom, resourceRef.resourceId],
+  );
+  const handleResetZoom = useCallback(
+    () => zoom?.resetZoom(resourceRef.resourceId),
+    [zoom, resourceRef.resourceId],
+  );
+  // #endregion
 
   // #region Editor
   // EditorRef requires null initial value per React ref convention
@@ -122,6 +154,14 @@ export function ResourceCell({
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
       nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
+      zoomFactor={zoomFactor}
+      canZoomIn={canZoomIn}
+      canZoomOut={canZoomOut}
+      canReset={canReset}
+      onZoomIn={handleZoomIn}
+      onZoomOut={handleZoomOut}
+      onResetZoom={handleResetZoom}
+      zoomMenuLabels={zoom ? zoomMenuLabels : undefined}
       editor={
         <Editorial
           ref={editorRef}
