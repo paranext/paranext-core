@@ -6,7 +6,8 @@ import type {
   ResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectDataProvider } from '@papi/frontend/react';
+import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
 
 const CURRENT_DATA_VERSION = '1.0.0';
 // Module-level constant avoids a useMemo with [] deps inside the hook
@@ -72,7 +73,7 @@ export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
 ): [EffectiveResourceReferenceList | undefined, boolean] {
-  const [projectResourceReferenceList, , , isProjectSettingLoading] = useProjectSetting(
+  const [projectResourceReferenceList, isProjectSettingLoading] = useBufferedProjectSetting(
     projectId,
     settingName,
     DEFAULT_LIST,
