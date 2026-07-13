@@ -50,6 +50,7 @@ import {
   ZOOM_OPTIONS_KEY,
   type ZoomMenuLabels,
 } from './scripture-text-grid/resource-cell-view.component';
+import { pickTabIconUrl, type TabIconUrls } from './scripture-text-grid/tab-icon.util';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -77,10 +78,15 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
 const GRID_RESOURCE_TYPE = 'ScriptureResource';
 
 // Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
-// `currentColor` SVG can't follow the theme. Swap between a dark-stroke (light theme) and a
-// light-stroke (dark theme) variant based on the web view's themed foreground brightness.
-const LIGHT_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library.svg';
-const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library-dark.svg';
+// `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
+// and the tab's selected state (light theme: white when selected, near-black when unselected,
+// mid-slate fallback when selection state is unknown; dark theme: always light).
+const TAB_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/library.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/library-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/library-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/library-unselected.svg',
+};
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
@@ -203,9 +209,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
   }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
-  // Pick the tab icon variant to match the current theme. The tab icon is painted by the platform
-  // as a static background-image, so a `currentColor` SVG can't follow the theme — we swap the
-  // `iconUrl` ourselves based on the theme type from `papi.themes`.
+  // Pick the tab icon variant to match the current theme and selected state. The tab icon is
+  // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
+  // theme — we swap the `iconUrl` ourselves based on both the theme type from `papi.themes` and the
+  // tab's selected state (detected via offsetParent on the iframe element).
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
     let disposed = false;
@@ -226,9 +233,34 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     };
   }, []);
 
+  // Detect the tab's selected state by polling whether the iframe has an offsetParent. rc-dock
+  // hides an inactive tab's pane (display:none), so an unselected tab's iframe has no offsetParent.
+  // This is best-effort — any failure yields `undefined`, which falls back to the mid-slate icon.
+  const [isTabSelected, setIsTabSelected] = useState<boolean | undefined>(undefined);
   useEffect(() => {
-    updateWebViewDefinition({ iconUrl: isDarkTheme ? DARK_THEME_ICON_URL : LIGHT_THEME_ICON_URL });
-  }, [isDarkTheme, updateWebViewDefinition]);
+    const read = (): boolean | undefined => {
+      try {
+        const { frameElement } = window;
+        if (!(frameElement instanceof HTMLElement)) return undefined;
+        return !!frameElement.offsetParent;
+      } catch {
+        return undefined;
+      }
+    };
+    const update = () =>
+      setIsTabSelected((prev) => {
+        const next = read();
+        return prev === next ? prev : next;
+      });
+    update();
+    // rc-dock fires no event we can hook from inside the iframe on tab switches, so poll cheaply.
+    const id = window.setInterval(update, 500);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    updateWebViewDefinition({ iconUrl: pickTabIconUrl(isDarkTheme, isTabSelected, TAB_ICON_URLS) });
+  }, [isDarkTheme, isTabSelected, updateWebViewDefinition]);
 
   const handleCheckedChange = useCallback(
     (resourceId: string, checked: boolean) => {
