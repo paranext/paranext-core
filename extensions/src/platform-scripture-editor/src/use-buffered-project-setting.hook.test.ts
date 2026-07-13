@@ -7,6 +7,7 @@ import {
   type PlatformError,
   type PlatformEventHandler,
 } from 'platform-bible-utils';
+import { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
 import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
@@ -14,6 +15,7 @@ import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
 vi.mock('@papi/frontend/react', () => ({ useProjectSetting: vi.fn() }));
 vi.mock('@papi/frontend', () => ({
   default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
+  logger: { warn: vi.fn() },
 }));
 
 // Capture the useEvent handler so the test can fire the re-arm event on demand.
@@ -126,5 +128,26 @@ describe('useBufferedProjectSetting', () => {
       useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     expect(result.current[0]).toBe(error);
+  });
+
+  it('warns when projectId changes in place (the unsupported no-remount case)', () => {
+    setRaw(DEFAULT);
+    const { rerender } = renderHook(
+      ({ pid }) => useBufferedProjectSetting(pid, 'platformScripture.modelTexts', DEFAULT),
+      { initialProps: { pid: 'proj-1' } },
+    );
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+    rerender({ pid: 'proj-2' });
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not warn on a stable projectId across rerenders', () => {
+    setRaw(DEFAULT);
+    const { rerender } = renderHook(() =>
+      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+    );
+    rerender();
+    rerender();
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
   });
 });
