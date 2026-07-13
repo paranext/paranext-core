@@ -8,12 +8,10 @@ import {
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { serializeRequestType } from '@shared/utils/util';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { AsyncVariable } from 'platform-bible-utils';
 
 const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
-
-// Must match SCRIPTURE_EDITOR_WEBVIEW_TYPE in platform-scripture-editor.utils.ts.
-const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.

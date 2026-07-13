@@ -19,7 +19,12 @@ import {
   TestInfo,
   ConsoleMessage,
 } from '@playwright/test';
-import { launchElectronApp, ElectronAppContext, teardownElectronApp } from './helpers';
+import {
+  launchElectronApp,
+  ElectronAppContext,
+  teardownElectronApp,
+  preConfigureSettings,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -41,11 +46,21 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
     // Playwright worker-scoped fixtures use empty destructuring when they have no fixture dependencies
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
+      // Pre-configure English locale and simple mode in the settings file before launching so
+      // the app starts in the expected state. This avoids the mid-session locale-reload path
+      // (which sequentially reloads every open WebView and can take 5+ minutes).
+      const restoreSettings = preConfigureSettings({
+        'platform.interfaceLanguage': ['en'],
+        'platform.interfaceMode': 'simple',
+      });
       const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
       await use(ctx);
 
       console.log('[teardown] Comment worker-scoped app teardown starting...');
       await teardownElectronApp(ctx);
+      // Restore the developer's settings file only after the app has fully closed so the app's
+      // own shutdown writes cannot clobber the restored contents.
+      restoreSettings();
       console.log('[teardown] Comment worker-scoped app teardown complete');
     },
     { scope: 'worker' },

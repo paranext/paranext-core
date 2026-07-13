@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Paratext.Data.ProjectComments;
+using Paratext.Data.UsfmDiff;
 using PtxUtils;
 
 namespace Paranext.DataProvider.JsonUtils;
@@ -131,6 +132,22 @@ public class PlatformCommentWrapper
         IsFirstCommentInThread ? _comment.ConflictType : NoteConflictType.None;
 
     /// <summary>
+    /// The conflict-resolution action recorded on this comment, if any: <c>null</c> (accept, or not
+    /// a resolution comment at all), <c>"replaced"</c> (a reject wrote the losing side into the
+    /// verse), or <c>"merged"</c> (PT10's merge resolution wrote PT9's auto-merged, both-sides text
+    /// into the verse - data synced from a PT9 three-way merge may also carry it). Comes straight
+    /// from the underlying <see cref="Comment"/> field.
+    ///
+    /// UNGATED on purpose (unlike the four verseText decode fields below, which are gated on
+    /// <see cref="IsVerseTextConflict"/>): PT9's SaveEdits stamps this on the resolution comment it
+    /// appends, and that comment has <c>Type == Conflict</c> but its <c>ConflictType</c> is
+    /// <see cref="NoteConflictType.None"/> (never copied from the original conflict note). A
+    /// verseText gate would therefore NEVER fire for the resolution comment, so this must serialize
+    /// whenever the underlying field is set — the converter null-skips it.
+    /// </summary>
+    public string? ConflictResolutionAction => _comment.ConflictResolutionAction;
+
+    /// <summary>
     /// The verse USFM captured on this comment. Per-comment history data, deliberately NOT gated to
     /// the thread's first comment: PT9's <c>CommentThread.AddNewComment</c> stores the current verse
     /// text on any comment (reply included) written after the verse changed. Only on a conflict
@@ -181,13 +198,12 @@ public class PlatformCommentWrapper
     {
         get =>
             _thread?.ThreadInternal == null
-                ? throw new InvalidOperationException(
+                ? throw new CommentThreadContextMissingException(
                     "Cannot get ContentsHtml without a valid thread."
                 )
                 : _comment.GetContentsAsHtml(
                     _thread.ThreadInternal,
-                    // TODO (PT-4104): this comparison is never true (comment ID vs thread ID); replace with IsFirstCommentInThread — behavior-neutral, see ticket.
-                    _comment.Id == _thread?.Id,
+                    IsFirstCommentInThread,
                     false,
                     false
                 );
@@ -308,6 +324,44 @@ public class PlatformCommentWrapper
                 getChangedVersion: true
             );
             return IsBlankText(usfm) ? null : usfm;
+        }
+    }
+
+    /// <summary>
+    /// For a verseText conflict whose two sides are independent, the PT9 "merge all changes" preview:
+    /// the merged verse diffed against the base, rendered with the same &lt;u&gt;/&lt;s&gt; markup as the
+    /// accepted/rejected sides. Null when merge is not available (overlapping edits - GetMergedUsfm null)
+    /// or the render is empty. Computation is PT9's exact display path (CommentHtmlBuilderUI): GetMergedUsfm
+    /// + GetDiffVerseUsfm(base) + DiffToken.GetDiffString.
+    /// </summary>
+    public string? MergedText
+    {
+        get
+        {
+            if (!IsVerseTextConflict || _thread?.ThreadInternal == null)
+                return null;
+            var thread = _thread.ThreadInternal;
+            string? mergedUsfm = CommentEditHelper.GetMergedUsfm(thread);
+            if (mergedUsfm == null)
+                return null;
+            // Base must come from the SAME comment GetMergedUsfm diffs against (thread.Comments[0]),
+            // not _comment: the root is identified by earliest date (RootCommentId) and, after
+            // thread-fragment dedup, may not be Comments[0] (see IsFirstCommentInThread). Diffing a
+            // root-based base against a Comments[0]-based merge would garble the preview when they
+            // differ; in the common case (root == Comments[0]) this is the same text.
+            string baseUsfm = CommentEditHelper.GetDiffVerseUsfm(
+                thread.Comments[0].Contents,
+                getChangedVersion: false
+            );
+            string differences = DiffToken.GetDiffString(
+                thread.ScrText,
+                thread.VerseRef.BookNum,
+                baseUsfm,
+                mergedUsfm
+            );
+            var doc = new System.Xml.XmlDocument();
+            doc.LoadXml("<contents>" + differences + "</contents>");
+            return RenderConflictSideHtml(doc.DocumentElement, skipLeadingMessage: false);
         }
     }
 

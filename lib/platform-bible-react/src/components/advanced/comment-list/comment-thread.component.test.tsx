@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
@@ -10,6 +11,37 @@ vi.mock('@/components/advanced/editor/editor', () => ({
     return <div data-testid="mock-editor" />;
   }),
 }));
+
+// jsdom doesn't implement ResizeObserver, hasPointerCapture, or scrollIntoView, all of which the
+// ConflictNoteCard's Radix RadioGroup and Tooltip (the clickable option cards) use. No-op stubs are
+// enough for the conflict-branch tests below.
+class NoopResizeObserver implements ResizeObserver {
+  private readonly targets = new Set<Element>();
+
+  observe(target: Element) {
+    this.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.targets.delete(target);
+  }
+
+  disconnect() {
+    this.targets.clear();
+  }
+}
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = NoopResizeObserver;
+  }
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+});
 
 const localizedStrings = {
   '%comment_assigning_to%': 'Assigning to: {assignedUser}',
@@ -228,5 +260,32 @@ describe('CommentThread assignee state machine', () => {
       expect(screen.getByText('Assigning to: Alice')).toBeInTheDocument();
     });
     expect(screen.queryByText('Assigning to: Charlie')).not.toBeInTheDocument();
+  });
+});
+
+describe('CommentThread generic resolve check', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('clicking ✓ on a non-conflict thread uses the generic status path', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleAddCommentToThread = vi.fn().mockResolvedValue('comment-id');
+    render(
+      <CommentThread
+        {...defaultProps}
+        canUserResolveThreadCallback={async () => true}
+        handleAddCommentToThread={handleAddCommentToThread}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Resolve thread' }));
+
+    // CommentThread has no built-in notion of conflicts anymore (that branching now lives in
+    // ConflictThread, which overrides resolveActionSlot) — its own header ✓ always goes through the
+    // generic handleAddCommentToThread status path.
+    expect(handleAddCommentToThread).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-1', status: 'Resolved' }),
+    );
   });
 });

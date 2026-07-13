@@ -26,23 +26,35 @@ const config = defineConfig({
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   outputDir: './test-results',
-  // Invariant: every directory under `tests/` (except `_example/`) MUST be reachable
-  // from at least one project entry below. If you add a new test directory, register it
-  // here AND wire it into either CI (`test:e2e:smoke`) or a local-only npm script.
+  // Convention: directories under `tests/` should generally be reachable from at least one project
+  // entry below. Most feature-specific e2e tests can be added under `isolated`. If you add a new
+  // test directory, register it here AND wire it into either CI (`test:e2e:smoke`) or a local-only
+  // npm script (`test:e2e:<name>`).
+  //
+  // See the README in each directory for more information about the nature of the tests.
+  //
+  // Exceptions:
+  // `_example/` — reference template for new tests, not a runnable test suite.
+  // Experimental tests that should not be wired into any standard test run. (e.g.,
+  // `manage-books/` and `markers-checklist/`)
   projects: [
     {
       name: 'smoke',
       testDir: './tests/smoke',
     },
     {
+      // The common set of locally-runnable tests, organized in subdirectories by feature.
+      // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
+      // `npm run test:e2e:isolated <subset>` runs one; `... all` runs everything.
       name: 'isolated',
       testDir: './tests/isolated',
     },
     {
       // Local-only - NOT wired into CI's `test:e2e:smoke`. The ER tests need real
-      // Marble resources (e.g., ESV16UK+) which are not available in CI. Run locally:
-      //   ./.erb/scripts/refresh.sh    # boot the app once with CDP enabled
-      //   npm run test:e2e:enhanced-resources
+      // Marble resources (e.g., ESV16UK+) which are not available in CI. There is no dedicated
+      // npm script; run the project directly (after booting the app once with CDP enabled):
+      //   ./.erb/scripts/refresh.sh
+      //   npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources
       name: 'enhanced-resources',
       testDir: './tests/enhanced-resources',
     },

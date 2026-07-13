@@ -3,9 +3,6 @@ import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
 
-vi.mock('@renderer/components/web-view.component', () => ({
-  TAB_TYPE_WEBVIEW: 'webView',
-}));
 vi.mock('../../../shared/services/logger.service');
 
 describe('simple-layout.data', () => {
@@ -41,11 +38,11 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('column 3 has exactly 2 tabs', () => {
+    it('column 3 has exactly 3 tabs', () => {
       // Narrowing column to BoxData and its first child to PanelData to access tabs.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const col3Panel = (columns[2] as BoxData).children[0] as PanelData;
-      expect(col3Panel.tabs).toHaveLength(2);
+      expect(col3Panel.tabs).toHaveLength(3);
     });
 
     it('all tab ids are unique across the layout', () => {
@@ -59,7 +56,7 @@ describe('simple-layout.data', () => {
       expect(new Set(allIds).size).toBe(allIds.length);
     });
 
-    it('contains the four expected webViewType strings', () => {
+    it('contains the five expected webViewType strings', () => {
       const allWebViewTypes: string[] = [];
       columns.forEach((col) => {
         // Narrowing column to BoxData and its first child to PanelData to iterate tabs.
@@ -76,6 +73,7 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScriptureEditor.react');
       expect(allWebViewTypes).toContain('platformScriptureEditor.bibleTexts');
       expect(allWebViewTypes).toContain('platformScriptureEditor.commentaries');
+      expect(allWebViewTypes).toContain('legacyCommentManager.commentListPanel');
     });
   });
 });

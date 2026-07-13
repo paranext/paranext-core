@@ -4,6 +4,26 @@ import {
   LegacyComment,
   LegacyCommentThread,
 } from 'platform-bible-utils';
+import { ReactNode } from 'react';
+import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
+
+/**
+ * Conflict-resolution callbacks a conflict thread needs: apply a resolution, and query which
+ * resolutions are available. Bundled into one optional slot so the generic list/thread props stay
+ * conflict-agnostic - only ConflictThread reads it.
+ */
+export interface ConflictResolutionCallbacks {
+  /**
+   * Applies a conflict resolution via the comments data provider's resolveConflict. Returns true on
+   * success, false on failure (the card re-enables its controls).
+   */
+  resolve: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+  /**
+   * Returns which resolution actions the current user may take on a conflict thread (the
+   * getConflictResolutionOptions capability). Treat missing as 'none'.
+   */
+  getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
+}
 
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
@@ -128,6 +148,11 @@ export interface CommentListProps {
   canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
+  /**
+   * Conflict-resolution callbacks (resolve + getOptions). Conflict threads render a read-only card
+   * when this is not provided.
+   */
+  conflictResolution?: ConflictResolutionCallbacks;
 }
 
 /** Props for the CommentThread component */
@@ -208,6 +233,43 @@ export interface CommentThreadProps {
   autoReadDelay?: number;
   /** Callback when the user clicks a verse reference in a comment thread. */
   onVerseRefClick?: (thread: LegacyCommentThread) => void;
+  /**
+   * Pre-computed non-deleted comments. When provided (e.g. by ConflictThread, which already derives
+   * them for its own logic), the thread uses these instead of re-filtering `comments`, avoiding a
+   * duplicate pass each render. Omitted for direct consumers, which filter `comments` themselves.
+   */
+  activeComments?: LegacyComment[];
+  /**
+   * Overrides the root-comment render (the collapsed root area). When omitted, the thread renders
+   * the standard CommentItem for its first comment. ConflictThread uses this to show the conflict
+   * summary (collapsed) or the ConflictNoteCard (expanded) for verseText conflicts.
+   */
+  rootContentSlot?: ReactNode;
+  /**
+   * Overrides the header hover resolve affordance. When omitted, the thread renders its generic
+   * status-resolve check (gated on canUserResolveThreadCallback). Pass a node to replace it, or
+   * `false` to render nothing. ConflictThread uses this to supply the conflict-gated resolve
+   * check.
+   */
+  resolveActionSlot?: ReactNode;
+  /**
+   * Adds a small vertical gap between the root content and the replies when the thread is expanded
+   * and has visible replies, so a resolution card isn't flush against its replies.
+   */
+  spaceRootContentFromReplies?: boolean;
+}
+
+/**
+ * Props for the ConflictThread container: the generic CommentThread shell's props plus the
+ * conflict-only resolution callbacks that ConflictThread (not the shell) consumes. Kept off
+ * CommentThreadProps so the conflict-agnostic shell's contract stays clean.
+ */
+export interface ConflictThreadProps extends CommentThreadProps {
+  /**
+   * Conflict-resolution callbacks (resolve + getOptions). When omitted, the conflict thread renders
+   * a read-only card.
+   */
+  conflictResolution?: ConflictResolutionCallbacks;
 }
 
 /** Props for the CommentItem component */

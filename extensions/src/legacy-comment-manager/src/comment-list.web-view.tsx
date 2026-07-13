@@ -3,6 +3,11 @@ import papi, { logger } from '@papi/frontend';
 import {
   AddCommentToThreadOptions,
   COMMENT_LIST_STRING_KEYS,
+  CONFLICT_NOTE_STRING_KEYS,
+  ConflictResolution,
+  ConflictResolutionOptions,
+  Sonner,
+  sonner,
   usePromise,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -16,16 +21,14 @@ import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
+import { CommentListPanel, COMMENT_LIST_PANEL_EXTRA_STRING_KEYS } from './comment-list.component';
 import {
-  CommentFilter,
-  CommentListPanel,
-  COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
-  FILTER_UNREAD_ASSIGNED,
-  FILTER_UNRESOLVED_ASSIGNED,
+  applyFilterOverrides,
+  buildCommentThreadSelector,
+  CommentFilters,
   ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
-} from './comment-list.component';
+} from './comment-list-filters.model';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -59,7 +62,11 @@ global.webViewComponent = function CommentListWebView({
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
-      return [...Array.from(COMMENT_LIST_STRING_KEYS), ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS];
+      return [
+        ...Array.from(COMMENT_LIST_STRING_KEYS),
+        ...Array.from(CONFLICT_NOTE_STRING_KEYS),
+        ...COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
+      ];
     }, []),
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
@@ -78,8 +85,33 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  const [commentFilter, setCommentFilter] = useState<CommentFilter>(UNFILTERED);
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
+  // Initial filter/scope axes passed by openCommentList when opening a NEW comment list (e.g. the
+  // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
+  // race where a setFilters message could arrive before this view's message listener attaches. An
+  // already-open (reused) view keeps its state and is updated via the setFilters message instead.
+  const [initialFilters, setInitialFilters] = useWebViewState<Partial<CommentFilters> | undefined>(
+    'initialFilters',
+    undefined,
+  );
+  const [initialScopeFilter, setInitialScopeFilter] = useWebViewState<ScopeFilter | undefined>(
+    'initialScopeFilter',
+    undefined,
+  );
+
+  const [filters, setFilters] = useState<CommentFilters>(() =>
+    applyFilterOverrides(initialFilters),
+  );
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScopeFilter ?? UNFILTERED);
+
+  // Consume the one-shot seed exactly once. The useState initializers above already read it
+  // synchronously on first render, so clear it from persistent web view state now. Otherwise an
+  // in-session remount that re-runs this component (e.g. dragging the tab to another dock region)
+  // would re-read the stale seed and snap the user's live filter changes back to the original
+  // programmatic request.
+  useEffect(() => {
+    if (initialFilters !== undefined) setInitialFilters(undefined);
+    if (initialScopeFilter !== undefined) setInitialScopeFilter(undefined);
+  }, [initialFilters, initialScopeFilter, setInitialFilters, setInitialScopeFilter]);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
 
@@ -115,12 +147,22 @@ global.webViewComponent = function CommentListWebView({
   // Listen for messages from the web view controller
   useEffect(() => {
     const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
-      if (data.method === 'selectThread') {
+      if (data?.method === 'selectThread') {
         logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
         // Note: We pass `true` for isDataLoading as a conservative default since we can't access
         // the current loading state synchronously here. The pending thread will be processed
         // by the effect below once loading completes.
         trySelectThread(data.threadId, true);
+      }
+
+      if (data?.method === 'setFilters') {
+        logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
+        // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
+        // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
+        // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
+        // carries over from prior state.
+        setFilters(applyFilterOverrides(data.filters));
+        setScopeFilter(data.scopeFilter ?? UNFILTERED);
       }
     };
 
@@ -128,6 +170,7 @@ global.webViewComponent = function CommentListWebView({
     return () => {
       window.removeEventListener('message', messageListener);
     };
+    // setFilters / setScopeFilter are stable useState setters, so they don't belong in the deps.
   }, [trySelectThread]);
 
   // Fetch current user's registration data on mount
@@ -151,42 +194,34 @@ global.webViewComponent = function CommentListWebView({
     };
   }, []);
 
+  // The selector only uses scrRef when the scope is the current chapter; in the all-books view a
+  // verse move must not tear down and re-establish the subscription (which re-runs the C# query and
+  // flashes the skeletons). Freeze the scrRef inputs to constants unless the chapter scope is
+  // active.
+  const usesChapterScope = scopeFilter !== UNFILTERED;
+  const scopeBook = usesChapterScope ? scrRef.book : '';
+  const scopeChapterNum = usesChapterScope ? scrRef.chapterNum : 0;
+  const scopeVerseNum = usesChapterScope ? scrRef.verseNum : 0;
+
+  // While the "assigned to me" axis is selected but the current user's name hasn't loaded yet, the
+  // query can't filter by user and would briefly show every thread. Hold the loading state until the
+  // name resolves so the panel shows skeletons instead of that flash.
+  const isAwaitingCurrentUserName = filters.assignment === 'assigned-to-me' && !currentUserName;
+
   const [commentThreads, , isLoadingCommentThreads] = useProjectData(
     'legacyCommentManager.comments',
     projectId,
   ).CommentThreads(
-    useMemo<LegacyCommentThreadSelector>(() => {
-      const selector: LegacyCommentThreadSelector = {};
-
-      // Apply scope (Scripture ranges) filter
-      if (scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER) {
-        selector.scriptureRanges = [
-          {
-            granularity: 'chapter' as const,
-            start: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-            end: { book: scrRef.book, chapterNum: scrRef.chapterNum, verseNum: scrRef.verseNum },
-          },
-        ];
-      }
-
-      // Apply comment filter
-      if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
-        selector.status = 'Todo';
-        selector.assignedTo = currentUserName;
-      } else if (commentFilter === FILTER_UNREAD_ASSIGNED) {
-        selector.isRead = false;
-        selector.assignedTo = currentUserName;
-      }
-
-      return selector;
-    }, [
-      scrRef.book,
-      scrRef.chapterNum,
-      scrRef.verseNum,
-      scopeFilter,
-      commentFilter,
-      currentUserName,
-    ]),
+    useMemo<LegacyCommentThreadSelector>(
+      () =>
+        buildCommentThreadSelector({
+          filters,
+          scopeFilter,
+          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: scopeVerseNum },
+          currentUserName,
+        }),
+      [scopeBook, scopeChapterNum, scopeVerseNum, scopeFilter, filters, currentUserName],
+    ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
 
@@ -239,6 +274,19 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const getConflictResolutionOptionsCallback = useCallback(
+    async (threadId: string): Promise<ConflictResolutionOptions> =>
+      withPdp(commentsPdp, 'getConflictResolutionOptionsCallback', 'none', async (pdp) => {
+        try {
+          return await pdp.getConflictResolutionOptions(threadId);
+        } catch (error) {
+          logger.error(`Failed to get conflict resolution options for thread ${threadId}:`, error);
+          return 'none';
+        }
+      }),
+    [commentsPdp],
+  );
+
   const canUserEditOrDeleteCommentCallback = useCallback(
     async (commentId: string): Promise<boolean> =>
       withPdp(commentsPdp, 'canUserEditOrDeleteCommentCallback', false, (pdp) =>
@@ -266,12 +314,40 @@ global.webViewComponent = function CommentListWebView({
     [commentsPdp],
   );
 
+  const handleResolveConflict = useCallback(
+    async (threadId: string, resolution: ConflictResolution): Promise<boolean> =>
+      withPdp(commentsPdp, 'handleResolveConflict', false, async (pdp) => {
+        try {
+          await pdp.resolveConflict(threadId, resolution);
+          return true;
+        } catch (error) {
+          logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
+          sonner.error(
+            localizedStrings['%conflict_note_resolve_failed%'] ?? 'Could not resolve the conflict.',
+          );
+          return false;
+        }
+      }),
+    [commentsPdp, localizedStrings],
+  );
+
+  // Bundle the two conflict callbacks into the single slot CommentList/ConflictThread consume.
+  const conflictResolution = useMemo(
+    () => ({ resolve: handleResolveConflict, getOptions: getConflictResolutionOptionsCallback }),
+    [handleResolveConflict, getConflictResolutionOptionsCallback],
+  );
+
   const handleUpdateComment = useCallback(
     async (commentId: string, contents: string): Promise<boolean> =>
       withPdp(commentsPdp, 'handleUpdateComment', false, async (pdp) => {
         try {
-          await pdp.updateComment(commentId, contents);
-          return true;
+          // `false` means the update was rejected (comment not found, or its content normalizes to
+          // the "content unavailable" placeholder, which is never persisted over real content).
+          // Surface it so the editor stays open instead of closing as if the edit had saved.
+          const updateSucceeded = (await pdp.updateComment(commentId, contents)) !== false;
+          if (!updateSucceeded)
+            logger.warn(`Update of comment ${commentId} was rejected and not saved.`);
+          return updateSucceeded;
         } catch (error) {
           logger.error(`Failed to update comment ${commentId}:`, error);
           return false;
@@ -328,27 +404,34 @@ global.webViewComponent = function CommentListWebView({
   );
 
   return (
-    <CommentListPanel
-      localizedStrings={localizedStrings}
-      isLoading={isLoadingCommentThreads || !commentsPdp}
-      threads={safeCommentThreads}
-      currentUser={currentUserName}
-      commentFilter={commentFilter}
-      onCommentFilterChange={setCommentFilter}
-      scopeFilter={scopeFilter}
-      onScopeFilterChange={setScopeFilter}
-      handleAddCommentToThread={handleAddCommentToThread}
-      handleUpdateComment={handleUpdateComment}
-      handleDeleteComment={handleDeleteComment}
-      handleReadStatusChange={handleReadStatusChange}
-      assignableUsers={assignableUsers}
-      canUserAddCommentToThread={canUserAddCommentToThread}
-      canUserAssignThreadCallback={canUserAssignThreadCallback}
-      canUserResolveThreadCallback={canUserResolveThreadCallback}
-      canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-      selectedThreadId={selectedThreadId}
-      onSelectedThreadChange={setSelectedThreadId}
-      onVerseRefClick={handleVerseRefClick}
-    />
+    <>
+      <CommentListPanel
+        localizedStrings={localizedStrings}
+        isLoading={isLoadingCommentThreads || !commentsPdp || isAwaitingCurrentUserName}
+        threads={safeCommentThreads}
+        currentUser={currentUserName}
+        filters={filters}
+        onFiltersChange={setFilters}
+        scopeFilter={scopeFilter}
+        onScopeFilterChange={setScopeFilter}
+        // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
+        // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
+        hasEditorContext={!!editorWebViewId}
+        handleAddCommentToThread={handleAddCommentToThread}
+        handleUpdateComment={handleUpdateComment}
+        handleDeleteComment={handleDeleteComment}
+        handleReadStatusChange={handleReadStatusChange}
+        assignableUsers={assignableUsers}
+        canUserAddCommentToThread={canUserAddCommentToThread}
+        canUserAssignThreadCallback={canUserAssignThreadCallback}
+        canUserResolveThreadCallback={canUserResolveThreadCallback}
+        canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+        selectedThreadId={selectedThreadId}
+        onSelectedThreadChange={setSelectedThreadId}
+        onVerseRefClick={handleVerseRefClick}
+        conflictResolution={conflictResolution}
+      />
+      <Sonner />
+    </>
   );
 };

@@ -65,14 +65,29 @@ const config: StorybookConfig = {
         !conflictingPlugins.includes(plugin?.constructor?.name ?? ''),
     );
 
-    // Inject postcss-loader into the renderer's CSS rules for Storybook only.
-    // postcss-loader is intentionally omitted from the shared renderer webpack configs so that
-    // Tailwind CSS is not processed in the Electron app build — only in Storybook.
+    // Inject postcss-loader into the renderer's general CSS rules for Storybook only.
+    // postcss-loader is intentionally omitted from the renderer's general CSS rules so that Tailwind
+    // is not processed in the Electron app build — only in Storybook. The one exception is core's
+    // dedicated Tailwind-entry rule (src/renderer/styles/tailwind.css), which carries its own
+    // postcss-loader for the app build; the guard below skips it so Storybook doesn't add a second.
     if (rendererConfigSanitized.module?.rules) {
       const rendererRules: RuleSetRule[] = rendererConfigSanitized.module.rules;
       rendererConfigSanitized.module.rules = rendererRules.map((rule) => {
         if (!rule || typeof rule !== 'object' || !Array.isArray(rule.use)) return rule;
         const useArr = rule.use;
+        // Skip rules that already include postcss-loader — injecting a second one would run
+        // Tailwind twice on the same file.
+        const hasPostcssLoader = useArr.some(
+          (u) =>
+            u === 'postcss-loader' ||
+            (!!u &&
+              typeof u === 'object' &&
+              typeof u !== 'function' &&
+              'loader' in u &&
+              typeof u.loader === 'string' &&
+              u.loader.includes('postcss-loader')),
+        );
+        if (hasPostcssLoader) return rule;
         const cssIdx = useArr.findIndex(
           (u) =>
             u === 'css-loader' ||

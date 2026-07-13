@@ -25,6 +25,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -73,6 +74,8 @@ export function BookChapterControl({
   onCloseAutoFocus,
   modal = false,
   align = 'center',
+  ref,
+  disabled,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
 
@@ -355,6 +358,43 @@ export function BookChapterControl({
       setInputValue('');
     }
   }, []);
+
+  // `disabled` on the trigger button only prevents OPENING the popover — it does not affect one
+  // that is already open, which would otherwise keep accepting input and submit a reference for a
+  // control the UI reports as non-interactive (e.g. the toolbar's navigation target disappearing
+  // mid-interaction). Close it when the control becomes disabled.
+  useEffect(() => {
+    if (disabled) handleOpenChange(false);
+  }, [disabled, handleOpenChange]);
+
+  // Imperative `open()` goes through handleOpenChange (not setIsCommandOpen directly) so the
+  // deferred view-state reset runs: the control deliberately leaves stale chapters/verses view
+  // state behind on close (see handleVerseSelect / handleChapterSelect) and only resets it when
+  // the popover opens. Callers like the Ctrl+B command can't know what view the control was last
+  // left in, and CommandInput only renders in 'books' view — without the reset, focus would no-op.
+  //
+  // Focusing the search input is driven by this request counter (each `open()` call increments
+  // it) rather than a `setTimeout` so the focus effect below runs after the commit that actually
+  // rendered the popover's books-view CommandInput, even if that render takes longer than a tick.
+  const [focusSearchInputRequestId, setFocusSearchInputRequestId] = useState(0);
+
+  useEffect(() => {
+    if (focusSearchInputRequestId === 0) return;
+    commandInputRef.current?.focus();
+  }, [focusSearchInputRequestId]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      open: () => {
+        // Match the trigger button: a disabled control cannot be opened imperatively either
+        if (disabled) return;
+        handleOpenChange(true);
+        setFocusSearchInputRequestId((requestId) => requestId + 1);
+      },
+    }),
+    [handleOpenChange, disabled],
+  );
 
   // #endregion
 
@@ -861,6 +901,7 @@ export function BookChapterControl({
           variant={triggerVariant}
           role="combobox"
           aria-expanded={isCommandOpen}
+          disabled={disabled}
           className={cn(
             'tw:h-8 tw:w-full tw:min-w-16 tw:max-w-48 tw:overflow-hidden tw:px-1',
             className,
@@ -966,23 +1007,25 @@ export function BookChapterControl({
               </div>
               {/* Navigation buttons for previous/next chapter/book */}
               <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
-                {quickNavButtons.map(({ onClick, disabled, title, icon: Icon }) => (
-                  <Button
-                    key={title}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setIsCommandListHidden(true);
-                      onClick();
-                    }}
-                    disabled={disabled}
-                    className="tw:h-10 tw:w-4 tw:p-0"
-                    title={title}
-                    onKeyDown={handleQuickNavButtonKeyDown}
-                  >
-                    <Icon />
-                  </Button>
-                ))}
+                {quickNavButtons.map(
+                  ({ onClick, disabled: isQuickNavDisabled, title, icon: Icon }) => (
+                    <Button
+                      key={title}
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setIsCommandListHidden(true);
+                        onClick();
+                      }}
+                      disabled={isQuickNavDisabled}
+                      className="tw:h-10 tw:w-4 tw:p-0"
+                      title={title}
+                      onKeyDown={handleQuickNavButtonKeyDown}
+                    >
+                      <Icon />
+                    </Button>
+                  ),
+                )}
               </div>
             </div>
           ) : (

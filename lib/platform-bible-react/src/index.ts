@@ -5,6 +5,7 @@ export { default as BookChapterControl } from './components/advanced/book-chapte
 export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export {
   BOOK_CHAPTER_CONTROL_STRING_KEYS,
+  type BookChapterControlHandle,
   type BookChapterControlLocalizedStrings,
 } from './components/advanced/book-chapter-control/book-chapter-control.types';
 export { default as BookSelector } from './components/advanced/book-selector.component';
@@ -35,8 +36,9 @@ export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/com
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
 export type {
   ConflictNoteCardProps,
-  ConflictNoteCardLocalizedStrings,
   ConflictResolution,
+  ConflictResolutionOptions,
+  ConflictResolutionOutcome,
 } from './components/advanced/comment-list/conflict-note-card.types';
 export { CONFLICT_NOTE_STRING_KEYS } from './components/advanced/comment-list/conflict-note-card.types';
 export { ConflictNoteCard } from './components/advanced/comment-list/conflict-note-card.component';
@@ -199,6 +201,8 @@ export type {
   UndoRedoButtonsProps,
 } from './components/basics/undo-redo-buttons.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
+export { EmptyState } from './components/basics/empty-state.component';
+export type { EmptyStateProps } from './components/basics/empty-state.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
@@ -299,3 +303,4 @@ export {
 // Utils
 export { cn } from './utils/shadcn-ui/utils';
 export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';
+export { isMacOs, isWindows } from './utils/platform.util';

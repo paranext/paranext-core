@@ -3,6 +3,7 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import React, { RefObject, useCallback, useEffect, useState } from 'react';
 import { AddCommentToThreadOptions, CommentListProps } from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
+import { ConflictThread } from './conflict-thread.component';
 
 /**
  * Component for rendering a list of comment threads
@@ -27,6 +28,7 @@ export default function CommentList({
   selectedThreadId: externalSelectedThreadId,
   onSelectedThreadChange,
   onVerseRefClick,
+  conflictResolution,
 }: CommentListProps) {
   const [expandedThreadIds, setExpandedThreadIds] = useState<Set<string>>(new Set());
   const [lastInteractedThreadId, setLastInteractedThreadId] = useState<string | undefined>();
@@ -136,40 +138,51 @@ export default function CommentList({
       )}
       onKeyDown={handleKeyDownWithEscape}
     >
-      {activeThreads.map((thread) => (
-        <div
-          key={thread.id}
-          className={cn({
-            'tw:opacity-60': thread.status === 'Resolved',
-          })}
-        >
-          <CommentThread
-            classNameForVerseText={classNameForVerseText}
-            comments={thread.comments}
-            localizedStrings={localizedStrings}
-            verseRef={thread.verseRef}
-            handleSelectThread={handleSelectThread}
-            threadId={thread.id}
-            thread={thread}
-            isRead={thread.isRead}
-            isSelected={expandedThreadIds.has(thread.id)}
-            currentUser={currentUser}
-            assignedUser={thread.assignedUser}
-            threadStatus={thread.status}
-            handleAddCommentToThread={handleAddCommentToThreadWithTracking}
-            handleUpdateComment={handleUpdateComment}
-            handleDeleteComment={handleDeleteComment}
-            handleReadStatusChange={handleReadStatusChange}
-            assignableUsers={assignableUsers}
-            canUserAddCommentToThread={canUserAddCommentToThread}
-            canUserAssignThreadCallback={canUserAssignThreadCallback}
-            canUserResolveThreadCallback={canUserResolveThreadCallback}
-            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-            onVerseRefClick={onVerseRefClick}
-            initialAssignedUser={lastAssignedUser}
-          />
-        </div>
-      ))}
+      {activeThreads.map((thread) => {
+        // The generic shell props both thread variants share. Conflict threads render through
+        // ConflictThread (which owns the resolve UI and forwards these slots to the shared
+        // CommentThread shell) and additionally receive the conflict-resolution callbacks; every
+        // other thread renders CommentThread directly, keeping the shell conflict-agnostic.
+        const commonThreadProps = {
+          classNameForVerseText,
+          comments: thread.comments,
+          localizedStrings,
+          verseRef: thread.verseRef,
+          handleSelectThread,
+          threadId: thread.id,
+          thread,
+          isRead: thread.isRead,
+          isSelected: expandedThreadIds.has(thread.id),
+          currentUser,
+          assignedUser: thread.assignedUser,
+          threadStatus: thread.status,
+          handleAddCommentToThread: handleAddCommentToThreadWithTracking,
+          handleUpdateComment,
+          handleDeleteComment,
+          handleReadStatusChange,
+          assignableUsers,
+          canUserAddCommentToThread,
+          canUserAssignThreadCallback,
+          canUserResolveThreadCallback,
+          canUserEditOrDeleteCommentCallback,
+          onVerseRefClick,
+          initialAssignedUser: lastAssignedUser,
+        };
+        return (
+          <div
+            key={thread.id}
+            className={cn({
+              'tw:opacity-60': thread.status === 'Resolved',
+            })}
+          >
+            {thread.type === 'Conflict' ? (
+              <ConflictThread {...commonThreadProps} conflictResolution={conflictResolution} />
+            ) : (
+              <CommentThread {...commonThreadProps} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

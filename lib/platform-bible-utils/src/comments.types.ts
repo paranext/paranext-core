@@ -10,6 +10,25 @@ export type CommentStatus = 'Unspecified' | 'Todo' | 'Done' | 'Resolved';
  */
 export type CommentType = 'Normal' | 'Conflict';
 
+/**
+ * The resolution actions the current user may take on a `verseText` conflict thread, as reported by
+ * the legacy comment data provider's `getConflictResolutionOptions`. Defined here so the comment
+ * data provider's type declaration and the conflict-note-card UI share a single source of truth.
+ *
+ * - `'none'`: no actions available - the thread is already resolved, is not a `verseText` conflict,
+ *   or the user lacks permission. UIs should hide the accept/reject controls entirely.
+ * - `'accept'`: the verse was edited after the merge (stale), so only "accept" (keep the current
+ *   text) is available; reject/merge are disabled.
+ * - `'acceptOrReject'`: accept and reject are available, but the two sides overlap and cannot be
+ *   auto-merged, so merge is not offered.
+ * - `'acceptRejectOrMerge'`: accept, reject, and merge are all available.
+ */
+export type ConflictResolutionOptions =
+  | 'none'
+  | 'accept'
+  | 'acceptOrReject'
+  | 'acceptRejectOrMerge';
+
 // #endregion
 
 // #region Legacy Types
@@ -39,6 +58,21 @@ export type LegacyComment = {
    * `comments[0]` — see {@link LegacyCommentThread.comments}); never present on replies.
    */
   conflictType?: string;
+  /**
+   * The conflict-resolution action recorded on a conflict thread's resolution comment, present only
+   * when text was written into the verse:
+   *
+   * - `'replaced'` — the conflict was rejected, so the previously-rejected side was written into the
+   *   text (replacing what Paratext had accepted).
+   * - `'merged'` - the conflict was resolved via PT10's merge action, which writes PT9's auto-merged
+   *   (both-sides) text into the verse; data synced from a PT9 three-way merge may also carry it.
+   *
+   * Absent means the conflict was accepted (no text write) or this is not a resolution comment.
+   * Unlike the four `verseText` decode fields, this is NOT gated on `conflictType`: the resolution
+   * comment has type `Conflict` but no `conflictType`, so it must be read directly from this
+   * field.
+   */
+  conflictResolutionAction?: 'replaced' | 'merged';
   /** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
   contents: string;
   /**
@@ -65,6 +99,11 @@ export type LegacyComment = {
   isRead: boolean;
   /** Language of note */
   language: string;
+  /**
+   * The PT9 "merge all changes" diff preview (same markup as {@link acceptedText}/
+   * {@link rejectedText}); present only when the two changes are independent.
+   */
+  mergedText?: string;
   /**
    * Only present on the ROOT comment of a `verseText` conflict thread (never on replies): the
    * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.

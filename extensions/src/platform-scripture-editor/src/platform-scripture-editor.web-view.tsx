@@ -59,6 +59,7 @@ import {
   TooltipTrigger,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
+  isMacOs,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -76,6 +77,10 @@ import {
   usfmMarkers,
   UsjReaderWriter,
 } from 'platform-bible-utils';
+import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
 import {
   AnnotationActionHandler,
   EditorDecorations,
@@ -164,8 +169,6 @@ const PENDING_COMMENT_ANNOTATION_ID = 'pending-comment';
 
 /** Prefix the editor puts on annotation type when calling the annotation's callbacks */
 const EDITOR_ANNOTATION_TYPE_PREFIX = 'external-';
-
-const BOOKS_PRESENT_DEFAULT = '';
 
 const DEFAULT_WEBVIEW_MENU = {
   topMenu: undefined,
@@ -295,7 +298,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [blockMarker, setBlockMarker] = useState<string | undefined>();
   const [contextMarker, setContextMarker] = useState<string | undefined>();
 
-  const isMac = useMemo(() => /Macintosh/i.test(navigator.userAgent), []);
+  const isMac = isMacOs();
 
   /**
    * Stores the annotation range for the pending comment being created. This is captured when the
@@ -1663,15 +1666,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = useCallback(() => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  }, [booksPresent]);
+  const fetchActiveBooks = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 

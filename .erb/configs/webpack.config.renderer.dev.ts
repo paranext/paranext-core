@@ -10,6 +10,7 @@ import ReactRefreshWebpackPlugin from '@pmmmwh/react-refresh-webpack-plugin';
 import baseConfig from './webpack.config.base';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
+import { buildTailwindCssRule, tailwindEntryTest } from './tailwind-css-rule';
 
 // When an ESLint server is running, we can't set the NODE_ENV so we'll check if it's
 // at the dev webpack config is not accidentally run in a production environment
@@ -74,11 +75,16 @@ const configuration: webpack.Configuration = {
         ],
         include: /\.module\.s?(c|a)ss$/,
       },
+      // Core's Tailwind entry: process through @tailwindcss/postcss so the app emits utilities from
+      // core's own source (PT-3920). `module.rules` is a flat array (not a `oneOf`), so what keeps
+      // this file from also being processed by the general `.css` rule is that rule's
+      // `exclude: [..., tailwindEntryTest]` below — not ordering.
+      buildTailwindCssRule('style-loader'),
       {
         test: /\.css$/,
         resourceQuery: { not: [/raw/] },
         use: ['style-loader', 'css-loader'],
-        exclude: /\.module\.s?(c|a)ss$/,
+        exclude: [/\.module\.s?(c|a)ss$/, tailwindEntryTest],
       },
       {
         test: /\.s(c|a)ss$/,

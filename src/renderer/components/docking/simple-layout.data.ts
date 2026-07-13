@@ -1,6 +1,6 @@
-import { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
-import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -40,7 +40,7 @@ export const simpleLayout: LayoutBase = {
                 id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
-                  webViewType: 'platformScriptureEditor.react',
+                  webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
                   id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
                   contentType: 'react',
                   state: {},
@@ -73,6 +73,16 @@ export const simpleLayout: LayoutBase = {
                 data: {
                   webViewType: 'platformScriptureEditor.commentaries',
                   id: '6c950d23-f8d7-4482-a384-93ea0481698b',
+                  contentType: 'react',
+                  state: {},
+                },
+              },
+              {
+                id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: 'legacyCommentManager.commentListPanel',
+                  id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
                   contentType: 'react',
                   state: {},
                 },

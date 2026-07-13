@@ -8,6 +8,7 @@ import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
+import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
 import {
   initialize as initializeThemeService,
@@ -100,6 +101,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startWebViewService(),
       startDialogService(),
       startScrollGroupService(),
+      startScrollGroupNavigationCommands(),
       startNotificationService(),
       startOverlayService(),
       initializeThemeService(),

@@ -1,5 +1,6 @@
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   IScrollGroupService,
@@ -10,6 +11,7 @@ import { networkObjectStatusService } from '@shared/services/network-object-stat
 import { networkObjectService } from '@shared/services/network-object.service';
 
 const onDidUpdateScrRef = getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
+const onDidChangeReferenceHistory = getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
 
 let networkObject: IScrollGroupService;
 const initialize = createCachedInitializer(async () => {
@@ -41,6 +43,7 @@ export const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupServ
   },
   {
     onDidUpdateScrRef,
+    onDidChangeReferenceHistory,
   },
 );
 

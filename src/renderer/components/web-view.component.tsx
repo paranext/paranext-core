@@ -27,6 +27,7 @@ import {
 } from 'platform-bible-utils';
 import {
   BookChapterControl,
+  BookChapterControlHandle,
   SelectMenuItemHandler,
   ScrollGroupSelector,
   TabToolbar,
@@ -42,19 +43,20 @@ import {
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
   getWebViewMessageRequestType,
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
-import { Canon } from '@sillsdev/scripture';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
+import {
+  BOOKS_PRESENT_DEFAULT,
+  getBookIdsFromBooksPresent,
+} from 'platform-bible-utils/experimental';
 
-export const TAB_TYPE_WEBVIEW = 'webView';
-
-const BOOKS_PRESENT_DEFAULT = '';
 const WEB_VIEW_MENU_DEFAULT = {
   topMenu: undefined,
   includeDefaults: true,
@@ -447,6 +449,20 @@ export function WebView({
 
   const isPowerMode = useIsPowerMode();
 
+  // Register this tab's BookChapterControl (power mode only — that is when it renders) so
+  // platform.openBookChapterControl can open it when this web view is active. React 19 cleanup
+  // callback ref so registration tracks the control's mount/unmount exactly
+  const registerBookChapterControl = useCallback(
+    (handle: BookChapterControlHandle | null) => {
+      if (!handle) return undefined;
+      const unsubscribe = registerBookChapterControlHandle(id, handle);
+      return () => {
+        unsubscribe();
+      };
+    },
+    [id],
+  );
+
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
@@ -465,15 +481,14 @@ export function WebView({
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
 
-  const fetchActiveBooks = () => {
-    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
-      if (char === '1') {
-        ids.push(Canon.bookNumberToId(index + 1));
-      }
-
-      return ids;
-    }, []);
-  };
+  // Stable identity per booksPresent value. BookChapterControl memoizes its book list (and the
+  // filtering/matching derived from it) on this function's identity, so a fresh closure every render
+  // would recompute all of that on every WebView render while a control is mounted (power mode).
+  // Mirrors the top toolbar's fetchActiveBookIds in platform-bible-toolbar.tsx.
+  const fetchActiveBooks = useCallback(
+    () => getBookIdsFromBooksPresent(booksPresent),
+    [booksPresent],
+  );
 
   const projectMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
@@ -523,6 +538,7 @@ export function WebView({
           startAreaChildren={
             isPowerMode ? (
               <BookChapterControl
+                ref={registerBookChapterControl}
                 scrRef={scrRef}
                 handleSubmit={setScrRef}
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}

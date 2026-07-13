@@ -1,1 +1,18 @@
-{ "tabs": [] }
+{
+  "tabs": [
+    {
+      "anchorWebViewType": "platformScriptureEditor.bibleTexts",
+      "flagSetting": "platformScriptureEditor.enableScriptureTextGrid",
+      "tab": {
+        "id": "scripture-text-grid-tab",
+        "tabType": "webView",
+        "data": {
+          "webViewType": "platformScriptureEditor.scriptureTextGrid",
+          "id": "scripture-text-grid-tab",
+          "contentType": "react",
+          "state": {}
+        }
+      }
+    }
+  ]
+}

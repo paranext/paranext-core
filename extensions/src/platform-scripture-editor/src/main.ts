@@ -31,16 +31,19 @@ import modelTextPanelWebView from './model-text-panel.web-view?inline';
 import resourceTextPanelWebViewStyles from './resource-text-panel.web-view.scss?inline';
 import resourceTextPanelWebView from './resource-text-panel.web-view?inline';
 import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
+import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
   convertScriptureRangeToEditorRange,
   formatEditorTitle,
   openCommentListAndSelectThread,
-  openTextConnectionPanels,
+  type OpenEditorDispatch,
+  openOrUpdateRelatedPanels,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   syncOnProjectSwitch,
+  toScriptureEditorInfos,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
 
@@ -245,17 +248,17 @@ async function open(
     // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
     // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
-    const allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
-    const allScriptureEditors = allOpenDefs
-      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-      .map((def) => ({
-        id: def.id,
-        projectId: def.projectId,
-        // WebView state isn't statically typed, but `getWebViewDefinition` always stores
-        // `isReadOnly` as boolean here. Treat any other value as `false` for safety.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        isReadOnly: !!(def.state?.isReadOnly as boolean | undefined),
-      }));
+    // getAllOpenWebViewDefinitions can time out under load; fall back to an empty list so that
+    // open still succeeds (opening a new editor tab) rather than throwing.
+    let allOpenDefs: SavedWebViewDefinition[] = [];
+    try {
+      allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+    } catch (e) {
+      logger.warn(
+        `open: getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); opening as new tab`,
+      );
+    }
+    const allScriptureEditors = toScriptureEditorInfos(allOpenDefs);
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
     const requestedIsReadOnly = !projectForWebView.isEditable;
 
@@ -318,15 +321,47 @@ async function open(
       options,
     };
 
-    // If in simple interface mode, open/update the model text, bible text, and commentary text panels
-    if (interfaceMode === 'simple' && projectForWebView.projectId)
-      await openTextConnectionPanels(papi, projectForWebView.projectId);
+    // If in simple interface mode and opening an editable project, open/update the related panels
+    // (model text, bible texts, commentaries, comments). Gated on isEditable: the related panels
+    // follow the active translation project, so opening a read-only published resource in the
+    // editor column must not switch them over to the resource.
+    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
+      await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
+
+    // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
+    // operations can remove the target tab between when the dispatch was resolved (above) and
+    // when openWebView runs. If the target is gone, re-resolve with fresh dock state so we
+    // don't throw "Replacing tab failed".
+    // Only applies in simple mode: openOrUpdateRelatedPanels (the source of the race) only runs
+    // there, and in power mode re-resolving would return the same caller-supplied
+    // existingTabIdToReplace anyway, so the re-check couldn't help.
+    // getAllOpenWebViewDefinitions can time out under load; if that happens keep the original
+    // dispatch — the target tab may still be present and openWebView will proceed normally.
+    let finalDispatch: OpenEditorDispatch = dispatch;
+    if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
+      try {
+        const freshDefs = await papi.webViews.getAllOpenWebViewDefinitions();
+        if (!freshDefs.some((def) => def.id === dispatch.targetTabId)) {
+          finalDispatch = resolveOpenEditorDispatch(
+            toScriptureEditorInfos(freshDefs),
+            projectForWebView.projectId,
+            requestedIsReadOnly,
+            interfaceMode,
+            existingTabIdToReplace,
+          );
+        }
+      } catch (e) {
+        logger.warn(
+          `open: re-check getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); using original dispatch`,
+        );
+      }
+    }
 
     const openedWebViewId = await papi.webViews
       .openWebView(
         SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-        dispatch.kind === 'replace-tab'
-          ? { type: 'replace-tab', targetTabId: dispatch.targetTabId }
+        finalDispatch.kind === 'replace-tab'
+          ? { type: 'replace-tab', targetTabId: finalDispatch.targetTabId }
           : undefined,
         openWebViewOptions,
       )
@@ -439,7 +474,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
   ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE)
       throw new Error(
-        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} WebView`,
+        `${SCRIPTURE_EDITOR_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
@@ -869,24 +904,42 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
 };
 
 const scriptureTextGridWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    openWebViewOptions: ResourceViewerOptions,
+  ): Promise<WebViewDefinition | undefined> {
     if (savedWebView.webViewType !== SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE)
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
+    // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
+    // once content selection lands, select its contents. The PT10 default-layout open passes no
+    // projectId (dormant until content selection lands).
+    const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
     return {
       ...savedWebView,
-      // A1 stubs the title as the single-cell form; the web view flips it to "Text Collection"
-      // via updateWebViewDefinition once 2+ cells are displayed.
-      title: '%webView_scriptureTextGrid_title_single%',
-      // Part of the default PT10 Studio layout and must always stay open, so the tab is non-closable
-      // (PT-4049 subsumes A8). No X-button and no keyboard close shortcut, so both paths are covered.
+      // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps
+      // this in sync). The initial empty title avoids flashing a label before the web view runs.
+      title: '',
+      tooltip: '%webView_scriptureTextGrid_title_multiple%',
+      // Part of the default Simple-mode layout and must always remain open, so the tab is
+      // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
+      // so this covers both close paths.
       isClosable: false,
-      // No top toolbar in this view; the View Options icon button comes in A5.
+      // No top toolbar in this view; the View Options icon button lives in the web view's header.
       shouldShowToolbar: false,
+      projectId,
       content: scriptureTextGridWebView,
+      // The grid embeds Editorial; ship the same editor stylesheet bundle the other editor/resource
+      // web views use so the toolbar and context menu render styled (not bare/transparent).
+      styles: scriptureTextGridWebViewStyles,
       // Lucide "Library" glyph (books on a shelf) for the tab icon.
       iconUrl: 'papi-extension://platformScriptureEditor/assets/library.svg',
+      // In simple mode, force scroll group 0 so the grid stays verse-synced with the scripture
+      // editor (which is also forced to 0 in simple mode). Power mode preserves the saved value.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
     };
   },
 };

@@ -1,3 +1,8 @@
+import {
+  createEmptyReferenceHistory,
+  navigateHistory,
+  recordNavigation,
+} from '@renderer/services/reference-history.util';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -7,10 +12,13 @@ import {
   getNetworkEvent,
 } from '@shared/services/network.service';
 import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  ReferenceHistory,
+  ReferenceHistoryUpdateInfo,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
@@ -25,6 +33,8 @@ import {
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
+import { resolveReferenceHistoryDirection } from 'platform-bible-utils/experimental';
+import { readDirection } from 'platform-bible-react/experimental';
 import type { NetworkEventTypes } from 'papi-shared-types';
 
 /**
@@ -47,6 +57,31 @@ const onDidUpdateScrRefBufferedEmitter = createBufferedNetworkEventEmitter(
           name: 'update',
           required: true,
           summary: 'The scroll group and its new Scripture reference.',
+          schema: { type: 'object' },
+        },
+      ],
+    },
+  },
+  { bufferStrategy: { latestByKey: (update) => String(update.scrollGroupId) } },
+);
+
+/**
+ * Buffered emitter for changes to a scroll group's reference history. Buffered latest-per-group
+ * like {@link onDidUpdateScrRefBufferedEmitter}; consumers only need the latest state.
+ */
+const onDidChangeReferenceHistoryBufferedEmitter = createBufferedNetworkEventEmitter(
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
+  {
+    notification: {
+      // Experimental to match the `@experimental` TSDoc on `onDidChangeReferenceHistory` in
+      // papi-shared-types; surfaces `x-experimental` in the live OpenRPC document.
+      'x-experimental': true,
+      summary: "Emitted when a scroll group's reference history changes.",
+      params: [
+        {
+          name: 'update',
+          required: true,
+          summary: 'The scroll group and its new reference history.',
           schema: { type: 'object' },
         },
       ],
@@ -116,6 +151,37 @@ const scrRefSourceProjectIdsSerialized = localStorage.getItem(
 const scrRefSourceProjectIds: { [scrollGroupId: ScrollGroupId]: string | undefined } =
   scrRefSourceProjectIdsSerialized ? (deserialize(scrRefSourceProjectIdsSerialized) ?? {}) : {};
 
+/**
+ * Reference history per scroll group. Session-only BY DESIGN (in-memory; resets on app restart —
+ * matches Paratext 9): do NOT persist to localStorage or settings.
+ *
+ * Declared ABOVE the scrRefs migration block below, which calls `setScrRefSync` during module
+ * evaluation — a migration write that passes the no-op guard reaches
+ * {@link getOrCreateReferenceHistory}, which must not hit this `const` in its temporal dead zone.
+ */
+const referenceHistories = new Map<ScrollGroupId, ReferenceHistory>();
+
+/**
+ * Get (lazily creating and seeding) the LIVE history object for a scroll group. The lazy seed with
+ * the group's current ref makes the first navigation immediately back-able (mirrors Paratext 9
+ * seeding history on layout restore). Internal only — external callers get copies via
+ * {@link getReferenceHistorySync}.
+ */
+function getOrCreateReferenceHistory(scrollGroupId: ScrollGroupId = 0): ReferenceHistory {
+  let history = referenceHistories.get(scrollGroupId);
+  if (!history) {
+    history = createEmptyReferenceHistory();
+    recordNavigation(history, {
+      // deepClone so the seed entry never aliases the live stored ref that getScrRefSync returns by
+      // reference (callers such as the module-load migration mutate stored refs in place)
+      scrRef: deepClone(getScrRefSync(scrollGroupId)),
+      sourceProjectId: getScrRefSourceProjectIdSync(scrollGroupId),
+    });
+    referenceHistories.set(scrollGroupId, history);
+  }
+  return history;
+}
+
 // The scrRefs object might contain old values that are of older types that are no longer supported.
 // We need to check if this is the case, and convert them to `SerializedVerseRef`.
 Object.entries(scrRefs).forEach(([key, value]) => {
@@ -174,6 +240,54 @@ export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo> = getNetwor
 export const onDidChangeVersification: PlatformEvent<{ projectId: string }> = getNetworkEvent(
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
 );
+
+/** Event that emits when a scroll group's reference history changes */
+export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo> =
+  getNetworkEvent(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY);
+
+function emitReferenceHistoryChange(scrollGroupId: ScrollGroupId, history: ReferenceHistory) {
+  onDidChangeReferenceHistoryBufferedEmitter.emit({ scrollGroupId, history: deepClone(history) });
+}
+
+/** See {@link IScrollGroupRemoteService.getReferenceHistory} */
+export function getReferenceHistorySync(scrollGroupId: ScrollGroupId = 0): ReferenceHistory {
+  return deepClone(getOrCreateReferenceHistory(scrollGroupId));
+}
+
+/** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
+export function navigateReferenceHistorySync(
+  scrollGroupId: ScrollGroupId | undefined,
+  offset: number,
+): boolean {
+  // Default undefined -> 0, matching getScrRefSync / setScrRefSync, so an undefined id navigates
+  // group 0 rather than a phantom history keyed under `undefined`.
+  const groupId = scrollGroupId ?? 0;
+  const history = getOrCreateReferenceHistory(groupId);
+  const destination = navigateHistory(history, offset);
+  if (!destination) return false;
+  // The stacks already reflect the navigation, so write the destination directly via `writeScrRef`
+  // rather than `setScrRefSync`: no re-recording (which would double-push), and no versification
+  // no-op guard — a multi-step jump onto a same-numbers entry still applies the destination's source
+  // frame instead of silently keeping the previous one.
+  writeScrRef(groupId, destination.scrRef, destination.sourceProjectId);
+  emitReferenceHistoryChange(groupId, history);
+  return true;
+}
+
+/**
+ * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
+ * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
+ * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
+ * commands so the main-process keyboard handler can dispatch the physical key directly and stay
+ * direction-agnostic.
+ */
+export function navigateReferenceHistoryPhysicalSync(
+  scrollGroupId: ScrollGroupId | undefined,
+  physicalDirection: 'left' | 'right',
+): boolean {
+  const logicalDirection = resolveReferenceHistoryDirection(physicalDirection, readDirection());
+  return navigateReferenceHistorySync(scrollGroupId, logicalDirection === 'back' ? -1 : 1);
+}
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
 export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerseRef {
@@ -471,7 +585,41 @@ async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<Serializ
 }
 
 /**
+ * Low-level ref write: store `scrRef` (+ its source project) for the scroll group, persist, and
+ * broadcast `onDidUpdateScrRef`. NO versification no-op guard and NO history recording — a caller
+ * that wants those wraps this (see {@link setScrRefSync}). Reference-history navigation writes
+ * through here directly: the stacks already reflect the move, so the destination must always be
+ * applied — including a multi-step jump onto a same-numbers entry whose source frame differs.
+ *
+ * @param scrRef Reference to store. Deep-cloned before storing so it never aliases the caller's
+ *   object (nor, for history navigation, the stored history entry).
+ */
+function writeScrRef(
+  scrollGroupId: ScrollGroupId,
+  scrRef: SerializedVerseRef,
+  sourceProjectId: string | undefined,
+): void {
+  const scrRefClone = deepClone(scrRef);
+  // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
+  // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
+  const sourceProjectIdChanged = scrRefSourceProjectIds[scrollGroupId] !== sourceProjectId;
+  scrRefs[scrollGroupId] = scrRefClone;
+  // A numbers-changed write with no source project (`sourceProjectId === undefined`) intentionally
+  // CLEARS the stored source frame. This is by design: a driver with no associated project (e.g. a
+  // data model that does not track versification) has an unknown versification, so followers must
+  // take the raw reference rather than mis-frame it under the previous source. This is not a
+  // lost-frame bug — an unknown frame is honestly unknown.
+  scrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
+  saveScrRefs(sourceProjectIdChanged);
+  onDidUpdateScrRefBufferedEmitter.emit({ scrollGroupId, scrRef: scrRefClone, sourceProjectId });
+}
+
+/**
  * See {@link IScrollGroupRemoteService.setScrRef}
+ *
+ * The user-facing setter: writes the ref (via {@link writeScrRef}) AND records the change in the
+ * scroll group's reference history. Reference-history navigation itself does NOT go through here —
+ * it calls {@link writeScrRef} directly, since its stacks already reflect the move.
  *
  * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
  *   unknown / canonical English.
@@ -490,14 +638,13 @@ export function setScrRefSync(
     throw new Error('Must provide scrRef in proper format!');
 
   const scrollGroupIdDefaulted = scrollGroupId ?? 0;
-  const scrRefClone = deepClone(scrRef);
 
   // compareScrRefs is versification-blind (book/chapter/verse only), so a same-numbered ref set by a
   // different source project still changes the versification frame and must NOT be treated as a
   // no-op. Skip only when the numbers are unchanged AND the write carries no new source info — a
   // same-numbered write with no source (`undefined`) must not clobber a known source.
   const scrRefUnchanged =
-    compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0;
+    compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRef) === 0;
   if (
     scrRefUnchanged &&
     (sourceProjectId === undefined ||
@@ -505,22 +652,22 @@ export function setScrRefSync(
   )
     return false;
 
-  // Update the scr ref and send out an event. The buffered emitter is usable immediately; if it
-  // hasn't finished registering yet, the latest update per scroll group is buffered and flushed.
-  const sourceProjectIdChanged = scrRefSourceProjectIds[scrollGroupIdDefaulted] !== sourceProjectId;
-  scrRefs[scrollGroupIdDefaulted] = scrRefClone;
-  // A numbers-changed write with no source project (`sourceProjectId === undefined`) intentionally
-  // CLEARS the stored source frame. This is by design: a driver with no associated project (e.g. a
-  // data model that does not track versification) has an unknown versification, so followers must
-  // take the raw reference rather than mis-frame it under the previous source. This is not a
-  // lost-frame bug — an unknown frame is honestly unknown.
-  scrRefSourceProjectIds[scrollGroupIdDefaulted] = sourceProjectId;
-  saveScrRefs(sourceProjectIdChanged);
-  onDidUpdateScrRefBufferedEmitter.emit({
-    scrollGroupId: scrollGroupIdDefaulted,
-    scrRef: scrRefClone,
-    sourceProjectId,
-  });
+  // Capture (lazily seeding) the history BEFORE writing the stored ref so a first-touch seed records
+  // the location being navigated AWAY from, not the destination.
+  const referenceHistory = getOrCreateReferenceHistory(scrollGroupIdDefaulted);
+
+  writeScrRef(scrollGroupIdDefaulted, scrRef, sourceProjectId);
+
+  // deepClone the ref into history so the recorded entry never aliases the object stored in `scrRefs`
+  // (which the module-load migration mutates in place — an in-place edit must not silently reach
+  // through into history).
+  recordNavigation(referenceHistory, { scrRef: deepClone(scrRef), sourceProjectId });
+  // Always emit, even for a verse-only move that changed only `current` and not the back/forward
+  // stacks: `current` is part of the published history and a consumer may render it. We could skip
+  // the emit (and its clone + broadcast) on a verse-only change to save work on the verse-scroll hot
+  // path, but that would assume no consumer needs the updated current ref — not worth the risk until
+  // a real performance problem shows up.
+  emitReferenceHistoryChange(scrollGroupIdDefaulted, referenceHistory);
 
   return true;
 }
@@ -533,13 +680,84 @@ async function setScrRef(
   return setScrRefSync(scrollGroupId, scrRef, sourceProjectId);
 }
 
+async function getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory> {
+  return getReferenceHistorySync(scrollGroupId);
+}
+
+async function navigateReferenceHistory(
+  scrollGroupId: ScrollGroupId,
+  offset: number,
+): Promise<boolean> {
+  return navigateReferenceHistorySync(scrollGroupId, offset);
+}
+
 const scrollGroupService: IScrollGroupRemoteService = {
   getScrRef,
   setScrRef,
   getScrRefForProject,
+  getReferenceHistory,
+  navigateReferenceHistory,
 };
 
-/** Register the network object that backs the scroll group service */
+/**
+ * Register the network object that backs the scroll group service.
+ *
+ * The reference-history navigation commands are NOT registered here: the physical left/right
+ * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
+ * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
+ * the window service this state module deliberately does not import). Programmatic offset
+ * navigation is exposed through this network object's `navigateReferenceHistory` method below
+ * rather than a duplicate command.
+ */
 export async function startScrollGroupService(): Promise<void> {
-  await networkObjectService.set(NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE, scrollGroupService);
+  // Mark ONLY the two experimental methods on the (otherwise stable) scroll group network object,
+  // via per-method `x-experimental` in documentation.methods[] — NOT the whole-object 5th-param
+  // fanout, which would wrongly mark the stable getScrRef/setScrRef methods too. Mirrors the
+  // `@experimental` TSDoc on these methods in IScrollGroupRemoteService.
+  await networkObjectService.set(
+    NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+    scrollGroupService,
+    'object',
+    undefined,
+    {
+      methods: [
+        {
+          name: 'getReferenceHistory',
+          'x-experimental': true,
+          summary: 'Get a copy of the reference history for the provided scroll group',
+          params: [
+            {
+              name: 'scrollGroupId',
+              required: true,
+              summary: 'Scroll group whose history to get',
+              schema: { type: 'number' },
+            },
+          ],
+          result: { name: 'referenceHistory', schema: { type: 'object' } },
+        },
+        {
+          name: 'navigateReferenceHistory',
+          'x-experimental': true,
+          summary:
+            'Navigate within the reference history of the provided scroll group ' +
+            '(negative offset = back, positive = forward)',
+          params: [
+            {
+              name: 'scrollGroupId',
+              required: true,
+              summary: 'Scroll group whose history to navigate',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'offset',
+              required: true,
+              summary: 'Signed number of steps: negative = back, positive = forward',
+              schema: { type: 'number' },
+            },
+          ],
+          result: { name: 'didNavigate', schema: { type: 'boolean' } },
+        },
+      ],
+    },
+  );
 }

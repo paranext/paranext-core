@@ -50,6 +50,130 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_CommentWithoutThread_ThrowsWiringErrorInsteadOfSilentlyDegrading()
+    {
+        // A wrapper with no thread is a wiring/programmer bug — a comment serialized in
+        // getCommentThreads always has a thread — not corrupt content. It must surface as a
+        // CommentThreadContextMissingException rather than being masked as a placeholder body, so a
+        // future regression that builds thread-less wrappers fails loudly instead of blanking notes.
+        Comment testComment = CommentTestHelper.CreateBasicComment(); // Thread "4217dff8"
+        var wrapper = new PlatformCommentWrapper(testComment, null);
+
+        Assert.Throws<CommentThreadContextMissingException>(
+            () => JsonSerializer.Serialize<PlatformCommentWrapper>(wrapper, _serializationOptions)
+        );
+    }
+
+    [Test]
+    public void TryRenderContents_GenuineRenderFailureDegrades_WiringErrorPropagates()
+    {
+        // A genuine render failure (corrupt content) degrades the body to the placeholder so one
+        // unrenderable note doesn't abort the whole response. Real ParatextData render throws can't
+        // be forced from a test (decoders return empty rather than throwing), so the contract is
+        // proven on the helper directly, mirroring the TryRender conflict-field test below.
+        Assert.That(
+            PlatformCommentConverter.TryRenderContents(
+                () => throw new InvalidOperationException("render failed"),
+                "comment-id"
+            ),
+            Is.EqualTo(PlatformCommentConverter.ContentsUnavailablePlaceholder)
+        );
+
+        // A missing-thread wiring error is NOT masked as a placeholder — it propagates.
+        Assert.Throws<CommentThreadContextMissingException>(
+            () =>
+                PlatformCommentConverter.TryRenderContents(
+                    () => throw new CommentThreadContextMissingException("no thread"),
+                    "comment-id"
+                )
+        );
+
+        // A successful render is returned unchanged.
+        Assert.That(
+            PlatformCommentConverter.TryRenderContents(() => "<p>real body</p>", "comment-id"),
+            Is.EqualTo("<p>real body</p>")
+        );
+    }
+
+    [Test]
+    public void TryRender_WhenAConflictDecodeGetterThrows_ReturnsNullInsteadOfPropagating()
+    {
+        // Layer 1 routes the four conflict-decode getters (RejectedText/AcceptedText/
+        // ResultText/RejectedResultText) through TryRender so one that throws on corrupt content is
+        // omitted (null → field dropped by TryWriteString) rather than aborting the whole note.
+        // Exercised on the helper directly because ParatextData's decoders return empty rather than
+        // throwing on the malformed inputs available to a test, so a real getter throw can't be forced.
+        string? result = "sentinel";
+        Assert.That(
+            () =>
+                result = PlatformCommentConverter.TryRender(
+                    () => throw new InvalidOperationException("decode failed"),
+                    "comment-id",
+                    "acceptedText"
+                ),
+            Throws.Nothing
+        );
+        Assert.That(result, Is.Null);
+
+        // And a getter that succeeds is returned unchanged.
+        Assert.That(
+            PlatformCommentConverter.TryRender(() => "rendered", "comment-id", "acceptedText"),
+            Is.EqualTo("rendered")
+        );
+    }
+
+    [Test]
+    public void IsContentsUnavailablePlaceholder_MatchesExactAndReserializedVariants()
+    {
+        // The byte-exact placeholder is recognized.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                PlatformCommentConverter.ContentsUnavailablePlaceholder
+            ),
+            Is.True
+        );
+
+        // Editor-reserialized variants (added attributes, span wrappers, extra whitespace) that
+        // preserve the text are still recognized — this is the hardening over an exact-HTML match,
+        // since the comment editor round-trips saved content through Lexical.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p dir=\"ltr\">This note could not be displayed.</p>"
+            ),
+            Is.True
+        );
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p><span>This note could not be displayed.</span></p>"
+            ),
+            Is.True
+        );
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "  <p>This note could not be displayed.</p>  "
+            ),
+            Is.True
+        );
+        // HTML-entity variant: a re-serialized &nbsp; between words decodes to the same text. This is
+        // the entity-decode hardening (strip tags, THEN HtmlDecode) over the previous tag-strip-only
+        // normalization, which would have left "&nbsp;" in place and failed to match.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder(
+                "<p>This&nbsp;note could not be displayed.</p>"
+            ),
+            Is.True
+        );
+
+        // Real note content and empty input are not affected.
+        Assert.That(
+            PlatformCommentConverter.IsContentsUnavailablePlaceholder("<p>A real comment.</p>"),
+            Is.False
+        );
+        Assert.That(PlatformCommentConverter.IsContentsUnavailablePlaceholder(null), Is.False);
+        Assert.That(PlatformCommentConverter.IsContentsUnavailablePlaceholder(""), Is.False);
+    }
+
+    [Test]
     public void Serialize_CommentWithBasicFields_CorrectJsonProduced()
     {
         Comment testComment = CommentTestHelper.CreateBasicComment();
@@ -233,7 +357,7 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Contain(@"""resultText"":"));
 
         // Each serialized VALUE must match its own getter, so a converter key<->value mis-binding
-        // (e.g. writing AcceptedText under "rejectedText") fails here rather than shipping green —
+        // (e.g. writing AcceptedText under "rejectedText") fails here rather than shipping green -
         // key-presence alone can't catch a swap, and the getter asserts below bypass the converter.
         using var doc = JsonDocument.Parse(json);
         JsonElement root = doc.RootElement;
@@ -278,6 +402,40 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_VerseTextConflictIndependentChanges_MergedTextPresent()
+    {
+        // Independent (non-overlapping) edits: CommentEditHelper.GetMergedUsfm can combine both sides,
+        // so MergedText renders PT9's "merge all changes" preview (same diff markup as accepted/rejected).
+        Comment testComment = CommentTestHelper.CreateIndependentVerseTextConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.MergedText, Is.Not.Null.And.Not.Empty);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        Assert.That(json, Does.Contain(@"""mergedText"":"));
+    }
+
+    [Test]
+    public void Serialize_VerseTextConflictOverlappingChanges_MergedTextNull()
+    {
+        // Overlapping edits (both sides change the same word): GetMergedUsfm returns null because the
+        // changes conflict, so MergedText must be null (merge is not offered for this thread).
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.MergedText, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+        Assert.That(json, Does.Not.Contain(@"""mergedText"":"));
+    }
+
+    [Test]
     public void Serialize_VerseTextConflictNoAncestor_OmitsAcceptedTextButKeepsOtherConflictFields()
     {
         // A verseText conflict where parent == null in the merger: Verse is set but
@@ -297,12 +455,11 @@ internal class PlatformCommentConverterTests : PapiTestBase
     }
 
     [Test]
-    public void Serialize_VerseTextConflictReplacementBothSides_IncludesStrikethroughAndUnderline()
+    public void Serialize_VerseTextConflictWithReplacement_IncludesStrikethroughAndUnderline()
     {
-        // Replacement on both sides: loser "town"→"village", winner "town"→"city". Both diffs show
-        // <s> (deleted "town") and <u> (inserted word), so this exercises the deletion (<s>) path.
-        Comment testComment =
-            CommentTestHelper.CreateVerseTextConflictCommentReplacementBothSides();
+        // Replacement: loser "town"→"village", winner "town"→"city". Both diffs show <s> (deleted
+        // "town") and <u> (inserted word), so this exercises the deletion (<s>) path.
+        Comment testComment = CommentTestHelper.CreateVerseTextConflictCommentBothSidesReplaced();
         var (commentWrapper, _) = CreateCommentWithThread(testComment);
 
         var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
@@ -344,6 +501,50 @@ internal class PlatformCommentConverterTests : PapiTestBase
         Assert.That(json, Does.Not.Contain("resultText"));
         Assert.That(json, Does.Not.Contain("rejectedResultText"));
         Assert.That(commentWrapper.RejectedText, Is.Null);
+        // A normal comment carries no resolution action, so the key must be absent too.
+        Assert.That(json, Does.Not.Contain("conflictResolutionAction"));
+    }
+
+    [Test]
+    public void Serialize_CommentWithConflictResolutionAction_IncludesKeyUngated()
+    {
+        // The resolution comment PT9's SaveEdits appends is Type==Conflict but ConflictType==None
+        // (never copied), so IsVerseTextConflict is false for it. CreateConflictComment matches that
+        // shape (Type=Conflict, ConflictType unset). Setting ConflictResolutionAction and seeing the
+        // key serialize proves the field is written UNGATED — not behind the verseText gate.
+        Comment testComment = CommentTestHelper.CreateConflictComment();
+        testComment.ConflictResolutionAction = "replaced";
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.ConflictResolutionAction, Is.EqualTo("replaced"));
+        // Guard: this comment is NOT a verseText conflict, so the gated fields stay absent while the
+        // ungated resolution-action field still serializes.
+        Assert.That(commentWrapper.RejectedText, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Contain(@"""conflictResolutionAction"":""replaced"""));
+        Assert.That(json, Does.Not.Contain("rejectedText"));
+    }
+
+    [Test]
+    public void Serialize_CommentWithoutConflictResolutionAction_OmitsKey()
+    {
+        // No resolution action set → the key must be null-skipped from the payload.
+        Comment testComment = CommentTestHelper.CreateConflictComment();
+        var (commentWrapper, _) = CreateCommentWithThread(testComment);
+
+        Assert.That(commentWrapper.ConflictResolutionAction, Is.Null);
+
+        var json = JsonSerializer.Serialize<PlatformCommentWrapper>(
+            commentWrapper,
+            _serializationOptions
+        );
+
+        Assert.That(json, Does.Not.Contain("conflictResolutionAction"));
     }
 
     [Test]

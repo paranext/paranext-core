@@ -446,5 +446,65 @@ export type LinkedScrRefButtonProps = {
  * read-only contexts where the reference should not be navigable but should still be readable).
  */
 export declare function LinkedScrRefButton({ scrRef, onClick, tooltipContent, ariaLabel, className, testId, }: LinkedScrRefButtonProps): import("react/jsx-runtime").JSX.Element | undefined;
+/** Book IDs for all books that are not considered obsolete in the SIL Canon library */
+export declare const ALL_BOOK_IDS: string[];
+/** Text and layout direction */
+export type Direction = "rtl" | "ltr";
+/** Read layout direction from localStorage or return 'ltr' */
+export declare function readDirection(): Direction;
+/** Write layout direction to localStorage */
+export declare function persistDirection(dir: Direction): void;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component.
+ */
+export declare const NAVIGATION_HISTORY_BUTTONS_STRING_KEYS: readonly [
+	"%navigationHistory_back_tooltip%",
+	"%navigationHistory_forward_tooltip%",
+	"%navigationHistory_backList_ariaLabel%",
+	"%navigationHistory_forwardList_ariaLabel%"
+];
+export type NavigationHistoryButtonsLocalizedStrings = {
+	[key in (typeof NAVIGATION_HISTORY_BUTTONS_STRING_KEYS)[number]]?: string;
+};
+/** One entry in a navigation-history menu */
+export type NavigationHistoryItem = {
+	/** Display label for the history entry, e.g. 'Mark 4:1' */
+	label: string;
+	/** Signed navigation offset for this entry: negative = back, positive = forward */
+	offset: number;
+};
+export type NavigationHistoryButtonsProps = {
+	/** Whether the back button is enabled */
+	canGoBack?: boolean;
+	/** Whether the forward button is enabled */
+	canGoForward?: boolean;
+	/** History entries behind the current location, nearest first (offsets -1, -2, ...) */
+	backItems?: NavigationHistoryItem[];
+	/** History entries ahead of the current location, nearest first (offsets +1, +2, ...) */
+	forwardItems?: NavigationHistoryItem[];
+	/** Called with the signed offset to navigate by (from a button click or a history-menu item) */
+	onNavigate: (offset: number) => void;
+	/** Localized strings for tooltips and aria-labels. Falls back to the key itself */
+	localizedStrings?: NavigationHistoryButtonsLocalizedStrings;
+	/**
+	 * Whether to show OS-specific keyboard shortcut hints in the tooltips. Defaults to `true`. The
+	 * hints follow the UI direction: in RTL the back/forward keys swap (physical-direction
+	 * preserving, matching the main-process handler)
+	 */
+	showKeyboardShortcuts?: boolean;
+	/** CSS class name for the buttons */
+	className?: string;
+	/** Variant for the buttons. Defaults to "ghost" */
+	variant?: ButtonProps["variant"];
+};
+/**
+ * Back/forward reference-history buttons merged into a single button group. Left-click navigates
+ * one step; right-click (or long-press, or the keyboard context-menu key) opens a menu of the
+ * history entries in that direction, anchored below the button. In RTL the pair mirrors (order,
+ * arrow icons, and tooltip shortcut hints), matching Paratext 9.
+ */
+export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
 
 export {};

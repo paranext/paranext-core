@@ -2,7 +2,12 @@ import { Direction } from '@/utils/dir-helper.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { ComponentType, useCallback, useMemo } from 'react';
-import { fetchEndChapter } from './book-chapter-control.utils';
+import {
+  getNextChapterRef,
+  getNextVerseRef,
+  getPreviousChapterRef,
+  getPreviousVerseRef,
+} from 'platform-bible-utils/experimental';
 
 export interface QuickNavButton {
   onClick: () => void;
@@ -11,112 +16,91 @@ export interface QuickNavButton {
   icon: ComponentType<{ className?: string }>;
 }
 
+/** Whether stepping to `newRef` would do nothing: there is no target, or it equals `scrRef`. */
+function isNoOpNavigation(
+  scrRef: SerializedVerseRef,
+  newRef: SerializedVerseRef | undefined,
+): boolean {
+  return (
+    !newRef ||
+    (newRef.book === scrRef.book &&
+      newRef.chapterNum === scrRef.chapterNum &&
+      newRef.verseNum === scrRef.verseNum)
+  );
+}
+
 export function useQuickNavButtons(
   scrRef: SerializedVerseRef,
   availableBooks: string[],
   direction: Direction,
   handleSubmit: (scrRef: SerializedVerseRef) => void,
 ): QuickNavButton[] {
-  const handlePreviousChapter = useCallback(() => {
-    if (scrRef.chapterNum > 1) {
-      handleSubmit({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum - 1,
-        verseNum: 1,
-      });
-    } else {
-      // Go to previous book's last chapter
-      const currentBookIndex = availableBooks.indexOf(scrRef.book);
-      if (currentBookIndex > 0) {
-        const previousBook = availableBooks[currentBookIndex - 1];
-        const lastChapter = Math.max(fetchEndChapter(previousBook), 1);
-        handleSubmit({
-          book: previousBook,
-          chapterNum: lastChapter,
-          verseNum: 1,
-        });
-      }
-    }
-  }, [scrRef, availableBooks, handleSubmit]);
+  // The buttons pass availableBooks (so navigation honors books-present and rolls across book
+  // boundaries the way the keyboard commands do) but intentionally pass no ScriptureBounds — there
+  // is no versification source here, so verse navigation keeps its pre-versification
+  // floor-at-0 / unbounded-increment behavior within a book. Making the buttons versification-aware
+  // to match the keyboard commands is tracked in PT-4143.
+  //
+  // Each target ref is computed once and reused for both the click handler and the disabled state,
+  // so the button is disabled exactly when the step would be a no-op (no target, or the same ref).
+  const previousChapterRef = useMemo(
+    () => getPreviousChapterRef(scrRef, availableBooks),
+    [scrRef, availableBooks],
+  );
+  const nextChapterRef = useMemo(
+    () => getNextChapterRef(scrRef, availableBooks),
+    [scrRef, availableBooks],
+  );
+  const previousVerseRef = useMemo(
+    () => getPreviousVerseRef(scrRef, availableBooks),
+    [scrRef, availableBooks],
+  );
+  const nextVerseRef = useMemo(
+    () => getNextVerseRef(scrRef, availableBooks),
+    [scrRef, availableBooks],
+  );
 
-  const handleNextChapter = useCallback(() => {
-    const maxChapter = fetchEndChapter(scrRef.book);
-    if (scrRef.chapterNum < maxChapter) {
-      handleSubmit({
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum + 1,
-        verseNum: 1,
-      });
-    } else {
-      // Go to next book's first chapter
-      const currentBookIndex = availableBooks.indexOf(scrRef.book);
-      if (currentBookIndex < availableBooks.length - 1) {
-        const nextBook = availableBooks[currentBookIndex + 1];
-        handleSubmit({
-          book: nextBook,
-          chapterNum: 1,
-          verseNum: 1,
-        });
-      }
-    }
-  }, [scrRef, availableBooks, handleSubmit]);
-
-  const handlePreviousVerse = useCallback(() => {
-    handleSubmit({
-      book: scrRef.book,
-      chapterNum: scrRef.chapterNum,
-      verseNum: scrRef.verseNum > 1 ? scrRef.verseNum - 1 : 0,
-    });
-  }, [scrRef, handleSubmit]);
-
-  const handleNextVerse = useCallback(() => {
-    handleSubmit({
-      book: scrRef.book,
-      chapterNum: scrRef.chapterNum,
-      verseNum: scrRef.verseNum + 1,
-    });
-  }, [scrRef, handleSubmit]);
+  const submitIfChanged = useCallback(
+    (newRef: SerializedVerseRef | undefined) => {
+      if (newRef) handleSubmit(newRef);
+    },
+    [handleSubmit],
+  );
 
   return useMemo(() => {
     return [
       {
-        onClick: handlePreviousChapter,
-        disabled:
-          availableBooks.length === 0 ||
-          (scrRef.chapterNum === 1 && availableBooks.indexOf(scrRef.book) === 0),
+        onClick: () => submitIfChanged(previousChapterRef),
+        disabled: isNoOpNavigation(scrRef, previousChapterRef),
         title: 'Previous chapter',
         icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
       },
       {
-        onClick: handlePreviousVerse,
-        disabled: availableBooks.length === 0 || scrRef.verseNum === 0,
+        onClick: () => submitIfChanged(previousVerseRef),
+        disabled: isNoOpNavigation(scrRef, previousVerseRef),
         title: 'Previous verse',
         icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
       },
       {
-        onClick: handleNextVerse,
-        disabled: availableBooks.length === 0,
+        onClick: () => submitIfChanged(nextVerseRef),
+        disabled: isNoOpNavigation(scrRef, nextVerseRef),
         title: 'Next verse',
         icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
       },
       {
-        onClick: handleNextChapter,
-        disabled:
-          availableBooks.length === 0 ||
-          ((scrRef.chapterNum === fetchEndChapter(scrRef.book) ||
-            fetchEndChapter(scrRef.book) <= 0) &&
-            availableBooks.indexOf(scrRef.book) === availableBooks.length - 1),
+        onClick: () => submitIfChanged(nextChapterRef),
+        disabled: isNoOpNavigation(scrRef, nextChapterRef),
         title: 'Next chapter',
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
       },
     ];
   }, [
     scrRef,
-    availableBooks,
     direction,
-    handlePreviousChapter,
-    handlePreviousVerse,
-    handleNextVerse,
-    handleNextChapter,
+    submitIfChanged,
+    previousChapterRef,
+    previousVerseRef,
+    nextVerseRef,
+    nextChapterRef,
   ]);
 }

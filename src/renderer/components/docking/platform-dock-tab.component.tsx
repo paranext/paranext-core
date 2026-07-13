@@ -1,4 +1,4 @@
-import { TabInfo } from '@shared/models/docking-framework.model';
+import { TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 
 import { TAB_GROUP } from './platform-dock-layout-positioning.util';
 import { PlatformPanel } from './platform-panel.component';
@@ -28,6 +28,8 @@ export function createRCDockTabFromTabInfo(tabInfo: TabInfo, shouldFlash = false
         tooltip={tabInfo.tabTooltip}
         flashTriggerTime={flashTriggerTime}
         id={tabInfo.id}
+        // For WebView tabs, the tab id IS the web view id
+        webViewId={tabInfo.tabType === TAB_TYPE_WEBVIEW ? tabInfo.id : undefined}
       />
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,

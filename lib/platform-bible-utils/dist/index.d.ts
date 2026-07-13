@@ -1540,7 +1540,9 @@ export declare const getChaptersForBook: (bookNum: number) => number;
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
  *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
- *   to the nearest valid book.
+ *   to the nearest valid book. For books-present-aware stepping that rolls across chapter/book
+ *   boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1550,7 +1552,9 @@ export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) =>
  * @param offset The number of chapters to offset the current chapter by. Positive values move
  *   forward, negative values move backward.
  * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
- *   chapter number is clamped to stay within valid bounds for the book.
+ *   chapter number is clamped to stay within valid bounds for the book. For books-present-aware
+ *   stepping that rolls across chapter/book boundaries (Paratext 9 style), see the `get*Ref`
+ *   navigation functions in `platform-bible-react/experimental`.
  */
 export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1560,7 +1564,9 @@ export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number)
  * @param offset The number of verses to offset the current verse by. Positive values move forward,
  *   negative values move backward.
  * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
- *   within valid bounds for the chapter.
+ *   within valid bounds for the chapter. For books-present-aware stepping that rolls across
+ *   chapter/book boundaries (Paratext 9 style), see the `get*Ref` navigation functions in
+ *   `platform-bible-react/experimental`.
  */
 export declare const offsetVerse: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
@@ -1794,14 +1800,14 @@ export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, 
  * `z...` custom marker as unconditionally valid.
  *
  * Because this returns every marker the document uses, the editor will not warn about any marker in
- * these panels — including genuine typos or bad data in the resource. That is an accepted trade-off:
- * the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical whether or not
- * it fires), and these consumers are read-only resource viewers (`isReadonly: true`), not the
- * editable authoring editor — so typo-catching still works where authors actually edit. Do not narrow
- * this to an "extra-only" delta: that would require the editor's internal built-in marker lists, which
- * it deliberately doesn't export, forcing either a re-coupling to the editor package or a duplicated
- * list that drifts. Passing everything the document uses is the correct consequence of core not owning
- * the editor's marker definitions.
+ * these panels — including genuine typos or bad data in the resource. That is an accepted
+ * trade-off: the warning is a `logger.warn` diagnostic (warn-and-continue; rendering is identical
+ * whether or not it fires), and these consumers are read-only resource viewers (`isReadonly:
+ * true`), not the editable authoring editor — so typo-catching still works where authors actually
+ * edit. Do not narrow this to an "extra-only" delta: that would require the editor's internal
+ * built-in marker lists, which it deliberately doesn't export, forcing either a re-coupling to the
+ * editor package or a duplicated list that drifts. Passing everything the document uses is the
+ * correct consequence of core not owning the editor's marker definitions.
  *
  * @param usj The USJ document being displayed (e.g. the chapter USJ handed to the editor).
  * @returns The distinct non-`z` markers found anywhere in the document, in first-seen order. Empty
@@ -5920,6 +5926,20 @@ export type CommentStatus = "Unspecified" | "Todo" | "Done" | "Resolved";
  */
 export type CommentType = "Normal" | "Conflict";
 /**
+ * The resolution actions the current user may take on a `verseText` conflict thread, as reported by
+ * the legacy comment data provider's `getConflictResolutionOptions`. Defined here so the comment
+ * data provider's type declaration and the conflict-note-card UI share a single source of truth.
+ *
+ * - `'none'`: no actions available - the thread is already resolved, is not a `verseText` conflict,
+ *   or the user lacks permission. UIs should hide the accept/reject controls entirely.
+ * - `'accept'`: the verse was edited after the merge (stale), so only "accept" (keep the current
+ *   text) is available; reject/merge are disabled.
+ * - `'acceptOrReject'`: accept and reject are available, but the two sides overlap and cannot be
+ *   auto-merged, so merge is not offered.
+ * - `'acceptRejectOrMerge'`: accept, reject, and merge are all available.
+ */
+export type ConflictResolutionOptions = "none" | "accept" | "acceptOrReject" | "acceptRejectOrMerge";
+/**
  * Represents a single comment/note in a scripture text
  *
  * This is the C# Comment type from Paratext.Data.ProjectComments
@@ -5944,6 +5964,21 @@ export type LegacyComment = {
 	 * `comments[0]` — see {@link LegacyCommentThread.comments}); never present on replies.
 	 */
 	conflictType?: string;
+	/**
+	 * The conflict-resolution action recorded on a conflict thread's resolution comment, present only
+	 * when text was written into the verse:
+	 *
+	 * - `'replaced'` — the conflict was rejected, so the previously-rejected side was written into the
+	 *   text (replacing what Paratext had accepted).
+	 * - `'merged'` - the conflict was resolved via PT10's merge action, which writes PT9's auto-merged
+	 *   (both-sides) text into the verse; data synced from a PT9 three-way merge may also carry it.
+	 *
+	 * Absent means the conflict was accepted (no text write) or this is not a resolution comment.
+	 * Unlike the four `verseText` decode fields, this is NOT gated on `conflictType`: the resolution
+	 * comment has type `Conflict` but no `conflictType`, so it must be read directly from this
+	 * field.
+	 */
+	conflictResolutionAction?: "replaced" | "merged";
 	/** Contents of the comment, represented in HTML that includes some Paratext 9 specific tags */
 	contents: string;
 	/**
@@ -5970,6 +6005,11 @@ export type LegacyComment = {
 	isRead: boolean;
 	/** Language of note */
 	language: string;
+	/**
+	 * The PT9 "merge all changes" diff preview (same markup as {@link acceptedText}/
+	 * {@link rejectedText}); present only when the two changes are independent.
+	 */
+	mergedText?: string;
 	/**
 	 * Only present on the ROOT comment of a `verseText` conflict thread (never on replies): the
 	 * resulting verse USFM (plain, no diff markup) if the change is REJECTED — i.e. the losing side.

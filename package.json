@@ -98,7 +98,7 @@
     "test:core": "vitest",
     "test:e2e-cdp": "playwright test --config e2e-tests/playwright-cdp.config.ts",
     "test:e2e:all": "playwright test --config e2e-tests/playwright.config.ts",
-    "test:e2e:isolated": "playwright test --config e2e-tests/playwright.config.ts --project=isolated",
+    "test:e2e:isolated": "node e2e-tests/run-isolated.mjs",
     "test:e2e:smoke": "playwright test --config e2e-tests/playwright.config.ts --project=smoke",
     "test:e2e:smoke-wsl": "e2e-tests/run-e2e-wsl.sh",
     "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",
@@ -115,7 +115,7 @@
       "node .erb/scripts/sort-cspell-words.js",
       "prettier --parser json --write --ignore-path .prettierignorerun"
     ],
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write --ignore-path .prettierignorerun"],
+    "*.{cjs,mjs,js,jsx,cts,mts,ts,tsx}": ["prettier --write --ignore-path .prettierignorerun"],
     "!(cspell).json": ["prettier --parser json --write --ignore-path .prettierignorerun"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write --ignore-path .prettierignorerun"]

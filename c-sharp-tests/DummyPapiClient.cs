@@ -47,6 +47,14 @@ namespace TestParanextDataProvider
         public OpenRpcSingleMethodDocumentation? GetDocumentationFor(string requestType) =>
             _documentationByRequestType.GetValueOrDefault(requestType);
 
+        /// <summary>
+        /// Test-only helper to unregister a request handler so a test can replace one a shared
+        /// <c>SetUp</c> registered (<see cref="RegisterRequestHandlerAsync"/> uses
+        /// <c>TryAdd</c> and will not overwrite an existing key).
+        /// </summary>
+        public void RemoveRequestHandler(string requestType) =>
+            _localMethods.TryRemove(requestType, out _);
+
         public override Task SendEventAsync(string eventType, object? eventParameters)
         {
             _sentEvents.Enqueue((eventType, eventParameters));

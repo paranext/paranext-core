@@ -65,8 +65,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     // every published PDP creation.
     private readonly Lazy<CommentManager> _commentManager;
 
+    // Serializes all comment mutations (ResolveConflict, AddCommentToThread, CreateComment,
+    // UpdateComment, DeleteComment) so their read-modify-write of the shared CommentManager (and the
+    // Comments_*.xml files it saves) is atomic. The PDP is a per-project singleton whose PAPI methods
+    // can be invoked concurrently, and PT9's CommentManager is not thread-safe - it was only ever
+    // driven by Paratext's single UI thread, so this concurrency is new in PT10. One lock per PDP
+    // instance, i.e. per project. Reads (GetCommentThreads) are intentionally not serialized: they
+    // can observe a transient in-progress view but cannot corrupt data.
+    private readonly object _commentMutationLock = new();
+
     private UserProjectSettings? _userProjectSettings;
     private string? _cachedUserId;
+
+    // Reference the shared data-type constant so the storage key and the data-type name can't drift.
+    private const string OverlaySettingName = ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY;
+    private const string OverlayInitializedMarkerName = OverlaySettingName + "Initialized";
+    private const string OverlaySchemaVersion = "1.0.0";
 
     #endregion
 
@@ -141,6 +155,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
+        retVal.Add(("getShownByDefaultOverlay", GetShownByDefaultOverlay));
+        retVal.Add(("setShownByDefaultOverlay", SetShownByDefaultOverlay));
+        retVal.Add(("resetShownByDefaultOverlay", ResetShownByDefaultOverlay));
+        retVal.Add(("initializeShownByDefaultOverlay", InitializeShownByDefaultOverlay));
         retVal.Add(
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
@@ -276,6 +294,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             { "getCommentThreads", GetCommentThreads },
             { "createComment", CreateComment },
             { "addCommentToThread", AddCommentToThread },
+            { "resolveConflict", ResolveConflict },
             { "deleteComment", DeleteComment },
             { "updateComment", UpdateComment },
             { "setIsCommentThreadRead", SetIsCommentThreadRead },
@@ -284,6 +303,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             { "canUserAddCommentToThread", CanUserAddCommentToThread },
             { "canUserAssignThread", CanUserAssignThread },
             { "canUserResolveThread", CanUserResolveThread },
+            { "getConflictResolutionOptions", GetConflictResolutionOptions },
             { "canUserEditOrDeleteComment", CanUserEditOrDeleteComment },
         };
 
@@ -387,6 +407,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (!string.IsNullOrEmpty(selector.ThreadId))
             filteredThreads = filteredThreads.Where(t => string.Equals(t.Id, selector.ThreadId));
 
+        // Status and IsResolved both constrain the thread's status (IsResolved is the negatable
+        // "== Resolved" form), so setting both can silently AND to zero results. Reject the
+        // ambiguous combination instead of returning a confusing empty set.
+        if (selector.Status != Enum<NoteStatus>.Null && selector.IsResolved is not null)
+            throw new ArgumentException(
+                "CommentThreadSelector.Status and IsResolved both filter thread status; set only one."
+            );
+
         // Filter by status
         if (selector.Status != Enum<NoteStatus>.Null)
         {
@@ -405,8 +433,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 t.Comments.Any(c => c.User == selector.Author)
             );
 
-        // Filter by assigned user
-        if (!string.IsNullOrEmpty(selector.AssignedTo))
+        // Filter by assigned user. null (absent) means "any assignee"; an empty string is the real
+        // "unassigned" value (CommentThread.unassignedUser), so it must still filter rather than be
+        // treated as "no filter".
+        if (selector.AssignedTo != null)
             filteredThreads = filteredThreads.Where(t => t.AssignedUser == selector.AssignedTo);
 
         // Filter by date
@@ -420,6 +450,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Filter by read status
         if (selector.IsRead is bool isRead)
             filteredThreads = filteredThreads.Where(t => ThreadStatus.IsThreadRead(t) == isRead);
+
+        // Filter by resolved status (THREAD status == Resolved or not; PT9 StatusFilter semantics)
+        if (selector.IsResolved is bool isResolved)
+            filteredThreads = filteredThreads.Where(t =>
+                (t.Status == NoteStatus.Resolved) == isResolved
+            );
 
         List<PlatformCommentThreadWrapper> results = filteredThreads
             .Select(t => new PlatformCommentThreadWrapper(t))
@@ -440,20 +476,23 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
-        // Find the comment by ID and its parent thread
-        var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
-        if (commentToDelete == null || parentThread == null)
-            return false;
+        lock (_commentMutationLock)
+        {
+            // Find the comment by ID and its parent thread
+            var (commentToDelete, parentThread) = FindCommentByIdWithThread(commentId);
+            if (commentToDelete == null || parentThread == null)
+                return false;
 
-        VerifyUserCanEditOrDeleteComment(commentId);
+            VerifyUserCanEditOrDeleteComment(commentId);
 
-        // Remove the comment using CommentManager
-        _commentManager.Value.RemoveComment(commentToDelete);
+            // Remove the comment using CommentManager
+            _commentManager.Value.RemoveComment(commentToDelete);
 
-        _commentManager.Value.SaveUser(commentToDelete.User, false);
+            _commentManager.Value.SaveUser(commentToDelete.User, false);
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
-        return true;
+            SendDataUpdateEvent(AllCommentDataTypes, "comment deleted event");
+            return true;
+        }
     }
 
     /// <summary>
@@ -479,6 +518,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public string CreateComment(PlatformCommentWrapper comment)
     {
         VerifyUserCanCreateComments();
+
+        // Never let the "content could not be displayed" placeholder become a note's real content.
+        // A degraded note is served with PlatformCommentConverter.ContentsUnavailablePlaceholder;
+        // planting that text here would create a note that UpdateComment then permanently refuses to
+        // edit (it rejects the same placeholder). Mirrors the guard in UpdateComment.
+        if (PlatformCommentConverter.IsContentsUnavailablePlaceholder(comment.Contents?.OuterXml))
+            throw new InvalidOperationException(
+                "Cannot create a comment whose content is the unavailable-content placeholder."
+            );
 
         if (comment.SelectedText != null && comment.SelectedText.Contains('\\'))
         {
@@ -577,11 +625,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (string.IsNullOrEmpty(newComment.Language))
             newComment.Language = scrText.Language.Id;
 
-        _commentManager.Value.AddComment(newComment);
-        _commentManager.Value.SaveUser(newComment.User, false);
-        ThreadStatus.MarkThreadRead(_commentManager.Value.FindThread(newComment.Thread));
+        // Only the CommentManager mutation needs serializing (see _commentMutationLock); the
+        // selection processing above builds the new comment without touching shared state.
+        lock (_commentMutationLock)
+        {
+            _commentManager.Value.AddComment(newComment);
+            _commentManager.Value.SaveUser(newComment.User, false);
+            ThreadStatus.MarkThreadRead(_commentManager.Value.FindThread(newComment.Thread));
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
+            SendDataUpdateEvent(AllCommentDataTypes, "comment created event");
+        }
 
         return newComment.Id;
     }
@@ -596,72 +649,371 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
     public string AddCommentToThread(PlatformCommentWrapper comment)
     {
-        if (string.IsNullOrEmpty(comment.Thread))
-            throw new InvalidDataException("Thread ID is required for AddCommentToThread");
+        lock (_commentMutationLock)
+        {
+            if (string.IsNullOrEmpty(comment.Thread))
+                throw new InvalidDataException("Thread ID is required for AddCommentToThread");
 
-        bool hasContents =
-            comment.Contents != null && !string.IsNullOrEmpty(comment.Contents.InnerText);
-        bool hasStatus = comment.Status != NoteStatus.Unspecified;
-        bool hasAssignedUser = comment.AssignedUser != null;
+            bool hasContents =
+                comment.Contents != null && !string.IsNullOrEmpty(comment.Contents.InnerText);
+            bool hasStatus = comment.Status != NoteStatus.Unspecified;
+            bool hasAssignedUser = comment.AssignedUser != null;
 
-        if (!hasContents && !hasStatus && !hasAssignedUser)
+            if (!hasContents && !hasStatus && !hasAssignedUser)
+                throw new InvalidDataException(
+                    "At least one of Contents, Status, or AssignedUser must be provided for AddCommentToThread"
+                );
+
+            CommentThread? existingThread = _commentManager.Value.FindThread(comment.Thread);
+            if (existingThread == null)
+                throw new InvalidDataException($"Thread with id {comment.Thread} does not exist.");
+
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+            VerifyUserCanAddCommentToThread();
+
+            // Adding a content comment to a resolved thread implicitly re-opens it (applied further below).
+            bool willReopenResolvedThread =
+                comment.Status == NoteStatus.Unspecified
+                && existingThread.Status == NoteStatus.Resolved
+                && hasContents;
+
+            // Validate permissions for status changes (resolve/re-open). An implicit re-open - adding a
+            // comment to a resolved thread - must clear the same gate as an explicit status change;
+            // otherwise a user who cannot resolve/re-open could bypass it by replying.
+            if (
+                comment.Status == NoteStatus.Resolved
+                || comment.Status == NoteStatus.Todo
+                || willReopenResolvedThread
+            )
+            {
+                VerifyUserCanResolveThread(comment.Thread);
+
+                // A verseText conflict must be resolved through ResolveConflict (accept/reject/merge),
+                // which applies the chosen text and enforces the admin-or-assignee gate. This generic
+                // path would mark it resolved without applying anything, and the already-resolved guard
+                // would then lock out the real flow. Other conflict types (invalidVerses, readError,
+                // verseBridge, ...) have no ResolveConflict path, so they must stay resolvable here;
+                // gating on Type == Conflict alone left them permanently unresolvable. Reopening (Todo)
+                // stays allowed.
+                if (
+                    comment.Status == NoteStatus.Resolved
+                    && existingThread.Type == NoteType.Conflict
+                    && existingThread.Comments is { Count: > 0 }
+                    && existingThread.Comments[0].ConflictType == NoteConflictType.VerseTextConflict
+                )
+                    throw new InvalidOperationException(
+                        $"Thread '{comment.Thread}' is a verseText merge conflict; use resolveConflict to accept or reject it instead of setting its status directly."
+                    );
+            }
+
+            // Validate assigned user has permission to be assigned and is in the assignable users list
+            if (comment.AssignedUser != null)
+            {
+                VerifyUserCanAssignThread(comment.Thread);
+                var assignableUsers = CommentThread
+                    .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
+                    .ToList();
+                if (!assignableUsers.Contains(comment.AssignedUser))
+                    throw new InvalidOperationException(
+                        $"User '{comment.AssignedUser}' cannot be assigned to threads in this project."
+                    );
+            }
+
+            Comment newComment = existingThread.AddNewComment();
+
+            CopyCommentProperties(comment, newComment);
+
+            if (willReopenResolvedThread)
+            {
+                Console.WriteLine(
+                    $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
+                );
+                newComment.Status = NoteStatus.Todo;
+            }
+
+            _commentManager.Value.AddComment(newComment);
+            _commentManager.Value.SaveUser(newComment.User, false);
+            ThreadStatus.MarkThreadRead(existingThread);
+
+            SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
+
+            return newComment.Id;
+        }
+    }
+
+    /// <summary>
+    /// Applies a user's resolution to a verseText merge-conflict note and marks it resolved.
+    /// <c>"accept"</c> keeps the auto-merged (winning) verse text and resolves the note (no verse
+    /// write). <c>"reject"</c> writes the losing side's USFM into the verse, and <c>"merge"</c>
+    /// writes PT9's auto-merged (both-sides) USFM into the verse, both via PT9's
+    /// <see cref="CommentEditHelper.SaveEdits"/>, then resolves the note.
+    /// </summary>
+    /// <remarks>
+    /// The reject/merge verse write happens inside PT9's <see cref="CommentEditHelper.SaveEdits"/>
+    /// orchestration, where PT9's <c>ReplaceAcceptedText</c>/<c>MergeAcceptedText</c> silently no-op
+    /// (they trace an error and leave the thread still resolved) if they cannot find the verse marker
+    /// in the chapter. Reject and merge are therefore pre-gated by <see cref="IsConflictVerseStale"/>,
+    /// which refuses the resolution when the verse is missing or has changed since the merge, so that
+    /// no-op path is not reached.
+    /// </remarks>
+    /// <exception cref="InvalidDataException">Unknown resolution, or the thread doesn't exist.</exception>
+    /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' or 'merge' and the verse text has changed since the conflict was recorded (stale).</exception>
+    public void ResolveConflict(string threadId, string resolution)
+    {
+        if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
-                "At least one of Contents, Status, or AssignedUser must be provided for AddCommentToThread"
+                $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
             );
 
-        CommentThread? existingThread = _commentManager.Value.FindThread(comment.Thread);
-        if (existingThread == null)
-            throw new InvalidDataException($"Thread with id {comment.Thread} does not exist");
+        // reject writes the loser text and merge the auto-merged text; both mutate the verse, while
+        // accept writes nothing. Computed once so the staleness gate and the Scripture-update event
+        // below cannot drift apart if a future resolution is added.
+        bool writesVerse = resolution is "reject" or "merge";
 
-        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-
-        VerifyUserCanAddCommentToThread();
-
-        // Validate permissions for status changes (resolve/re-open)
-        if (
-            comment.Status != NoteStatus.Unspecified
-            && (comment.Status == NoteStatus.Resolved || comment.Status == NoteStatus.Todo)
-        )
+        // Take the shared comment-mutation lock so the already-resolved guard (in
+        // VerifyUserCanResolveConflict) is atomic with the SaveEdits that applies the resolution, and
+        // so a concurrent AddCommentToThread reopen (or any other comment mutation) can't interleave
+        // with it. Without this, two callers could both pass the guard and both write the verse,
+        // corrupting an already-settled conflict.
+        lock (_commentMutationLock)
         {
-            VerifyUserCanResolveThread(comment.Thread);
-        }
+            // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
+            CommentThread thread = VerifyUserCanResolveConflict(threadId);
 
-        // Validate assigned user has permission to be assigned and is in the assignable users list
-        if (comment.AssignedUser != null)
-        {
-            VerifyUserCanAssignThread(comment.Thread);
-            var assignableUsers = CommentThread
-                .GetAssignToUsers(scrText, includeCurrentUserInUnsharedProject: true)
-                .ToList();
-            if (!assignableUsers.Contains(comment.AssignedUser))
+            // Reject writes the loser text, and merge writes the auto-merged (both-sides) text, over
+            // the current verse; refuse both when the verse was edited after the merge (stale) so
+            // post-merge edits can't be clobbered. Accept stays available as the exit path (it writes
+            // nothing).
+            if (writesVerse && IsConflictVerseStale(thread))
                 throw new InvalidOperationException(
-                    $"User '{comment.AssignedUser}' cannot be assigned to threads in this project."
+                    $"Conflict thread '{threadId}' cannot be resolved with '{resolution}': the verse text has changed since the conflict was recorded. Only 'accept' (keep the current text) is available."
+                );
+
+            // Merge only works when PT9 can auto-merge the two sides (independent edits). For
+            // overlapping edits GetMergedUsfm returns null, and PT9's MergeAcceptedText would then
+            // splice that null into the chapter USFM (C# concatenates null as ""), silently erasing
+            // the whole verse. GetConflictResolutionOptions already withholds merge in this case;
+            // enforce the same invariant here so a caller that skips the capability query can't
+            // trigger the data loss.
+            if (resolution == "merge" && CommentEditHelper.GetMergedUsfm(thread) == null)
+                throw new InvalidOperationException(
+                    $"Conflict thread '{threadId}' cannot be resolved with 'merge': the two sides have overlapping edits that cannot be auto-merged. Use 'accept' or 'reject'."
+                );
+
+            // Reuse PT9's orchestration (grant edit -> splice loser USFM -> resolve -> restore) via SaveEdits.
+            var state = new ThreadEditState
+            {
+                Status = NoteStatus.Resolved,
+                ConflictResolution = resolution switch
+                {
+                    "reject" => NoteConflictResolutions.Replaced,
+                    "merge" => NoteConflictResolutions.Merged,
+                    _ => NoteConflictResolutions.None,
+                },
+            };
+            // SaveEdits returns false when the user cancels resolving (the creator-resolve path).
+            // Surface that so we don't fire "resolved" events and report success for a thread that
+            // is still open.
+            bool resolved = CommentEditHelper.SaveEdits(
+                null,
+                _commentManager.Value,
+                thread,
+                state,
+                true,
+                out _,
+                out _
+            );
+            if (!resolved)
+                throw new InvalidOperationException(
+                    $"Resolving conflict thread '{threadId}' was canceled; the thread was not resolved."
                 );
         }
 
-        Comment newComment = existingThread.AddNewComment();
+        // Refresh the comment list; on reject/merge the verse text changed via a raw PutText that
+        // bypasses the Set* methods, so also refresh Scripture-text subscribers (the open editor).
+        SendDataUpdateEvent(AllCommentDataTypes, "conflict resolved event");
+        if (writesVerse)
+            SendDataUpdateEvent(AllScriptureDataTypes, "conflict resolve wrote verse text event");
+    }
 
-        CopyCommentProperties(comment, newComment);
+    /// <summary>
+    /// Verifies the current user may resolve the given verseText conflict thread right now:
+    /// the thread exists, is an unresolved verseText conflict, passes the base resolve check, and
+    /// the user is a project administrator or the assigned resolver. Throws with a specific
+    /// message otherwise. Shared by <see cref="ResolveConflict"/> (enforcement) and
+    /// <see cref="GetConflictResolutionOptions"/> (capability query).
+    /// </summary>
+    /// <returns>The verified conflict thread (never null); callers reuse it instead of re-finding.</returns>
+    /// <exception cref="InvalidDataException">The thread doesn't exist or has no comments.</exception>
+    /// <exception cref="InvalidOperationException">Not an unresolved verseText conflict, or the
+    /// user lacks permission.</exception>
+    private CommentThread VerifyUserCanResolveConflict(string threadId)
+    {
+        CommentThread? thread = _commentManager.Value.FindThread(threadId);
+        if (thread == null)
+            throw new InvalidDataException($"Thread with id {threadId} does not exist.");
 
+        // v1 resolves verseText conflicts only. Guard the first-comment access: PT9's
+        // CommentThread.FirstComment is private, so index defensively - an empty thread would
+        // otherwise throw IndexOutOfRangeException (masked to "none" by GetConflictResolutionOptions).
+        if (thread.Comments is not { Count: > 0 })
+            throw new InvalidDataException($"Thread with id {threadId} has no comments.");
+        Comment firstComment = thread.Comments[0];
         if (
-            comment.Status == NoteStatus.Unspecified
-            && existingThread.Status == NoteStatus.Resolved
-            && hasContents
+            thread.Type != NoteType.Conflict
+            || firstComment.ConflictType != NoteConflictType.VerseTextConflict
         )
-        {
-            Console.WriteLine(
-                $"Reopening resolved thread {existingThread.Id} because a new comment is being added to it."
+            throw new InvalidOperationException(
+                $"Thread '{threadId}' is not a verseText conflict and cannot be resolved here."
             );
-            newComment.Status = NoteStatus.Todo;
+
+        // A resolved conflict has already had its resolution applied. Re-resolving would rewrite the
+        // verse of an already-settled thread (e.g. reject-after-accept) - a transition PT9's UI never
+        // allows structurally. Reject it here so a stale/duplicate call can't clobber the verse text.
+        if (thread.Status == NoteStatus.Resolved)
+            throw new InvalidOperationException(
+                $"Conflict thread '{threadId}' is already resolved and cannot be resolved again."
+            );
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+
+        // Permission: run the base resolve check, then restrict resolving to a project administrator
+        // or the user (or team) the conflict is assigned to.
+        VerifyUserCanResolveThread(threadId);
+        if (!IsUserProjectAdministrator())
+        {
+            if (!IsThreadAssignedToUser(thread, scrText.User.Name))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - only a project administrator or the assigned user may resolve it."
+                );
+
+            // A non-admin resolver must also have edit rights on the conflict verse's chapter.
+            // Resolving (reject/merge) writes the verse; PT9's CommentHtmlBuilder.GetResolutionOptions
+            // gates the resolve controls on CanEdit(book, chapter) for the same reason. Without this,
+            // SaveEdits' EnsureCanEditChapter would temporarily grant the edit and let a user write to
+            // a chapter they are not permitted to edit.
+            VerseRef vref = thread.VerseRef;
+            if (!scrText.Permissions.CanEdit(vref.BookNum, vref.ChapterNum))
+                throw new InvalidOperationException(
+                    $"User '{scrText.User.Name}' cannot resolve conflict thread '{threadId}' - they do not have permission to edit {vref.Book} {vref.ChapterNum}."
+                );
         }
 
-        _commentManager.Value.AddComment(newComment);
-        _commentManager.Value.SaveUser(newComment.User, false);
-        ThreadStatus.MarkThreadRead(existingThread);
+        return thread;
+    }
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment added to thread event");
+    /// <summary>
+    /// True when the conflict's verse can no longer be safely rewritten: the current verse text no
+    /// longer matches the merge-winner text recorded on the conflict comment (the verse was edited
+    /// after the merge), or the verse reference is invalid/unreadable. Mirrors the staleness guard
+    /// in PT9's CommentHtmlBuilder.GetResolutionOptions.
+    /// </summary>
+    private bool IsConflictVerseStale(CommentThread thread)
+    {
+        try
+        {
+            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            VerseRef vref = thread.VerseRef;
+            if (!vref.Valid || vref.IsDefault)
+                return true;
+            // PT9 reads verse-only USFM via Parser.GetVerseUsfmText (CommentHtmlBuilder
+            // .GetResolutionOptions); ScrText.GetText returns the whole chapter, which never
+            // matches the verse-only text recorded on Comment.Verse. A missing verse -> stale.
+            string? currentRaw = scrText.Parser.GetVerseUsfmText(vref, true, true);
+            if (currentRaw == null)
+                return true;
+            // Regularize (PT9 does this to the recorded side) AND trim both sides: the parser emits a
+            // trailing space the recorded Comment.Verse may lack, and a pure leading/trailing
+            // whitespace difference is not a meaningful verse edit, so it must not count as stale.
+            string currentVerseUsfm = UsfmToken.RegularizeSpaces(currentRaw).Trim();
+            string conflictUsfm = UsfmToken.RegularizeSpaces(thread.Comments[0].Verse).Trim();
+            return currentVerseUsfm != conflictUsfm;
+        }
+        catch (Exception e)
+        {
+            // Unreadable text -> treat as stale: reject/merge become unavailable, accept remains.
+            // This runs only after the thread is validated, so an exception here is a genuine read
+            // failure (parser/NRE) - log it so it isn't silently masked as a benign "stale".
+            Console.WriteLine(
+                $"IsConflictVerseStale: treating conflict thread '{thread.Id}' as stale due to an error: {e}"
+            );
+            return true;
+        }
+    }
 
-        return newComment.Id;
+    /// <summary>
+    /// The resolution actions the current user may take on the given conflict thread.
+    /// "none" - not an unresolved verseText conflict, or the user lacks permission (see
+    /// <see cref="VerifyUserCanResolveConflict"/>). "accept" - permitted, but the verse was edited
+    /// after the merge (stale), so only accept (keep current text) is available. "acceptOrReject" -
+    /// permitted and the verse still matches the recorded merge winner. Never throws; this is the
+    /// capability query for <see cref="ResolveConflict"/>.
+    /// </summary>
+    /// <remarks>
+    /// This resolvability policy mirrors a slice of PT9's <c>CommentHtmlBuilder.GetResolutionOptions</c>
+    /// (the canonical version lives in ParatextInternalShared and is not referenceable here).
+    /// Intentional divergences to keep in mind if that upstream method changes: (1) a Team-assigned
+    /// conflict is resolvable by any team member (see <see cref="IsThreadAssignedToUser"/>); (2) there
+    /// is no study-bible-additions gate; (3) staleness regularizes and trims whitespace before
+    /// comparing (see <see cref="IsConflictVerseStale"/>), so a pure leading/trailing whitespace
+    /// change is not treated as stale.
+    /// </remarks>
+    public string GetConflictResolutionOptions(string threadId)
+    {
+        try
+        {
+            // Verify proves the thread exists (throws otherwise) and returns it, so no re-find here.
+            CommentThread thread = VerifyUserCanResolveConflict(threadId);
+            if (IsConflictVerseStale(thread))
+                return "accept";
+            // Merge is offered only when PT9 can actually merge the two sides (independent changes);
+            // GetMergedUsfm returns null for overlapping edits. Same gate PT9's GetResolutionOptions uses.
+            return CommentEditHelper.GetMergedUsfm(thread) != null
+                ? "acceptRejectOrMerge"
+                : "acceptOrReject";
+        }
+        catch (Exception e) when (e is InvalidOperationException or InvalidDataException)
+        {
+            // Expected domain outcomes (not an unresolved verseText conflict, no permission, no
+            // comments) mean "no resolve options" - return quietly, this is a capability query.
+            return "none";
+        }
+        catch (Exception e)
+        {
+            // Unexpected failure (parser, NRE, ...). Still degrade to "none" so the query never
+            // throws, but log so the root cause isn't invisible to logs/telemetry.
+            Console.WriteLine(
+                $"GetConflictResolutionOptions: unexpected error for thread '{threadId}', returning 'none': {e}"
+            );
+            return "none";
+        }
+    }
+
+    /// <summary>
+    /// True when the thread's most-recent assignment lets <paramref name="userName"/> resolve it:
+    /// either the thread is assigned to that user, or it is assigned to the whole team
+    /// (<see cref="CommentThread.teamUser"/>), which counts every team member as an assignee.
+    /// </summary>
+    private static bool IsThreadAssignedToUser(CommentThread thread, string userName)
+    {
+        // Scan comments newest-first for the effective assignment, inspecting the raw per-comment
+        // AssignedUser. We deliberately do NOT reuse CommentThread.AssignedUser: that property
+        // collapses "no assignment" (null) into its unassigned sentinel (unassignedUser = ""), which
+        // is then indistinguishable from an explicit assignment to an empty-named user - so an
+        // unassigned thread could spuriously read as assigned (the non-admin permission tests exercise
+        // exactly this via an empty-named dummy user). The raw per-comment value preserves the null vs
+        // "" distinction; a thread with no assignment must be "not assigned to this user" (false).
+        for (int i = thread.Comments.Count - 1; i >= 0; i--)
+        {
+            string? assigned = thread.Comments[i].AssignedUser;
+            if (assigned != null)
+                // "Team" assigns to everyone, so any team member counts as the assignee; otherwise
+                // the assignment must name this user exactly.
+                return assigned == CommentThread.teamUser
+                    || string.Equals(assigned, userName, StringComparison.Ordinal);
+        }
+        return false;
     }
 
     /// <summary>
@@ -719,31 +1071,43 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool UpdateComment(string commentId, string updatedContentHtml)
     {
-        if (string.IsNullOrEmpty(commentId))
-            return false;
+        lock (_commentMutationLock)
+        {
+            if (string.IsNullOrEmpty(commentId))
+                return false;
 
-        // Find the comment by ID and its parent thread
-        var (commentToUpdate, parentThread) = FindCommentByIdWithThread(commentId);
-        if (commentToUpdate == null || parentThread == null)
-            return false;
+            // Never persist the "content could not be displayed" placeholder back over a note's
+            // real stored content. A note whose content can't be rendered is served to the client as
+            // PlatformCommentConverter.ContentsUnavailablePlaceholder; if the user opens that degraded
+            // note and saves, the frontend sends the placeholder here, which would silently overwrite
+            // the (unrenderable but present) original. Matched on normalized text rather than exact
+            // HTML because the editor may re-serialize the placeholder markup on save. Reject that.
+            if (PlatformCommentConverter.IsContentsUnavailablePlaceholder(updatedContentHtml))
+                return false;
 
-        VerifyUserCanEditOrDeleteComment(commentId);
+            // Find the comment by ID and its parent thread
+            var (commentToUpdate, parentThread) = FindCommentByIdWithThread(commentId);
+            if (commentToUpdate == null || parentThread == null)
+                return false;
 
-        // Update the comment contents from HTML
-        var commentWrapper = new PlatformCommentWrapper(
-            commentToUpdate,
-            new PlatformCommentThreadWrapper(parentThread)
-        );
-        commentWrapper.ContentsHtml = updatedContentHtml;
+            VerifyUserCanEditOrDeleteComment(commentId);
 
-        // Reset the status field to Unspecified when a comment is edited
-        commentToUpdate.Status = NoteStatus.Unspecified;
+            // Update the comment contents from HTML
+            var commentWrapper = new PlatformCommentWrapper(
+                commentToUpdate,
+                new PlatformCommentThreadWrapper(parentThread)
+            );
+            commentWrapper.ContentsHtml = updatedContentHtml;
 
-        _commentManager.Value.SaveUser(commentToUpdate.User, false);
+            // Reset the status field to Unspecified when a comment is edited
+            commentToUpdate.Status = NoteStatus.Unspecified;
 
-        SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
+            _commentManager.Value.SaveUser(commentToUpdate.User, false);
 
-        return true;
+            SendDataUpdateEvent(AllCommentDataTypes, "comment updated");
+
+            return true;
+        }
     }
 
     public void SetIsCommentThreadRead(string threadId, bool markRead)
@@ -1360,6 +1724,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"{ProjectSettingsNames.PB_IS_PUBLISHED} is a read-only computed setting."
             );
 
+        // Figure out which setting name to use (resolved early so the admin gate below can use it
+        // before the IsValid network round-trip — unauthorized writes are rejected immediately).
+        var paratextSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
+            ?? settingName;
+
+        // The referenced-projects-and-resources list carries the admin-only isResourceShownByDefault
+        // flag (the shared shown-by-default default for the Scripture Text Grid), so its writes are
+        // gated to project administrators server-side (the UI-facing query is
+        // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
+        // shown-by-default and keep their pre-existing ungated behavior. USER-scope writes (user
+        // lists, overlay, init) are intentionally UNGATED.
+        if (
+            paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
+            && !IsUserProjectAdministrator()
+        )
+            throw new UnauthorizedAccessException(
+                $"Only project administrators may write '{settingName}'."
+            );
+
         // If there is no Paratext setting for the name given, we'll create one lower down
         object? currentValue = null;
         try
@@ -1371,11 +1755,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Make sure the value we're planning to set is valid
         if (!ProjectSettingsService.IsValid(PapiClient, value, currentValue, settingName, ""))
             throw new InvalidDataException($"Validation failed for {settingName}");
-
-        // Figure out which setting name to use
-        var paratextSettingName =
-            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
-            ?? settingName;
 
         // Text direction comes from the project's ldml file, not from Settings.xml
         // We may add an LDML projectInterface one day where you can edit the LDML in the UI
@@ -1459,13 +1838,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                                 ?? throw new InvalidDataException(
                                     $"Value for {settingName} could not be converted to a string"
                                 );
-                            var list =
+                            var parsedList =
                                 serialized.DeserializeFromJson<ResourceReferenceList>()
                                 ?? throw new InvalidDataException(
                                     $"Value for {settingName} could not be deserialized as a ResourceReferenceList"
                                 );
-                            value =
-                                $"{ResourceReferenceList.CurrentFormatVersion} {list.SerializeToJson()}";
+                            // Preserve the client-provided parsedList.DataVersion rather than
+                            // stamping CurrentDataVersion here — deliberate forward-compat: stamping
+                            // would silently minor-downgrade a newer body version from a future client.
+                            scrText.Settings.SetSetting(
+                                paratextSettingName,
+                                $"{ResourceReferenceList.CurrentFormatVersion} {parsedList.SerializeToJson()}"
+                            );
+                            scrText.Settings.Save(false);
+                            // Return here; SendDataUpdateEvent fires after the lock releases below.
+                            return;
                         }
                         else if (
                             ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName)
@@ -1523,6 +1910,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ?? throw new InvalidDataException($"Default value for {settingName} was null");
         return SetProjectSetting(settingName, defaultValue);
     }
+
+    /// <summary>
+    /// Returns the (discriminant, Id) match key for a Bible-text reference
+    /// (<see cref="ProjectReference"/> = "project", <see cref="DblResourceReference"/> =
+    /// "dblResource"); <c>null</c> for all other reference types.
+    /// </summary>
+    private static (string type, string id)? TryGetBibleTextKey(ResourceReference item) =>
+        item switch
+        {
+            ProjectReference p => ("project", p.Id),
+            DblResourceReference d => ("dblResource", d.Id),
+            _ => null,
+        };
 
     /// <summary>
     /// Determines if the current user can write the project settings for "text connections"
@@ -1688,6 +2088,120 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
+    public Dictionary<string, bool> GetShownByDefaultOverlay(object? param = null)
+    {
+        var (schemaVersion, content) = GetUserProjectSettings().GetSetting(OverlaySettingName);
+        if (content == null || string.IsNullOrEmpty(content.Value))
+            return [];
+        // Reject an overlay written by a future/incompatible build rather than silently
+        // deserializing it into the current shape (mirrors ValidateUserSettingVersion on the
+        // S/R'd lists). Absent/empty overlays above still mean "nothing stored, proceed".
+        ValidateOverlaySchemaVersion(schemaVersion);
+        return content.Value.DeserializeFromJson<Dictionary<string, bool>>() ?? [];
+    }
+
+    public bool SetShownByDefaultOverlay(object? value)
+    {
+        string? json = value?.ToString();
+        Dictionary<string, bool>? map;
+        try
+        {
+            // Deserialize inside try/catch so a wrong-SHAPE value (JSON array/number/string) surfaces
+            // the same InvalidDataException as a null/empty value, rather than leaking a raw
+            // JsonException. System.Text.Json throws for a shape mismatch and returns null only for a
+            // literal JSON null, so both failure modes must be funneled to one contract.
+            map = string.IsNullOrEmpty(json)
+                ? null
+                : json.DeserializeFromJson<Dictionary<string, bool>>();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException(
+                "ShownByDefaultOverlay value must be a JSON object map",
+                ex
+            );
+        }
+        if (map is null)
+            throw new InvalidDataException("ShownByDefaultOverlay value must be a JSON object map");
+        WriteOverlay(map);
+        SendDataUpdateEvent(
+            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
+            "shown-by-default overlay update event"
+        );
+        return true;
+    }
+
+    public bool ResetShownByDefaultOverlay()
+    {
+        // Full reset: forget the overlay AND the initialized marker so the next first-open re-inits
+        // from the current admin defaults.
+        GetUserProjectSettings().RemoveSetting(OverlaySettingName);
+        GetUserProjectSettings().RemoveSetting(OverlayInitializedMarkerName);
+        SendDataUpdateEvent(
+            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
+            "shown-by-default overlay reset event"
+        );
+        return true;
+    }
+
+    /// <summary>
+    /// First-open initialization of the current user's shown-by-default overlay for this project.
+    /// For each Bible-text reference in <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> whose
+    /// <c>IsResourceShownByDefault</c> is set, records overlay[resourceId] = that value. Idempotent:
+    /// a per-user-per-project marker prevents re-initialization, so later opens (and user un-checks)
+    /// are preserved. Returns <c>false</c> when already initialized. Model texts do NOT participate
+    /// in shown-by-default and are intentionally not read here.
+    /// </summary>
+    public bool InitializeShownByDefaultOverlay(object? param = null)
+    {
+        var settings = GetUserProjectSettings();
+        var (_, marker) = settings.GetSetting(OverlayInitializedMarkerName);
+        if (marker != null)
+            return false;
+
+        var overlay = GetShownByDefaultOverlay();
+        if (
+            GetProjectSetting(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)
+            is ResourceReferenceList list
+        )
+            foreach (var item in list.Items)
+                if (
+                    item.IsResourceShownByDefault is bool shown
+                    && TryGetBibleTextKey(item) is (_, string id)
+                )
+                    // Overlay is keyed by resource id only (matching the TS `{ [id]: boolean }`
+                    // shape), while Bible-text refs are dedup-keyed by (type, id). Safe because
+                    // project ids are 40-char hex and DBL ids 48-char hex, so ids never collide
+                    // across the two types; revisit this if a future ref type reuses id strings.
+                    overlay[id] = shown;
+
+        WriteOverlay(overlay);
+        settings.SetSetting(
+            OverlayInitializedMarkerName,
+            OverlaySchemaVersion,
+            new XElement("Items", "true")
+        );
+        SendDataUpdateEvent(
+            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
+            "shown-by-default overlay first-open init event"
+        );
+        return true;
+    }
+
+    // The overlay is a flat { id -> bool } map, so it is stored as a JSON blob inside <Items> rather
+    // than as the structured XML the sibling user-list settings use (ResourceReferenceList.ToXml).
+    // Structured XML earns its keep for the resource-reference lists (nested, typed items); for a
+    // flat map it would add ceremony without benefit, and JSON round-trips the map directly.
+    private void WriteOverlay(Dictionary<string, bool> map)
+    {
+        GetUserProjectSettings()
+            .SetSetting(
+                OverlaySettingName,
+                OverlaySchemaVersion,
+                new XElement("Items", map.SerializeToJson())
+            );
+    }
+
     private UserProjectSettings GetUserProjectSettings()
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -1710,6 +2224,26 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new InvalidDataException(
                 $"User setting '{settingName}' has incompatible major version {parsed.Major}; "
                     + $"expected {ResourceReferenceList.CurrentMajorVersion}"
+            );
+    }
+
+    /// <summary>
+    /// Validates the schema version stored alongside the shown-by-default overlay. The overlay has
+    /// its own version line (<see cref="OverlaySchemaVersion"/>), independent of the S/R'd resource
+    /// lists, so it is validated against that rather than
+    /// <see cref="ResourceReferenceList.CurrentMajorVersion"/>.
+    /// </summary>
+    private static void ValidateOverlaySchemaVersion(string? schemaVersion)
+    {
+        int expectedMajor = new Version(OverlaySchemaVersion).Major;
+        if (!Version.TryParse(schemaVersion, out Version? parsed))
+            throw new InvalidDataException(
+                $"Shown-by-default overlay has invalid version format: '{schemaVersion}'"
+            );
+        if (parsed.Major != expectedMajor)
+            throw new InvalidDataException(
+                $"Shown-by-default overlay has incompatible major version {parsed.Major}; "
+                    + $"expected {expectedMajor}"
             );
     }
 

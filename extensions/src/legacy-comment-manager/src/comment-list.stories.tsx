@@ -5,16 +5,18 @@ import { ReactElement, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../.storybook/story.utils';
 import {
-  CommentFilter,
   CommentListPanel,
   CommentListPanelProps,
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS,
-  FILTER_UNREAD_ASSIGNED,
-  FILTER_UNRESOLVED_ASSIGNED,
+} from './comment-list.component';
+import {
+  CommentFilters,
+  DEFAULT_COMMENT_FILTERS,
   ScopeFilter,
   SCOPE_FILTER_CURRENT_CHAPTER,
+  TEAM_ASSIGNED_USER,
   UNFILTERED,
-} from './comment-list.component';
+} from './comment-list-filters.model';
 
 /**
  * `CommentListPanel` is the presentational half of the legacy comment-list web view: a comment /
@@ -122,11 +124,11 @@ const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
 /**
  * Mirrors the web view's comment-thread selector: the panel renders already-filtered threads, so
  * here we derive the visible threads from the toolbar filters the same way the web view's PDP query
- * would (unresolved/unread + assigned-to-me, and the current-chapter scope).
+ * would — the orthogonal resolved/read/type/assignment axes AND'd with the current-chapter scope.
  */
 function filterThreads(
   threads: LegacyCommentThread[],
-  commentFilter: CommentFilter,
+  filters: CommentFilters,
   scopeFilter: ScopeFilter,
   currentUser: string,
 ): LegacyCommentThread[] {
@@ -135,12 +137,18 @@ function filterThreads(
       const chapterPrefix = `${STORY_SCR_REF.book} ${STORY_SCR_REF.chapterNum}:`;
       if (!thread.verseRef?.startsWith(chapterPrefix)) return false;
     }
-    if (commentFilter === FILTER_UNRESOLVED_ASSIGNED) {
-      return thread.status === 'Todo' && thread.assignedUser === currentUser;
-    }
-    if (commentFilter === FILTER_UNREAD_ASSIGNED) {
-      return !thread.isRead && thread.assignedUser === currentUser;
-    }
+    if (filters.resolved === 'unresolved' && thread.status === 'Resolved') return false;
+    if (filters.resolved === 'resolved' && thread.status !== 'Resolved') return false;
+    if (filters.read === 'unread' && thread.isRead) return false;
+    if (filters.read === 'read' && !thread.isRead) return false;
+    if (filters.type === 'conflicts' && thread.type !== 'Conflict') return false;
+    if (filters.type === 'comments' && thread.type !== 'Normal') return false;
+    if (filters.assignment === 'assigned-to-me' && thread.assignedUser !== currentUser)
+      return false;
+    if (filters.assignment === 'team' && thread.assignedUser !== TEAM_ASSIGNED_USER) return false;
+    // "Unassigned" = no assignee. Sample threads omit `assignedUser` (undefined); real threads carry
+    // the empty-string UNASSIGNED_USER sentinel. Both are falsy.
+    if (filters.assignment === 'unassigned' && thread.assignedUser) return false;
     return true;
   });
 }
@@ -159,7 +167,8 @@ type Story = StoryObj<typeof CommentListPanel>;
 type DecoratorConfig = {
   isLoading?: boolean;
   threads?: LegacyCommentThread[];
-  initialCommentFilter?: CommentFilter;
+  initialFilters?: Partial<CommentFilters>;
+  hasEditorContext?: boolean;
 };
 
 /**
@@ -171,16 +180,17 @@ function createDecorator(config: DecoratorConfig) {
   return function CommentListPanelDecorator(
     Story: (update?: { args: CommentListPanelProps }) => ReactElement,
   ) {
-    const [commentFilter, setCommentFilter] = useState<CommentFilter>(
-      config.initialCommentFilter ?? UNFILTERED,
-    );
+    const [filters, setFilters] = useState<CommentFilters>({
+      ...DEFAULT_COMMENT_FILTERS,
+      ...config.initialFilters,
+    });
     const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(UNFILTERED);
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(undefined);
     const [threads, setThreads] = useState<LegacyCommentThread[]>(config.threads ?? sampleThreads);
 
     // The panel renders already-filtered threads (the web view filters via its query), so derive the
     // visible list from the toolbar filters here.
-    const displayedThreads = filterThreads(threads, commentFilter, scopeFilter, CURRENT_USER);
+    const displayedThreads = filterThreads(threads, filters, scopeFilter, CURRENT_USER);
 
     return (
       <div className="tw:h-screen">
@@ -190,10 +200,11 @@ function createDecorator(config: DecoratorConfig) {
             isLoading: config.isLoading ?? false,
             threads: displayedThreads,
             currentUser: CURRENT_USER,
-            commentFilter,
-            onCommentFilterChange: setCommentFilter,
+            filters,
+            onFiltersChange: setFilters,
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
+            hasEditorContext: config.hasEditorContext,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -291,5 +302,13 @@ export const Empty: Story = {
 
 /** No comments match the active filter — shows the "no comments match filter" message. */
 export const EmptyFiltered: Story = {
-  decorators: [createDecorator({ threads: [], initialCommentFilter: 'unread-assigned-to-me' })],
+  decorators: [createDecorator({ threads: [], initialFilters: { type: 'conflicts' } })],
+};
+
+/**
+ * Opened without an editor (e.g. a cross-project open from the Send/Receive results link): the
+ * scope dropdown omits "current chapter" because there is no editor to derive the chapter from.
+ */
+export const NoEditorContext: Story = {
+  decorators: [createDecorator({ hasEditorContext: false })],
 };

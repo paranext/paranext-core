@@ -7,10 +7,10 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -70,6 +70,19 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
 	[localizedKey in (typeof BOOK_CHAPTER_CONTROL_STRING_KEYS)[number]]?: string;
+};
+/**
+ * Imperative handle for controlling a {@link BookChapterControl} from outside React — e.g. the
+ * `platform.openBookChapterControl` command opening it in response to Ctrl+B
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export type BookChapterControlHandle = {
+	/**
+	 * Opens the reference dropdown and focuses its search input, ready for typing. No-op while the
+	 * control is disabled.
+	 */
+	open: () => void;
 };
 export type BookChapterControlProps = {
 	/** The current scripture reference */
@@ -164,6 +177,18 @@ export type BookChapterControlProps = {
 	 * keep the popover anchored to the trigger's leading edge rather than spilling off-screen.
 	 */
 	align?: React$1.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>["align"];
+	/**
+	 * Ref that receives a {@link BookChapterControlHandle} for imperative control
+	 *
+	 * @experimental This property is unstable and may change shape or disappear without notice
+	 */
+	ref?: React$1.Ref<BookChapterControlHandle>;
+	/**
+	 * When true, the control is disabled (e.g. no target to navigate): the trigger button cannot be
+	 * clicked, an already-open dropdown closes, and the imperative
+	 * {@link BookChapterControlHandle.open} is a no-op
+	 */
+	disabled?: boolean;
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -173,7 +198,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -329,6 +354,90 @@ export interface CommentEditorProps {
  * @param CommentEditorProps - The properties for the comment editor component
  */
 export function CommentEditor({ assignableUsers, onSave, onClose, localizedStrings, initialAssignedUser, }: CommentEditorProps): import("react/jsx-runtime").JSX.Element;
+type ConflictCardActions = ConflictResolutionOptions | "loading";
+/**
+ * The resolution a user picks for a conflict: keep the accepted (winning) side, take the rejected
+ * (losing) side, or merge (combine) both sides.
+ */
+export type ConflictResolution = "accept" | "reject" | "merge";
+/**
+ * How an already-resolved conflict was resolved, derived from the resolution comment's
+ * `conflictResolutionAction`:
+ *
+ * - `'accept'`: resolved by accepting (no text was written); the accepted side stands.
+ * - `'reject'`: resolved by rejecting (the rejected side was written into the verse).
+ * - `'merged'`: resolved by combining both changes (PT10's "Combine both changes" option, or a PT9
+ *   three-way merge). The card shows the merged verse text (`mergedText`); the outcome itself is
+ *   stated in prose by CommentItem's resolution-reply banner, not on the card.
+ *
+ * Distinct from {@link ConflictResolution} (the live accept/reject choice) because it adds the
+ * `'merged'` legacy outcome and is only meaningful for a conflict that is already resolved.
+ */
+export type ConflictResolutionOutcome = "accept" | "reject" | "merged";
+/**
+ * Localization keys used by the ConflictNoteCard. Pass into the useLocalizedStrings hook (in the
+ * consuming extension) and forward the result via the localizedStrings prop.
+ */
+export declare const CONFLICT_NOTE_STRING_KEYS: readonly [
+	"%conflict_note_description_verseText%",
+	"%conflict_note_choose_aria_label%",
+	"%conflict_note_stale_notice%",
+	"%conflict_note_resolve_failed%",
+	"%conflict_note_choose_prompt%",
+	"%conflict_note_option_keep_current%",
+	"%conflict_note_option_use_other%",
+	"%conflict_note_option_combine%",
+	"%conflict_note_save_and_resolve%",
+	"%conflict_note_save_disabled_tooltip%",
+	"%conflict_note_save_warning%",
+	"%conflict_note_no_result%",
+	"%conflict_note_outcome_used_other%",
+	"%conflict_note_outcome_combined%",
+	"%conflict_note_summary_unresolved%",
+	"%conflict_note_summary_resolved_kept_current%",
+	"%conflict_note_summary_resolved_used_other%",
+	"%conflict_note_summary_resolved_combined%"
+];
+/** Props for the ConflictNoteCard component */
+export interface ConflictNoteCardProps {
+	/**
+	 * The conflict comment. Reads rejected/accepted/result/rejectedResultText + conflictType; falls
+	 * back to contents.
+	 */
+	comment: LegacyComment;
+	/** Localized strings for the component */
+	localizedStrings: LanguageStrings;
+	/**
+	 * Which resolution actions are available (default 'acceptOrReject'). 'loading' shows a skeleton
+	 * while the options are being fetched; 'none' hides the selector and Resolve button entirely
+	 * (read-only regions); 'accept' disables the Reject option with a stale-verse explanation
+	 * tooltip. The card manages its own selection state (uncontrolled, default 'accept').
+	 */
+	availableActions?: ConflictCardActions;
+	/**
+	 * Which way an already-resolved conflict was resolved. Used ONLY when `availableActions` is
+	 * `'none'` (read-only): it makes the Result region show the text that was actually applied
+	 * ('accept' -> resultText, 'reject' -> rejectedResultText, 'merged' -> mergedText) instead of the
+	 * live selector state. Ignored while the conflict is still resolvable.
+	 */
+	resolvedResolution?: ConflictResolutionOutcome;
+	/** Called when the user clicks Resolve, with the currently selected resolution. */
+	onResolve?: (resolution: ConflictResolution) => void;
+	/** Disables the selector and Resolve button while a resolve call is in flight. */
+	isResolving?: boolean;
+}
+interface ConflictResolutionCallbacks {
+	/**
+	 * Applies a conflict resolution via the comments data provider's resolveConflict. Returns true on
+	 * success, false on failure (the card re-enables its controls).
+	 */
+	resolve: (threadId: string, resolution: ConflictResolution) => Promise<boolean>;
+	/**
+	 * Returns which resolution actions the current user may take on a conflict thread (the
+	 * getConflictResolutionOptions capability). Treat missing as 'none'.
+	 */
+	getOptions: (threadId: string) => Promise<ConflictResolutionOptions>;
+}
 /** Options for adding a comment to a thread */
 export type AddCommentToThreadOptions = {
 	/** The ID of the thread to add the comment to */
@@ -449,63 +558,32 @@ export interface CommentListProps {
 	canUserEditOrDeleteCommentCallback?: (commentId: string) => Promise<boolean>;
 	/** Callback when the user clicks a verse reference in a comment thread. */
 	onVerseRefClick?: (thread: LegacyCommentThread) => void;
+	/**
+	 * Conflict-resolution callbacks (resolve + getOptions). Conflict threads render a read-only card
+	 * when this is not provided.
+	 */
+	conflictResolution?: ConflictResolutionCallbacks;
 }
 /**
  * Component for rendering a list of comment threads
  *
  * @param CommentListProps Props for the CommentList component
  */
-export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
+export function CommentList({ className, classNameForVerseText, threads, currentUser, localizedStrings, handleAddCommentToThread, handleUpdateComment, handleDeleteComment, handleReadStatusChange, assignableUsers, canUserAddCommentToThread, canUserAssignThreadCallback, canUserResolveThreadCallback, canUserEditOrDeleteCommentCallback, selectedThreadId: externalSelectedThreadId, onSelectedThreadChange, onVerseRefClick, conflictResolution, }: CommentListProps): import("react/jsx-runtime").JSX.Element;
 /**
- * The resolution a user picks for a conflict: keep the accepted (winning) side or take the rejected
- * (losing) side.
+ * Presentational card body for a verseText merge conflict. Presents the resolution as a set of
+ * clickable option cards — "Keep the current text" (accept, preselected), "Use the other change"
+ * (reject), and, when the two edits are independent, "Combine both changes" (merge) — each showing
+ * its inline red/green diff. Clicking anywhere on an option card selects it; the cards keep radio
+ * semantics (a labelled radio group with role=radio / aria-checked and arrow-key navigation) via a
+ * visible radio inline with each card's title. A Save-and-resolve button commits the choice.
+ * Handles the stale state (accept stays enabled and selected; reject is disabled and carries a
+ * read-only explanation; Save stays present but disabled) and the already-resolved read-only state
+ * (just the chosen outcome's Result text — the outcome itself is stated in prose by CommentItem's
+ * resolution-reply banner). Falls back to rendering the raw note contents for any non-verseText
+ * conflict.
  */
-export type ConflictResolution = "accept" | "reject";
-/**
- * Object containing all keys used for localization in the ConflictNoteCard component. If you're
- * using this component in an extension, you can pass it into the useLocalizedStrings hook to easily
- * obtain the localized strings and pass them into the localizedStrings prop of this component.
- */
-export declare const CONFLICT_NOTE_STRING_KEYS: readonly [
-	"%conflictNote_description_verseText%",
-	"%conflictNote_chooseLabel%",
-	"%conflictNote_chooseAriaLabel%",
-	"%conflictNote_accept%",
-	"%conflictNote_reject%",
-	"%conflictNote_rejectedLabel%",
-	"%conflictNote_acceptedLabel%",
-	"%conflictNote_resultLabel%",
-	"%conflictNote_resultUnavailable%"
-];
-/** Type definition for the localized strings used in the ConflictNoteCard component */
-export type ConflictNoteCardLocalizedStrings = {
-	[localizedKey in (typeof CONFLICT_NOTE_STRING_KEYS)[number]]?: string;
-};
-/** Props for the ConflictNoteCard component */
-export interface ConflictNoteCardProps {
-	/**
-	 * The conflict comment. Reads rejected/accepted/result/rejectedResultText + conflictType; falls
-	 * back to contents.
-	 */
-	comment: LegacyComment;
-	/** Optional localized strings for the component; English fallbacks apply when omitted */
-	localizedStrings?: ConflictNoteCardLocalizedStrings;
-	/**
-	 * Controlled selected resolution. When omitted, the card manages its own state (default
-	 * 'accept').
-	 */
-	selectedResolution?: ConflictResolution;
-	/** Called when the user changes the Accept/Reject selection */
-	onResolutionChange?: (resolution: ConflictResolution) => void;
-	/** Whether the current user may accept/reject; disables the selector when false */
-	canAcceptReject?: boolean;
-}
-/**
- * Presentational card body for a verseText merge conflict: an Accept/Reject selector, the Rejected
- * and Accepted diff regions, and a read-only Result preview that tracks the selection. Falls back
- * to rendering the raw note contents for any non-verseText conflict.
- */
-export declare function ConflictNoteCard({ comment, localizedStrings, selectedResolution, onResolutionChange, canAcceptReject, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
+export declare function ConflictNoteCard({ comment, localizedStrings, availableActions, resolvedResolution, onResolve, isResolving, }: ConflictNoteCardProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -1619,9 +1697,11 @@ export type ScrollGroupSelectorProps = {
 	className?: string;
 	/** Optional id for the select element */
 	id?: string;
+	/** When true, the selector is disabled */
+	disabled?: boolean;
 };
 /** Selector component for choosing a scroll group */
-export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, id, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, id, disabled, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
@@ -2266,6 +2346,24 @@ interface ResultsCardProps {
  * state, dropdown menus, and expandable content.
  */
 export declare function ResultsCard({ cardKey, isSelected, onSelect, isDenied, isHidden, className, children, selectedButtons, hoverButtons, dropdownContent, additionalContent, accentColor, showDropdownOnHover, }: ResultsCardProps): import("react/jsx-runtime").JSX.Element;
+/** Props for {@link EmptyState}. */
+export type EmptyStateProps = {
+	/** Localized message explaining why the region is empty and, ideally, what the user can do next. */
+	message: string;
+	/** Optional `data-testid` for locating the empty state (e.g. from an e2e test). */
+	id?: string;
+	/**
+	 * Optional class name appended to the message element so the caller controls layout (centering,
+	 * spacing, emphasis).
+	 */
+	className?: string;
+};
+/**
+ * A presentational empty-state message for a list, grid, or panel that currently has nothing to
+ * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
+ * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ */
+export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Search query for the search bar */
@@ -3330,8 +3428,19 @@ export declare const Z_INDEX_MODAL = 500;
  *   described above
  */
 export declare function cn(...inputs: ClassValue[]): string;
+/**
+ * Whether the app is running on macOS, based on the user agent. Used to pick platform-appropriate
+ * keyboard shortcut behavior and display hints (e.g. `⌘` vs `Ctrl`)
+ */
+export declare function isMacOs(): boolean;
+/**
+ * Whether the app is running on Windows, based on the user agent. Used to pick platform-appropriate
+ * keyboard shortcut behavior and display hints (e.g. modifier ordering)
+ */
+export declare function isWindows(): boolean;
 
 export {
+	ConflictResolutionOptions,
 	TabNavigationContentSearch as NavigationContentSearch,
 	Toaster as Sonner,
 	sonner,

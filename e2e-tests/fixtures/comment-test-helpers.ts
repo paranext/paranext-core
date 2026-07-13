@@ -41,10 +41,16 @@ import { addUsersToProject, sendPapiRequestOnce, waitForPapiMethodRegistered } f
 /** Source WEB project bundled with the c-sharp assets */
 const WEB_PROJECT_ASSETS_DIR = path.resolve(__dirname, '../../c-sharp/assets/WEB');
 
-/** Platform.Bible's Paratext 9 projects root (matches LocalParatextProjects constructor) */
+/**
+ * Platform.Bible's Paratext 9 projects root. Must match the folder the app scans at startup —
+ * `LocalParatextProjects`'s constructor hardcodes `~/.platform.bible/projects/Paratext 9 Projects`
+ * (c-sharp/Projects/LocalParatextProjects.cs), where `UserProfile` === `os.homedir()`. The app
+ * scans this folder exactly once at startup (there is no on-demand rescan), so a test project
+ * written here is discoverable only if it exists before the app launches.
+ */
 const PARATEXT_PROJECTS_ROOT = path.join(
   os.homedir(),
-  '.{{ productInfo.name }}',
+  '.platform.bible',
   'projects',
   'Paratext 9 Projects',
 );
@@ -214,7 +220,7 @@ export async function createCommentThreads(
  * 1. Waits for the dock layout's `loadLayout()` to complete (signalled by the first iframe — the Home
  *    webview — appearing). This prevents a race where `addWebViewToDock` runs before
  *    `loadLayout(testLayout)`, causing `loadLayout` to wipe the newly added editor tab.
- * 2. Calls `platformScriptureEditor.openResourceViewer` to open the scripture editor and get its
+ * 2. Calls `platformScriptureEditor.openScriptureEditor` to open the scripture editor and get its
  *    webViewId, then immediately calls `legacyCommentManager.openCommentList` with that webViewId.
  *    Both calls are retried together up to 5 times.
  *
@@ -231,7 +237,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
   //
   //    Why: `registerDockLayout` (called from the PlatformDockLayout `useEffect`) calls
   //    `loadLayout()` asynchronously. `loadLayout` calls `getDockLayout()` (an already-resolved
-  //    promise), so its continuation is queued as a *microtask*. If `openResourceViewer` also
+  //    promise), so its continuation is queued as a *microtask*. If `openScriptureEditor` also
   //    resolves `getDockLayout()` around the same time — which happens when the PDP is cached and
   //    the extension-host round-trip is fast — `addWebViewToDock` can run *before* `loadLayout`'s
   //    `dockLayout.loadLayout(testLayout)` does. Then `loadLayout` wipes the newly added editor
@@ -243,7 +249,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
 
   // 2. Pre-register both commands so individual PAPI calls don't time out while waiting.
   await waitForPapiMethodRegistered(
-    'command:platformScriptureEditor.openResourceViewer',
+    'command:platformScriptureEditor.openScriptureEditor',
     DEFAULT_WEBSOCKET_PORT,
     30_000,
   );
@@ -277,7 +283,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
     // ── Phase A: open the editor and wait for its iframe ──────────────────────
 
     const editorId = await sendPapiRequestOnce<string | undefined>(
-      'command:platformScriptureEditor.openResourceViewer',
+      'command:platformScriptureEditor.openScriptureEditor',
       [project.projectId],
       DEFAULT_WEBSOCKET_PORT,
       60_000,
@@ -285,7 +291,7 @@ export async function openCommentList(mainPage: Page, project: CommentTestProjec
 
     if (!editorId) {
       console.warn(
-        `[openCommentList] Attempt ${attempt + 1}: openResourceViewer returned no webViewId`,
+        `[openCommentList] Attempt ${attempt + 1}: openScriptureEditor returned no webViewId`,
       );
       continue;
     }

@@ -112,6 +112,9 @@ export type {
   ProjectSettingValidator,
 } from '@shared/services/project-settings.service-model';
 export type {
+  ReferenceHistory,
+  ReferenceHistoryEntry,
+  ReferenceHistoryUpdateInfo,
   ScrollGroupScrRef,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';

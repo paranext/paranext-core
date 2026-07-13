@@ -74,6 +74,11 @@ declare module 'shared/services/scroll-group.service-model' {
    */
   export const EVENT_NAME_ON_DID_CHANGE_VERSIFICATION: 'scrollGroup:onDidChangeVersification';
   /**
+   * Name to use when creating a network event that is fired when a scroll group's reference history
+   * changes
+   */
+  export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY: 'scrollGroup:onDidChangeReferenceHistory';
+  /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
@@ -93,6 +98,45 @@ declare module 'shared/services/scroll-group.service-model' {
     scrRef: SerializedVerseRef;
     scrollGroupId: ScrollGroupId;
     sourceProjectId?: string;
+  };
+  /**
+   * One visited location in a scroll group's reference history
+   *
+   * @experimental
+   */
+  export type ReferenceHistoryEntry = {
+    /** The visited Scripture reference */
+    scrRef: SerializedVerseRef;
+    /**
+     * Project whose versification `scrRef` is expressed in. `undefined` = unknown. Preserved so
+     * navigating back restores the reference in its original versification context
+     */
+    sourceProjectId?: string;
+  };
+  /**
+   * Back/forward reference history for one scroll group. Session-only (in-memory; resets on app
+   * restart)
+   *
+   * @experimental
+   */
+  export type ReferenceHistory = {
+    /** The current location, or `undefined` when nothing has been recorded yet */
+    current: ReferenceHistoryEntry | undefined;
+    /** Entries strictly behind the current location, nearest first (offsets -1, -2, ...) */
+    back: ReferenceHistoryEntry[];
+    /** Entries strictly ahead of the current location, nearest first (offsets +1, +2, ...) */
+    forward: ReferenceHistoryEntry[];
+  };
+  /**
+   * Information about a change to a scroll group's reference history
+   *
+   * @experimental
+   */
+  export type ReferenceHistoryUpdateInfo = {
+    /** The scroll group whose history changed */
+    scrollGroupId: ScrollGroupId;
+    /** The new history state (a copy, safe to keep) */
+    history: ReferenceHistory;
   };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
@@ -141,6 +185,24 @@ declare module 'shared/services/scroll-group.service-model' {
       scrollGroupId: ScrollGroupId | undefined,
       projectId: string,
     ): Promise<SerializedVerseRef>;
+    /**
+     * Get a copy of the reference history for the provided scroll group
+     *
+     * @param scrollGroupId Scroll group whose history to get
+     * @returns Copy of the scroll group's reference history
+     * @experimental
+     */
+    getReferenceHistory(scrollGroupId: ScrollGroupId): Promise<ReferenceHistory>;
+    /**
+     * Navigate within the reference history of the provided scroll group, browser-`history.go` style:
+     * negative offset = back that many steps, positive = forward that many steps.
+     *
+     * @param scrollGroupId Scroll group whose history to navigate
+     * @param offset Signed number of steps. -1 = back one, +1 = forward one
+     * @returns `true` if navigation happened; `false` if the offset was 0 or out of range
+     * @experimental
+     */
+    navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
   }
   /**
    *
@@ -154,6 +216,12 @@ declare module 'shared/services/scroll-group.service-model' {
      * versification should call {@link getScrRefForProject} for that project.
      */
     onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+    /**
+     * Event that emits when a scroll group's reference history changes
+     *
+     * @experimental
+     */
+    onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
   }
 }
 declare module 'shared/models/web-view.model' {
@@ -443,6 +511,22 @@ declare module 'shared/models/web-view.model' {
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /**
+   * The `webViewType` of the Scripture editor web views provided by the `platform-scripture-editor`
+   * extension. Must match `SCRIPTURE_EDITOR_WEBVIEW_TYPE` in `platform-scripture-editor.utils.ts` —
+   * core code cannot import extension source, so the value is mirrored here as the single core-side
+   * copy.
+   */
+  export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+  /**
+   * Finds the first open Scripture editor web view that has a project (first match in the given
+   * order, which is dock-layout order for the open web view lists) — the shared "current project
+   * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
+   * never disagree on which editor is primary.
+   */
+  export function findFirstEditorWebViewDefinition(
+    definitions: SavedWebViewDefinition[],
+  ): SavedWebViewDefinition | undefined;
+  /**
    * The keys of properties on a WebViewDefinition that may be updated when that webview is already
    * displayed
    */
@@ -519,7 +603,7 @@ declare module 'shared/models/web-view.model' {
    *
    * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
    *
-   * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+   * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
    *
    * - `scrRef`: The current value for the Scripture reference this web view is on
    * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -527,11 +611,16 @@ declare module 'shared/models/web-view.model' {
    * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
    *   synced to a scroll group, this is `undefined`
    * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+   * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+   *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+   *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+   *   the active Scripture reference
    *
    * _＠example_
    *
    * ```typescript
-   * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+   * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+   *   useWebViewScrollGroupScrRef();
    * ```
    */
   export type UseWebViewScrollGroupScrRefHook = () => [
@@ -539,6 +628,7 @@ declare module 'shared/models/web-view.model' {
     setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+    sourceProjectId: string | undefined,
   ];
   /**
    *
@@ -620,7 +710,7 @@ declare module 'shared/models/web-view.model' {
      *
      * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
      *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
      *
      * - `scrRef`: The current value for the Scripture reference this web view is on
      * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -628,11 +718,16 @@ declare module 'shared/models/web-view.model' {
      * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
      *   synced to a scroll group, this is `undefined`
      * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+     * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+     *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+     *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+     *   the active Scripture reference
      *
      * _＠example_
      *
      * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+     *   useWebViewScrollGroupScrRef();
      * ```
      */
     useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
@@ -781,7 +876,7 @@ declare module 'shared/global-this.model' {
      *
      * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
      *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
      *
      * - `scrRef`: The current value for the Scripture reference this web view is on
      * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
@@ -789,11 +884,16 @@ declare module 'shared/global-this.model' {
      * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
      *   synced to a scroll group, this is `undefined`
      * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+     * - `sourceProjectId`: The id of the project that last set this web view's scroll group reference
+     *   (the source frame of `scrRef`); this web view's own project when not synced to a scroll group.
+     *   `undefined` when unknown. Useful for a web view that must follow whichever project is driving
+     *   the active Scripture reference
      *
      * _＠example_
      *
      * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId] =
+     *   useWebViewScrollGroupScrRef();
      * ```
      */
     var useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
@@ -3200,6 +3300,8 @@ declare module 'shared/models/docking-framework.model' {
     /** Data needed to load the tab */
     data?: unknown;
   };
+  /** {@link SavedTabInfo.tabType} for web view tabs. A web view tab's id matches its `WebViewId` */
+  export const TAB_TYPE_WEBVIEW = 'webView';
   /**
    * Information that Platform.Bible uses to create a tab in the dock layout.
    *
@@ -4198,7 +4300,10 @@ declare module 'papi-shared-types' {
   } from 'shared/models/data-provider.interface';
   import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject, NetworkObjectDetails } from 'shared/models/network-object.model';
-  import type { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import type {
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
   import type {
     CloseWebViewEvent,
     OpenWebViewEvent,
@@ -4277,6 +4382,77 @@ declare module 'papi-shared-types' {
     'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
     /** Call close function for Usersnap forms known to the application */
     'platform.closeOpenUsersnapForm': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next chapter (rolls into the next book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous chapter (rolls into the previous book)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousChapter': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous book (chapter 1, verse 1)
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousBook': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the next verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToNextVerse': () => Promise<void>;
+    /**
+     * Navigate the active scroll group to the previous verse
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.goToPreviousVerse': () => Promise<void>;
+    /**
+     * Open the appropriate Book Chapter Control (the active tab's if it shows one, else the top
+     * toolbar's) and focus its input, ready for typing a reference
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.openBookChapterControl': () => Promise<void>;
+    /**
+     * Navigate the reference history in the physical "left" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
+    /**
+     * Navigate the reference history in the physical "right" direction. Acts on the same scroll
+     * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
+     * and the on-screen history buttons can never disagree. The renderer resolves the physical
+     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
+     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
+     * dispatches this directly so it never needs to know the UI direction or the active scroll
+     * group.
+     *
+     * @returns `true` if navigation happened; `false` when there is no history in that direction or
+     *   the active web view has no scroll group (a detached ref)
+     * @experimental
+     */
+    'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -4949,6 +5125,12 @@ declare module 'papi-shared-types' {
     'platform.onDidReloadExtensions': boolean;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
     /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
     'webView:onDidAddWebView': OpenWebViewEvent;
     /** Emitted when a WebView is created. */
@@ -7817,8 +7999,46 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export const useData: UseDataHook;
   export default useData;
 }
+declare module 'renderer/services/reference-history.util' {
+  import {
+    ReferenceHistory,
+    ReferenceHistoryEntry,
+  } from 'shared/services/scroll-group.service-model';
+  /**
+   * Maximum number of entries a scroll group's history keeps in total, counting the current location
+   * (matches Paratext 9). The back stack therefore holds at most this many minus one.
+   */
+  export const REFERENCE_HISTORY_MAX_DEPTH = 20;
+  /** Create a new, empty reference history */
+  export function createEmptyReferenceHistory(): ReferenceHistory;
+  /**
+   * Record a navigation to `entry` in `history` (mutates `history`). Matches Paratext 9
+   * `WindowCollectionBase.AddVerseRefToHistory`: a move within the current book+chapter replaces the
+   * current entry in place (preserving the forward stack); a genuinely new chapter pushes the old
+   * current onto the back stack, clears the forward stack, caps same-book runs, and trims to
+   * {@link REFERENCE_HISTORY_MAX_DEPTH} total entries.
+   */
+  export function recordNavigation(history: ReferenceHistory, entry: ReferenceHistoryEntry): void;
+  /**
+   * Navigate within `history` by a signed `offset` (mutates `history`), browser-`history.go` style:
+   * negative = back that many steps, positive = forward that many steps. The entries passed over
+   * transfer to the opposite stack, and the old current moves one step in the opposite direction
+   * (matches Paratext 9's dropdown jump).
+   *
+   * @returns The destination entry (the new current), or `undefined` (history unchanged) when
+   *   `offset` is 0, non-integer, or out of range
+   */
+  export function navigateHistory(
+    history: ReferenceHistory,
+    offset: number,
+  ): ReferenceHistoryEntry | undefined;
+}
 declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import {
+    ReferenceHistory,
+    ReferenceHistoryUpdateInfo,
+    ScrollGroupUpdateInfo,
+  } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   /**
@@ -7843,6 +8063,26 @@ declare module 'renderer/services/scroll-group.service-host' {
   export const onDidChangeVersification: PlatformEvent<{
     projectId: string;
   }>;
+  /** Event that emits when a scroll group's reference history changes */
+  export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
+  export function getReferenceHistorySync(scrollGroupId?: ScrollGroupId): ReferenceHistory;
+  /** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
+  export function navigateReferenceHistorySync(
+    scrollGroupId: ScrollGroupId | undefined,
+    offset: number,
+  ): boolean;
+  /**
+   * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
+   * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
+   * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
+   * commands so the main-process keyboard handler can dispatch the physical key directly and stay
+   * direction-agnostic.
+   */
+  export function navigateReferenceHistoryPhysicalSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    physicalDirection: 'left' | 'right',
+  ): boolean;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
   export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
@@ -7892,6 +8132,10 @@ declare module 'renderer/services/scroll-group.service-host' {
   /**
    * See {@link IScrollGroupRemoteService.setScrRef}
    *
+   * The user-facing setter: writes the ref (via {@link writeScrRef}) AND records the change in the
+   * scroll group's reference history. Reference-history navigation itself does NOT go through here —
+   * it calls {@link writeScrRef} directly, since its stacks already reflect the move.
+   *
    * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
    *   unknown / canonical English.
    */
@@ -7900,7 +8144,16 @@ declare module 'renderer/services/scroll-group.service-host' {
     scrRef: SerializedVerseRef,
     sourceProjectId?: string,
   ): boolean;
-  /** Register the network object that backs the scroll group service */
+  /**
+   * Register the network object that backs the scroll group service.
+   *
+   * The reference-history navigation commands are NOT registered here: the physical left/right
+   * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
+   * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
+   * the window service this state module deliberately does not import). Programmatic offset
+   * navigation is exposed through this network object's `navigateReferenceHistory` method below
+   * rather than a duplicate command.
+   */
   export function startScrollGroupService(): Promise<void>;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
@@ -7928,7 +8181,7 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
    * @param projectId Optional project id for the consuming web view. When provided, the returned
    *   `scrRef` is converted into this project's versification for display. `setScrRef` stamps the
    *   scroll group with this project as the source.
-   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+   * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId, sourceProjectId]`
    *
    *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents,
    *       converted into `projectId`'s versification when a `projectId` is provided
@@ -7938,6 +8191,9 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
    *       If not synced to a scroll group, this is `undefined`
    *   - `setScrollGroupId`: Function to use to update the scroll group with which this
    *       `scrollGroupScrRef` is synced
+   *   - `sourceProjectId`: The id of the project that last set this scroll group's reference (the source
+   *       frame of `scrRef`); this web view's own `projectId` when not synced to a scroll group.
+   *       `undefined` when unknown
    */
   export function useScrollGroupScrRef(
     scrollGroupScrRef: ScrollGroupScrRef | undefined,
@@ -7948,6 +8204,7 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
     setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+    sourceProjectId: string | undefined,
   ];
   export default useScrollGroupScrRef;
 }
@@ -9801,6 +10058,17 @@ declare module 'shared/services/window.service-model' {
   };
   /** Current item that is the subject of top-level app window focus */
   export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
   /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
   /** Instructions that indicate how to change the app window focus */
@@ -10000,6 +10268,9 @@ declare module '@papi/core' {
     ProjectSettingValidator,
   } from 'shared/services/project-settings.service-model';
   export type {
+    ReferenceHistory,
+    ReferenceHistoryEntry,
+    ReferenceHistoryUpdateInfo,
     ScrollGroupScrRef,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';

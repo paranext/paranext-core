@@ -40,7 +40,8 @@ import type {
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
-import { DEFAULT_RESOURCE_REFERENCE_LIST, selectTextConnection } from './select-dbl-resource';
+import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
