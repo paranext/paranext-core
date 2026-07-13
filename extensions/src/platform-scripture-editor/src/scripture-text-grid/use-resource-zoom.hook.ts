@@ -34,9 +34,11 @@ const EMPTY_ZOOM_MAP: ZoomByResourceId = {};
  * Owns the per-resource zoom map, persisted in the grid web view's `useWebViewState` (synchronous
  * localStorage — no debounce needed, so no pending write can be lost on close). Reads fall back to
  * `DEFAULT_ZOOM_FACTOR`; writes clamp+round via `resource-zoom.utils`.
+ *
  * @param useWebViewState - The web view's state hook, injected so the controller persists to (and
  *   rehydrates from) web-view state and stays unit-testable.
- * @returns The zoom controller the input paths (context menu, kebab, Ctrl/Cmd+wheel) funnel through.
+ * @returns The zoom controller the input paths (context menu, kebab, Ctrl/Cmd+wheel) funnel
+ *   through.
  */
 export function useResourceZoom(useWebViewState: UseWebViewStateHook): ResourceZoomController {
   const [zoomByResourceId, setZoomByResourceId] = useWebViewState<ZoomByResourceId>(
