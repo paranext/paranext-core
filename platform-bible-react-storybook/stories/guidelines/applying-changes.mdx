@@ -1,0 +1,211 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { Button } from '@/components/shadcn-ui/button';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
+import LinkTo from '@storybook/addon-links/react';
+
+<Meta title="Guidelines/Applying Changes" />
+
+# Applying Changes
+
+This article defines how changes take effect in Paratext 10 — the moment a setting, selection, or edit becomes real. Paratext 9 leaned on an **OK/Cancel** confirmation before persisting almost anything. Paratext 10 does not. Most changes should apply the instant the user makes them, and the exceptions should be deliberate, named, and consistent.
+
+It is also an **audit reference**: the codebase does not yet live up to everything here. Where a current component contradicts this guidance, that is a finding to fix, not a precedent to follow. Real before/after examples appear throughout.
+
+---
+
+## The governing principle: least astonishment
+
+> The user should always be able to predict, **before** they act, whether a change takes effect now.
+
+Every rule below serves this one. Astonishment comes from inconsistency — some controls applying instantly while their neighbors wait for a save button, with nothing to tell them apart. The fix is not "confirm everything." It is to make each surface's behavior predictable and to reserve the heavier models for the few places that genuinely need them.
+
+---
+
+## Default to immediate apply
+
+**Immediate apply is the default. Use it as often as possible.** A change takes effect the moment the user makes it, and its effect is visible right away.
+
+The case for it is not only that it feels modern — it is that it is **simpler**:
+
+- **Cheaper to design and build.** No draft state to hold, no commit step to wire up, no dirty tracking, no unsaved-changes guard.
+- **Fewer clicks.** A lower priority, but users have asked for it directly.
+- **It matches the platform we resemble.** [GNOME's Human Interface Guidelines](https://developer.gnome.org/hig/) — a desktop platform like ours — have long favored instant apply: the classic GNOME HIG recommends it "should be used wherever possible," with explicit apply "only necessary if changes have to be applied simultaneously to have the desired behaviour" (this wording is from the older GNOME 2 HIG). A web app like [GitLab defaults the other way](https://design.gitlab.com/patterns/saving-and-feedback/) (manual save) because it is data-entry heavy; we are not.
+
+**Migration honesty.** Paratext 9 users learned that nothing is committed until they press a button — a Windows-era expectation. Moving them to immediate apply is the right call, but it is a real change in mental model, and we should not pretend otherwise. That is exactly why the exceptions below must be predictable, and why reversibility (undo) matters so much.
+
+---
+
+## The apply-model typology
+
+Pick **exactly one** model per surface. These are named so the whole team — and code review — can talk about them precisely.
+
+### Primary models
+
+| Model                           | What it means                                                                                                                                                                         | Use it when                                                                                                | Example                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Immediate apply** *(default)* | Every change takes effect as soon as it is made; the effect is visible immediately. Also called *instant apply* / *auto-apply*.                                                       | The effect is visible and easily reversible (e.g., a toggle, slider, theme switcher, panel/layout toggle, or live filter). | Theme switcher; view/layout toggles                          |
+| **Auto-save draft**             | Freeform edits persist continuously on their own (on pause or blur), with a save-state indicator. Publishing or sharing is a separate step from editing. Also called a *local draft*. | The user is authoring continuous, freeform content that would be painful to lose.                          | Scripture editor (Lexical); comment and footnote text fields |
+| **Explicit apply**              | Edits stage locally and take effect only when the user commits them (an **Apply**, **Save**, or **Confirm** action). Also called *deferred apply*.                                    | Changes only make sense **as a group**, or the user needs a **contained preview** before they take effect. | A settings sub-dialog; a grouped multi-value picker          |
+
+Explicit apply is the most common exception to immediate apply — especially in Settings. Its two presentations are the same model: a **confirmation dialog** (the modal *is* the draft) and a **form with a Save button** (the surface is the draft). Both stage edits and commit on an explicit action.
+
+### Models to avoid
+
+Named so review can spot and reject them. Each requires a significant, written argument **and** explicit UX approval before use.
+
+- **Commit on close** *(delayed commit)* — a change enters the local UI immediately but is not finalized until a later event: closing the window, leaving the panel, a timer expiring. Astonishing, because the moment of no return is invisible.
+- **Staged changes** *(save-on-commit)* — edits collect into a **visible, reviewable set** the user inspects (a diff) before committing all at once. This is explicit apply **plus** a dedicated review surface. Unless you are actually building that review UI, you just have explicit apply — which is why staged changes is not a casual choice. (It is, however, a promising direction for a specific problem — see [Under consideration](#under-consideration).)
+
+### Special cases
+
+- **Optimistic update** — show the result immediately as if it succeeded, then reconcile if the later operation fails. Usually *better* than plain immediate apply where it applies, but more expensive to build. Treat it as an optimization, not a default.
+- **Pessimistic update** *(wait for confirmation)* — do not show the final result until the operation has fully succeeded. Reserve for cases where correctness outweighs speed: large deletes, exports, security-sensitive actions.
+
+---
+
+## Choosing a model
+
+1. **Is the effect visible and easily reversible right where the user is acting?** → **Immediate apply.**
+2. **Is the user authoring continuous freeform content (prose, a comment)?** → **Auto-save draft.**
+3. **Do several values only make sense committed together, or does the user need to preview the result first?** → **Explicit apply**, isolated per the rule below.
+
+If more than one seems to fit, prefer the earliest — immediate apply is the cheapest and least astonishing.
+
+---
+
+## Hard rule: never interleave apply models
+
+**Immediate-apply and explicit-apply controls must never sit side by side as siblings.** When a subset of controls must commit as a group (or needs a contained preview), move them into their **own nested container** — a sub-dialog or grouped section — that owns its **own** Apply button. Everything outside that container stays immediate apply.
+
+This is a hard rule, not a preference. The danger was never explicit apply itself; it is **mixing the two models in one visual field**, so the user cannot tell which controls take effect now and which are waiting. Nesting is the *mechanism*; non-interleaving is the *invariant*.
+
+GNOME's guidance takes a mixed approach here: group the controls that need grouping, give that group its own Apply, and leave the rest instant. In practice this means explicit apply tends to live **deeper** in the interface than its immediate-apply siblings — hidden away from the easy-to-reach surface, not mixed in with it.
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="avoid">
+    A settings page where three dropdowns apply instantly and a fourth silently waits for a **Save** button at the bottom. Nothing distinguishes them, so the user cannot predict which is which.
+  </ExampleBlock>
+
+  <ExampleBlock variant="prefer">
+    The three related, must-change-together options move into their own **Edit…** dialog with a single **Apply** button; the rest of the page stays immediate apply.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+---
+
+## Preventing and recovering from errors
+
+Reserving immediate apply for reversible changes only works if we handle the un-reversible and the consequential deliberately. This section is grounded in Nielsen Norman Group's error framework, not invented for us.
+
+Users make two kinds of errors ([Norman, via NN/g](https://www.nngroup.com/articles/user-mistakes/)):
+
+- **Slips** — the right goal, the wrong action, made on autopilot.
+- **Mistakes** — a flawed mental model leads to the wrong goal.
+
+Immediate apply reduces slips (the effect is visible, so a wrong move is caught immediately) but makes a slip on a *destructive* action more costly. We answer that with four tools, in rough order of preference:
+
+1. **Undo — the safety net.** [User control and freedom](https://www.nngroup.com/articles/user-control-and-freedom/) (Nielsen's heuristic #3) frames undo as an emergency exit that makes errors less costly to recover from. For a reversible action, offering undo afterward is usually **better than blocking with a prompt**. **Carve-out:** a control that is *its own undo* — its effect is visible and reversed simply by re-operating it (e.g., a toggle, slider, theme switcher, panel/layout toggle, or live filter) — needs no separate undo affordance; adding one is redundant. Other reversible immediate-apply changes should have undo behind them (see the [known gap](#known-gap-app-wide-undo)); irreversible or consequential changes use friction *before* instead (below).
+2. **Warn before the error** — passive, contextual awareness that an action is consequential (a `destructive` button variant, inline copy) before the user commits it.
+3. **Remove memory burden** — "remove conditions that require users to keep information in their own memory." Show the state; don't make the user remember what they changed.
+4. **Intentional friction — a confirmation step — used sparingly.** For actions that are **consequential, irreversible, expensive, or easy to mis-trigger**, interrupt with a confirm step. But NN/g is explicit that overusing confirmation makes users "instinctively click" it without reading — so a confirmation dialog on a routine action does **not** protect anyone. This is the same reason we avoid **OK** (below).
+
+### Friction before, or recovery after — not both
+
+Default to one, based on reversibility:
+
+- **Irreversible / consequential** → **friction before** (e.g., a confirmation dialog, or a **consequence-preview confirmation** that shows what will happen).
+- **Reversible** → **recovery after** (e.g., an undo affordance).
+
+Usually one is enough, and stacking a confirmation dialog *and* an undo toast on a routine action is just belt-and-suspenders noise. Both is reasonable, though, on a high-consequence but reversible action when the confirm and the undo genuinely guard different mistakes — the confirm catches a click-time slip, the undo catches immediate regret. Friction also isn't only a confirmation dialog: hold-to-delete, type-the-name-to-confirm, and a `destructive` variant are all lighter forms.
+
+---
+
+## Feedback
+
+When does an applied change need a toast (`Sonner`) or an inline indicator? The governing rule:
+
+> **Feedback is needed in inverse proportion to how visible the effect already is.**
+
+If an immediate-apply change is visible on screen, the change **is** its own confirmation — say nothing. You need feedback only when the effect is invisible, off-screen, delayed, or failed.
+
+| Situation                                               | Feedback                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Effect is visible now (most immediate apply)            | **None** — the UI is the feedback                                                     |
+| Effect is invisible / off-screen / bulk, and reversible | **Undo toast** (`Sonner` with an Undo action)                                         |
+| Effect is invisible / off-screen, not worth an undo     | **Info toast** ("Changes saved")                                                      |
+| Async with duration (auto-save, sync)                   | **Inline status** — "Saving… / Saved" (with a timestamp), never a toast per keystroke |
+| Failure                                                 | **Always** — an error toast or inline message. Never fail silently.                   |
+
+Two consequences:
+
+- **For a visible reversible immediate-apply change, don't toast every action.** If the control is its own undo (the [carve-out](#preventing-and-recovering-from-errors) above), nothing more is needed. Otherwise the change still needs a recovery path — reserve undo toasts for effects that are off-screen, bulk, or not obviously reversible via the control itself; until app-wide undo exists, a feature-local undo fills the gap.
+- **Do not auto-save data with financial, security, or privacy impact** ([GitLab](https://design.gitlab.com/patterns/saving-and-feedback/)) — those want an explicit, deliberate commit.
+
+### Known gap: app-wide undo
+
+The guidance above assumes a single, app-wide undo (`Ctrl+Z`) that can reverse a reversible immediate-apply change wherever it happens. **That does not exist yet.** Today, `Ctrl+Z` is scoped to specific surfaces (e.g. the scripture/footnote editors via `EditorKeyboardShortcuts`); there is no global undo command.
+
+This is a deliberate **aspiration + known gap**, not a claim about the current build:
+
+- **Aspiration:** app-wide undo becomes the default recovery net for reversible immediate-apply changes, so most such changes need no per-change affordance.
+- **Until then:** the undo requirement above still holds _where it applies_ — a change that needs recovery (i.e., not a self-reversing control) and defaults to immediate apply **must provide its own** undo (feature-local revert, a scoped `Ctrl+Z`, or a scoped undo toast) rather than assume a global one it can lean on. Don't read "rely on app-wide undo" as permission to ship no recovery.
+
+---
+
+## Microcopy
+
+Button *labels* — the words, and which apply model they express — live here. (How dialog buttons **look and arrange** — order, variant hierarchy, the `Trash2` icon — is owned by <LinkTo title="Guidelines/Design Principles">Design Principles</LinkTo>.)
+
+**Avoid OK.** Users learn to dismiss **OK** without reading it, which turns a decision into an interruption — the same "instinctive click" failure that makes over-used confirmation useless. A label should say what will happen, even if the user skips every other word on screen.
+
+Use a specific action verb that names the outcome. Prefer these pairs:
+
+| Instead of OK / Cancel    | Use                                    |
+| ------------------------- | -------------------------------------- |
+| Saving edited settings    | **Save changes** / **Discard changes** |
+| Committing a staged group | **Apply changes** / **Cancel**         |
+| Removing something        | **Delete project** / **Keep project**  |
+| Sending / submitting      | **Send** / **Go back**                 |
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="avoid" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}>
+    Neither label says what will happen — the user dismisses without reading.
+  </ExampleBlock>
+
+  <ExampleBlock variant="prefer" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Discard changes</Button><Button>Save changes</Button></div>}>
+    Both actions are self-evident, and the verbs name the apply model.
+  </ExampleBlock>
+</ExampleBlockGroup>
+
+### Cancel vs. Close
+
+They are not the same action, and users read them differently ([NN/g](https://www.nngroup.com/articles/cancel-vs-close/)):
+
+- **Cancel** — abandon the process; discard everything staged.
+- **Close** — dismiss the view but **preserve** the work.
+
+A bare **✕** is ambiguous — many users assume it *closes* and preserves their work, not that it *cancels* and discards. So do **not** let a **✕** silently throw away staged edits — if closing discards, either label the intent or confirm it.
+
+See also: <LinkTo title="Guidelines/Ellipses">Ellipses</LinkTo> — a trailing `…` already signals "this won't execute immediately"; <LinkTo title="Guidelines/Capitalization Rules">Capitalization</LinkTo> — sentence case for all labels; <LinkTo title="Guidelines/Vocabulary">Vocabulary</LinkTo> — standard UI terminology.
+
+---
+
+## Under consideration
+
+**The ideas in this section are not guidelines.** They are candidate solutions to one real, unsolved problem, kept here so we can compare them side by side rather than adopt one prematurely. We do not yet have a concrete UI to stress-test them against.
+
+**The problem:** in an explicit-apply surface, how does the user see **what they have changed** (and what the system pre-filled for them) before they commit?
+
+| Candidate                          | Idea                                                                                                                                                                                                       | Status                                                                      |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Container-level dirty**          | The commit button emphasizes/enables and a navigate-away guard fires when there are uncommitted edits.                                                                                                     | Least controversial; would be the floor if we adopt dirty signaling at all. |
+| **Field-level dirty marker**       | Each changed control carries an additive marker (an unread-email-style **dot**, not a background recolor — recolor collides with hover/focus/selected state), paired with a revert-to-original affordance. | Overlaps heavily with staging; skeptical it earns its complexity.           |
+| **Staged changes with comparison** | Collect edits into a reviewable set showing before → after, so the user confirms a diff. Naturally absorbs "here's what you changed" **and** "here's what we suggested."                                   | The most developed idea; likely the real solution.                          |
+
+Two states get conflated here and must stay distinct if any of this is adopted: **dirty/uncommitted** (the user changed it, not yet committed — explicit apply only) vs. **suggested / auto-selected** (the system pre-filled a value the user may want to confirm — can appear in any model). Different meaning, different marker.
+
+---
+
+## Out of scope
+
+**Action-flow predictability** — whether a click is *terminal* or *leads to more steps* (does selecting a book commit, or proceed to chapter selection? does an icon button execute, or open a popover?) — is a related astonishment problem, but it is a design problem for specific controls rather than an apply-model rule. It is left for another day.
