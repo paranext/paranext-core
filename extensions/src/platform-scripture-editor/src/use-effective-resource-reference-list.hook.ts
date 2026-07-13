@@ -6,11 +6,12 @@ import type {
   ResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
+import { useProjectDataProvider } from '@papi/frontend/react';
 import {
   CURRENT_DATA_VERSION,
   DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST,
 } from './resource-reference-list.const';
+import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
 
 const KNOWN_RESOURCE_TYPES = new Set([
   'project',
@@ -72,7 +73,7 @@ export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
 ): [EffectiveResourceReferenceList | undefined, boolean] {
-  const [projectResourceReferenceList, , , isProjectSettingLoading] = useProjectSetting(
+  const [projectResourceReferenceList, isProjectSettingLoading] = useBufferedProjectSetting(
     projectId,
     settingName,
     DEFAULT_LIST,
