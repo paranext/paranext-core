@@ -52,6 +52,11 @@ describe('findScrollTarget', () => {
     expect(findScrollTarget(threads, MRK_11_13)).toBeUndefined();
   });
 
+  it('returns bottom when unparseable threads are mixed with parseable ones all before the reference', () => {
+    const threads = [thread('junk', 'not a reference'), thread('a', 'MRK 11:1')];
+    expect(findScrollTarget(threads, MRK_11_13)).toEqual({ type: 'bottom' });
+  });
+
   it('resolves same-verse ties to the first thread in list order', () => {
     const threads = [thread('first', 'MRK 11:13'), thread('second', 'MRK 11:13')];
     expect(findScrollTarget(threads, MRK_11_13)).toEqual({ type: 'thread', threadId: 'first' });
