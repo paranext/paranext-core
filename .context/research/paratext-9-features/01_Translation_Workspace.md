@@ -22,7 +22,7 @@ The Translation Workspace encompasses the core features users interact with dail
 
 **Sub-Features**:
 - In-place editing with automatic USFM handling
-- Verse-by-verse display with chapter/verse numbers
+- Paragraph-flow display with inline chapter/verse numbers (verified 2026-07-13: `ScriptureViews/Standard.xslt` renders USFM paragraphs with inline verse spans; PT9 has no verse-per-line editor mode)
 - Footnotes, cross-references, and sidebars
 - Drag-and-drop editing (optional, disabled by default)
 
@@ -139,11 +139,11 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `nextViewToolStripMenuItem_Click` at line 1933 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `nextViewToolStripMenuItem_Click` at line 1986 |
 
 **UI Entry Points**:
 - ≡ Tab > View > Switch Scripture view (cycles through views)
-  - Menu Structure: `TextForm`, handler `nextViewToolStripMenuItem_Click`, line 1933
+  - Menu Structure: `TextForm`, handler `nextViewToolStripMenuItem_Click`, line 1986
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > View > [click "v" icon for expanded menu] > Select specific view
   - Manual: `chapters/04_keyboarding.md`, line 52
@@ -598,7 +598,7 @@ The Translation Workspace encompasses the core features users interact with dail
 | Menu Structure | Menu: `Insert > End note`; Handler: `endNoteToolStripMenuItem_Click`; Owner: `TextForm` | `[MS]` |
 | Menu Structure | Menu: `Insert > Extended footnote`; Handler: `InsertEfMarkerButtonOnClick`; Owner: `TextForm` | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
-| HelpData | Keyword: `ComponentFootnotes`; Dialog: `FootnotePropertiesForm` | `[H]` |
+| HelpData | Keyword: `ComponentFootnotes`; Dialog: `LanguageSettingsForm_tabOther` (note: no `FootnotePropertiesForm` exists anywhere in PT9 — insertion is dialogless via `Editor.InsertNote`; verified 2026-07-13) | `[H]` |
 | Manual | `chapters/04_keyboarding.md`: Insert menu | `[M]` |
 
 **Key Quote** (from Requirements):
@@ -608,22 +608,22 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `footnoteToolStripMenuItem_Click` at line 1761 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `endNoteToolStripMenuItem_Click` at line 1771 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertEfMarkerButtonOnClick` at line 4531 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `footnoteToolStripMenuItem_Click` at line 1796 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `endNoteToolStripMenuItem_Click` at line 1806 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertEfMarkerButtonOnClick` at line 4597 |
 
 **UI Entry Points**:
 - ≡ Tab > Insert > Footnote
-  - Menu Structure: `TextForm`, handler `footnoteToolStripMenuItem_Click`, line 1761
+  - Menu Structure: `TextForm`, handler `footnoteToolStripMenuItem_Click`, line 1796
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > End note
-  - Menu Structure: `TextForm`, handler `endNoteToolStripMenuItem_Click`, line 1771
+  - Menu Structure: `TextForm`, handler `endNoteToolStripMenuItem_Click`, line 1806
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Extended footnote
-  - Menu Structure: `TextForm`, handler `InsertEfMarkerButtonOnClick`, line 4531
+  - Menu Structure: `TextForm`, handler `InsertEfMarkerButtonOnClick`, line 4597
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Extended end note
-  - Menu Structure: `TextForm`, handler `extendedEndNoteToolStripMenuItem_Click`, line 1734
+  - Menu Structure: `TextForm`, handler `extendedEndNoteToolStripMenuItem_Click`, line 1769
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] - [R] [M] [H] [C] — Last verified: 2026-01-20
@@ -657,7 +657,7 @@ The Translation Workspace encompasses the core features users interact with dail
 | Menu Structure | Menu: `Project > Advanced > Insert cross-references`; Handler: `insertCrossReferencesToolStripMenuItem_Click`; Line: 507; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Menu Structure | Menu: `Project > Advanced > Insert missing origin references`; Handler: `insertMissingOriginReferencesToolStripMenuItem_Click`; Line: 566; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
-| HelpData | Keyword: `ContentInsertCrossReference`; Dialog: `CrossReferencePropertiesForm` | `[H]` |
+| HelpData | Keyword: `ContentInsertCrossReference` (note: no `CrossReferencePropertiesForm` exists anywhere in PT9 — insertion is dialogless via `Editor.InsertNote`; the only related dialog is the batch tool `InsertCrossReferencesForm`; verified 2026-07-13) | `[H]` |
 | Manual | `chapters/04_keyboarding.md`: Insert menu | `[M]` |
 
 **Key Quote** (from Requirements):
@@ -667,8 +667,8 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `crossReferenceToolStripMenuItem_Click` at line 1766 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertExMarkerButtonOnClick` at line 4520 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `crossReferenceToolStripMenuItem_Click` at line 1801 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertExMarkerButtonOnClick` at line 4586 |
 | 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `extractCrossReferencesToolStripMenuItem_Click` at line 472 |
 | 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `insertCrossReferencesToolStripMenuItem_Click` at line 507 |
 | 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `insertMissingOriginReferencesToolStripMenuItem_Click` at line 566 |
@@ -677,10 +677,10 @@ The Translation Workspace encompasses the core features users interact with dail
 
 *Interactive Insertion:*
 - ≡ Tab > Insert > Cross-reference
-  - Menu Structure: `TextForm`, handler `crossReferenceToolStripMenuItem_Click`, line 1766
+  - Menu Structure: `TextForm`, handler `crossReferenceToolStripMenuItem_Click`, line 1801
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Extended cross reference
-  - Menu Structure: `TextForm`, handler `InsertExMarkerButtonOnClick`, line 4520
+  - Menu Structure: `TextForm`, handler `InsertExMarkerButtonOnClick`, line 4586
   - File: `Paratext/TextForm.cs`
 
 *Batch Operations:*
