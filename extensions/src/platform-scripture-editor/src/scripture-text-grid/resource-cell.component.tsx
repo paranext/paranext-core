@@ -121,6 +121,7 @@ export function ResourceCell({
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
+      nameDisplay={viewMode === 'verse' ? 'inline' : 'header'}
       editor={
         <Editorial
           ref={editorRef}
