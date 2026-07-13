@@ -208,9 +208,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Open the chapter-context view for the focused cell',
     category: 'View',
     context: 'Scripture Text Grid web view',
-    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-move-between-cells',
+    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    category: 'Navigation',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
     ],
   },
   {

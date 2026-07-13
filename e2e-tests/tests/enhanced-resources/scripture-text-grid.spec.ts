@@ -549,6 +549,143 @@ test.describe('Scripture Text Grid empty state', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// PT-4057 — accessibility pass on top of the PT-4062 renderer. Verse cells are `listitem`s that
+// carry a reference-bearing accessible name, are keyboard-reachable (Tab) and -activatable
+// (Enter/Space) with a visible focus ring, and announce chapter-context open/close through a polite
+// live region. Local-only for the same reason as the renderer specs above (mutate real settings).
+// ---------------------------------------------------------------------------
+const ACC_RESOURCE_A_ID = 'aabbccddeeff00112233';
+const ACC_RESOURCE_B_ID = 'bbccddeeff0011223344';
+
+test.describe('Scripture Text Grid accessibility', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('listitem accessible name includes the resource label and verse reference', async ({
+    mainPage,
+  }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      {
+        type: 'project',
+        name: 'AccName A',
+        id: ACC_RESOURCE_A_ID,
+        isResourceShownByDefault: true,
+      },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const firstCell = frame.locator('[role="listitem"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
+    // The book id is a 3-char USFM code; only the first char may be a digit (1-4, e.g. 1SA, 2KI,
+    // 3JN), and the remaining two are always letters.
+    await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z1-4][A-Z]{2}\s\d+:\d+$/);
+  });
+
+  test('Tab moves focus between listitems, not into editor content', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'Tab A', id: ACC_RESOURCE_A_ID, isResourceShownByDefault: true },
+      { type: 'project', name: 'Tab B', id: ACC_RESOURCE_B_ID, isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const firstCell = frame.locator('[role="listitem"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+
+    // Capture the first cell's aria-label to verify Tab moves focus to a different cell.
+    const firstLabel = await firstCell.getAttribute('aria-label');
+    await firstCell.focus();
+    await mainPage.keyboard.press('Tab');
+    // Read the active element from INSIDE the frame document so focus escaping the iframe
+    // fails the test rather than passing vacuously.
+    const focused = await frame.evaluate(() => ({
+      role: document.activeElement?.getAttribute('role') ?? undefined,
+      label: document.activeElement?.getAttribute('aria-label') ?? undefined,
+    }));
+    expect(focused.role).toBe('listitem');
+    expect(focused.label).not.toBe(firstLabel);
+  });
+
+  test('focused listitem shows a focus ring', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      { type: 'project', name: 'Ring A', id: ACC_RESOURCE_A_ID, isResourceShownByDefault: true },
+      { type: 'project', name: 'Ring B', id: ACC_RESOURCE_B_ID, isResourceShownByDefault: true },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const firstCell = frame.locator('[role="listitem"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // The ring is `focus-visible`-gated, which Chromium applies only for keyboard-originated focus —
+    // a programmatic `.focus()` would not trigger it. Land on the cell, then leave and re-enter via
+    // the keyboard so the focus is keyboard-originated.
+    await firstCell.focus();
+    await mainPage.keyboard.press('Shift+Tab');
+    await mainPage.keyboard.press('Tab');
+    const boxShadow = await frame
+      .locator('[role="listitem"]:focus')
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(boxShadow).not.toBe('none');
+  });
+
+  test('chapter-context open and close are announced in the live region', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
+      {
+        type: 'project',
+        name: 'Announce A',
+        id: ACC_RESOURCE_A_ID,
+        isResourceShownByDefault: true,
+      },
+    ]);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    const status = frame.locator('[role="status"]').first();
+    const firstCell = frame.locator('[role="listitem"]').first();
+    await expect(firstCell).toBeVisible({ timeout: 15_000 });
+    // Nothing announced until the split is opened.
+    await expect(status).toHaveText('');
+
+    await firstCell.click();
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toBeVisible({
+      timeout: 15_000,
+    });
+    // Opening announces a non-empty "opened" message.
+    await expect(status).not.toHaveText('');
+    const openedMessage = await status.textContent();
+
+    await mainPage.keyboard.press('Escape');
+    await expect(frame.getByTestId('scripture-text-grid-chapter-context')).toHaveCount(0);
+    // Closing announces a distinct "closed" message (a polite region needs a text change to re-fire).
+    await expect(status).not.toHaveText('');
+    expect(await status.textContent()).not.toBe(openedMessage);
+  });
+});
+
 /**
  * Conditional `test.skip` that first emits a console warning when it is about to skip.
  *
