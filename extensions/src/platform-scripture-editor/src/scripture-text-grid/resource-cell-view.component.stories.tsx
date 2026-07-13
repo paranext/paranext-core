@@ -275,6 +275,30 @@ export const VerseLongName: Story = {
   ),
 };
 
+/**
+ * Verse mode, long name in a very narrow pane — the inline label must keep its truncation ellipsis
+ * at the visible edge even when the pane is narrower than the label's width cap. (Regression guard:
+ * with a fixed-width, non-shrinking label the ellipsis was pushed off-screen and the name showed a
+ * hard cut with no "…". Hover still reveals the full name via the tooltip.)
+ */
+export const VerseLongNameNarrowPane: Story = {
+  render: () => (
+    <div
+      style={{ ...CELL_BOX_STYLE, width: '110px' }}
+      // Verify: the label ends in a visible "…" (not a hard cut), and hover shows the full name.
+    >
+      <ResourceCellView
+        state="ready"
+        label="New International Version 2011"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse />}
+      />
+    </div>
+  ),
+};
+
 /** Verse mode, RTL long name — truncates on the inline-start (right) side; tooltip reveals it. */
 export const VerseLongNameRightToLeft: Story = {
   render: () => (

@@ -132,10 +132,15 @@ export function ResourceCellView({
       {nameDisplay === 'inline' ? (
         // Verse-row cell: hang the name at the inline-start beside the verse text. `dir` on the row
         // makes flex place the name on the resource's own inline-start (right in RTL). The name is a
-        // shrink-0, width-capped column; the verse text flows and scrolls in the remaining min-w-0
+        // width-capped column (max-w-24); the verse text flows and scrolls in the remaining min-w-0
         // column, so the hanging name stays pinned even when the verse overflows.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
-          <ResourceNameLabel label={label} className="tw:max-w-24 tw:shrink-0 tw:text-sm" />
+          {/* `min-w-0` (not `shrink-0`): the name caps at max-w-24 when there is room, but must be
+              able to shrink below that in a very narrow verse pane. With `shrink-0` the label kept
+              its full width and overflowed the pane, pushing the truncation ellipsis off-screen — so
+              a clipped name showed a hard cut with no "…". Allowing it to shrink keeps the ellipsis
+              at the visible edge (and lets the clip-detecting tooltip fire). */}
+          <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
           <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto">{stateContent}</div>
         </div>
       ) : (
