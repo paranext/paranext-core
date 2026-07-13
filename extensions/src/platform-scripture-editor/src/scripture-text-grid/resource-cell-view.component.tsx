@@ -59,9 +59,9 @@ export type ResourceCellViewProps = {
 /**
  * The resource short-name/abbreviation, in the standout resource color (`tw:text-primary`). Single
  * line; a tooltip reveals the full name only when the text is actually clipped (same manual-`open`
- * measure-on-pointer-enter pattern as `ProjectRowView` in platform-bible-react). `aria-hidden`
- * because the enclosing gridcell already exposes the name via `aria-label`, so the visible copy
- * must not be announced a second time (reading order stays name → verse text).
+ * pattern as the `ProjectRowView` row in `project-selector.component.tsx`). `aria-hidden` because
+ * the enclosing gridcell already exposes the name via `aria-label`, so the visible copy is not
+ * announced twice.
  */
 function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
   const [isTooltipOpen, setIsTooltipOpen] = useState(false);
@@ -72,6 +72,7 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
   const handlePointerEnter = useCallback(() => {
     const element = ref.current;
     if (!element) return;
+    // Open the tooltip only when the label is actually clipped (its text overflows the visible box).
     if (element.scrollWidth > element.clientWidth) setIsTooltipOpen(true);
   }, []);
 
@@ -157,13 +158,11 @@ export function ResourceCellView({
       {nameDisplay === 'inline' ? (
         // Verse-row cell: hang the name at the inline-start beside the verse text. `dir` on the row
         // makes flex place the name on the resource's own inline-start (right in RTL). The name is a
-        // shrink-0, width-capped column; the verse text flows in the remaining min-w-0 column.
-        <div
-          className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:overflow-auto tw:p-2"
-          dir={textDirection}
-        >
+        // shrink-0, width-capped column; the verse text flows and scrolls in the remaining min-w-0
+        // column, so the hanging name stays pinned even when the verse overflows.
+        <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
           <ResourceNameLabel label={label} className="tw:max-w-24 tw:shrink-0 tw:text-sm" />
-          <div className="tw:min-w-0 tw:flex-1">{stateContent}</div>
+          <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto">{stateContent}</div>
         </div>
       ) : (
         // Chapter context: a compact band above the content, in the resource color. Long labels

@@ -230,6 +230,73 @@ export const VerseInlineWrapping: Story = {
   ),
 };
 
+/** Verse mode, downloading — the inline name stays beside the offline placeholder + spinner. */
+export const VerseDownloading: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="downloading"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={undefined}
+      />
+    </GridCellBox>
+  ),
+};
+
+/** Verse mode, failed — the inline name stays beside the "Download failed" placeholder. */
+export const VerseFailed: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="failed"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={undefined}
+      />
+    </GridCellBox>
+  ),
+};
+
+/**
+ * Verse mode, long name — the inline label truncates at its width cap; hovering reveals the full
+ * name via the tooltip (which opens only when the text is actually clipped).
+ */
+export const VerseLongName: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="New International Version 2011"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse />}
+      />
+    </GridCellBox>
+  ),
+};
+
+/** Verse mode, RTL long name — truncates on the inline-start (right) side; tooltip reveals it. */
+export const VerseLongNameRightToLeft: Story = {
+  render: () => (
+    <GridCellBox>
+      <ResourceCellView
+        state="ready"
+        label="תרגום השבעים המלא לפי מהדורת רלפס"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse rtl />}
+      />
+    </GridCellBox>
+  ),
+};
+
 /**
  * PR-1 partial-failure row smoke: ready, failed, and downloading cells side by side in one row.
  * Neighbors stay independent — one offline cell does not blank its siblings.
