@@ -77,6 +77,11 @@ Flag (Critical or Important):
 - Dead code added
 - Logic issues or bugs
 - Mismatches between `PURPOSE` and what the code actually does
+- Cross-view sync (scroll/selection/scrRef-driven behavior) that does not handle the
+  hidden/inactive-view case or explicitly dismiss it — layout-dependent side effects
+  (`scrollIntoView`, geometry reads, rAF animations) silently no-op in display-none dock tabs.
+  The standard detection mechanism is the `useViewVisibility` hook from `platform-bible-react`
+  (see `.claude/rules/cross-view-sync-hidden-views.md`)
 
 ---
 
