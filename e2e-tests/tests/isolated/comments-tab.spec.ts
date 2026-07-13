@@ -369,4 +369,50 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     });
     await expect(commentsFrame.locator('body')).not.toContainText('Project A unique comment text');
   });
+
+  test('filter dropdowns are operable with the keyboard (PT-4070)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage, 180_000);
+    await waitForSimpleLayout(mainPage);
+
+    // The toolbar renders in the loaded state even with zero threads, but seed a few so the panel
+    // never sits in the skeleton state when we go to interact (keeps the test self-sufficient when
+    // run alone via -g).
+    await createCommentThreads(
+      projectScroll,
+      ['GEN 2:1', 'GEN 2:2', 'GEN 2:3'],
+      ['PT-4070 keyboard a11y 1', 'PT-4070 keyboard a11y 2', 'PT-4070 keyboard a11y 3'],
+    );
+
+    await waitForPapiMethodRegistered(
+      'command:legacyCommentManager.openCommentListPanel',
+      DEFAULT_WEBSOCKET_PORT,
+      SETTINGS_TIMEOUT_MS,
+    );
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+
+    await clickCommentsTab(mainPage);
+
+    const commentsFrame = commentsFrameLocator(mainPage);
+    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+
+    // Wait for the loaded toolbar, then drive the first filter entirely by keyboard.
+    await expect(firstFilter).toBeVisible({ timeout: 90_000 });
+    await firstFilter.focus();
+    await expect(firstFilter).toBeFocused();
+
+    // Open with the keyboard.
+    await firstFilter.press('Enter');
+    const dropdown = commentsFrame.locator('[data-slot="select-content"]');
+    await expect(dropdown).toBeVisible({ timeout: 10_000 });
+
+    // Navigate and select a different option with the keyboard; the dropdown closes on select.
+    await mainPage.keyboard.press('ArrowDown');
+    await mainPage.keyboard.press('Enter');
+    await expect(dropdown).toBeHidden({ timeout: 10_000 });
+  });
 });
