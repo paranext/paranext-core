@@ -250,4 +250,74 @@ describe('SharedLayoutReceiver', () => {
     await flush();
     expect(h.send).toHaveBeenCalledTimes(1);
   });
+
+  it('treats an expired auto-mark as manual and notifies', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    try {
+      const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
+      await h.receiver.applyForProject('proj-1');
+      h.papi.projectDataProviders.get.mockImplementation(async () => ({
+        getSetting: vi.fn(async (key: string) =>
+          key === 'platformScripture.sharedLayoutDefaultTab'
+            ? ''
+            : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
+        ),
+      }));
+      h.receiver.markAutoSync('proj-1');
+      // Advance the clock well past the mark's TTL so the mark is stale when the sync completes;
+      // the leaked mark must self-heal to "manual" and notify rather than silently apply.
+      nowSpy.mockReturnValue(1_000_000 + 60 * 60 * 1000);
+      h.fireSync();
+      await flush();
+      expect(h.send).toHaveBeenCalledWith(
+        expect.objectContaining({ clickCommand: 'platformScriptureEditor.applySharedLayout' }),
+      );
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('dismisses an outstanding notification when the project applies', async () => {
+    const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
+    await h.receiver.applyForProject('proj-1');
+    h.papi.projectDataProviders.get.mockImplementation(async () => ({
+      getSetting: vi.fn(async (key: string) =>
+        key === 'platformScripture.sharedLayoutDefaultTab'
+          ? ''
+          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
+      ),
+    }));
+    h.fireSync();
+    await flush(); // notif-1 is now outstanding for proj-1
+    h.dismiss.mockClear();
+    await h.receiver.applyForProject('proj-1');
+    expect(h.dismiss).toHaveBeenCalledWith('notif-1');
+  });
+
+  it('dismisses the prior notification before sending one for a second distinct change', async () => {
+    const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
+    await h.receiver.applyForProject('proj-1');
+    h.send.mockResolvedValueOnce('notif-1').mockResolvedValueOnce('notif-2');
+    h.papi.projectDataProviders.get.mockImplementation(async () => ({
+      getSetting: vi.fn(async (key: string) =>
+        key === 'platformScripture.sharedLayoutDefaultTab'
+          ? ''
+          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
+      ),
+    }));
+    h.fireSync();
+    await flush(); // notif-1
+    // A second, distinct layout arrives while notif-1 is still outstanding.
+    h.papi.projectDataProviders.get.mockImplementation(async () => ({
+      getSetting: vi.fn(async (key: string) =>
+        key === 'platformScripture.sharedLayoutDefaultTab'
+          ? ''
+          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'C', id: '3' }] },
+      ),
+    }));
+    h.fireSync();
+    await flush(); // dismiss notif-1, then send notif-2
+    expect(h.dismiss).toHaveBeenCalledWith('notif-1');
+    expect(h.send).toHaveBeenCalledTimes(2);
+  });
 });
