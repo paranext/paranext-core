@@ -238,28 +238,23 @@ export function CommentListPanel({
         />
       </div>
 
+      {/* Hidden-notes banner — kept OUTSIDE the scroll region below so it stays pinned in view on a
+          long thread list instead of scrolling out of sight above the comments. */}
+      {hiddenCount > 0 && (
+        <Alert className="tw:m-4 tw:w-auto">
+          <AlertDescription>
+            {hiddenCount === 1
+              ? localizedStrings['%comment_hidden_single%']
+              : formatReplacementString(localizedStrings['%comment_hidden_multiple%'], {
+                  count: hiddenCount,
+                })}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Comments list */}
       <div className="tw:flex-1 tw:overflow-auto">
-        {hiddenCount > 0 && (
-          <Alert className="tw:m-4 tw:w-auto">
-            <AlertDescription>
-              {hiddenCount === 1
-                ? localizedStrings['%comment_hidden_single%']
-                : formatReplacementString(localizedStrings['%comment_hidden_multiple%'], {
-                    count: hiddenCount,
-                  })}
-            </AlertDescription>
-          </Alert>
-        )}
-        {threads.length === 0 ? (
-          <div className="tw:m-4 tw:flex tw:justify-center">
-            <Label>
-              {noFiltersActive
-                ? localizedStrings['%no_comments%']
-                : localizedStrings['%no_comments_match_filter%']}
-            </Label>
-          </div>
-        ) : (
+        {threads.length > 0 ? (
           <CommentList
             classNameForVerseText="scripture-font"
             threads={threads}
@@ -279,6 +274,19 @@ export function CommentListPanel({
             onSelectedThreadChange={onSelectedThreadChange}
             onVerseRefClick={onVerseRefClick}
           />
+        ) : (
+          // Every matching thread was dropped when hiddenCount > 0; the banner above already explains
+          // the emptiness, so suppress the empty-state label rather than showing "No comments match
+          // filter", which would wrongly claim nothing matched.
+          hiddenCount === 0 && (
+            <div className="tw:m-4 tw:flex tw:justify-center">
+              <Label>
+                {noFiltersActive
+                  ? localizedStrings['%no_comments%']
+                  : localizedStrings['%no_comments_match_filter%']}
+              </Label>
+            </div>
+          )
         )}
       </div>
     </div>

@@ -315,7 +315,7 @@ export const NoEditorContext: Story = {
   decorators: [createDecorator({ hasEditorContext: false })],
 };
 
-/** One dropped thread — the banner uses the singular copy ("1 note couldn't be shown"). */
+/** One dropped thread — the banner uses the singular copy ("1 comment couldn't be shown"). */
 export const OneNoteHidden: Story = {
   decorators: [createDecorator({ hiddenCount: 1 })],
 };
@@ -328,7 +328,11 @@ export const SomeNotesHidden: Story = {
   decorators: [createDecorator({ hiddenCount: 3 })],
 };
 
-/** Every thread was dropped — the banner shows above the empty-state, not just a bare "no comments". */
+/**
+ * Every matching thread was dropped — only the banner shows. The empty-state label is suppressed
+ * here because "No comments match filter" would wrongly claim nothing matched (the comments
+ * matched; they just couldn't be shown).
+ */
 export const AllNotesHidden: Story = {
   decorators: [createDecorator({ threads: [], hiddenCount: 2 })],
 };
