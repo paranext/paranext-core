@@ -36,5 +36,3 @@ export function resolveTextCollectionProjectId(
   if (candidateIsOwnResource) return previous;
   return candidateProjectId;
 }
-
-export default resolveTextCollectionProjectId;

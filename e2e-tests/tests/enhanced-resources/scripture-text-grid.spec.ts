@@ -25,6 +25,7 @@ import {
   openScriptureTextGrid,
   restoreScriptureTextGridProjectSettings,
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
+  switchToChapterView,
 } from './test-helpers';
 
 test.describe('Scripture Text Grid (scaffold)', () => {
@@ -141,7 +142,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
@@ -163,7 +164,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
@@ -195,7 +196,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
@@ -222,7 +223,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       { type: 'project', name: 'WEB', id: 'rtl001', isResourceShownByDefault: true },
@@ -250,10 +251,10 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     const validIds = REAL_RESOURCE_IDS.slice(0, 2);
-    test.skip(
+    warnAndSkip(
       validIds.length < 1,
       'Set E2E_TEST_RESOURCE_IDS with at least one downloaded resource',
     );
@@ -287,8 +288,8 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 2,
       'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
     );
@@ -337,8 +338,8 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 5,
       'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
     );
@@ -379,7 +380,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       { type: 'project', name: 'WEB', id: 'chap001', isResourceShownByDefault: true },
@@ -387,10 +388,7 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await frame.getByRole('button', { name: 'View Options' }).click();
-    await frame.getByRole('radio', { name: /Chapter/ }).click();
-    // Close the popover so it does not overlay the grid body.
-    await frame.locator('body').press('Escape');
+    await switchToChapterView(frame);
 
     // The chapter group lays out as a horizontal row of columns and shows no chapter-context split.
     const grid = frame.locator('[role="group"]');
@@ -409,8 +407,8 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 2,
       'Set E2E_TEST_RESOURCE_IDS with two downloaded resource IDs',
     );
@@ -427,9 +425,7 @@ test.describe('Scripture Text Grid renderer', () => {
     );
 
     const frame = await openScriptureTextGrid(mainPage);
-    await frame.getByRole('button', { name: 'View Options' }).click();
-    await frame.getByRole('radio', { name: /Chapter/ }).click();
-    await frame.locator('body').press('Escape');
+    await switchToChapterView(frame);
 
     await expect(frame.locator('[role="region"]')).toHaveCount(2, { timeout: 15_000 });
     // Clicking inside a chapter region must NOT open the verse-view chapter-context split, and both
@@ -447,8 +443,8 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 5,
       'Set E2E_TEST_RESOURCE_IDS with five downloaded resource IDs',
     );
@@ -465,9 +461,7 @@ test.describe('Scripture Text Grid renderer', () => {
     );
 
     const frame = await openScriptureTextGrid(mainPage);
-    await frame.getByRole('button', { name: 'View Options' }).click();
-    await frame.getByRole('radio', { name: /Chapter/ }).click();
-    await frame.locator('body').press('Escape');
+    await switchToChapterView(frame);
 
     const elapsedMs = await frame.locator('body').evaluate(async () => {
       const start = performance.now();
@@ -486,7 +480,7 @@ test.describe('Scripture Text Grid renderer', () => {
 
     await expect(frame.locator('[role="region"]')).toHaveCount(5, { timeout: 15_000 });
     // Chapter mode renders full chapters (10–100x a verse cell), so the ~220ms verse threshold does
-    // NOT apply. Baseline established here; tighten once real measurements are collected (see Step 6).
+    // NOT apply. Baseline established here; tighten once real measurements are collected.
     // eslint-disable-next-line no-console -- surfaces the measured baseline in CI/local logs
     console.log(`[chapter frame budget] ${elapsedMs.toFixed(1)}ms for 5 side-by-side chapters`);
     expect(elapsedMs).toBeLessThan(2000);
@@ -499,7 +493,7 @@ test.describe('Scripture Text Grid renderer', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       { type: 'project', name: 'WEB', id: 'chaprtl1', isResourceShownByDefault: true },
@@ -507,9 +501,7 @@ test.describe('Scripture Text Grid renderer', () => {
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
-    await frame.getByRole('button', { name: 'View Options' }).click();
-    await frame.getByRole('radio', { name: /Chapter/ }).click();
-    await frame.locator('body').press('Escape');
+    await switchToChapterView(frame);
 
     const grid = frame.locator('[role="group"]');
     await expect(grid).toBeVisible({ timeout: 15_000 });
@@ -544,7 +536,7 @@ test.describe('Scripture Text Grid empty state', () => {
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     // Flag nothing → the effective list is empty → the grid renders the empty state, not cells.
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, []);
@@ -556,3 +548,22 @@ test.describe('Scripture Text Grid empty state', () => {
     await expect(frame.locator('[role="gridcell"]')).toHaveCount(0);
   });
 });
+
+/**
+ * Conditional `test.skip` that first emits a console warning when it is about to skip.
+ *
+ * These enhanced-resources specs run only locally (they mutate real project settings and need
+ * downloaded resources), so a bare `test.skip` on a missing prerequisite is silent — a dev without
+ * the local setup could miss that a whole scenario never ran. The warning surfaces the skipped
+ * prerequisite in the run output while still skipping (not failing), so an unconfigured machine is
+ * not blocked. Use only for prerequisite gates, not the deliberate CI gate.
+ */
+function warnAndSkip(condition: boolean, reason: string): void {
+  if (condition) {
+    // Warn (not fail) so a missing local prerequisite is visible in the run output without blocking
+    // an unconfigured machine. console is the only run-output channel available in a spec here.
+    // eslint-disable-next-line no-console
+    console.warn(`[scripture-text-grid.spec] Skipping test — ${reason}`);
+  }
+  test.skip(condition, reason);
+}

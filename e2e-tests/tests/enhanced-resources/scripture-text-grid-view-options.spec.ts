@@ -18,7 +18,12 @@
 import { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import {
+  chapterViewOption,
+  closeAllNonHomeDockTabs,
+  verseViewOption,
+  viewOptionsButton,
+} from './test-helpers';
 
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
@@ -89,12 +94,12 @@ test.describe('Scripture Text Grid — View Options panel', () => {
 
     // Open the popover from the header View Options icon button (aria-label is localized to English
     // in the test locale).
-    await grid.getByRole('button', { name: 'View Options' }).click();
+    await viewOptionsButton(grid).click();
 
-    // VIEW toggle: Verse is the active option; Chapter is now enabled (B4 shipped its renderer), so
+    // VIEW toggle: Verse is the active option; Chapter is now enabled (its renderer shipped), so
     // the "Coming soon" hint is gone.
-    const verse = grid.getByRole('radio', { name: 'Verse' });
-    const chapter = grid.getByRole('radio', { name: /Chapter/ });
+    const verse = verseViewOption(grid);
+    const chapter = chapterViewOption(grid);
     await expect(verse).toBeVisible({ timeout: 15_000 });
     await expect(verse).toHaveAttribute('data-state', 'on');
     await expect(chapter).toBeEnabled();

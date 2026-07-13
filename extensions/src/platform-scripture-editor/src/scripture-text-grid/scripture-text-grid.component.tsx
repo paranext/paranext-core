@@ -97,8 +97,8 @@ export function ScriptureTextGrid({
   }
 
   // Layout is derived from viewMode: verse view is a vertical column of stacked resource rows;
-  // chapter view is a horizontal row of side-by-side full-chapter columns. B4 hard-codes this
-  // mapping; PT-4168 (deferred single-flag orientation override) will later make it
+  // chapter view is a horizontal row of side-by-side full-chapter columns. This mapping is
+  // hard-coded; PT-4168 (deferred single-flag orientation override) will later make it
   // `orientation ?? deriveLayout(viewMode)` — a seam, not the feature.
   const layout: 'row' | 'column' = viewMode === 'chapter' ? 'row' : 'column';
 
