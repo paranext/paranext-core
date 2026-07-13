@@ -6947,9 +6947,19 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const ALERT_DIALOG_TYPE = 'platform.alert';
   /** The dialogType for confirm dialogs rendered via overlay */
   export const CONFIRM_DIALOG_TYPE = 'platform.confirm';
-  /** The tabType for the resource picker dialog in `resource-picker.dialog.tsx` */
+  /**
+   * The tabType for the resource picker dialog in `resource-picker.dialog.tsx`
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
   export const RESOURCE_PICKER_DIALOG_TYPE = 'platform.resourcePicker';
-  /** The tabType for the project picker dialog in `project-picker.dialog.tsx` */
+  /**
+   * The tabType for the project picker dialog in `project-picker.dialog.tsx`
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
   export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
@@ -6977,14 +6987,24 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     /** Custom label for the OK button. Defaults to a localized "OK". */
     okLabel?: string | LocalizeKey;
   };
-  /** Options to provide when showing the Resource Picker dialog */
+  /**
+   * Options to provide when showing the Resource Picker dialog
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
   export type ResourcePickerDialogOptions = DialogOptions & {
     /** If provided, only resources of this type are shown */
     resourceType?: ResourceType;
     /** IDs of resources already selected in the calling panel */
     selectedResourceIds?: string[];
   };
-  /** Options to provide when showing the Project Picker dialog (no extra options needed) */
+  /**
+   * Options to provide when showing the Project Picker dialog (no extra options needed)
+   *
+   * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+   *   It is not yet a stable contract.
+   */
   export type ProjectPickerOptions = DialogOptions;
   /** Options to provide when showing a confirm dialog */
   export type ConfirmDialogOptions = DialogOptions & {
@@ -7017,7 +7037,15 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     [SELECT_BOOKS_DIALOG_TYPE]: DialogDataTypes<SelectBooksDialogOptions, string[]>;
     [ALERT_DIALOG_TYPE]: DialogDataTypes<AlertDialogOptions, true>;
     [CONFIRM_DIALOG_TYPE]: DialogDataTypes<ConfirmDialogOptions, boolean>;
+    /**
+     * @experimental This dialog was recently added, and its shape may change as we learn how it is
+     *   used. It is not yet a stable contract.
+     */
     [RESOURCE_PICKER_DIALOG_TYPE]: DialogDataTypes<ResourcePickerDialogOptions, DblResourceData>;
+    /**
+     * @experimental This dialog was recently added, and its shape may change as we learn how it is
+     *   used. It is not yet a stable contract.
+     */
     [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, string>;
   }
   /** All dialog types that have DialogDefinition entries */
