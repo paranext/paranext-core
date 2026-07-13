@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { ResourceCell } from './resource-cell.component';
 
@@ -186,20 +186,21 @@ describe('ResourceCell viewMode', () => {
 describe('ResourceCell name display', () => {
   it('verse mode uses the inline hanging name (name shares a row with the editor)', async () => {
     setUsjResult(chapter, false);
-    render(<ResourceCell {...props} viewMode="verse" />);
-    const cell = screen.getByRole('gridcell', { name: 'WEB' });
-    const name = within(cell).getByText('WEB');
-    const editorial = await within(cell).findByTestId('editorial');
-    // Inline: name and editor share an intermediate row, not the gridcell directly.
-    expect(name.parentElement).not.toBe(cell);
+    const { container } = render(<ResourceCell {...props} viewMode="verse" />);
+    const cellRoot = container.firstElementChild;
+    const name = screen.getByText('WEB');
+    const editorial = await screen.findByTestId('editorial');
+    // Inline: name and editor share an intermediate row, not the cell root directly.
+    expect(name.parentElement).not.toBe(cellRoot);
     expect(name.parentElement).toContainElement(editorial);
   });
 
-  it('chapter mode uses the header band (name is a direct child of the gridcell)', () => {
+  it('chapter mode uses the header band (name is a direct child of the cell root)', () => {
     setUsjResult(chapter, false);
-    render(<ResourceCell {...props} viewMode="chapter" />);
-    const cell = screen.getByRole('gridcell', { name: 'WEB' });
-    const name = within(cell).getByText('WEB');
-    expect(name.parentElement).toBe(cell);
+    const { container } = render(<ResourceCell {...props} viewMode="chapter" />);
+    const cellRoot = container.firstElementChild;
+    const name = screen.getByText('WEB');
+    // Header mode: no intermediate row — the name band is a direct child of the cell root.
+    expect(name.parentElement).toBe(cellRoot);
   });
 });

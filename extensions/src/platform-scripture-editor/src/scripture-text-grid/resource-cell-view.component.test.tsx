@@ -109,7 +109,7 @@ describe('ResourceCellView row smoke', () => {
 
 describe('ResourceCellView name display', () => {
   it('inline mode hangs the name before the verse text in reading order', () => {
-    renderGridRow(
+    const { container } = renderCells(
       <ResourceCellView
         state="ready"
         label="NIV"
@@ -119,15 +119,14 @@ describe('ResourceCellView name display', () => {
         editor={<span>In the beginning</span>}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'NIV' });
-    // Name precedes the verse text in DOM (reading) order — assert via text order in the cell.
-    const text = cell.textContent ?? '';
+    // Name precedes the verse text in DOM (reading) order — assert via text order in the subtree.
+    const text = container.textContent ?? '';
     expect(text.indexOf('NIV')).toBeGreaterThanOrEqual(0);
     expect(text.indexOf('NIV')).toBeLessThan(text.indexOf('In the beginning'));
   });
 
   it('inline mode puts the name and verse text in one row (name beside text, not a header band)', () => {
-    renderGridRow(
+    renderCells(
       <ResourceCellView
         state="ready"
         label="NIV"
@@ -137,17 +136,15 @@ describe('ResourceCellView name display', () => {
         editor={<span>In the beginning</span>}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'NIV' });
-    const name = within(cell).getByText('NIV');
-    const verse = within(cell).getByText('In the beginning');
+    const name = screen.getByText('NIV');
+    const verse = screen.getByText('In the beginning');
+    // Inline: an intermediate flex row wraps the name + content beside each other.
     const row = name.parentElement;
-    // Inline: an intermediate flex row wraps the name + content, so the row is NOT the gridcell.
-    expect(row).not.toBe(cell);
     expect(row).toContainElement(verse);
   });
 
   it('inline mode scopes the row to the resource dir and puts the name first in DOM order', () => {
-    renderGridRow(
+    renderCells(
       <ResourceCellView
         state="ready"
         label="עברית"
@@ -157,8 +154,7 @@ describe('ResourceCellView name display', () => {
         editor={<span>אַשְׁרֵי</span>}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'עברית' });
-    const name = within(cell).getByText('עברית');
+    const name = screen.getByText('עברית');
     const row = name.parentElement;
     expect(row).toHaveAttribute('dir', 'rtl');
     // Name is first in DOM order; combined with `dir="rtl"` + flex (which jsdom does not lay out)
@@ -167,7 +163,7 @@ describe('ResourceCellView name display', () => {
   });
 
   it('inline mode still shows the name while downloading', () => {
-    renderGridRow(
+    renderCells(
       <ResourceCellView
         state="downloading"
         label="KJV"
@@ -177,13 +173,12 @@ describe('ResourceCellView name display', () => {
         editor={undefined}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'KJV' });
-    expect(within(cell).getByText('KJV')).toBeInTheDocument();
-    expect(within(cell).getByText('Downloading…')).toBeInTheDocument();
+    expect(screen.getByText('KJV')).toBeInTheDocument();
+    expect(screen.getByText('Downloading…')).toBeInTheDocument();
   });
 
   it('inline mode still shows the name when the download failed', () => {
-    renderGridRow(
+    renderCells(
       <ResourceCellView
         state="failed"
         label="ASV"
@@ -193,13 +188,12 @@ describe('ResourceCellView name display', () => {
         editor={undefined}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'ASV' });
-    expect(within(cell).getByText('ASV')).toBeInTheDocument();
-    expect(within(cell).getByText('Download failed')).toBeInTheDocument();
+    expect(screen.getByText('ASV')).toBeInTheDocument();
+    expect(screen.getByText('Download failed')).toBeInTheDocument();
   });
 
   it('inline mode still shows the name for an empty verse', () => {
-    renderGridRow(
+    renderCells(
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -210,13 +204,12 @@ describe('ResourceCellView name display', () => {
         editor={undefined}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'WEB' });
-    expect(within(cell).getByText('WEB')).toBeInTheDocument();
-    expect(within(cell).getByText('No text for this verse')).toBeInTheDocument();
+    expect(screen.getByText('WEB')).toBeInTheDocument();
+    expect(screen.getByText('No text for this verse')).toBeInTheDocument();
   });
 
-  it('the visible name is aria-hidden so the gridcell name is not announced twice', () => {
-    renderGridRow(
+  it('the visible name is aria-hidden so the parent listitem name is not announced twice', () => {
+    renderCells(
       <ResourceCellView
         state="ready"
         label="NIV"
@@ -226,13 +219,13 @@ describe('ResourceCellView name display', () => {
         editor={<span>In the beginning</span>}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'NIV' });
-    expect(cell).toHaveAttribute('aria-label', 'NIV');
-    expect(within(cell).getByText('NIV')).toHaveAttribute('aria-hidden', 'true');
+    // ResourceCellView is presentational (no role/aria-label of its own); the parent verse
+    // `listitem` owns the accessible name, so the visible copy must be hidden from the a11y tree.
+    expect(screen.getByText('NIV')).toHaveAttribute('aria-hidden', 'true');
   });
 
-  it('defaults to header display: the name is a band directly under the gridcell', () => {
-    renderGridRow(
+  it('defaults to header display: the name band is a direct child of the cell root', () => {
+    const { container } = renderCells(
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -241,9 +234,10 @@ describe('ResourceCellView name display', () => {
         editor={<span>Blessed</span>}
       />,
     );
-    const cell = screen.getByRole('gridcell', { name: 'WEB' });
-    const name = within(cell).getByText('WEB');
-    // Header mode: no intermediate row — the name band is a direct child of the gridcell.
+    // The cell root is the presentational div ResourceCellView renders (our wrapper's only child).
+    const cell = container.firstElementChild?.firstElementChild;
+    const name = screen.getByText('WEB');
+    // Header mode: no intermediate row — the name band is a direct child of the cell root.
     expect(name.parentElement).toBe(cell);
     // Header mode routes through the same helper, so it inherits the aria-hidden non-duplication.
     expect(name).toHaveAttribute('aria-hidden', 'true');

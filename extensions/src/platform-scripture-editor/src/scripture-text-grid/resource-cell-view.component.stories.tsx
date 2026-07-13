@@ -227,7 +227,7 @@ export const VerseInlineWrapping: Story = {
 /** Verse mode, downloading — the inline name stays beside the offline placeholder + spinner. */
 export const VerseDownloading: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="downloading"
         label="WEB"
@@ -236,14 +236,14 @@ export const VerseDownloading: Story = {
         nameDisplay="inline"
         editor={undefined}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** Verse mode, failed — the inline name stays beside the "Download failed" placeholder. */
 export const VerseFailed: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="failed"
         label="WEB"
@@ -252,7 +252,7 @@ export const VerseFailed: Story = {
         nameDisplay="inline"
         editor={undefined}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
@@ -262,7 +262,7 @@ export const VerseFailed: Story = {
  */
 export const VerseLongName: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="New International Version 2011"
@@ -271,14 +271,14 @@ export const VerseLongName: Story = {
         nameDisplay="inline"
         editor={<SampleVerse />}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** Verse mode, RTL long name — truncates on the inline-start (right) side; tooltip reveals it. */
 export const VerseLongNameRightToLeft: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="תרגום השבעים המלא לפי מהדורת רלפס"
@@ -287,7 +287,7 @@ export const VerseLongNameRightToLeft: Story = {
         nameDisplay="inline"
         editor={<SampleVerse rtl />}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
