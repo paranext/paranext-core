@@ -4,7 +4,12 @@ import { useEffect } from 'react';
 export type ResourceZoomInputOptions = {
   /** The grid container the listeners attach to. */
   containerRef: React.RefObject<HTMLElement | null>;
-  adjustZoom: (resourceId: string, deltaSteps: number) => void;
+  /**
+   * Applies a zoom delta (in steps; +1 = zoom in, −1 = zoom out) to the resource resolved from the
+   * wheel event's target. Optional — when omitted (no zoom controller) the wheel gesture is still
+   * caught and the page-zoom default is suppressed, but no factor changes.
+   */
+  adjustZoom?: (resourceId: string, deltaSteps: number) => void;
 };
 
 /** Walks up from an element to the nearest `[data-resource-id]`, returning its value. */
@@ -45,7 +50,7 @@ export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomI
         event.target instanceof Element ? event.target : undefined,
       );
       if (!resourceId) return;
-      adjustZoom(resourceId, event.deltaY < 0 ? 1 : -1);
+      adjustZoom?.(resourceId, event.deltaY < 0 ? 1 : -1);
     };
 
     container.addEventListener('wheel', onWheel, { capture: true, passive: false });
