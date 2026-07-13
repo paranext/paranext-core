@@ -33,6 +33,7 @@ import {
   persistUserRemoval,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -55,6 +56,7 @@ const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
+const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
@@ -62,6 +64,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
+  CELL_ACCESSIBLE_NAME_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -76,19 +79,21 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
- * Options panel, and the verse-cell grid body.
+ * Options panel, and the resource body (verse mode / chapter mode).
  *
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
- * through the per-user text-connection PDP setters. Below the header, the grid body renders one
+ * through the per-user text-connection PDP setters. Below the header, the body renders one
  * `ResourceCell` per shown resource — the resources come from the `getScriptureTextGridContents`
- * selector over the Text Collection sources assembled by `useTextCollectionSources`, and the row's
- * verse/chapter layout follows the View Options `viewMode` toggle.
+ * selector over the Text Collection sources assembled by `useTextCollectionSources`. The `viewMode`
+ * toggle selects the layout: a vertical list of stacked verse rows (verse mode), or a horizontal
+ * row of side-by-side full-chapter columns (chapter mode).
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
 
@@ -97,7 +102,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // follow it when opened without an explicit project — e.g. from the default layout, whose tab
   // carries no projectId. An explicit `projectId` (e.g. a direct openWebView) takes precedence.
   const [scrRef, setScrRef, , , activeEditorProjectId] = useWebViewScrollGroupScrRef();
-  const effectiveProjectId = projectId ?? activeEditorProjectId;
+  const candidateProjectId = projectId ?? activeEditorProjectId;
+
+  // `effectiveProjectId` is the project whose text collection the grid shows. It starts from the
+  // active editor and is refined by a latch effect (below, once `resources` is known) so that
+  // focusing one of the grid's own resource cells doesn't hijack it. See resolveTextCollectionProjectId.
+  const [effectiveProjectId, setEffectiveProjectId] = useState<string | undefined>(
+    candidateProjectId,
+  );
 
   const { sources, textConnectionPdp } = useTextCollectionSources(effectiveProjectId);
 
@@ -107,13 +119,16 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const sourcesRef = useRef(sources);
   sourcesRef.current = sources;
 
-  // View Options `viewMode` toggle; also drives the grid body's verse/chapter row layout.
-  const [viewMode, setViewMode] = useState<ResourceCollectionViewMode>('verse');
+  // View Options `viewMode` toggle; drives the grid body's verse/chapter layout. Persisted per web
+  // view via useWebViewState so the choice survives an app restart (mirrors resource-text-panel).
+  const [viewMode, setViewMode] = useWebViewState<ResourceCollectionViewMode>('viewMode', 'verse');
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
 
-  // Chapter-context overlay opened from a verse cell; Escape closes it.
+  // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
+  // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
+  // returns to verse mode.
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
@@ -151,6 +166,23 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
     [sources, cachedResources],
   );
+
+  // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
+  // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
+  // the grid to one of its own displayed resources — that project has no text collection and would
+  // blank the grid; keep the current project instead. Still follow the active editor to a genuinely
+  // different text-collection project.
+  useEffect(() => {
+    setEffectiveProjectId((previous) =>
+      resolveTextCollectionProjectId(previous, {
+        explicitProjectId: projectId,
+        candidateProjectId,
+        candidateIsOwnResource: resources.some(
+          (resource) => resource.projectId === candidateProjectId,
+        ),
+      }),
+    );
+  }, [projectId, candidateProjectId, resources]);
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
@@ -320,6 +352,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             <ResourceCollectionOptions
               viewMode={viewMode}
               onViewModeChange={setViewMode}
+              isChapterEnabled
               top={top}
               bottom={bottom}
               installingResourceNames={installingResourceNames}
@@ -368,6 +401,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             onChapterContextChange={setChapterContext}
             onChapterContextClose={handleCloseChapterContext}
             closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+            cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
           />
         )}
       </div>

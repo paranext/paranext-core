@@ -2,9 +2,9 @@
  * E2E checks for the Scripture Text Grid's View Options panel (PT-4053).
  *
  * Covered: opening the panel from the header icon button shows the expected controls — the VIEW
- * toggle with Verse active and Chapter disabled ("Coming soon"), the TEXTS section, and the Get
- * Resources button. The panel renders these controls without a bound project (the TEXTS list is
- * simply empty), so this does not depend on project fixtures.
+ * toggle with Verse active and Chapter enabled, the TEXTS section, and the Get Resources button.
+ * The panel renders these controls without a bound project (the TEXTS list is simply empty), so
+ * this does not depend on project fixtures.
  *
  * There is no menu/command for the grid (it ships in the default layout), so the test opens it
  * directly via `window.papi.webViews.openWebView` and addresses the web view iframe by its
@@ -18,7 +18,12 @@
 import { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures/cdp.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-import { closeAllNonHomeDockTabs } from './test-helpers';
+import {
+  chapterViewOption,
+  closeAllNonHomeDockTabs,
+  verseViewOption,
+  viewOptionsButton,
+} from './test-helpers';
 
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
@@ -89,16 +94,16 @@ test.describe('Scripture Text Grid — View Options panel', () => {
 
     // Open the popover from the header View Options icon button (aria-label is localized to English
     // in the test locale).
-    await grid.getByRole('button', { name: 'View Options' }).click();
+    await viewOptionsButton(grid).click();
 
-    // VIEW toggle: Verse is the active option; Chapter is disabled with a "Coming soon" hint (its
-    // renderer ships later).
-    const verse = grid.getByRole('radio', { name: 'Verse' });
-    const chapter = grid.getByRole('radio', { name: /Chapter/ });
+    // VIEW toggle: Verse is the active option; Chapter is now enabled (its renderer shipped), so
+    // the "Coming soon" hint is gone.
+    const verse = verseViewOption(grid);
+    const chapter = chapterViewOption(grid);
     await expect(verse).toBeVisible({ timeout: 15_000 });
     await expect(verse).toHaveAttribute('data-state', 'on');
-    await expect(chapter).toBeDisabled();
-    await expect(grid.getByText('Coming soon')).toBeVisible();
+    await expect(chapter).toBeEnabled();
+    await expect(grid.getByText('Coming soon')).toHaveCount(0);
 
     // TEXTS section header and the Get Resources button are always present (the list itself is empty
     // without a bound project).

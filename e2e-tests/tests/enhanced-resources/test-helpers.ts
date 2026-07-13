@@ -1,4 +1,4 @@
-import { expect, Page } from '@playwright/test';
+import { expect, FrameLocator, Page } from '@playwright/test';
 
 /**
  * Close every dock tab whose title is not "Home" so each test starts from a clean dock state.
@@ -184,6 +184,41 @@ export async function openScriptureTextGrid(page: Page) {
   const tab = page.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_GRID_TAB_TITLE });
   await expect(tab).toBeVisible({ timeout: 15_000 });
   return page.frameLocator(SCRIPTURE_TEXT_GRID_FRAME_SELECTOR);
+}
+
+// --- View Options panel locators/actions --------------------------------------------------------
+// Small helpers over the grid iframe so specs read intent-first and a label change (e.g. sentence-
+// casing "View Options") is a one-line edit here instead of a find-and-replace across every spec.
+
+/** The header "View Options" icon button inside the grid iframe. */
+export function viewOptionsButton(frame: FrameLocator) {
+  return frame.getByRole('button', { name: 'View Options' });
+}
+
+/** The "Verse" radio in the View Options VIEW toggle. */
+export function verseViewOption(frame: FrameLocator) {
+  return frame.getByRole('radio', { name: 'Verse' });
+}
+
+/** The "Chapter" radio in the View Options VIEW toggle. */
+export function chapterViewOption(frame: FrameLocator) {
+  return frame.getByRole('radio', { name: /Chapter/ });
+}
+
+/** The grid body — a neutral whitespace target to press Escape on and dismiss the popover. */
+export function gridBody(frame: FrameLocator) {
+  return frame.locator('body');
+}
+
+/**
+ * Open the View Options popover, switch the grid to Chapter view, and dismiss the popover so it
+ * does not overlay the grid body. Bundles the three-step sequence the chapter-mode specs all
+ * repeat.
+ */
+export async function switchToChapterView(frame: FrameLocator): Promise<void> {
+  await viewOptionsButton(frame).click();
+  await chapterViewOption(frame).click();
+  await gridBody(frame).press('Escape');
 }
 
 /**
