@@ -2,7 +2,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import type { PlatformEventHandler } from 'platform-bible-utils';
+import {
+  newPlatformError,
+  type PlatformError,
+  type PlatformEventHandler,
+} from 'platform-bible-utils';
 import { useProjectSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
 import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
@@ -23,12 +27,16 @@ vi.mock('platform-bible-react', () => ({
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
 const DEFAULT = { dataVersion: '1.0.0', items: [] };
 
-const setRaw = (value: unknown) =>
+/**
+ * Set the value the mocked `useProjectSetting` returns. `isLoading` defaults to `false` (the
+ * settled state); pass `true` to simulate the initial loading phase before the real value arrives.
+ */
+const setRaw = (value: unknown, isLoading = false) =>
   // `useProjectSetting`'s real return type is a specific setting-typed tuple; the mock only needs
   // to satisfy the hook's destructuring shape `[setting, setSetting, resetSetting, isLoading]`, so
   // cast the test-only tuple to `never` rather than reconstructing the full generic setter types.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  mockUseProjectSetting.mockReturnValue([value, undefined, undefined, false] as never);
+  mockUseProjectSetting.mockReturnValue([value, undefined, undefined, isLoading] as never);
 
 describe('useBufferedProjectSetting', () => {
   beforeEach(() => {
@@ -43,6 +51,19 @@ describe('useBufferedProjectSetting', () => {
       useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     expect(result.current[0]).toEqual(first);
+  });
+
+  it('does not lock in the loading placeholder — applies the value once it finishes loading', () => {
+    const real = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] };
+    // Initial mount: still loading, so `useProjectSetting` returns the default placeholder.
+    setRaw(DEFAULT, true);
+    const { result, rerender } = renderHook(() =>
+      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+    );
+    // The subscription resolves: the real value arrives and loading finishes.
+    setRaw(real, false);
+    rerender();
+    expect(result.current[0]).toEqual(real);
   });
 
   it('holds a later raw change until re-armed', () => {
@@ -64,6 +85,8 @@ describe('useBufferedProjectSetting', () => {
     const { result, rerender } = renderHook(() =>
       useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
+    // Subscribing to the re-arm event is what makes this apply possible.
+    expect(vi.mocked(useEvent)).toHaveBeenCalled();
     setRaw(second);
     rerender();
     act(() => capturedHandler?.({ projectId: 'proj-1' }));
@@ -83,22 +106,25 @@ describe('useBufferedProjectSetting', () => {
     expect(result.current[0]).toEqual(first);
   });
 
-  it('re-applies when projectId changes', () => {
-    const first = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] };
-    const second = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] };
-    setRaw(first);
-    const { result, rerender } = renderHook(
-      ({ pid }) => useBufferedProjectSetting(pid, 'platformScripture.modelTexts', DEFAULT),
-      { initialProps: { pid: 'proj-1' } },
+  it('handles an undefined projectId without applying or throwing', () => {
+    setRaw(DEFAULT);
+    const { result } = renderHook(() =>
+      useBufferedProjectSetting(undefined, 'platformScripture.modelTexts', DEFAULT),
     );
-    setRaw(second);
-    rerender({ pid: 'proj-2' });
-    expect(result.current[0]).toEqual(second);
+    expect(result.current[0]).toEqual(DEFAULT);
+    // A re-arm event for some real project must not affect an undefined-projectId hold.
+    const other = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'X', id: '9' }] };
+    setRaw(other);
+    act(() => capturedHandler?.({ projectId: 'proj-1' }));
+    expect(result.current[0]).toEqual(DEFAULT);
   });
 
-  it('subscribes to the re-arm event', () => {
-    setRaw(DEFAULT);
-    renderHook(() => useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT));
-    expect(vi.mocked(useEvent)).toHaveBeenCalled();
+  it('passes a held PlatformError value through unchanged', () => {
+    const error: PlatformError = newPlatformError('boom');
+    setRaw(error);
+    const { result } = renderHook(() =>
+      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+    );
+    expect(result.current[0]).toBe(error);
   });
 });
