@@ -78,7 +78,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private string? _cachedUserId;
 
     // Reference the shared data-type constant so the storage key and the data-type name can't drift.
-    private const string OverlaySettingName = ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY;
+    private const string OverlaySettingName = ProjectDataType.TEXT_COLLECTION_OVERLAY;
     private const string OverlayInitializedMarkerName = OverlaySettingName + "Initialized";
     private const string OverlaySchemaVersion = "1.0.0";
 
@@ -155,10 +155,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
-        retVal.Add(("getShownByDefaultOverlay", GetShownByDefaultOverlay));
-        retVal.Add(("setShownByDefaultOverlay", SetShownByDefaultOverlay));
-        retVal.Add(("resetShownByDefaultOverlay", ResetShownByDefaultOverlay));
-        retVal.Add(("initializeShownByDefaultOverlay", InitializeShownByDefaultOverlay));
+        retVal.Add(("getTextCollectionOverlay", GetTextCollectionOverlay));
+        retVal.Add(("setTextCollectionOverlay", SetTextCollectionOverlay));
+        retVal.Add(("resetTextCollectionOverlay", ResetTextCollectionOverlay));
+        retVal.Add(("initializeTextCollectionOverlay", InitializeTextCollectionOverlay));
         retVal.Add(
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
@@ -1730,11 +1730,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // The referenced-projects-and-resources list carries the admin-only isResourceShownByDefault
-        // flag (the shared shown-by-default default for the Scripture Text Grid), so its writes are
+        // The referenced-projects-and-resources list carries the admin-only inTextCollection
+        // flag (the shared text-collection default for the Scripture Text Grid), so its writes are
         // gated to project administrators server-side (the UI-facing query is
         // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
-        // shown-by-default and keep their pre-existing ungated behavior. USER-scope writes (user
+        // text-collection and keep their pre-existing ungated behavior. USER-scope writes (user
         // lists, overlay, init) are intentionally UNGATED.
         if (
             paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
@@ -2088,7 +2088,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    public Dictionary<string, bool> GetShownByDefaultOverlay(object? param = null)
+    public Dictionary<string, bool> GetTextCollectionOverlay(object? param = null)
     {
         var (schemaVersion, content) = GetUserProjectSettings().GetSetting(OverlaySettingName);
         if (content == null || string.IsNullOrEmpty(content.Value))
@@ -2100,7 +2100,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return content.Value.DeserializeFromJson<Dictionary<string, bool>>() ?? [];
     }
 
-    public bool SetShownByDefaultOverlay(object? value)
+    public bool SetTextCollectionOverlay(object? value)
     {
         string? json = value?.ToString();
         Dictionary<string, bool>? map;
@@ -2117,56 +2117,56 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         catch (JsonException ex)
         {
             throw new InvalidDataException(
-                "ShownByDefaultOverlay value must be a JSON object map",
+                "TextCollectionOverlay value must be a JSON object map",
                 ex
             );
         }
         if (map is null)
-            throw new InvalidDataException("ShownByDefaultOverlay value must be a JSON object map");
+            throw new InvalidDataException("TextCollectionOverlay value must be a JSON object map");
         WriteOverlay(map);
         SendDataUpdateEvent(
-            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
-            "shown-by-default overlay update event"
+            ProjectDataType.TEXT_COLLECTION_OVERLAY,
+            "text-collection overlay update event"
         );
         return true;
     }
 
-    public bool ResetShownByDefaultOverlay()
+    public bool ResetTextCollectionOverlay()
     {
         // Full reset: forget the overlay AND the initialized marker so the next first-open re-inits
         // from the current admin defaults.
         GetUserProjectSettings().RemoveSetting(OverlaySettingName);
         GetUserProjectSettings().RemoveSetting(OverlayInitializedMarkerName);
         SendDataUpdateEvent(
-            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
-            "shown-by-default overlay reset event"
+            ProjectDataType.TEXT_COLLECTION_OVERLAY,
+            "text-collection overlay reset event"
         );
         return true;
     }
 
     /// <summary>
-    /// First-open initialization of the current user's shown-by-default overlay for this project.
+    /// First-open initialization of the current user's text-collection overlay for this project.
     /// For each Bible-text reference in <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> whose
-    /// <c>IsResourceShownByDefault</c> is set, records overlay[resourceId] = that value. Idempotent:
+    /// <c>InTextCollection</c> is set, records overlay[resourceId] = that value. Idempotent:
     /// a per-user-per-project marker prevents re-initialization, so later opens (and user un-checks)
     /// are preserved. Returns <c>false</c> when already initialized. Model texts do NOT participate
-    /// in shown-by-default and are intentionally not read here.
+    /// in text-collection and are intentionally not read here.
     /// </summary>
-    public bool InitializeShownByDefaultOverlay(object? param = null)
+    public bool InitializeTextCollectionOverlay(object? param = null)
     {
         var settings = GetUserProjectSettings();
         var (_, marker) = settings.GetSetting(OverlayInitializedMarkerName);
         if (marker != null)
             return false;
 
-        var overlay = GetShownByDefaultOverlay();
+        var overlay = GetTextCollectionOverlay();
         if (
             GetProjectSetting(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)
             is ResourceReferenceList list
         )
             foreach (var item in list.Items)
                 if (
-                    item.IsResourceShownByDefault is bool shown
+                    item.InTextCollection is bool shown
                     && TryGetBibleTextKey(item) is (_, string id)
                 )
                     // Overlay is keyed by resource id only (matching the TS `{ [id]: boolean }`
@@ -2182,8 +2182,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             new XElement("Items", "true")
         );
         SendDataUpdateEvent(
-            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
-            "shown-by-default overlay first-open init event"
+            ProjectDataType.TEXT_COLLECTION_OVERLAY,
+            "text-collection overlay first-open init event"
         );
         return true;
     }
@@ -2228,7 +2228,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Validates the schema version stored alongside the shown-by-default overlay. The overlay has
+    /// Validates the schema version stored alongside the text-collection overlay. The overlay has
     /// its own version line (<see cref="OverlaySchemaVersion"/>), independent of the S/R'd resource
     /// lists, so it is validated against that rather than
     /// <see cref="ResourceReferenceList.CurrentMajorVersion"/>.
@@ -2238,11 +2238,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         int expectedMajor = new Version(OverlaySchemaVersion).Major;
         if (!Version.TryParse(schemaVersion, out Version? parsed))
             throw new InvalidDataException(
-                $"Shown-by-default overlay has invalid version format: '{schemaVersion}'"
+                $"Text-collection overlay has invalid version format: '{schemaVersion}'"
             );
         if (parsed.Major != expectedMajor)
             throw new InvalidDataException(
-                $"Shown-by-default overlay has incompatible major version {parsed.Major}; "
+                $"Text-collection overlay has incompatible major version {parsed.Major}; "
                     + $"expected {expectedMajor}"
             );
     }

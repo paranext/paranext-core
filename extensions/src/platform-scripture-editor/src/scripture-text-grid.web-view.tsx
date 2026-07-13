@@ -193,10 +193,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     if (!effectiveProjectId || !textConnectionPdp) return;
     if (initializedProjectIds.current.has(effectiveProjectId)) return;
     initializedProjectIds.current.add(effectiveProjectId);
-    textConnectionPdp.initializeShownByDefaultOverlay().catch((error) => {
+    textConnectionPdp.initializeTextCollectionOverlay().catch((error) => {
       initializedProjectIds.current.delete(effectiveProjectId);
       logger.error(
-        `Failed to initialize shown-by-default overlay for ${effectiveProjectId}: ${error}`,
+        `Failed to initialize text-collection overlay for ${effectiveProjectId}: ${error}`,
       );
     });
   }, [effectiveProjectId, textConnectionPdp]);

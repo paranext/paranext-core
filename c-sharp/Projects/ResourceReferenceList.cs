@@ -10,19 +10,20 @@ public abstract record ResourceReference
     public string Name { get; init; } = string.Empty;
 
     /// <summary>
-    /// Project-scope (Send/Receive'd) admin flag: when set, this resource is shown by default.
-    /// Consumed by the shared layout (PT-4040) and, for Bible-text resources, by the Scripture Text
-    /// Grid, where it also seeds new users' per-user overlay on first open (PT-4050). Understood on
-    /// every reference type; null/absent means no admin preference. Serialized only when non-null.
+    /// Project-scope (Send/Receive'd) admin flag: when set, this resource is in the text collection
+    /// by default. Consumed by the shared layout (PT-4040) and, for Bible-text resources, by the
+    /// Scripture Text Grid, where it also seeds new users' per-user overlay on first open (PT-4050).
+    /// Understood on every reference type; null/absent means no admin preference. Serialized only
+    /// when non-null.
     /// </summary>
-    public bool? IsResourceShownByDefault { get; init; }
+    public bool? InTextCollection { get; init; }
 
     /// <summary>
-    /// User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
-    /// resources list. Nullable/absent by default; meaningful only for Bible-text references.
-    /// Serialized only when non-null.
+    /// User-scope (NOT Send/Receive'd) flag: whether the current user has included this resource
+    /// from their personal list in the text collection. Nullable/absent by default; meaningful only
+    /// for Bible-text references. Serialized only when non-null.
     /// </summary>
-    public bool? IsResourceShownForUser { get; init; }
+    public bool? InTextCollectionForUser { get; init; }
 
     /// <summary>
     /// Forward-compat passthrough for JSON/XML properties this build does not recognize, so a
@@ -81,8 +82,8 @@ public record ResourceReferenceList
         "type",
         "name",
         "id",
-        "isResourceShownByDefault",
-        "isResourceShownForUser",
+        "inTextCollection",
+        "inTextCollectionForUser",
     };
 
     /// <summary>
@@ -90,15 +91,15 @@ public record ResourceReferenceList
     /// (<see cref="EnhancedResourceReference"/>, <see cref="XmlResourceReference"/>,
     /// <see cref="SourceLanguageResourceReference"/>). Narrower than
     /// <see cref="KnownBibleTextPropertyNames"/> because these types never carry <c>id</c> or
-    /// <c>isResourceShownForUser</c>; properties outside this set flow through
-    /// <see cref="ResourceReference.ExtraData"/>. Includes <c>isResourceShownByDefault</c>, which is
+    /// <c>inTextCollectionForUser</c>; properties outside this set flow through
+    /// <see cref="ResourceReference.ExtraData"/>. Includes <c>inTextCollection</c>, which is
     /// understood on every reference type (see PT-4040).
     /// </summary>
     internal static readonly IReadOnlySet<string> KnownNamedOnlyPropertyNames = new HashSet<string>
     {
         "type",
         "name",
-        "isResourceShownByDefault",
+        "inTextCollection",
     };
 
     /// <summary>
@@ -152,13 +153,11 @@ public record ResourceReferenceList
                 // Write the two flags only when set, so old-build files stay clean. XML attributes
                 // are untyped strings; booleans are emitted lowercase and parsed back with
                 // bool.TryParse (the JSON path uses a native JSON boolean instead).
-                if (item.IsResourceShownByDefault is bool shown)
+                if (item.InTextCollection is bool shown)
+                    element.Add(new XAttribute("inTextCollection", shown ? "true" : "false"));
+                if (item.InTextCollectionForUser is bool shownForUser)
                     element.Add(
-                        new XAttribute("isResourceShownByDefault", shown ? "true" : "false")
-                    );
-                if (item.IsResourceShownForUser is bool shownForUser)
-                    element.Add(
-                        new XAttribute("isResourceShownForUser", shownForUser ? "true" : "false")
+                        new XAttribute("inTextCollectionForUser", shownForUser ? "true" : "false")
                     );
 
                 AddExtraDataAttributes(element, item.ExtraData);
@@ -214,7 +213,7 @@ public record ResourceReferenceList
 
                 // Capture unknown attributes against the per-type known-name set (everything else ->
                 // ExtraData). Name-only types use the narrower set so a Bible-text-only attribute such
-                // as "id" or "isResourceShownForUser" round-trips instead of being silently dropped.
+                // as "id" or "inTextCollectionForUser" round-trips instead of being silently dropped.
                 static Dictionary<string, JsonElement>? CaptureExtras(
                     XElement el,
                     IReadOnlySet<string> known
@@ -236,34 +235,34 @@ public record ResourceReferenceList
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
-                            IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
-                            IsResourceShownForUser = ParseFlag(el, "isResourceShownForUser"),
+                            InTextCollection = ParseFlag(el, "inTextCollection"),
+                            InTextCollectionForUser = ParseFlag(el, "inTextCollectionForUser"),
                             ExtraData = CaptureExtras(el, KnownBibleTextPropertyNames),
                         },
                         "dblResource" => new DblResourceReference
                         {
                             Name = name,
                             Id = el.Attribute("id")?.Value ?? "",
-                            IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
-                            IsResourceShownForUser = ParseFlag(el, "isResourceShownForUser"),
+                            InTextCollection = ParseFlag(el, "inTextCollection"),
+                            InTextCollectionForUser = ParseFlag(el, "inTextCollectionForUser"),
                             ExtraData = CaptureExtras(el, KnownBibleTextPropertyNames),
                         },
                         "enhancedResource" => new EnhancedResourceReference
                         {
                             Name = name,
-                            IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
+                            InTextCollection = ParseFlag(el, "inTextCollection"),
                             ExtraData = CaptureExtras(el, KnownNamedOnlyPropertyNames),
                         },
                         "xmlResource" => new XmlResourceReference
                         {
                             Name = name,
-                            IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
+                            InTextCollection = ParseFlag(el, "inTextCollection"),
                             ExtraData = CaptureExtras(el, KnownNamedOnlyPropertyNames),
                         },
                         "sourceLanguageResource" => new SourceLanguageResourceReference
                         {
                             Name = name,
-                            IsResourceShownByDefault = ParseFlag(el, "isResourceShownByDefault"),
+                            InTextCollection = ParseFlag(el, "inTextCollection"),
                             ExtraData = CaptureExtras(el, KnownNamedOnlyPropertyNames),
                         },
                         _ => new UnknownResourceReference

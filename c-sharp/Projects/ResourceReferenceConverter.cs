@@ -22,47 +22,47 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
                 ? typeEl.GetString()
                 : null;
 
-        bool? shown = GetBool(root, "isResourceShownByDefault");
-        bool? shownForUser = GetBool(root, "isResourceShownForUser");
+        bool? shown = GetBool(root, "inTextCollection");
+        bool? shownForUser = GetBool(root, "inTextCollectionForUser");
 
         // Capture extras against the per-type known-name set so name-only types don't silently
-        // swallow (and drop) a Bible-text-only property such as "id" or "isResourceShownForUser" —
+        // swallow (and drop) a Bible-text-only property such as "id" or "inTextCollectionForUser" —
         // those flow through ExtraData instead. See ResourceReferenceList.Known*PropertyNames.
-        // isResourceShownByDefault is understood on every type (see PT-4040), so it is in both sets.
+        // inTextCollection is understood on every type (see PT-4040), so it is in both sets.
         return type switch
         {
             "project" => new ProjectReference
             {
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
-                IsResourceShownByDefault = shown,
-                IsResourceShownForUser = shownForUser,
+                InTextCollection = shown,
+                InTextCollectionForUser = shownForUser,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownBibleTextPropertyNames),
             },
             "dblResource" => new DblResourceReference
             {
                 Name = GetString(root, "name"),
                 Id = GetString(root, "id"),
-                IsResourceShownByDefault = shown,
-                IsResourceShownForUser = shownForUser,
+                InTextCollection = shown,
+                InTextCollectionForUser = shownForUser,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownBibleTextPropertyNames),
             },
             "enhancedResource" => new EnhancedResourceReference
             {
                 Name = GetString(root, "name"),
-                IsResourceShownByDefault = shown,
+                InTextCollection = shown,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownNamedOnlyPropertyNames),
             },
             "xmlResource" => new XmlResourceReference
             {
                 Name = GetString(root, "name"),
-                IsResourceShownByDefault = shown,
+                InTextCollection = shown,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownNamedOnlyPropertyNames),
             },
             "sourceLanguageResource" => new SourceLanguageResourceReference
             {
                 Name = GetString(root, "name"),
-                IsResourceShownByDefault = shown,
+                InTextCollection = shown,
                 ExtraData = CaptureExtras(root, ResourceReferenceList.KnownNamedOnlyPropertyNames),
             },
             _ => CreateUnknown(root),
@@ -145,10 +145,10 @@ internal sealed class ResourceReferenceConverter : JsonConverter<ResourceReferen
             writer.WriteString("id", dbl.Id);
 
         // Emit the two flags only when set, so old-build files stay clean.
-        if (value.IsResourceShownByDefault is bool shownVal)
-            writer.WriteBoolean("isResourceShownByDefault", shownVal);
-        if (value.IsResourceShownForUser is bool shownForUserVal)
-            writer.WriteBoolean("isResourceShownForUser", shownForUserVal);
+        if (value.InTextCollection is bool shownVal)
+            writer.WriteBoolean("inTextCollection", shownVal);
+        if (value.InTextCollectionForUser is bool shownForUserVal)
+            writer.WriteBoolean("inTextCollectionForUser", shownForUserVal);
 
         // Forward-compat: re-emit unknown properties captured on read.
         if (value.ExtraData is not null)

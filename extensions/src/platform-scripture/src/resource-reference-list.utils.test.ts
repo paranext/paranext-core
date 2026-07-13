@@ -73,30 +73,30 @@ describe('isValidResourceReference', () => {
         type: 'project',
         name: 'P',
         id: 'aabbcc',
-        isResourceShownByDefault: true,
-        isResourceShownForUser: false,
+        inTextCollection: true,
+        inTextCollectionForUser: false,
       }),
     ).toBe(true);
   });
 
-  it('rejects a project reference with a non-boolean isResourceShownByDefault', () => {
+  it('rejects a project reference with a non-boolean inTextCollection', () => {
     expect(
       isValidResourceReference({
         type: 'project',
         name: 'P',
         id: 'aabbcc',
-        isResourceShownByDefault: 'yes',
+        inTextCollection: 'yes',
       }),
     ).toBe(false);
   });
 
-  it('rejects a dblResource reference with a non-boolean isResourceShownForUser', () => {
+  it('rejects a dblResource reference with a non-boolean inTextCollectionForUser', () => {
     expect(
       isValidResourceReference({
         type: 'dblResource',
         name: 'D',
         id: '112233445566',
-        isResourceShownForUser: 3,
+        inTextCollectionForUser: 3,
       }),
     ).toBe(false);
   });
@@ -111,13 +111,13 @@ describe('isValidResourceReference', () => {
     ).toBe(true);
   });
 
-  it('rejects a dblResource reference with a non-boolean isResourceShownByDefault', () => {
+  it('rejects a dblResource reference with a non-boolean inTextCollection', () => {
     expect(
       isValidResourceReference({
         type: 'dblResource',
         name: 'D',
         id: '112233445566',
-        isResourceShownByDefault: 'no',
+        inTextCollection: 'no',
       }),
     ).toBe(false);
   });

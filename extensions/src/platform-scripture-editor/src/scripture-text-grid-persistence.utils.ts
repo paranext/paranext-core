@@ -1,4 +1,4 @@
-import type { ResourceReferenceList, ShownByDefaultOverlay } from 'platform-scripture';
+import type { ResourceReferenceList, TextCollectionOverlay } from 'platform-scripture';
 import {
   addToUserResources,
   removeFromUserResources,
@@ -12,7 +12,7 @@ import {
  */
 export interface UserResourceWriter {
   setUserReferencedProjectsAndResources: (list: ResourceReferenceList) => Promise<unknown>;
-  setShownByDefaultOverlay: (overlay: ShownByDefaultOverlay) => Promise<unknown>;
+  setTextCollectionOverlay: (overlay: TextCollectionOverlay) => Promise<unknown>;
 }
 
 /**
@@ -30,7 +30,7 @@ export function persistUserDisplay(
   const writes: Promise<unknown>[] = [];
   if (next.userReferenced !== sources.userReferenced)
     writes.push(writer.setUserReferencedProjectsAndResources(next.userReferenced));
-  if (next.overlay !== sources.overlay) writes.push(writer.setShownByDefaultOverlay(next.overlay));
+  if (next.overlay !== sources.overlay) writes.push(writer.setTextCollectionOverlay(next.overlay));
   return writes;
 }
 

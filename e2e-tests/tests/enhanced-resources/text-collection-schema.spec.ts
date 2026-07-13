@@ -6,11 +6,11 @@
  * nowhere in the repo. To run it locally, boot the app with CDP enabled, set `E2E_TEST_PROJECT_ID`
  * to a known editable admin project, and run the `enhanced-resources` project (see the run command
  * in `e2e-tests/playwright.config.ts`). Regression protection for this feature comes from the C#
- * unit tests (ParatextProjectDataProviderShownByDefaultTests); this spec is a manual smoke check.
+ * unit tests (ParatextProjectDataProviderTextCollectionTests); this spec is a manual smoke check.
  *
  * Scope — vanilla-core-observable only:
  *
- * - `isResourceShownByDefault` persists through the referenced-resources setting round-trip.
+ * - `inTextCollection` persists through the referenced-resources setting round-trip.
  * - First-open init writes the per-user overlay to match the project's flags.
  * - The admin gate on the referenced-resources write is enforced server-side; it is covered by the C#
  *   unit tests, not asserted here — this fixture runs as the default (admin) user.
@@ -30,7 +30,7 @@ import { waitForAppReady } from '../../fixtures/helpers';
 // The env-var + test.skip guard is therefore the correct pattern here.
 const TEST_PROJECT_ID = process.env.E2E_TEST_PROJECT_ID ?? '';
 
-test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
+test.describe('Scripture Text Grid text collection schema (A2)', () => {
   test('project flag persists and first-open init seeds the overlay', async ({ mainPage }) => {
     test.skip(!TEST_PROJECT_ID, 'No editable admin test project configured for this run');
     await waitForAppReady(mainPage);
@@ -50,10 +50,10 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
               // the return here to that shape. This lets the assertions below avoid a type assertion.
               getSetting: (
                 key: string,
-              ) => Promise<{ items: { id?: string; isResourceShownByDefault?: boolean }[] }>;
-              resetShownByDefaultOverlay: () => Promise<boolean>;
-              initializeShownByDefaultOverlay: () => Promise<boolean>;
-              getShownByDefaultOverlay: () => Promise<Record<string, boolean>>;
+              ) => Promise<{ items: { id?: string; inTextCollection?: boolean }[] }>;
+              resetTextCollectionOverlay: () => Promise<boolean>;
+              initializeTextCollectionOverlay: () => Promise<boolean>;
+              getTextCollectionOverlay: () => Promise<Record<string, boolean>>;
             }>;
           };
         };
@@ -72,7 +72,7 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
             type: 'project',
             name: 'P',
             id: 'aabbccddeeff00112233',
-            isResourceShownByDefault: true,
+            inTextCollection: true,
           },
         ],
       });
@@ -80,9 +80,9 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
       const stored = await pdp.getSetting('platformScripture.referencedProjectsAndResources');
 
       // First open initializes the overlay to match the project's flags.
-      await pdp.resetShownByDefaultOverlay();
-      const didInit = await pdp.initializeShownByDefaultOverlay();
-      const overlay = await pdp.getShownByDefaultOverlay();
+      await pdp.resetTextCollectionOverlay();
+      const didInit = await pdp.initializeTextCollectionOverlay();
+      const overlay = await pdp.getTextCollectionOverlay();
 
       return { stored, didInit, overlay };
     }, TEST_PROJECT_ID);
@@ -92,7 +92,7 @@ test.describe('Scripture Text Grid shown-by-default schema (A2)', () => {
     expect(result.stored).toBeTruthy();
 
     const flaggedItem = result.stored.items.find((i) => i.id === 'aabbccddeeff00112233');
-    expect(flaggedItem?.isResourceShownByDefault).toBe(true);
+    expect(flaggedItem?.inTextCollection).toBe(true);
     expect(result.didInit).toBe(true);
     expect(result.overlay.aabbccddeeff00112233).toBe(true);
   });

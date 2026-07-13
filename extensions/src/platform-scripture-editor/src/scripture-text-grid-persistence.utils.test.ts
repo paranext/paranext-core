@@ -32,16 +32,16 @@ const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollection
 /** A stub writer whose setters resolve; each test asserts which one was called and with what. */
 const makeWriter = (): UserResourceWriter => ({
   setUserReferencedProjectsAndResources: vi.fn().mockResolvedValue(true),
-  setShownByDefaultOverlay: vi.fn().mockResolvedValue(true),
+  setTextCollectionOverlay: vi.fn().mockResolvedValue(true),
 });
 
-/** Reads `isResourceShownForUser` off a reference without a type assertion. */
+/** Reads `inTextCollectionForUser` off a reference without a type assertion. */
 const userFlagOf = (refList: ResourceReferenceList, id: string): boolean | undefined => {
   const ref = refList.items.find(
     (item) => (isProjectReference(item) || isDblResourceReference(item)) && item.id === id,
   );
   return ref && (isProjectReference(ref) || isDblResourceReference(ref))
-    ? ref.isResourceShownForUser
+    ? ref.inTextCollectionForUser
     : undefined;
 };
 
@@ -55,24 +55,24 @@ describe('persistUserDisplay', () => {
   it('routes an admin-owned entry to the overlay only (not the user list)', () => {
     const writer = makeWriter();
     const sources = makeSources({
-      adminReferenced: list([dbl('esv', { isResourceShownByDefault: true })]),
+      adminReferenced: list([dbl('esv', { inTextCollection: true })]),
     });
 
     persistUserDisplay(writer, 'esv', false, sources);
 
-    expect(writer.setShownByDefaultOverlay).toHaveBeenCalledWith({ esv: false });
+    expect(writer.setTextCollectionOverlay).toHaveBeenCalledWith({ esv: false });
     expect(writer.setUserReferencedProjectsAndResources).not.toHaveBeenCalled();
   });
 
   it('routes a user entry to the user list only (not the overlay)', () => {
     const writer = makeWriter();
     const sources = makeSources({
-      userReferenced: list([dbl('web', { isResourceShownForUser: true })]),
+      userReferenced: list([dbl('web', { inTextCollectionForUser: true })]),
     });
 
     persistUserDisplay(writer, 'web', false, sources);
 
-    expect(writer.setShownByDefaultOverlay).not.toHaveBeenCalled();
+    expect(writer.setTextCollectionOverlay).not.toHaveBeenCalled();
     expect(writer.setUserReferencedProjectsAndResources).toHaveBeenCalledTimes(1);
     const persisted = vi.mocked(writer.setUserReferencedProjectsAndResources).mock.calls[0][0];
     expect(userFlagOf(persisted, 'web')).toBe(false);
@@ -84,14 +84,14 @@ describe('persistUserDisplay', () => {
 
     expect(writes).toHaveLength(0);
     expect(writer.setUserReferencedProjectsAndResources).not.toHaveBeenCalled();
-    expect(writer.setShownByDefaultOverlay).not.toHaveBeenCalled();
+    expect(writer.setTextCollectionOverlay).not.toHaveBeenCalled();
   });
 });
 
 describe('persistUserRemoval', () => {
   it('persists the user list without the removed entry', () => {
     const writer = makeWriter();
-    const userReferenced = list([dbl('web', { isResourceShownForUser: true }), dbl('kjv')]);
+    const userReferenced = list([dbl('web', { inTextCollectionForUser: true }), dbl('kjv')]);
 
     const result = persistUserRemoval(writer, 'web', userReferenced);
 
@@ -110,7 +110,7 @@ describe('persistUserRemoval', () => {
 });
 
 describe('persistUserAddition', () => {
-  it('appends the reference with isResourceShownForUser and persists', () => {
+  it('appends the reference with inTextCollectionForUser and persists', () => {
     const writer = makeWriter();
     const result = persistUserAddition(writer, dbl('niv'), list());
 
