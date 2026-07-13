@@ -148,7 +148,7 @@ export const ReadyRightToLeft: Story = {
   ),
 };
 
-/** Verse mode, ready — the editor slot shows a single verse (stand-in). */
+/** Verse mode, ready — the inline hanging name sits before a single verse (stand-in). */
 export const VerseReady: Story = {
   render: () => (
     <CellBox>
@@ -157,6 +157,7 @@ export const VerseReady: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        nameDisplay="inline"
         editor={<SampleVerse />}
       />
     </CellBox>
@@ -172,6 +173,7 @@ export const VerseEmpty: Story = {
         label="WEB"
         textDirection="ltr"
         localizedStrings={localizedStrings}
+        nameDisplay="inline"
         isVerseEmpty
         editor={undefined}
       />
@@ -188,7 +190,35 @@ export const VerseRightToLeft: Story = {
         label="עברית"
         textDirection="rtl"
         localizedStrings={localizedStrings}
+        nameDisplay="inline"
         editor={<SampleVerse rtl />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * Verse mode, inline name beside a longer verse — shows the verse text wrapping within its own
+ * column to the right of the name (the P9-style compact treatment; later lines stay in the text
+ * column rather than tucking under the name).
+ */
+export const VerseInlineWrapping: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={
+          <div style={{ fontFamily: 'serif', lineHeight: 1.7 }}>
+            <p style={{ margin: 0 }}>
+              <sup>3</sup> Blessed are the poor in spirit, for theirs is the kingdom of heaven, and
+              great is their reward in the days to come.
+            </p>
+          </div>
+        }
       />
     </CellBox>
   ),
