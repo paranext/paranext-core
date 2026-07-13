@@ -118,6 +118,25 @@ const sampleThreads: LegacyCommentThread[] = [
   },
 ];
 
+/** A long thread list (GEN 1:1–20) for the Scrollable story, enough to overflow the panel. */
+const manyThreads: LegacyCommentThread[] = Array.from({ length: 20 }, (_, index) => {
+  const verse = index + 1;
+  const id = `scroll-thread-${verse}`;
+  const verseRef = `GEN 1:${verse}`;
+  return {
+    id,
+    verseRef,
+    status: 'Todo',
+    type: 'Normal',
+    modifiedDate: '2024-01-02T10:00:00.0000000-00:00',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: false,
+    comments: [makeComment({ id: `${id}-c1`, thread: id, verseRef })],
+  };
+});
+
 /** The "current chapter" the scope filter narrows to in these stories (GEN 1). */
 const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
 
@@ -288,6 +307,15 @@ function createDecorator(config: DecoratorConfig) {
 /** A populated, unfiltered list with an open and a resolved thread. */
 export const Populated: Story = {
   decorators: [createDecorator({})],
+};
+
+/**
+ * A long list that overflows the panel: the comments scroll while the filter toolbar stays pinned
+ * at the top. The `tw:h-screen` decorator bounds the panel height so the inner list is the scroll
+ * area.
+ */
+export const Scrollable: Story = {
+  decorators: [createDecorator({ threads: manyThreads })],
 };
 
 /** Threads are still loading — show skeletons. */

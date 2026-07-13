@@ -321,9 +321,8 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // real scroll container, so this is robust whether the inner list or an ancestor scrolls.
     await threads.last().scrollIntoViewIfNeeded();
 
-    // Guard against a false green: if the list actually scrolled, the FIRST thread is no longer
-    // within the comments-iframe viewport. If this fails, the list did not overflow — raise
-    // COMMENT_COUNT (e.g. spread across GEN 1 + GEN 2) until it does.
+    // Guard against a false green: after scrolling, the FIRST thread must be out of the viewport,
+    // proving the list actually overflowed. If this fails, raise COMMENT_COUNT until it does.
     await expect(threads.first()).not.toBeInViewport();
 
     // The point of PT-4070: the filter row must remain on-screen after scrolling to the bottom.
