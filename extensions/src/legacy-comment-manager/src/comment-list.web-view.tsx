@@ -10,7 +10,7 @@ import {
   sonner,
   usePromise,
 } from 'platform-bible-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useLocalizedStrings,
   useProjectData,
@@ -29,7 +29,12 @@ import {
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
-import { findScrollTarget } from './comment-list-scroll.utils';
+import {
+  findScrollTarget,
+  NavigationRecord,
+  shouldArmSyncScroll,
+  toNavigationRecord,
+} from './comment-list-scroll.utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -96,11 +101,34 @@ global.webViewComponent = function CommentListWebView({
     ScrollBehavior | undefined
   >('instant');
 
+  /**
+   * One-shot record of the scripture reference this view itself navigated to — by clicking a
+   * thread's verse reference, or via the editor's "go to comment" selecting a thread. The matching
+   * incoming scroll-group change is consumed without arming a sync scroll: a click inside the
+   * comment list must never scroll the comment list. Any other scrRef change clears the record.
+   */
+  const selfInitiatedNavigationRef = useRef<NavigationRecord | undefined>(undefined);
+
+  /** Latest loaded threads, readable from the stable message listener without re-subscribing it. */
+  const commentThreadsRef = useRef<LegacyCommentThread[]>([]);
+
   // Arm a sync scroll whenever the scroll-group reference changes. This also runs on mount, where
   // `?? ` preserves the initial 'instant' behavior instead of downgrading it to 'smooth'. Note this
   // deliberately does NOT unfreeze the all-books selector: the query inputs stay frozen (see
-  // usesChapterScope below); a verse move only scrolls the already-loaded list.
+  // usesChapterScope below); a verse move only scrolls the already-loaded list. A change this view
+  // itself initiated (see selfInitiatedNavigationRef) is swallowed instead of armed.
   useEffect(() => {
+    const selfInitiatedNavigation = selfInitiatedNavigationRef.current;
+    selfInitiatedNavigationRef.current = undefined;
+    if (
+      !shouldArmSyncScroll(selfInitiatedNavigation, {
+        // TODO: Handle versification
+        book: scrRef.book,
+        chapterNum: scrRef.chapterNum,
+        verseNum: scrRef.verseNum,
+      })
+    )
+      return;
     setPendingSyncScrollBehavior((previous) => previous ?? 'smooth');
   }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
@@ -174,6 +202,13 @@ global.webViewComponent = function CommentListWebView({
         trySelectThread(data.threadId, true);
         // The explicit "go to comment" navigation wins over any due BCV-sync scroll (PT-4080).
         setPendingSyncScrollBehavior(undefined);
+        // The editor's caret move for this navigation may deliver its scroll-group change AFTER
+        // this message; record the thread's reference so that late change doesn't scroll the list
+        // away from the selection either.
+        const selectedThread = commentThreadsRef.current.find(
+          (thread) => thread.id === data.threadId,
+        );
+        selfInitiatedNavigationRef.current = toNavigationRecord(selectedThread?.verseRef);
       }
 
       if (data?.method === 'setFilters') {
@@ -250,6 +285,11 @@ global.webViewComponent = function CommentListWebView({
     if (!commentThreads || isPlatformError(commentThreads)) return [];
     return commentThreads;
   }, [commentThreads]);
+
+  // Mirror the loaded threads into the ref the stable message listener reads.
+  useEffect(() => {
+    commentThreadsRef.current = safeCommentThreads;
+  }, [safeCommentThreads]);
 
   // Process any pending thread selection once data finishes loading
   useEffect(() => {
@@ -438,6 +478,10 @@ global.webViewComponent = function CommentListWebView({
     (thread: LegacyCommentThread) => {
       const { verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
       if (!verseRef.valid) return;
+
+      // This view is causing the upcoming scroll-group change; a click inside the list must never
+      // scroll the list, so record the reference for the arm effect to swallow.
+      selfInitiatedNavigationRef.current = toNavigationRecord(thread.verseRef);
 
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
