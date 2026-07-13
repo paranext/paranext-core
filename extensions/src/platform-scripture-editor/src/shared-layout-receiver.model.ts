@@ -1,9 +1,9 @@
 import type PapiBackend from '@papi/backend';
 import { getErrorMessage, serialize, type PlatformEventEmitter } from 'platform-bible-utils';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils';
 
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 /** Reads the three admin layout settings for a project and serializes them into a signature. */
 async function readLayoutSignature(papi: typeof PapiBackend, projectId: string): Promise<string> {
@@ -65,6 +65,14 @@ export class SharedLayoutReceiver {
 
   private readonly unsubscribe: () => void;
 
+  /**
+   * Serializes `handleSyncCompleted` runs. `onSyncStateChanged` completions are
+   * fired-and-forgotten, so overlapping ones could otherwise interleave between the auto-mark /
+   * dedup reads and their write-backs and double-notify. Chaining each run after the previous keeps
+   * the checks atomic.
+   */
+  private handling: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly papi: typeof PapiBackend,
     private readonly reArmEmitter: PlatformEventEmitter<{ projectId: string }>,
@@ -73,13 +81,24 @@ export class SharedLayoutReceiver {
       'paratextBibleSendReceive.onSyncStateChanged',
     )(({ isSyncing }) => {
       if (!isSyncing)
-        this.handleSyncCompleted().catch((e) =>
-          this.papi.logger.warn(`Shared-layout sync handler failed: ${getErrorMessage(e)}`),
-        );
+        this.handling = this.handling
+          .then(() => this.handleSyncCompleted())
+          .catch((e) =>
+            this.papi.logger.warn(`Shared-layout sync handler failed: ${getErrorMessage(e)}`),
+          );
     });
   }
 
-  /** Mark that an in-flight sync for this project was initiated by us (auto). */
+  /**
+   * Mark that an in-flight sync for this project was initiated by us (auto), so its completion
+   * applies silently instead of prompting the member.
+   *
+   * Accepted v1 risk: `onSyncStateChanged` carries only `{ isSyncing }` — no sync or project id —
+   * so this mark is consumed by whichever matching-project sync completes first. If an unrelated
+   * sync for the same project completes before the intended auto-sync, it consumes the mark and the
+   * real project-switch sync is then mis-categorized as manual. This is inherent to the event shape
+   * and documented as an accepted risk in the design spec; it is deliberate, not an oversight.
+   */
   markAutoSync(projectId: string): void {
     this.autoSyncProjectIds.add(projectId);
   }
@@ -104,8 +123,12 @@ export class SharedLayoutReceiver {
     const projectId = this.projectIdByNotificationId.get(notificationId);
     if (!projectId) return;
     await this.applyForProject(projectId);
-    await this.papi.notifications.dismiss(notificationId);
-    this.projectIdByNotificationId.delete(notificationId);
+    try {
+      await this.papi.notifications.dismiss(notificationId);
+    } finally {
+      // Drop the mapping even if dismiss throws so the entry can't leak.
+      this.projectIdByNotificationId.delete(notificationId);
+    }
   }
 
   dispose(): void {
@@ -132,11 +155,16 @@ export class SharedLayoutReceiver {
       return;
     }
 
+    // Fail-open: this read intentionally relies on the outer catch (subscription handler). Unlike
+    // `applyForProject`'s signature read — caught locally so an apply still completes — a failure
+    // here should abort the notify path entirely rather than notify with an unknown signature.
     const signature = await readLayoutSignature(this.papi, projectId);
     if (signature === this.lastAppliedSignatureByProjectId.get(projectId)) return; // unchanged
     if (signature === this.pendingNotifiedSignatureByProjectId.get(projectId)) return; // already asked
 
-    this.pendingNotifiedSignatureByProjectId.set(projectId, signature);
+    // Record the pending/notification bookkeeping only AFTER a successful send. If `send` throws,
+    // the outer catch logs it and nothing is retained, so the next sync with this same changed
+    // layout notifies again rather than being silently suppressed as "already asked".
     const notificationId = await this.papi.notifications.send({
       severity: 'info',
       message: '%sharedLayout_newLayoutAvailable%',
@@ -144,5 +172,6 @@ export class SharedLayoutReceiver {
       clickCommandLabel: '%sharedLayout_applyNow%',
     });
     this.projectIdByNotificationId.set(notificationId, projectId);
+    this.pendingNotifiedSignatureByProjectId.set(projectId, signature);
   }
 }

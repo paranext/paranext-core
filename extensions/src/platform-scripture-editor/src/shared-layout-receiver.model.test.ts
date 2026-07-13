@@ -213,4 +213,41 @@ describe('SharedLayoutReceiver', () => {
     expect(h.emit).toHaveBeenCalledWith({ projectId: 'proj-1' });
     expect(h.dismiss).toHaveBeenCalledWith('notif-1');
   });
+
+  it('retries the notify when a previous send failed (no pending entry retained)', async () => {
+    const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
+    await h.receiver.applyForProject('proj-1');
+    h.papi.projectDataProviders.get.mockImplementation(async () => ({
+      getSetting: vi.fn(async (key: string) =>
+        key === 'platformScripture.sharedLayoutDefaultTab'
+          ? ''
+          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
+      ),
+    }));
+    h.send.mockRejectedValueOnce(new Error('send boom'));
+    h.fireSync();
+    await flush();
+    // The failed send must not leave a pending marker, so the SAME changed layout notifies again.
+    h.fireSync();
+    await flush();
+    expect(h.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends exactly one notification for two sync completions in the same tick', async () => {
+    const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
+    await h.receiver.applyForProject('proj-1');
+    h.papi.projectDataProviders.get.mockImplementation(async () => ({
+      getSetting: vi.fn(async (key: string) =>
+        key === 'platformScripture.sharedLayoutDefaultTab'
+          ? ''
+          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
+      ),
+    }));
+    // Both completions fire before any flush; the single-flight chain must serialize them so the
+    // second sees the pending marker written by the first and does not double-notify.
+    h.fireSync();
+    h.fireSync();
+    await flush();
+    expect(h.send).toHaveBeenCalledTimes(1);
+  });
 });
