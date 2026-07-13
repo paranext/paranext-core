@@ -188,6 +188,14 @@ type DecoratorConfig = {
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
   canScopeToCurrentChapter?: boolean;
+  /**
+   * Render the panel with no bounding-height ancestor, reproducing the real web view where nothing
+   * sets a height on `html`/`body`/`#root` so `tw:h-full` collapses to `auto` and the document is
+   * the scroll container. This is the layout in which `tw:sticky` is load-bearing; a bounded
+   * ancestor (the default `tw:h-screen` wrapper) instead makes the inner list the scroller, where
+   * the toolbar is trivially always visible with or without `sticky`.
+   */
+  unbounded?: boolean;
 };
 
 /**
@@ -212,7 +220,9 @@ function createDecorator(config: DecoratorConfig) {
     const displayedThreads = filterThreads(threads, filters, scopeFilter, CURRENT_USER);
 
     return (
-      <div className="tw:h-screen">
+      // A bounded height (default) makes the inner list the scroller; `unbounded` drops it so the
+      // document scrolls, reproducing the real web view where `tw:sticky` is what pins the toolbar.
+      <div className={config.unbounded ? undefined : 'tw:h-screen'}>
         <Story
           args={{
             localizedStrings,
@@ -311,11 +321,13 @@ export const Populated: Story = {
 
 /**
  * A long list that overflows the panel: the comments scroll while the filter toolbar stays pinned
- * at the top. The `tw:h-screen` decorator bounds the panel height so the inner list is the scroll
- * area.
+ * at the top. Rendered `unbounded` (no bounding-height ancestor) so the document scrolls — the same
+ * scroll model as the real web view, where `tw:sticky` is what keeps the toolbar visible. Delete
+ * the `tw:sticky tw:top-0 tw:z-10` classes on the toolbar and this story visibly regresses (the
+ * toolbar scrolls out of view), which is the whole point of PT-4070.
  */
 export const Scrollable: Story = {
-  decorators: [createDecorator({ threads: manyThreads })],
+  decorators: [createDecorator({ threads: manyThreads, unbounded: true })],
 };
 
 /** Threads are still loading — show skeletons. */

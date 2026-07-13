@@ -130,8 +130,17 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
   return { shortName, projectDir, projectId, users };
 }
 
-/** Removes a test project created by {@link createCommentTestProject}. Call this in `afterAll`. */
-export function cleanupCommentTestProject(project: CommentTestProject): void {
+/**
+ * Removes a test project created by {@link createCommentTestProject}. Call this in `afterAll`.
+ *
+ * No-ops on a falsy argument so a teardown can safely clean up every project even when an earlier
+ * one in the same `beforeAll` failed to create (leaving its variable `undefined`) — otherwise the
+ * first undefined would throw and abort teardown, leaking the already-created project directories
+ * under `~/.platform.bible` where `LocalParatextProjects` would rediscover them on every later
+ * run.
+ */
+export function cleanupCommentTestProject(project: CommentTestProject | undefined): void {
+  if (!project) return;
   if (fs.existsSync(project.projectDir)) {
     fs.rmSync(project.projectDir, { recursive: true, force: true });
   }

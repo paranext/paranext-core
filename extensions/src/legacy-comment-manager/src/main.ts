@@ -23,10 +23,13 @@ import {
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
 } from './project-data-provider/legacy-comment-manager-usj-pdpef.model';
 import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
-import { resolveCommentListPanelProjectId } from './comment-list-panel.utils';
+import {
+  COMMENT_LIST_PANEL_WEB_VIEW_TYPE,
+  resolveCommentListPanelProjectId,
+} from './comment-list-panel.utils';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
-const commentListPanelWebViewType = 'legacyCommentManager.commentListPanel';
+const commentListPanelWebViewType = COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
 
 // #region Comment List WebView
 
@@ -189,12 +192,6 @@ const commentListPanelProvider: IWebViewProvider = {
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
-      state: {
-        ...savedWebView.state,
-        // Marks this as the Column 3 panel, which follows the active project's scroll group. The web
-        // view uses this to offer the "current chapter" scope option even though no editor is wired.
-        isCommentListPanel: true,
-      },
     };
   },
 };
