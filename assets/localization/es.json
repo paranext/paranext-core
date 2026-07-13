@@ -511,6 +511,7 @@
   "%shareLayoutDialog_activeTab_none%": "Ninguno seleccionado",
   "%shareLayoutDialog_activeTab_scriptureResource%": "Textos bíblicos",
   "%shareLayoutDialog_activeTab_sublabel%": "Para la tercera columna",
+  "%shareLayoutDialog_activeTab_textCollection%": "Colección de textos",
   "%shareLayoutDialog_cancel_label%": "Cancelar",
   "%shareLayoutDialog_closePicker_label%": "Cerrar",
   "%shareLayoutDialog_commentaryResources_label%": "Comentarios del proyecto",

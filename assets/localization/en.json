@@ -393,6 +393,7 @@
   "%shareLayoutDialog_activeTab_none%": "None selected",
   "%shareLayoutDialog_activeTab_scriptureResource%": "Bible texts",
   "%shareLayoutDialog_activeTab_sublabel%": "For third column",
+  "%shareLayoutDialog_activeTab_textCollection%": "Text collection",
   "%shareLayoutDialog_cancel_label%": "Cancel",
   "%shareLayoutDialog_closePicker_label%": "Close",
   "%shareLayoutDialog_commentaryResources_label%": "Project commentaries",

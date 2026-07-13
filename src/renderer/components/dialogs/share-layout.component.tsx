@@ -34,7 +34,11 @@ import { ChevronDown, X } from 'lucide-react';
 // list has room to show many entries and scroll within a bounded area instead of growing unbounded.
 const RESOURCE_PICKER_POPOVER_STYLE = { width: 560, maxHeight: 400 };
 
-export type ShareLayoutActiveTab = 'ScriptureResource' | 'CommentaryResource' | 'Comments';
+export type ShareLayoutActiveTab =
+  | 'ScriptureResource'
+  | 'CommentaryResource'
+  | 'Comments'
+  | 'TextCollection';
 
 export type ShareLayoutResult = {
   modelText: ResourceReference | undefined;
@@ -54,6 +58,7 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_activeTab_scriptureResource%',
   '%shareLayoutDialog_activeTab_commentaryResource%',
   '%shareLayoutDialog_activeTab_comments%',
+  '%shareLayoutDialog_activeTab_textCollection%',
   '%shareLayoutDialog_scriptureResources_label%',
   '%shareLayoutDialog_commentaryResources_label%',
   '%shareLayoutDialog_manageScriptureResources_label%',
@@ -132,7 +137,12 @@ function toResourceReference(resource: DblResourceData): ResourceReference {
 }
 
 export function isShareLayoutActiveTab(value: string): value is ShareLayoutActiveTab {
-  return value === 'ScriptureResource' || value === 'CommentaryResource' || value === 'Comments';
+  return (
+    value === 'ScriptureResource' ||
+    value === 'CommentaryResource' ||
+    value === 'Comments' ||
+    value === 'TextCollection'
+  );
 }
 
 type TabKey = 'ScriptureResource' | 'CommentaryResource';
@@ -336,6 +346,9 @@ export function ShareLayoutDialogContent({
                 </SelectItem>
                 <SelectItem value="Comments">
                   {localizeString(strings, '%shareLayoutDialog_activeTab_comments%')}
+                </SelectItem>
+                <SelectItem value="TextCollection">
+                  {localizeString(strings, '%shareLayoutDialog_activeTab_textCollection%')}
                 </SelectItem>
               </SelectContent>
             </Select>
