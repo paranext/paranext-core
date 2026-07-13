@@ -4,9 +4,10 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useTruncationTooltip,
 } from 'platform-bible-react';
 import { LocalizedStringValue } from 'platform-bible-utils';
-import { ReactNode, useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import { ReactNode, useCallback, type KeyboardEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -48,10 +49,10 @@ export type ResourceCellViewProps = {
   /** Fired on click anywhere in the cell or Enter while the gridcell is focused. */
   onActivate?: () => void;
   /**
-   * How to show the resource name. `'header'` (default) is a compact band above the content, used
-   * by chapter contexts (single-resource full-width + chapter-context split). `'inline'` hangs the
-   * name at the resource's inline-start beside the verse text, used by verse-row cells. Both render
-   * outside `Editorial` (paranext-core only).
+   * How to show the resource name. `'header'` (default) is a compact header line above the content,
+   * used by chapter contexts (single-resource full-width + chapter-context split). `'inline'` hangs
+   * the name at the resource's inline-start beside the verse text, used by verse-row cells. Both
+   * render outside `Editorial` (paranext-core only).
    */
   nameDisplay?: ResourceNameDisplay;
 };
@@ -64,27 +65,19 @@ export type ResourceCellViewProps = {
  * announced twice.
  */
 function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
-  // React's ref API requires `null` as the initial value for DOM refs.
-  // eslint-disable-next-line no-null/no-null
-  const ref = useRef<HTMLSpanElement>(null);
-
-  const handlePointerEnter = useCallback(() => {
-    const element = ref.current;
-    if (!element) return;
-    // Open the tooltip only when the label is actually clipped (its text overflows the visible box).
-    if (element.scrollWidth > element.clientWidth) setIsTooltipOpen(true);
-  }, []);
+  // Show the tooltip only when the label text is actually clipped (same manual-`open` pattern
+  // shared with `ProjectRowView` in `project-selector.component.tsx`).
+  const { ref, open, onPointerEnter, onPointerLeave } = useTruncationTooltip<HTMLSpanElement>();
 
   return (
     <TooltipProvider>
-      <Tooltip open={isTooltipOpen}>
+      <Tooltip open={open}>
         <TooltipTrigger asChild>
           <span
             ref={ref}
             aria-hidden
-            onPointerEnter={handlePointerEnter}
-            onPointerLeave={() => setIsTooltipOpen(false)}
+            onPointerEnter={onPointerEnter}
+            onPointerLeave={onPointerLeave}
             className={`tw:truncate tw:font-medium tw:text-primary ${className ?? ''}`}
           >
             {label}
@@ -165,8 +158,8 @@ export function ResourceCellView({
           <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto">{stateContent}</div>
         </div>
       ) : (
-        // Chapter context: a compact band above the content, in the resource color. Long labels
-        // truncate; the tooltip reveals the full name only when actually clipped.
+        // Chapter context: a compact header line (colored text with a bottom border) above the
+        // content. Long labels truncate; the tooltip reveals the full name only when actually clipped.
         <>
           <ResourceNameLabel
             label={label}

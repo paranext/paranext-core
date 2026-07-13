@@ -3357,6 +3357,30 @@ export declare function useStylesheet(stylesheet: string | undefined): void;
  *   Empty when `usj` is `undefined` or uses no markers.
  */
 export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
+/** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
+export type UseTruncationTooltipResult<T extends HTMLElement> = {
+	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
+	ref: React$1.RefObject<T | null>;
+	/** Whether the tooltip should currently be open. Pass to a controlled `<Tooltip open={...}>`. */
+	open: boolean;
+	/** Pointer-enter handler for the trigger; opens the tooltip only when the trigger text is clipped. */
+	onPointerEnter: () => void;
+	/** Pointer-leave handler for the trigger; closes the tooltip. */
+	onPointerLeave: () => void;
+};
+/**
+ * Drives a controlled tooltip that opens on hover only when the trigger element's text is actually
+ * truncated (its content overflows the visible box, i.e. `scrollWidth > clientWidth`). Useful for
+ * revealing the full text of a label that uses CSS truncation, without showing a redundant tooltip
+ * when the text already fits.
+ *
+ * Attach the returned `ref` to the truncating trigger element, spread `onPointerEnter` /
+ * `onPointerLeave` onto it, and pass `open` to a controlled Radix `<Tooltip open={...}>`.
+ *
+ * @typeParam T - The type of the trigger element (e.g. `HTMLSpanElement`, `HTMLDivElement`).
+ * @returns An object with `ref`, `open`, `onPointerEnter`, and `onPointerLeave`.
+ */
+export declare function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTooltipResult<T>;
 /** Properties of one option contained in a listbox */
 export interface ListboxOption {
 	/** Unique identifier for the option */
