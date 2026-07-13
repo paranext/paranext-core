@@ -63,6 +63,8 @@
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_markersView_readonly_message_format%": "The markers view for {projectName} is read-only.",
       "%platformScriptureEditor_markersView_readonly_dismiss%": "Don't show again today",
+      "%sharedLayout_newLayoutAvailable%": "A new shared layout is available for this project.",
+      "%sharedLayout_applyNow%": "Apply now",
       "%temp_webView_platformScriptureEditor_changeFootnotePaneLocation%": "Change Footnote Pane Location",
       "%versionHistoryCommit_beforeInsertCrossReference%": "Before inserting cross reference",
       "%versionHistoryCommit_beforeInsertFootnote%": "Before inserting footnote",
