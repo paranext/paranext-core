@@ -207,6 +207,8 @@ export type {
   UndoRedoButtonsProps,
 } from './components/basics/undo-redo-buttons.component';
 export { default as ResultsCard } from './components/basics/results-card.component';
+export { EmptyState } from './components/basics/empty-state.component';
+export type { EmptyStateProps } from './components/basics/empty-state.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
