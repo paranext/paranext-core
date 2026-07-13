@@ -31,7 +31,7 @@ export function toGridResources(
     } else {
       projectId = reference.id;
     }
-    return projectId ? [{ projectId, label: reference.name }] : [];
+    return projectId ? [{ resourceId: reference.id, projectId, label: reference.name }] : [];
   });
 }
 
