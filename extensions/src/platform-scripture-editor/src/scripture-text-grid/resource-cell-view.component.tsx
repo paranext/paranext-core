@@ -12,9 +12,9 @@ import {
   TooltipTrigger,
   useTruncationTooltip,
 } from 'platform-bible-react';
-import { EllipsisVertical } from 'lucide-react';
+import { EllipsisVertical, GripVertical } from 'lucide-react';
 import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
-import { CSSProperties, ReactNode, useCallback, useState, type MouseEvent } from 'react';
+import { CSSProperties, ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -87,6 +87,19 @@ export type ResourceCellViewProps = {
   onResetZoom?: () => void;
   /** Localized menu copy; when omitted the zoom surfaces are not rendered. */
   zoomMenuLabels?: ZoomMenuLabels;
+  /**
+   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * parent). The grip is drag-and-drop source presentation AND a keyboard-operable control.
+   */
+  showDragHandle?: boolean;
+  /** Stable id of this resource, exposed on the grip so the parent can restore focus after a move. */
+  reorderHandleId?: string;
+  /** Accessible name for the reorder grip (e.g. "Reorder Genesis"); used as its `aria-label`. */
+  reorderHandleLabel?: string;
+  /** Tooltip text shown on grip hover/focus (e.g. "Drag or press arrow keys to reorder"). */
+  reorderHint?: string;
+  /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
+  onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
 
 function ZoomItemsShared({
@@ -161,7 +174,8 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
- * per-resource zoom surfaces (the header kebab dropdown and the right-click zoom/copy menu).
+ * per-resource zoom surfaces (the header kebab dropdown and the right-click zoom/copy menu) and the
+ * drag/keyboard reorder handle grip.
  */
 export function ResourceCellView({
   state,
@@ -179,6 +193,11 @@ export function ResourceCellView({
   onZoomOut,
   onResetZoom,
   zoomMenuLabels,
+  showDragHandle,
+  reorderHandleId,
+  reorderHandleLabel,
+  reorderHint,
+  onReorderKeyDown,
 }: ResourceCellViewProps) {
   let readyContent: ReactNode = editor;
   if (isVerseEmpty) {
@@ -263,10 +282,36 @@ export function ResourceCellView({
         </div>
       ) : (
         // Chapter context: a compact header line (colored name with a bottom border) with the zoom
-        // kebab at its inline-end, above the content. Long labels truncate; the tooltip reveals the
-        // full name only when actually clipped. Only the content scales with zoom, not the header.
+        // kebab and optional reorder grip at its inline-end, above the content. Long labels
+        // truncate; the tooltip reveals the full name only when actually clipped. Only the content
+        // scales with zoom, not the header.
         <>
           <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-0.5">
+            {showDragHandle ? (
+              // Nested tooltip on the grip so `reorderHint` shows on hover AND keyboard focus.
+              // Its own provider/tooltip keeps it independent of the name-truncation tooltip.
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      data-reorder-handle-id={reorderHandleId}
+                      aria-label={reorderHandleLabel}
+                      // A grip click must not bubble to the enclosing cell wrapper (whose click
+                      // may activate the chapter-context split); the grip only starts a reorder.
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={onReorderKeyDown}
+                      className="tw:h-6 tw:w-6 tw:shrink-0 tw:cursor-grab tw:text-muted-foreground"
+                    >
+                      <GripVertical className="tw:h-4 tw:w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  {reorderHint ? <TooltipContent>{reorderHint}</TooltipContent> : undefined}
+                </Tooltip>
+              </TooltipProvider>
+            ) : undefined}
             <ResourceNameLabel label={label} className="tw:min-w-0 tw:flex-1 tw:text-xs" />
             {zoomMenuLabels ? (
               <TooltipProvider>

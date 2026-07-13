@@ -23,11 +23,14 @@ import {
 } from 'platform-bible-utils';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
-  getScriptureTextGridContents,
-  getViewOptionsTexts,
-} from './scripture-text-grid-contents.utils';
+  getOrderedScriptureTextGridContents,
+  reorderShownIds,
+  reconcileCellOrder,
+} from './scripture-text-grid-order.utils';
 import {
+  persistCellOrder,
   persistUserAddition,
   persistUserDisplay,
   persistUserRemoval,
@@ -70,6 +73,9 @@ const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName
 // Screen-reader announcements for the chapter-context split opening/closing.
 const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
 const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
+const REORDER_ANNOUNCEMENT_KEY = '%webView_scriptureTextGrid_cell_reorderAnnouncement%';
+const REORDER_HANDLE_KEY = '%webView_scriptureTextGrid_cell_reorderHandle%';
+const REORDER_HINT_KEY = '%webView_scriptureTextGrid_cell_reorderHint%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
@@ -84,6 +90,9 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
+  REORDER_ANNOUNCEMENT_KEY,
+  REORDER_HANDLE_KEY,
+  REORDER_HINT_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -108,10 +117,11 @@ const TAB_ICON_URLS: TabIconUrls = {
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. Below the header, the body renders one
- * `ResourceCell` per shown resource — the resources come from the `getScriptureTextGridContents`
+ * `ResourceCell` per shown resource — the resources come from the `getOrderedScriptureTextGridContents`
  * selector over the Text Collection sources assembled by `useTextCollectionSources`. The `viewMode`
  * toggle selects the layout: a vertical list of stacked verse rows (verse mode), or a horizontal
- * row of side-by-side full-chapter columns (chapter mode).
+ * row of side-by-side full-chapter columns (chapter mode). In chapter mode the columns are
+ * reorderable (drag or keyboard); the persisted order is wired via `handleReorder`.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
@@ -206,12 +216,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     undefined,
   );
 
-  // The grid body's cells: the `getScriptureTextGridContents` selector over the Text Collection
-  // sources, resolved to the row's `{ projectId, label }` shape. The selector returns
+  // The grid body's cells: the `getOrderedScriptureTextGridContents` selector over the Text
+  // Collection sources, resolved to the row's `{ resourceId, projectId, label }` shape. The selector returns
   // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
-      toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
+      toGridResources(
+        sources ? getOrderedScriptureTextGridContents(sources) : [],
+        cachedResources ?? [],
+      ),
     [sources, cachedResources],
   );
 
@@ -336,6 +349,34 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     [textConnectionPdp],
   );
 
+  const handleReorder = useCallback(
+    (newShownIdSequence: string[]) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const nextOrder = reorderShownIds(current.order, newShownIdSequence);
+      persistCellOrder(textConnectionPdp, nextOrder).catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist cell order: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const getReorderHandleLabel = useCallback(
+    (resourceName: string) =>
+      formatReplacementString(localizedStrings[REORDER_HANDLE_KEY] ?? '', { resourceName }),
+    [localizedStrings],
+  );
+  const getReorderAnnouncement = useCallback(
+    (resourceName: string, position: number, total: number) =>
+      formatReplacementString(localizedStrings[REORDER_ANNOUNCEMENT_KEY] ?? '', {
+        resourceName,
+        position,
+        total,
+      }),
+    [localizedStrings],
+  );
+
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       if (!textConnectionPdp) return;
@@ -375,6 +416,23 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     () => [...top, ...bottom].map((entry) => entry.reference.id),
     [top, bottom],
   );
+
+  // Reconcile the saved order: drop ids that have left the user's world (X-removed, or an admin
+  // entry no longer shared). `selectedResourceIds` is every resource the user still has (shown AND
+  // hidden), so hidden-but-known ids keep their saved slots. Reads sourcesRef.current for freshness;
+  // `sources` is in the deps only to re-run on subscription updates. reconcileCellOrder persists
+  // only on a real change, so the subscribe→persist→subscribe cycle converges. (A reorder persisted
+  // in the same tick that a resource is removed is a narrow last-writer-wins window; acceptable —
+  // the next delivery reconciles.)
+  useEffect(() => {
+    const { current } = sourcesRef;
+    if (!current || !textConnectionPdp) return;
+    const next = reconcileCellOrder(current.order, selectedResourceIds);
+    if (!next) return;
+    persistCellOrder(textConnectionPdp, next).catch((e) =>
+      logger.warn(`Failed to reconcile cell order: ${getErrorMessage(e)}`),
+    );
+  }, [sources, textConnectionPdp, selectedResourceIds]);
 
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
@@ -484,6 +542,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             onChapterContextClose={handleCloseChapterContext}
             closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
             cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+            onReorder={handleReorder}
+            getReorderHandleLabel={getReorderHandleLabel}
+            reorderHint={localizedStrings[REORDER_HINT_KEY]}
+            getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
       </div>

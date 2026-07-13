@@ -790,6 +790,8 @@ declare module 'platform-scripture' {
       TextCollectionOverlay,
       TextCollectionOverlay
     >;
+    /** Gets/sets the current user's preferred cell order (resource ids) for this project */
+    CellOrder: DataProviderDataType<undefined, CellOrder, CellOrder>;
   };
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
@@ -873,6 +875,29 @@ declare module 'platform-scripture' {
       subscribeTextCollectionOverlay(
         selector: undefined,
         callback: (value: TextCollectionOverlay | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+      /** Gets the current user's preferred cell order (list of resource ids) */
+      getCellOrder(): Promise<CellOrder>;
+      /** Sets the current user's preferred cell order (list of resource ids) */
+      setCellOrder(
+        value: CellOrder,
+      ): Promise<
+        DataProviderUpdateInstructions<UserTextConnectionSettingsProjectInterfaceDataTypes>
+      >;
+      /** Resets (removes) the current user's preferred cell order */
+      resetCellOrder(): Promise<boolean>;
+      /**
+       * Subscribe to run a callback when the current user's preferred cell order changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated order, or a {@link PlatformError} on error
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeCellOrder(
+        selector: undefined,
+        callback: (value: CellOrder | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
       /**
@@ -2101,6 +2126,9 @@ declare module 'platform-scripture' {
    * independently.
    */
   export type TextCollectionOverlay = { [resourceId: string]: boolean };
+
+  /** The current user's preferred cell order for a project: resource ids in display order. */
+  export type CellOrder = string[];
 
   // #endregion Resource Reference Types
 

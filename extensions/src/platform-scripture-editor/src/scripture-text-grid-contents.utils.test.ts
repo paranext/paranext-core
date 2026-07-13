@@ -41,6 +41,7 @@ const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollection
   adminReferenced: list(),
   userReferenced: list(),
   overlay: {},
+  order: [],
   ...overrides,
 });
 

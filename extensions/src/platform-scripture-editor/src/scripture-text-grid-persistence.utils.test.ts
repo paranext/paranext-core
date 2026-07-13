@@ -4,6 +4,7 @@ import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
 import {
+  persistCellOrder,
   persistUserAddition,
   persistUserDisplay,
   persistUserRemoval,
@@ -26,6 +27,7 @@ const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollection
   adminReferenced: list(),
   userReferenced: list(),
   overlay: {},
+  order: [],
   ...overrides,
 });
 
@@ -33,6 +35,7 @@ const makeSources = (overrides?: Partial<TextCollectionSources>): TextCollection
 const makeWriter = (): UserResourceWriter => ({
   setUserReferencedProjectsAndResources: vi.fn().mockResolvedValue(true),
   setTextCollectionOverlay: vi.fn().mockResolvedValue(true),
+  setCellOrder: vi.fn().mockResolvedValue(true),
 });
 
 /** Reads `isInTextCollectionForUser` off a reference without a type assertion. */
@@ -126,5 +129,13 @@ describe('persistUserAddition', () => {
 
     expect(result).toBeUndefined();
     expect(writer.setUserReferencedProjectsAndResources).not.toHaveBeenCalled();
+  });
+});
+
+describe('persistCellOrder', () => {
+  it('writes the order through setCellOrder', async () => {
+    const writer = makeWriter();
+    await persistCellOrder(writer, ['a', 'b']);
+    expect(writer.setCellOrder).toHaveBeenCalledWith(['a', 'b']);
   });
 });

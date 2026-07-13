@@ -663,3 +663,70 @@ describe('ResourceCellView zoom UI', () => {
     expect(screen.queryByRole('menuitem', { name: 'Copy' })).not.toBeInTheDocument();
   });
 });
+
+describe('ResourceCellView reorder grip', () => {
+  it('renders the grip as a focusable, labeled control and fires onReorderKeyDown on keydown', () => {
+    const onReorderKeyDown = vi.fn();
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="Genesis"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="gen"
+        reorderHandleLabel="Reorder Genesis"
+        reorderHint="Drag or press arrow keys to reorder"
+        onReorderKeyDown={onReorderKeyDown}
+      />,
+    );
+
+    const grip = screen.getByRole('button', { name: 'Reorder Genesis' });
+    expect(grip).toHaveAttribute('data-reorder-handle-id', 'gen');
+    // A real focusable control (button), not an aria-hidden decoration.
+    expect(grip).not.toHaveAttribute('aria-hidden');
+    grip.focus();
+    expect(grip).toHaveFocus();
+
+    fireEvent.keyDown(grip, { key: 'ArrowRight' });
+    expect(onReorderKeyDown).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the reorder hint tooltip on grip focus', async () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="Genesis"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        showDragHandle
+        reorderHandleId="gen"
+        reorderHandleLabel="Reorder Genesis"
+        reorderHint="Drag or press arrow keys to reorder"
+        onReorderKeyDown={vi.fn()}
+      />,
+    );
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Reorder Genesis' }));
+    // Radix renders the tooltip content into a live region on focus.
+    expect(await screen.findAllByText('Drag or press arrow keys to reorder')).not.toHaveLength(0);
+  });
+
+  it('does not crash when showDragHandle is set without reorder wiring', () => {
+    renderCells(
+      <ResourceCellView
+        state="ready"
+        label="Genesis"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<span>In the beginning</span>}
+        showDragHandle
+      />,
+    );
+    // The grip still renders (no aria-label supplied); the label text is still shown in the header.
+    expect(screen.getByText('Genesis')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toBeInTheDocument();
+  });
+});
