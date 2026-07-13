@@ -5,7 +5,7 @@ import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/fr
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
 import { sliceUsjToVerse } from './verse-display.utils';
@@ -13,12 +13,23 @@ import { sliceUsjToVerse } from './verse-display.utils';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
 
-export type GridResource = { projectId: string; label: string };
+export type GridResource = { id: string; projectId: string; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
   setScrRef: (scrRef: SerializedVerseRef) => void;
   viewMode?: 'chapter' | 'verse';
+  /**
+   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * parent).
+   */
+  showDragHandle?: boolean;
+  /** Accessible name for the reorder grip (e.g. "Reorder Genesis"). */
+  reorderHandleLabel?: string;
+  /** Tooltip text shown on grip hover/focus. */
+  reorderHint?: string;
+  /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
+  onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
 
 /**
@@ -32,6 +43,10 @@ export function ResourceCell({
   scrRef,
   setScrRef,
   viewMode = 'chapter',
+  showDragHandle,
+  reorderHandleLabel,
+  reorderHint,
+  onReorderKeyDown,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -121,6 +136,11 @@ export function ResourceCell({
       textDirection={textDirection}
       localizedStrings={localizedStrings}
       isVerseEmpty={isVerseEmpty}
+      showDragHandle={showDragHandle}
+      reorderHandleId={resourceRef.id}
+      reorderHandleLabel={reorderHandleLabel}
+      reorderHint={reorderHint}
+      onReorderKeyDown={onReorderKeyDown}
       editor={
         <Editorial
           ref={editorRef}

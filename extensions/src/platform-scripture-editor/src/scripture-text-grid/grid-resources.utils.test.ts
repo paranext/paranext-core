@@ -28,13 +28,13 @@ describe('toGridResources', () => {
     ];
 
     expect(toGridResources(references, dblResources)).toEqual([
-      { projectId: 'project-abc', label: 'DBL dblUid-1' },
+      { id: 'dblUid-1', projectId: 'project-abc', label: 'DBL dblUid-1' },
     ]);
   });
 
   it('uses a project reference id directly (it already is the project id)', () => {
     expect(toGridResources([project('proj-1')], [])).toEqual([
-      { projectId: 'proj-1', label: 'Proj proj-1' },
+      { id: 'proj-1', projectId: 'proj-1', label: 'Proj proj-1' },
     ]);
   });
 
@@ -54,8 +54,8 @@ describe('toGridResources', () => {
     ];
 
     expect(toGridResources(references, dblResources)).toEqual([
-      { projectId: 'p1', label: 'Proj p1' },
-      { projectId: 'installed-u1', label: 'DBL u1' },
+      { id: 'p1', projectId: 'p1', label: 'Proj p1' },
+      { id: 'u1', projectId: 'installed-u1', label: 'DBL u1' },
     ]);
   });
 });

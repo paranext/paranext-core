@@ -67,7 +67,11 @@ const chapter = {
     },
   ],
 };
-const props = { resourceRef: { projectId: 'p1', label: 'WEB' }, scrRef, setScrRef: vi.fn() };
+const props = {
+  resourceRef: { id: 'p1', projectId: 'p1', label: 'WEB' },
+  scrRef,
+  setScrRef: vi.fn(),
+};
 
 // Two-verse chapter fixture for viewMode tests: verse 1 "verse one" + verse 2 "verse two" in one
 // <para style="p">, so a chapter-vs-verse slice is unambiguous.
@@ -126,7 +130,7 @@ describe('ResourceCell', () => {
   it('applies the resource own text direction', () => {
     setUsjResult(chapter, false);
     mockUseProjectSetting.mockReturnValue(['rtl', vi.fn(), vi.fn(), false]);
-    render(<ResourceCell {...props} resourceRef={{ projectId: 'p1', label: 'עברית' }} />);
+    render(<ResourceCell {...props} resourceRef={{ id: 'p1', projectId: 'p1', label: 'עברית' }} />);
     expect(document.querySelector('[dir="rtl"]')).toBeInTheDocument();
   });
   it('defaults direction to ltr when the setting is a PlatformError', () => {

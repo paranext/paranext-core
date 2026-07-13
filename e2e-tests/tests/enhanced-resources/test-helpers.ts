@@ -45,6 +45,7 @@ export type ScriptureTextGridPapiWindow = {
         getSetting: (key: string) => Promise<{ items: unknown[] }>;
         canUserWriteProjectTextConnectionSettings: () => Promise<boolean>;
         resetTextCollectionOverlay: () => Promise<boolean>;
+        resetCellOrder: () => Promise<boolean>;
         initializeTextCollectionOverlay: () => Promise<boolean>;
       }>;
     };
@@ -131,12 +132,14 @@ export async function flagResourcesAndOpenScriptureTextGrid(
           items: modelItems,
         });
         await pdp.resetTextCollectionOverlay();
+        await pdp.resetCellOrder();
         await pdp.initializeTextCollectionOverlay();
         await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
         return { projectId: testProjectId, modelTexts: originalModelTexts };
       } catch (error) {
         await pdp.setSetting('platformScripture.modelTexts', originalModelTexts);
         await pdp.resetTextCollectionOverlay();
+        await pdp.resetCellOrder();
         throw error;
       }
     },
@@ -161,6 +164,7 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
         );
         await pdp.setSetting('platformScripture.modelTexts', payload.modelTexts);
         await pdp.resetTextCollectionOverlay();
+        await pdp.resetCellOrder();
         await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
       },
       { payload: restore, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },

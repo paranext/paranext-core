@@ -28,9 +28,9 @@ const scrRef: SerializedVerseRef = {
 };
 
 const resources = [
-  { projectId: 'web', label: 'WEB' },
-  { projectId: 'kjv', label: 'KJV' },
-  { projectId: 'heb', label: 'עברית' },
+  { id: 'web', projectId: 'web', label: 'WEB' },
+  { id: 'kjv', projectId: 'kjv', label: 'KJV' },
+  { id: 'heb', projectId: 'heb', label: 'עברית' },
 ];
 
 /** Bounds the grid so its `h-full` layout behaves like a real web-view pane. */
@@ -58,6 +58,26 @@ export const Row: Story = {
         setScrRef={noop}
         ariaLabel="Text Collection"
         onChapterContextChange={noop}
+      />
+    </GridBox>
+  ),
+};
+
+/**
+ * The default row with `onReorder` supplied: every cell receives a drag-handle grip and is
+ * draggable. Documents that passing `onReorder` activates the drag-to-reorder UI without changing
+ * the layout otherwise.
+ */
+export const RowDraggable: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        ariaLabel="Text Collection"
+        onChapterContextChange={noop}
+        onReorder={noop}
       />
     </GridBox>
   ),

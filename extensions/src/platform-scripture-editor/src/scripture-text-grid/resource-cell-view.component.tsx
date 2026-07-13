@@ -1,4 +1,5 @@
 import {
+  Button,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -6,7 +7,8 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { LocalizedStringValue } from 'platform-bible-utils';
-import { ReactNode, useCallback, useRef, useState } from 'react';
+import { GripVertical } from 'lucide-react';
+import { ReactNode, useCallback, useRef, useState, type KeyboardEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -42,6 +44,19 @@ export type ResourceCellViewProps = {
   editor: ReactNode;
   /** When true (verse mode, slice empty), render the empty label instead of the editor. */
   isVerseEmpty?: boolean;
+  /**
+   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * parent). The grip is drag-and-drop source presentation AND a keyboard-operable control.
+   */
+  showDragHandle?: boolean;
+  /** Stable id of this resource, exposed on the grip so the parent can restore focus after a move. */
+  reorderHandleId?: string;
+  /** Accessible name for the reorder grip (e.g. "Reorder Genesis"); used as its `aria-label`. */
+  reorderHandleLabel?: string;
+  /** Tooltip text shown on grip hover/focus (e.g. "Drag or press arrow keys to reorder"). */
+  reorderHint?: string;
+  /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
+  onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
 
 /**
@@ -59,19 +74,27 @@ export function ResourceCellView({
   localizedStrings,
   editor,
   isVerseEmpty,
+  showDragHandle,
+  reorderHandleId,
+  reorderHandleLabel,
+  reorderHint,
+  onReorderKeyDown,
 }: ResourceCellViewProps) {
   // The tooltip only repeats the visible label, so it should show only when the label is actually
   // truncated. Radix's auto-detection cannot know that, so control `open` manually and measure the
-  // header on pointer enter (same pattern as `ProjectRowView` in platform-bible-react).
+  // label span on pointer enter (same pattern as `ProjectRowView` in platform-bible-react).
   const [isHeaderTooltipOpen, setIsHeaderTooltipOpen] = useState(false);
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const headerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line no-null/no-null
+  const labelRef = useRef<HTMLSpanElement>(null);
 
   const handleHeaderPointerEnter = useCallback(() => {
-    const headerElement = headerRef.current;
-    if (!headerElement) return;
-    if (headerElement.scrollWidth > headerElement.clientWidth) setIsHeaderTooltipOpen(true);
+    // Measure the label span (not the flex-row header div) so the grip icon doesn't false-trigger.
+    const labelElement = labelRef.current;
+    if (!labelElement) return;
+    if (labelElement.scrollWidth > labelElement.clientWidth) setIsHeaderTooltipOpen(true);
   }, []);
 
   let readyContent: ReactNode = editor;
@@ -89,14 +112,43 @@ export function ResourceCellView({
         <Tooltip open={isHeaderTooltipOpen}>
           <TooltipTrigger asChild>
             {/* Single-line header; long labels truncate. The tooltip reveals the full name and
-                shows only when the label is actually clipped. */}
+                shows only when the label is actually clipped. The grip (when shown) is a real
+                focusable, labeled control: it is the drag source presentation AND is operable by
+                keyboard (arrow keys, handled by the parent). */}
             <div
               ref={headerRef}
               onPointerEnter={handleHeaderPointerEnter}
               onPointerLeave={() => setIsHeaderTooltipOpen(false)}
-              className="tw:truncate tw:border-b tw:px-2 tw:py-1 tw:text-sm tw:font-medium"
+              className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-1 tw:text-sm tw:font-medium"
             >
-              {label}
+              {showDragHandle ? (
+                // Nested tooltip on the grip so `reorderHint` shows on hover AND keyboard focus.
+                // Its own provider/tooltip keeps it independent of the label-truncation tooltip.
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        data-reorder-handle-id={reorderHandleId}
+                        aria-label={reorderHandleLabel}
+                        // A grip click must not bubble to the enclosing cell wrapper (whose click
+                        // may activate the chapter-context split); the grip only starts a reorder.
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={onReorderKeyDown}
+                        className="tw:h-6 tw:w-6 tw:shrink-0 tw:cursor-grab tw:text-muted-foreground"
+                      >
+                        <GripVertical className="tw:h-4 tw:w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    {reorderHint ? <TooltipContent>{reorderHint}</TooltipContent> : undefined}
+                  </Tooltip>
+                </TooltipProvider>
+              ) : undefined}
+              <span ref={labelRef} className="tw:truncate">
+                {label}
+              </span>
             </div>
           </TooltipTrigger>
           <TooltipContent>{label}</TooltipContent>

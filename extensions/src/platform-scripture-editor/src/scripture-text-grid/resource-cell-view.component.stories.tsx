@@ -233,6 +233,49 @@ export const PartialFailureRow: Story = {
 };
 
 /**
+ * Ready, LTR, with the drag-handle grip visible in the cell header. In the app, supplying
+ * `onReorder` to `ScriptureTextGrid` causes every chapter-view cell to receive
+ * `showDragHandle={true}`. This story documents the grip's appearance in isolation.
+ */
+export const ReadyWithDragHandle: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        showDragHandle
+        reorderHandleLabel="Reorder WEB"
+        reorderHint="Drag or press arrow keys to reorder"
+        editor={<SampleChapter />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * Ready, RTL, with the drag-handle grip visible. Documents that the grip placement is correct on
+ * the RTL header, independent of the UI locale.
+ */
+export const ReadyRightToLeftWithDragHandle: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="עברית"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        showDragHandle
+        reorderHandleLabel="Reorder עברית"
+        reorderHint="Drag or press arrow keys to reorder"
+        editor={<SampleChapter rtl />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
  * Mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic. Each cell applies its own
  * `dir` on the content area, independent of the UI locale.
  */
