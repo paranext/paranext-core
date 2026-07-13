@@ -315,5 +315,68 @@ public class JsonConverterUtilsTests
         );
     }
 
+    [Test]
+    public void WriteIsolatedArray_SurvivorReportsNestedDrops_RollsThemIntoTotal()
+    {
+        // A survivor element can itself shed nested elements (a thread that drops one of its
+        // comments). A custom serializeItem reports those nested drops, and they must be ADDED to the
+        // array's own count — this roll-up is how a comment dropped inside an otherwise-healthy thread
+        // still reaches hiddenCount.
+        var (json, dropped) = WriteNestedIsolatedArrayToJson(
+            [
+                ["ok", SentinelStringConverter.ThrowAfterPartialWrite], // survives, drops 1 "comment"
+                ["ok", "ok"],
+            ]
+        );
+        Assert.That(json, Is.EqualTo("[[\"ok\"],[\"ok\",\"ok\"]]")); // no whole element dropped
+        Assert.That(dropped, Is.EqualTo(1)); // the single nested drop rolled up
+    }
+
+    [Test]
+    public void WriteIsolatedArray_DroppedSurvivorAndNestedDrops_SumBothLevels()
+    {
+        // An empty inner array is the marker for "this whole element fails to serialize" (see
+        // WriteNestedIsolatedArrayToJson). One whole element is dropped AND a survivor drops one
+        // nested element, so the total spans both levels: 1 + 1 = 2.
+        var (json, dropped) = WriteNestedIsolatedArrayToJson(
+            [
+                ["ok", SentinelStringConverter.ThrowAfterPartialWrite], // survives, drops 1 nested
+                [], // whole element fails
+                ["ok"],
+            ]
+        );
+        Assert.That(json, Is.EqualTo("[[\"ok\"],[\"ok\"]]")); // failed element dropped entirely
+        Assert.That(dropped, Is.EqualTo(2)); // 1 whole element + 1 nested
+    }
+
+    /// <summary>
+    /// Serializes an array of arrays through two nested <see cref="WriteIsolatedArray{T}"/> levels:
+    /// each inner array is written by a custom serializeItem that returns its own nested drop count,
+    /// exercising the roll-up. An EMPTY inner array throws, standing in for a whole element that
+    /// cannot be serialized (a dropped thread).
+    /// </summary>
+    private static (string json, int dropped) WriteNestedIsolatedArrayToJson(string[][] elements)
+    {
+        var options = new JsonSerializerOptions();
+        options.Converters.Add(new SentinelStringConverter());
+        var buffer = new ArrayBufferWriter<byte>();
+        int dropped;
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            dropped = WriteIsolatedArray(
+                writer,
+                elements,
+                options,
+                _ => "element",
+                (itemWriter, inner, opts) =>
+                    inner.Length == 0
+                        ? throw new InvalidOperationException("whole element failed")
+                        : WriteIsolatedArray(itemWriter, inner, opts, c => $"nested '{c}'")
+            );
+            writer.Flush();
+        }
+        return (Encoding.UTF8.GetString(buffer.WrittenSpan), dropped);
+    }
+
     #endregion
 }

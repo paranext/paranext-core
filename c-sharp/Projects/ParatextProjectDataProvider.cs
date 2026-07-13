@@ -291,7 +291,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     internal Dictionary<string, Delegate> GetCommentFunctions() =>
         new()
         {
-            { "getCommentThreads", GetCommentThreads },
+            { "getCommentThreads", GetCommentThreadsResponse },
             { "createComment", CreateComment },
             { "addCommentToThread", AddCommentToThread },
             { "resolveConflict", ResolveConflict },
@@ -473,6 +473,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         return results;
     }
+
+    /// <summary>
+    /// Wire entry point for <c>getCommentThreads</c>. Wraps <see cref="GetCommentThreads"/>'s threads
+    /// in the <c>{ threads, hiddenCount }</c> response envelope (see <see cref="CommentThreadsResult"/>),
+    /// where <c>hiddenCount</c> is filled in at serialization time by counting threads/comments that
+    /// can't be serialized. <see cref="GetCommentThreads"/> itself stays a plain, queryable list for
+    /// internal callers and tests.
+    /// </summary>
+    private CommentThreadsResult GetCommentThreadsResponse(CommentThreadSelector selector) =>
+        new(GetCommentThreads(selector));
 
     public bool DeleteComment(string commentId)
     {

@@ -38,6 +38,21 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
         Utf8JsonWriter writer,
         PlatformCommentThreadWrapper value,
         JsonSerializerOptions options
+    ) => WriteThread(writer, value, options);
+
+    /// <summary>
+    /// Writes a comment thread object and returns how many of its comments were dropped because they
+    /// could not be serialized (each is logged). A dropped comment leaves the rest of the thread
+    /// intact; returning the count — rather than discarding it as a void <see cref="Write"/> would —
+    /// lets the getCommentThreads response fold comment-level drops into its <c>hiddenCount</c>, so a
+    /// comment lost inside an otherwise-healthy thread is still surfaced to the user. The signature
+    /// matches the <c>serializeItem</c> delegate of
+    /// <see cref="JsonConverterUtils.WriteIsolatedArray{T}"/>.
+    /// </summary>
+    internal static int WriteThread(
+        Utf8JsonWriter writer,
+        PlatformCommentThreadWrapper value,
+        JsonSerializerOptions options
     )
     {
         writer.WriteStartObject();
@@ -47,9 +62,9 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
 
         // All comments in the thread. Isolated per-comment: a single comment that can't be
         // serialized is dropped (and logged) rather than taking down the whole thread of otherwise
-        // healthy comments.
+        // healthy comments. The drop count is returned (not discarded) so it reaches hiddenCount.
         writer.WritePropertyName(COMMENTS);
-        JsonConverterUtils.WriteIsolatedArray(
+        int droppedComments = JsonConverterUtils.WriteIsolatedArray(
             writer,
             value.Comments,
             options,
@@ -88,5 +103,6 @@ public class PlatformCommentThreadConverter : JsonConverter<PlatformCommentThrea
 
         writer.WriteBoolean(IS_READ, value.IsRead);
         writer.WriteEndObject();
+        return droppedComments;
     }
 }

@@ -87,6 +87,14 @@ public static class JsonConverterUtils
     /// that throws mid-serialization must never reach <paramref name="writer"/> — and only elements
     /// that serialize cleanly are copied out.
     /// </summary>
+    /// <param name="serializeItem">
+    /// Optional custom per-element writer that returns how many NESTED elements it dropped (e.g. a
+    /// comment thread that itself isolates its comments). Those nested drops are added to this array's
+    /// returned count, so the caller gets a single total spanning both this level and one level down —
+    /// this is how a comment dropped inside an otherwise-serializable thread still reaches
+    /// <c>hiddenCount</c>. When null, each element is whole-object serialized via
+    /// <see cref="JsonSerializer"/>, which drops nothing of its own.
+    /// </param>
     /// <remarks>
     /// A <see cref="CommentThreadContextMissingException"/> is a wiring/programmer error, not corrupt
     /// data, so it is allowed to propagate rather than being swallowed as a dropped element — a
@@ -97,7 +105,8 @@ public static class JsonConverterUtils
         Utf8JsonWriter writer,
         IEnumerable<T> items,
         JsonSerializerOptions options,
-        Func<T, string> describe
+        Func<T, string> describe,
+        Func<Utf8JsonWriter, T, JsonSerializerOptions, int>? serializeItem = null
     )
     {
         writer.WriteStartArray();
@@ -111,9 +120,13 @@ public static class JsonConverterUtils
         {
             buffer.Clear();
             itemWriter.Reset();
+            int nestedDropped = 0;
             try
             {
-                JsonSerializer.Serialize(itemWriter, item, options);
+                if (serializeItem is null)
+                    JsonSerializer.Serialize(itemWriter, item, options);
+                else
+                    nestedDropped = serializeItem(itemWriter, item, options);
                 itemWriter.Flush();
             }
             catch (CommentThreadContextMissingException)
@@ -133,6 +146,9 @@ public static class JsonConverterUtils
             // The bytes came straight from Utf8JsonWriter above (already valid JSON), so skip
             // WriteRawValue's redundant re-parse/validation.
             writer.WriteRawValue(buffer.WrittenSpan, skipInputValidation: true);
+            // A survivor may still have shed nested elements (e.g. a thread that dropped one of its
+            // comments); count those too.
+            dropped += nestedDropped;
         }
         writer.WriteEndArray();
         return dropped;

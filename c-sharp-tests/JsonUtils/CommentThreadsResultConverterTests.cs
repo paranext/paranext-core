@@ -5,7 +5,7 @@ using Paratext.Data.ProjectComments;
 
 namespace TestParanextDataProvider.JsonUtils;
 
-internal class PlatformCommentThreadListConverterTests : PapiTestBase
+internal class CommentThreadsResultConverterTests : PapiTestBase
 {
     private JsonSerializerOptions _serializationOptions = null!;
     private ScrText _scrText = null!;
@@ -30,17 +30,20 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
         return new PlatformCommentThreadWrapper(_commentManager.FindThread(comment.Thread));
     }
 
+    // An empty CommentThread (no comments) is genuinely unserializable: reading its metadata
+    // (e.g. ModifiedDate, which indexes the last comment) throws mid-serialization.
+    private PlatformCommentThreadWrapper UnserializableThread() =>
+        new(new CommentThread { ScrText = _scrText });
+
+    private string Serialize(params PlatformCommentThreadWrapper[] threads) =>
+        JsonSerializer.Serialize(new CommentThreadsResult([.. threads]), _serializationOptions);
+
     [Test]
-    public void Serialize_ListWithOneUnserializableThread_DropsItAndReportsHiddenCount()
+    public void Serialize_OneUnserializableThread_DropsItAndReportsHiddenCount()
     {
         PlatformCommentThreadWrapper goodThread = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
-        // An empty CommentThread (no comments) is genuinely unserializable: reading its metadata
-        // (e.g. ModifiedDate, which indexes the last comment) throws mid-serialization.
-        var badThread = new PlatformCommentThreadWrapper(new CommentThread { ScrText = _scrText });
 
-        var list = new List<PlatformCommentThreadWrapper> { goodThread, badThread };
-
-        var json = JsonSerializer.Serialize(list, _serializationOptions);
+        var json = Serialize(goodThread, UnserializableThread());
 
         using var doc = JsonDocument.Parse(json);
         Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Object));
@@ -51,14 +54,28 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
     }
 
     [Test]
+    public void Serialize_MultipleUnserializableThreads_CountsEachInHiddenCount()
+    {
+        // The plural banner copy ("{count} comments couldn't be shown") only fires for hiddenCount
+        // >= 2, so prove the count actually reaches 2 rather than saturating at 1.
+        PlatformCommentThreadWrapper goodThread = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
+
+        var json = Serialize(UnserializableThread(), goodThread, UnserializableThread());
+
+        using var doc = JsonDocument.Parse(json);
+        JsonElement threads = doc.RootElement.GetProperty("threads");
+        Assert.That(threads.GetArrayLength(), Is.EqualTo(1)); // both bad threads dropped
+        Assert.That(threads[0].GetProperty("id").GetString(), Is.EqualTo("4217dff8"));
+        Assert.That(doc.RootElement.GetProperty("hiddenCount").GetInt32(), Is.EqualTo(2));
+    }
+
+    [Test]
     public void Serialize_HealthyMultiThreadList_KeepsAllThreadsInOrderWithZeroHidden()
     {
         PlatformCommentThreadWrapper first = AddThread(CommentTestHelper.CreateBasicComment()); // 4217dff8
         PlatformCommentThreadWrapper second = AddThread(CommentTestHelper.CreateConflictComment()); // 5f5ea40f
 
-        var list = new List<PlatformCommentThreadWrapper> { first, second };
-
-        var json = JsonSerializer.Serialize(list, _serializationOptions);
+        var json = Serialize(first, second);
 
         using var doc = JsonDocument.Parse(json);
         JsonElement threads = doc.RootElement.GetProperty("threads");
@@ -69,13 +86,27 @@ internal class PlatformCommentThreadListConverterTests : PapiTestBase
     }
 
     [Test]
-    public void Serialize_EmptyList_ProducesEmptyThreadsAndZeroHidden()
+    public void Serialize_EmptyResult_ProducesEmptyThreadsAndZeroHidden()
     {
+        var json = Serialize();
+
+        Assert.That(json, Is.EqualTo("{\"threads\":[],\"hiddenCount\":0}"));
+    }
+
+    [Test]
+    public void Serialize_BareThreadList_IsPlainArrayNotEnvelope()
+    {
+        // The { threads, hiddenCount } envelope is scoped to CommentThreadsResult: an ordinary
+        // List<PlatformCommentThreadWrapper> serialized on its own must stay a plain JSON array, so
+        // no unrelated serialization silently turns into an object.
+        PlatformCommentThreadWrapper thread = AddThread(CommentTestHelper.CreateBasicComment());
+
         var json = JsonSerializer.Serialize(
-            new List<PlatformCommentThreadWrapper>(),
+            new List<PlatformCommentThreadWrapper> { thread },
             _serializationOptions
         );
 
-        Assert.That(json, Is.EqualTo("{\"threads\":[],\"hiddenCount\":0}"));
+        using var doc = JsonDocument.Parse(json);
+        Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Array));
     }
 }
