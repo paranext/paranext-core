@@ -392,6 +392,8 @@ describe('ResourceCellView zoom UI', () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onParentClick = vi.fn();
     render(
+      // The wrapper div is a test-only click sink used to assert propagation; it is not a real
+      // interactive control, so the a11y interactivity rules do not apply here.
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events
       <div onClick={onParentClick}>
         <ResourceCellView
