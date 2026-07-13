@@ -194,6 +194,28 @@ describe('ResourceCollectionOptions — empty TEXTS list', () => {
     ).toBeInTheDocument();
   });
 
+  // A localizer may end the label with any of several trailing-ellipsis forms; each should be
+  // stripped when the label is embedded mid-sentence in the prompt.
+  it.each([
+    ['three-ASCII-dot fallback', 'Get resources...'],
+    ['CJK double ellipsis', 'Get resources……'],
+    ['ellipsis with trailing space', 'Get resources… '],
+    ['ellipsis with trailing full-width space', 'Get resources…　'],
+  ])('drops the trailing ellipsis from the interpolated label (%s)', (_label, getResources) => {
+    renderComponent({
+      top: [],
+      bottom: [],
+      installingResourceNames: [],
+      localizedStrings: {
+        ...STRINGS,
+        '%webView_scriptureTextGrid_viewOptions_getResources%': getResources,
+      },
+    });
+    expect(
+      screen.getByText('No texts added yet. Use Get resources to add them.'),
+    ).toBeInTheDocument();
+  });
+
   it('hides the empty-texts prompt when a user (bottom) row is present', () => {
     renderComponent({ bottom: [row('u1', 'My Text', { isUserRemovable: true })] });
     expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();

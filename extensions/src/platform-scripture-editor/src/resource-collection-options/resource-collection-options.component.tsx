@@ -66,8 +66,10 @@ export function ResourceCollectionOptions({
   // The Get Resources button label ends with an ellipsis (the dialog-opening affordance
   // convention); drop it when the label is embedded mid-sentence in the empty prompt so it reads
   // cleanly. Interpolating the label (rather than hardcoding it in the message) keeps the prompt in
-  // sync if the button is ever renamed.
-  const getResourcesLabelInProse = getResourcesLabel.replace(/(?:…|\.{3})$/u, '');
+  // sync if the button is ever renamed. The trailing-ellipsis regex tolerates the forms a localizer
+  // might use: one or two `…` characters (CJK convention doubles it), the three-ASCII-dot fallback
+  // `...`, and any trailing whitespace after it (including the full-width space `\s` matches).
+  const getResourcesLabelInProse = getResourcesLabel.replace(/(?:…{1,2}|\.{3})\s*$/u, '');
 
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
