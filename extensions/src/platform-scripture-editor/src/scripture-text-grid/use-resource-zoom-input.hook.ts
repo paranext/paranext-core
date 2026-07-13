@@ -28,7 +28,7 @@ function hasZoomModifier(event: WheelEvent): boolean {
  * NOTE: Keyboard zoom (Ctrl/Cmd +/-/0) is deferred pending PT-4143. The main-process
  * before-input-event handler in main.ts claims those chords for window zoom before the WebView
  * iframe sees them, so the keyboard path cannot function correctly until PT-4143 makes that handler
- * focus-aware. B8 ships three working paths: right-click context menu, hover/touch kebab, and
+ * focus-aware. Zoom ships three working paths: right-click context menu, hover/touch kebab, and
  * Ctrl/Cmd+wheel.
  */
 export function useResourceZoomInput({ containerRef, adjustZoom }: ResourceZoomInputOptions): void {

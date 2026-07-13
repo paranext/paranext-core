@@ -1,5 +1,5 @@
 /**
- * E2E checks for the Scripture Text Grid per-resource zoom feature (PT-4155 / B8).
+ * E2E checks for the Scripture Text Grid per-resource zoom feature (PT-4155).
  *
  * Covered:
  *
