@@ -385,7 +385,7 @@ export function ShareLayoutDialogContent({
                   {formatResourceDisplayName(ref, allResources)}
                 </span>
                 <Checkbox
-                  checked={!!ref.isResourceShownByDefault}
+                  checked={!!ref.isInTextCollection}
                   onCheckedChange={(checked: boolean) => handleToggleShownByDefault(ref, checked)}
                   aria-label={formatReplacementString(
                     localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
