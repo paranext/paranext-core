@@ -45,6 +45,7 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -57,6 +58,9 @@ const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
+// Screen-reader announcements for the chapter-context split opening/closing.
+const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
+const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
@@ -65,6 +69,8 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
+  ARIA_OPENED_KEY,
+  ARIA_CLOSED_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -132,9 +138,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
+  // Live-region message announced when the chapter-context split opens or closes (rendered into the
+  // `role="status"` region below).
+  const [announcement, setAnnouncement] = useState('');
+  const handleChapterContextChange = useCallback(
+    (context: ChapterContextResource) => {
+      setChapterContext(context);
+      setAnnouncement(
+        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
+      );
+    },
+    [localizedStrings],
+  );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-  }, []);
+    setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+  }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || chapterContext === undefined) return;
@@ -326,6 +345,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       data-testid="scripture-text-grid"
       className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
     >
+      {/* Polite live region announcing chapter-context open/close. Placed at the top of the render
+          tree so it exists in the DOM before any announcement fires (a screen reader ignores text
+          present at initial render). */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {announcement}
+      </div>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
           <TooltipProvider>
@@ -398,7 +423,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             setScrRef={setScrRef}
             viewMode={viewMode}
             chapterContext={chapterContext}
-            onChapterContextChange={setChapterContext}
+            onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
             closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
             cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}

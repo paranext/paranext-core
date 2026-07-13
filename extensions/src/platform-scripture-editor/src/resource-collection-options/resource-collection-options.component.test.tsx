@@ -39,6 +39,7 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_chapter%'] = 'Chapter';
 STRINGS['%webView_scriptureTextGrid_viewOptions_comingSoon%'] = 'Coming soon';
 STRINGS['%webView_scriptureTextGrid_viewOptions_textsHeader%'] = 'Texts';
 STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources…';
+STRINGS['%webView_scriptureTextGrid_viewOptions_adminSharedLock%'] = 'Shared by administrator';
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
@@ -243,5 +244,44 @@ describe('ResourceCollectionOptions — truncated names', () => {
     const longName = 'A Very Long Digital Bible Library Resource Display Name';
     renderComponent({ bottom: [row('u1', longName)] });
     expect(screen.getByText(longName)).toHaveAttribute('title', longName);
+  });
+});
+
+describe('ResourceCollectionOptions locked-admin indicator', () => {
+  it('shows a lock (not a remove button) on the admin-shared row', () => {
+    renderComponent({
+      top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
+      bottom: [row('b', 'My NIV', { isUserRemovable: true })],
+    });
+    expect(screen.getByLabelText('Shared by administrator')).toBeInTheDocument();
+    // Admin row has no "Remove ... from list" control.
+    expect(screen.queryByLabelText('Remove Admin ESV from list')).not.toBeInTheDocument();
+  });
+
+  it('shows a remove button (not a lock) on the user row', () => {
+    renderComponent({
+      top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
+      bottom: [row('b', 'My NIV', { isUserRemovable: true })],
+    });
+    expect(screen.getByLabelText('Remove My NIV from list')).toBeInTheDocument();
+  });
+
+  it('shows neither a lock nor a remove control on an opted-out admin row', () => {
+    // Opted-out admin entries land in the bottom section: not shared (isAdminLocked false) and not
+    // user-removable. They must show no lock (not currently shared) and no remove (✕) control.
+    renderComponent({
+      bottom: [row('a2', 'Opted-out Admin', { isAdminLocked: false, isUserRemovable: false })],
+    });
+    expect(screen.queryByLabelText('Shared by administrator')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Remove Opted-out Admin from list')).not.toBeInTheDocument();
+  });
+
+  it('the lock is not a focusable/tab-stop button', () => {
+    renderComponent({
+      top: [row('a', 'Admin ESV', { isAdminLocked: true, isUserRemovable: false })],
+      bottom: [],
+    });
+    const lock = screen.getByLabelText('Shared by administrator');
+    expect(lock.tagName).not.toBe('BUTTON');
   });
 });

@@ -16,13 +16,14 @@ import type {
  * same component. These stories drive it with local state so every interaction works without a
  * backend.
  *
- * **Try it**: toggle the checkboxes, hover a user row to reveal the remove (✕) button, and click
- * Get Resources. Chapter is disabled with a "coming soon" hint until its renderer ships.
+ * **Try it**: toggle the checkboxes, hover a user row to reveal the remove (✕) button, hover an
+ * admin-shared (top-section) row to reveal its "shared by administrator" lock, and click Get
+ * Resources. Chapter is disabled with a "coming soon" hint until its renderer ships.
  */
 const meta: Meta<typeof ResourceCollectionOptions> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceCollectionOptions',
   component: ResourceCollectionOptions,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
 };
 export default meta;
 
