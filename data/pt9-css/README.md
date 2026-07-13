@@ -20,16 +20,16 @@ their generated SCSS reproduces from the committed `.css`).
 | `hbkfra.css`        | extractor output | UBS Translator's Handbook (French) — HBKFRA                |
 | `hbkpt.css`         | extractor output | UBS Translator's Handbook (Portuguese) — HBKPT             |
 | `hbkesp.css`        | extractor output | UBS Translator's Handbook (Spanish) — HBKESP               |
-| `tnn.css`           | extractor output | UBS Translator's Notes (English) — TNN                     |
-| `tnnesp.css`        | extractor output | UBS Translator's Notes (Spanish) — TNNESP                  |
-| `tnnptg.css`        | extractor output | UBS Translator's Notes (Portuguese) — TNNPTG               |
-| `tnnfr.css`         | extractor output | UBS Translator's Notes (French) — TNNFR                    |
-| `tnd.css`           | extractor output | UBS Translator's Notes (Deuterocanon, English) — TND       |
-| `tndesp.css`        | extractor output | UBS Translator's Notes (Deuterocanon, Spanish) — TNDESP    |
-| `tndptg.css`        | extractor output | UBS Translator's Notes (Deuterocanon, Portuguese) — TNDPTG |
+| `tnn.css`           | extractor output | SIL Translator's Notes (English) — TNN                     |
+| `tnnesp.css`        | extractor output | SIL Translator's Notes (Spanish) — TNNESP                  |
+| `tnnptg.css`        | extractor output | SIL Translator's Notes (Portuguese) — TNNPTG               |
+| `tnnfr.css`         | extractor output | SIL Translator's Notes (French) — TNNFR                    |
+| `tnd.css`           | extractor output | SIL Translator's Notes (Deuterocanon, English) — TND       |
+| `tndesp.css`        | extractor output | SIL Translator's Notes (Deuterocanon, Spanish) — TNDESP    |
+| `tndptg.css`        | extractor output | SIL Translator's Notes (Deuterocanon, Portuguese) — TNDPTG |
 | `hbkeng-manual.css` | manual reference | UBS Translator's Handbook (English) — HBKENG               |
-| `tnn-manual.css`    | manual reference | UBS Translator's Notes — TNN                               |
-| `tnd-manual.css`    | manual reference | UBS Translator's Notes (Deuterocanon) — TND                |
+| `tnn-manual.css`    | manual reference | SIL Translator's Notes — TNN                               |
+| `tnd-manual.css`    | manual reference | SIL Translator's Notes (Deuterocanon) — TND                |
 
 ### `<id>.css` — extractor output (the live converter source)
 
