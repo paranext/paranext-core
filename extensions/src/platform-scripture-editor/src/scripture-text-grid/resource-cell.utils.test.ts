@@ -16,8 +16,8 @@ describe('buildCellAccessibleName', () => {
     expect(buildCellAccessibleName('ESV', scrRef)).toBe('ESV, MAT 5:3');
   });
 
-  it('still returns the reference when the label is empty', () => {
-    expect(buildCellAccessibleName('', scrRef)).toBe(', MAT 5:3');
+  it('returns the reference alone (no leading comma) when the label is empty', () => {
+    expect(buildCellAccessibleName('', scrRef)).toBe('MAT 5:3');
   });
 });
 

@@ -7,10 +7,13 @@ export type ResourceCellState = 'downloading' | 'ready' | 'failed';
 /**
  * Accessible name for a grid cell: the resource's short label plus the active reference, e.g. "ESV,
  * MAT 5:3". Read by screen readers when the cell receives focus. The reference uses the stable
- * 3-letter book id (not localized) for a terse, unambiguous spoken form.
+ * 3-letter book id (not localized) for a terse, unambiguous spoken form. When the label is empty (a
+ * defensive case — resource labels are normally present), the reference is returned alone so the
+ * spoken name has no dangling leading comma.
  */
 export function buildCellAccessibleName(label: string, scrRef: SerializedVerseRef): string {
-  return `${label}, ${formatScrRef(scrRef)}`;
+  const reference = formatScrRef(scrRef);
+  return label ? `${label}, ${reference}` : reference;
 }
 
 /**

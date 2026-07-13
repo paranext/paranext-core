@@ -438,9 +438,9 @@ test.describe('Scripture Text Grid accessibility', () => {
     const firstCell = frame.locator('[role="gridcell"]').first();
     await expect(firstCell).toBeVisible({ timeout: 15_000 });
     // Accessible name is "<label>, <BOOK C:V>" — anchored so a stray substring can't match.
-    // The book id is a 3-char USFM code; it may start with a digit (e.g. 1SA, 2KI), so digits
-    // are allowed in the class.
-    await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z0-9]{3}\s\d+:\d+$/);
+    // The book id is a 3-char USFM code; only the first char may be a digit (1-4, e.g. 1SA, 2KI,
+    // 3JN), and the remaining two are always letters.
+    await expect(firstCell).toHaveAttribute('aria-label', /^[^,]+,\s[A-Z1-4][A-Z]{2}\s\d+:\d+$/);
   });
 
   test('Tab moves focus between gridcells, not into editor content', async ({ mainPage }) => {

@@ -269,7 +269,7 @@
       "%webView_scriptureTextGrid_cell_status_failed%": "Error de descarga",
       "%webView_scriptureTextGrid_cell_verse_empty%": "No hay texto para este versículo",
       "%webView_scriptureTextGrid_aria_chapterContextClosed%": "Vista de capítulo cerrada",
-      "%webView_scriptureTextGrid_aria_chapterContextOpened%": "Vista de capítulo abierta para {resourceReference}",
+      "%webView_scriptureTextGrid_aria_chapterContextOpened%": "Vista de capítulo abierta mostrando {resourceReference}",
       "%webView_scriptureTextGrid_chapterContext_close%": "Cerrar vista de capítulo",
       "%webView_scriptureTextGrid_viewOptions_adminSharedLock%": "Compartido por el administrador",
       "%webView_scriptureTextGrid_viewOptions_chapter%": "Capítulo",
