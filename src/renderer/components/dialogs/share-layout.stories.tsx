@@ -93,6 +93,30 @@ const ALL_RESOURCES: DblResourceData[] = [
   },
 ];
 
+// Generates a long list of scripture resources so both scrollable regions can be exercised in a
+// story: the "Text Collection Resources" list in the main dialog body, and the resource picker
+// list inside the "Manage" popover.
+const MANY_SCRIPTURE_RESOURCES: DblResourceData[] = Array.from({ length: 30 }, (_, i) => ({
+  dblEntryUid: `scroll-test-uid-${i}`,
+  displayName: `Scroll Test Version ${i + 1}`,
+  fullName: `Scroll Test Version ${i + 1} Full Name`,
+  bestLanguageName: 'English',
+  type: 'ScriptureResource',
+  size: 1000 + i,
+  installed: true,
+  updateAvailable: false,
+  projectId: `scroll-test-proj-${i}`,
+}));
+
+const MANY_SCRIPTURE_REFERENCES: ResourceReference[] = MANY_SCRIPTURE_RESOURCES.map(
+  (resource, i) => ({
+    type: 'dblResource',
+    name: resource.displayName,
+    id: resource.dblEntryUid,
+    isResourceShownByDefault: i % 2 === 0,
+  }),
+);
+
 const meta: Meta<typeof ShareLayoutDialogContent> = {
   title: 'Advanced/ShareLayoutDialogContent',
   component: ShareLayoutDialogContent,
@@ -134,3 +158,10 @@ export const NoResourcesYet: Story = {
   args: { initialScriptureResources: [], initialCommentaryResources: [] },
 };
 export const ResourcesLoading: Story = { args: { isResourcesLoading: true, allResources: [] } };
+export const ManyResourcesScrolling: Story = {
+  args: {
+    initialScriptureResources: MANY_SCRIPTURE_REFERENCES,
+    initialCommentaryResources: [],
+    allResources: [...MANY_SCRIPTURE_RESOURCES, ...ALL_RESOURCES],
+  },
+};
