@@ -10,7 +10,7 @@ import {
   sonner,
   usePromise,
 } from 'platform-bible-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useLocalizedStrings,
   useProjectData,
@@ -29,6 +29,12 @@ import {
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
+import {
+  findScrollTarget,
+  NavigationRecord,
+  shouldArmSyncScroll,
+  toNavigationRecord,
+} from './comment-list-scroll.utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -85,6 +91,48 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
+  /**
+   * Scroll behavior for a due BCV-sync scroll (PT-4080). `'instant'` initially so the list opens
+   * already positioned at the current reference; `'smooth'` for subsequent scroll-group navigation.
+   * `undefined` means no sync scroll is due. Consumed only when thread data is not loading, so a
+   * chapter-scope requery finishes before the scroll runs.
+   */
+  const [pendingSyncScrollBehavior, setPendingSyncScrollBehavior] = useState<
+    ScrollBehavior | undefined
+  >('instant');
+
+  /**
+   * One-shot record of the scripture reference this view itself navigated to — by clicking a
+   * thread's verse reference, or via the editor's "go to comment" selecting a thread. The matching
+   * incoming scroll-group change is consumed without arming a sync scroll: a click inside the
+   * comment list must never scroll the comment list. Any other scrRef change clears the record.
+   */
+  const selfInitiatedNavigationRef = useRef<NavigationRecord | undefined>(undefined);
+
+  /** Latest loaded threads, readable from the stable message listener without re-subscribing it. */
+  const commentThreadsRef = useRef<LegacyCommentThread[]>([]);
+
+  // Arm a sync scroll whenever the scroll-group reference changes. This also runs on mount, where
+  // `?? ` preserves the initial 'instant' behavior instead of downgrading it to 'smooth'. Note this
+  // deliberately does NOT unfreeze the all-books selector: the query inputs stay frozen (see
+  // usesChapterScope below); a verse move only scrolls the already-loaded list. A change this view
+  // itself initiated (see selfInitiatedNavigationRef) is swallowed instead of armed.
+  useEffect(() => {
+    const selfInitiatedNavigation = selfInitiatedNavigationRef.current;
+    selfInitiatedNavigationRef.current = undefined;
+    if (
+      !shouldArmSyncScroll(selfInitiatedNavigation, {
+        // TODO (PT-4031): Handle versification
+        book: scrRef.book,
+        chapterNum: scrRef.chapterNum,
+        verseNum: scrRef.verseNum,
+      })
+    )
+      return;
+
+    setPendingSyncScrollBehavior((previous) => previous ?? 'smooth');
+  }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
+
   // Initial filter/scope axes passed by openCommentList when opening a NEW comment list (e.g. the
   // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
   // race where a setFilters message could arrive before this view's message listener attaches. An
@@ -129,6 +177,13 @@ global.webViewComponent = function CommentListWebView({
       setSelectedThreadId(threadId);
       threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setPendingThreadIdToSelect(undefined);
+      // The editor's caret move for this navigation may deliver its scroll-group change after
+      // this point; record the thread's reference so that late change doesn't scroll the list
+      // away from the selection. Recording here (not in the message handler) covers the deferred
+      // path too: when the message arrived before thread data loaded, the data is loaded by the
+      // time this success branch runs, so the lookup cannot miss.
+      const selectedThread = commentThreadsRef.current.find((thread) => thread.id === threadId);
+      selfInitiatedNavigationRef.current = toNavigationRecord(selectedThread?.verseRef);
       return true;
     }
 
@@ -153,6 +208,10 @@ global.webViewComponent = function CommentListWebView({
         // the current loading state synchronously here. The pending thread will be processed
         // by the effect below once loading completes.
         trySelectThread(data.threadId, true);
+        // The explicit "go to comment" navigation wins over any due BCV-sync scroll (PT-4080).
+        // (trySelectThread records the thread's reference as self-initiated navigation when the
+        // selection succeeds, guarding against the editor's caret move arriving after it.)
+        setPendingSyncScrollBehavior(undefined);
       }
 
       if (data?.method === 'setFilters') {
@@ -230,6 +289,11 @@ global.webViewComponent = function CommentListWebView({
     return commentThreads;
   }, [commentThreads]);
 
+  // Mirror the loaded threads into the ref the stable message listener reads.
+  useEffect(() => {
+    commentThreadsRef.current = safeCommentThreads;
+  }, [safeCommentThreads]);
+
   // Process any pending thread selection once data finishes loading
   useEffect(() => {
     if (!isLoadingCommentThreads && pendingThreadIdToSelect) {
@@ -241,6 +305,44 @@ global.webViewComponent = function CommentListWebView({
     }
     return undefined;
   }, [isLoadingCommentThreads, pendingThreadIdToSelect, trySelectThread]);
+
+  // Consume the pending BCV-sync scroll once thread data has settled. Scroll only — selection and
+  // expansion are never changed here. An explicit selectThread navigation (the editor's "go to
+  // comment" flow) is the more specific intent, so it wins and the sync scroll is dropped.
+  useEffect(() => {
+    if (pendingSyncScrollBehavior === undefined || isLoadingCommentThreads) return;
+
+    if (pendingThreadIdToSelect) {
+      setPendingSyncScrollBehavior(undefined);
+      return;
+    }
+    const target = findScrollTarget(safeCommentThreads, scrRef);
+    if (target?.type === 'thread') {
+      const threadElement = document.getElementById(target.threadId);
+      if (threadElement)
+        threadElement.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'start' });
+      else logger.debug(`BCV-sync scroll: thread element not found: ${target.threadId}`);
+    } else if (target?.type === 'bottom') {
+      // Past every loaded thread: show the end of the list (the user can scroll up). A 'bottom'
+      // target guarantees at least one loaded thread, so the list and its children should exist;
+      // either miss below means the DOM contract with platform-bible-react's CommentList broke.
+      const listElement = document.getElementById('comment-list');
+      const lastThreadElement = listElement?.lastElementChild;
+      if (lastThreadElement)
+        lastThreadElement.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'end' });
+      else
+        logger.debug(
+          `BCV-sync scroll: #comment-list ${listElement ? 'has no children to scroll to' : 'element not found'}`,
+        );
+    }
+    setPendingSyncScrollBehavior(undefined);
+  }, [
+    pendingSyncScrollBehavior,
+    isLoadingCommentThreads,
+    pendingThreadIdToSelect,
+    safeCommentThreads,
+    scrRef,
+  ]);
 
   const fetchAssignableUsers = useCallback(
     async () =>
@@ -388,6 +490,10 @@ global.webViewComponent = function CommentListWebView({
     (thread: LegacyCommentThread) => {
       const { verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
       if (!verseRef.valid) return;
+
+      // This view is causing the upcoming scroll-group change; a click inside the list must never
+      // scroll the list, so record the reference for the arm effect to swallow.
+      selfInitiatedNavigationRef.current = toNavigationRecord(thread.verseRef);
 
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
