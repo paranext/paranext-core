@@ -355,7 +355,7 @@ const zoomMenuLabels = {
  */
 export const ZoomDefault: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -367,14 +367,14 @@ export const ZoomDefault: Story = {
         canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
 /** Zoomed in (factor = 1.4): the content area is enlarged; both actions remain enabled. */
 export const ZoomedIn: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -386,7 +386,7 @@ export const ZoomedIn: Story = {
         canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
@@ -396,7 +396,7 @@ export const ZoomedIn: Story = {
  */
 export const AtMaxZoom: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -408,7 +408,7 @@ export const AtMaxZoom: Story = {
         canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
@@ -418,7 +418,7 @@ export const AtMaxZoom: Story = {
  */
 export const AtMinZoom: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -430,7 +430,7 @@ export const AtMinZoom: Story = {
         canZoomOut={false}
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
@@ -454,7 +454,7 @@ export const AtMinZoom: Story = {
  */
 export const ZoomKebabOpen: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -466,7 +466,7 @@ export const ZoomKebabOpen: Story = {
         canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -499,7 +499,7 @@ export const ZoomKebabOpen: Story = {
  */
 export const AtMaxZoomMenuOpen: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -511,7 +511,7 @@ export const AtMaxZoomMenuOpen: Story = {
         canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -538,7 +538,7 @@ export const AtMaxZoomMenuOpen: Story = {
 /** At minimum zoom: "Zoom Out" is disabled in the dropdown while "Zoom In" remains enabled. */
 export const AtMinZoomMenuOpen: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -550,7 +550,7 @@ export const AtMinZoomMenuOpen: Story = {
         canZoomOut={false}
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -576,7 +576,7 @@ export const AtMinZoomMenuOpen: Story = {
  */
 export const ResetDisabledAtDefault: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="WEB"
@@ -589,7 +589,7 @@ export const ResetDisabledAtDefault: Story = {
         canReset={false}
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
   play: async ({ canvas, userEvent, step }) => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
@@ -615,7 +615,7 @@ export const ResetDisabledAtDefault: Story = {
  */
 export const LongLabelWithZoom: Story = {
   render: () => (
-    <GridCellBox>
+    <CellBox>
       <ResourceCellView
         state="ready"
         label="World English Bible Revised 2023 Study Edition"
@@ -627,7 +627,7 @@ export const LongLabelWithZoom: Story = {
         canZoomOut
         zoomMenuLabels={zoomMenuLabels}
       />
-    </GridCellBox>
+    </CellBox>
   ),
 };
 
