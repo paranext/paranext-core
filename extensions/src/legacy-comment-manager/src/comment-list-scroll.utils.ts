@@ -37,6 +37,7 @@ export function findScrollTarget(
 ): CommentListScrollTarget {
   // Guard before calling scrRefToBBBCCCVVV, which assumes a known book id.
   if (Canon.bookIdToNumber(scrRef.book) <= 0) return undefined;
+
   const currentPosition = scrRefToBBBCCCVVV(scrRef);
 
   let bestThreadId: string | undefined;
@@ -46,10 +47,12 @@ export function findScrollTarget(
   threads.forEach((thread) => {
     const { success, verseRef } = VerseRef.tryParse(thread.verseRef ?? '');
     if (!success || verseRef.bookNum <= 0) return;
+
     hasRankableThread = true;
     // For a verse range, verseNum is the start verse, so ranges rank by where they begin.
     const threadPosition = verseRef.BBBCCCVVV;
     if (threadPosition < currentPosition) return;
+
     // Strict < keeps the FIRST thread in list order when several share a verse.
     if (threadPosition < bestPosition) {
       bestPosition = threadPosition;
@@ -77,6 +80,7 @@ export type NavigationRecord = Pick<SerializedVerseRef, 'book' | 'chapterNum' | 
 export function toNavigationRecord(verseRefText: string | undefined): NavigationRecord | undefined {
   const { verseRef } = VerseRef.tryParse(verseRefText ?? '');
   if (!verseRef.valid) return undefined;
+
   return { book: verseRef.book, chapterNum: verseRef.chapterNum, verseNum: verseRef.verseNum };
 }
 
@@ -94,6 +98,7 @@ export function shouldArmSyncScroll(
   scrRef: SerializedVerseRef,
 ): boolean {
   if (!selfInitiatedNavigation) return true;
+
   return (
     selfInitiatedNavigation.book !== scrRef.book ||
     selfInitiatedNavigation.chapterNum !== scrRef.chapterNum ||

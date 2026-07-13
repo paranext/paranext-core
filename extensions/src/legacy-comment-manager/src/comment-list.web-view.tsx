@@ -129,6 +129,7 @@ global.webViewComponent = function CommentListWebView({
       })
     )
       return;
+
     setPendingSyncScrollBehavior((previous) => previous ?? 'smooth');
   }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
@@ -176,6 +177,13 @@ global.webViewComponent = function CommentListWebView({
       setSelectedThreadId(threadId);
       threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setPendingThreadIdToSelect(undefined);
+      // The editor's caret move for this navigation may deliver its scroll-group change after
+      // this point; record the thread's reference so that late change doesn't scroll the list
+      // away from the selection. Recording here (not in the message handler) covers the deferred
+      // path too: when the message arrived before thread data loaded, the data is loaded by the
+      // time this success branch runs, so the lookup cannot miss.
+      const selectedThread = commentThreadsRef.current.find((thread) => thread.id === threadId);
+      selfInitiatedNavigationRef.current = toNavigationRecord(selectedThread?.verseRef);
       return true;
     }
 
@@ -201,14 +209,9 @@ global.webViewComponent = function CommentListWebView({
         // by the effect below once loading completes.
         trySelectThread(data.threadId, true);
         // The explicit "go to comment" navigation wins over any due BCV-sync scroll (PT-4080).
+        // (trySelectThread records the thread's reference as self-initiated navigation when the
+        // selection succeeds, guarding against the editor's caret move arriving after it.)
         setPendingSyncScrollBehavior(undefined);
-        // The editor's caret move for this navigation may deliver its scroll-group change AFTER
-        // this message; record the thread's reference so that late change doesn't scroll the list
-        // away from the selection either.
-        const selectedThread = commentThreadsRef.current.find(
-          (thread) => thread.id === data.threadId,
-        );
-        selfInitiatedNavigationRef.current = toNavigationRecord(selectedThread?.verseRef);
       }
 
       if (data?.method === 'setFilters') {
@@ -308,6 +311,7 @@ global.webViewComponent = function CommentListWebView({
   // comment" flow) is the more specific intent, so it wins and the sync scroll is dropped.
   useEffect(() => {
     if (pendingSyncScrollBehavior === undefined || isLoadingCommentThreads) return;
+
     if (pendingThreadIdToSelect) {
       setPendingSyncScrollBehavior(undefined);
       return;
