@@ -43,6 +43,7 @@ import {
   syncOnProjectSwitch,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { SharedLayoutReceiver } from './shared-layout-receiver.model';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -94,6 +95,18 @@ let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> |
 let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
 
 // #endregion Project Switch Events
+
+// #region Shared Layout
+
+/**
+ * Coordinates team-member receipt of a shared layout across project switches and Send/Receive
+ * syncs. Created in activate(). `open()` is a separate top-level function (not nested inside
+ * activate()), so this is module-level rather than a local const; call sites there use optional
+ * chaining since it is `undefined` until activation completes.
+ */
+let sharedLayoutReceiver: SharedLayoutReceiver | undefined;
+
+// #endregion Shared Layout
 
 interface ResourceViewerOptions extends OpenWebViewOptions {
   projectId?: string;
@@ -299,6 +312,7 @@ async function open(
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
       const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
+      sharedLayoutReceiver?.markAutoSync(projectForWebView.projectId);
       // Fire-and-forget: runs concurrently with openWebView below.
       syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }
@@ -319,8 +333,10 @@ async function open(
     };
 
     // If in simple interface mode, open/update the model text, bible text, and commentary text panels
-    if (interfaceMode === 'simple' && projectForWebView.projectId)
+    if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openTextConnectionPanels(papi, projectForWebView.projectId);
+      await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
+    }
 
     const openedWebViewId = await papi.webViews
       .openWebView(
@@ -1284,6 +1300,35 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // triggers coalesce into a single follow-up run.
   const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);
 
+  // Payload type is inferred from the NetworkEvents augmentation added earlier — do NOT pass an
+  // explicit payload generic here.
+  const sharedLayoutReArmEmitter = await papi.network.createNetworkEventEmitterAsync(
+    'platformScriptureEditor.onSharedLayoutApply',
+  );
+
+  sharedLayoutReceiver = new SharedLayoutReceiver(papi, sharedLayoutReArmEmitter);
+
+  const applySharedLayoutPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.applySharedLayout',
+    async (notificationId) => {
+      await sharedLayoutReceiver?.applyFromNotification(notificationId);
+    },
+    {
+      method: {
+        summary: 'Apply the buffered shared layout for the project tied to a notification',
+        params: [
+          {
+            name: 'notificationId',
+            required: true,
+            summary: 'The id of the notification whose shared layout should be applied',
+            schema: { type: ['string', 'number'] },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -1327,6 +1372,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
+    await applySharedLayoutPromise,
+    sharedLayoutReArmEmitter,
+    {
+      dispose: async () => {
+        sharedLayoutReceiver?.dispose();
+        sharedLayoutReceiver = undefined;
+        return true;
+      },
+    },
   );
 
   logger.debug('Scripture editor is finished activating!');
