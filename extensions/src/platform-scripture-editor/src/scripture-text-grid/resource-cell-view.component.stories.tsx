@@ -36,7 +36,7 @@ const ROW_BOX_STYLE: React.CSSProperties = {
 };
 
 /**
- * Supplies the `grid` → `row` ARIA ancestors that `role="gridcell"` requires (in the app, PR-2's
+ * Supplies the `grid` → `row` ARIA ancestors that `role="gridcell"` requires (in the app, the
  * `ScriptureTextGrid` row container provides these).
  */
 function GridRowBox({ children }: { children: React.ReactNode }) {
@@ -224,7 +224,7 @@ export const VerseRightToLeft: Story = {
 };
 
 /**
- * PR-1 partial-failure row smoke: ready, failed, and downloading cells side by side in one row.
+ * Partial-failure row smoke: ready, failed, and downloading cells side by side in one row.
  * Neighbors stay independent — one offline cell does not blank its siblings.
  */
 export const PartialFailureRow: Story = {
@@ -262,8 +262,8 @@ export const PartialFailureRow: Story = {
 };
 
 /**
- * PR-1 mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic in one row. Each cell
- * applies its own `dir` on the content area, independent of the UI locale.
+ * Mixed-direction row smoke: LTR English beside RTL Hebrew and Arabic in one row. Each cell applies
+ * its own `dir` on the content area, independent of the UI locale.
  */
 export const MixedDirectionRow: Story = {
   render: () => (

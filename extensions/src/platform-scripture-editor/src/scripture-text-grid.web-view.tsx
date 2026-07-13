@@ -77,12 +77,12 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
- * Options panel (A5), and the verse-cell grid body (A4).
+ * Options panel, and the verse-cell grid body.
  *
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. Below the header, the grid body renders one
- * `ResourceCell` per shown resource — the resources come from A3's `getScriptureTextGridContents`
+ * `ResourceCell` per shown resource — the resources come from the `getScriptureTextGridContents`
  * selector over the Text Collection sources assembled by `useTextCollectionSources`, and the row's
  * verse/chapter layout follows the View Options `viewMode` toggle.
  */
@@ -157,7 +157,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     undefined,
   );
 
-  // The grid body's cells: A3's selector over the Text Collection sources, resolved to the row's
+  // The grid body's cells: the effective-contents selector over the Text Collection sources, resolved to the row's
   // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>

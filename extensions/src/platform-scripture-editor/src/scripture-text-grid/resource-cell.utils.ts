@@ -14,8 +14,9 @@ export function buildCellAccessibleName(label: string, scrRef: SerializedVerseRe
 }
 
 /**
- * Derives a cell's offline state from observable data. A2/A13 own the actual download; this only
- * visualizes it: PlatformError → `failed`; still loading / no value → `downloading`; else `ready`.
+ * Derives a cell's offline state from observable data. The download itself is owned by the data
+ * layer; this only visualizes it: PlatformError → `failed`; still loading / no value →
+ * `downloading`; else `ready`.
  */
 export function deriveCellState(args: {
   usjPossiblyError: unknown;
