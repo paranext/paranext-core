@@ -436,6 +436,10 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     // project's scroll group), so only "All books" appeared. Assert on the localized labels rather
     // than the option count, so a future change that swapped in a different second scope value while
     // dropping current-chapter could not keep this test green.
+    //
+    // This overlay wait is NOT redundant with the one inside the retry loop above: the loop only
+    // guarantees the overlay is gone at the moment the trigger becomes visible, but a fresh dock
+    // rebuild can raise it again before the click below — which is a new pointer action. Keep it.
     await waitForOverlayGone(mainPage, 30_000);
     await scopeTrigger.click();
     const scopeOptions = commentsFrame.locator(

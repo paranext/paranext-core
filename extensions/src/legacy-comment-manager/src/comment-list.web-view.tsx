@@ -26,8 +26,8 @@ import {
   applyFilterOverrides,
   buildCommentThreadSelector,
   CommentFilters,
+  resolveEffectiveScopeFilter,
   ScopeFilter,
-  SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
 } from './comment-list-filters.model';
 import {
@@ -154,6 +154,11 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
+  // Plain useState (deliberately NOT persisted, unlike scopeFilter below): the orthogonal filter
+  // axes are treated as ephemeral per-view state and reset to their defaults when the view reloads on
+  // a project switch. Only the scope axis persists, because "Current chapter" is a viewing mode a
+  // user sets once and expects to carry across projects. If you unify these, re-check the project-
+  // switch behavior both ways before changing it.
   const [filters, setFilters] = useState<CommentFilters>(() =>
     applyFilterOverrides(initialFilters),
   );
@@ -275,16 +280,10 @@ global.webViewComponent = function CommentListWebView({
   // open has neither.
   const canScopeToCurrentChapter = isCommentListPanel || !!editorWebViewId;
 
-  // When this list can't follow a live reference but a persisted/stale scope still says "current
-  // chapter" (e.g. a value carried over from when an editor was wired, or set via the public
-  // setFilters controller), coerce it back to all-books. Otherwise the toolbar would show a
-  // "Current chapter" value whose option it hides, and the query would keep filtering against a
-  // reference this list doesn't have. This keeps the displayed value, the option list, and the
-  // query in agreement.
-  const effectiveScopeFilter =
-    !canScopeToCurrentChapter && scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER
-      ? UNFILTERED
-      : scopeFilter;
+  // Coerce a "current chapter" scope this list can't honor (no live reference) back to all-books, so
+  // the displayed value, the offered options, and the query all agree. See the helper for the full
+  // rationale; it lives in the model so the same rule drives both the display and the query below.
+  const effectiveScopeFilter = resolveEffectiveScopeFilter(scopeFilter, canScopeToCurrentChapter);
 
   // The selector only uses scrRef when the scope is the current chapter; in the all-books view a
   // verse move must not tear down and re-establish the subscription (which re-runs the C# query and
