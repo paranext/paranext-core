@@ -17,11 +17,39 @@ process.stdin.on("end", () => {
   const total = j?.context_window?.context_window_size ?? 200000;
   const used = Math.floor(total * pct / 100);
   const cwd = j?.cwd ?? "~";
+
+  // Rate-limit usage (Claude.ai Pro/Max only; the whole object is absent
+  // otherwise, e.g. API-key auth or before the first API response, and each
+  // window may be independently absent). Reset times are rendered in the
+  // machine local time zone via the local Date getters.
+  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const hhmm = (epoch) => {
+    const d = new Date(epoch * 1000);
+    return String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0");
+  };
+  const dayMonHHMM = (epoch) => {
+    const d = new Date(epoch * 1000);
+    return `${d.getDate()} ${MONTHS[d.getMonth()]} ${hhmm(epoch)}`;
+  };
+  const win = (w, label, fmt) => {
+    const p = w?.used_percentage;
+    if (p === undefined || p === null) return undefined;
+    let s = `${label} ${Math.round(p)}%`;
+    if (typeof w.resets_at === "number") s += ` (${fmt(w.resets_at)})`;
+    return s;
+  };
+  const rl = j?.rate_limits;
+  const rate = [
+    win(rl?.five_hour, "5h", hhmm),
+    win(rl?.seven_day, "7d", dayMonHHMM),
+  ].filter(Boolean).join(" | ");
+
   console.log(model);
   console.log(pct);
   console.log(total);
   console.log(used);
   console.log(cwd);
+  console.log(rate);
 });
 ' <<< "$input")
 
@@ -31,6 +59,7 @@ process.stdin.on("end", () => {
   IFS= read -r TOTAL
   IFS= read -r USED
   IFS= read -r CWD
+  IFS= read -r RATE
 } <<< "$node_output"
 
 # Default values for robustness when node output is empty (node absent)
@@ -58,4 +87,14 @@ fmt_tokens() {
   fi
 }
 
-printf "%s | %s%% ctx | %s/%s tokens | %s%s" "$MODEL" "$PCT" "$(fmt_tokens "$USED")" "$(fmt_tokens "$TOTAL")" "$DIR" "$GIT"
+# Append rate-limit usage to the right of the branch, when available. True
+# right-alignment isn't possible: Claude Code doesn't pass the terminal width
+# to the status line, and stdout is a pipe (no tty) so $COLUMNS / tput cols are
+# unreliable.
+if [ -n "$RATE" ]; then
+  RATE_SEG=" | $RATE"
+else
+  RATE_SEG=""
+fi
+
+printf "%s | %s%% ctx | %s/%s tokens | %s%s%s" "$MODEL" "$PCT" "$(fmt_tokens "$USED")" "$(fmt_tokens "$TOTAL")" "$DIR" "$GIT" "$RATE_SEG"
