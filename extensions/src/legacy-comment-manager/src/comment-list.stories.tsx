@@ -118,8 +118,8 @@ const sampleThreads: LegacyCommentThread[] = [
   },
 ];
 
-/** A long thread list (GEN 1:1–20) for the Scrollable story, enough to overflow the panel. */
-const manyThreads: LegacyCommentThread[] = Array.from({ length: 20 }, (_, index) => {
+/** A long thread list (GEN 1:1–30) for the Scrollable story, enough to overflow the panel. */
+const manyThreads: LegacyCommentThread[] = Array.from({ length: 30 }, (_, index) => {
   const verse = index + 1;
   const id = `scroll-thread-${verse}`;
   const verseRef = `GEN 1:${verse}`;
