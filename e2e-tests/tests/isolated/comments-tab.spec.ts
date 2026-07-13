@@ -435,17 +435,22 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
       OPEN_EDITOR_TIMEOUT_MS,
     );
 
-    await clickCommentsTab(mainPage);
-
     const commentsFrame = commentsFrameLocator(mainPage);
     // The scope dropdown is the last of the five filter triggers (resolved, read, type, assignment,
-    // scope). Open it and confirm the Column 3 panel offers BOTH "all books" and "current chapter" —
-    // before this fix it offered only "all books" (the option was gated on a wired editor, which the
-    // Column 3 panel does not have even though it follows the active project's scroll group).
+    // scope). Click the tab inside a retry loop: a "workspace updating" overlay can intercept pointer
+    // events during dock rebuilds, so wait it out and retry (same pattern as the panel-display test).
     const scopeTrigger = commentsFrame.locator('[data-slot="select-trigger"]').nth(4);
-    await expect(scopeTrigger).toBeVisible({ timeout: 90_000 });
-    await scopeTrigger.click();
+    await expect(async () => {
+      await waitForOverlayGone(mainPage, 60_000);
+      await clickCommentsTab(mainPage, 5_000);
+      await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
+    }).toPass({ timeout: 180_000 });
 
+    // With the overlay cleared, open the scope dropdown and confirm the Column 3 panel offers BOTH
+    // "all books" and "current chapter" — before this fix it offered only "all books" (the option was
+    // gated on a wired editor, which the panel lacks even though it follows the active project's group).
+    await waitForOverlayGone(mainPage, 30_000);
+    await scopeTrigger.click();
     const scopeOptions = commentsFrame.locator(
       '[data-slot="select-content"] [data-slot="select-item"]',
     );
