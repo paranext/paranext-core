@@ -71,27 +71,7 @@ In dialogs and popovers, the discard button should use `variant="secondary"` or 
 
 ### Button labels
 
-Labels should communicate what will happen — even if the user skips the surrounding text. Use a specific action verb. Avoid **OK**: users learn to dismiss it without reading, which turns dialogs into interruptions rather than decisions.
-
-**Cancel** is sometimes appropriate, but a more descriptive alternative is usually clearer. Both buttons should be self-explanatory taken together.
-
-**Example scenario:** A user writes a comment, then tries to navigate away. The app needs to know: submit the comment or discard it? Draft-saving is not an option.
-
-|            | Dismiss | Confirm |
-| ---------- | ------- | ------- |
-| Avoid      | Cancel  | OK      |
-| Acceptable | Cancel  | Comment |
-| Preferred  | Discard | Comment |
-
-<ExampleBlockGroup>
-  <ExampleBlock variant="avoid" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Cancel</Button><Button>OK</Button></div>}>
-    Neither label explains what will happen — users dismiss without reading.
-  </ExampleBlock>
-
-  <ExampleBlock variant="prefer" preview={<div style={{display: 'flex', gap: '8px'}}><Button variant="secondary">Discard</Button><Button>Comment</Button></div>}>
-    Both actions are self-evident — the choice is clear without reading surrounding text.
-  </ExampleBlock>
-</ExampleBlockGroup>
+Button *labels* — the words, and which apply model they express — are covered in [Applying Changes](?path=/docs/guidelines-applying-changes--docs#microcopy). In short: avoid **OK** (users dismiss it without reading), and use a specific action verb so the label says what will happen. This page owns how dialog buttons **look and arrange** (order, variant, icon, above); Applying Changes owns what they **say**.
 
 ### ButtonGroup
 
