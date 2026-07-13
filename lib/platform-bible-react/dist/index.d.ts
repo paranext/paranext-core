@@ -1045,14 +1045,14 @@ export interface FootnoteEditorMarkerPalette {
  */
 export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, isNewNote, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /**
- * Shared keydown forwarding table for standard-view marker-palette sessions (Task 15 final
- * review, Important 1). This is THE single source of the while-open key semantics — previously
- * duplicated between `platform-scripture-editor.web-view.tsx` and
- * `footnote-editor.component.tsx`, and the copies drifted: the round-3 capture-phase rework
- * (stopPropagation on session-ending keys, the every-key-claiming 'selection' session that fixed
- * the wrap-palette text loss, Enter-session type-to-filter) landed only in the web view, so the
- * popover's in-session Enter still reached MarkerEditPlugin FIRST (double mutation: `\fp`
- * insert/plain split committed before the palette apply ran).
+ * Shared keydown forwarding table for standard-view marker-palette sessions (Task 15 final review,
+ * Important 1). This is THE single source of the while-open key semantics — previously duplicated
+ * between `platform-scripture-editor.web-view.tsx` and `footnote-editor.component.tsx`, and the
+ * copies drifted: the round-3 capture-phase rework (stopPropagation on session-ending keys, the
+ * every-key-claiming 'selection' session that fixed the wrap-palette text loss, Enter-session
+ * type-to-filter) landed only in the web view, so the popover's in-session Enter still reached
+ * MarkerEditPlugin FIRST (double mutation: `\fp` insert/plain split committed before the palette
+ * apply ran).
  *
  * Consumers register a `keydown` listener in CAPTURE phase and call
  * {@link handleMarkerPaletteSessionKeyDown} while a session is open; on an `'ended'` outcome they
@@ -1067,23 +1067,22 @@ export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose,
  * - `'enter'` — FOCUSED Enter-split menu (collapsed caret): control keys and filter characters are
  *   claimed (a typed char must narrow the palette, not land), any other key means the user resumed
  *   editing (dismiss, let it land).
- * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may
- *   land while it is open, because typing would replace the wrapped selection (the QA run 3 text
- *   loss).
+ * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
+ *   while it is open, because typing would replace the wrapped selection (the QA run 3 text loss).
  *
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
  * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
  * never claimed — the session is dismissed and the chord does its normal job (e.g. Ctrl+C copies
- * the wrapped selection; previously the selection session claimed it and copy was dead while a
- * wrap palette was open).
+ * the wrapped selection; previously the selection session claimed it and copy was dead while a wrap
+ * palette was open).
  */
 export type MarkerPaletteSessionKind = "backslash" | "enter" | "selection";
 /** The mutable per-session state the forwarding table reads and updates. */
 export interface MarkerPaletteSessionState {
 	kind: MarkerPaletteSessionKind;
 	/**
-	 * Display-only mirror of what the user has typed since the session opened. Appliers read the
-	 * real literal run from the document at apply time, so drift here can never corrupt an insert.
+	 * Display-only mirror of what the user has typed since the session opened. Appliers read the real
+	 * literal run from the document at apply time, so drift here can never corrupt an insert.
 	 */
 	filter: string;
 }
@@ -1103,8 +1102,8 @@ export interface MarkerPaletteSessionDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
- * Routes one keydown through an open marker-palette session. See the module doc for the
- * per-kind semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.
+ * Routes one keydown through an open marker-palette session. See the module doc for the per-kind
+ * semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.
  */
 export declare function handleMarkerPaletteSessionKeyDown(event: KeyboardEvent, session: MarkerPaletteSessionState, driver: MarkerPaletteSessionDriver): MarkerPaletteKeyOutcome;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
