@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import {
   DOWNLOADING_KEY,
+  EMPTY_KEY,
   FAILED_KEY,
   UNAVAILABLE_KEY,
   ResourceCellView,
@@ -14,6 +15,7 @@ const localizedStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
   [DOWNLOADING_KEY]: 'Downloading…',
   [FAILED_KEY]: 'Download failed',
+  [EMPTY_KEY]: 'No text for this verse',
 };
 
 /** Renders cells in a plain div wrapper — ResourceCellView is now presentational, no role needed. */
@@ -144,7 +146,7 @@ describe('ResourceCellView name display', () => {
     expect(row).toContainElement(verse);
   });
 
-  it('inline mode applies the resource dir to the row and puts the name first (inline-start)', () => {
+  it('inline mode scopes the row to the resource dir and puts the name first in DOM order', () => {
     renderGridRow(
       <ResourceCellView
         state="ready"
@@ -159,7 +161,8 @@ describe('ResourceCellView name display', () => {
     const name = within(cell).getByText('עברית');
     const row = name.parentElement;
     expect(row).toHaveAttribute('dir', 'rtl');
-    // Name is the first child; flex + dir=rtl place it on the inline-start (visually right).
+    // Name is first in DOM order; combined with `dir="rtl"` + flex (which jsdom does not lay out)
+    // this renders on the inline-start. Visual placement is verified in Storybook, not here.
     expect(row?.firstElementChild).toBe(name);
   });
 
@@ -177,6 +180,39 @@ describe('ResourceCellView name display', () => {
     const cell = screen.getByRole('gridcell', { name: 'KJV' });
     expect(within(cell).getByText('KJV')).toBeInTheDocument();
     expect(within(cell).getByText('Downloading…')).toBeInTheDocument();
+  });
+
+  it('inline mode still shows the name when the download failed', () => {
+    renderGridRow(
+      <ResourceCellView
+        state="failed"
+        label="ASV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={undefined}
+      />,
+    );
+    const cell = screen.getByRole('gridcell', { name: 'ASV' });
+    expect(within(cell).getByText('ASV')).toBeInTheDocument();
+    expect(within(cell).getByText('Download failed')).toBeInTheDocument();
+  });
+
+  it('inline mode still shows the name for an empty verse', () => {
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        isVerseEmpty
+        editor={undefined}
+      />,
+    );
+    const cell = screen.getByRole('gridcell', { name: 'WEB' });
+    expect(within(cell).getByText('WEB')).toBeInTheDocument();
+    expect(within(cell).getByText('No text for this verse')).toBeInTheDocument();
   });
 
   it('the visible name is aria-hidden so the gridcell name is not announced twice', () => {
@@ -209,5 +245,7 @@ describe('ResourceCellView name display', () => {
     const name = within(cell).getByText('WEB');
     // Header mode: no intermediate row — the name band is a direct child of the gridcell.
     expect(name.parentElement).toBe(cell);
+    // Header mode routes through the same helper, so it inherits the aria-hidden non-duplication.
+    expect(name).toHaveAttribute('aria-hidden', 'true');
   });
 });
