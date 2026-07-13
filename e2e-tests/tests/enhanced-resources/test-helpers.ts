@@ -62,7 +62,7 @@ export type FlaggedResourceItem = {
   type: 'project';
   name: string;
   id: string;
-  inTextCollection: boolean;
+  isInTextCollection: boolean;
 };
 
 type ScriptureTextGridRestorePayload = {

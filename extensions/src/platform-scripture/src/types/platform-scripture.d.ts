@@ -878,7 +878,7 @@ declare module 'platform-scripture' {
       /**
        * Initializes the current user's text-collection overlay on first open of the Scripture Text
        * Grid for this project: sets each admin-flagged Bible-text resource's overlay value to the
-       * project's current `inTextCollection`. Idempotent — a per-user-per-project marker prevents
+       * project's current `isInTextCollection`. Idempotent — a per-user-per-project marker prevents
        * re-initialization on later opens (returns `false` when already initialized).
        */
       initializeTextCollectionOverlay(): Promise<boolean>;
@@ -1950,13 +1950,13 @@ declare module 'platform-scripture' {
      * Text Grid, where it also seeds new users' overlay on first open. `undefined` means no admin
      * preference.
      */
-    inTextCollection?: boolean;
+    isInTextCollection?: boolean;
     /**
      * User-scope (NOT Send/Receive'd) flag: whether the current user has included this resource
      * from their personal list in the text collection. Absent by default; only meaningful on
      * Bible-text references.
      */
-    inTextCollectionForUser?: boolean;
+    isInTextCollectionForUser?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1976,13 +1976,13 @@ declare module 'platform-scripture' {
      * Text Grid, where it also seeds new users' overlay on first open. `undefined` means no admin
      * preference.
      */
-    inTextCollection?: boolean;
+    isInTextCollection?: boolean;
     /**
      * User-scope (NOT Send/Receive'd) flag: whether the current user has included this resource
      * from their personal list in the text collection. Absent by default; only meaningful on
      * Bible-text references.
      */
-    inTextCollectionForUser?: boolean;
+    isInTextCollectionForUser?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -1995,7 +1995,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource is in the text collection by default
      * when the shared layout is applied. When `undefined`, no admin preference has been set.
      */
-    inTextCollection?: boolean;
+    isInTextCollection?: boolean;
   };
 
   /** A reference to an XML resource, identified by name */
@@ -2008,7 +2008,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource is in the text collection by default
      * when the shared layout is applied. When `undefined`, no admin preference has been set.
      */
-    inTextCollection?: boolean;
+    isInTextCollection?: boolean;
   };
 
   /** A reference to a Source Language resource, identified by name */
@@ -2021,7 +2021,7 @@ declare module 'platform-scripture' {
      * When set by a project admin, indicates this resource is in the text collection by default
      * when the shared layout is applied. When `undefined`, no admin preference has been set.
      */
-    inTextCollection?: boolean;
+    isInTextCollection?: boolean;
   };
 
   /**
@@ -2060,7 +2060,7 @@ declare module 'platform-scripture' {
      * breaking changes.
      *
      * Current version is `1.1.0`: the `1.1.0` minor bump added the optional Bible-text flags
-     * `inTextCollection` (project-scope) and `inTextCollectionForUser` (user-scope). Both are
+     * `isInTextCollection` (project-scope) and `isInTextCollectionForUser` (user-scope). Both are
      * additive and backwards-compatible — files lacking them read cleanly. (These two keys were
      * renamed pre-release from `isResourceTextCollection`/`isResourceShownForUser` under this same,
      * still-unreleased `1.1.0`, so a pre-rename `1.1.0` file carrying the old keys does not read
@@ -2097,7 +2097,7 @@ declare module 'platform-scripture' {
   /**
    * Per-user (NOT Send/Receive'd) overlay recording the current user's text-collection checkbox
    * state for admin-flagged Bible-text resources, keyed by resource id. Initialized on first open
-   * of the Scripture Text Grid to match the project's `inTextCollection` values, then diverges
+   * of the Scripture Text Grid to match the project's `isInTextCollection` values, then diverges
    * independently.
    */
   export type TextCollectionOverlay = { [resourceId: string]: boolean };

@@ -1730,7 +1730,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // The referenced-projects-and-resources list carries the admin-only inTextCollection
+        // The referenced-projects-and-resources list carries the admin-only isInTextCollection
         // flag (the shared text-collection default for the Scripture Text Grid), so its writes are
         // gated to project administrators server-side (the UI-facing query is
         // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
@@ -2147,7 +2147,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// First-open initialization of the current user's text-collection overlay for this project.
     /// For each Bible-text reference in <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> whose
-    /// <c>InTextCollection</c> is set, records overlay[resourceId] = that value. Idempotent:
+    /// <c>IsInTextCollection</c> is set, records overlay[resourceId] = that value. Idempotent:
     /// a per-user-per-project marker prevents re-initialization, so later opens (and user un-checks)
     /// are preserved. Returns <c>false</c> when already initialized. Model texts do NOT participate
     /// in text-collection and are intentionally not read here.
@@ -2166,7 +2166,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         )
             foreach (var item in list.Items)
                 if (
-                    item.InTextCollection is bool shown
+                    item.IsInTextCollection is bool shown
                     && TryGetBibleTextKey(item) is (_, string id)
                 )
                     // Overlay is keyed by resource id only (matching the TS `{ [id]: boolean }`

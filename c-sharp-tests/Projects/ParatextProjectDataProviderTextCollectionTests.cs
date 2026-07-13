@@ -240,13 +240,13 @@ internal class ParatextProjectDataProviderTextCollectionTests : PapiTestBase
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 },
                 new DblResourceReference
                 {
                     Name = "D",
                     Id = "112233445566",
-                    InTextCollection = false,
+                    IsInTextCollection = false,
                 }
             )
         );
@@ -284,7 +284,7 @@ internal class ParatextProjectDataProviderTextCollectionTests : PapiTestBase
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 }
             )
         );
@@ -310,7 +310,7 @@ internal class ParatextProjectDataProviderTextCollectionTests : PapiTestBase
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 }
             )
         );
@@ -333,7 +333,7 @@ internal class ParatextProjectDataProviderTextCollectionTests : PapiTestBase
                 {
                     Name = "D",
                     Id = "112233445566",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 }
             )
         );
@@ -353,7 +353,7 @@ internal class ParatextProjectDataProviderTextCollectionTests : PapiTestBase
                 {
                     Name = "D",
                     Id = "112233445566",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 }
             )
         );

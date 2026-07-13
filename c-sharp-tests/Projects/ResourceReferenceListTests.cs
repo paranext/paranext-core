@@ -125,7 +125,7 @@ public class ResourceReferenceListTests
     }
 
     [Test]
-    public void ProjectReference_InTextCollectionTrue_SerializesAndDeserializesCorrectly()
+    public void ProjectReference_IsInTextCollectionTrue_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
@@ -135,7 +135,7 @@ public class ResourceReferenceListTests
                 {
                     Name = "My Project",
                     Id = "aabbcc",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 },
             ],
         };
@@ -145,11 +145,11 @@ public class ResourceReferenceListTests
         Assert.That(result, Is.Not.Null);
         var item = result!.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.InTextCollection, Is.EqualTo(true));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     [Test]
-    public void ProjectReference_InTextCollectionAbsent_DeserializesAsNull()
+    public void ProjectReference_IsInTextCollectionAbsent_DeserializesAsNull()
     {
         const string json =
             """{"dataVersion":"1.0.0","items":[{"type":"project","name":"My Project","id":"aabbcc"}]}""";
@@ -157,22 +157,22 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.InTextCollection, Is.Null);
+        Assert.That(item!.IsInTextCollection, Is.Null);
     }
 
     [Test]
-    public void ProjectReference_InTextCollectionNull_NotPresentInSerializedJson()
+    public void ProjectReference_IsInTextCollectionNull_NotPresentInSerializedJson()
     {
         var list = new ResourceReferenceList
         {
             Items = [new ProjectReference { Name = "P", Id = "abc" }],
         };
         string json = list.SerializeToJson();
-        Assert.That(json, Does.Not.Contain("inTextCollection"));
+        Assert.That(json, Does.Not.Contain("isInTextCollection"));
     }
 
     [Test]
-    public void DblResourceReference_InTextCollectionFalse_SerializesAndDeserializesCorrectly()
+    public void DblResourceReference_IsInTextCollectionFalse_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
@@ -182,7 +182,7 @@ public class ResourceReferenceListTests
                 {
                     Name = "Web English",
                     Id = "aabbccddeeff00112233445566778899aabbccddeeff0011",
-                    InTextCollection = false,
+                    IsInTextCollection = false,
                 },
             ],
         };
@@ -191,17 +191,17 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as DblResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.InTextCollection, Is.EqualTo(false));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(false));
     }
 
     [Test]
-    public void EnhancedResourceReference_InTextCollectionTrue_SerializesAndDeserializesCorrectly()
+    public void EnhancedResourceReference_IsInTextCollectionTrue_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
             Items =
             [
-                new EnhancedResourceReference { Name = "BDAG", InTextCollection = true },
+                new EnhancedResourceReference { Name = "BDAG", IsInTextCollection = true },
             ],
         };
         string json = list.SerializeToJson();
@@ -209,17 +209,17 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as EnhancedResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.InTextCollection, Is.EqualTo(true));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     [Test]
-    public void XmlResourceReference_InTextCollectionFalse_SerializesAndDeserializesCorrectly()
+    public void XmlResourceReference_IsInTextCollectionFalse_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
             Items =
             [
-                new XmlResourceReference { Name = "SomeXml", InTextCollection = false },
+                new XmlResourceReference { Name = "SomeXml", IsInTextCollection = false },
             ],
         };
         string json = list.SerializeToJson();
@@ -227,11 +227,11 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as XmlResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.InTextCollection, Is.EqualTo(false));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(false));
     }
 
     [Test]
-    public void SourceLanguageResourceReference_InTextCollectionTrue_SerializesAndDeserializesCorrectly()
+    public void SourceLanguageResourceReference_IsInTextCollectionTrue_SerializesAndDeserializesCorrectly()
     {
         var list = new ResourceReferenceList
         {
@@ -240,7 +240,7 @@ public class ResourceReferenceListTests
                 new SourceLanguageResourceReference
                 {
                     Name = "Greek",
-                    InTextCollection = true,
+                    IsInTextCollection = true,
                 },
             ],
         };
@@ -249,7 +249,7 @@ public class ResourceReferenceListTests
 
         var item = result!.Items[0] as SourceLanguageResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.InTextCollection, Is.EqualTo(true));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     #endregion
@@ -365,16 +365,16 @@ public class ResourceReferenceListTests
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    InTextCollection = true,
-                    InTextCollectionForUser = false,
+                    IsInTextCollection = true,
+                    IsInTextCollectionForUser = false,
                 },
             ],
         };
         var result = list.SerializeToJson().DeserializeFromJson<ResourceReferenceList>();
 
         var item = result!.Items[0] as ProjectReference;
-        Assert.That(item!.InTextCollection, Is.True);
-        Assert.That(item.InTextCollectionForUser, Is.False);
+        Assert.That(item!.IsInTextCollection, Is.True);
+        Assert.That(item.IsInTextCollectionForUser, Is.False);
     }
 
     [Test]
@@ -387,8 +387,8 @@ public class ResourceReferenceListTests
         string json = list.SerializeToJson();
 
         // Old-build files must stay clean: unset flags are absent, not `false`.
-        Assert.That(json, Does.Not.Contain("inTextCollection"));
-        Assert.That(json, Does.Not.Contain("inTextCollectionForUser"));
+        Assert.That(json, Does.Not.Contain("isInTextCollection"));
+        Assert.That(json, Does.Not.Contain("isInTextCollectionForUser"));
     }
 
     [Test]
@@ -400,8 +400,8 @@ public class ResourceReferenceListTests
         var result = json.DeserializeFromJson<ResourceReferenceList>();
 
         var item = result!.Items[0] as ProjectReference;
-        Assert.That(item!.InTextCollection, Is.Null);
-        Assert.That(item.InTextCollectionForUser, Is.Null);
+        Assert.That(item!.IsInTextCollection, Is.Null);
+        Assert.That(item.IsInTextCollectionForUser, Is.Null);
     }
 
     [Test]
@@ -429,8 +429,8 @@ public class ResourceReferenceListTests
                 {
                     Name = "D",
                     Id = "112233445566",
-                    InTextCollection = false,
-                    InTextCollectionForUser = true,
+                    IsInTextCollection = false,
+                    IsInTextCollectionForUser = true,
                 },
             ],
         };
@@ -438,8 +438,8 @@ public class ResourceReferenceListTests
         var result = ResourceReferenceList.FromXml(xml, ResourceReferenceList.CurrentDataVersion);
 
         var item = result.Items[0] as DblResourceReference;
-        Assert.That(item!.InTextCollection, Is.False);
-        Assert.That(item.InTextCollectionForUser, Is.True);
+        Assert.That(item!.IsInTextCollection, Is.False);
+        Assert.That(item.IsInTextCollectionForUser, Is.True);
     }
 
     [Test]
@@ -452,8 +452,8 @@ public class ResourceReferenceListTests
         var xml = ResourceReferenceList.ToXml(list);
         var itemEl = xml.Elements("Item").First();
 
-        Assert.That(itemEl.Attribute("inTextCollection"), Is.Null);
-        Assert.That(itemEl.Attribute("inTextCollectionForUser"), Is.Null);
+        Assert.That(itemEl.Attribute("isInTextCollection"), Is.Null);
+        Assert.That(itemEl.Attribute("isInTextCollectionForUser"), Is.Null);
     }
 
     [Test]
@@ -465,8 +465,8 @@ public class ResourceReferenceListTests
         var result = ResourceReferenceList.FromXml(xml, "1.0.0");
 
         var item = result.Items[0] as ProjectReference;
-        Assert.That(item!.InTextCollection, Is.Null);
-        Assert.That(item.InTextCollectionForUser, Is.Null);
+        Assert.That(item!.IsInTextCollection, Is.Null);
+        Assert.That(item.IsInTextCollectionForUser, Is.Null);
     }
 
     [Test]
@@ -499,19 +499,19 @@ public class ResourceReferenceListTests
     [Test]
     public void NamedOnlyType_PreservesBibleTextOnlyProperties_OnJsonRoundTrip()
     {
-        // A name-only type (enhancedResource) never natively handles "id" or "inTextCollectionForUser"
+        // A name-only type (enhancedResource) never natively handles "id" or "isInTextCollectionForUser"
         // (both are Bible-text-only). A future build that attaches them must not have them silently
         // dropped: they flow through ExtraData (captured against the narrower
-        // KnownNamedOnlyPropertyNames set) and are re-emitted. inTextCollection, by contrast,
+        // KnownNamedOnlyPropertyNames set) and are re-emitted. isInTextCollection, by contrast,
         // is understood on every type, so it is a real field rather than a passthrough.
         const string json =
-            """{"dataVersion":"1.1.0","items":[{"type":"enhancedResource","name":"Enh","id":"keep-id","inTextCollectionForUser":true}]}""";
+            """{"dataVersion":"1.1.0","items":[{"type":"enhancedResource","name":"Enh","id":"keep-id","isInTextCollectionForUser":true}]}""";
         var result = json.DeserializeFromJson<ResourceReferenceList>();
         Assert.That(result!.Items[0], Is.InstanceOf<EnhancedResourceReference>());
 
         string reSerialized = result.SerializeToJson();
         Assert.That(reSerialized, Does.Contain("keep-id"));
-        Assert.That(reSerialized, Does.Contain("inTextCollectionForUser"));
+        Assert.That(reSerialized, Does.Contain("isInTextCollectionForUser"));
     }
 
     [Test]

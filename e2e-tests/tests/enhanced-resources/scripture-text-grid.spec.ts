@@ -149,7 +149,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project',
         name: 'STG renderer smoke',
         id: SYNTHETIC_BAD_ID,
-        inTextCollection: true,
+        isInTextCollection: true,
       },
     ]);
 
@@ -171,7 +171,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project',
         name: 'STG renderer split',
         id: SYNTHETIC_BAD_ID,
-        inTextCollection: true,
+        isInTextCollection: true,
       },
     ]);
 
@@ -203,7 +203,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project',
         name: 'STG renderer esc',
         id: SYNTHETIC_BAD_ID,
-        inTextCollection: true,
+        isInTextCollection: true,
       },
     ]);
 
@@ -226,8 +226,8 @@ test.describe('Scripture Text Grid renderer', () => {
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'WEB', id: 'rtl001', inTextCollection: true },
-      { type: 'project', name: 'KJV', id: 'rtl002', inTextCollection: true },
+      { type: 'project', name: 'WEB', id: 'rtl001', isInTextCollection: true },
+      { type: 'project', name: 'KJV', id: 'rtl002', isInTextCollection: true },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
@@ -264,13 +264,13 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project' as const,
         name: `Valid ${index + 1}`,
         id,
-        inTextCollection: true,
+        isInTextCollection: true,
       })),
       {
         type: 'project',
         name: 'Bad resource',
         id: SYNTHETIC_BAD_ID,
-        inTextCollection: true,
+        isInTextCollection: true,
       },
     ]);
 
@@ -301,7 +301,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project' as const,
         name: `Sync ${index + 1}`,
         id,
-        inTextCollection: true,
+        isInTextCollection: true,
       })),
     );
 
@@ -351,7 +351,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project' as const,
         name: `Perf ${index + 1}`,
         id,
-        inTextCollection: true,
+        isInTextCollection: true,
       })),
     );
 
@@ -383,8 +383,8 @@ test.describe('Scripture Text Grid renderer', () => {
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'WEB', id: 'chap001', inTextCollection: true },
-      { type: 'project', name: 'KJV', id: 'chap002', inTextCollection: true },
+      { type: 'project', name: 'WEB', id: 'chap001', isInTextCollection: true },
+      { type: 'project', name: 'KJV', id: 'chap002', isInTextCollection: true },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);
@@ -420,7 +420,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project' as const,
         name: `ChapSync ${index + 1}`,
         id,
-        inTextCollection: true,
+        isInTextCollection: true,
       })),
     );
 
@@ -456,7 +456,7 @@ test.describe('Scripture Text Grid renderer', () => {
         type: 'project' as const,
         name: `ChapPerf ${index + 1}`,
         id,
-        inTextCollection: true,
+        isInTextCollection: true,
       })),
     );
 
@@ -496,8 +496,8 @@ test.describe('Scripture Text Grid renderer', () => {
     warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
 
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
-      { type: 'project', name: 'WEB', id: 'chaprtl1', inTextCollection: true },
-      { type: 'project', name: 'KJV', id: 'chaprtl2', inTextCollection: true },
+      { type: 'project', name: 'WEB', id: 'chaprtl1', isInTextCollection: true },
+      { type: 'project', name: 'KJV', id: 'chaprtl2', isInTextCollection: true },
     ]);
 
     const frame = await openScriptureTextGrid(mainPage);

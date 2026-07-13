@@ -35,13 +35,13 @@ const makeWriter = (): UserResourceWriter => ({
   setTextCollectionOverlay: vi.fn().mockResolvedValue(true),
 });
 
-/** Reads `inTextCollectionForUser` off a reference without a type assertion. */
+/** Reads `isInTextCollectionForUser` off a reference without a type assertion. */
 const userFlagOf = (refList: ResourceReferenceList, id: string): boolean | undefined => {
   const ref = refList.items.find(
     (item) => (isProjectReference(item) || isDblResourceReference(item)) && item.id === id,
   );
   return ref && (isProjectReference(ref) || isDblResourceReference(ref))
-    ? ref.inTextCollectionForUser
+    ? ref.isInTextCollectionForUser
     : undefined;
 };
 
@@ -55,7 +55,7 @@ describe('persistUserDisplay', () => {
   it('routes an admin-owned entry to the overlay only (not the user list)', () => {
     const writer = makeWriter();
     const sources = makeSources({
-      adminReferenced: list([dbl('esv', { inTextCollection: true })]),
+      adminReferenced: list([dbl('esv', { isInTextCollection: true })]),
     });
 
     persistUserDisplay(writer, 'esv', false, sources);
@@ -67,7 +67,7 @@ describe('persistUserDisplay', () => {
   it('routes a user entry to the user list only (not the overlay)', () => {
     const writer = makeWriter();
     const sources = makeSources({
-      userReferenced: list([dbl('web', { inTextCollectionForUser: true })]),
+      userReferenced: list([dbl('web', { isInTextCollectionForUser: true })]),
     });
 
     persistUserDisplay(writer, 'web', false, sources);
@@ -91,7 +91,7 @@ describe('persistUserDisplay', () => {
 describe('persistUserRemoval', () => {
   it('persists the user list without the removed entry', () => {
     const writer = makeWriter();
-    const userReferenced = list([dbl('web', { inTextCollectionForUser: true }), dbl('kjv')]);
+    const userReferenced = list([dbl('web', { isInTextCollectionForUser: true }), dbl('kjv')]);
 
     const result = persistUserRemoval(writer, 'web', userReferenced);
 
@@ -110,7 +110,7 @@ describe('persistUserRemoval', () => {
 });
 
 describe('persistUserAddition', () => {
-  it('appends the reference with inTextCollectionForUser and persists', () => {
+  it('appends the reference with isInTextCollectionForUser and persists', () => {
     const writer = makeWriter();
     const result = persistUserAddition(writer, dbl('niv'), list());
 

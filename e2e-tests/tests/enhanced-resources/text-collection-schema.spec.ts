@@ -10,7 +10,7 @@
  *
  * Scope — vanilla-core-observable only:
  *
- * - `inTextCollection` persists through the referenced-resources setting round-trip.
+ * - `isInTextCollection` persists through the referenced-resources setting round-trip.
  * - First-open init writes the per-user overlay to match the project's flags.
  * - The admin gate on the referenced-resources write is enforced server-side; it is covered by the C#
  *   unit tests, not asserted here — this fixture runs as the default (admin) user.
@@ -50,7 +50,7 @@ test.describe('Scripture Text Grid text collection schema (A2)', () => {
               // the return here to that shape. This lets the assertions below avoid a type assertion.
               getSetting: (
                 key: string,
-              ) => Promise<{ items: { id?: string; inTextCollection?: boolean }[] }>;
+              ) => Promise<{ items: { id?: string; isInTextCollection?: boolean }[] }>;
               resetTextCollectionOverlay: () => Promise<boolean>;
               initializeTextCollectionOverlay: () => Promise<boolean>;
               getTextCollectionOverlay: () => Promise<Record<string, boolean>>;
@@ -72,7 +72,7 @@ test.describe('Scripture Text Grid text collection schema (A2)', () => {
             type: 'project',
             name: 'P',
             id: 'aabbccddeeff00112233',
-            inTextCollection: true,
+            isInTextCollection: true,
           },
         ],
       });
@@ -92,7 +92,7 @@ test.describe('Scripture Text Grid text collection schema (A2)', () => {
     expect(result.stored).toBeTruthy();
 
     const flaggedItem = result.stored.items.find((i) => i.id === 'aabbccddeeff00112233');
-    expect(flaggedItem?.inTextCollection).toBe(true);
+    expect(flaggedItem?.isInTextCollection).toBe(true);
     expect(result.didInit).toBe(true);
     expect(result.overlay.aabbccddeeff00112233).toBe(true);
   });

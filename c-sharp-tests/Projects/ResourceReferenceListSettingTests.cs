@@ -354,8 +354,8 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
         var list = (ResourceReferenceList)_provider.GetProjectSetting(pbSettingName)!;
         var item = (ProjectReference)list.Items[0];
 
-        Assert.That(item.InTextCollection, Is.Null);
-        Assert.That(item.InTextCollectionForUser, Is.Null);
+        Assert.That(item.IsInTextCollection, Is.Null);
+        Assert.That(item.IsInTextCollectionForUser, Is.Null);
     }
 
     [TestCase(ProjectSettingsNames.PB_MODEL_TEXTS)]
@@ -396,7 +396,7 @@ internal class ResourceReferenceListSettingTests : PapiTestBase
 
         Assert.That(third.Items, Has.Count.EqualTo(1));
         Assert.That(((ProjectReference)third.Items[0]).Id, Is.EqualTo("aabbcc"));
-        Assert.That(((ProjectReference)third.Items[0]).InTextCollection, Is.Null);
+        Assert.That(((ProjectReference)third.Items[0]).IsInTextCollection, Is.Null);
     }
 
     #endregion
