@@ -115,7 +115,7 @@ export function LockToggleButtonView({
   else if (isLocked) displayState = 'locked';
   else displayState = 'unlocked';
 
-  // Auto-open the tooltip whenever the visible state changes, so the change is not silent (NN6).
+  // Auto-open the tooltip whenever the visible state changes, so the change is never silent.
   // Radix closes it again on click-away and Escape via onOpenChange; scroll dismissal is handled by
   // the effect below.
   const [tooltipOpen, setTooltipOpen] = useState(false);
