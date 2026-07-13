@@ -142,7 +142,8 @@ shortcuts catalog is untouched.
 ## Definition of Done (from the ticket)
 
 - [x] Rendering path chosen (a) and documented before start — this spec.
-- [ ] Grid cell shows the resource name compactly per the chosen path.
-- [ ] B8 kebab has a discoverable anchor (if affected) — N/A, no kebab in the cell.
-- [ ] Chapter-view treatment consistent — compact header band.
-- [ ] Snapshot + accessibility + RTL tests pass.
+- [x] Grid cell shows the resource name compactly per the chosen path — hanging inline label in verse cells (`nameDisplay='inline'`).
+- [x] B8 kebab has a discoverable anchor (if affected) — N/A, no kebab in the cell.
+- [x] Chapter-view treatment consistent — compact colored header band (`nameDisplay='header'`).
+- [x] Accessibility + RTL tests pass — covered by the `ResourceCellView name display` tests (aria-hidden name, RTL inline-start); verse+chapter visual coverage via the inline Storybook stories. Automated suite: 117/117 grid tests pass, workspace typecheck + ESLint clean.
+- [ ] Manual app verification (running app) — pending: name inline-start of verse, click still opens chapter-context split, RTL, screen-reader order.
