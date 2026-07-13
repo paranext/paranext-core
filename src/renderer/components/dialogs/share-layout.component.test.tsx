@@ -28,6 +28,12 @@ const ESV: ResourceReference = {
   isResourceShownByDefault: true,
 };
 const NIV: ResourceReference = { type: 'dblResource', name: 'NIV', id: 'niv-uid' };
+const IVP: ResourceReference = {
+  type: 'dblResource',
+  name: 'IVP Commentary',
+  id: 'ivp-uid',
+  isResourceShownByDefault: true,
+};
 
 const ALL_RESOURCES: DblResourceData[] = [
   {
@@ -192,5 +198,17 @@ describe('ShareLayoutDialogContent', () => {
 
     fireEvent.click(screen.getByLabelText('%shareLayoutDialog_closePicker_label%'));
     expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
+  });
+
+  it('renders the Text Collection Resources section with a checkbox per scripture resource, and no checkboxes for commentary resources', () => {
+    renderContent({ initialCommentaryResources: [IVP] });
+
+    expect(
+      screen.getByText('%shareLayoutDialog_textCollectionResources_label%'),
+    ).toBeInTheDocument();
+
+    // Only the two scripture resources (ESV, NIV) get a "shown by default" checkbox — commentary
+    // resources no longer have a checkbox list at all.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 });

@@ -58,6 +58,7 @@ export const SHARE_LAYOUT_DIALOG_STRING_KEYS = Object.freeze([
   '%shareLayoutDialog_commentaryResources_label%',
   '%shareLayoutDialog_manageScriptureResources_label%',
   '%shareLayoutDialog_manageCommentaryResources_label%',
+  '%shareLayoutDialog_textCollectionResources_label%',
   '%shareLayoutDialog_shownByDefault_label%',
   '%shareLayoutDialog_cancel_label%',
   '%shareLayoutDialog_closePicker_label%',
@@ -175,20 +176,17 @@ export function ShareLayoutDialogContent({
     });
   }, []);
 
-  const handleToggleShownByDefault = useCallback(
-    (tab: TabKey, ref: ResourceReference, checked: boolean) => {
-      const setResources =
-        tab === 'ScriptureResource' ? setScriptureResources : setCommentaryResources;
-      setResources((existing) =>
-        existing.map((item) =>
-          referenceKey(item) === referenceKey(ref)
-            ? { ...item, isResourceShownByDefault: checked }
-            : item,
-        ),
-      );
-    },
-    [],
-  );
+  // Only scripture resources have a "shown by default" toggle in the Text Collection Resources
+  // section — commentary no longer has a per-resource checkbox list.
+  const handleToggleShownByDefault = useCallback((ref: ResourceReference, checked: boolean) => {
+    setScriptureResources((existing) =>
+      existing.map((item) =>
+        referenceKey(item) === referenceKey(ref)
+          ? { ...item, isResourceShownByDefault: checked }
+          : item,
+      ),
+    );
+  }, []);
 
   const handleConfirm = useCallback(() => {
     onConfirm({ modelText, activeTab, scriptureResources, commentaryResources });
@@ -199,85 +197,66 @@ export function ShareLayoutDialogContent({
     CommentaryResource: '%shareLayoutDialog_manageCommentaryResources_label%',
   };
 
-  const renderResourceCard = (
+  const renderResourceHeaderRow = (
     tab: TabKey,
     resources: ResourceReference[],
     sectionLabelKey: keyof ShareLayoutDialogLocalizedStrings,
   ) => (
-    <div className="tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
-      <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:border-b tw:border-border tw:px-4 tw:py-3">
-        <span className="tw:font-medium">{localizeString(strings, sectionLabelKey)}</span>
-        <Popover
-          open={openAddPickerTab === tab}
-          onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
-        >
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="tw:w-fit">
-              {localizeString(strings, manageLabelKey[tab])}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="tw:p-0" style={RESOURCE_PICKER_POPOVER_STYLE}>
-            {/* flex/h-full/min-h-0 so this fills the fixed-height PopoverContent above, giving
+    <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
+      <span className="tw:font-medium">{localizeString(strings, sectionLabelKey)}</span>
+      <Popover
+        open={openAddPickerTab === tab}
+        onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
+      >
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="tw:w-fit">
+            {localizeString(strings, manageLabelKey[tab])}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="tw:p-0" style={RESOURCE_PICKER_POPOVER_STYLE}>
+          {/* flex/h-full/min-h-0 so this fills the fixed-height PopoverContent above, giving
             ResourcePickerDialog's internal `flex-1 overflow-y-auto` list a bounded height to scroll
             within instead of growing to fit every resource. */}
-            <div className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:flex-col">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
-                      onClick={() => setOpenAddPickerTab(undefined)}
-                      aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-                    >
-                      <X className="tw:size-4" aria-hidden />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              {/*
+          <div className="tw:relative tw:flex tw:h-full tw:min-h-0 tw:flex-col">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw:absolute tw:end-2 tw:top-2 tw:z-10"
+                    onClick={() => setOpenAddPickerTab(undefined)}
+                    aria-label={localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+                  >
+                    <X className="tw:size-4" aria-hidden />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {localizeString(strings, '%shareLayoutDialog_closePicker_label%')}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {/*
                 ResourcePickerDialog renders its own DialogTitle internally but has no Dialog.Root
                 of its own by design (it's meant to be embedded in a host-provided Dialog context).
                 Since this popover is rendered inside the outer ShareLayoutDialogContent's
                 Dialog.Root, wrap it in its own isolated Dialog.Root here so its DialogTitle gets a
                 distinct id from the outer dialog's title instead of colliding with it.
               */}
-              <Dialog open modal={false}>
-                <ResourcePickerDialog
-                  allResources={allResources}
-                  isResourcesLoading={isResourcesLoading}
-                  resourceType={tab}
-                  selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
-                  localizedStrings={resourcePickerLocalizedStrings}
-                  allowDeselect
-                  onSelect={(resource) => handleTogglePickedResource(tab, resource)}
-                />
-              </Dialog>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-      <div className="tw:divide-y tw:divide-border">
-        {resources.map((ref) => (
-          <div key={referenceKey(ref)} className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2">
-            <span className="tw:flex-1 tw:truncate">
-              {formatResourceDisplayName(ref, allResources)}
-            </span>
-            <Checkbox
-              checked={!!ref.isResourceShownByDefault}
-              onCheckedChange={(checked: boolean) => handleToggleShownByDefault(tab, ref, checked)}
-              aria-label={formatReplacementString(
-                localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
-                { resourceName: formatResourceDisplayName(ref, allResources) },
-              )}
-            />
+            <Dialog open modal={false}>
+              <ResourcePickerDialog
+                allResources={allResources}
+                isResourcesLoading={isResourcesLoading}
+                resourceType={tab}
+                selectedResourceIds={resources.filter(hasStringId).map((r) => r.id)}
+                localizedStrings={resourcePickerLocalizedStrings}
+                allowDeselect
+                onSelect={(resource) => handleTogglePickedResource(tab, resource)}
+              />
+            </Dialog>
           </div>
-        ))}
-      </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 
@@ -363,17 +342,47 @@ export function ShareLayoutDialogContent({
           </div>
         </div>
 
-        {renderResourceCard(
-          'ScriptureResource',
-          scriptureResources,
-          '%shareLayoutDialog_scriptureResources_label%',
-        )}
+        <div className="tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
+          {renderResourceHeaderRow(
+            'ScriptureResource',
+            scriptureResources,
+            '%shareLayoutDialog_scriptureResources_label%',
+          )}
 
-        {renderResourceCard(
-          'CommentaryResource',
-          commentaryResources,
-          '%shareLayoutDialog_commentaryResources_label%',
-        )}
+          {renderResourceHeaderRow(
+            'CommentaryResource',
+            commentaryResources,
+            '%shareLayoutDialog_commentaryResources_label%',
+          )}
+        </div>
+
+        <div className="tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
+          <div className="tw:border-b tw:border-border tw:px-4 tw:py-3">
+            <span className="tw:font-medium">
+              {localizeString(strings, '%shareLayoutDialog_textCollectionResources_label%')}
+            </span>
+          </div>
+          <div className="tw:divide-y tw:divide-border">
+            {scriptureResources.map((ref) => (
+              <div
+                key={referenceKey(ref)}
+                className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2"
+              >
+                <span className="tw:flex-1 tw:truncate">
+                  {formatResourceDisplayName(ref, allResources)}
+                </span>
+                <Checkbox
+                  checked={!!ref.isResourceShownByDefault}
+                  onCheckedChange={(checked: boolean) => handleToggleShownByDefault(ref, checked)}
+                  aria-label={formatReplacementString(
+                    localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
+                    { resourceName: formatResourceDisplayName(ref, allResources) },
+                  )}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="tw:flex tw:justify-end tw:gap-2 tw:p-4">
