@@ -1,14 +1,16 @@
 /**
- * E2E scaffold checks for the Scripture Text Grid web view (PT-4049 / A1).
+ * E2E scaffold checks for the Scripture Text Grid web view (PT-4049).
  *
  * Covered: the view opens as a non-closable, icon-only dock tab (located by the opened web view id,
  * since the tab has no text label) — no `.dock-tab-close-btn`, checked against a positive-control
  * tab so a class rename can't make the assertion pass vacuously. The app has no keyboard close
  * shortcut, so the missing button covers both close paths.
  *
- * There is no menu/command for this view (it ships in the PT10 Studio default layout), so the test
- * opens it directly via `window.papi.webViews.openWebView` (renderer exposes `papi` on
- * `globalThis`).
+ * There is no menu/command for this view (it is injected into the default Simple-mode layout via
+ * the dock-layout supplement), so the test opens it directly via `window.papi.webViews.openWebView`
+ * (renderer exposes `papi` on `globalThis`). Opening it directly makes these tests independent of
+ * the interface mode and the default layout — they neither assume nor assert Simple mode; the
+ * `closeAllNonHomeDockTabs` calls are just per-test dock hygiene, not a mode requirement.
  *
  * NOT covered (need an app relaunch the CDP fixture can't do; verified manually): `useWebViewState`
  * restart-persistence, and feature-flag-OFF hiding the view (registration happens at activation).
@@ -25,7 +27,7 @@ import {
   SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE,
 } from './test-helpers';
 
-test.describe('Scripture Text Grid (A1 scaffold)', () => {
+test.describe('Scripture Text Grid (scaffold)', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);
   });
@@ -106,11 +108,12 @@ test.describe('Scripture Text Grid (A1 scaffold)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// A4 (PT-4052) — ScriptureTextGrid renderer (verse default + chapter-context split).
+// PT-4052 — ScriptureTextGrid renderer (verse default + chapter-context split).
 //
 // Honest runnability: there is NO dev-fixture plumbing for web-view content (a web view is a
 // renderer iframe with no injected env), and most scenarios need real flagged resources. Data-mutating
-// specs skip in CI and discover an admin-writable project locally (mirroring the A2 spec).
+// specs skip in CI and discover an admin-writable project locally (mirroring the other
+// data-mutating enhanced-resources specs).
 //
 // Env vars:
 // - E2E_TEST_PROJECT_ID — pin an admin-writable text-connection project (optional)
@@ -122,7 +125,7 @@ const REAL_RESOURCE_IDS = (process.env.E2E_TEST_RESOURCE_IDS ?? '')
   .map((id) => id.trim())
   .filter(Boolean);
 
-test.describe('Scripture Text Grid renderer (A4)', () => {
+test.describe('Scripture Text Grid renderer', () => {
   test.beforeEach(async ({ mainPage }) => {
     await closeAllNonHomeDockTabs(mainPage);
   });
@@ -143,7 +146,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
         type: 'project',
-        name: 'STG A4 smoke',
+        name: 'STG renderer smoke',
         id: SYNTHETIC_BAD_ID,
         isResourceShownByDefault: true,
       },
@@ -165,7 +168,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
         type: 'project',
-        name: 'STG A4 split',
+        name: 'STG renderer split',
         id: SYNTHETIC_BAD_ID,
         isResourceShownByDefault: true,
       },
@@ -194,7 +197,7 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
     await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, [
       {
         type: 'project',
-        name: 'STG A4 esc',
+        name: 'STG renderer esc',
         id: SYNTHETIC_BAD_ID,
         isResourceShownByDefault: true,
       },
@@ -364,5 +367,32 @@ test.describe('Scripture Text Grid renderer (A4)', () => {
 
     await expect(frame.locator('[role="gridcell"]')).toHaveCount(5, { timeout: 15_000 });
     expect(elapsedMs).toBeLessThan(220);
+  });
+});
+
+test.describe('Scripture Text Grid empty state', () => {
+  test.beforeEach(async ({ mainPage }) => {
+    await closeAllNonHomeDockTabs(mainPage);
+  });
+
+  test.afterEach(async ({ mainPage }) => {
+    await restoreScriptureTextGridProjectSettings(mainPage);
+  });
+
+  test('shows directional copy and no cells when nothing is shown', async ({ mainPage }) => {
+    test.skip(!!process.env.CI, 'Mutates real project settings — local runs only');
+    await waitForAppReady(mainPage);
+
+    const projectId = await discoverAdminTextConnectionProject(mainPage);
+    test.skip(!projectId, 'No admin-writable text-connection project found locally');
+
+    // Flag nothing → the effective list is empty → the grid renders the empty state, not cells.
+    await flagResourcesAndOpenScriptureTextGrid(mainPage, projectId, []);
+
+    const frame = await openScriptureTextGrid(mainPage);
+    await expect(frame.getByTestId('scripture-text-grid-empty-state')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(frame.locator('[role="gridcell"]')).toHaveCount(0);
   });
 });

@@ -1,4 +1,11 @@
-import { Button, Checkbox, Label, ToggleGroup, ToggleGroupItem } from 'platform-bible-react';
+import {
+  Button,
+  Checkbox,
+  EmptyState,
+  Label,
+  ToggleGroup,
+  ToggleGroupItem,
+} from 'platform-bible-react';
 import { X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import {
@@ -47,6 +54,23 @@ export function ResourceCollectionOptions({
   disabledMessage,
   localizedStrings = {},
 }: ResourceCollectionOptionsProps) {
+  // Shown only when interactive (`!disabled`): while disabled we show `disabledMessage` (no
+  // project) or nothing (brief load), so this never double-messages or fires prematurely.
+  const isTextsListEmpty =
+    top.length === 0 && bottom.length === 0 && installingResourceNames.length === 0;
+
+  const getResourcesLabel = localize(
+    localizedStrings,
+    RESOURCE_COLLECTION_OPTIONS_KEYS.getResources,
+  );
+  // The Get Resources button label ends with an ellipsis (the dialog-opening affordance
+  // convention); drop it when the label is embedded mid-sentence in the empty prompt so it reads
+  // cleanly. Interpolating the label (rather than hardcoding it in the message) keeps the prompt in
+  // sync if the button is ever renamed. The trailing-ellipsis regex tolerates the forms a localizer
+  // might use: one or two `…` characters (CJK convention doubles it), the three-ASCII-dot fallback
+  // `...`, and any trailing whitespace after it (including the full-width space `\s` matches).
+  const getResourcesLabelInProse = getResourcesLabel.replace(/(?:…{1,2}|\.{3})\s*$/u, '');
+
   const handleViewModeChange = (value: string) => {
     // Radix single-toggle emits '' when the active item is clicked again; ignore that (a view mode
     // is always selected) and any unexpected value.
@@ -123,6 +147,15 @@ export function ResourceCollectionOptions({
         {disabled && disabledMessage && (
           <p className="tw:py-1 tw:text-sm tw:text-muted-foreground tw:italic">{disabledMessage}</p>
         )}
+        {!disabled && isTextsListEmpty && (
+          <EmptyState
+            className="tw:py-1 tw:italic"
+            message={formatReplacementString(
+              localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.emptyTexts),
+              { getResourcesLabel: getResourcesLabelInProse },
+            )}
+          />
+        )}
         {top.map(renderRow)}
         {bottom.map(renderRow)}
         {installingResourceNames.map((name) => (
@@ -139,7 +172,7 @@ export function ResourceCollectionOptions({
       </section>
 
       <Button variant="outline" disabled={disabled} onClick={onGetResources}>
-        {localize(localizedStrings, RESOURCE_COLLECTION_OPTIONS_KEYS.getResources)}
+        {getResourcesLabel}
       </Button>
     </div>
   );

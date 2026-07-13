@@ -42,6 +42,8 @@ STRINGS['%webView_scriptureTextGrid_viewOptions_getResources%'] = 'Get resources
 STRINGS['%webView_scriptureTextGrid_viewOptions_removeFromList%'] =
   'Remove {resourceName} from list';
 STRINGS['%webView_scriptureTextGrid_viewOptions_installing%'] = 'Installing {resourceName}…';
+STRINGS['%webView_scriptureTextGrid_viewOptions_emptyState_prompt%'] =
+  'No texts added yet. Use {getResourcesLabel} to add them.';
 
 const ref = (id: string, name: string): DblResourceReference => ({
   type: 'dblResource',
@@ -180,6 +182,59 @@ describe('ResourceCollectionOptions — disabled (no project/PDP bound)', () => 
   it('does not show the disabled message when enabled', () => {
     renderComponent({ disabled: false, disabledMessage: 'No project selected.' });
     expect(screen.queryByText('No project selected.')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceCollectionOptions — empty TEXTS list', () => {
+  it('shows the empty-texts prompt with the Get Resources label interpolated (ellipsis dropped)', () => {
+    renderComponent({ top: [], bottom: [], installingResourceNames: [] });
+    // The button label is 'Get resources…'; embedded mid-sentence the trailing ellipsis is dropped.
+    expect(
+      screen.getByText('No texts added yet. Use Get resources to add them.'),
+    ).toBeInTheDocument();
+  });
+
+  // A localizer may end the label with any of several trailing-ellipsis forms; each should be
+  // stripped when the label is embedded mid-sentence in the prompt.
+  it.each([
+    ['three-ASCII-dot fallback', 'Get resources...'],
+    ['CJK double ellipsis', 'Get resources……'],
+    ['ellipsis with trailing space', 'Get resources… '],
+    ['ellipsis with trailing full-width space', 'Get resources…　'],
+  ])('drops the trailing ellipsis from the interpolated label (%s)', (_label, getResources) => {
+    renderComponent({
+      top: [],
+      bottom: [],
+      installingResourceNames: [],
+      localizedStrings: {
+        ...STRINGS,
+        '%webView_scriptureTextGrid_viewOptions_getResources%': getResources,
+      },
+    });
+    expect(
+      screen.getByText('No texts added yet. Use Get resources to add them.'),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the empty-texts prompt when a user (bottom) row is present', () => {
+    renderComponent({ bottom: [row('u1', 'My Text', { isUserRemovable: true })] });
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
+  });
+
+  it('hides the empty-texts prompt when only an admin (top) row is present', () => {
+    renderComponent({ top: [row('a1', 'Admin Text', { isAdminLocked: true })] });
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
+  });
+
+  it('hides the empty-texts prompt while an install is pending', () => {
+    renderComponent({ installingResourceNames: ['New Resource'] });
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
+  });
+
+  it('shows the disabled message, not the empty prompt, when disabled with a message', () => {
+    renderComponent({ disabled: true, disabledMessage: 'No project selected.' });
+    expect(screen.getByText('No project selected.')).toBeInTheDocument();
+    expect(screen.queryByText(/No texts added yet/)).not.toBeInTheDocument();
   });
 });
 

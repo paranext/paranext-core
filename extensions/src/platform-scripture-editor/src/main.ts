@@ -912,8 +912,9 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       throw new Error(
         `${SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
-    // A2 seam: the grid is project-bound so it can fire first-open overlay init and (in A3+) select
-    // its contents. The PT10 default-layout open passes no projectId (dormant until A3).
+    // Project-binding seam: the grid is project-bound so it can fire first-open overlay init and,
+    // once content selection lands, select its contents. The PT10 default-layout open passes no
+    // projectId (dormant until content selection lands).
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
@@ -923,7 +924,7 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
       // this in sync). The initial empty title avoids flashing a label before the web view runs.
       title: '',
       tooltip: '%webView_scriptureTextGrid_title_multiple%',
-      // Part of the default PT10 Studio layout and must always remain open, so the tab is
+      // Part of the default Simple-mode layout and must always remain open, so the tab is
       // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
       // so this covers both close paths.
       isClosable: false,

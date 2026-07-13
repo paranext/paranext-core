@@ -3,6 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import {
   Button,
+  EmptyState,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -15,6 +16,7 @@ import {
 import { Settings2 } from 'lucide-react';
 import {
   DblResourceData,
+  formatReplacementString,
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
@@ -52,12 +54,14 @@ const INSTALL_FAILED_KEY = '%webView_selectDblResource_installFailed%';
 const PERSIST_FAILED_KEY = '%webView_scriptureTextGrid_viewOptions_persistFailed%';
 const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
+const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
   VIEW_OPTIONS_BUTTON_KEY,
   NO_PROJECT_KEY,
   CHAPTER_CONTEXT_CLOSE_KEY,
+  EMPTY_STATE_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -72,12 +76,12 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
- * Options panel (A5), and the verse-cell grid body (A4).
+ * Options panel, and the verse-cell grid body.
  *
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. Below the header, the grid body renders one
- * `ResourceCell` per shown resource — the resources come from A3's `getScriptureTextGridContents`
+ * `ResourceCell` per shown resource — the resources come from the `getScriptureTextGridContents`
  * selector over the Text Collection sources assembled by `useTextCollectionSources`, and the row's
  * verse/chapter layout follows the View Options `viewMode` toggle.
  */
@@ -134,13 +138,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup.
-  const [cachedResources] = usePromise(
+  const [cachedResources, isLoadingCachedResources] = usePromise(
     useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
   );
 
-  // The grid body's cells: A3's selector over the Text Collection sources, resolved to the row's
-  // `{ projectId, label }` shape. The selector returns already-filtered, ordered Bible-text refs.
+  // The grid body's cells: the `getScriptureTextGridContents` selector over the Text Collection
+  // sources, resolved to the row's `{ projectId, label }` shape. The selector returns
+  // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
       toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
@@ -331,19 +336,40 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           </PopoverContent>
         </Popover>
       </div>
-      {/* Grid body: verse-cell rows below the header seam, verse/chapter layout from `viewMode`. */}
+      {/* Grid body: the empty state when nothing is renderable, otherwise the verse-cell rows.
+          Gate the empty state on loading being finished so it can't flash before data arrives —
+          `sources` undefined and `cachedResources` still loading each make `resources` transiently
+          empty (a DBL ref resolves to a cell only once the cached list loads). The
+          `!isLoadingLocalizedStrings` guard also avoids flashing a raw `%key%`. */}
       <div className="tw:flex-1 tw:overflow-hidden">
-        <ScriptureTextGrid
-          ariaLabel={localizedStrings[TITLE_KEY]}
-          resources={resources}
-          scrRef={scrRef}
-          setScrRef={setScrRef}
-          viewMode={viewMode}
-          chapterContext={chapterContext}
-          onChapterContextChange={setChapterContext}
-          onChapterContextClose={handleCloseChapterContext}
-          closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
-        />
+        {resources.length === 0 &&
+        sources !== undefined &&
+        !isLoadingCachedResources &&
+        !isLoadingLocalizedStrings ? (
+          // Centered in the grid body; the message names the View Options button by interpolating
+          // its own localized label so a rename can't desync the copy.
+          <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-4">
+            <EmptyState
+              id="scripture-text-grid-empty-state"
+              className="tw:text-center"
+              message={formatReplacementString(localizedStrings[EMPTY_STATE_KEY], {
+                viewOptionsLabel: localizedStrings[VIEW_OPTIONS_BUTTON_KEY],
+              })}
+            />
+          </div>
+        ) : (
+          <ScriptureTextGrid
+            ariaLabel={localizedStrings[TITLE_KEY]}
+            resources={resources}
+            scrRef={scrRef}
+            setScrRef={setScrRef}
+            viewMode={viewMode}
+            chapterContext={chapterContext}
+            onChapterContextChange={setChapterContext}
+            onChapterContextClose={handleCloseChapterContext}
+            closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
+          />
+        )}
       </div>
     </div>
   );
