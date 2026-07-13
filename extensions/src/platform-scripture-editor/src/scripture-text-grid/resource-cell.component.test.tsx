@@ -236,18 +236,15 @@ describe('ResourceCell zoom', () => {
     expect(contentWrapper instanceof HTMLElement && contentWrapper.style.zoom).toBe('1.4');
   });
 
-  it('forwards zoom items into the editor options.contextMenu when zoom and zoomMenuLabels are provided', () => {
-    // The editor's built-in ContextMenuPlugin owns `contextmenu` events over the editor
-    // content, so a wrapping Radix ContextMenu cannot intercept right-clicks there.
-    // Instead, ResourceCell appends zoom actions to the editor's own context menu via
-    // EditorOptions.contextMenu so they appear alongside the editor's native items.
-    const adjustZoom = vi.fn();
-    const resetZoom = vi.fn();
+  it('does NOT forward a contextMenu to the editor when zoom and zoomMenuLabels are provided', () => {
+    // Zoom items are now surfaced via the view's own right-click DropdownMenu (intercept in
+    // capture phase), not via EditorOptions.contextMenu. The editor options should never contain
+    // a contextMenu so the editor's built-in menu and our menu don't conflict.
     const zoom = {
-      getZoom: () => 1, // at default — canReset should be false
+      getZoom: () => 1,
       setZoomForResource: vi.fn(),
-      adjustZoom,
-      resetZoom,
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
       pruneToResourceIds: vi.fn(),
     };
     setUsjResult(chapter, false);
@@ -271,31 +268,9 @@ describe('ResourceCell zoom', () => {
       </div>,
     );
 
-    // Editorial should have been rendered; grab the options it was called with.
     expect(capturedEditorOptions).toHaveBeenCalled();
     const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
-    const contextMenu: { title: string; onSelect: () => void; isDisabled: boolean }[] =
-      lastOptions?.contextMenu ?? [];
-
-    // Three items: Zoom In, Zoom Out, Reset Zoom.
-    expect(contextMenu).toHaveLength(3);
-    expect(contextMenu[0].title).toBe('Zoom In');
-    expect(contextMenu[1].title).toBe('Zoom Out');
-    expect(contextMenu[2].title).toBe('Reset Zoom');
-
-    // At factor = 1 (default): both Zoom In and Zoom Out are enabled; Reset is disabled.
-    expect(contextMenu[0].isDisabled).toBe(false); // canZoomIn: 1 < MAX_ZOOM_FACTOR (3)
-    expect(contextMenu[1].isDisabled).toBe(false); // canZoomOut: 1 > MIN_ZOOM_FACTOR (0.5)
-    expect(contextMenu[2].isDisabled).toBe(true); // canReset: factor === DEFAULT (1) → false
-
-    // Invoking onSelect calls the zoom controller with the correct resource id.
-    contextMenu[0].onSelect(); // Zoom In
-    expect(adjustZoom).toHaveBeenCalledWith('r1', 1);
-
-    contextMenu[1].onSelect(); // Zoom Out
-    expect(adjustZoom).toHaveBeenCalledWith('r1', -1);
-
-    contextMenu[2].onSelect(); // Reset
-    expect(resetZoom).toHaveBeenCalledWith('r1');
+    // The editor must not receive a contextMenu — zoom is handled by the view's own right-click menu.
+    expect(lastOptions?.contextMenu).toBeUndefined();
   });
 });

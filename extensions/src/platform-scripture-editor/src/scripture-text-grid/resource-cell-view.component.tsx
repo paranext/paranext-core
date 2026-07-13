@@ -12,7 +12,15 @@ import {
 } from 'platform-bible-react';
 import { EllipsisVertical } from 'lucide-react';
 import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
-import { CSSProperties, ReactNode, useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  CSSProperties,
+  ReactNode,
+  useCallback,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -43,10 +51,7 @@ export type ResourceCellLocalizedStrings = {
   [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
 };
 
-/**
- * Localized copy for the zoom actions (the kebab dropdown here, and the editor's right-click
- * context menu wired in `ResourceCell`).
- */
+/** Localized copy for the zoom actions (the kebab dropdown and the right-click context menu). */
 export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
 
 export type ResourceCellViewProps = {
@@ -176,6 +181,24 @@ export function ResourceCellView({
     onActivate?.();
   }, [onActivate]);
 
+  const [rightClickMenuPos, setRightClickMenuPos] = useState<{ x: number; y: number } | undefined>(
+    undefined,
+  );
+
+  const handleCellContextMenu = useCallback(
+    (event: MouseEvent) => {
+      if (!zoomMenuLabels) return; // no zoom controller → allow default behavior
+      // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
+      // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
+      // our own portaled, collision-aware menu at the cursor instead.
+      event.preventDefault();
+      event.stopPropagation();
+      zoomMenuOpenRef.current = true;
+      setRightClickMenuPos({ x: event.clientX, y: event.clientY });
+    },
+    [zoomMenuLabels],
+  );
+
   // Format the kebab aria-label with the resource name (the template uses {resourceName}).
   const zoomOptionsAriaLabel = zoomMenuLabels
     ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
@@ -191,6 +214,7 @@ export function ResourceCellView({
       tabIndex={onActivate ? 0 : undefined}
       onKeyDown={onActivate ? handleKeyDown : undefined}
       onClick={onActivate ? handleActivateClick : undefined}
+      onContextMenuCapture={zoomMenuLabels ? handleCellContextMenu : undefined}
       // `group` powers the hover/focus-visible kebab; `cursor-pointer` signals the cell opens the
       // chapter-context split (only when activation is wired).
       className={`tw:group tw:flex tw:min-w-0 tw:flex-col ${onActivate ? 'tw:cursor-pointer' : ''}`}
@@ -283,6 +307,40 @@ export function ResourceCellView({
           </div>
         )}
       </div>
+      {zoomMenuLabels ? (
+        <DropdownMenu
+          open={rightClickMenuPos !== undefined}
+          onOpenChange={(open) => {
+            if (open) return;
+            setRightClickMenuPos(undefined);
+            // Hold the suppress flag through the closing click so a fall-through click doesn't
+            // activate the cell (open the chapter split).
+            window.setTimeout(() => {
+              zoomMenuOpenRef.current = false;
+            }, 0);
+          }}
+        >
+          {/* Zero-size fixed anchor at the cursor; Radix positions + collision-flips the menu from here. */}
+          <DropdownMenuTrigger asChild>
+            <span
+              aria-hidden="true"
+              className="tw:pointer-events-none tw:fixed tw:h-0 tw:w-0"
+              style={{ left: rightClickMenuPos?.x ?? 0, top: rightClickMenuPos?.y ?? 0 }}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <ZoomItemsShared
+              labels={zoomMenuLabels}
+              canZoomIn={canZoomIn}
+              canZoomOut={canZoomOut}
+              canReset={canReset}
+              onZoomIn={onZoomIn}
+              onZoomOut={onZoomOut}
+              onResetZoom={onResetZoom}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : undefined}
     </div>
   );
 

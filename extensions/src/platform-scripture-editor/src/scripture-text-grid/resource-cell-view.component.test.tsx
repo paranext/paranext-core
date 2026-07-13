@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom';
 import type React from 'react';
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   LOADING_KEY,
@@ -362,5 +362,35 @@ describe('ResourceCellView zoom UI', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Zoom options for WEB' })).toBeInTheDocument();
+  });
+
+  it('right-click opens the zoom menu at the cursor and does NOT call onActivate', async () => {
+    // Radix DropdownMenu relies on PointerEvent sequences that fireEvent.click() does not
+    // synthesize. userEvent v14 with pointerEventsCheck: 0 works reliably in jsdom.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onActivate = vi.fn();
+    renderGridRow(
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={zoomLabels}
+        editor={<span>verse</span>}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        onActivate={onActivate}
+        zoomMenuLabels={menuLabels}
+      />,
+    );
+
+    // Fire a contextmenu event on the gridcell to trigger the capture-phase handler.
+    fireEvent.contextMenu(screen.getByRole('gridcell'));
+
+    // The right-click zoom menu should open (Zoom In menuitem is visible).
+    await user.click(screen.getByRole('menuitem', { name: 'Zoom In' }));
+
+    // onActivate must NOT have been called — the right-click menu suppresses cell activation.
+    expect(onActivate).not.toHaveBeenCalled();
   });
 });

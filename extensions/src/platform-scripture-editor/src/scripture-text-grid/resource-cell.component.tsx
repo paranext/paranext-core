@@ -90,8 +90,8 @@ export function ResourceCell({
     [usjPossiblyError, isLoading],
   );
 
-  // #region Zoom — computed before the editor options memo so the callbacks and bound-state are
-  // available when building the contextMenu array passed to Editorial.
+  // #region Zoom — computed here so the callbacks and bound-state are available for the view's
+  // kebab dropdown and the right-click zoom menu rendered by ResourceCellView.
   const zoomFactor = zoom ? zoom.getZoom(resourceRef.resourceId) : undefined;
   const canZoomIn = zoomFactor === undefined || zoomFactor < MAX_ZOOM_FACTOR;
   const canZoomOut = zoomFactor === undefined || zoomFactor > MIN_ZOOM_FACTOR;
@@ -128,28 +128,8 @@ export function ResourceCell({
       hasSpellCheck: false,
       textDirection,
       ...(extraValidMarkers.length > 0 ? { nodes: { extraValidMarkers } } : {}),
-      ...(zoom && zoomMenuLabels
-        ? {
-            contextMenu: [
-              { title: zoomMenuLabels.zoomIn, onSelect: handleZoomIn, isDisabled: !canZoomIn },
-              { title: zoomMenuLabels.zoomOut, onSelect: handleZoomOut, isDisabled: !canZoomOut },
-              { title: zoomMenuLabels.reset, onSelect: handleResetZoom, isDisabled: !canReset },
-            ],
-          }
-        : {}),
     }),
-    [
-      textDirection,
-      extraValidMarkers,
-      zoom,
-      zoomMenuLabels,
-      handleZoomIn,
-      handleZoomOut,
-      handleResetZoom,
-      canZoomIn,
-      canZoomOut,
-      canReset,
-    ],
+    [textDirection, extraValidMarkers],
   );
   // Slice depends on scrRef.verseNum (unlike the chapter fetch memo above, which intentionally
   // omits it — the chapter is identical across verses, but the slice is not).
