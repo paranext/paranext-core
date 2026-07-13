@@ -117,11 +117,12 @@ const TAB_ICON_URLS: TabIconUrls = {
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. Below the header, the body renders one
- * `ResourceCell` per shown resource — the resources come from the `getOrderedScriptureTextGridContents`
- * selector over the Text Collection sources assembled by `useTextCollectionSources`. The `viewMode`
- * toggle selects the layout: a vertical list of stacked verse rows (verse mode), or a horizontal
- * row of side-by-side full-chapter columns (chapter mode). In chapter mode the columns are
- * reorderable (drag or keyboard); the persisted order is wired via `handleReorder`.
+ * `ResourceCell` per shown resource — the resources come from the
+ * `getOrderedScriptureTextGridContents` selector over the Text Collection sources assembled by
+ * `useTextCollectionSources`. The `viewMode` toggle selects the layout: a vertical list of stacked
+ * verse rows (verse mode), or a horizontal row of side-by-side full-chapter columns (chapter mode).
+ * In chapter mode the columns are reorderable (drag or keyboard); the persisted order is wired via
+ * `handleReorder`.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
