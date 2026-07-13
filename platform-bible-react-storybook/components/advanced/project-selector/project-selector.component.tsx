@@ -46,6 +46,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 import {
   computeRows,
   normalizeProjectId,
@@ -288,19 +289,25 @@ type RowRenderProps = {
 };
 
 function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }: RowRenderProps) {
-  // Per-row hover state. We control Radix Tooltip's `open` prop manually because Radix's
-  // built-in pointer/focus auto-detection does not fire on cmdk's `<CommandItem>` trigger
-  // (data-state stays "closed" even after pointerenter / pointermove / focus). Tracking
-  // hover ourselves bypasses that auto-detection entirely.
-  const [isHovered, setIsHovered] = useState(false);
+  // We control Radix Tooltip's `open` prop manually because Radix's built-in pointer/focus
+  // auto-detection does not fire on cmdk's `<CommandItem>` trigger (data-state stays "closed"
+  // even after pointerenter / pointermove / focus). Tracking hover ourselves bypasses that
+  // auto-detection entirely.
+  //
+  // `useTruncationTooltip` owns the label ref plus the open state and pointer handlers for the
+  // "only show a tooltip when the row text is actually clipped" case. Its ref measures
+  // scrollWidth vs clientWidth on the truncating label span.
+  const {
+    ref: labelRef,
+    open: isTruncatedHovered,
+    onPointerEnter: onTruncationPointerEnter,
+    onPointerLeave: onTruncationPointerLeave,
+  } = useTruncationTooltip<HTMLSpanElement>();
 
-  // Ref to the truncating label span so we can measure scrollWidth vs clientWidth on hover
-  // and decide whether the tooltip should show. We only want a tooltip on rows where the
-  // visible text is actually clipped — or on rows that have extra info to surface beyond
-  // what's visible in the row itself.
-  // React's ref API requires `null` as the initial value for DOM refs.
-  // eslint-disable-next-line no-null/no-null
-  const labelRef = useRef<HTMLSpanElement>(null);
+  // Some rows also carry a tooltip on hover regardless of truncation, because it surfaces info
+  // that is NOT visible in the row text at all. Track that hover separately and OR it with the
+  // truncation-driven open state.
+  const [isExtraContentHovered, setIsExtraContentHovered] = useState(false);
 
   const tooltipHasLanguage = Boolean(row.language || row.languageCode);
 
@@ -312,16 +319,21 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
     row.isBoundButClosed ||
     (row.isDisabled && Boolean(row.disabledReason));
 
+  const isHovered = isTruncatedHovered || isExtraContentHovered;
+
   const handlePointerEnter = useCallback(() => {
     if (hasExtraTooltipContent) {
-      setIsHovered(true);
+      setIsExtraContentHovered(true);
       return;
     }
     // Otherwise only open the tooltip if the visible row text is actually truncated.
-    const el = labelRef.current;
-    if (!el) return;
-    if (el.scrollWidth > el.clientWidth) setIsHovered(true);
-  }, [hasExtraTooltipContent]);
+    onTruncationPointerEnter();
+  }, [hasExtraTooltipContent, onTruncationPointerEnter]);
+
+  const handlePointerLeave = useCallback(() => {
+    setIsExtraContentHovered(false);
+    onTruncationPointerLeave();
+  }, [onTruncationPointerLeave]);
 
   const leftCheck = (
     <Check className={cn('tw:h-4 tw:w-4', row.isSelected ? 'tw:opacity-100' : 'tw:opacity-0')} />
@@ -379,7 +391,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
       }}
       disabled={row.isDisabled}
       onPointerEnter={handlePointerEnter}
-      onPointerLeave={() => setIsHovered(false)}
+      onPointerLeave={handlePointerLeave}
       className="tw:flex tw:items-center tw:gap-2 tw:pe-4"
       data-selected={row.isSelected}
     >
