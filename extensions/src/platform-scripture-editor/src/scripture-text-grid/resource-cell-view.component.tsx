@@ -1,12 +1,19 @@
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Button,
   Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { LocalizedStringValue } from 'platform-bible-utils';
-import { ReactNode, useCallback, useRef, useState } from 'react';
+import { EllipsisVertical } from 'lucide-react';
+import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
+import { CSSProperties, ReactNode, useCallback, useRef, useState, type MouseEvent } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
@@ -14,20 +21,33 @@ import { ResourceCellState } from './resource-cell.utils';
  * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
  */
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
-export const DOWNLOADING_KEY = '%webView_scriptureTextGrid_cell_status_downloading%';
+export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
+export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
+export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
+export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
+export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
+export const COPY_KEY = '%webView_scriptureTextGrid_cell_copy%';
 export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   UNAVAILABLE_KEY,
-  DOWNLOADING_KEY,
+  LOADING_KEY,
   FAILED_KEY,
   EMPTY_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+  COPY_KEY,
 ] as const);
 
 type ResourceCellLocalizedStringKey = (typeof RESOURCE_CELL_STRING_KEYS)[number];
 export type ResourceCellLocalizedStrings = {
   [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
 };
+
+/** Localized copy for the zoom actions (the kebab dropdown and the right-click context menu). */
+export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
 
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
@@ -42,7 +62,53 @@ export type ResourceCellViewProps = {
   editor: ReactNode;
   /** When true (verse mode, slice empty), render the empty label instead of the editor. */
   isVerseEmpty?: boolean;
+  /** Current zoom factor for this resource (1 = default). */
+  zoomFactor?: number;
+  /** False when the factor is at MAX_ZOOM_FACTOR. */
+  canZoomIn?: boolean;
+  /** False when the factor is at MIN_ZOOM_FACTOR. */
+  canZoomOut?: boolean;
+  /** False when the factor is already at the default (1). Defaults to true. */
+  canReset?: boolean;
+  /** Zoom action callbacks; invoked by the kebab dropdown. */
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
+  /** Localized menu copy; when omitted the zoom surfaces are not rendered. */
+  zoomMenuLabels?: ZoomMenuLabels;
 };
+
+function ZoomItemsShared({
+  labels,
+  canZoomIn,
+  canZoomOut,
+  canReset = true,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+}: {
+  labels: ZoomMenuLabels;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
+  canReset?: boolean;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
+}) {
+  return (
+    <>
+      <DropdownMenuItem disabled={!canZoomIn} onSelect={onZoomIn}>
+        {labels.zoomIn}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!canZoomOut} onSelect={onZoomOut}>
+        {labels.zoomOut}
+      </DropdownMenuItem>
+      <DropdownMenuItem disabled={!canReset} onSelect={onResetZoom}>
+        {labels.reset}
+      </DropdownMenuItem>
+    </>
+  );
+}
 
 /**
  * Presentational ResourceCell: renders the header, per-cell text direction, and either the editor
@@ -50,7 +116,8 @@ export type ResourceCellViewProps = {
  * every state; `ResourceCell` wraps it with the PAPI fetch/direction/offline wiring.
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
- * `listitem` in `ScriptureTextGrid` — this component is purely presentational.
+ * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
+ * per-resource zoom surfaces (the header kebab dropdown and the right-click zoom/copy menu).
  */
 export function ResourceCellView({
   state,
@@ -59,6 +126,14 @@ export function ResourceCellView({
   localizedStrings,
   editor,
   isVerseEmpty,
+  zoomFactor,
+  canZoomIn = true,
+  canZoomOut = true,
+  canReset = true,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
+  zoomMenuLabels,
 }: ResourceCellViewProps) {
   // The tooltip only repeats the visible label, so it should show only when the label is actually
   // truncated. Radix's auto-detection cannot know that, so control `open` manually and measure the
@@ -83,40 +158,157 @@ export function ResourceCellView({
     );
   }
 
+  const [rightClickMenuPos, setRightClickMenuPos] = useState<{ x: number; y: number } | undefined>(
+    undefined,
+  );
+  const [selectedText, setSelectedText] = useState('');
+
+  const handleCellContextMenu = useCallback(
+    (event: MouseEvent) => {
+      if (!zoomMenuLabels) return; // no zoom controller → allow default behavior
+      // The editor owns `contextmenu` over its content, and its built-in menu clips and cannot flip
+      // near the viewport edge. Intercept in the capture phase (before the editor's handler) and open
+      // our own portaled, collision-aware menu at the cursor instead.
+      event.preventDefault();
+      event.stopPropagation();
+      // Capture selection now — focus moves to the menu when it opens, which clears the DOM
+      // selection, so we must grab it before setRightClickMenuPos triggers the re-render.
+      const selection = window.getSelection()?.toString().trim() ?? '';
+      setSelectedText(selection);
+      setRightClickMenuPos({ x: event.clientX, y: event.clientY });
+    },
+    [zoomMenuLabels],
+  );
+
+  // Format the kebab aria-label with the resource name (the template uses {resourceName}).
+  const zoomOptionsAriaLabel = zoomMenuLabels
+    ? formatReplacementString(zoomMenuLabels.options, { resourceName: label })
+    : undefined;
+
+  const contentStyle: CSSProperties | undefined =
+    zoomFactor !== undefined && zoomFactor !== 1 ? { zoom: zoomFactor } : undefined;
+
   return (
-    <div className="tw:flex tw:min-w-0 tw:flex-col">
+    <div
+      onContextMenuCapture={zoomMenuLabels ? handleCellContextMenu : undefined}
+      // `group` powers the hover/focus-visible kebab reveal. Activation (opening the chapter split)
+      // is owned by the parent verse `listitem` in ScriptureTextGrid — this cell is presentational.
+      className="tw:group tw:flex tw:min-w-0 tw:flex-col"
+    >
       <TooltipProvider>
         <Tooltip open={isHeaderTooltipOpen}>
-          <TooltipTrigger asChild>
-            {/* Single-line header; long labels truncate. The tooltip reveals the full name and
-                shows only when the label is actually clipped. */}
-            <div
-              ref={headerRef}
-              onPointerEnter={handleHeaderPointerEnter}
-              onPointerLeave={() => setIsHeaderTooltipOpen(false)}
-              className="tw:truncate tw:border-b tw:px-2 tw:py-1 tw:text-sm tw:font-medium"
-            >
-              {label}
-            </div>
-          </TooltipTrigger>
+          <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:px-2 tw:py-1">
+            <TooltipTrigger asChild>
+              <div
+                ref={headerRef}
+                onPointerEnter={handleHeaderPointerEnter}
+                onPointerLeave={() => setIsHeaderTooltipOpen(false)}
+                className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium"
+              >
+                {label}
+              </div>
+            </TooltipTrigger>
+            {zoomMenuLabels ? (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={zoomOptionsAriaLabel}
+                        // Stop the click from bubbling to the parent verse `listitem`, whose click
+                        // handler opens the chapter-context split. Radix opens the dropdown on
+                        // pointerdown, so this does not prevent the menu from opening — it only
+                        // prevents the chapter-context panel from opening simultaneously.
+                        onClick={(e) => e.stopPropagation()}
+                        // Hidden until hover/focus for pointer users; always visible on touch
+                        // (`hover: none`) where there is no hover to reveal it.
+                        className="tw:h-6 tw:w-6 tw:shrink-0 tw:opacity-0 tw:group-hover:opacity-100 tw:group-focus-within:opacity-100 tw:focus-visible:opacity-100 tw:[@media(hover:none)]:opacity-100"
+                      >
+                        <EllipsisVertical className="tw:h-4 tw:w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{zoomOptionsAriaLabel}</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent>
+                  <ZoomItemsShared
+                    labels={zoomMenuLabels}
+                    canZoomIn={canZoomIn}
+                    canZoomOut={canZoomOut}
+                    canReset={canReset}
+                    onZoomIn={onZoomIn}
+                    onZoomOut={onZoomOut}
+                    onResetZoom={onResetZoom}
+                  />
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : undefined}
+          </div>
           <TooltipContent>{label}</TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <div className="tw:flex-1 tw:overflow-auto tw:p-2" dir={textDirection}>
+      <div className="tw:flex-1 tw:overflow-auto tw:p-2" style={contentStyle} dir={textDirection}>
         {state === 'ready' ? (
           readyContent
         ) : (
           <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
-            {state === 'downloading' && <Spinner />}
-            <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {state === 'failed'
-                ? localizedStrings[FAILED_KEY]
-                : localizedStrings[DOWNLOADING_KEY]}
-            </span>
+            {state === 'downloading' ? (
+              <>
+                <Spinner />
+                <span className="tw:text-sm tw:text-muted-foreground">
+                  {localizedStrings[LOADING_KEY]}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
+                <span className="tw:text-sm tw:text-muted-foreground">
+                  {localizedStrings[FAILED_KEY]}
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
+      {zoomMenuLabels ? (
+        <DropdownMenu
+          open={rightClickMenuPos !== undefined}
+          onOpenChange={(open) => {
+            if (!open) setRightClickMenuPos(undefined);
+          }}
+        >
+          {/* Zero-size fixed anchor at the cursor; Radix positions + collision-flips the menu from here. */}
+          <DropdownMenuTrigger asChild>
+            <span
+              aria-hidden="true"
+              className="tw:pointer-events-none tw:fixed tw:h-0 tw:w-0"
+              style={{ left: rightClickMenuPos?.x ?? 0, top: rightClickMenuPos?.y ?? 0 }}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem
+              disabled={!selectedText}
+              onSelect={() => {
+                if (selectedText) navigator.clipboard?.writeText(selectedText).catch(() => {});
+              }}
+            >
+              {localizedStrings[COPY_KEY]}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <ZoomItemsShared
+              labels={zoomMenuLabels}
+              canZoomIn={canZoomIn}
+              canZoomOut={canZoomOut}
+              canReset={canReset}
+              onZoomIn={onZoomIn}
+              onZoomOut={onZoomOut}
+              onResetZoom={onResetZoom}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : undefined}
     </div>
   );
 }

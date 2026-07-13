@@ -6,11 +6,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { ResourceCell } from './resource-cell.component';
 
-const { mockUseProjectData, mockUseProjectSetting, setUsjSpy } = vi.hoisted(() => ({
-  mockUseProjectData: vi.fn(),
-  mockUseProjectSetting: vi.fn(),
-  setUsjSpy: vi.fn(),
-}));
+const { mockUseProjectData, mockUseProjectSetting, setUsjSpy, capturedEditorOptions } = vi.hoisted(
+  () => ({
+    mockUseProjectData: vi.fn(),
+    mockUseProjectSetting: vi.fn(),
+    setUsjSpy: vi.fn(),
+    /** Collects the `options` prop passed to each Editorial render. */
+    capturedEditorOptions: vi.fn(),
+  }),
+);
 
 vi.mock('platform-bible-react', async (importOriginal) => {
   const original = await importOriginal<typeof import('platform-bible-react')>();
@@ -26,7 +30,7 @@ vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
-      '%webView_scriptureTextGrid_cell_status_downloading%': 'Downloading…',
+      '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
     },
@@ -35,12 +39,23 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 vi.mock('@eten-tech-foundation/platform-editor', () => {
   return {
-    Editorial: React.forwardRef((_p: unknown, ref: React.Ref<unknown>) => {
+    Editorial: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+      capturedEditorOptions(props.options);
       React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
       return <div data-testid="editorial" />;
     }),
   };
 });
+// Mock platform-bible-react: stub useExtraValidMarkers (used by ResourceCell) and pass through
+// the UI components that ResourceCellView needs to render properly in jsdom.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const original = await importOriginal<typeof import('platform-bible-react')>();
+  return {
+    ...original,
+    useExtraValidMarkers: () => [],
+  };
+});
+
 vi.mock('@eten-tech-foundation/scripture-utilities', async (importOriginal) => {
   // Keep the real usxStringToUsj (used to build test fixtures below) alongside the existing
   // lightweight EMPTY_USJ/USJ_TYPE stand-ins.
@@ -67,7 +82,11 @@ const chapter = {
     },
   ],
 };
-const props = { resourceRef: { projectId: 'p1', label: 'WEB' }, scrRef, setScrRef: vi.fn() };
+const props = {
+  resourceRef: { resourceId: 'r1', projectId: 'p1', label: 'WEB' },
+  scrRef,
+  setScrRef: vi.fn(),
+};
 
 // Two-verse chapter fixture for viewMode tests: verse 1 "verse one" + verse 2 "verse two" in one
 // <para style="p">, so a chapter-vs-verse slice is unambiguous.
@@ -105,11 +124,11 @@ beforeEach(() => {
 });
 
 describe('ResourceCell', () => {
-  it('shows the label + Spinner while downloading', () => {
+  it('shows the Spinner and neutral loading message while downloading', () => {
     setUsjResult(undefined, true);
     render(<ResourceCell {...props} />);
-    expect(screen.getByText('Resource unavailable')).toBeInTheDocument();
-    expect(screen.getByText('Downloading…')).toBeInTheDocument();
+    expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
+    expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
   });
   it('shows the failed subtitle for a PlatformError', () => {
@@ -126,7 +145,12 @@ describe('ResourceCell', () => {
   it('applies the resource own text direction', () => {
     setUsjResult(chapter, false);
     mockUseProjectSetting.mockReturnValue(['rtl', vi.fn(), vi.fn(), false]);
-    render(<ResourceCell {...props} resourceRef={{ projectId: 'p1', label: 'עברית' }} />);
+    render(
+      <ResourceCell
+        {...props}
+        resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'עברית' }}
+      />,
+    );
     expect(document.querySelector('[dir="rtl"]')).toBeInTheDocument();
   });
   it('defaults direction to ltr when the setting is a PlatformError', () => {
@@ -180,5 +204,81 @@ describe('ResourceCell viewMode', () => {
     expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
     expect(setUsjSpy).not.toHaveBeenCalled();
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResourceCell zoom', () => {
+  it('passes the controller factor to the cell content as a zoom style', () => {
+    const zoom = {
+      getZoom: () => 1.4,
+      setZoomForResource: vi.fn(),
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+      pruneToResourceIds: vi.fn(),
+    };
+    setUsjResult(chapter, false);
+    render(
+      <div role="grid">
+        <div role="row">
+          <ResourceCell
+            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
+            scrRef={scrRef}
+            setScrRef={() => {}}
+            viewMode="chapter"
+            zoom={zoom}
+            zoomMenuLabels={{
+              zoomIn: 'Zoom In',
+              zoomOut: 'Zoom Out',
+              reset: 'Reset Zoom',
+              options: 'Zoom options',
+            }}
+          />
+        </div>
+      </div>,
+    );
+    // jsdom does not serialize CSS `zoom` into the style attribute string, so
+    // `[style*="zoom"]` selectors fail. Instead check the CSSOM property directly on
+    // the content wrapper element (the div with dir="ltr" that carries the zoom style).
+    const contentWrapper = document.querySelector('[dir="ltr"]');
+    expect(contentWrapper).not.toBeNull();
+    expect(contentWrapper instanceof HTMLElement && contentWrapper.style.zoom).toBe('1.4');
+  });
+
+  it('does NOT forward a contextMenu to the editor when zoom and zoomMenuLabels are provided', () => {
+    // Zoom items are now surfaced via the view's own right-click DropdownMenu (intercept in
+    // capture phase), not via EditorOptions.contextMenu. The editor options should never contain
+    // a contextMenu so the editor's built-in menu and our menu don't conflict.
+    const zoom = {
+      getZoom: () => 1,
+      setZoomForResource: vi.fn(),
+      adjustZoom: vi.fn(),
+      resetZoom: vi.fn(),
+      pruneToResourceIds: vi.fn(),
+    };
+    setUsjResult(chapter, false);
+    render(
+      <div role="grid">
+        <div role="row">
+          <ResourceCell
+            resourceRef={{ resourceId: 'r1', projectId: 'p1', label: 'WEB' }}
+            scrRef={scrRef}
+            setScrRef={() => {}}
+            viewMode="chapter"
+            zoom={zoom}
+            zoomMenuLabels={{
+              zoomIn: 'Zoom In',
+              zoomOut: 'Zoom Out',
+              reset: 'Reset Zoom',
+              options: 'Zoom options',
+            }}
+          />
+        </div>
+      </div>,
+    );
+
+    expect(capturedEditorOptions).toHaveBeenCalled();
+    const [lastOptions] = capturedEditorOptions.mock.lastCall ?? [];
+    // The editor must not receive a contextMenu — zoom is handled by the view's own right-click menu.
+    expect(lastOptions?.contextMenu).toBeUndefined();
   });
 });
