@@ -10,9 +10,9 @@ namespace TestParanextDataProvider.Projects;
 
 [TestFixture]
 [ExcludeFromCodeCoverage]
-internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
+internal class ParatextProjectDataProviderTextCollectionTests : PapiTestBase
 {
-    private const string PdpName = "shownByDefaultTestProject";
+    private const string PdpName = "textCollectionTestProject";
 
     private DummyScrText _scrText = null!;
     private ProjectDetails _projectDetails = null!;
@@ -78,7 +78,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     [Test]
     public void SetProjectSetting_NonAdmin_ReferencedList_Rejected()
     {
-        // Only the referenced-resources list carries the admin-only shown-by-default default, so it
+        // Only the referenced-resources list carries the admin-only text-collection default, so it
         // is the only project-scope write gated to administrators.
         var nonAdmin = BuildNonAdminProvider(out var scrText);
         try
@@ -100,7 +100,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     [Test]
     public void SetProjectSetting_NonAdmin_ModelTexts_Allowed()
     {
-        // Model texts do NOT participate in shown-by-default and keep their pre-existing ungated
+        // Model texts do NOT participate in text-collection and keep their pre-existing ungated
         // behavior, so a non-admin write must succeed (not throw).
         var nonAdmin = BuildNonAdminProvider(out var scrText);
         try
@@ -172,7 +172,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     [Test]
     public void Overlay_Get_WhenUnset_ReturnsEmptyMap()
     {
-        var overlay = _provider.GetShownByDefaultOverlay();
+        var overlay = _provider.GetTextCollectionOverlay();
         Assert.That(overlay, Is.Empty);
     }
 
@@ -180,9 +180,9 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     public void Overlay_SetThenGet_RoundTrips()
     {
         var input = new Dictionary<string, bool> { ["aabbcc"] = true, ["ddeeff"] = false };
-        Assert.That(_provider.SetShownByDefaultOverlay(input.SerializeToJson()), Is.True);
+        Assert.That(_provider.SetTextCollectionOverlay(input.SerializeToJson()), Is.True);
 
-        var overlay = _provider.GetShownByDefaultOverlay();
+        var overlay = _provider.GetTextCollectionOverlay();
         Assert.That(overlay["aabbcc"], Is.True);
         Assert.That(overlay["ddeeff"], Is.False);
     }
@@ -191,11 +191,11 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     public void Overlay_Get_WithIncompatibleMajorVersion_Throws()
     {
         // Seed the overlay setting directly with a future major version the current build cannot
-        // read. "ShownByDefaultOverlay" mirrors ParatextProjectDataProvider.OverlaySettingName
-        // (a private const). GetShownByDefaultOverlay must reject it rather than deserialize blindly.
+        // read. "TextCollectionOverlay" mirrors ParatextProjectDataProvider.OverlaySettingName
+        // (a private const). GetTextCollectionOverlay must reject it rather than deserialize blindly.
         var userSettings = new UserProjectSettings(_scrText.Directory, _scrText.User.Name);
         userSettings.SetSetting(
-            "ShownByDefaultOverlay",
+            "TextCollectionOverlay",
             "2.0.0",
             new XElement(
                 "Items",
@@ -203,7 +203,7 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
             )
         );
 
-        Assert.Throws<InvalidDataException>(() => _provider.GetShownByDefaultOverlay());
+        Assert.Throws<InvalidDataException>(() => _provider.GetTextCollectionOverlay());
     }
 
     [TestCase("null")] // JSON null literal -> deserializes to null
@@ -214,20 +214,20 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
     [TestCase("{ not json")] // malformed JSON
     public void Overlay_Set_WithNonMapValue_Throws(string json)
     {
-        // SetShownByDefaultOverlay must reject any value that does not yield a { id -> bool } map
+        // SetTextCollectionOverlay must reject any value that does not yield a { id -> bool } map
         // with a consistent InvalidDataException — whether it is null/empty (deserializes to null) or
         // a wrong-shape/malformed value (System.Text.Json throws, which the setter wraps).
-        Assert.Throws<InvalidDataException>(() => _provider.SetShownByDefaultOverlay(json));
+        Assert.Throws<InvalidDataException>(() => _provider.SetTextCollectionOverlay(json));
     }
 
     [Test]
     public void Overlay_Reset_ClearsMap()
     {
-        _provider.SetShownByDefaultOverlay(
+        _provider.SetTextCollectionOverlay(
             new Dictionary<string, bool> { ["aabbcc"] = true }.SerializeToJson()
         );
-        Assert.That(_provider.ResetShownByDefaultOverlay(), Is.True);
-        Assert.That(_provider.GetShownByDefaultOverlay(), Is.Empty);
+        Assert.That(_provider.ResetTextCollectionOverlay(), Is.True);
+        Assert.That(_provider.GetTextCollectionOverlay(), Is.Empty);
     }
 
     [Test]
@@ -240,20 +240,20 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    IsResourceShownByDefault = true,
+                    IsInTextCollection = true,
                 },
                 new DblResourceReference
                 {
                     Name = "D",
                     Id = "112233445566",
-                    IsResourceShownByDefault = false,
+                    IsInTextCollection = false,
                 }
             )
         );
 
-        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.True);
+        Assert.That(_provider.InitializeTextCollectionOverlay(), Is.True);
 
-        var overlay = _provider.GetShownByDefaultOverlay();
+        var overlay = _provider.GetTextCollectionOverlay();
         Assert.That(overlay["aabbcc"], Is.True);
         Assert.That(overlay["112233445566"], Is.False);
     }
@@ -269,9 +269,9 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
             )
         );
 
-        _provider.InitializeShownByDefaultOverlay();
+        _provider.InitializeTextCollectionOverlay();
 
-        Assert.That(_provider.GetShownByDefaultOverlay(), Is.Empty);
+        Assert.That(_provider.GetTextCollectionOverlay(), Is.Empty);
     }
 
     [Test]
@@ -284,20 +284,20 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    IsResourceShownByDefault = true,
+                    IsInTextCollection = true,
                 }
             )
         );
-        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.True);
+        Assert.That(_provider.InitializeTextCollectionOverlay(), Is.True);
 
         // User un-checks the resource in their overlay.
-        _provider.SetShownByDefaultOverlay(
+        _provider.SetTextCollectionOverlay(
             new Dictionary<string, bool> { ["aabbcc"] = false }.SerializeToJson()
         );
 
         // A later open must NOT re-init (must not re-check the user's un-check).
-        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.False);
-        Assert.That(_provider.GetShownByDefaultOverlay()["aabbcc"], Is.False);
+        Assert.That(_provider.InitializeTextCollectionOverlay(), Is.False);
+        Assert.That(_provider.GetTextCollectionOverlay()["aabbcc"], Is.False);
     }
 
     [Test]
@@ -310,21 +310,21 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
                 {
                     Name = "P",
                     Id = "aabbcc",
-                    IsResourceShownByDefault = true,
+                    IsInTextCollection = true,
                 }
             )
         );
-        _provider.InitializeShownByDefaultOverlay();
-        _provider.ResetShownByDefaultOverlay();
+        _provider.InitializeTextCollectionOverlay();
+        _provider.ResetTextCollectionOverlay();
 
-        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.True);
-        Assert.That(_provider.GetShownByDefaultOverlay()["aabbcc"], Is.True);
+        Assert.That(_provider.InitializeTextCollectionOverlay(), Is.True);
+        Assert.That(_provider.GetTextCollectionOverlay()["aabbcc"], Is.True);
     }
 
     [Test]
     public void Initialize_IgnoresModelTextFlags()
     {
-        // Model texts are decoupled from shown-by-default: a flag set on the model-texts list must
+        // Model texts are decoupled from text-collection: a flag set on the model-texts list must
         // NOT seed the overlay. Only PB_REFERENCED_PROJECTS_AND_RESOURCES feeds first-open init.
         _provider.SetProjectSetting(
             ProjectSettingsNames.PB_MODEL_TEXTS,
@@ -333,13 +333,13 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
                 {
                     Name = "D",
                     Id = "112233445566",
-                    IsResourceShownByDefault = true,
+                    IsInTextCollection = true,
                 }
             )
         );
 
-        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.True);
-        Assert.That(_provider.GetShownByDefaultOverlay(), Is.Empty);
+        Assert.That(_provider.InitializeTextCollectionOverlay(), Is.True);
+        Assert.That(_provider.GetTextCollectionOverlay(), Is.Empty);
     }
 
     [Test]
@@ -353,12 +353,12 @@ internal class ParatextProjectDataProviderShownByDefaultTests : PapiTestBase
                 {
                     Name = "D",
                     Id = "112233445566",
-                    IsResourceShownByDefault = true,
+                    IsInTextCollection = true,
                 }
             )
         );
 
-        Assert.That(_provider.InitializeShownByDefaultOverlay(), Is.True);
-        Assert.That(_provider.GetShownByDefaultOverlay()["112233445566"], Is.True);
+        Assert.That(_provider.InitializeTextCollectionOverlay(), Is.True);
+        Assert.That(_provider.GetTextCollectionOverlay()["112233445566"], Is.True);
     }
 }

@@ -44,8 +44,8 @@ export type ScriptureTextGridPapiWindow = {
         setSetting: (key: string, value: unknown) => Promise<boolean>;
         getSetting: (key: string) => Promise<{ items: unknown[] }>;
         canUserWriteProjectTextConnectionSettings: () => Promise<boolean>;
-        resetShownByDefaultOverlay: () => Promise<boolean>;
-        initializeShownByDefaultOverlay: () => Promise<boolean>;
+        resetTextCollectionOverlay: () => Promise<boolean>;
+        initializeTextCollectionOverlay: () => Promise<boolean>;
       }>;
     };
     webViews: {
@@ -62,7 +62,7 @@ export type FlaggedResourceItem = {
   type: 'project';
   name: string;
   id: string;
-  isResourceShownByDefault: boolean;
+  isInTextCollection: boolean;
 };
 
 type ScriptureTextGridRestorePayload = {
@@ -106,7 +106,7 @@ export async function discoverAdminTextConnectionProject(
 }
 
 /**
- * Flag resources shown-by-default, seed the overlay, and open the Scripture Text Grid web view.
+ * Flag resources text-collection, seed the overlay, and open the Scripture Text Grid web view.
  * Restores the project's pre-test settings in a `finally` block.
  */
 export async function flagResourcesAndOpenScriptureTextGrid(
@@ -130,13 +130,13 @@ export async function flagResourcesAndOpenScriptureTextGrid(
           dataVersion: '1.1.0',
           items: modelItems,
         });
-        await pdp.resetShownByDefaultOverlay();
-        await pdp.initializeShownByDefaultOverlay();
+        await pdp.resetTextCollectionOverlay();
+        await pdp.initializeTextCollectionOverlay();
         await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
         return { projectId: testProjectId, modelTexts: originalModelTexts };
       } catch (error) {
         await pdp.setSetting('platformScripture.modelTexts', originalModelTexts);
-        await pdp.resetShownByDefaultOverlay();
+        await pdp.resetTextCollectionOverlay();
         throw error;
       }
     },
@@ -160,7 +160,7 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
           payload.projectId,
         );
         await pdp.setSetting('platformScripture.modelTexts', payload.modelTexts);
-        await pdp.resetShownByDefaultOverlay();
+        await pdp.resetTextCollectionOverlay();
         await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
       },
       { payload: restore, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },

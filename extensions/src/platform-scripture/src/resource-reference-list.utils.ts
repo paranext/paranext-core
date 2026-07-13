@@ -9,9 +9,12 @@ export const isValidResourceReference = (item: unknown): boolean => {
       if (!('name' in item) || !('id' in item)) return false;
       if (typeof item.name !== 'string' || typeof item.id !== 'string') return false;
       // Optional flags, when present, must be booleans.
-      if ('isResourceShownByDefault' in item && typeof item.isResourceShownByDefault !== 'boolean')
+      if ('isInTextCollection' in item && typeof item.isInTextCollection !== 'boolean')
         return false;
-      if ('isResourceShownForUser' in item && typeof item.isResourceShownForUser !== 'boolean')
+      if (
+        'isInTextCollectionForUser' in item &&
+        typeof item.isInTextCollectionForUser !== 'boolean'
+      )
         return false;
       return true;
     }

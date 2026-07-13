@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type {
   ResourceReferenceList,
-  ShownByDefaultOverlay,
+  TextCollectionOverlay,
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
@@ -48,7 +48,7 @@ function settingTuple(
 /**
  * Configures `useProjectSetting` to answer with the admin `referencedProjectsAndResources` tuple.
  * That is the only project setting the hook reads (model texts are decoupled from the
- * shown-by-default feature, so they are no longer a source).
+ * text-collection feature, so they are no longer a source).
  */
 function mockSettings(referenced: ReturnType<typeof useProjectSetting>) {
   mockUseProjectSetting.mockImplementation(() => referenced);
@@ -64,7 +64,7 @@ function makeControllablePdp() {
   const unsubOverlay = vi.fn(() => Promise.resolve(true));
 
   let deliverUserReferenced: (value: ResourceReferenceList | object) => void = () => {};
-  let deliverOverlay: (value: ShownByDefaultOverlay | object) => void = () => {};
+  let deliverOverlay: (value: TextCollectionOverlay | object) => void = () => {};
 
   // Resolvers for the subscribe promises themselves — left pending until a test resolves them,
   // which is what lets us simulate the dispose-before-subscribe race.
@@ -79,8 +79,8 @@ function makeControllablePdp() {
       });
     },
   );
-  const subscribeShownByDefaultOverlay = vi.fn(
-    (_selector: undefined, callback: (value: ShownByDefaultOverlay | object) => void) => {
+  const subscribeTextCollectionOverlay = vi.fn(
+    (_selector: undefined, callback: (value: TextCollectionOverlay | object) => void) => {
       deliverOverlay = callback;
       return new Promise<() => Promise<boolean>>((resolve) => {
         resolveOverlaySub = resolve;
@@ -92,7 +92,7 @@ function makeControllablePdp() {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const pdp = {
     subscribeUserReferencedProjectsAndResources,
-    subscribeShownByDefaultOverlay,
+    subscribeTextCollectionOverlay,
   } as unknown as ITextConnectionSettingsProjectDataProvider;
 
   return {
@@ -108,7 +108,7 @@ function makeControllablePdp() {
         return Promise.resolve();
       }),
     /** Fire both subscription callbacks with values (data delivery is synchronous in the PDP). */
-    deliver: (userReferenced: ResourceReferenceList | object, overlay: ShownByDefaultOverlay) =>
+    deliver: (userReferenced: ResourceReferenceList | object, overlay: TextCollectionOverlay) =>
       act(() => {
         deliverUserReferenced(userReferenced);
         deliverOverlay(overlay);
@@ -117,7 +117,7 @@ function makeControllablePdp() {
       act(() => {
         deliverUserReferenced(userReferenced);
       }),
-    deliverOverlayOnly: (overlay: ShownByDefaultOverlay) =>
+    deliverOverlayOnly: (overlay: TextCollectionOverlay) =>
       act(() => {
         deliverOverlay(overlay);
       }),
@@ -163,7 +163,7 @@ describe('useTextCollectionSources', () => {
 
     await controller.resolveSubscriptions();
     const userReferenced = list('user-v');
-    const overlay: ShownByDefaultOverlay = { 'res-1': true };
+    const overlay: TextCollectionOverlay = { 'res-1': true };
     await controller.deliver(userReferenced, overlay);
 
     expect(result.current.sources).toEqual({

@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { logger } from '@papi/frontend';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import type { ResourceReferenceList, ShownByDefaultOverlay } from 'platform-scripture';
+import type { ResourceReferenceList, TextCollectionOverlay } from 'platform-scripture';
 import { useProjectDataProvider, useProjectSetting } from '@papi/frontend/react';
 import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-reference-list.const';
 
 /** A user with no recorded checkbox interactions has an empty overlay. */
-const DEFAULT_OVERLAY: ShownByDefaultOverlay = {};
+const DEFAULT_OVERLAY: TextCollectionOverlay = {};
 
 /**
  * Assembles the three data sources the View Options helpers read — the admin project-scope
- * `referencedProjectsAndResources` list, the per-user list, and the per-user shown-by-default
+ * `referencedProjectsAndResources` list, the per-user list, and the per-user text-collection
  * overlay — into a single {@link TextCollectionSources} object, and returns the
  * `platformScripture.textConnectionSettings` data provider so callers can persist mutations via its
- * `setUserReferencedProjectsAndResources` / `setShownByDefaultOverlay` setters.
+ * `setUserReferencedProjectsAndResources` / `setTextCollectionOverlay` setters.
  *
- * Model texts are decoupled from the shown-by-default feature (they carry no admin flag and the
+ * Model texts are decoupled from the text-collection feature (they carry no admin flag and the
  * overlay is initialized only from the referenced list), so they are not read here. The View
  * Options panel reads the admin list but never writes it (admin sharing lives in a separate
  * dialog). `sources` is `undefined` while any source is still loading.
@@ -36,7 +36,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
   const [userReferenced, setUserReferenced] = useState<ResourceReferenceList | undefined>(
     undefined,
   );
-  const [overlay, setOverlay] = useState<ShownByDefaultOverlay | undefined>(undefined);
+  const [overlay, setOverlay] = useState<TextCollectionOverlay | undefined>(undefined);
 
   useEffect(() => {
     if (!textConnectionPdp) {
@@ -67,10 +67,10 @@ export function useTextCollectionSources(projectId: string | undefined) {
       'user referenced projects and resources',
     );
     track(
-      textConnectionPdp.subscribeShownByDefaultOverlay(undefined, (value) => {
+      textConnectionPdp.subscribeTextCollectionOverlay(undefined, (value) => {
         setOverlay(isPlatformError(value) ? DEFAULT_OVERLAY : value);
       }),
-      'shown-by-default overlay',
+      'text-collection overlay',
     );
 
     return () => {
