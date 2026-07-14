@@ -42,6 +42,28 @@ export function isScopeFilter(value: string): value is ScopeFilter {
   return Object.hasOwn(scopeFilterToLabelKey, value);
 }
 
+/**
+ * Resolves the scope value that should actually drive both the query and the toolbar display.
+ *
+ * "Current chapter" only makes sense when the list has a live Scripture reference to follow. When
+ * it doesn't (`canScopeToCurrentChapter` is false — e.g. a cross-project list with no wired
+ * editor), a `current-chapter` value — whether persisted from a prior context or set via the public
+ * `setFilters` controller — is coerced back to {@link UNFILTERED}. This keeps the displayed value,
+ * the offered options, and the query in agreement instead of scoping to a reference that isn't
+ * there.
+ *
+ * Co-located with the scope-axis definitions so the single rule is testable and every caller stays
+ * consistent, rather than re-deriving the coercion at each use site.
+ */
+export function resolveEffectiveScopeFilter(
+  scopeFilter: ScopeFilter,
+  canScopeToCurrentChapter: boolean,
+): ScopeFilter {
+  return !canScopeToCurrentChapter && scopeFilter === SCOPE_FILTER_CURRENT_CHAPTER
+    ? UNFILTERED
+    : scopeFilter;
+}
+
 // --- Resolved-status axis (the thread's note-lifecycle Resolved state) ---
 
 export const resolvedFilterToLabelKey = {
