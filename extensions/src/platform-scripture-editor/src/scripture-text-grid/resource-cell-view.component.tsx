@@ -53,7 +53,6 @@ export type ResourceNameDisplay = 'inline' | 'header';
 /** Localized copy for the zoom actions (the kebab dropdown and the right-click context menu). */
 export type ZoomMenuLabels = { zoomIn: string; zoomOut: string; reset: string; options: string };
 
-
 export type ResourceCellViewProps = {
   /** Which visual state to render; only `ready` shows the editor. */
   state: ResourceCellState;
