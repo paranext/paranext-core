@@ -8,6 +8,7 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
+  decideNoteCallerClickAction,
   generateParagraphMenuListItems,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
@@ -2533,5 +2534,54 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('decideNoteCallerClickAction (PT-4187 bug 3: caller-click must not dead-end)', () => {
+  const base = {
+    isCollapsed: true,
+    editingNoteKey: undefined,
+    popoverShown: false,
+    paneRendered: false,
+  };
+
+  it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
+    expect(decideNoteCallerClickAction(base)).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+    });
+  });
+
+  it('ignores clicks on expanded notes', () => {
+    expect(decideNoteCallerClickAction({ ...base, isCollapsed: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+    });
+  });
+
+  it('ignores clicks while a popover session is really shown (one at a time)', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: true }),
+    ).toEqual({ clearStaleEditingSession: false, action: 'ignore-popover-open' });
+  });
+
+  it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
+    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+    ).toEqual({ clearStaleEditingSession: true, action: 'open-popover' });
+  });
+
+  it('routes to the pane only when the pane is actually rendered', () => {
+    expect(decideNoteCallerClickAction({ ...base, paneRendered: true })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'focus-pane',
+    });
+  });
+
+  it('clears a stale session even when routing to the pane', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', paneRendered: true }),
+    ).toEqual({ clearStaleEditingSession: true, action: 'focus-pane' });
   });
 });
