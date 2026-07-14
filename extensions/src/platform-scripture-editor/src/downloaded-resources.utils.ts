@@ -33,7 +33,7 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
     const metadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
     });
-    return Promise.all(
+    const results = await Promise.allSettled(
       metadata.map(async (data) => {
         const pdp = await papi.projectDataProviders.get('platform.base', data.id);
         return {
@@ -44,6 +44,17 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
         };
       }),
     );
+    const resolved: DownloadedResource[] = [];
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        resolved.push(result.value);
+      } else {
+        logger.warn(
+          `fetchDownloadedResources: failed to resolve project '${metadata[i].id}': ${getErrorMessage(result.reason)}`,
+        );
+      }
+    });
+    return resolved;
   } catch (e) {
     logger.warn(`fetchDownloadedResources failed: ${getErrorMessage(e)}`);
     return [];
@@ -101,6 +112,9 @@ function downloadedToRow(
   const dbl = dblResources.find(
     (r) =>
       (r.installed && r.projectId === project.projectId) ||
+      // The second branch matches a DBL entry whose cache row is not yet flagged installed (e.g.
+      // the flag lags an update), but the local project exists on disk — installed: true is still
+      // correct because the local project file is present.
       project.projectId.toLowerCase().startsWith(r.dblEntryUid.toLowerCase()),
   );
   if (dbl) {
