@@ -9,6 +9,7 @@ import {
   Sonner,
   sonner,
   usePromise,
+  useViewVisibility,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -26,15 +27,13 @@ import {
   applyFilterOverrides,
   buildCommentThreadSelector,
   CommentFilters,
+  resolveEffectiveScopeFilter,
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
-import {
-  findScrollTarget,
-  NavigationRecord,
-  shouldArmSyncScroll,
-  toNavigationRecord,
-} from './comment-list-scroll.utils';
+import type { CommentListScrollTarget } from './comment-list-scroll.utils';
+import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
+import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -65,6 +64,7 @@ global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
   projectId,
+  webViewType,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -77,6 +77,11 @@ global.webViewComponent = function CommentListWebView({
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+  // The Column 3 comment-list panel follows the active project's scroll group, so it always has a
+  // current chapter even though no editor is wired to it. Both comment-list web view types share
+  // this component, so its own `webViewType` prop distinguishes the panel — no extra state channel
+  // needed (and nothing gets serialized into persisted layouts).
+  const isCommentListPanel = webViewType === COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
@@ -91,47 +96,8 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
-  /**
-   * Scroll behavior for a due BCV-sync scroll (PT-4080). `'instant'` initially so the list opens
-   * already positioned at the current reference; `'smooth'` for subsequent scroll-group navigation.
-   * `undefined` means no sync scroll is due. Consumed only when thread data is not loading, so a
-   * chapter-scope requery finishes before the scroll runs.
-   */
-  const [pendingSyncScrollBehavior, setPendingSyncScrollBehavior] = useState<
-    ScrollBehavior | undefined
-  >('instant');
-
-  /**
-   * One-shot record of the scripture reference this view itself navigated to — by clicking a
-   * thread's verse reference, or via the editor's "go to comment" selecting a thread. The matching
-   * incoming scroll-group change is consumed without arming a sync scroll: a click inside the
-   * comment list must never scroll the comment list. Any other scrRef change clears the record.
-   */
-  const selfInitiatedNavigationRef = useRef<NavigationRecord | undefined>(undefined);
-
   /** Latest loaded threads, readable from the stable message listener without re-subscribing it. */
   const commentThreadsRef = useRef<LegacyCommentThread[]>([]);
-
-  // Arm a sync scroll whenever the scroll-group reference changes. This also runs on mount, where
-  // `?? ` preserves the initial 'instant' behavior instead of downgrading it to 'smooth'. Note this
-  // deliberately does NOT unfreeze the all-books selector: the query inputs stay frozen (see
-  // usesChapterScope below); a verse move only scrolls the already-loaded list. A change this view
-  // itself initiated (see selfInitiatedNavigationRef) is swallowed instead of armed.
-  useEffect(() => {
-    const selfInitiatedNavigation = selfInitiatedNavigationRef.current;
-    selfInitiatedNavigationRef.current = undefined;
-    if (
-      !shouldArmSyncScroll(selfInitiatedNavigation, {
-        // TODO (PT-4031): Handle versification
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: scrRef.verseNum,
-      })
-    )
-      return;
-
-    setPendingSyncScrollBehavior((previous) => previous ?? 'smooth');
-  }, [scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
   // Initial filter/scope axes passed by openCommentList when opening a NEW comment list (e.g. the
   // S/R conflict link). Read from web view state so a new view mounts already-filtered — avoiding the
@@ -149,7 +115,14 @@ global.webViewComponent = function CommentListWebView({
   const [filters, setFilters] = useState<CommentFilters>(() =>
     applyFilterOverrides(initialFilters),
   );
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>(initialScopeFilter ?? UNFILTERED);
+  // Persisted (not plain useState) so the user's scope choice — the "Current chapter" capability this
+  // panel adds — survives the iframe reload that a project switch triggers (reloadWebView rebuilds
+  // the srcNonce, which destroys and recreates the React root). Seeded from the one-shot
+  // initialScopeFilter on first mount; the persisted value wins on every later (re)mount.
+  const [scopeFilter, setScopeFilter] = useWebViewState<ScopeFilter>(
+    'scopeFilter',
+    initialScopeFilter ?? UNFILTERED,
+  );
 
   // Consume the one-shot seed exactly once. The useState initializers above already read it
   // synchronously on first render, so clear it from persistent web view state now. Otherwise an
@@ -162,75 +135,6 @@ global.webViewComponent = function CommentListWebView({
   }, [initialFilters, initialScopeFilter, setInitialFilters, setInitialScopeFilter]);
 
   const commentsPdp = useProjectDataProvider('legacyCommentManager.comments', projectId);
-
-  /**
-   * Attempts to scroll to and select a thread by ID. If the thread element doesn't exist yet
-   * (likely because data is still loading), queues the thread ID to be processed later.
-   *
-   * @param threadId The ID of the thread to select and scroll to
-   * @param isDataLoading Whether comment threads are currently loading
-   * @returns `true` if the thread was found and scrolled to, `false` if it was queued for later
-   */
-  const trySelectThread = useCallback((threadId: string, isDataLoading: boolean): boolean => {
-    const threadElement = document.getElementById(threadId);
-    if (threadElement) {
-      setSelectedThreadId(threadId);
-      threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setPendingThreadIdToSelect(undefined);
-      // The editor's caret move for this navigation may deliver its scroll-group change after
-      // this point; record the thread's reference so that late change doesn't scroll the list
-      // away from the selection. Recording here (not in the message handler) covers the deferred
-      // path too: when the message arrived before thread data loaded, the data is loaded by the
-      // time this success branch runs, so the lookup cannot miss.
-      const selectedThread = commentThreadsRef.current.find((thread) => thread.id === threadId);
-      selfInitiatedNavigationRef.current = toNavigationRecord(selectedThread?.verseRef);
-      return true;
-    }
-
-    // If data is still loading, queue the thread ID to select later
-    if (isDataLoading) {
-      logger.debug(`Thread element ${threadId} not found; queuing for selection after data loads`);
-      setPendingThreadIdToSelect(threadId);
-      return false;
-    }
-
-    // Data is loaded but element still not found - thread may not exist in current view
-    logger.warn(`Could not find thread element with id: ${threadId}`);
-    return false;
-  }, []);
-
-  // Listen for messages from the web view controller
-  useEffect(() => {
-    const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
-      if (data?.method === 'selectThread') {
-        logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
-        // Note: We pass `true` for isDataLoading as a conservative default since we can't access
-        // the current loading state synchronously here. The pending thread will be processed
-        // by the effect below once loading completes.
-        trySelectThread(data.threadId, true);
-        // The explicit "go to comment" navigation wins over any due BCV-sync scroll (PT-4080).
-        // (trySelectThread records the thread's reference as self-initiated navigation when the
-        // selection succeeds, guarding against the editor's caret move arriving after it.)
-        setPendingSyncScrollBehavior(undefined);
-      }
-
-      if (data?.method === 'setFilters') {
-        logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
-        // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
-        // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
-        // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
-        // carries over from prior state.
-        setFilters(applyFilterOverrides(data.filters));
-        setScopeFilter(data.scopeFilter ?? UNFILTERED);
-      }
-    };
-
-    window.addEventListener('message', messageListener);
-    return () => {
-      window.removeEventListener('message', messageListener);
-    };
-    // setFilters / setScopeFilter are stable useState setters, so they don't belong in the deps.
-  }, [trySelectThread]);
 
   // Fetch current user's registration data on mount
   useEffect(() => {
@@ -253,14 +157,23 @@ global.webViewComponent = function CommentListWebView({
     };
   }, []);
 
+  // "Current chapter" needs a live reference to follow: the Column 3 panel follows the active
+  // project's scroll group, and an editor-anchored list follows its wired editor. A cross-project
+  // open has neither.
+  const canScopeToCurrentChapter = isCommentListPanel || !!editorWebViewId;
+
+  // Coerce a "current chapter" scope this list can't honor (no live reference) back to all-books, so
+  // the displayed value, the offered options, and the query all agree. See the helper for the full
+  // rationale; it lives in the model so the same rule drives both the display and the query below.
+  const effectiveScopeFilter = resolveEffectiveScopeFilter(scopeFilter, canScopeToCurrentChapter);
+
   // The selector only uses scrRef when the scope is the current chapter; in the all-books view a
   // verse move must not tear down and re-establish the subscription (which re-runs the C# query and
   // flashes the skeletons). Freeze the scrRef inputs to constants unless the chapter scope is
   // active.
-  const usesChapterScope = scopeFilter !== UNFILTERED;
+  const usesChapterScope = effectiveScopeFilter !== UNFILTERED;
   const scopeBook = usesChapterScope ? scrRef.book : '';
   const scopeChapterNum = usesChapterScope ? scrRef.chapterNum : 0;
-  const scopeVerseNum = usesChapterScope ? scrRef.verseNum : 0;
 
   // While the "assigned to me" axis is selected but the current user's name hasn't loaded yet, the
   // query can't filter by user and would briefly show every thread. Hold the loading state until the
@@ -275,11 +188,16 @@ global.webViewComponent = function CommentListWebView({
       () =>
         buildCommentThreadSelector({
           filters,
-          scopeFilter,
-          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: scopeVerseNum },
+          scopeFilter: effectiveScopeFilter,
+          // verseNum is meaningless in a chapter-granularity range — the C# query matches on
+          // book + chapter only — so freeze it to 0. This keeps a same-chapter verse move from
+          // minting a new-but-equal selector object that would needlessly tear down and
+          // re-establish the PDP subscription (re-running the full query) on the panel, which
+          // follows verse-granularity scroll-group moves (PT-4070).
+          scrRef: { book: scopeBook, chapterNum: scopeChapterNum, verseNum: 0 },
           currentUserName,
         }),
-      [scopeBook, scopeChapterNum, scopeVerseNum, scopeFilter, filters, currentUserName],
+      [scopeBook, scopeChapterNum, effectiveScopeFilter, filters, currentUserName],
     ),
     DEFAULT_LEGACY_COMMENT_THREADS,
   );
@@ -294,6 +212,118 @@ global.webViewComponent = function CommentListWebView({
     commentThreadsRef.current = safeCommentThreads;
   }, [safeCommentThreads]);
 
+  const isViewVisible = useViewVisibility();
+
+  // Performs the DOM scroll for a computed sync-scroll target. The hook computes WHERE to scroll;
+  // this web view owns the DOM knowledge (both element ids come from platform-bible-react's
+  // CommentList).
+  const scrollToTarget = useCallback(
+    (target: NonNullable<CommentListScrollTarget>, behavior: ScrollBehavior) => {
+      if (target.type === 'thread') {
+        const threadElement = document.getElementById(target.threadId);
+        if (threadElement) threadElement.scrollIntoView({ behavior, block: 'start' });
+        else logger.debug(`BCV-sync scroll: thread element not found: ${target.threadId}`);
+        return;
+      }
+      // Past every loaded thread: show the end of the list (the user can scroll up). A 'bottom'
+      // target guarantees at least one loaded thread, so the list and its children should exist;
+      // either miss below means the DOM contract with platform-bible-react's CommentList broke.
+      const listElement = document.getElementById('comment-list');
+      const lastThreadElement = listElement?.lastElementChild;
+      if (lastThreadElement) lastThreadElement.scrollIntoView({ behavior, block: 'end' });
+      else
+        logger.debug(
+          `BCV-sync scroll: #comment-list ${listElement ? 'has no children to scroll to' : 'element not found'}`,
+        );
+    },
+    [],
+  );
+
+  const { recordSelfInitiatedNavigation, cancelPendingSyncScroll } = useBcvSyncScroll({
+    scrRef,
+    isLoadingCommentThreads,
+    hasPendingThreadSelection: pendingThreadIdToSelect !== undefined,
+    isViewVisible,
+    commentThreads: safeCommentThreads,
+    scrollToTarget,
+  });
+
+  /**
+   * Attempts to scroll to and select a thread by ID. If the thread element doesn't exist yet
+   * (likely because data is still loading), queues the thread ID to be processed later.
+   *
+   * @param threadId The ID of the thread to select and scroll to
+   * @param isDataLoading Whether comment threads are currently loading
+   * @returns `true` if the thread was found and scrolled to, `false` if it was queued for later
+   */
+  const trySelectThread = useCallback(
+    (threadId: string, isDataLoading: boolean): boolean => {
+      const threadElement = document.getElementById(threadId);
+      if (threadElement) {
+        setSelectedThreadId(threadId);
+        threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setPendingThreadIdToSelect(undefined);
+        // The editor's caret move for this navigation may deliver its scroll-group change after
+        // this point; record the thread's reference so that late change doesn't scroll the list
+        // away from the selection. Recording here (not in the message handler) covers the deferred
+        // path too: when the message arrived before thread data loaded, the data is loaded by the
+        // time this success branch runs, so the lookup cannot miss.
+        const selectedThread = commentThreadsRef.current.find((thread) => thread.id === threadId);
+        recordSelfInitiatedNavigation(selectedThread?.verseRef);
+        return true;
+      }
+
+      // If data is still loading, queue the thread ID to select later
+      if (isDataLoading) {
+        logger.debug(
+          `Thread element ${threadId} not found; queuing for selection after data loads`,
+        );
+        setPendingThreadIdToSelect(threadId);
+        return false;
+      }
+
+      // Data is loaded but element still not found - thread may not exist in current view
+      logger.warn(`Could not find thread element with id: ${threadId}`);
+      return false;
+    },
+    [recordSelfInitiatedNavigation],
+  );
+
+  // Listen for messages from the web view controller
+  useEffect(() => {
+    const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
+      if (data?.method === 'selectThread') {
+        logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
+        // Note: We pass `true` for isDataLoading as a conservative default since we can't access
+        // the current loading state synchronously here. The pending thread will be processed
+        // by the effect below once loading completes.
+        trySelectThread(data.threadId, true);
+        // The explicit "go to comment" navigation wins over any due BCV-sync scroll (PT-4080).
+        // (trySelectThread records the thread's reference as self-initiated navigation when the
+        // selection succeeds, guarding against the editor's caret move arriving after it.)
+        cancelPendingSyncScroll();
+      }
+
+      if (data?.method === 'setFilters') {
+        logger.debug(`Comment list received setFilters message: ${serialize(data)}`);
+        // A setFilters message sets the ENTIRE view deterministically, exactly like a fresh open:
+        // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
+        // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
+        // carries over from prior state.
+        setFilters(applyFilterOverrides(data.filters));
+        setScopeFilter(data.scopeFilter ?? UNFILTERED);
+      }
+    };
+
+    window.addEventListener('message', messageListener);
+    return () => {
+      window.removeEventListener('message', messageListener);
+    };
+    // setFilters is a stable useState setter (the linter treats it as stable, so it's omitted).
+    // setScopeFilter is a useWebViewState setter — also stable (memoized on its constant key) — but
+    // the linter can't prove that, so it's listed to satisfy react-hooks/exhaustive-deps.
+  }, [trySelectThread, cancelPendingSyncScroll, setScopeFilter]);
+
   // Process any pending thread selection once data finishes loading
   useEffect(() => {
     if (!isLoadingCommentThreads && pendingThreadIdToSelect) {
@@ -305,44 +335,6 @@ global.webViewComponent = function CommentListWebView({
     }
     return undefined;
   }, [isLoadingCommentThreads, pendingThreadIdToSelect, trySelectThread]);
-
-  // Consume the pending BCV-sync scroll once thread data has settled. Scroll only — selection and
-  // expansion are never changed here. An explicit selectThread navigation (the editor's "go to
-  // comment" flow) is the more specific intent, so it wins and the sync scroll is dropped.
-  useEffect(() => {
-    if (pendingSyncScrollBehavior === undefined || isLoadingCommentThreads) return;
-
-    if (pendingThreadIdToSelect) {
-      setPendingSyncScrollBehavior(undefined);
-      return;
-    }
-    const target = findScrollTarget(safeCommentThreads, scrRef);
-    if (target?.type === 'thread') {
-      const threadElement = document.getElementById(target.threadId);
-      if (threadElement)
-        threadElement.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'start' });
-      else logger.debug(`BCV-sync scroll: thread element not found: ${target.threadId}`);
-    } else if (target?.type === 'bottom') {
-      // Past every loaded thread: show the end of the list (the user can scroll up). A 'bottom'
-      // target guarantees at least one loaded thread, so the list and its children should exist;
-      // either miss below means the DOM contract with platform-bible-react's CommentList broke.
-      const listElement = document.getElementById('comment-list');
-      const lastThreadElement = listElement?.lastElementChild;
-      if (lastThreadElement)
-        lastThreadElement.scrollIntoView({ behavior: pendingSyncScrollBehavior, block: 'end' });
-      else
-        logger.debug(
-          `BCV-sync scroll: #comment-list ${listElement ? 'has no children to scroll to' : 'element not found'}`,
-        );
-    }
-    setPendingSyncScrollBehavior(undefined);
-  }, [
-    pendingSyncScrollBehavior,
-    isLoadingCommentThreads,
-    pendingThreadIdToSelect,
-    safeCommentThreads,
-    scrRef,
-  ]);
 
   const fetchAssignableUsers = useCallback(
     async () =>
@@ -492,8 +484,8 @@ global.webViewComponent = function CommentListWebView({
       if (!verseRef.valid) return;
 
       // This view is causing the upcoming scroll-group change; a click inside the list must never
-      // scroll the list, so record the reference for the arm effect to swallow.
-      selfInitiatedNavigationRef.current = toNavigationRecord(thread.verseRef);
+      // scroll the list, so record the reference for the sync-scroll hook to swallow.
+      recordSelfInitiatedNavigation(thread.verseRef);
 
       if (editorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
@@ -506,7 +498,7 @@ global.webViewComponent = function CommentListWebView({
         setScrRef(verseRef.toJSON());
       }
     },
-    [setScrRef, editorWebViewId, editorWebViewController],
+    [setScrRef, editorWebViewId, editorWebViewController, recordSelfInitiatedNavigation],
   );
 
   return (
@@ -518,11 +510,13 @@ global.webViewComponent = function CommentListWebView({
         currentUser={currentUserName}
         filters={filters}
         onFiltersChange={setFilters}
-        scopeFilter={scopeFilter}
+        // Pass the coerced value so the displayed dropdown value stays in sync with the hidden
+        // option and the query when this list can't scope to the current chapter.
+        scopeFilter={effectiveScopeFilter}
         onScopeFilterChange={setScopeFilter}
-        // No editor wired (e.g. a cross-project open) means there is no "current chapter" to scope to,
-        // so the panel hides that option rather than filtering against an unrelated scroll-group ref.
-        hasEditorContext={!!editorWebViewId}
+        // When false (a cross-project open with no live reference), the "current chapter" option
+        // stays hidden rather than scoping to an unrelated ref.
+        canScopeToCurrentChapter={canScopeToCurrentChapter}
         handleAddCommentToThread={handleAddCommentToThread}
         handleUpdateComment={handleUpdateComment}
         handleDeleteComment={handleDeleteComment}

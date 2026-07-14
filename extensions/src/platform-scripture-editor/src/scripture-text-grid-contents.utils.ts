@@ -3,29 +3,34 @@ import type {
   ProjectReference,
   ResourceReference,
   ResourceReferenceList,
-  ShownByDefaultOverlay,
+  TextCollectionOverlay,
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 
-/** A Bible-text reference — the only reference types that carry `id` and `isResourceShownForUser`. */
-type BibleTextReference = ProjectReference | DblResourceReference;
+/**
+ * A Bible-text reference — the only reference types that carry `id` and
+ * `isInTextCollectionForUser`. Shared union used by both the grid-contents logic and the View
+ * Options long-name helpers.
+ */
+export type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
  * The three data sources that together determine what a given user sees in the Text Collection.
  *
- * The admin's shown-by-default opinions live solely on `referencedProjectsAndResources`: model
- * texts are decoupled from the shown-by-default feature (they carry no `isResourceShownByDefault`
- * flag and the overlay is initialized only from the referenced list), so they are not a source
- * here.
+ * The admin's text-collection opinions live solely on `referencedProjectsAndResources`: model texts
+ * are decoupled from the text-collection feature (they carry no `isInTextCollection` flag and the
+ * overlay is initialized only from the referenced list), so they are not a source here.
  */
 export type TextCollectionSources = {
   /** Admin project-scope `platformScripture.referencedProjectsAndResources` list. */
   adminReferenced: ResourceReferenceList;
   /** The current user's per-user `UserReferencedProjectsAndResources` list. */
   userReferenced: ResourceReferenceList;
-  /** The current user's per-user shown-by-default overlay (keyed by resource id). */
-  overlay: ShownByDefaultOverlay;
+  /** The current user's per-user text-collection overlay (keyed by resource id). */
+  overlay: TextCollectionOverlay;
+  /** The current user's preferred cell order (resource ids); `[]` when unset. */
+  order: string[];
 };
 
 /** A single row in the View Options TEXTS list. */
@@ -45,6 +50,12 @@ export type ViewOptionsTextEntry = {
    * removed.
    */
   isUserRemovable: boolean;
+  /**
+   * The resource's long/full name, rendered after the short `name` (as `NIV — New International
+   * Version`) when present. Populated only for DBL resources whose cached `fullName` is available
+   * and differs from the short name; absent for project rows and uncached resources.
+   */
+  longName?: string;
 };
 
 /** An admin-owned entry: one Bible-text reference plus whether the admin currently flags it shown. */
@@ -58,21 +69,21 @@ function getBibleTextId(reference: unknown): string | undefined {
 
 /**
  * The Bible-text resources the admin owns for the Text Collection, decided per referenced-list
- * item: a resource is owned when the admin has an opinion on it (`isResourceShownByDefault` set to
- * `true` or `false`) or the user still has an overlay slot for it from a prior admin selection.
+ * item: a resource is owned when the admin has an opinion on it (`isInTextCollection` set to `true`
+ * or `false`) or the user still has an overlay slot for it from a prior admin selection.
  * Deduplicated by `id`, referenced-list order.
  *
  * Only the admin `referencedProjectsAndResources` list is read — model texts are decoupled from the
- * shown-by-default feature. A resource merely present in the referenced list with no flag (e.g.
+ * text-collection feature. A resource merely present in the referenced list with no flag (e.g.
  * downloaded for another feature) is NOT owned — the user can add it to their own list like any
  * other resource. An overlay slot whose id is no longer in the referenced list is ignored: there is
  * no reference left to render.
  *
- * `adminFlagged` is `true` when the resource is currently shown-by-default in the referenced list.
+ * `adminFlagged` is `true` when the resource is currently text-collection in the referenced list.
  */
 function getAdminOwnedEntries(
   adminReferenced: ResourceReferenceList,
-  overlay: ShownByDefaultOverlay,
+  overlay: TextCollectionOverlay,
 ): AdminOwnedEntry[] {
   const byId = new Map<string, AdminOwnedEntry>();
   const entries: AdminOwnedEntry[] = [];
@@ -80,10 +91,10 @@ function getAdminOwnedEntries(
   const consider = (item: ResourceReference) => {
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
 
-    const isFlagSet = item.isResourceShownByDefault !== undefined;
+    const isFlagSet = item.isInTextCollection !== undefined;
     if (!isFlagSet && !Object.hasOwn(overlay, item.id)) return;
 
-    const flagged = item.isResourceShownByDefault === true;
+    const flagged = item.isInTextCollection === true;
     const existing = byId.get(item.id);
     if (existing) {
       if (flagged) existing.adminFlagged = true;
@@ -103,7 +114,7 @@ function getAdminOwnedEntries(
  * The user's effective shown-state for an admin-owned entry: their overlay choice, else the admin
  * flag.
  */
-function isAdminEntryShown(overlay: ShownByDefaultOverlay, entry: AdminOwnedEntry): boolean {
+function isAdminEntryShown(overlay: TextCollectionOverlay, entry: AdminOwnedEntry): boolean {
   return Object.hasOwn(overlay, entry.reference.id)
     ? overlay[entry.reference.id]
     : entry.adminFlagged;
@@ -123,8 +134,9 @@ function isAdminOwnedId(resourceId: string, sources: TextCollectionSources): boo
 /**
  * Computes the Bible-text references that render in the Scripture Text Grid for the current user:
  * admin-owned entries the user has shown (overlay choice, falling back to the admin flag), followed
- * by the user's own list entries with `isResourceShownForUser === true`. Deduplicated by `id` with
- * admin precedence; admin entries keep referenced-list order, user entries keep user-list order.
+ * by the user's own list entries with `isInTextCollectionForUser === true`. Deduplicated by `id`
+ * with admin precedence; admin entries keep referenced-list order, user entries keep user-list
+ * order.
  */
 export function getScriptureTextGridContents(sources: TextCollectionSources): BibleTextReference[] {
   const { adminReferenced, userReferenced, overlay } = sources;
@@ -141,7 +153,7 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
     if (seen.has(item.id)) return;
     seen.add(item.id);
-    if (item.isResourceShownForUser === true) contents.push(item);
+    if (item.isInTextCollectionForUser === true) contents.push(item);
   });
 
   return contents;
@@ -150,16 +162,19 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
 /**
  * Splits the View Options TEXTS list into two ordered sections:
  *
- * - `top` — the admin's current selection (`isResourceShownByDefault === true`). Always visible and
- *   locked from removal (`isAdminLocked: true`); the user may only uncheck to hide from the grid.
+ * - `top` — the admin's current selection (`isInTextCollection === true`). Always visible and locked
+ *   from removal (`isAdminLocked: true`); the user may only uncheck to hide from the grid.
  * - `bottom` — resources the user can freely toggle and remove (`isAdminLocked: false`): other
  *   admin-owned entries (opted out, or shown before) followed by the user's own list additions.
  *
- * Checkbox state comes from the overlay for admin-owned entries and from `isResourceShownForUser`
- * for the user's own entries. An admin-owned id never also appears as a user entry (admin
- * precedence).
+ * Checkbox state comes from the overlay for admin-owned entries and from
+ * `isInTextCollectionForUser` for the user's own entries. An admin-owned id never also appears as a
+ * user entry (admin precedence).
  */
-export function getViewOptionsTexts(sources: TextCollectionSources): {
+export function getViewOptionsTexts(
+  sources: TextCollectionSources,
+  resolveLongName?: (reference: BibleTextReference) => string | undefined,
+): {
   top: ViewOptionsTextEntry[];
   bottom: ViewOptionsTextEntry[];
 } {
@@ -171,11 +186,13 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
 
   adminOwned.forEach((entry) => {
     adminIds.add(entry.reference.id);
-    const row = {
+    const longName = resolveLongName?.(entry.reference);
+    const row: ViewOptionsTextEntry = {
       reference: entry.reference,
       checked: isAdminEntryShown(overlay, entry),
       isAdminLocked: entry.adminFlagged,
       isUserRemovable: false,
+      ...(longName ? { longName } : {}),
     };
     (entry.adminFlagged ? top : bottom).push(row);
   });
@@ -183,11 +200,13 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
   userReferenced.items.forEach((item) => {
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
     if (adminIds.has(item.id)) return; // admin-owned ids are rendered by the loop above
+    const longName = resolveLongName?.(item);
     bottom.push({
       reference: item,
-      checked: item.isResourceShownForUser === true,
+      checked: item.isInTextCollectionForUser === true,
       isAdminLocked: false,
       isUserRemovable: true,
+      ...(longName ? { longName } : {}),
     });
   });
 
@@ -197,14 +216,14 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
 /**
  * Records the user's shown/hidden choice for a resource, returning the next state (callers
  * persist). Routes by ownership: an admin-owned entry writes the per-user overlay (the admin's flag
- * is untouched); a user-list entry writes that item's `isResourceShownForUser`. Unknown ids are a
- * no-op.
+ * is untouched); a user-list entry writes that item's `isInTextCollectionForUser`. Unknown ids are
+ * a no-op.
  */
 export function setUserDisplay(
   resourceId: string,
   shown: boolean,
   sources: TextCollectionSources,
-): { userReferenced: ResourceReferenceList; overlay: ShownByDefaultOverlay } {
+): { userReferenced: ResourceReferenceList; overlay: TextCollectionOverlay } {
   const { userReferenced, overlay } = sources;
 
   if (isAdminOwnedId(resourceId, sources))
@@ -214,7 +233,7 @@ export function setUserDisplay(
   if (index < 0) return { userReferenced, overlay };
 
   const items = userReferenced.items.map((item, itemIndex) =>
-    itemIndex === index ? { ...item, isResourceShownForUser: shown } : item,
+    itemIndex === index ? { ...item, isInTextCollectionForUser: shown } : item,
   );
   return { userReferenced: { dataVersion: CURRENT_DATA_VERSION, items }, overlay };
 }
@@ -239,8 +258,9 @@ export function removeFromUserResources(
 }
 
 /**
- * Appends a Bible-text reference to the user's per-user list with `isResourceShownForUser === true`
- * (the Get Resources flow). Idempotent: returns the list unchanged when the id is already present.
+ * Appends a Bible-text reference to the user's per-user list with `isInTextCollectionForUser ===
+ * true` (the Get Resources flow). Idempotent: returns the list unchanged when the id is already
+ * present.
  *
  * Precondition: `reference` must not be an admin-owned resource. Admin-owned resources are
  * overlay-driven — toggle them with {@link setUserDisplay}; a user-list entry for one is ignored by
@@ -256,6 +276,6 @@ export function addToUserResources(
   }
   return {
     dataVersion: CURRENT_DATA_VERSION,
-    items: [...userReferenced.items, { ...reference, isResourceShownForUser: true }],
+    items: [...userReferenced.items, { ...reference, isInTextCollectionForUser: true }],
   };
 }

@@ -2901,7 +2901,7 @@ export type SelectTriggerProps = React$1.ComponentProps<typeof SelectPrimitive.T
 /** @inheritdoc Select */
 export declare function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectContent({ className, children, position, align, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function SelectContent({ className, children, position, align, style, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
 export declare function SelectLabel({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Label>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
@@ -3324,6 +3324,45 @@ export declare function useStylesheet(stylesheet: string | undefined): void;
  *   Empty when `usj` is `undefined` or uses no markers.
  */
 export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
+/**
+ * Whether this web view's document is currently rendered — i.e. its dock tab is active. rc-dock
+ * hides inactive tab panes with `display: none`, which keeps the web view's iframe mounted and its
+ * JavaScript running but removes all layout: geometry reads return zero and `scrollIntoView`
+ * no-ops. Layout-dependent side effects should be deferred while this returns `false` and caught up
+ * when it flips to `true`.
+ *
+ * Detection is an `IntersectionObserver` on `document.body` against the iframe's viewport: a hidden
+ * iframe has zero area, so the body never intersects; when the tab is shown the observer fires with
+ * a non-zero intersection. The initial value is a synchronous geometry check so a visible view does
+ * not flash a "hidden" frame while waiting for the observer's first callback.
+ *
+ * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
+ */
+export declare const useViewVisibility: () => boolean;
+/** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
+export type UseTruncationTooltipResult<T extends HTMLElement> = {
+	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
+	ref: React$1.RefObject<T | null>;
+	/** Whether the tooltip should currently be open. Pass to a controlled `<Tooltip open={...}>`. */
+	open: boolean;
+	/** Pointer-enter handler for the trigger; opens the tooltip only when the trigger text is clipped. */
+	onPointerEnter: () => void;
+	/** Pointer-leave handler for the trigger; closes the tooltip. */
+	onPointerLeave: () => void;
+};
+/**
+ * Drives a controlled tooltip that opens on hover only when the trigger element's text is actually
+ * truncated (its content overflows the visible box, i.e. `scrollWidth > clientWidth`). Useful for
+ * revealing the full text of a label that uses CSS truncation, without showing a redundant tooltip
+ * when the text already fits.
+ *
+ * Attach the returned `ref` to the truncating trigger element, spread `onPointerEnter` /
+ * `onPointerLeave` onto it, and pass `open` to a controlled Radix `<Tooltip open={...}>`.
+ *
+ * @typeParam T - The type of the trigger element (e.g. `HTMLSpanElement`, `HTMLDivElement`).
+ * @returns An object with `ref`, `open`, `onPointerEnter`, and `onPointerLeave`.
+ */
+export declare function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTooltipResult<T>;
 /** Properties of one option contained in a listbox */
 export interface ListboxOption {
 	/** Unique identifier for the option */

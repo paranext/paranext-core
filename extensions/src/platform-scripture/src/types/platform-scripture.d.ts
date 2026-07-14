@@ -784,12 +784,14 @@ declare module 'platform-scripture' {
       ResourceReferenceList,
       ResourceReferenceList
     >;
-    /** Gets/sets the current user's shown-by-default overlay for this project */
-    ShownByDefaultOverlay: DataProviderDataType<
+    /** Gets/sets the current user's text-collection overlay for this project */
+    TextCollectionOverlay: DataProviderDataType<
       undefined,
-      ShownByDefaultOverlay,
-      ShownByDefaultOverlay
+      TextCollectionOverlay,
+      TextCollectionOverlay
     >;
+    /** Gets/sets the current user's preferred cell order (resource ids) for this project */
+    CellOrder: DataProviderDataType<undefined, CellOrder, CellOrder>;
   };
 
   /** Provides user-specific text connection settings (model texts and referenced projects/resources) */
@@ -851,18 +853,18 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
       /** Determines whether the current user can write to text connection project settings. */
       canUserWriteProjectTextConnectionSettings(): Promise<boolean>;
-      /** Gets the current user's shown-by-default overlay (resourceId -> checkbox state) */
-      getShownByDefaultOverlay(): Promise<ShownByDefaultOverlay>;
-      /** Sets the current user's shown-by-default overlay */
-      setShownByDefaultOverlay(
-        value: ShownByDefaultOverlay,
+      /** Gets the current user's text-collection overlay (resourceId -> checkbox state) */
+      getTextCollectionOverlay(): Promise<TextCollectionOverlay>;
+      /** Sets the current user's text-collection overlay */
+      setTextCollectionOverlay(
+        value: TextCollectionOverlay,
       ): Promise<
         DataProviderUpdateInstructions<UserTextConnectionSettingsProjectInterfaceDataTypes>
       >;
-      /** Resets (removes) the current user's shown-by-default overlay and its initialized marker */
-      resetShownByDefaultOverlay(): Promise<boolean>;
+      /** Resets (removes) the current user's text-collection overlay and its initialized marker */
+      resetTextCollectionOverlay(): Promise<boolean>;
       /**
-       * Subscribe to run a callback when the current user's shown-by-default overlay changes
+       * Subscribe to run a callback when the current user's text-collection overlay changes
        *
        * @param selector Tells the provider what changes to listen for
        * @param callback Function to run with the updated overlay, or a {@link PlatformError} on
@@ -870,18 +872,41 @@ declare module 'platform-scripture' {
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function
        */
-      subscribeShownByDefaultOverlay(
+      subscribeTextCollectionOverlay(
         selector: undefined,
-        callback: (value: ShownByDefaultOverlay | undefined | PlatformError) => void,
+        callback: (value: TextCollectionOverlay | undefined | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+      /** Gets the current user's preferred cell order (list of resource ids) */
+      getCellOrder(): Promise<CellOrder>;
+      /** Sets the current user's preferred cell order (list of resource ids) */
+      setCellOrder(
+        value: CellOrder,
+      ): Promise<
+        DataProviderUpdateInstructions<UserTextConnectionSettingsProjectInterfaceDataTypes>
+      >;
+      /** Resets (removes) the current user's preferred cell order */
+      resetCellOrder(): Promise<boolean>;
+      /**
+       * Subscribe to run a callback when the current user's preferred cell order changes
+       *
+       * @param selector Tells the provider what changes to listen for
+       * @param callback Function to run with the updated order, or a {@link PlatformError} on error
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function
+       */
+      subscribeCellOrder(
+        selector: undefined,
+        callback: (value: CellOrder | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
       /**
-       * Initializes the current user's shown-by-default overlay on first open of the Scripture Text
+       * Initializes the current user's text-collection overlay on first open of the Scripture Text
        * Grid for this project: sets each admin-flagged Bible-text resource's overlay value to the
-       * project's current `isResourceShownByDefault`. Idempotent — a per-user-per-project marker
-       * prevents re-initialization on later opens (returns `false` when already initialized).
+       * project's current `isInTextCollection`. Idempotent — a per-user-per-project marker prevents
+       * re-initialization on later opens (returns `false` when already initialized).
        */
-      initializeShownByDefaultOverlay(): Promise<boolean>;
+      initializeTextCollectionOverlay(): Promise<boolean>;
     };
 
   // #endregion User Text Connection Settings Types
@@ -1945,16 +1970,18 @@ declare module 'platform-scripture' {
     /** 20-byte (40-char) hex ID that uniquely identifies the project */
     id: string;
     /**
-     * Project-scope (Send/Receive'd) admin flag: when set, this resource is shown by default —
-     * consumed by the shared layout and, for Bible-text resources, by the Scripture Text Grid,
-     * where it also seeds new users' overlay on first open. `undefined` means no admin preference.
+     * Project-scope (Send/Receive'd) admin flag: when set, this resource is in the text collection
+     * by default — consumed by the shared layout and, for Bible-text resources, by the Scripture
+     * Text Grid, where it also seeds new users' overlay on first open. `undefined` means no admin
+     * preference.
      */
-    isResourceShownByDefault?: boolean;
+    isInTextCollection?: boolean;
     /**
-     * User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
-     * resources list. Absent by default; only meaningful on Bible-text references.
+     * User-scope (NOT Send/Receive'd) flag: whether the current user has included this resource
+     * from their personal list in the text collection. Absent by default; only meaningful on
+     * Bible-text references.
      */
-    isResourceShownForUser?: boolean;
+    isInTextCollectionForUser?: boolean;
   };
 
   /** A reference to a DBL resource, identified by its 24-byte (48-char) hex ID */
@@ -1969,16 +1996,18 @@ declare module 'platform-scripture' {
     /** 24-byte (48-char) hex ID that uniquely identifies the resource */
     id: string;
     /**
-     * Project-scope (Send/Receive'd) admin flag: when set, this resource is shown by default —
-     * consumed by the shared layout and, for Bible-text resources, by the Scripture Text Grid,
-     * where it also seeds new users' overlay on first open. `undefined` means no admin preference.
+     * Project-scope (Send/Receive'd) admin flag: when set, this resource is in the text collection
+     * by default — consumed by the shared layout and, for Bible-text resources, by the Scripture
+     * Text Grid, where it also seeds new users' overlay on first open. `undefined` means no admin
+     * preference.
      */
-    isResourceShownByDefault?: boolean;
+    isInTextCollection?: boolean;
     /**
-     * User-scope (NOT Send/Receive'd) per-resource checkbox state on the current user's personal
-     * resources list. Absent by default; only meaningful on Bible-text references.
+     * User-scope (NOT Send/Receive'd) flag: whether the current user has included this resource
+     * from their personal list in the text collection. Absent by default; only meaningful on
+     * Bible-text references.
      */
-    isResourceShownForUser?: boolean;
+    isInTextCollectionForUser?: boolean;
   };
 
   /** A reference to an Enhanced resource, identified by name */
@@ -1988,10 +2017,10 @@ declare module 'platform-scripture' {
     /** Name that uniquely identifies the resource */
     name: string;
     /**
-     * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied. When `undefined`, no admin preference has been set.
+     * When set by a project admin, indicates this resource is in the text collection by default
+     * when the shared layout is applied. When `undefined`, no admin preference has been set.
      */
-    isResourceShownByDefault?: boolean;
+    isInTextCollection?: boolean;
   };
 
   /** A reference to an XML resource, identified by name */
@@ -2001,10 +2030,10 @@ declare module 'platform-scripture' {
     /** Name that uniquely identifies the resource */
     name: string;
     /**
-     * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied. When `undefined`, no admin preference has been set.
+     * When set by a project admin, indicates this resource is in the text collection by default
+     * when the shared layout is applied. When `undefined`, no admin preference has been set.
      */
-    isResourceShownByDefault?: boolean;
+    isInTextCollection?: boolean;
   };
 
   /** A reference to a Source Language resource, identified by name */
@@ -2014,10 +2043,10 @@ declare module 'platform-scripture' {
     /** Name that uniquely identifies the resource */
     name: string;
     /**
-     * When set by a project admin, indicates this resource should be shown by default when the
-     * shared layout is applied. When `undefined`, no admin preference has been set.
+     * When set by a project admin, indicates this resource is in the text collection by default
+     * when the shared layout is applied. When `undefined`, no admin preference has been set.
      */
-    isResourceShownByDefault?: boolean;
+    isInTextCollection?: boolean;
   };
 
   /**
@@ -2056,8 +2085,11 @@ declare module 'platform-scripture' {
      * breaking changes.
      *
      * Current version is `1.1.0`: the `1.1.0` minor bump added the optional Bible-text flags
-     * `isResourceShownByDefault` (project-scope) and `isResourceShownForUser` (user-scope). Both
-     * are additive and backwards-compatible — files lacking them read cleanly.
+     * `isInTextCollection` (project-scope) and `isInTextCollectionForUser` (user-scope). Both are
+     * additive and backwards-compatible — files lacking them read cleanly. (These two keys were
+     * renamed pre-release from `isResourceTextCollection`/`isResourceShownForUser` under this same,
+     * still-unreleased `1.1.0`, so a pre-rename `1.1.0` file carrying the old keys does not read
+     * back into these fields.)
      */
     dataVersion: string;
     /** Ordered list of project and resource references */
@@ -2088,12 +2120,15 @@ declare module 'platform-scripture' {
   };
 
   /**
-   * Per-user (NOT Send/Receive'd) overlay recording the current user's shown-by-default checkbox
+   * Per-user (NOT Send/Receive'd) overlay recording the current user's text-collection checkbox
    * state for admin-flagged Bible-text resources, keyed by resource id. Initialized on first open
-   * of the Scripture Text Grid to match the project's `isResourceShownByDefault` values, then
-   * diverges independently.
+   * of the Scripture Text Grid to match the project's `isInTextCollection` values, then diverges
+   * independently.
    */
-  export type ShownByDefaultOverlay = { [resourceId: string]: boolean };
+  export type TextCollectionOverlay = { [resourceId: string]: boolean };
+
+  /** The current user's preferred cell order for a project: resource ids in display order. */
+  export type CellOrder = string[];
 
   // #endregion Resource Reference Types
 

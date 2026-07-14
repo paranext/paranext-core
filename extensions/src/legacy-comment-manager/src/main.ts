@@ -23,10 +23,13 @@ import {
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
 } from './project-data-provider/legacy-comment-manager-usj-pdpef.model';
 import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
-import { resolveCommentListPanelProjectId } from './comment-list-panel.utils';
+import {
+  COMMENT_LIST_PANEL_WEB_VIEW_TYPE,
+  resolveCommentListPanelProjectId,
+} from './comment-list-panel.utils';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
-const commentListPanelWebViewType = 'legacyCommentManager.commentListPanel';
+const commentListPanelWebViewType = COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
 
 // #region Comment List WebView
 
@@ -183,12 +186,19 @@ const commentListPanelProvider: IWebViewProvider = {
       localizeKey: '%webView_legacyCommentManager_commentListPanel_title%',
     });
 
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
+
     return {
       ...savedWebView,
       title,
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
+      // In simple mode, force the comments panel to scroll group 0 so it stays verse-synced with
+      // the Scripture editor (which is also forced to 0 in simple mode). Power mode preserves the
+      // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power
+      // mode) would survive into simple mode and detach the panel from the editor's navigation.
+      scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
     };
   },
 };
@@ -218,7 +228,7 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
   if (existingId) {
     currentCommentListPanelProjectId = projectId;
     return papi.webViews.reloadWebView(commentListPanelWebViewType, existingId, {
-      bringToFront: false, // Don't steal focus from the scripture editor on project switch
+      bringToFront: false, // Don't steal focus from the Scripture editor on project switch
     });
   }
 

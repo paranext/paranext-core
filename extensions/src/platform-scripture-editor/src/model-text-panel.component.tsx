@@ -67,15 +67,8 @@ export type ModelTextPanelProps = {
   dblResources: DblResourceData[];
   /** Whether the DBL resources are still loading. */
   isLoadingResources: boolean;
-  /** The project's admin-level model-text setting (used when writing an admin choice). */
-  adminModelTexts: ResourceReferenceList | undefined;
   /** The function to get the user-level model-text setting (used when writing a user choice). */
   getUserModelTexts: () => Promise<ResourceReferenceList | undefined>;
-  /**
-   * Function to get whether the user may write project (admin) settings; decides admin vs. user
-   * persistence.
-   */
-  getCanWriteProjectSettings: () => Promise<boolean | undefined>;
   /** Current Scripture reference for the editor. */
   scrRef?: SerializedVerseRef;
   /** Called when the editor changes the Scripture reference. */
@@ -85,8 +78,6 @@ export type ModelTextPanelProps = {
    * installed).
    */
   installResource: (dblEntryUid: string) => Promise<void>;
-  /** Persist an admin-level model-text list. */
-  setAdminModelTexts: (list: ResourceReferenceList) => void;
   /** Persist a user-level model-text list. */
   setUserModelTexts: (list: ResourceReferenceList) => Promise<void>;
   /**
@@ -121,13 +112,10 @@ export function ModelTextPanel({
   isEffectiveModelTextsLoading,
   dblResources,
   isLoadingResources,
-  adminModelTexts,
   getUserModelTexts,
-  getCanWriteProjectSettings,
   scrRef = DEFAULT_SCR_REF,
   onScrRefChange = () => {},
   installResource,
-  setAdminModelTexts,
   setUserModelTexts,
   showResourcePicker,
   getResourceChapter,
@@ -286,27 +274,14 @@ export function ModelTextPanel({
     async (resource: DblResourceData) => {
       setIsSelecting(true);
       try {
-        await selectTextConnection(
-          resource,
-          adminModelTexts,
-          setAdminModelTexts,
-          getCanWriteProjectSettings,
-          getUserModelTexts,
-          setUserModelTexts,
-          async () => installResource(resource.dblEntryUid),
+        await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () =>
+          installResource(resource.dblEntryUid),
         );
       } finally {
         setIsSelecting(false);
       }
     },
-    [
-      adminModelTexts,
-      getCanWriteProjectSettings,
-      setAdminModelTexts,
-      getUserModelTexts,
-      setUserModelTexts,
-      installResource,
-    ],
+    [getUserModelTexts, setUserModelTexts, installResource],
   );
 
   const handlePickModelText = useCallback(async () => {

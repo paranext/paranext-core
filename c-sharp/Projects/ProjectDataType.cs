@@ -4,13 +4,14 @@ public static class ProjectDataType
 {
     public const string BOOK_USFM = "BookUSFM";
     public const string BOOK_USX = "BookUSX";
+    public const string CELL_ORDER = "CellOrder";
     public const string CHAPTER_USFM = "ChapterUSFM";
     public const string CHAPTER_USX = "ChapterUSX";
     public const string COMMENTS = "Comments";
     public const string COMMENT_THREADS = "CommentThreads";
     public const string EXTENSION_DATA = "ExtensionData";
     public const string SETTING = "Setting";
-    public const string SHOWN_BY_DEFAULT_OVERLAY = "ShownByDefaultOverlay";
+    public const string TEXT_COLLECTION_OVERLAY = "TextCollectionOverlay";
     public const string USER_MODEL_TEXTS = "UserModelTexts";
     public const string USER_REFERENCED_PROJECTS_AND_RESOURCES =
         "UserReferencedProjectsAndResources";

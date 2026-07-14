@@ -28,23 +28,27 @@ describe('toGridResources', () => {
     ];
 
     expect(toGridResources(references, dblResources)).toEqual([
-      { projectId: 'project-abc', label: 'DBL dblUid-1' },
+      { resourceId: 'dblUid-1', projectId: 'project-abc', label: 'DBL dblUid-1' },
     ]);
   });
 
   it('uses a project reference id directly (it already is the project id)', () => {
     expect(toGridResources([project('proj-1')], [])).toEqual([
-      { projectId: 'proj-1', label: 'Proj proj-1' },
+      { resourceId: 'proj-1', projectId: 'proj-1', label: 'Proj proj-1' },
     ]);
   });
 
-  it('omits a DBL reference whose resource is not installed (nothing to render)', () => {
+  it('includes a not-installed DBL reference with projectId undefined (renders unavailable cell)', () => {
     const dblResources = [cached({ dblEntryUid: 'dblUid-2', installed: false, projectId: '' })];
-    expect(toGridResources([dbl('dblUid-2')], dblResources)).toEqual([]);
+    expect(toGridResources([dbl('dblUid-2')], dblResources)).toEqual([
+      { resourceId: 'dblUid-2', projectId: undefined, label: 'DBL dblUid-2' },
+    ]);
   });
 
-  it('omits a DBL reference absent from the cached resource list', () => {
-    expect(toGridResources([dbl('missing')], [])).toEqual([]);
+  it('includes a DBL reference absent from the cache with projectId undefined (renders unavailable cell)', () => {
+    expect(toGridResources([dbl('missing')], [])).toEqual([
+      { resourceId: 'missing', projectId: undefined, label: 'DBL missing' },
+    ]);
   });
 
   it('preserves order and handles a mix of project and DBL references', () => {
@@ -54,8 +58,23 @@ describe('toGridResources', () => {
     ];
 
     expect(toGridResources(references, dblResources)).toEqual([
-      { projectId: 'p1', label: 'Proj p1' },
-      { projectId: 'installed-u1', label: 'DBL u1' },
+      { resourceId: 'p1', projectId: 'p1', label: 'Proj p1' },
+      { resourceId: 'u1', projectId: 'installed-u1', label: 'DBL u1' },
+    ]);
+  });
+
+  it('carries the stable resourceId (reference.id) onto each cell', () => {
+    const projectRef = { type: 'project', id: 'proj-1', name: 'WEB' } as const;
+    const dblRef = { type: 'dblResource', id: 'dbl-uid-9', name: 'NIV' } as const;
+    const dblResources: DblResourceData[] = [
+      cached({ dblEntryUid: 'dbl-uid-9', installed: true, projectId: 'installed-proj-42' }),
+    ];
+
+    const cells = toGridResources([projectRef, dblRef], dblResources);
+
+    expect(cells).toEqual([
+      { resourceId: 'proj-1', projectId: 'proj-1', label: 'WEB' },
+      { resourceId: 'dbl-uid-9', projectId: 'installed-proj-42', label: 'NIV' },
     ]);
   });
 });

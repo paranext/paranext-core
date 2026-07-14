@@ -1,4 +1,4 @@
-import { expect, FrameLocator, Page } from '@playwright/test';
+import { expect, FrameLocator, Locator, Page } from '@playwright/test';
 
 /**
  * Close every dock tab whose title is not "Home" so each test starts from a clean dock state.
@@ -44,8 +44,9 @@ export type ScriptureTextGridPapiWindow = {
         setSetting: (key: string, value: unknown) => Promise<boolean>;
         getSetting: (key: string) => Promise<{ items: unknown[] }>;
         canUserWriteProjectTextConnectionSettings: () => Promise<boolean>;
-        resetShownByDefaultOverlay: () => Promise<boolean>;
-        initializeShownByDefaultOverlay: () => Promise<boolean>;
+        resetTextCollectionOverlay: () => Promise<boolean>;
+        resetCellOrder: () => Promise<boolean>;
+        initializeTextCollectionOverlay: () => Promise<boolean>;
       }>;
     };
     webViews: {
@@ -62,7 +63,7 @@ export type FlaggedResourceItem = {
   type: 'project';
   name: string;
   id: string;
-  isResourceShownByDefault: boolean;
+  isInTextCollection: boolean;
 };
 
 type ScriptureTextGridRestorePayload = {
@@ -106,7 +107,7 @@ export async function discoverAdminTextConnectionProject(
 }
 
 /**
- * Flag resources shown-by-default, seed the overlay, and open the Scripture Text Grid web view.
+ * Flag resources text-collection, seed the overlay, and open the Scripture Text Grid web view.
  * Restores the project's pre-test settings in a `finally` block.
  */
 export async function flagResourcesAndOpenScriptureTextGrid(
@@ -130,13 +131,15 @@ export async function flagResourcesAndOpenScriptureTextGrid(
           dataVersion: '1.1.0',
           items: modelItems,
         });
-        await pdp.resetShownByDefaultOverlay();
-        await pdp.initializeShownByDefaultOverlay();
+        await pdp.resetTextCollectionOverlay();
+        await pdp.resetCellOrder();
+        await pdp.initializeTextCollectionOverlay();
         await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
         return { projectId: testProjectId, modelTexts: originalModelTexts };
       } catch (error) {
         await pdp.setSetting('platformScripture.modelTexts', originalModelTexts);
-        await pdp.resetShownByDefaultOverlay();
+        await pdp.resetTextCollectionOverlay();
+        await pdp.resetCellOrder();
         throw error;
       }
     },
@@ -160,7 +163,8 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
           payload.projectId,
         );
         await pdp.setSetting('platformScripture.modelTexts', payload.modelTexts);
-        await pdp.resetShownByDefaultOverlay();
+        await pdp.resetTextCollectionOverlay();
+        await pdp.resetCellOrder();
         await papi.webViews.openWebView(webViewType, undefined, { existingId: '?' });
       },
       { payload: restore, webViewType: SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE },
@@ -172,8 +176,29 @@ export async function restoreScriptureTextGridProjectSettings(page: Page): Promi
   scriptureTextGridRestorePayload = undefined;
 }
 
-/** Open (or focus) the Scripture Text Grid tab and return its iframe locator. */
-export async function openScriptureTextGrid(page: Page) {
+/**
+ * Pre-bound locators and actions for the Scripture Text Grid iframe.
+ *
+ * Obtain one by calling `openScriptureTextGrid`. Use `stg.frame` for selectors not covered by the
+ * named locators below.
+ */
+export type ScriptureTextGrid = {
+  /** Raw FrameLocator — use for selectors not covered by the named locators below. */
+  frame: FrameLocator;
+  /** The "View Options" icon button in the grid header. */
+  viewOptionsButton: Locator;
+  /** The "Verse" radio in the View Options VIEW toggle. */
+  verseViewOption: Locator;
+  /** The "Chapter" radio in the View Options VIEW toggle. */
+  chapterViewOption: Locator;
+  /** The draggable cell wrappers (`data-testid="scripture-text-grid-cell-draggable"`). */
+  cellDraggable: Locator;
+  /** Open View Options, switch to Chapter view, dismiss the popover. */
+  switchToChapterView: () => Promise<void>;
+};
+
+/** Open (or focus) the Scripture Text Grid tab and return a page object with pre-bound locators. */
+export async function openScriptureTextGrid(page: Page): Promise<ScriptureTextGrid> {
   await page.evaluate(async (webViewType) => {
     // `globalThis.papi` is set by the renderer and untyped in the Playwright context.
     // eslint-disable-next-line no-type-assertion/no-type-assertion -- Playwright page has no PAPI types
@@ -183,7 +208,15 @@ export async function openScriptureTextGrid(page: Page) {
 
   const tab = page.locator('.dock-tab', { hasText: SCRIPTURE_TEXT_GRID_TAB_TITLE });
   await expect(tab).toBeVisible({ timeout: 15_000 });
-  return page.frameLocator(SCRIPTURE_TEXT_GRID_FRAME_SELECTOR);
+  const frame = page.frameLocator(SCRIPTURE_TEXT_GRID_FRAME_SELECTOR);
+  return {
+    frame,
+    viewOptionsButton: viewOptionsButton(frame),
+    verseViewOption: verseViewOption(frame),
+    chapterViewOption: chapterViewOption(frame),
+    cellDraggable: frame.getByTestId('scripture-text-grid-cell-draggable'),
+    switchToChapterView: async () => switchToChapterView(frame),
+  };
 }
 
 // --- View Options panel locators/actions --------------------------------------------------------

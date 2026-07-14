@@ -1,4 +1,4 @@
-import type { ResourceReferenceList, ShownByDefaultOverlay } from 'platform-scripture';
+import type { ResourceReferenceList, TextCollectionOverlay } from 'platform-scripture';
 import {
   addToUserResources,
   removeFromUserResources,
@@ -12,7 +12,8 @@ import {
  */
 export interface UserResourceWriter {
   setUserReferencedProjectsAndResources: (list: ResourceReferenceList) => Promise<unknown>;
-  setShownByDefaultOverlay: (overlay: ShownByDefaultOverlay) => Promise<unknown>;
+  setTextCollectionOverlay: (overlay: TextCollectionOverlay) => Promise<unknown>;
+  setCellOrder: (order: string[]) => Promise<unknown>;
 }
 
 /**
@@ -30,7 +31,7 @@ export function persistUserDisplay(
   const writes: Promise<unknown>[] = [];
   if (next.userReferenced !== sources.userReferenced)
     writes.push(writer.setUserReferencedProjectsAndResources(next.userReferenced));
-  if (next.overlay !== sources.overlay) writes.push(writer.setShownByDefaultOverlay(next.overlay));
+  if (next.overlay !== sources.overlay) writes.push(writer.setTextCollectionOverlay(next.overlay));
   return writes;
 }
 
@@ -61,4 +62,12 @@ export function persistUserAddition(
   const next = addToUserResources(reference, userReferenced);
   if (next === userReferenced) return undefined;
   return writer.setUserReferencedProjectsAndResources(next);
+}
+
+/**
+ * Persists the user's preferred cell order through the text-connection PDP; always fires a write,
+ * so callers must call only when the order has actually changed.
+ */
+export function persistCellOrder(writer: UserResourceWriter, order: string[]): Promise<unknown> {
+  return writer.setCellOrder(order);
 }

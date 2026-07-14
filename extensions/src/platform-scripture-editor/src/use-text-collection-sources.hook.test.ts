@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type {
   ResourceReferenceList,
-  ShownByDefaultOverlay,
+  TextCollectionOverlay,
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
@@ -16,7 +16,17 @@ vi.mock('@papi/frontend/react', () => ({
 }));
 
 vi.mock('@papi/frontend', () => ({
+  default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
   logger: { warn: vi.fn() },
+}));
+
+// The admin layer is read through `useBufferedLayoutSetting`, which re-arms on a captured
+// `useEvent` handler. Capture it here so a test can drive the re-arm.
+let capturedApplyHandler: ((payload: { projectId: string }) => void) | undefined;
+vi.mock('platform-bible-react', () => ({
+  useEvent: vi.fn((_event, handler) => {
+    capturedApplyHandler = handler;
+  }),
 }));
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
@@ -48,7 +58,7 @@ function settingTuple(
 /**
  * Configures `useProjectSetting` to answer with the admin `referencedProjectsAndResources` tuple.
  * That is the only project setting the hook reads (model texts are decoupled from the
- * shown-by-default feature, so they are no longer a source).
+ * text-collection feature, so they are no longer a source).
  */
 function mockSettings(referenced: ReturnType<typeof useProjectSetting>) {
   mockUseProjectSetting.mockImplementation(() => referenced);
@@ -62,14 +72,17 @@ function mockSettings(referenced: ReturnType<typeof useProjectSetting>) {
 function makeControllablePdp() {
   const unsubUserReferenced = vi.fn(() => Promise.resolve(true));
   const unsubOverlay = vi.fn(() => Promise.resolve(true));
+  const unsubCellOrder = vi.fn(() => Promise.resolve(true));
 
   let deliverUserReferenced: (value: ResourceReferenceList | object) => void = () => {};
-  let deliverOverlay: (value: ShownByDefaultOverlay | object) => void = () => {};
+  let deliverOverlay: (value: TextCollectionOverlay | object) => void = () => {};
+  let deliverCellOrder: (value: string[] | object) => void = () => {};
 
   // Resolvers for the subscribe promises themselves — left pending until a test resolves them,
   // which is what lets us simulate the dispose-before-subscribe race.
   let resolveUserReferencedSub: (unsub: () => Promise<boolean>) => void = () => {};
   let resolveOverlaySub: (unsub: () => Promise<boolean>) => void = () => {};
+  let resolveCellOrderSub: (unsub: () => Promise<boolean>) => void = () => {};
 
   const subscribeUserReferencedProjectsAndResources = vi.fn(
     (_selector: undefined, callback: (value: ResourceReferenceList | object) => void) => {
@@ -79,11 +92,19 @@ function makeControllablePdp() {
       });
     },
   );
-  const subscribeShownByDefaultOverlay = vi.fn(
-    (_selector: undefined, callback: (value: ShownByDefaultOverlay | object) => void) => {
+  const subscribeTextCollectionOverlay = vi.fn(
+    (_selector: undefined, callback: (value: TextCollectionOverlay | object) => void) => {
       deliverOverlay = callback;
       return new Promise<() => Promise<boolean>>((resolve) => {
         resolveOverlaySub = resolve;
+      });
+    },
+  );
+  const subscribeCellOrder = vi.fn(
+    (_selector: undefined, callback: (value: string[] | object) => void) => {
+      deliverCellOrder = callback;
+      return new Promise<() => Promise<boolean>>((resolve) => {
+        resolveCellOrderSub = resolve;
       });
     },
   );
@@ -92,23 +113,29 @@ function makeControllablePdp() {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const pdp = {
     subscribeUserReferencedProjectsAndResources,
-    subscribeShownByDefaultOverlay,
+    subscribeTextCollectionOverlay,
+    subscribeCellOrder,
   } as unknown as ITextConnectionSettingsProjectDataProvider;
 
   return {
     pdp,
     unsubUserReferenced,
     unsubOverlay,
-    /** Resolve both subscribe promises with their unsubscribe spies. */
+    unsubCellOrder,
+    /** Resolve all three subscribe promises with their unsubscribe spies. */
     resolveSubscriptions: () =>
       act(() => {
         resolveUserReferencedSub(unsubUserReferenced);
         resolveOverlaySub(unsubOverlay);
+        resolveCellOrderSub(unsubCellOrder);
         // Let the .then handlers that push/dispose unsubscribers run.
         return Promise.resolve();
       }),
-    /** Fire both subscription callbacks with values (data delivery is synchronous in the PDP). */
-    deliver: (userReferenced: ResourceReferenceList | object, overlay: ShownByDefaultOverlay) =>
+    /**
+     * Fire the two gating subscription callbacks (userReferenced + overlay); CellOrder is
+     * non-gating.
+     */
+    deliver: (userReferenced: ResourceReferenceList | object, overlay: TextCollectionOverlay) =>
       act(() => {
         deliverUserReferenced(userReferenced);
         deliverOverlay(overlay);
@@ -117,9 +144,13 @@ function makeControllablePdp() {
       act(() => {
         deliverUserReferenced(userReferenced);
       }),
-    deliverOverlayOnly: (overlay: ShownByDefaultOverlay) =>
+    deliverOverlayOnly: (overlay: TextCollectionOverlay) =>
       act(() => {
         deliverOverlay(overlay);
+      }),
+    deliverCellOrderOnly: (order: string[] | object) =>
+      act(() => {
+        deliverCellOrder(order);
       }),
   };
 }
@@ -129,6 +160,7 @@ function makeControllablePdp() {
 describe('useTextCollectionSources', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedApplyHandler = undefined;
   });
 
   it('returns sources undefined while the admin setting is still loading', () => {
@@ -163,14 +195,61 @@ describe('useTextCollectionSources', () => {
 
     await controller.resolveSubscriptions();
     const userReferenced = list('user-v');
-    const overlay: ShownByDefaultOverlay = { 'res-1': true };
+    const overlay: TextCollectionOverlay = { 'res-1': true };
     await controller.deliver(userReferenced, overlay);
 
     expect(result.current.sources).toEqual({
       adminReferenced,
       userReferenced,
       overlay,
+      order: [],
     });
+  });
+
+  it('buffers the admin layer: holds an admin change until the shared-layout re-arm fires', async () => {
+    const adminV1 = list('admin-v1');
+    mockSettings(settingTuple(adminV1, false));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+
+    const { result, rerender } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), { 'res-1': true });
+    expect(result.current.sources?.adminReferenced).toEqual(adminV1);
+
+    // The admin setting changes (as if a manual sync landed) — it must be HELD, not applied.
+    const adminV2 = list('admin-v2');
+    mockSettings(settingTuple(adminV2, false));
+    rerender();
+    expect(result.current.sources?.adminReferenced).toEqual(adminV1);
+
+    // A shared-layout re-arm for this project applies the new admin layout.
+    act(() => capturedApplyHandler?.({ projectId: 'proj-1' }));
+    expect(result.current.sources?.adminReferenced).toEqual(adminV2);
+  });
+
+  it('reflects a delivered cell order in sources.order', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    await controller.deliverCellOrderOnly(['b', 'a']);
+    expect(result.current.sources?.order).toEqual(['b', 'a']);
+  });
+
+  it('falls back to an empty order when the cell-order subscription delivers a PlatformError', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    // A real order arrives first, then a PlatformError — the error must not leak into sources.order.
+    await controller.deliverCellOrderOnly(['b', 'a']);
+    await controller.deliverCellOrderOnly(makePlatformError());
+    expect(result.current.sources?.order).toEqual([]);
   });
 
   it('keeps sources undefined until BOTH subscriptions have delivered', async () => {
@@ -251,11 +330,13 @@ describe('useTextCollectionSources', () => {
 
     expect(controller.unsubUserReferenced).not.toHaveBeenCalled();
     expect(controller.unsubOverlay).not.toHaveBeenCalled();
+    expect(controller.unsubCellOrder).not.toHaveBeenCalled();
 
     unmount();
 
     expect(controller.unsubUserReferenced).toHaveBeenCalledTimes(1);
     expect(controller.unsubOverlay).toHaveBeenCalledTimes(1);
+    expect(controller.unsubCellOrder).toHaveBeenCalledTimes(1);
   });
 
   it('immediately unsubscribes a subscription whose promise resolves after unmount (no leak)', async () => {
@@ -271,6 +352,7 @@ describe('useTextCollectionSources', () => {
     // The unsubscribers do not exist yet, so cleanup could not have called them.
     expect(controller.unsubUserReferenced).not.toHaveBeenCalled();
     expect(controller.unsubOverlay).not.toHaveBeenCalled();
+    expect(controller.unsubCellOrder).not.toHaveBeenCalled();
 
     // Now the subscribe promises resolve — since the effect already disposed, the resolved
     // unsubscribe functions must be invoked immediately rather than stored.
@@ -278,6 +360,7 @@ describe('useTextCollectionSources', () => {
 
     expect(controller.unsubUserReferenced).toHaveBeenCalledTimes(1);
     expect(controller.unsubOverlay).toHaveBeenCalledTimes(1);
+    expect(controller.unsubCellOrder).toHaveBeenCalledTimes(1);
   });
 
   it('returns the same textConnectionPdp object that useProjectDataProvider yields', () => {

@@ -118,6 +118,25 @@ const sampleThreads: LegacyCommentThread[] = [
   },
 ];
 
+/** A long thread list (GEN 1:1–30) for the Scrollable story, enough to overflow the panel. */
+const manyThreads: LegacyCommentThread[] = Array.from({ length: 30 }, (_, index) => {
+  const verse = index + 1;
+  const id = `scroll-thread-${verse}`;
+  const verseRef = `GEN 1:${verse}`;
+  return {
+    id,
+    verseRef,
+    status: 'Todo',
+    type: 'Normal',
+    modifiedDate: '2024-01-02T10:00:00.0000000-00:00',
+    isSpellingNote: false,
+    isBTNote: false,
+    isConsultantNote: false,
+    isRead: false,
+    comments: [makeComment({ id: `${id}-c1`, thread: id, verseRef })],
+  };
+});
+
 /** The "current chapter" the scope filter narrows to in these stories (GEN 1). */
 const STORY_SCR_REF = { book: 'GEN', chapterNum: 1 };
 
@@ -168,7 +187,15 @@ type DecoratorConfig = {
   isLoading?: boolean;
   threads?: LegacyCommentThread[];
   initialFilters?: Partial<CommentFilters>;
-  hasEditorContext?: boolean;
+  canScopeToCurrentChapter?: boolean;
+  /**
+   * Render the panel with no bounding-height ancestor, reproducing the real web view where nothing
+   * sets a height on `html`/`body`/`#root` so `tw:h-full` collapses to `auto` and the document is
+   * the scroll container. This is the layout in which `tw:sticky` is load-bearing; a bounded
+   * ancestor (the default `tw:h-screen` wrapper) instead makes the inner list the scroller, where
+   * the toolbar is trivially always visible with or without `sticky`.
+   */
+  unbounded?: boolean;
 };
 
 /**
@@ -193,7 +220,9 @@ function createDecorator(config: DecoratorConfig) {
     const displayedThreads = filterThreads(threads, filters, scopeFilter, CURRENT_USER);
 
     return (
-      <div className="tw:h-screen">
+      // A bounded height (default) makes the inner list the scroller; `unbounded` drops it so the
+      // document scrolls, reproducing the real web view where `tw:sticky` is what pins the toolbar.
+      <div className={config.unbounded ? undefined : 'tw:h-screen'}>
         <Story
           args={{
             localizedStrings,
@@ -204,7 +233,7 @@ function createDecorator(config: DecoratorConfig) {
             onFiltersChange: setFilters,
             scopeFilter,
             onScopeFilterChange: setScopeFilter,
-            hasEditorContext: config.hasEditorContext,
+            canScopeToCurrentChapter: config.canScopeToCurrentChapter,
             assignableUsers: ['', 'Alice', 'Bob', 'Charlie', CURRENT_USER],
             canUserAddCommentToThread: true,
             canUserAssignThreadCallback: resolveTrue,
@@ -290,6 +319,17 @@ export const Populated: Story = {
   decorators: [createDecorator({})],
 };
 
+/**
+ * A long list that overflows the panel: the comments scroll while the filter toolbar stays pinned
+ * at the top. Rendered `unbounded` (no bounding-height ancestor) so the document scrolls — the same
+ * scroll model as the real web view, where `tw:sticky` is what keeps the toolbar visible. Delete
+ * the `tw:sticky tw:top-0 tw:z-10` classes on the toolbar and this story visibly regresses (the
+ * toolbar scrolls out of view), which is the whole point of PT-4070.
+ */
+export const Scrollable: Story = {
+  decorators: [createDecorator({ threads: manyThreads, unbounded: true })],
+};
+
 /** Threads are still loading — show skeletons. */
 export const Loading: Story = {
   decorators: [createDecorator({ isLoading: true })],
@@ -306,9 +346,9 @@ export const EmptyFiltered: Story = {
 };
 
 /**
- * Opened without an editor (e.g. a cross-project open from the Send/Receive results link): the
- * scope dropdown omits "current chapter" because there is no editor to derive the chapter from.
+ * A list with no current chapter to follow (e.g. a cross-project open from the Send/Receive results
+ * link): the scope dropdown omits "current chapter" and offers only "all books".
  */
-export const NoEditorContext: Story = {
-  decorators: [createDecorator({ hasEditorContext: false })],
+export const NoCurrentChapter: Story = {
+  decorators: [createDecorator({ canScopeToCurrentChapter: false })],
 };

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import type {
   ResourceReferenceList,
   ITextConnectionSettingsProjectDataProvider,
@@ -12,6 +12,19 @@ import { useEffectiveResourceReferenceList } from './use-effective-resource-refe
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
   useProjectDataProvider: vi.fn(),
+}));
+
+vi.mock('@papi/frontend', () => ({
+  default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
+  logger: { warn: vi.fn() },
+}));
+
+// Capture the re-arm handler so buffering can be exercised.
+let capturedApplyHandler: ((payload: { projectId: string }) => void) | undefined;
+vi.mock('platform-bible-react', () => ({
+  useEvent: vi.fn((_event, handler) => {
+    capturedApplyHandler = handler;
+  }),
 }));
 
 /** Minimal PlatformError shape — matches the `isPlatformError` runtime check */
@@ -50,6 +63,7 @@ function makeMockPdp(
 describe('useEffectiveResourceReferenceList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedApplyHandler = undefined;
   });
 
   it('returns undefined while project setting is loading', () => {
@@ -404,5 +418,32 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(items?.[1]).toEqual({ type: 'project', name: 'In Both', id: 'b-001', source: 'admin' });
     // User-only item comes last
     expect(items?.[2]).toEqual({ type: 'enhancedResource', name: 'User Only', source: 'user' });
+  });
+
+  it('holds admin-layer changes until re-armed, while the user layer stays live', () => {
+    const adminV1: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin V1', id: 'a-1' }],
+    };
+    const adminV2: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'Admin V2', id: 'a-2' }],
+    };
+    mockUseProjectSetting.mockReturnValue([adminV1, undefined, undefined, false]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result, rerender } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+    expect(result.current[0]?.items[0]).toMatchObject({ name: 'Admin V1' });
+
+    // Admin setting changes (as if a manual sync landed) — must be held.
+    mockUseProjectSetting.mockReturnValue([adminV2, undefined, undefined, false]);
+    rerender();
+    expect(result.current[0]?.items[0]).toMatchObject({ name: 'Admin V1' });
+
+    // Re-arm → now the new admin layout is applied.
+    act(() => capturedApplyHandler?.({ projectId: 'proj-1' }));
+    expect(result.current[0]?.items[0]).toMatchObject({ name: 'Admin V2' });
   });
 });

@@ -53,6 +53,12 @@ export interface ResourcePickerDialogProps {
   selectedResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
   localizedStrings: ResourcePickerDialogLocalizedStrings;
+  /**
+   * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
+   * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
+   * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
+   */
+  allowDeselect?: boolean;
   /** Called when the user clicks a resource row to select it */
   onSelect: (resource: DblResourceData) => void;
 }
@@ -66,10 +72,12 @@ function ResourceSection({
   label,
   resources,
   onSelect,
+  showCheckmark,
 }: {
   label: string;
   resources: DblResourceData[];
   onSelect?: (resource: DblResourceData) => void;
+  showCheckmark?: boolean;
 }) {
   if (resources.length === 0) return undefined;
   return (
@@ -102,7 +110,7 @@ function ResourceSection({
           }
         >
           <TableCell className="tw:w-5 tw:border-0 tw:py-1 tw:pr-1">
-            {!onSelect && (
+            {showCheckmark && (
               <>
                 <Check className="tw:h-3.5 tw:w-3.5" aria-hidden />
                 <span className="tw:sr-only">{label}</span>
@@ -151,6 +159,7 @@ export default function ResourcePickerDialog({
   resourceType,
   selectedResourceIds,
   localizedStrings,
+  allowDeselect,
   onSelect,
 }: ResourcePickerDialogProps) {
   const [searchText, setSearchText] = useState('');
@@ -261,7 +270,7 @@ export default function ResourcePickerDialog({
           })}
         </p>
       )}
-      <div className="tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
+      <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto tw:px-4 tw:pb-4">
         {isResourcesLoading && (
           <p className="tw:py-8 tw:text-center">
             <Spinner />
@@ -273,7 +282,12 @@ export default function ResourcePickerDialog({
         {!hasNoResults && !isResourcesLoading && (
           <Table>
             <TableBody>
-              <ResourceSection label={alreadySelectedLabel} resources={alreadySelected} />
+              <ResourceSection
+                label={alreadySelectedLabel}
+                resources={alreadySelected}
+                onSelect={allowDeselect ? onSelect : undefined}
+                showCheckmark
+              />
               <ResourceSection label={installedLabel} resources={installed} onSelect={onSelect} />
               <ResourceSection
                 label={toDownloadLabel}
