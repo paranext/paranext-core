@@ -367,13 +367,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         } finally {
           setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
         }
+        // Resource was just installed; bump the cache key so `getCachedResources` re-validates the
+        // `installed` flag — without this, `cachedResources` loaded at mount still shows the resource
+        // as not-installed and `toGridResources` can't resolve it to a projectId.
+        setCacheRefreshKey((k) => k + 1);
       }
-
-      // The resource is now installed (either just now or while the picker dialog was open).
-      // Bump the cache key so `getCachedResources` re-validates the `installed` flag — without this,
-      // `cachedResources` loaded at mount still shows the resource as not-installed and
-      // `toGridResources` can't resolve it to a projectId, so it renders as 'unavailable'.
-      setCacheRefreshKey((k) => k + 1);
 
       // Re-read after the await: the subscription may have advanced during the install.
       const { current } = sourcesRef;
