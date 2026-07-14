@@ -275,6 +275,12 @@ export interface ResourcePickerDialogProps {
 	selectedResourceIds?: string[];
 	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
 	localizedStrings: ResourcePickerDialogLocalizedStrings;
+	/**
+	 * When true, clicking an "Already Selected" row calls `onSelect` just like any other row, letting
+	 * the caller treat it as a deselect. Defaults to false (Already Selected rows stay
+	 * non-interactive, showing only a checkmark) to preserve existing consumers' behavior.
+	 */
+	allowDeselect?: boolean;
 	/** Called when the user clicks a resource row to select it */
 	onSelect: (resource: DblResourceData) => void;
 }
@@ -291,7 +297,7 @@ export interface ResourcePickerDialogProps {
  *
  * @param props See {@link ResourcePickerDialogProps}
  */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 /** Base item interface for items displayed in the SourceLanguageIndexedList */
 export type IndexedListItem = {
 	/** Unique identifier for the item */

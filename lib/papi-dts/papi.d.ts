@@ -6961,6 +6961,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
+  /** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+  export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -7006,6 +7008,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export type ProjectPickerOptions = DialogOptions;
+  /** Options to provide when showing the Share Layout dialog */
+  export type ShareLayoutDialogOptions = DialogOptions & {
+    /** The project whose layout is being shared */
+    projectId: string;
+  };
   /** Options to provide when showing a confirm dialog */
   export type ConfirmDialogOptions = DialogOptions & {
     /** The message body displayed in the dialog. Required for confirm dialogs. */
@@ -7047,6 +7054,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      *   used. It is not yet a stable contract.
      */
     [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, string>;
+    [SHARE_LAYOUT_DIALOG_TYPE]: DialogDataTypes<ShareLayoutDialogOptions, boolean>;
   }
   /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;

@@ -5,17 +5,11 @@ import {
   useDataProvider,
   useLocalizedStrings,
   useProjectDataProvider,
-  useProjectSetting,
   useScrollGroupScrRef,
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { usePromise } from 'platform-bible-react';
-import {
-  formatReplacementString,
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -24,7 +18,6 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
-import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -61,15 +54,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
     'platformScripture.modelTexts',
   );
-
-  const [adminModelTextsSetting, setAdminModelTextsSetting] = useProjectSetting(
-    projectId,
-    'platformScripture.modelTexts',
-    DEFAULT_RESOURCE_REFERENCE_LIST,
-  );
-  const adminModelTexts = isPlatformError(adminModelTextsSetting)
-    ? undefined
-    : adminModelTextsSetting;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -163,13 +147,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     [dblResourcesProvider],
   );
 
-  const setAdminModelTexts = useCallback(
-    (list: ResourceReferenceList) => {
-      setAdminModelTextsSetting?.(list);
-    },
-    [setAdminModelTextsSetting],
-  );
-
   const setUserModelTexts = useCallback(
     async (list: ResourceReferenceList) => {
       await textConnectionsProvider?.setUserModelTexts(list);
@@ -179,11 +156,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   const getUserModelTexts = useCallback(
     async () => textConnectionsProvider?.getUserModelTexts(),
-    [textConnectionsProvider],
-  );
-
-  const getCanWriteProjectSettings = useCallback(
-    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
     [textConnectionsProvider],
   );
 
@@ -233,13 +205,10 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
       dblResources={dblResources}
       isLoadingResources={isLoadingResources}
-      adminModelTexts={adminModelTexts}
       getUserModelTexts={getUserModelTexts}
-      getCanWriteProjectSettings={getCanWriteProjectSettings}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
       installResource={installResource}
-      setAdminModelTexts={setAdminModelTexts}
       setUserModelTexts={setUserModelTexts}
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}

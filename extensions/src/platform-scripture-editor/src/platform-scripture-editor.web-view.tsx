@@ -100,6 +100,10 @@ import {
 } from './structure-protection-button.component';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import {
+  ShareLayoutButton,
+  SHARE_LAYOUT_BUTTON_STRING_KEYS,
+} from './share-layout-button.component';
+import {
   getLocalizeKeysFromDecorations,
   mergeDecorations,
   removeDecorations,
@@ -144,6 +148,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
+  ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -1856,7 +1861,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         endAreaChildren={
           <>
+            {/* This container is flex-row-reverse, so StructureProtectionButton must come first
+            in JSX order to render visually after (to the right of) ShareLayoutButton. */}
             <StructureProtectionButton
+              projectId={projectId}
+              localizedStrings={localizedStrings}
+              className="tw:h-8"
+            />
+            <ShareLayoutButton
               projectId={projectId}
               localizedStrings={localizedStrings}
               className="tw:h-8"

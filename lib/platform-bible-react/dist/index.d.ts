@@ -2901,7 +2901,7 @@ export type SelectTriggerProps = React$1.ComponentProps<typeof SelectPrimitive.T
 /** @inheritdoc Select */
 export declare function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectContent({ className, children, position, align, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function SelectContent({ className, children, position, align, style, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
 export declare function SelectLabel({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Label>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
