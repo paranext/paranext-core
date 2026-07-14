@@ -189,26 +189,31 @@ export function ResourceCellView({
     );
   }
 
+  let offlineContent: ReactNode;
+  if (state === 'downloading') {
+    offlineContent = (
+      <>
+        <Spinner />
+        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[LOADING_KEY]}</span>
+      </>
+    );
+  } else if (state === 'unavailable') {
+    offlineContent = <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>;
+  } else {
+    offlineContent = (
+      <>
+        <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
+        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[FAILED_KEY]}</span>
+      </>
+    );
+  }
+
   const stateContent =
     state === 'ready' ? (
       readyContent
     ) : (
       <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
-        {state === 'downloading' ? (
-          <>
-            <Spinner />
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {localizedStrings[LOADING_KEY]}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {localizedStrings[FAILED_KEY]}
-            </span>
-          </>
-        )}
+        {offlineContent}
       </div>
     );
 

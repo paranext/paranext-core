@@ -38,13 +38,17 @@ describe('toGridResources', () => {
     ]);
   });
 
-  it('omits a DBL reference whose resource is not installed (nothing to render)', () => {
+  it('includes a not-installed DBL reference with projectId undefined (renders unavailable cell)', () => {
     const dblResources = [cached({ dblEntryUid: 'dblUid-2', installed: false, projectId: '' })];
-    expect(toGridResources([dbl('dblUid-2')], dblResources)).toEqual([]);
+    expect(toGridResources([dbl('dblUid-2')], dblResources)).toEqual([
+      { resourceId: 'dblUid-2', projectId: undefined, label: 'DBL dblUid-2' },
+    ]);
   });
 
-  it('omits a DBL reference absent from the cached resource list', () => {
-    expect(toGridResources([dbl('missing')], [])).toEqual([]);
+  it('includes a DBL reference absent from the cache with projectId undefined (renders unavailable cell)', () => {
+    expect(toGridResources([dbl('missing')], [])).toEqual([
+      { resourceId: 'missing', projectId: undefined, label: 'DBL missing' },
+    ]);
   });
 
   it('preserves order and handles a mix of project and DBL references', () => {

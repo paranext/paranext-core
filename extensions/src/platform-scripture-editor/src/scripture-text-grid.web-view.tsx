@@ -160,6 +160,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
+  // Increment to re-fetch cachedResources. The initial fetch runs once at mount; after any resource
+  // installation (including one done in the picker dialog before it returned), the `installed` flag
+  // in the cached list is stale, so `toGridResources` can't resolve the new resource to a projectId.
+  // Bumping this key triggers a fresh getCachedResources call which re-validates installed flags.
+  const [cacheRefreshKey, setCacheRefreshKey] = useState(0);
 
   // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
   // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
@@ -201,8 +206,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup.
+  // Re-fetched on `cacheRefreshKey` bumps so a newly-installed resource's `installed` flag is
+  // current when `toGridResources` resolves it.
   const [cachedResources, isLoadingCachedResources] = usePromise(
-    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(
+      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      // cacheRefreshKey is a refresh-trigger counter: the factory doesn't read it, but each bump
+      // creates a new function reference so usePromise re-runs and getCachedResources re-validates
+      // installed flags — necessary after any installation completes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [cacheRefreshKey],
+    ),
     undefined,
   );
 
@@ -354,6 +368,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
           setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
         }
       }
+
+      // The resource is now installed (either just now or while the picker dialog was open).
+      // Bump the cache key so `getCachedResources` re-validates the `installed` flag — without this,
+      // `cachedResources` loaded at mount still shows the resource as not-installed and
+      // `toGridResources` can't resolve it to a projectId, so it renders as 'unavailable'.
+      setCacheRefreshKey((k) => k + 1);
 
       // Re-read after the await: the subscription may have advanced during the install.
       const { current } = sourcesRef;

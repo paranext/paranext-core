@@ -160,7 +160,7 @@ export function ScriptureTextGrid({
       >
         {resources.map((resource) => (
           <div
-            key={resource.projectId}
+            key={resource.resourceId}
             role="region"
             aria-label={resource.label}
             data-project-id={resource.projectId}
@@ -214,7 +214,7 @@ export function ScriptureTextGrid({
           // justified by the explicit handler and tabIndex below.
           /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
           <div
-            key={resource.projectId}
+            key={resource.resourceId}
             role="listitem"
             data-project-id={resource.projectId}
             data-resource-id={resource.resourceId}
