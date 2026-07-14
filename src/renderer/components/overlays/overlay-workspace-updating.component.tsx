@@ -3,9 +3,9 @@ import {
   getWorkspaceUpdating,
   subscribeToWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
-import { Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
+import { Button, Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const WORKSPACE_UPDATING_KEY: LocalizeKey = '%overlay_workspaceUpdating%';
@@ -15,9 +15,32 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [WORKSPACE_UPDATING_KEY];
 /** Z-index below modals so modal dialogs remain accessible during a project switch */
 const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL - 1;
 
-type Props = { label: string };
+type Props = {
+  label: string;
+  /** Localized label for the Cancel button. Only rendered when onCancel is provided. */
+  cancelLabel?: string;
+  /** Whether the Cancel button can be clicked (e.g. false after a single-shot cancel fired) */
+  isCancelEnabled?: boolean;
+  /** When provided, a Cancel button is rendered under the label and focused on mount */
+  onCancel?: () => void;
+};
 
-export function WorkspaceUpdatingOverlayPresentational({ label }: Props) {
+export function WorkspaceUpdatingOverlayPresentational({
+  label,
+  cancelLabel,
+  isCancelEnabled,
+  onCancel,
+}: Props) {
+  // React's useRef requires null as the initial value for DOM refs
+  // eslint-disable-next-line no-null/no-null
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Focus the Cancel button on mount so mid-keystroke input lands here instead of a focused
+  // editor. Focused via ref because jsx-a11y flags the autoFocus attribute.
+  useEffect(() => {
+    cancelButtonRef.current?.focus();
+  }, []);
+
   return (
     <div className="pr-twp">
       <div
@@ -31,6 +54,11 @@ export function WorkspaceUpdatingOverlayPresentational({ label }: Props) {
       >
         <Spinner />
         <p className="tw:text-sm tw:font-medium">{label}</p>
+        {onCancel && (
+          <Button ref={cancelButtonRef} disabled={!isCancelEnabled} onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+        )}
       </div>
     </div>
   );
