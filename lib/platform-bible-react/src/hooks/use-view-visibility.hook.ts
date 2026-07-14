@@ -33,5 +33,3 @@ export const useViewVisibility = (): boolean => {
 
   return isViewVisible;
 };
-
-export default useViewVisibility;

@@ -112,6 +112,11 @@ global.webViewComponent = function CommentListWebView({
     undefined,
   );
 
+  // Plain useState (deliberately NOT persisted, unlike scopeFilter below): the orthogonal filter
+  // axes are treated as ephemeral per-view state and reset to their defaults when the view reloads on
+  // a project switch. Only the scope axis persists, because "Current chapter" is a viewing mode a
+  // user sets once and expects to carry across projects. If you unify these, re-check the project-
+  // switch behavior both ways before changing it.
   const [filters, setFilters] = useState<CommentFilters>(() =>
     applyFilterOverrides(initialFilters),
   );
@@ -294,13 +299,15 @@ global.webViewComponent = function CommentListWebView({
     const messageListener = ({ data }: MessageEvent<CommentListWebViewMessage>) => {
       if (data?.method === 'selectThread') {
         logger.debug(`Comment list received selectThread message: ${serialize(data)}`);
-        // Note: We pass `true` for isDataLoading as a conservative default since we can't access
-        // the current loading state synchronously here. The pending thread will be processed
-        // by the effect below once loading completes.
+        // Note: This handler closes over a stale isLoadingCommentThreads (it isn't in the effect's
+        // deps), so we always pass `true` as the conservative safe default rather than trust it. The
+        // pending thread will be processed by the effect below once loading actually completes.
         trySelectThread(data.threadId, true);
         // The explicit "go to comment" navigation wins over any due BCV-sync scroll (PT-4080).
         // (trySelectThread records the thread's reference as self-initiated navigation when the
         // selection succeeds, guarding against the editor's caret move arriving after it.)
+        // This drop is permanent unless the BCV changes again — safe here only because this flow
+        // always navigates the editor first (see cancelPendingSyncScroll's JSDoc for the invariant).
         cancelPendingSyncScroll();
       }
 
