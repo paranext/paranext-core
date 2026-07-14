@@ -3,7 +3,7 @@ import {
   getWorkspaceUpdating,
   subscribeToWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
-import { Button, Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
+import { Button, Progress, Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
 import {
   type FocusEvent,
@@ -34,6 +34,17 @@ type Props = {
    * Tab/Shift+Tab cannot move focus outside the overlay.
    */
   onCancel?: () => void;
+  /**
+   * Live progress status text rendered under the label: for determinate progress the current item
+   * (e.g. a project name), for indeterminate progress a complete localized message. Omitted → no
+   * progress area is rendered (the legacy project-switch overlay).
+   */
+  progressText?: string;
+  /**
+   * Determinate progress as a 0–1 fraction, rendered as a progress bar under the progress text.
+   * Undefined while progressText is provided means indeterminate progress.
+   */
+  progressValue?: number;
 };
 
 export function WorkspaceUpdatingOverlayPresentational({
@@ -41,6 +52,8 @@ export function WorkspaceUpdatingOverlayPresentational({
   cancelLabel,
   isCancelEnabled,
   onCancel,
+  progressText,
+  progressValue,
 }: Props) {
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -113,6 +126,15 @@ export function WorkspaceUpdatingOverlayPresentational({
       >
         <Spinner />
         <p className="tw:text-sm tw:font-medium">{label}</p>
+        {progressText !== undefined && (
+          <p className="tw:text-sm tw:text-muted-foreground">{progressText}</p>
+        )}
+        {/* platform-bible-react's Progress (shadcn/Radix) has no indeterminate visual — without a
+            value it renders an empty track — so the bar only appears for determinate progress;
+            indeterminate progress is shown as text only. */}
+        {progressValue !== undefined && (
+          <Progress value={progressValue * 100} className="tw:w-64" />
+        )}
         {onCancel && (
           <Button ref={cancelButtonRef} disabled={!isCancelEnabled} onClick={onCancel}>
             {cancelLabel}

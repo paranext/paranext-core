@@ -6,7 +6,7 @@ import {
 } from '@renderer/services/auto-sync-blocking-store';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
-import { request } from '@shared/services/network.service';
+import { getNetworkEvent, request } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,6 +16,27 @@ const AUTO_SYNC_BLOCKING_KEY: LocalizeKey = '%overlay_autoSyncBlocking%';
 const CANCEL_KEY: LocalizeKey = '%general_cancel%';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [AUTO_SYNC_BLOCKING_KEY, CANCEL_KEY];
+
+// String value must match the event emitted by the Send/Receive extension during any sync (same
+// naming idiom as auto-sync-blocking-service.ts)
+const SYNC_PROGRESS_EVENT = 'paratextBibleSendReceive.onSyncProgress';
+
+/** Payload of the Send/Receive extension's sync progress event */
+type SyncProgressEvent = {
+  /**
+   * For determinate progress, the bare current item (e.g. a project name); for indeterminate
+   * progress, a complete localized message shown verbatim
+   */
+  progressText: string;
+  /** Progress fraction 0–1 for determinate progress; null/undefined means indeterminate */
+  progressValue?: number | null;
+};
+
+/** Progress display state: like the event payload, but with null normalized away */
+type SyncProgress = {
+  progressText: string;
+  progressValue?: number;
+};
 
 /**
  * Full-workspace overlay shown while an automatic (scheduled) Send/Receive blocks editing. Driven
@@ -38,6 +59,31 @@ export function AutoSyncBlockingOverlay() {
     syncState();
     return subscribeToAutoSyncBlocking(syncState);
   }, [syncState]);
+
+  const [progress, setProgress] = useState<SyncProgress | undefined>(undefined);
+
+  // Live sync progress, PT9-style: subscribe to the extension's progress event only while the
+  // overlay is blocking (visible). When blocking clears, unsubscribe and drop the progress so the
+  // next blocking episode starts clean instead of briefly showing the previous sync's last state.
+  useEffect(() => {
+    if (!isBlocking) {
+      setProgress(undefined);
+      return undefined;
+    }
+    const unsubscribe = getNetworkEvent<SyncProgressEvent>(SYNC_PROGRESS_EVENT)(
+      ({ progressText, progressValue }) =>
+        setProgress({
+          progressText,
+          // Normalize the payload's null (indeterminate) to undefined at this boundary so null
+          // does not spread into props (repo style forbids null)
+          progressValue: progressValue ?? undefined,
+        }),
+    );
+    // Wrapped because an effect destructor must return void, not Unsubscriber's boolean
+    return () => {
+      unsubscribe();
+    };
+  }, [isBlocking]);
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
@@ -68,6 +114,8 @@ export function AutoSyncBlockingOverlay() {
       cancelLabel={localizedStrings[CANCEL_KEY]}
       isCancelEnabled={isCancelEnabled}
       onCancel={handleCancel}
+      progressText={progress?.progressText}
+      progressValue={progress?.progressValue}
     />,
     document.body,
   );

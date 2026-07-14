@@ -6,11 +6,14 @@ import {
   setAutoSyncBlocking,
   resetAutoSyncBlocking,
 } from '@renderer/services/auto-sync-blocking-store';
-import { request } from '@shared/services/network.service';
+import { getNetworkEvent, request } from '@shared/services/network.service';
 import { AutoSyncBlockingOverlay } from './overlay-auto-sync-blocking.component';
 
 /** Must match SHOW_GRACE_MS in auto-sync-blocking-store.ts */
 const SHOW_GRACE_MS = 200;
+
+/** Must match the payload shape of paratextBibleSendReceive.onSyncProgress */
+type SyncProgressEvent = { progressText: string; progressValue?: number | null };
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -29,10 +32,12 @@ vi.mock('platform-bible-react', () => ({
       {children}
     </button>
   ),
+  Progress: ({ value }: { value?: number }) => <div data-testid="progress" data-value={value} />,
 }));
 
 vi.mock('@shared/services/network.service', () => ({
   request: vi.fn(() => Promise.resolve()),
+  getNetworkEvent: vi.fn(),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -48,11 +53,39 @@ function showOverlay() {
 }
 
 describe('AutoSyncBlockingOverlay', () => {
+  let capturedProgressHandler: ((event: SyncProgressEvent) => void) | undefined;
+  let progressUnsubscribe: ReturnType<typeof vi.fn>;
+
+  /** Emits a sync progress event through the captured network-event handler */
+  function emitProgress(event: SyncProgressEvent) {
+    act(() => {
+      if (!capturedProgressHandler) throw new Error('no sync progress subscription');
+      capturedProgressHandler(event);
+    });
+  }
+
   beforeEach(() => {
     // The store's show-grace timer means visibility changes need timer control
     vi.useFakeTimers();
     resetAutoSyncBlocking();
     vi.mocked(request).mockClear();
+
+    capturedProgressHandler = undefined;
+    progressUnsubscribe = vi.fn();
+    vi.mocked(getNetworkEvent).mockImplementation(
+      // getNetworkEvent has a complex generic signature; cast is required for the mock
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((eventName: string) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncProgress')
+          return (cb: (event: SyncProgressEvent) => void) => {
+            capturedProgressHandler = cb;
+            return progressUnsubscribe;
+          };
+        return () => vi.fn();
+        // Same cast as above: closing the type assertion needed for the complex generic signature
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
   });
 
   afterEach(() => {
@@ -175,5 +208,60 @@ describe('AutoSyncBlockingOverlay', () => {
     expect(cancelButton).toBeEnabled();
     fireEvent.click(cancelButton);
     expect(vi.mocked(request)).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not subscribe to sync progress while nothing is blocking', () => {
+    render(<AutoSyncBlockingOverlay />);
+    expect(capturedProgressHandler).toBeUndefined();
+  });
+
+  it('shows progress text and a determinate bar when progress arrives while blocking', () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    emitProgress({ progressText: 'MyProject', progressValue: 0.4 });
+    expect(screen.getByText('MyProject')).toBeInTheDocument();
+    // The 0–1 payload fraction is converted to the Progress component's 0–100 scale
+    expect(screen.getByTestId('progress')).toHaveAttribute('data-value', '40');
+  });
+
+  it('renders indeterminate progress (no progressValue) as text only, without a bar', () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    emitProgress({ progressText: 'Looking for changes' });
+    expect(screen.getByText('Looking for changes')).toBeInTheDocument();
+    expect(screen.queryByTestId('progress')).not.toBeInTheDocument();
+  });
+
+  it('treats a null progressValue as indeterminate (normalized at the subscription boundary)', () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    // The extension's payload contract uses null for indeterminate progress
+    // eslint-disable-next-line no-null/no-null
+    emitProgress({ progressText: 'Connecting to server', progressValue: null });
+    expect(screen.getByText('Connecting to server')).toBeInTheDocument();
+    expect(screen.queryByTestId('progress')).not.toBeInTheDocument();
+  });
+
+  it('updates the displayed progress as further events arrive', () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    emitProgress({ progressText: 'ProjectA', progressValue: 0.25 });
+    emitProgress({ progressText: 'ProjectB', progressValue: 0.75 });
+    expect(screen.queryByText('ProjectA')).not.toBeInTheDocument();
+    expect(screen.getByText('ProjectB')).toBeInTheDocument();
+    expect(screen.getByTestId('progress')).toHaveAttribute('data-value', '75');
+  });
+
+  it('unsubscribes and clears progress when blocking ends — the next episode starts clean', () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    emitProgress({ progressText: 'MyProject', progressValue: 0.4 });
+    act(() => {
+      setAutoSyncBlocking(false);
+    });
+    expect(progressUnsubscribe).toHaveBeenCalledTimes(1);
+    showOverlay(); // a later scheduled sync raises the block again
+    expect(screen.queryByText('MyProject')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('progress')).not.toBeInTheDocument();
   });
 });
