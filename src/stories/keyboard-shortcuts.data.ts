@@ -306,6 +306,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'footnote-new-paragraph',
+    purpose: 'Insert a new paragraph (\\fp) within the footnote being edited',
+    category: 'Editing',
+    context: 'Footnote editor',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
     id: 'select-books-range',
     purpose: 'Range-select books (extend the selection to the clicked book)',
     category: 'Selection',

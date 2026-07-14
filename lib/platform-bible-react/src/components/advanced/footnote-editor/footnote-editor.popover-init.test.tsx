@@ -14,84 +14,11 @@
  * Unlike `footnote-editor.component.test.tsx` (marker-palette wiring), this suite does NOT mock
  * `@eten-tech-foundation/platform-editor`'s `Editorial` — the artifact is a real Lexical
  * reconciliation effect of the wrapper doc's actual node shape, so it can only be observed by
- * mounting the real editor.
+ * mounting the real editor (via the shared footnote-editor.test-harness).
  */
-import { act, render } from '@testing-library/react';
-import '@testing-library/jest-dom';
 import { describe, expect, it } from 'vitest';
-import type { DeltaOpInsertNoteEmbed, EditorOptions } from '@eten-tech-foundation/platform-editor';
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import { $getRoot, $isElementNode, LexicalEditor } from 'lexical';
-import FootnoteEditor from './footnote-editor.component';
-import {
-  FOOTNOTE_EDITOR_STRING_KEYS,
-  FootnoteEditorLocalizedStrings,
-} from './footnote-editor.types';
-
-function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
-  const entries = FOOTNOTE_EDITOR_STRING_KEYS.map((key) => [key, key] as const);
-  // `FootnoteEditorLocalizedStrings` is a mapped type over every key in
-  // `FOOTNOTE_EDITOR_STRING_KEYS`; building it from `Object.fromEntries` is simpler than spelling
-  // out every key by hand, but `Object.fromEntries`'s return type is necessarily untyped.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return Object.fromEntries(entries) as FootnoteEditorLocalizedStrings;
-}
-
-const scrRef: SerializedVerseRef = {
-  book: 'GEN',
-  chapterNum: 1,
-  verseNum: 1,
-  verse: '1',
-};
-
-const sentinelNoteOp: DeltaOpInsertNoteEmbed = {
-  insert: {
-    note: {
-      style: 'f',
-      caller: '+',
-      contents: {
-        ops: [
-          { insert: '1:1 ', attributes: { char: { style: 'fr' } } },
-          { insert: 'sentinel note text', attributes: { char: { style: 'ft' } } },
-        ],
-      },
-    },
-  },
-};
-
-/** Mounts the REAL `FootnoteEditor` (no mocked `Editorial`) and waits for its init effect. */
-async function renderPopoverAndWaitForInit(view: EditorOptions['view']) {
-  const utils = render(
-    <FootnoteEditor
-      noteOps={[sentinelNoteOp]}
-      onClose={() => {}}
-      scrRef={scrRef}
-      noteKey={undefined}
-      isNewNote
-      editorOptions={{ view }}
-      defaultMarkerMenuTrigger="\\"
-      localizedStrings={buildLocalizedStrings()}
-    />,
-  );
-  const editorInput = utils.container.querySelector('.editor-input');
-  if (!editorInput) throw new Error('popover editor-input not found');
-
-  // The init effect defers `applyUpdate` via `setTimeout(0)` (footnote-editor.component.tsx);
-  // let it run for real rather than mocking timers, matching the effect's own scheduling.
-  await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 10);
-    });
-  });
-
-  // Lexical exposes its mounted editor instance on the root DOM element via this non-public,
-  // underscore-prefixed property — there's no public API to reach it from outside a React ref,
-  // and this is the same technique the engine's own popover round-trip tests use.
-  // eslint-disable-next-line no-underscore-dangle, no-type-assertion/no-type-assertion
-  const lexical = (editorInput as unknown as { __lexicalEditor?: LexicalEditor }).__lexicalEditor;
-  if (!lexical) throw new Error('lexical editor handle not found on popover editor-input');
-  return lexical;
-}
+import { renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
 
 /** The wrapper paragraph's direct child node types, document order. */
 function wrapperParaChildTypes(lexical: LexicalEditor): string[] {
@@ -104,11 +31,12 @@ function wrapperParaChildTypes(lexical: LexicalEditor): string[] {
 
 describe('FootnoteEditor popover init (Task 14 Phase 5: wrapper-para glyph artifact)', () => {
   it('editable marker mode: lands the note after the wrapper para prefix, no trailing glyph junk', async () => {
-    const lexical = await renderPopoverAndWaitForInit({
-      markerMode: 'editable',
-      hasSpacing: true,
-      isFormattedFont: true,
-    });
+    // This suite only asserts on the post-`applyUpdate` node shape, so wait just for that macrotask
+    // (not the later new-note selection re-assert).
+    const { lexical } = await renderPopoverAndWaitForInit(
+      { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+      { waitMs: 10 },
+    );
 
     // Well-formed shape: the para's own `\p` marker glyph, its NBSP trailing space, then the
     // note — and NOTHING else. A displaced insert leaves a second `marker`/`text` pair trailing
@@ -117,11 +45,10 @@ describe('FootnoteEditor popover init (Task 14 Phase 5: wrapper-para glyph artif
   });
 
   it('non-editable (visible) marker mode: unaffected by the editable-mode retain fix', async () => {
-    const lexical = await renderPopoverAndWaitForInit({
-      markerMode: 'visible',
-      hasSpacing: true,
-      isFormattedFont: true,
-    });
+    const { lexical } = await renderPopoverAndWaitForInit(
+      { markerMode: 'visible', hasSpacing: true, isFormattedFont: true },
+      { waitMs: 10 },
+    );
 
     // `createPara` only injects the two-node MarkerNode+NBSP prefix for `markerMode: "editable"`;
     // "visible" mode's single `immutable-typed-text` prefix node is a pre-existing, out-of-scope

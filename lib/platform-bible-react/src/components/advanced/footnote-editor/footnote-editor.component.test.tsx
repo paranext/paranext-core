@@ -142,27 +142,38 @@ function renderFootnoteEditor(
     getMarkerMenuContext: vi.fn(),
     applyMarkerMenuSelection: vi.fn(),
     splitParagraphWithMarker: vi.fn(),
+    commitPendingMarkerEdits: vi.fn(),
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
     selectNote: vi.fn(),
   } as unknown as EditorRef;
 
-  const utils = render(
+  // Builder so a test can re-render with a different scrRef to exercise the book/chapter-change
+  // close-and-save path (see the "close-and-save settle" suite).
+  const renderElement = (currentScrRef: SerializedVerseRef) => (
     <FootnoteEditor
       noteOps={undefined}
       onClose={() => {}}
-      scrRef={scrRef}
+      scrRef={currentScrRef}
       noteKey={undefined}
       editorOptions={editorOptions}
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
-    />,
+    />
   );
+
+  const utils = render(renderElement(scrRef));
 
   const editorInput = utils.getByTestId('popover-editor-input');
   editorInput.focus();
-  return { ...utils, editorInput, editorRef: mockEditorRefHolder.current };
+  return {
+    ...utils,
+    editorInput,
+    editorRef: mockEditorRefHolder.current,
+    /** Re-render with a new scrRef; a book/chapter change triggers closeAndSave (save-and-close). */
+    rerenderScrRef: (nextScrRef: SerializedVerseRef) => utils.rerender(renderElement(nextScrRef)),
+  };
 }
 
 function makeItem(overrides: Partial<EditorMarkerMenuItem> = {}): EditorMarkerMenuItem {
@@ -441,10 +452,44 @@ describe('FootnoteEditor marker palette wiring', () => {
   });
 
   describe('Enter inside the popover', () => {
-    it('is never intercepted by the palette wiring (no session, so no preventDefault/dismiss/commit)', () => {
+    it('with the caret inside the note content: never intercepted (stays on the library \\fp path)', () => {
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette();
       const { editorInput } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      // Give the mocked editor a note whose content holds the DOM caret — the state where the
+      // library's own KEY_ENTER handler ($handleEnterInNote → \fp) must receive the event.
+      const doc = editorInput.ownerDocument;
+      const note = doc.createElement('span');
+      note.classList.add('note');
+      note.textContent = 'note text';
+      editorInput.appendChild(note);
+      const selection = doc.getSelection();
+      const range = doc.createRange();
+      if (!note.firstChild || !selection) throw new Error('mock note text/selection missing');
+      range.setStart(note.firstChild, 2);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      const notPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(markerPalette.show).not.toHaveBeenCalled();
+      expect(markerPalette.commit).not.toHaveBeenCalled();
+    });
+
+    it('with the DOM caret outside the note content: claimed and rerouted into the note (PT-4187 bug 2)', () => {
+      // Radix's open-autofocus can park the DOM caret at the wrapper-para start; Enter there
+      // used to plain-split the wrapper instead of inserting \fp. The guard claims the key and
+      // routes the caret into the note instead.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette();
+      const { editorInput, editorRef } = renderFootnoteEditor(
         { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
         markerPalette,
       );
@@ -453,7 +498,8 @@ describe('FootnoteEditor marker palette wiring', () => {
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
       );
 
-      expect(notPrevented).toBe(true);
+      expect(notPrevented).toBe(false); // claimed — must not reach Lexical's split path
+      expect(editorRef.selectNote).toHaveBeenCalledWith(0);
       expect(markerPalette.show).not.toHaveBeenCalled();
       expect(markerPalette.commit).not.toHaveBeenCalled();
     });
@@ -474,6 +520,53 @@ describe('FootnoteEditor marker palette wiring', () => {
 
       expect(markerPalette.show).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('close-and-save settle (PT-4187 abandonment window)', () => {
+  // closeAndSave runs commitPendingMarkerEdits() before the final note-op read so a marker rename
+  // the user walked away from mid-edit serializes as what's on screen, not the stale pre-rename
+  // marker — EXCEPT while this popover's own marker-palette session is open, where the palette's
+  // own apply must be the one to consume the typed literal. These tests drive closeAndSave through
+  // the book/chapter-change path (navigating away closes-and-saves the open note), which invokes
+  // the same callback as the Save button without depending on the accept button's enabled state.
+  const editorOptions: EditorOptions = {
+    view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+  };
+  const nextChapterScrRef: SerializedVerseRef = { ...scrRef, chapterNum: 2 };
+
+  it('commits pending marker edits before saving when no palette session is open', () => {
+    const { editorRef, rerenderScrRef } = renderFootnoteEditor(editorOptions, makeMarkerPalette());
+
+    rerenderScrRef(nextChapterScrRef);
+
+    expect(editorRef.commitPendingMarkerEdits).toHaveBeenCalledOnce();
+  });
+
+  it('skips the settle while a marker-palette session is open', () => {
+    mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+    const markerPalette = makeMarkerPalette(vi.fn(() => new Promise<string | undefined>(() => {})));
+    const { editorInput, editorRef, rerenderScrRef } = renderFootnoteEditor(
+      editorOptions,
+      markerPalette,
+    );
+    mockMarkerMenuContext(editorRef, {
+      source: 'character',
+      previousParaMarkers: [],
+      openCharMarkers: [],
+      hasTextSelection: false,
+      inMarkerText: false,
+      anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+    });
+    // Open a live palette session — its `show` promise never resolves, so the session stays open
+    // across the chapter-change close-and-save below.
+    editorInput.ownerDocument.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+    );
+
+    rerenderScrRef(nextChapterScrRef);
+
+    expect(editorRef.commitPendingMarkerEdits).not.toHaveBeenCalled();
   });
 });
 

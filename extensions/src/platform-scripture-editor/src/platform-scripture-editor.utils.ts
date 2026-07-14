@@ -91,6 +91,63 @@ export function findNoteIndexByOps(
   return undefined;
 }
 
+/** Snapshot of the state a collapsed-note caller click decides against. */
+export interface NoteCallerClickState {
+  /**
+   * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
+   * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
+   * `noteCallerOnClick` guard.
+   */
+  isCollapsed: boolean | undefined;
+  /** The note key of an in-progress footnote-editor session, if any. */
+  editingNoteKey: string | undefined;
+  /** Whether the footnote-editor popover is actually shown right now. */
+  popoverShown: boolean;
+  /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
+  paneRendered: boolean;
+}
+
+/** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
+export interface NoteCallerClickDecision {
+  /**
+   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
+   * bookkeeping that would otherwise dead-end every future caller click (PT-4187 bug 3, "make the
+   * failure benign"). The caller must clear the editing-session refs before acting.
+   */
+  clearStaleEditingSession: boolean;
+  /**
+   * What the caller click resolves to:
+   *
+   * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
+   * - `focus-pane` — focus/highlight the note in the footnotes pane (PT9 navigate-to-note).
+   * - `open-popover` — open the footnote-editor popover for the clicked note.
+   */
+  action: 'ignore-expanded' | 'ignore-popover-open' | 'focus-pane' | 'open-popover';
+}
+
+/**
+ * Decides what a click on a note caller does (PT-4187 bug 3). Pure decision logic extracted from
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ *
+ * - An expanded note's caller does nothing (the note is edited in place).
+ * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
+ * - An editing-session key without a shown popover is STALE — it must not block the click.
+ * - Pane actually rendered → focus/highlight the note there (PT9 navigate-to-note, Decision 6); the
+ *   pane's visibility toggle alone is not enough (the pane also needs its data to render).
+ * - Otherwise → open the footnote-editor popover.
+ */
+export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  if (!state.isCollapsed) return { clearStaleEditingSession: false, action: 'ignore-expanded' };
+  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
+  // truthiness check; an empty-string key is never a live session).
+  if (state.editingNoteKey && state.popoverShown)
+    return { clearStaleEditingSession: false, action: 'ignore-popover-open' };
+  const clearStaleEditingSession = !!state.editingNoteKey;
+  if (state.paneRendered) return { clearStaleEditingSession, action: 'focus-pane' };
+  return { clearStaleEditingSession, action: 'open-popover' };
+}
+
 // #region Editor Title Formatting
 
 const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';

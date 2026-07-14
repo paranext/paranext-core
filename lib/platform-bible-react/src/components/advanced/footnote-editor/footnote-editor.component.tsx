@@ -386,9 +386,24 @@ export default function FootnoteEditor({
     if (!showMarkersMenu) editorRef.current?.focus();
   }, [noteType, showMarkersMenu]);
 
+  /**
+   * True when the DOM selection's anchor sits inside this popover's note content (the `span.note`
+   * element). The popover's document is a lone wrapper `\p` paragraph hosting exactly one note, so
+   * a caret anywhere else (e.g. parked at the wrapper-para start by Radix's open-autofocus, PT-4187
+   * bug 2) is never where the user means to edit.
+   */
+  const isDomCaretInsideNote = useCallback(() => {
+    const editorInput = editorParentRef.current?.querySelector('.editor-input');
+    const noteElement = editorInput?.querySelector('span.note');
+    const anchorNode = editorParentRef.current?.ownerDocument.getSelection()?.anchorNode;
+    return !!noteElement && !!anchorNode && noteElement.contains(anchorNode);
+  }, []);
+
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
+    let reassertFrame: ReturnType<typeof requestAnimationFrame> | undefined;
+    let reassertTimeout: ReturnType<typeof setTimeout> | undefined;
     hasInitializedEditor.current = false;
     setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
@@ -427,6 +442,19 @@ export default function FootnoteEditor({
         if (isNewNote) {
           editorRef.current?.selectNote(0);
           editorRef.current?.focus();
+          // PT-4187 bug 2: Radix's open-autofocus (load-bearing for the focus handoff into this
+          // popover — preventing it was falsified live) can land AFTER this and park the DOM
+          // caret at the wrapper-para start, where Enter plain-splits instead of inserting \fp.
+          // Re-assert the note selection once the autofocus has settled (a frame plus a
+          // macrotask later); skipped when the caret is already inside the note so a user's own
+          // click is never overridden.
+          reassertFrame = requestAnimationFrame(() => {
+            reassertTimeout = setTimeout(() => {
+              if (isDomCaretInsideNote()) return;
+              editorRef.current?.selectNote(0);
+              editorRef.current?.focus();
+            }, 0);
+          });
         }
       }, 0);
     }
@@ -435,8 +463,10 @@ export default function FootnoteEditor({
       if (timeout) {
         clearTimeout(timeout);
       }
+      if (reassertFrame !== undefined) cancelAnimationFrame(reassertFrame);
+      if (reassertTimeout !== undefined) clearTimeout(reassertTimeout);
     };
-  }, [noteOps, noteKey, isNewNote]);
+  }, [noteOps, noteKey, isNewNote, isDomCaretInsideNote]);
 
   /**
    * Gets the current note op from the editor, applies the given caller, calls onChange, and
@@ -471,6 +501,14 @@ export default function FootnoteEditor({
   );
 
   const closeAndSave = useCallback(() => {
+    // PT-4187 (abandonment window): settle pending mid-edit marker text before the final read
+    // of the note ops, so a marker rename walked away from mid-edit saves as what's on screen
+    // rather than the stale pre-rename marker. Clicking Save blurs this popover's editor, so
+    // the settle covers everything; skipped while this popover's own marker-palette session is
+    // open (the palette's apply must be the one to consume the typed literal). Deliberately
+    // NOT in saveCurrentNoteOp: the auto-save path runs inside a Lexical update listener,
+    // where dispatching another (discrete) update mid-commit is unsafe.
+    if (!paletteSession.current) editorRef.current?.commitPendingMarkerEdits();
     saveCurrentNoteOp(callerType, customCaller, true);
     onClose();
   }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
@@ -714,10 +752,9 @@ export default function FootnoteEditor({
     if (options.view?.markerMode === 'editable') {
       // In editable marker mode (e.g. Standard view) a typed backslash IS content — the editor's
       // marker-editing engine resolves typed markers itself. Without a host-supplied
-      // `markerPalette` there's nothing to wire up here: let every keystroke land as a literal
-      // character (pass-through-only degradation for non-P10 consumers). Enter is never
-      // intercepted below either way — it stays on the library's own `\fp` path.
-      if (!markerPalette) return () => {};
+      // `markerPalette` there is no palette to wire up: every keystroke lands as a literal
+      // character (pass-through-only degradation for non-P10 consumers). The Enter guard below
+      // still applies either way.
 
       // CAPTURE phase (Task 15 final review, Important 1 — the round-3 semantics ported from the
       // web view): session-ending keys must be claimed BEFORE Lexical's own root-element keydown
@@ -729,12 +766,28 @@ export default function FootnoteEditor({
         if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
 
-        if (session) {
+        if (session && markerPalette) {
           if (handleMarkerPaletteSessionKeyDown(event, session, markerPalette) === 'ended')
             paletteSession.current = undefined;
           return;
         }
 
+        // PT-4187 bug 2: Enter with the DOM caret OUTSIDE the note content (Radix's
+        // open-autofocus can park it at the wrapper-para start; Lexical's keydown path follows
+        // the DOM) plain-splits the wrapper instead of inserting `\fp`. Enter has no legitimate
+        // job outside the note in this popover — the wrapper para exists only to host the note —
+        // so claim the key and route the caret into the note; the next Enter lands on the
+        // library's `\fp` path ($handleEnterInNote). Enter with the caret inside the note is
+        // deliberately left alone.
+        if (event.key === 'Enter' && !isDomCaretInsideNote()) {
+          event.preventDefault();
+          event.stopPropagation();
+          editorRef.current?.selectNote(0);
+          editorRef.current?.focus();
+          return;
+        }
+
+        if (!markerPalette) return;
         if (event.key !== defaultMarkerMenuTrigger) return;
         const ctx = editorRef.current?.getMarkerMenuContext();
         if (!ctx) return;
@@ -788,6 +841,7 @@ export default function FootnoteEditor({
     options.styleInfo,
     markerPalette,
     openMarkerPalette,
+    isDomCaretInsideNote,
   ]);
 
   const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
