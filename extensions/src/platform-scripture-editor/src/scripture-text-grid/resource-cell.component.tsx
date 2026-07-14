@@ -19,7 +19,14 @@ import { sliceUsjToVerse } from './verse-display.utils';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
 
-export type GridResource = { resourceId: string; projectId: string; label: string };
+/**
+ * A resource to render as a grid cell.
+ *
+ * `projectId` is `undefined` when the DBL reference could not be resolved to an installed project
+ * (e.g., the resource has not been downloaded or is absent from the cached resource list). The cell
+ * renders an `'unavailable'` placeholder in that case.
+ */
+export type GridResource = { resourceId: string; projectId: string | undefined; label: string };
 type ResourceCellProps = {
   resourceRef: GridResource;
   scrRef: SerializedVerseRef;
@@ -98,8 +105,11 @@ export function ResourceCell({
   // #endregion
 
   const state = useMemo(
-    () => deriveCellState({ usjPossiblyError, isLoading }),
-    [usjPossiblyError, isLoading],
+    () =>
+      resourceRef.projectId === undefined
+        ? 'unavailable'
+        : deriveCellState({ usjPossiblyError, isLoading }),
+    [resourceRef.projectId, usjPossiblyError, isLoading],
   );
 
   // #region Zoom — computed here so the callbacks and bound-state are available for the view's

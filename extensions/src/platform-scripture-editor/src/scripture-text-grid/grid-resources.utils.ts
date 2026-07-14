@@ -13,15 +13,15 @@ import type { GridResource } from './resource-cell.component';
  *   installed project id via the cached DBL resource list (matched by `dblEntryUid`). This mirrors
  *   how `resource-text-panel` resolves the resource it renders.
  *
- * A DBL resource with no installed project (not yet downloaded, or absent from the cache) has no
- * fetchable text, so it is omitted rather than rendered as a cell whose subscription spins
- * forever.
+ * A DBL resource with no installed project (not yet downloaded, or absent from the cache) is
+ * included with `projectId: undefined`. The cell renders an 'unavailable' placeholder so the
+ * resource stays visible in the grid and doesn't silently disappear from View Options.
  */
 export function toGridResources(
   references: BibleTextReference[],
   dblResources: DblResourceData[],
 ): GridResource[] {
-  return references.flatMap((reference) => {
+  return references.map((reference) => {
     let projectId: string | undefined;
     if (isDblResourceReference(reference)) {
       const match = findCachedDblResource(reference, dblResources);
@@ -29,7 +29,7 @@ export function toGridResources(
     } else {
       projectId = reference.id;
     }
-    return projectId ? [{ resourceId: reference.id, projectId, label: reference.name }] : [];
+    return { resourceId: reference.id, projectId, label: reference.name };
   });
 }
 
