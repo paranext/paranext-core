@@ -18,10 +18,96 @@ process.stdin.on("end", () => {
   const used = Math.floor(total * pct / 100);
   const cwd = j?.cwd ?? "~";
 
-  // Rate-limit usage (Claude.ai Pro/Max only; the whole object is absent
-  // otherwise, e.g. API-key auth or before the first API response, and each
-  // window may be independently absent). Reset times are rendered in the
-  // machine local time zone via the local Date getters.
+  // --- Cross-session rate-limit harvest -------------------------------------
+  // rate_limits is ACCOUNT-WIDE (server-side rolling 5h / 7d windows), but
+  // Claude Code only refreshes it in THIS session JSON after an API response,
+  // so between prompts it is frozen. To show a live figure that also reflects
+  // other sessions, every session writes what it observes to a shared file and
+  // all sessions display the freshest value across them. Freshness rule per
+  // window: the later resets_at is the newer reading (windows advance over
+  // time); on a tie, the higher used_percentage is newer (usage accrues within
+  // a fixed window). ts is stamped only when a genuinely new reading wins, so
+  // idle 60s re-renders do not falsely refresh it.
+  const os = require("os");
+  const fs = require("fs");
+  const path = require("path");
+  const SHARED = (() => {
+    // Resolve a file that is the SAME physical file from Windows and WSL2 (so
+    // sessions in both environments aggregate together), and a normal per-home
+    // file on macOS / plain Linux / native Windows.
+    const envp = process.env.CLAUDE_USAGE_SHARED_FILE;
+    if (envp) return envp; // explicit override wins
+    const isWSL = process.platform === "linux" &&
+      (/microsoft|wsl/i.test(String(os.release())) || !!process.env.WSL_DISTRO_NAME);
+    if (isWSL) {
+      // Write to the Windows-side home so Windows and WSL share one file.
+      const pick = (home) => {
+        try { return fs.existsSync(path.join(home, ".claude")) ? path.join(home, ".claude", "rate-limits-shared.json") : undefined; }
+        catch (e) { return undefined; }
+      };
+      let user;
+      try { user = os.userInfo().username; } catch (e) { user = process.env.USER; }
+      const skip = ["Public", "Default", "Default User", "All Users", "desktop.ini"];
+      for (const drv of ["c", "C"]) {
+        if (user) { const r = pick(`/mnt/${drv}/Users/${user}`); if (r) return r; }
+      }
+      for (const drv of ["c", "C"]) {
+        let names = [];
+        try { names = fs.readdirSync(`/mnt/${drv}/Users`); } catch (e) {}
+        for (const n of names) {
+          if (skip.includes(n)) continue;
+          const r = pick(`/mnt/${drv}/Users/${n}`); if (r) return r;
+        }
+      }
+      // fall through to WSL-local home if no Windows home with .claude found
+    }
+    return path.join(os.homedir(), ".claude", "rate-limits-shared.json");
+  })();
+  const STALE_SECS = 300; // values not refreshed within this many seconds get a "*"
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(SHARED, "utf8")) || {}; } catch { saved = {}; }
+
+  const expired = (e) => e && typeof e.resets_at === "number" && nowSec >= e.resets_at;
+  const mergeWin = (obs, sv) => {
+    let cur;
+    if (obs && typeof obs.used_percentage === "number") {
+      cur = {
+        used_percentage: obs.used_percentage,
+        resets_at: typeof obs.resets_at === "number" ? obs.resets_at : undefined,
+      };
+    }
+    if (expired(sv)) sv = undefined;
+    if (expired(cur)) cur = undefined;
+    if (!cur && !sv) return undefined;
+    if (cur && !sv) return { ...cur, ts: nowSec };
+    if (!cur && sv) return sv;
+    let curWins;
+    if (typeof cur.resets_at === "number" && typeof sv.resets_at === "number" && cur.resets_at !== sv.resets_at) {
+      curWins = cur.resets_at > sv.resets_at;
+    } else {
+      curWins = Math.round(cur.used_percentage) > Math.round(sv.used_percentage);
+    }
+    return curWins ? { ...cur, ts: nowSec } : sv;
+  };
+
+  const rl = j?.rate_limits;
+  const merged = {};
+  const fh = mergeWin(rl?.five_hour, saved.five_hour);
+  const sd = mergeWin(rl?.seven_day, saved.seven_day);
+  if (fh) merged.five_hour = fh;
+  if (sd) merged.seven_day = sd;
+
+  // Persist best-effort (temp + rename; readers tolerate a rare torn read).
+  try {
+    fs.mkdirSync(path.dirname(SHARED), { recursive: true });
+    const tmp = `${SHARED}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(merged));
+    try { fs.renameSync(tmp, SHARED); }
+    catch { fs.writeFileSync(SHARED, JSON.stringify(merged)); try { fs.unlinkSync(tmp); } catch (e) {} }
+  } catch (e) {}
+
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const hhmm = (epoch) => {
     const d = new Date(epoch * 1000);
@@ -31,17 +117,16 @@ process.stdin.on("end", () => {
     const d = new Date(epoch * 1000);
     return `${d.getDate()} ${MONTHS[d.getMonth()]} ${hhmm(epoch)}`;
   };
-  const win = (w, label, fmt) => {
-    const p = w?.used_percentage;
-    if (p === undefined || p === null) return undefined;
-    let s = `${label} ${Math.round(p)}%`;
-    if (typeof w.resets_at === "number") s += ` (${fmt(w.resets_at)})`;
+  const fmtWin = (e, label, fmt) => {
+    if (!e || typeof e.used_percentage !== "number") return undefined;
+    const stale = typeof e.ts === "number" && nowSec - e.ts > STALE_SECS;
+    let s = `${label} ${Math.round(e.used_percentage)}%${stale ? "*" : ""}`;
+    if (typeof e.resets_at === "number") s += ` (${fmt(e.resets_at)})`;
     return s;
   };
-  const rl = j?.rate_limits;
   const rate = [
-    win(rl?.five_hour, "5h", hhmm),
-    win(rl?.seven_day, "7d", dayMonHHMM),
+    fmtWin(merged.five_hour, "5h", hhmm),
+    fmtWin(merged.seven_day, "7d", dayMonHHMM),
   ].filter(Boolean).join(" | ");
 
   console.log(model);
