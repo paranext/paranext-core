@@ -45,7 +45,7 @@ export function useResourcePickerResources(
     return () => {
       current = false;
     };
-  }, [includeDownloaded, projectId]);
+  }, [includeDownloaded]);
 
   const rows = useMemo(() => {
     if (!effectiveResources || downloaded === undefined) return undefined;
