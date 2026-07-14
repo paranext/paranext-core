@@ -49,7 +49,7 @@ describe('focusSharedLayoutDefaultTab', () => {
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     await focusSharedLayoutDefaultTab(papi as never, 'proj-1');
     expect(papi.webViews.openWebView).toHaveBeenCalledWith(
-      'legacyCommentManager.comments',
+      'legacyCommentManager.commentListPanel',
       undefined,
       {
         existingId: '?',
