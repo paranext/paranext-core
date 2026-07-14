@@ -73,6 +73,26 @@ export const Row: Story = {
 };
 
 /**
+ * The default row with `onReorder` supplied: every cell receives a drag-handle grip and is
+ * draggable. Documents that passing `onReorder` activates the drag-to-reorder UI without changing
+ * the layout otherwise.
+ */
+export const RowDraggable: Story = {
+  render: () => (
+    <GridBox>
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={noop}
+        ariaLabel="Text Collection"
+        onChapterContextChange={noop}
+        onReorder={noop}
+      />
+    </GridBox>
+  ),
+};
+
+/**
  * The chapter-context split open for one resource: the verse row on the left, that resource's
  * chapter panel (with its labeled close button) on the right, separated by a resizable handle.
  */

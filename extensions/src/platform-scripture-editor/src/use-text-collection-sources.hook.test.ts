@@ -62,14 +62,17 @@ function mockSettings(referenced: ReturnType<typeof useProjectSetting>) {
 function makeControllablePdp() {
   const unsubUserReferenced = vi.fn(() => Promise.resolve(true));
   const unsubOverlay = vi.fn(() => Promise.resolve(true));
+  const unsubCellOrder = vi.fn(() => Promise.resolve(true));
 
   let deliverUserReferenced: (value: ResourceReferenceList | object) => void = () => {};
   let deliverOverlay: (value: TextCollectionOverlay | object) => void = () => {};
+  let deliverCellOrder: (value: string[] | object) => void = () => {};
 
   // Resolvers for the subscribe promises themselves — left pending until a test resolves them,
   // which is what lets us simulate the dispose-before-subscribe race.
   let resolveUserReferencedSub: (unsub: () => Promise<boolean>) => void = () => {};
   let resolveOverlaySub: (unsub: () => Promise<boolean>) => void = () => {};
+  let resolveCellOrderSub: (unsub: () => Promise<boolean>) => void = () => {};
 
   const subscribeUserReferencedProjectsAndResources = vi.fn(
     (_selector: undefined, callback: (value: ResourceReferenceList | object) => void) => {
@@ -87,27 +90,41 @@ function makeControllablePdp() {
       });
     },
   );
+  const subscribeCellOrder = vi.fn(
+    (_selector: undefined, callback: (value: string[] | object) => void) => {
+      deliverCellOrder = callback;
+      return new Promise<() => Promise<boolean>>((resolve) => {
+        resolveCellOrderSub = resolve;
+      });
+    },
+  );
 
   // Mock object literal cannot satisfy the full PDP interface — cast is required for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const pdp = {
     subscribeUserReferencedProjectsAndResources,
     subscribeTextCollectionOverlay,
+    subscribeCellOrder,
   } as unknown as ITextConnectionSettingsProjectDataProvider;
 
   return {
     pdp,
     unsubUserReferenced,
     unsubOverlay,
-    /** Resolve both subscribe promises with their unsubscribe spies. */
+    unsubCellOrder,
+    /** Resolve all three subscribe promises with their unsubscribe spies. */
     resolveSubscriptions: () =>
       act(() => {
         resolveUserReferencedSub(unsubUserReferenced);
         resolveOverlaySub(unsubOverlay);
+        resolveCellOrderSub(unsubCellOrder);
         // Let the .then handlers that push/dispose unsubscribers run.
         return Promise.resolve();
       }),
-    /** Fire both subscription callbacks with values (data delivery is synchronous in the PDP). */
+    /**
+     * Fire the two gating subscription callbacks (userReferenced + overlay); CellOrder is
+     * non-gating.
+     */
     deliver: (userReferenced: ResourceReferenceList | object, overlay: TextCollectionOverlay) =>
       act(() => {
         deliverUserReferenced(userReferenced);
@@ -120,6 +137,10 @@ function makeControllablePdp() {
     deliverOverlayOnly: (overlay: TextCollectionOverlay) =>
       act(() => {
         deliverOverlay(overlay);
+      }),
+    deliverCellOrderOnly: (order: string[] | object) =>
+      act(() => {
+        deliverCellOrder(order);
       }),
   };
 }
@@ -170,7 +191,32 @@ describe('useTextCollectionSources', () => {
       adminReferenced,
       userReferenced,
       overlay,
+      order: [],
     });
+  });
+
+  it('reflects a delivered cell order in sources.order', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    await controller.deliverCellOrderOnly(['b', 'a']);
+    expect(result.current.sources?.order).toEqual(['b', 'a']);
+  });
+
+  it('falls back to an empty order when the cell-order subscription delivers a PlatformError', async () => {
+    mockSettings(settingTuple(list(), false));
+    const controller = makeControllablePdp();
+    mockUseProjectDataProvider.mockReturnValue(controller.pdp);
+    const { result } = renderHook(() => useTextCollectionSources('proj-1'));
+    await controller.resolveSubscriptions();
+    await controller.deliver(list('user-v'), {});
+    // A real order arrives first, then a PlatformError — the error must not leak into sources.order.
+    await controller.deliverCellOrderOnly(['b', 'a']);
+    await controller.deliverCellOrderOnly(makePlatformError());
+    expect(result.current.sources?.order).toEqual([]);
   });
 
   it('keeps sources undefined until BOTH subscriptions have delivered', async () => {
@@ -251,11 +297,13 @@ describe('useTextCollectionSources', () => {
 
     expect(controller.unsubUserReferenced).not.toHaveBeenCalled();
     expect(controller.unsubOverlay).not.toHaveBeenCalled();
+    expect(controller.unsubCellOrder).not.toHaveBeenCalled();
 
     unmount();
 
     expect(controller.unsubUserReferenced).toHaveBeenCalledTimes(1);
     expect(controller.unsubOverlay).toHaveBeenCalledTimes(1);
+    expect(controller.unsubCellOrder).toHaveBeenCalledTimes(1);
   });
 
   it('immediately unsubscribes a subscription whose promise resolves after unmount (no leak)', async () => {
@@ -271,6 +319,7 @@ describe('useTextCollectionSources', () => {
     // The unsubscribers do not exist yet, so cleanup could not have called them.
     expect(controller.unsubUserReferenced).not.toHaveBeenCalled();
     expect(controller.unsubOverlay).not.toHaveBeenCalled();
+    expect(controller.unsubCellOrder).not.toHaveBeenCalled();
 
     // Now the subscribe promises resolve — since the effect already disposed, the resolved
     // unsubscribe functions must be invoked immediately rather than stored.
@@ -278,6 +327,7 @@ describe('useTextCollectionSources', () => {
 
     expect(controller.unsubUserReferenced).toHaveBeenCalledTimes(1);
     expect(controller.unsubOverlay).toHaveBeenCalledTimes(1);
+    expect(controller.unsubCellOrder).toHaveBeenCalledTimes(1);
   });
 
   it('returns the same textConnectionPdp object that useProjectDataProvider yields', () => {

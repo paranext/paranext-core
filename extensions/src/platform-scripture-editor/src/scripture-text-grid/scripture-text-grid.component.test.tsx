@@ -13,16 +13,36 @@ const mockResourceCell = vi.fn(
     // setScrRef stays in the type (so mock.calls[n][0].setScrRef type-checks in the setter-sync test)
     // but is not destructured here because it is not used in the rendered JSX.
     viewMode,
+    showDragHandle,
+    reorderHandleLabel,
+    onReorderKeyDown,
   }: {
     resourceRef: { label: string; projectId: string; resourceId: string };
     scrRef: { verseNum: number };
     setScrRef: (scrRef: unknown) => void;
     viewMode?: string;
+    showDragHandle?: boolean;
+    reorderHandleLabel?: string;
+    onReorderKeyDown?: (event: React.KeyboardEvent) => void;
   }) => (
-    <div
-      data-testid={`cell-${resourceRef.projectId}`}
-      data-view-mode={viewMode}
-    >{`${resourceRef.label}@${scrRef.verseNum}`}</div>
+    <div data-testid={`cell-${resourceRef.projectId}`} data-view-mode={viewMode}>
+      {`${resourceRef.label}@${scrRef.verseNum}`}
+      {showDragHandle ? (
+        // Mirror the real wiring: a focusable grip that forwards keydown and exposes its id.
+        <button
+          type="button"
+          data-reorder-handle-id={resourceRef.resourceId}
+          data-testid={`grip-${resourceRef.resourceId}`}
+          aria-label={reorderHandleLabel}
+          // Mirror the real grip: stop click bubbling so a reorder grip click never activates the
+          // enclosing verse listitem's chapter-context split.
+          onClick={(event: React.MouseEvent) => event.stopPropagation()}
+          onKeyDown={onReorderKeyDown}
+        >
+          grip
+        </button>
+      ) : undefined}
+    </div>
   ),
 );
 
@@ -128,7 +148,7 @@ describe('ScriptureTextGrid', () => {
   it('renders a single resource as a whole-chapter region, not a verse list', () => {
     render(
       <ScriptureTextGrid
-        resources={[{ projectId: 'a', label: 'WEB' }]}
+        resources={[{ resourceId: 'r-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
         ariaLabel="Text Collection"
@@ -303,7 +323,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('renders a single resource as a whole-chapter region in chapter mode too', () => {
     render(
       <ScriptureTextGrid
-        resources={[{ projectId: 'a', label: 'WEB' }]}
+        resources={[{ resourceId: 'r-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
         viewMode="chapter"
@@ -373,5 +393,283 @@ describe('ScriptureTextGrid — chapter view', () => {
     );
     const chapterContextRegion = screen.getByTestId('scripture-text-grid-chapter-context');
     expect(chapterContextRegion).toHaveAttribute('data-resource-id', resources[1].resourceId);
+  });
+});
+
+// Reorder (drag + keyboard) is also wired into the verse view's vertical listitems, reusing the
+// same handlers but with vertical drag and ArrowUp/ArrowDown on the grips.
+describe('ScriptureTextGrid — verse view reorder', () => {
+  it('calls onReorder with the reordered id sequence after a drag-and-drop', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="verse"
+        onReorder={onReorder}
+      />,
+    );
+    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.drop(wrappers[0]); // onto WEB (resourceId 'r-a')
+    expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+  });
+  it('keyboard: ArrowDown on the first item moves it one position toward the end', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="verse"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowDown' });
+    expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+  });
+  it('keyboard: ArrowUp on the first item is a no-op at the start boundary', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="verse"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowUp' });
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+  it('highlights the hovered drop-target item and clears the highlight on dragEnd', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="verse"
+        onReorder={vi.fn()}
+      />,
+    );
+    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.dragOver(wrappers[0]); // hover over WEB (resourceId 'r-a')
+    expect(wrappers[0].className).toContain('tw:ring-2');
+    expect(wrappers[0].className).toContain('tw:ring-inset');
+    expect(wrappers[0].className).toContain('tw:ring-primary');
+    fireEvent.dragEnd(wrappers[1]);
+    expect(wrappers[0].className).not.toContain('tw:ring-2');
+  });
+  it('grip click does not trigger chapter-context activation', () => {
+    const onChapterContextChange = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="verse"
+        onReorder={vi.fn()}
+        onChapterContextChange={onChapterContextChange}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('grip-r-a'));
+    expect(onChapterContextChange).not.toHaveBeenCalled();
+  });
+});
+
+// Reorder (drag + keyboard) is wired into the chapter view's side-by-side columns.
+describe('ScriptureTextGrid — chapter view reorder', () => {
+  it('calls onReorder with the reordered id sequence after a drag-and-drop', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+      />,
+    );
+    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.drop(wrappers[0]); // onto WEB (resourceId 'r-a')
+    expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+  });
+  it('highlights the hovered drop-target cell and clears the highlight on dragEnd', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={vi.fn()}
+      />,
+    );
+    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.dragOver(wrappers[0]); // hover over WEB (resourceId 'r-a')
+    expect(wrappers[0].className).toContain('tw:ring-2');
+    expect(wrappers[0].className).toContain('tw:ring-inset');
+    expect(wrappers[0].className).toContain('tw:ring-primary');
+    fireEvent.dragEnd(wrappers[1]);
+    expect(wrappers[0].className).not.toContain('tw:ring-2');
+  });
+  it('does not highlight the dragged cell itself when hovered', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={vi.fn()}
+      />,
+    );
+    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(wrappers[1]); // drag KJV (resourceId 'r-b')
+    fireEvent.dragOver(wrappers[1]); // hover over itself
+    expect(wrappers[1].className).not.toContain('tw:ring-2');
+  });
+  it('clears the drop-target highlight after drop', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+      />,
+    );
+    const wrappers = screen.getAllByTestId('scripture-text-grid-cell-draggable');
+    fireEvent.dragStart(wrappers[1]);
+    fireEvent.dragOver(wrappers[0]);
+    expect(wrappers[0].className).toContain('tw:ring-2');
+    fireEvent.drop(wrappers[0]);
+    expect(wrappers[0].className).not.toContain('tw:ring-2');
+  });
+  it('keyboard: ArrowRight on the first cell moves it one position toward the end', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+    expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+  });
+  it('keyboard: ArrowLeft on the first cell is a no-op at the start boundary', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowLeft' });
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+  it('keyboard: the live region announces the move after a successful keyboard reorder', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={vi.fn()}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+        getReorderAnnouncement={(name, position, total) =>
+          `Moved ${name} to position ${position} of ${total}`
+        }
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('');
+    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+    expect(screen.getByRole('status')).toHaveTextContent('Moved WEB to position 2 of 3');
+  });
+  it('keyboard: ArrowLeft on a middle cell moves it one position toward the start', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-b'), { key: 'ArrowLeft' });
+    expect(onReorder).toHaveBeenCalledWith(['r-b', 'r-a', 'r-c']);
+  });
+  it('keyboard: ArrowRight on the last cell is a no-op at the end boundary', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-c'), { key: 'ArrowRight' });
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+  it('keyboard: arrows move by logical index for an RTL cell (not visually flipped)', () => {
+    const onReorder = vi.fn();
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={onReorder}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    // 'r-c' (עברית) is the last logical cell; ArrowLeft moves it one slot toward the start.
+    fireEvent.keyDown(screen.getByTestId('grip-r-c'), { key: 'ArrowLeft' });
+    expect(onReorder).toHaveBeenCalledWith(['r-a', 'r-c', 'r-b']);
+  });
+  it('keyboard: restores focus to the moved cell grip after the row re-renders', () => {
+    const { rerender } = render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={vi.fn()}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    fireEvent.keyDown(screen.getByTestId('grip-r-a'), { key: 'ArrowRight' });
+    // The parent persists → the reordered resources come back as a new prop; the row re-renders
+    // with 'r-a' in its new slot and focus must follow it to the moved grip.
+    rerender(
+      <ScriptureTextGrid
+        resources={[resources[1], resources[0], resources[2]]}
+        scrRef={scrRef}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        onReorder={vi.fn()}
+        getReorderHandleLabel={(name) => `Reorder ${name}`}
+      />,
+    );
+    expect(screen.getByTestId('grip-r-a')).toHaveFocus();
   });
 });

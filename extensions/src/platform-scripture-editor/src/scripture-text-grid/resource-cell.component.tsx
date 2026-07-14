@@ -5,7 +5,7 @@ import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/fr
 import { useExtraValidMarkers } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { deriveCellState } from './resource-cell.utils';
 import {
   RESOURCE_CELL_STRING_KEYS,
@@ -29,6 +29,17 @@ type ResourceCellProps = {
   zoom?: ResourceZoomController;
   /** Localized zoom menu copy, passed straight to the view. */
   zoomMenuLabels?: ZoomMenuLabels;
+  /**
+   * When true, show a focusable reorder-handle grip in the header (reorder logic lives in the
+   * parent).
+   */
+  showDragHandle?: boolean;
+  /** Accessible name for the reorder grip (e.g. "Reorder Genesis"). */
+  reorderHandleLabel?: string;
+  /** Tooltip text shown on grip hover/focus. */
+  reorderHint?: string;
+  /** Keydown handler for the grip; the parent owns the arrow-key reorder logic. */
+  onReorderKeyDown?: (event: KeyboardEvent) => void;
 };
 
 /**
@@ -44,6 +55,10 @@ export function ResourceCell({
   viewMode = 'chapter',
   zoom,
   zoomMenuLabels,
+  showDragHandle,
+  reorderHandleLabel,
+  reorderHint,
+  onReorderKeyDown,
 }: ResourceCellProps) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
@@ -162,6 +177,11 @@ export function ResourceCell({
       onZoomOut={handleZoomOut}
       onResetZoom={handleResetZoom}
       zoomMenuLabels={zoom ? zoomMenuLabels : undefined}
+      showDragHandle={showDragHandle}
+      reorderHandleId={resourceRef.resourceId}
+      reorderHandleLabel={reorderHandleLabel}
+      reorderHint={reorderHint}
+      onReorderKeyDown={onReorderKeyDown}
       editor={
         <Editorial
           ref={editorRef}

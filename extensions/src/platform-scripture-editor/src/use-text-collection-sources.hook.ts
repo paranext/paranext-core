@@ -9,12 +9,15 @@ import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-refe
 /** A user with no recorded checkbox interactions has an empty overlay. */
 const DEFAULT_OVERLAY: TextCollectionOverlay = {};
 
+/** A user with no saved cell order has an empty order. */
+const DEFAULT_ORDER: string[] = [];
+
 /**
- * Assembles the three data sources the View Options helpers read — the admin project-scope
- * `referencedProjectsAndResources` list, the per-user list, and the per-user text-collection
- * overlay — into a single {@link TextCollectionSources} object, and returns the
+ * Assembles the four data sources the View Options helpers read — the admin project-scope
+ * `referencedProjectsAndResources` list, the per-user list, the per-user text-collection overlay,
+ * and the per-user cell order — into a single {@link TextCollectionSources} object, and returns the
  * `platformScripture.textConnectionSettings` data provider so callers can persist mutations via its
- * `setUserReferencedProjectsAndResources` / `setTextCollectionOverlay` setters.
+ * `setUserReferencedProjectsAndResources` / `setTextCollectionOverlay` / `setCellOrder` setters.
  *
  * Model texts are decoupled from the text-collection feature (they carry no admin flag and the
  * overlay is initialized only from the referenced list), so they are not read here. The View
@@ -37,11 +40,13 @@ export function useTextCollectionSources(projectId: string | undefined) {
     undefined,
   );
   const [overlay, setOverlay] = useState<TextCollectionOverlay | undefined>(undefined);
+  const [order, setOrder] = useState<string[]>(DEFAULT_ORDER);
 
   useEffect(() => {
     if (!textConnectionPdp) {
       setUserReferenced(undefined);
       setOverlay(undefined);
+      setOrder(DEFAULT_ORDER);
       return undefined;
     }
 
@@ -72,6 +77,12 @@ export function useTextCollectionSources(projectId: string | undefined) {
       }),
       'text-collection overlay',
     );
+    track(
+      textConnectionPdp.subscribeCellOrder(undefined, (value) => {
+        setOrder(isPlatformError(value) ? DEFAULT_ORDER : value);
+      }),
+      'cell order',
+    );
 
     return () => {
       disposed = true;
@@ -83,8 +94,8 @@ export function useTextCollectionSources(projectId: string | undefined) {
     if (isReferencedLoading) return undefined;
     if (isPlatformError(adminReferenced)) return undefined;
     if (userReferenced === undefined || overlay === undefined) return undefined;
-    return { adminReferenced, userReferenced, overlay };
-  }, [isReferencedLoading, adminReferenced, userReferenced, overlay]);
+    return { adminReferenced, userReferenced, overlay, order };
+  }, [isReferencedLoading, adminReferenced, userReferenced, overlay, order]);
 
   return { sources, textConnectionPdp };
 }

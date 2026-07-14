@@ -28,6 +28,8 @@ export type TextCollectionSources = {
   userReferenced: ResourceReferenceList;
   /** The current user's per-user text-collection overlay (keyed by resource id). */
   overlay: TextCollectionOverlay;
+  /** The current user's preferred cell order (resource ids); `[]` when unset. */
+  order: string[];
 };
 
 /** A single row in the View Options TEXTS list. */
