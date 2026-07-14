@@ -8,15 +8,12 @@
  * in this popover. Enter with the caret inside the note stays on the library's `\fp` path
  * ($handleEnterInNote), pinned here end-to-end through the real editor.
  *
- * Like footnote-editor.popover-init.test.tsx (whose harness this reuses), this suite mounts the
- * REAL `Editorial` — the bug is an interaction between DOM focus/selection and Lexical's keydown
- * handling, unobservable with a mocked editor.
+ * Like footnote-editor.popover-init.test.tsx (with which it shares footnote-editor.test-harness),
+ * this suite mounts the REAL `Editorial` — the bug is an interaction between DOM focus/selection
+ * and Lexical's keydown handling, unobservable with a mocked editor.
  */
-import { act, render } from '@testing-library/react';
-import '@testing-library/jest-dom';
+import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { DeltaOpInsertNoteEmbed, EditorOptions } from '@eten-tech-foundation/platform-editor';
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   $getRoot,
   $getSelection,
@@ -25,11 +22,7 @@ import {
   LexicalEditor,
   LexicalNode,
 } from 'lexical';
-import FootnoteEditor from './footnote-editor.component';
-import {
-  FOOTNOTE_EDITOR_STRING_KEYS,
-  FootnoteEditorLocalizedStrings,
-} from './footnote-editor.types';
+import { editableView, renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
 
 // jsdom doesn't implement `getBoundingClientRect` on `Range`; moving the caret can make
 // Lexical's post-commit scroll-into-view read a Range rect. Stub it (a zero rect nothing
@@ -50,73 +43,6 @@ if (typeof Range.prototype.getBoundingClientRect !== 'function') {
       },
     };
   };
-}
-
-function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {
-  const entries = FOOTNOTE_EDITOR_STRING_KEYS.map((key) => [key, key] as const);
-  // Same untyped `Object.fromEntries` construction as footnote-editor.popover-init.test.tsx.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return Object.fromEntries(entries) as FootnoteEditorLocalizedStrings;
-}
-
-const scrRef: SerializedVerseRef = {
-  book: 'GEN',
-  chapterNum: 1,
-  verseNum: 1,
-  verse: '1',
-};
-
-const sentinelNoteOp: DeltaOpInsertNoteEmbed = {
-  insert: {
-    note: {
-      style: 'f',
-      caller: '+',
-      contents: {
-        ops: [
-          { insert: '1:1 ', attributes: { char: { style: 'fr' } } },
-          { insert: 'sentinel note text', attributes: { char: { style: 'ft' } } },
-        ],
-      },
-    },
-  },
-};
-
-const editableView: EditorOptions['view'] = {
-  markerMode: 'editable',
-  hasSpacing: true,
-  isFormattedFont: true,
-};
-
-/** Mounts the REAL `FootnoteEditor` (no mocked `Editorial`) and waits for its init effect. */
-async function renderPopoverAndWaitForInit() {
-  const utils = render(
-    <FootnoteEditor
-      noteOps={[sentinelNoteOp]}
-      onClose={() => {}}
-      scrRef={scrRef}
-      noteKey={undefined}
-      isNewNote
-      editorOptions={{ view: editableView }}
-      defaultMarkerMenuTrigger="\"
-      localizedStrings={buildLocalizedStrings()}
-    />,
-  );
-  const editorInput = utils.container.querySelector('.editor-input');
-  if (!(editorInput instanceof HTMLElement)) throw new Error('popover editor-input not found');
-
-  // The init effect defers `applyUpdate` via `setTimeout(0)`, then re-asserts the note
-  // selection a frame + a macrotask later; let both run for real.
-  await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
-  });
-
-  // Same non-public Lexical handle technique as footnote-editor.popover-init.test.tsx.
-  // eslint-disable-next-line no-underscore-dangle, no-type-assertion/no-type-assertion
-  const lexical = (editorInput as unknown as { __lexicalEditor?: LexicalEditor }).__lexicalEditor;
-  if (!lexical) throw new Error('lexical editor handle not found on popover editor-input');
-  return { editorInput, lexical };
 }
 
 /**
@@ -182,7 +108,7 @@ function lexicalCaretInsideNote(lexical: LexicalEditor): boolean {
 
 describe('FootnoteEditor Enter guard (PT-4187 bug 2: popover Enter must not split the wrapper)', () => {
   it('claims Enter when the DOM caret is outside the note and routes the caret into it', async () => {
-    const { editorInput, lexical } = await renderPopoverAndWaitForInit();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView);
     const childCountBefore = rootChildCount(lexical);
 
     await act(async () => {
@@ -200,7 +126,7 @@ describe('FootnoteEditor Enter guard (PT-4187 bug 2: popover Enter must not spli
   });
 
   it('leaves Enter alone when the caret is inside the note (the library \\fp path)', async () => {
-    const { editorInput, lexical } = await renderPopoverAndWaitForInit();
+    const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView);
     const childCountBefore = rootChildCount(lexical);
 
     // First Enter routes the caret into the note (guard), second Enter must reach the

@@ -622,10 +622,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [footnotesPaneVisible]);
 
   /**
-   * Whether the footnotes pane is ACTUALLY rendered — the render condition below is
-   * `footnotesPaneVisible && usjFromPdp`, not the visibility toggle alone (PT-4187 bug 3: a caller
-   * click routed to a pane that is not really rendered is a dead click). Synced by an effect next
-   * to the `usjFromPdp` derivation.
+   * Whether the footnotes pane is ACTUALLY rendered — `footnotesPaneVisible && usjFromPdp`, not the
+   * visibility toggle alone (PT-4187 bug 3: a caller click routed to a pane that is not really
+   * rendered is a dead click). Mirrors the single `footnotesPaneRendered` value (derived next to
+   * the `usjFromPdp` derivation) that also gates the `FootnotesLayout` render, so the click routing
+   * and the render gate cannot drift apart.
    */
   const footnotesPaneRenderedRef = useRef(false);
 
@@ -1865,12 +1866,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
 
-  // Keep the pane-rendered mirror in sync with the ACTUAL render condition of the footnotes
-  // pane (`footnotesPaneVisible && usjFromPdp`, see the FootnotesLayout render below) so
-  // `noteCallerOnClick` never routes a click to a pane that is not really there (PT-4187 bug 3).
+  // Single source of truth for "is the footnotes pane ACTUALLY rendered": the same value gates the
+  // `FootnotesLayout` render below AND (mirrored into `footnotesPaneRenderedRef`) the
+  // `noteCallerOnClick` routing, so a caller click can never be routed to a pane that is not really
+  // there (PT-4187 bug 3). Deriving it once keeps the render gate and the click routing from
+  // drifting apart.
+  const footnotesPaneRendered = footnotesPaneVisible && !!usjFromPdp;
   useEffect(() => {
-    footnotesPaneRenderedRef.current = footnotesPaneVisible && !!usjFromPdp;
-  }, [footnotesPaneVisible, usjFromPdp]);
+    footnotesPaneRenderedRef.current = footnotesPaneRendered;
+  }, [footnotesPaneRendered]);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
   // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
   // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing
@@ -2686,7 +2690,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 </Alert>
               ))}
 
-              {footnotesPaneVisible && usjFromPdp ? (
+              {footnotesPaneRendered ? (
                 <FootnotesLayout
                   usj={usjFromPdp}
                   onFootnoteSelected={handleFootnoteSelected}
