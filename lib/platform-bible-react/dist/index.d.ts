@@ -3324,6 +3324,21 @@ export declare function useStylesheet(stylesheet: string | undefined): void;
  *   Empty when `usj` is `undefined` or uses no markers.
  */
 export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
+/**
+ * Whether this web view's document is currently rendered — i.e. its dock tab is active. rc-dock
+ * hides inactive tab panes with `display: none`, which keeps the web view's iframe mounted and its
+ * JavaScript running but removes all layout: geometry reads return zero and `scrollIntoView`
+ * no-ops. Layout-dependent side effects should be deferred while this returns `false` and caught up
+ * when it flips to `true`.
+ *
+ * Detection is an `IntersectionObserver` on `document.body` against the iframe's viewport: a hidden
+ * iframe has zero area, so the body never intersects; when the tab is shown the observer fires with
+ * a non-zero intersection. The initial value is a synchronous geometry check so a visible view does
+ * not flash a "hidden" frame while waiting for the observer's first callback.
+ *
+ * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
+ */
+export declare const useViewVisibility: () => boolean;
 /** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
 export type UseTruncationTooltipResult<T extends HTMLElement> = {
 	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
