@@ -217,12 +217,14 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
   // current when `toGridResources` resolves it.
   const [cachedResources, isLoadingCachedResources] = usePromise(
-    useCallback(() => {
-      // Read refreshCounter so each bump produces a new function reference, causing usePromise
-      // to re-run getCachedResources and re-validate installed flags after installation completes.
-      void refreshCounter;
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [refreshCounter]),
+    useCallback(
+      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
+      // bump creates a new function reference so usePromise re-runs and re-validates installed
+      // flags — necessary after any installation completes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [refreshCounter],
+    ),
     undefined,
   );
 
