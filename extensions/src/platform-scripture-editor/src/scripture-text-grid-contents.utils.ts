@@ -7,6 +7,7 @@ import type {
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
+import type { DownloadedResource } from './downloaded-resources.utils';
 
 /** A Bible-text reference — the only reference types that carry `id` and `isResourceShownForUser`. */
 type BibleTextReference = ProjectReference | DblResourceReference;
@@ -159,10 +160,10 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * for the user's own entries. An admin-owned id never also appears as a user entry (admin
  * precedence).
  */
-export function getViewOptionsTexts(sources: TextCollectionSources): {
-  top: ViewOptionsTextEntry[];
-  bottom: ViewOptionsTextEntry[];
-} {
+export function getViewOptionsTexts(
+  sources: TextCollectionSources,
+  options?: { downloaded?: DownloadedResource[] },
+): { top: ViewOptionsTextEntry[]; bottom: ViewOptionsTextEntry[] } {
   const { adminReferenced, userReferenced, overlay } = sources;
   const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
   const top: ViewOptionsTextEntry[] = [];
@@ -188,6 +189,17 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
       checked: item.isResourceShownForUser === true,
       isAdminLocked: false,
       isUserRemovable: true,
+    });
+  });
+
+  const listedIds = new Set([...top, ...bottom].map((r) => r.reference.id));
+  (options?.downloaded ?? []).forEach((dl) => {
+    if (listedIds.has(dl.projectId)) return;
+    bottom.push({
+      reference: { type: 'project', name: dl.name, id: dl.projectId },
+      checked: false,
+      isAdminLocked: false,
+      isUserRemovable: false,
     });
   });
 
