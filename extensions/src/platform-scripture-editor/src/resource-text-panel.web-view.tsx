@@ -32,12 +32,9 @@ import {
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ResourceReferenceList,
-} from 'platform-scripture';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import type { ResourceReferenceList } from 'platform-scripture';
+import { useResourcePickerResources } from './use-resource-picker-resources.hook';
+import type { PickerResource } from './downloaded-resources.utils';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
@@ -59,34 +56,28 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_commentaries_title_withResource%',
 ];
 
-/** Returns the `id` field for reference types that have one, or `undefined` for others. */
-function getRefId(ref: EffectiveResourceReference): string | undefined {
-  if (isDblResourceReference(ref) || isProjectReference(ref)) {
-    return ref.id;
-  }
+function pickerRowId(row: PickerResource): string | undefined {
+  if (isDblResourceReference(row.reference) || isProjectReference(row.reference))
+    return row.reference.id;
   return undefined;
 }
 
-/**
- * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
- * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
- * Returns `ref.name` for project references.
- */
-function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResourceData[]): string {
-  if (isDblResourceReference(ref)) {
-    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
+function getRefLabel(row: PickerResource, dblResourcesList: DblResourceData[]): string {
+  const { reference } = row;
+  if (isDblResourceReference(reference)) {
+    const dblData = dblResourcesList.find((r) => r.dblEntryUid === reference.id);
     if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
-    return ref.name;
+    return reference.name;
   }
-  if (isProjectReference(ref)) {
-    return ref.name;
+  if (isProjectReference(reference)) {
+    return reference.name;
   }
   return '';
 }
 
 type ResourceSelectorDropdownProps = {
-  filteredResources: EffectiveResourceReference[];
-  selectedRef: EffectiveResourceReference | undefined;
+  filteredResources: PickerResource[];
+  selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   onSelectResource: (id: string) => void;
   onShowResourcePicker: () => void;
@@ -117,11 +108,11 @@ function ResourceSelectorDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
           {filteredResources.map((ref) => {
-            const refId = getRefId(ref);
+            const refId = pickerRowId(ref);
             return (
               <DropdownMenuCheckboxItem
                 key={refId}
-                checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
+                checked={refId === (selectedRef ? pickerRowId(selectedRef) : undefined)}
                 onCheckedChange={() => {
                   if (refId) onSelectResource(refId);
                 }}
@@ -163,11 +154,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
-  const [effectiveResources] = useEffectiveResourceReferenceList(
-    projectId,
-    'platformScripture.referencedProjectsAndResources',
-  );
-
   const [adminResourceListSetting, setAdminResourceTextsRaw] = useProjectSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
@@ -201,6 +187,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
   );
+  const [pickerResources, isPickerLoading] = useResourcePickerResources(
+    projectId,
+    // stable reference — no inline object literal in JSX to avoid recreation
+    useMemo(() => ({ includeDownloaded: true }), []),
+    dblResources,
+  );
   const getCanWriteProjectSettings = useCallback(
     async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
     [textConnectionsProvider],
@@ -225,19 +217,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Filter list based on resourceType
 
-  const filteredResources = useMemo((): EffectiveResourceReference[] => {
-    if (!effectiveResources) return [];
-    return effectiveResources.items.filter((ref) => {
-      if (isDblResourceReference(ref)) {
-        return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
-      }
-      if (isProjectReference(ref)) {
-        // ProjectReferences only appear in the Bible Texts tab
-        return resourceType === 'ScriptureResource';
-      }
-      return false;
-    });
-  }, [effectiveResources, dblResources, resourceType]);
+  const filteredResources = useMemo<PickerResource[]>(
+    () => (pickerResources ?? []).filter((row) => row.type === resourceType),
+    [pickerResources, resourceType],
+  );
 
   // #endregion
 
@@ -251,7 +234,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Once the pending resource appears in filteredResources, commit it as the active selection.
   useEffect(() => {
     if (!pendingResourceId) return;
-    const found = filteredResources.find((r) => getRefId(r) === pendingResourceId);
+    const found = filteredResources.find((r) => pickerRowId(r) === pendingResourceId);
     if (found) {
       setSelectedResourceId(pendingResourceId);
       setPendingResourceId(undefined);
@@ -263,22 +246,25 @@ globalThis.webViewComponent = function ResourceTextPanel({
   useEffect(() => {
     if (filteredResources.length === 0) return;
     if (pendingResourceId) return;
-    const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
-    if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
+    const currentId = filteredResources.find((r) => pickerRowId(r) === selectedResourceId);
+    if (!currentId) setSelectedResourceId(pickerRowId(filteredResources[0]));
   }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
 
   const selectedRef =
-    filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
+    filteredResources.find((r) => pickerRowId(r) === selectedResourceId) ?? filteredResources[0];
 
-  let resourceProjectId: string | undefined;
+  // PickerResource.projectId is pre-computed — no need to re-derive from the reference shape.
+  const resourceProjectId = selectedRef?.projectId;
+
+  // dblMatch is still needed for the dynamic title's displayName.
   let dblMatch: (typeof dblResources)[number] | undefined;
   const [isSelecting, setIsSelecting] = useState(false);
 
-  if (isDblResourceReference(selectedRef)) {
-    dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
-    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-  } else if (isProjectReference(selectedRef)) {
-    resourceProjectId = selectedRef.id;
+  if (selectedRef) {
+    const { reference } = selectedRef;
+    if (isDblResourceReference(reference)) {
+      dblMatch = dblResources.find((r) => r.dblEntryUid === reference.id);
+    }
   }
 
   // Load PT9-derived marker styles when the displayed resource is a supported commentary.
@@ -291,10 +277,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // #region Dynamic title
 
   let resourceShortName: string | undefined;
-  if (isDblResourceReference(selectedRef) && dblMatch?.installed) {
-    resourceShortName = dblMatch.displayName;
-  } else if (isProjectReference(selectedRef)) {
-    resourceShortName = selectedRef?.name;
+  if (selectedRef) {
+    const { reference } = selectedRef;
+    if (isDblResourceReference(reference) && dblMatch?.installed) {
+      resourceShortName = dblMatch.displayName;
+    } else if (isProjectReference(reference)) {
+      resourceShortName = reference.name;
+    }
   }
 
   const titleKey =
@@ -373,11 +362,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
   const currentFilteredDblIds = useMemo(() => {
-    return filteredResources
-      .filter(
-        (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-      )
-      .map((r) => r.id);
+    return filteredResources.flatMap((r) =>
+      isDblResourceReference(r.reference) ? [r.reference.id] : [],
+    );
   }, [filteredResources]);
 
   const handleResourceSelect = useCallback(
@@ -493,7 +480,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Also shows spinner for if loading resources, except if there is no resources then it should
   // directly show the button to pick a resource bellow
-  if (!effectiveResources || (isLoadingResources && filteredResources.length !== 0)) {
+  if (isPickerLoading || (isLoadingResources && filteredResources.length !== 0)) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
