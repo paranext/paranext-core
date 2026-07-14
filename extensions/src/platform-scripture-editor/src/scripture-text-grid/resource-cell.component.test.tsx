@@ -16,13 +16,6 @@ const { mockUseProjectData, mockUseProjectSetting, setUsjSpy, capturedEditorOpti
   }),
 );
 
-vi.mock('platform-bible-react', async (importOriginal) => {
-  const original = await importOriginal<typeof import('platform-bible-react')>();
-  return {
-    ...original,
-    useExtraValidMarkers: () => [],
-  };
-});
 vi.mock('@papi/frontend', () => ({ logger: { warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@papi/frontend/react', () => ({
   useProjectData: (...a: unknown[]) => mockUseProjectData(...a),
