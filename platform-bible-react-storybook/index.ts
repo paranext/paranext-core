@@ -285,6 +285,7 @@ export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
+export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export {
   useTruncationTooltip,
   type UseTruncationTooltipResult,
