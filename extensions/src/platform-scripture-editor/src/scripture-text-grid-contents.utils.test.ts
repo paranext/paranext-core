@@ -376,6 +376,50 @@ describe('getViewOptionsTexts', () => {
     expect(bottom[0].checked).toBe(true);
     expect(bottom[0].isAdminLocked).toBe(false);
   });
+
+  it('stamps longName from the resolver onto rows', () => {
+    const { top } = getViewOptionsTexts(
+      makeSources({
+        adminReferenced: list([dbl('niv', { isInTextCollection: true })]),
+        overlay: { niv: true },
+      }),
+      (reference) => (reference.id === 'niv' ? 'New International Version' : undefined),
+    );
+    expect(top).toHaveLength(1);
+    expect(top[0].longName).toBe('New International Version');
+  });
+
+  it('omits longName entirely when the resolver returns undefined', () => {
+    const { top } = getViewOptionsTexts(
+      makeSources({
+        adminReferenced: list([dbl('niv', { isInTextCollection: true })]),
+        overlay: { niv: true },
+      }),
+      () => undefined,
+    );
+    expect(top[0]).not.toHaveProperty('longName');
+  });
+
+  it('leaves rows without a longName when no resolver is passed (backward compatible)', () => {
+    const { top } = getViewOptionsTexts(
+      makeSources({
+        adminReferenced: list([dbl('niv', { isInTextCollection: true })]),
+        overlay: { niv: true },
+      }),
+    );
+    expect(top[0]).not.toHaveProperty('longName');
+  });
+
+  it('stamps longName onto a user-referenced (bottom) row when the resolver returns one', () => {
+    const { bottom } = getViewOptionsTexts(
+      makeSources({
+        userReferenced: list([dbl('esv', { isInTextCollectionForUser: true })]),
+      }),
+      (reference) => (reference.id === 'esv' ? 'English Standard Version' : undefined),
+    );
+    expect(bottom).toHaveLength(1);
+    expect(bottom[0].longName).toBe('English Standard Version');
+  });
 });
 
 describe('setUserDisplay', () => {

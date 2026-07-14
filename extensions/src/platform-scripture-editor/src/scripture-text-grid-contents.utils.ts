@@ -10,9 +10,10 @@ import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
 
 /**
  * A Bible-text reference — the only reference types that carry `id` and
- * `isInTextCollectionForUser`.
+ * `isInTextCollectionForUser`. Shared union used by both the grid-contents logic and the View
+ * Options long-name helpers.
  */
-type BibleTextReference = ProjectReference | DblResourceReference;
+export type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
  * The three data sources that together determine what a given user sees in the Text Collection.
@@ -47,6 +48,12 @@ export type ViewOptionsTextEntry = {
    * removed.
    */
   isUserRemovable: boolean;
+  /**
+   * The resource's long/full name, rendered after the short `name` (as `NIV — New International
+   * Version`) when present. Populated only for DBL resources whose cached `fullName` is available
+   * and differs from the short name; absent for project rows and uncached resources.
+   */
+  longName?: string;
 };
 
 /** An admin-owned entry: one Bible-text reference plus whether the admin currently flags it shown. */
@@ -162,7 +169,10 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * `isInTextCollectionForUser` for the user's own entries. An admin-owned id never also appears as a
  * user entry (admin precedence).
  */
-export function getViewOptionsTexts(sources: TextCollectionSources): {
+export function getViewOptionsTexts(
+  sources: TextCollectionSources,
+  resolveLongName?: (reference: BibleTextReference) => string | undefined,
+): {
   top: ViewOptionsTextEntry[];
   bottom: ViewOptionsTextEntry[];
 } {
@@ -174,11 +184,13 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
 
   adminOwned.forEach((entry) => {
     adminIds.add(entry.reference.id);
-    const row = {
+    const longName = resolveLongName?.(entry.reference);
+    const row: ViewOptionsTextEntry = {
       reference: entry.reference,
       checked: isAdminEntryShown(overlay, entry),
       isAdminLocked: entry.adminFlagged,
       isUserRemovable: false,
+      ...(longName ? { longName } : {}),
     };
     (entry.adminFlagged ? top : bottom).push(row);
   });
@@ -186,11 +198,13 @@ export function getViewOptionsTexts(sources: TextCollectionSources): {
   userReferenced.items.forEach((item) => {
     if (!isProjectReference(item) && !isDblResourceReference(item)) return;
     if (adminIds.has(item.id)) return; // admin-owned ids are rendered by the loop above
+    const longName = resolveLongName?.(item);
     bottom.push({
       reference: item,
       checked: item.isInTextCollectionForUser === true,
       isAdminLocked: false,
       isUserRemovable: true,
+      ...(longName ? { longName } : {}),
     });
   });
 

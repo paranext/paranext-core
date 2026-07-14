@@ -1,10 +1,8 @@
 import type { DblResourceData } from 'platform-bible-utils';
-import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { isDblResourceReference } from '../resource-reference.utils';
+import type { BibleTextReference } from '../scripture-text-grid-contents.utils';
+import { findCachedDblResource } from './dbl-resource-lookup.utils';
 import type { GridResource } from './resource-cell.component';
-
-/** The Bible-text references the grid can render — the reference types that carry a resource `id`. */
-type BibleTextReference = ProjectReference | DblResourceReference;
 
 /**
  * Maps the Bible-text references chosen for display to renderable grid cells. A cell fetches its
@@ -26,7 +24,7 @@ export function toGridResources(
   return references.flatMap((reference) => {
     let projectId: string | undefined;
     if (isDblResourceReference(reference)) {
-      const match = dblResources.find((resource) => resource.dblEntryUid === reference.id);
+      const match = findCachedDblResource(reference, dblResources);
       projectId = match?.installed ? match.projectId : undefined;
     } else {
       projectId = reference.id;
