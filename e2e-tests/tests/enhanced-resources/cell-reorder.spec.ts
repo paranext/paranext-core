@@ -108,8 +108,8 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 2,
       'Set E2E_TEST_RESOURCE_IDS with at least two downloaded resource IDs',
     );
@@ -154,8 +154,8 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 2,
       'Set E2E_TEST_RESOURCE_IDS with at least two downloaded resource IDs',
     );
@@ -233,8 +233,8 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     await waitForAppReady(mainPage);
 
     const projectId = await discoverAdminTextConnectionProject(mainPage);
-    test.skip(!projectId, 'No admin-writable text-connection project found locally');
-    test.skip(
+    warnAndSkip(!projectId, 'No admin-writable text-connection project found locally');
+    warnAndSkip(
       REAL_RESOURCE_IDS.length < 2,
       'Set E2E_TEST_RESOURCE_IDS with at least two downloaded resource IDs',
     );
@@ -336,3 +336,20 @@ test.describe('Scripture Text Grid — cell drag-reorder and persistence', () =>
     expect(labelsAfterRecheck[1]).toBe('Resource A');
   });
 });
+
+/**
+ * These enhanced-resources specs run only locally (they mutate real project settings and need
+ * downloaded resources), so a bare `test.skip` on a missing prerequisite is silent — a dev without
+ * the local setup could miss that a whole scenario never ran. The warning surfaces the skipped
+ * prerequisite in the run output while still skipping (not failing), so an unconfigured machine is
+ * not blocked. Use only for prerequisite gates, not the deliberate CI gate.
+ */
+function warnAndSkip(condition: boolean, reason: string): void {
+  if (condition) {
+    // Warn (not fail) so a missing local prerequisite is visible in the run output without blocking
+    // an unconfigured machine. console is the only run-output channel available in a spec here.
+    // eslint-disable-next-line no-console
+    console.warn(`[cell-reorder.spec] Skipping test — ${reason}`);
+  }
+  test.skip(condition, reason);
+}
