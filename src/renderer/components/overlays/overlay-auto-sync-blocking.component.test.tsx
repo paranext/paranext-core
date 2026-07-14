@@ -188,6 +188,29 @@ describe('AutoSyncBlockingOverlay', () => {
     expect(overlay).toHaveFocus();
   });
 
+  it('yields focus in the deferred microtask check when a modal claims focus after the blur fires with no relatedTarget', async () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    const overlay = screen.getByRole('dialog');
+    const modal = document.createElement('div');
+    modal.setAttribute('aria-modal', 'true');
+    const modalButton = document.createElement('button');
+    modal.appendChild(modalButton);
+    document.body.appendChild(modal);
+    // relatedTarget is null when blur fires (same as the body-drop case above), so the
+    // synchronous check can't see the modal yet. Radix moves the modal's own focus in
+    // asynchronously, so document.activeElement only becomes the modal button after this —
+    // still before the queued microtask re-checks it. The deferred check must catch that and
+    // yield, not yank focus back out of the modal.
+    await act(async () => {
+      overlay.blur();
+      modalButton.focus();
+    });
+    expect(modalButton).toHaveFocus();
+    expect(overlay).not.toHaveFocus();
+    modal.remove();
+  });
+
   it('uses dialog semantics in cancel mode and the passive status role in legacy mode', () => {
     const { unmount } = render(<AutoSyncBlockingOverlay />);
     showOverlay();

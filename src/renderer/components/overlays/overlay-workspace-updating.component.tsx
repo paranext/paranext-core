@@ -23,15 +23,18 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [WORKSPACE_UPDATING_KEY];
 const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL - 1;
 
 /**
- * Whether focus has landed in a layer that legitimately renders above this overlay: a modal dialog
- * (`aria-modal="true"`) or another overlay-host subtree (`[data-overlay-host]`). The overlay sits
- * at `Z_INDEX_MODAL - 1` precisely so modals opened mid-sync stay usable, and those modals are
- * Radix Dialogs with their own focus trap. So the overlay's blur re-containment must yield to them
- * — yanking focus back would ping-pong with the dialog's trap. `Element.closest` walks the node's
- * own ancestors (the node itself included).
+ * Whether focus has landed inside a modal dialog (`aria-modal="true"`) — the only layer that
+ * legitimately renders above this overlay. The overlay sits at `Z_INDEX_MODAL - 1` precisely so
+ * modals opened mid-sync (rendered at `Z_INDEX_MODAL`) stay usable, and those modals are Radix
+ * Dialogs with their own focus trap, identified by `aria-modal`. So the overlay's blur
+ * re-containment must yield to them — yanking focus back would ping-pong with the dialog's trap.
+ * Other overlay-host layers (popover, context menu, command palette) all render BELOW this overlay
+ * and portal their focusable content to `document.body`, so they are never a legitimate escape
+ * target here and must keep being re-contained. `Element.closest` walks the node's own ancestors
+ * (the node itself included).
  */
 function isInHigherFocusLayer(node: Element | null): boolean {
-  return !!node?.closest('[data-overlay-host], [aria-modal="true"]');
+  return !!node?.closest('[aria-modal="true"]');
 }
 
 type Props = {
