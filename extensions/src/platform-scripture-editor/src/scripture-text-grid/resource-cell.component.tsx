@@ -70,6 +70,8 @@ export function ResourceCell({
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   // #region Chapter fetch — data method returns [data, setData, isLoading]; isLoading is index 2.
+  // `projectId` may be undefined for unavailable resources; both hooks must still be called
+  // unconditionally (Rules of Hooks). The hooks accept undefined and return loading/empty state.
   const [usjPossiblyError, , isLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceRef.projectId,
@@ -186,7 +188,7 @@ export function ResourceCell({
       onZoomIn={handleZoomIn}
       onZoomOut={handleZoomOut}
       onResetZoom={handleResetZoom}
-      zoomMenuLabels={zoom ? zoomMenuLabels : undefined}
+      zoomMenuLabels={zoom && state !== 'unavailable' ? zoomMenuLabels : undefined}
       showDragHandle={showDragHandle}
       reorderHandleId={resourceRef.resourceId}
       reorderHandleLabel={reorderHandleLabel}
