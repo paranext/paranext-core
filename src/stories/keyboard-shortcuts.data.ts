@@ -204,6 +204,30 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'scripture-insert-footnote',
+    purpose: 'Insert a footnote at the selection (Standard view, editable)',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // macOS intentionally uses ⌃T (not ⌘T) to match the handler in
+    // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    keys: { macOS: '⌃T', windows: 'Ctrl+T', linux: 'Ctrl+T' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-insert-cross-reference',
+    purpose: 'Insert a cross-reference at the selection (Standard view, editable)',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
+    // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
+    keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
     id: 'scripture-text-grid-open-chapter-context',
     purpose: 'Open the chapter-context view for the focused cell',
     category: 'View',
