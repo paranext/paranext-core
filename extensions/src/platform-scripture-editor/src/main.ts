@@ -315,7 +315,6 @@ async function open(
       // ENHANCE: also skip if the outgoing editor had no user edits during the session (would
       // require tracking a dirty flag in the editor controller, which doesn't exist yet).
       const outgoingProjectId = outgoing?.isReadOnly ? undefined : outgoing?.projectId;
-      sharedLayoutReceiver?.markAutoSync(projectForWebView.projectId);
       // Fire-and-forget: runs concurrently with openWebView below.
       syncOnProjectSwitch(papi, projectForWebView.projectId, outgoingProjectId);
     }

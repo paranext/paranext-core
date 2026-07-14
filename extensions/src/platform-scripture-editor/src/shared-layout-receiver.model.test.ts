@@ -42,6 +42,36 @@ describe('focusSharedLayoutDefaultTab', () => {
     );
   });
 
+  it('brings the comments panel to front for Comments', async () => {
+    const { papi, getSetting } = makePapi();
+    getSetting.mockResolvedValue('Comments');
+    // The mock papi only implements the subset of PapiBackend this helper uses.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await focusSharedLayoutDefaultTab(papi as never, 'proj-1');
+    expect(papi.webViews.openWebView).toHaveBeenCalledWith(
+      'legacyCommentManager.comments',
+      undefined,
+      {
+        existingId: '?',
+        createNewIfNotFound: false,
+        bringToFront: true,
+      },
+    );
+  });
+
+  it('brings the scripture-text-grid (Text Collection) panel to front for TextCollection', async () => {
+    const { papi, getSetting } = makePapi();
+    getSetting.mockResolvedValue('TextCollection');
+    // The mock papi only implements the subset of PapiBackend this helper uses.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await focusSharedLayoutDefaultTab(papi as never, 'proj-1');
+    expect(papi.webViews.openWebView).toHaveBeenCalledWith(
+      'platformScriptureEditor.scriptureTextGrid',
+      undefined,
+      { existingId: '?', createNewIfNotFound: false, bringToFront: true },
+    );
+  });
+
   it('does nothing when the setting is empty or unrecognized', async () => {
     const { papi, getSetting } = makePapi();
     getSetting.mockResolvedValue('');
@@ -153,24 +183,6 @@ describe('SharedLayoutReceiver', () => {
     expect(h.send).not.toHaveBeenCalled();
   });
 
-  it('does not notify for a marked auto-sync (project switch); it applies instead', async () => {
-    const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
-    await h.receiver.applyForProject('proj-1');
-    h.papi.projectDataProviders.get.mockImplementation(async () => ({
-      getSetting: vi.fn(async (key: string) =>
-        key === 'platformScripture.sharedLayoutDefaultTab'
-          ? ''
-          : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
-      ),
-    }));
-    h.receiver.markAutoSync('proj-1');
-    h.emit.mockClear();
-    h.fireSync();
-    await flush();
-    expect(h.send).not.toHaveBeenCalled();
-    expect(h.emit).toHaveBeenCalledWith({ projectId: 'proj-1' });
-  });
-
   it('does not re-notify on a second manual sync with the same pending layout', async () => {
     const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
     await h.receiver.applyForProject('proj-1');
@@ -249,32 +261,6 @@ describe('SharedLayoutReceiver', () => {
     h.fireSync();
     await flush();
     expect(h.send).toHaveBeenCalledTimes(1);
-  });
-
-  it('treats an expired auto-mark as manual and notifies', async () => {
-    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
-    try {
-      const h = makeReceiverHarness({ layout: [{ type: 'project', name: 'A', id: '1' }] });
-      await h.receiver.applyForProject('proj-1');
-      h.papi.projectDataProviders.get.mockImplementation(async () => ({
-        getSetting: vi.fn(async (key: string) =>
-          key === 'platformScripture.sharedLayoutDefaultTab'
-            ? ''
-            : { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] },
-        ),
-      }));
-      h.receiver.markAutoSync('proj-1');
-      // Advance the clock well past the mark's TTL so the mark is stale when the sync completes;
-      // the leaked mark must self-heal to "manual" and notify rather than silently apply.
-      nowSpy.mockReturnValue(1_000_000 + 60 * 60 * 1000);
-      h.fireSync();
-      await flush();
-      expect(h.send).toHaveBeenCalledWith(
-        expect.objectContaining({ clickCommand: 'platformScriptureEditor.applySharedLayout' }),
-      );
-    } finally {
-      nowSpy.mockRestore();
-    }
   });
 
   it('dismisses an outstanding notification when the project applies', async () => {

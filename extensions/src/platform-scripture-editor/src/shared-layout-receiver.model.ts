@@ -4,15 +4,10 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils
 
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-
-/**
- * How long a `markAutoSync` mark stays valid, in ms. Generous enough to cover a slow deep
- * project-switch Send/Receive, but short enough to bound a leak: if the marked sync never completes
- * (throws, or never emits `isSyncing: false`), the stale mark self-expires after this window
- * instead of silently routing the next genuine manual sync through the no-notification auto-branch
- * forever.
- */
-const AUTO_SYNC_MARK_TTL_MS = 5 * 60 * 1000;
+const COMMENTS_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.comments';
+// The Scripture Text Grid panel presents the "Text Collection" tab (its title/tooltip is
+// `%webView_scriptureTextGrid_title_multiple%` = "Text Collection").
+const TEXT_COLLECTION_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
 
 /** Reads the three admin layout settings for a project and serializes them into a signature. */
 async function readLayoutSignature(papi: typeof PapiBackend, projectId: string): Promise<string> {
@@ -29,6 +24,8 @@ async function readLayoutSignature(papi: typeof PapiBackend, projectId: string):
 function webViewTypeForTab(tab: string | undefined): string | undefined {
   if (tab === 'ScriptureResource') return BIBLE_TEXTS_PANEL_WEBVIEW_TYPE;
   if (tab === 'CommentaryResource') return COMMENTARIES_PANEL_WEBVIEW_TYPE;
+  if (tab === 'Comments') return COMMENTS_PANEL_WEBVIEW_TYPE;
+  if (tab === 'TextCollection') return TEXT_COLLECTION_PANEL_WEBVIEW_TYPE;
   return undefined;
 }
 
@@ -60,11 +57,12 @@ export async function focusSharedLayoutDefaultTab(
 }
 
 /**
- * Coordinates team-member receipt of a shared layout. On each Send/Receive completion, if the open
- * simple-mode project's layout changed and the sync was not a known auto-sync, it notifies the
- * member with an "Apply now" action; the reactive panels keep holding until the member applies.
- * Auto-syncs (project switch) and confirmations apply immediately: re-arm the panels + focus the
- * col-3 tab. All state is in-memory and lost on app close.
+ * Coordinates team-member receipt of a shared layout. `onSyncStateChanged` only fires for manual
+ * Send/Receives, so every completion handled here is treated as manual: if the open simple-mode
+ * project's layout changed, it notifies the member with an "Apply now" action, and the reactive
+ * panels keep holding until the member applies. Project switches auto-apply directly (the caller
+ * invokes `applyForProject` — re-arm the panels + focus the col-3 tab) rather than through this
+ * completion path. All state is in-memory and lost on app close.
  *
  * @param papi The backend PAPI instance used for network events, project data, and notifications.
  * @param reArmEmitter Emitter fired (with the affected `projectId`) to re-arm the reactive panels
@@ -79,15 +77,13 @@ export class SharedLayoutReceiver {
 
   private readonly notificationIdByProjectId = new Map<string, string | number>();
 
-  private readonly autoSyncExpiryByProjectId = new Map<string, number>();
-
   private readonly unsubscribe: () => void;
 
   /**
    * Serializes `handleSyncCompleted` runs. `onSyncStateChanged` completions are
-   * fired-and-forgotten, so overlapping ones could otherwise interleave between the auto-mark /
-   * dedup reads and their write-backs and double-notify. Chaining each run after the previous keeps
-   * the checks atomic.
+   * fired-and-forgotten, so overlapping ones could otherwise interleave between the dedup reads and
+   * their write-backs and double-notify. Chaining each run after the previous keeps the checks
+   * atomic.
    */
   private handling: Promise<void> = Promise.resolve();
 
@@ -105,27 +101,6 @@ export class SharedLayoutReceiver {
             this.papi.logger.warn(`Shared-layout sync handler failed: ${getErrorMessage(e)}`),
           );
     });
-  }
-
-  /**
-   * Mark that an in-flight sync for this project was initiated by us (auto), so its completion
-   * applies silently instead of prompting the member.
-   *
-   * Accepted v1 risk: `onSyncStateChanged` carries only `{ isSyncing }` — no sync or project id —
-   * so this mark is consumed by whichever matching-project sync completes first. If an unrelated
-   * sync for the same project completes before the intended auto-sync, it consumes the mark and the
-   * real project-switch sync is then mis-categorized as manual. This is inherent to the event shape
-   * and documented as an accepted risk in the design spec; it is deliberate, not an oversight.
-   *
-   * The mark is time-bounded (`AUTO_SYNC_MARK_TTL_MS`): if its sync never completes (throws, or
-   * never emits `isSyncing: false`), the mark self-expires rather than persisting for the session.
-   * Otherwise a leaked mark would route the next genuine manual sync through the silent
-   * auto-branch, applying with no notification and overwriting the member's held view.
-   *
-   * @param projectId The project whose next in-flight sync completion should apply silently.
-   */
-  markAutoSync(projectId: string): void {
-    this.autoSyncExpiryByProjectId.set(projectId, Date.now() + AUTO_SYNC_MARK_TTL_MS);
   }
 
   /**
@@ -193,18 +168,9 @@ export class SharedLayoutReceiver {
     const projectId = await this.getOpenSimpleModeProjectId();
     if (!projectId) return;
 
-    // Auto-sync (e.g. project switch): apply silently, no notification — but only while the mark is
-    // still fresh. A mark whose sync never completed lingers; once past its TTL, drop it and fall
-    // through to the manual notify path so a stale mark can't suppress notifications indefinitely.
-    const autoSyncExpiry = this.autoSyncExpiryByProjectId.get(projectId);
-    if (autoSyncExpiry !== undefined) {
-      this.autoSyncExpiryByProjectId.delete(projectId);
-      if (Date.now() <= autoSyncExpiry) {
-        await this.applyForProject(projectId);
-        return;
-      }
-    }
-
+    // Only manual Send/Receives reach here (`onSyncStateChanged` does not fire for the programmatic
+    // project-switch sync), so always take the notify path when the layout changed. Project-switch
+    // auto-apply is handled directly by the caller via `applyForProject`, not through this handler.
     // This read intentionally relies on the outer catch (the subscription handler). Unlike
     // `applyForProject`'s signature read — caught locally so an apply still completes — a failure
     // here should suppress the notify path entirely rather than notify with an unknown signature.
