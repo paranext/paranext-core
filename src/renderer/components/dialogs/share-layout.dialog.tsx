@@ -167,6 +167,7 @@ function ShareLayoutDialogWrapper({
     ],
   );
 
+  //
   // Defense-in-depth admin gate: menu items in this codebase have no declarative
   // visibility/condition mechanism, so a non-admin can still trigger the command that opens this
   // dialog. Reject here instead. This check must run after all hooks above (Rules of Hooks
