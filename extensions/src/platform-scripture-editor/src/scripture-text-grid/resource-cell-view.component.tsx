@@ -14,7 +14,14 @@ import {
 } from 'platform-bible-react';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
 import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
-import { CSSProperties, ReactNode, useCallback, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import {
+  CSSProperties,
+  ReactNode,
+  useCallback,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from 'react';
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
