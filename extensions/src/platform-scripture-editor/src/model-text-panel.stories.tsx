@@ -118,7 +118,10 @@ type DecoratorConfig = {
  */
 function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
   const [resources, setResources] = useState<DblResourceData[]>(config.resources ?? seedResources);
-  const [adminItems, setAdminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
+  // No setter needed: the admin-level list is only used to seed `effectiveModelTexts` for these
+  // stories now that `ModelTextPanel` no longer writes admin-level settings itself (that write path
+  // moved to the Share Layout dialog).
+  const [adminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
   const [userItems, setUserItems] = useState<DblResourceReference[]>([]);
   const [scrRef, setScrRef] = useState<SerializedVerseRef>({
     book: 'GEN',
@@ -168,8 +171,6 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         isEffectiveModelTextsLoading={false}
         dblResources={resources}
         isLoadingResources={false}
-        adminModelTexts={{ dataVersion: DATA_VERSION, items: adminItems }}
-        getCanWriteProjectSettings={async () => config.canWriteProjectSettings ?? true}
         getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
@@ -177,14 +178,6 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
-          );
-        }}
-        setAdminModelTexts={(list) => {
-          // Settings write — log it, then reflect it so the panel updates (thin CRUD).
-          // eslint-disable-next-line no-console
-          console.log('setAdminModelTexts', list);
-          setAdminItems(
-            list.items.filter((i): i is DblResourceReference => i.type === 'dblResource'),
           );
         }}
         setUserModelTexts={async (list) => {

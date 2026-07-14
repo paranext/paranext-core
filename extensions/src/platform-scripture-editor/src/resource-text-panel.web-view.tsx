@@ -40,7 +40,6 @@ import type {
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
-import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -168,15 +167,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'platformScripture.referencedProjectsAndResources',
   );
 
-  const [adminResourceListSetting, setAdminResourceTextsRaw] = useProjectSetting(
-    projectId,
-    'platformScripture.referencedProjectsAndResources',
-    DEFAULT_RESOURCE_REFERENCE_LIST,
-  );
-  const adminResourceList = isPlatformError(adminResourceListSetting)
-    ? undefined
-    : adminResourceListSetting;
-
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
@@ -200,16 +190,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const dblResources = useMemo(
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
-  );
-  const getCanWriteProjectSettings = useCallback(
-    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
-    [textConnectionsProvider],
-  );
-  const setAdminResourceTexts = useCallback(
-    (resources: ResourceReferenceList) => {
-      setAdminResourceTextsRaw?.(resources);
-    },
-    [setAdminResourceTextsRaw],
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -386,9 +366,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
       try {
         await selectTextConnection(
           resource,
-          adminResourceList,
-          setAdminResourceTexts,
-          getCanWriteProjectSettings,
           getUserResourceTexts,
           setUserResourceTexts,
           dblResourcesProvider
@@ -414,14 +391,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         setIsSelecting(false);
       }
     },
-    [
-      adminResourceList,
-      dblResourcesProvider,
-      setAdminResourceTexts,
-      getCanWriteProjectSettings,
-      getUserResourceTexts,
-      setUserResourceTexts,
-    ],
+    [dblResourcesProvider, getUserResourceTexts, setUserResourceTexts],
   );
 
   const showResourcePicker = useDialogCallback(

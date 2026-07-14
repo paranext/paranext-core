@@ -7,6 +7,9 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import { IconSelector, IconCheck, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
 // CUSTOM: Added Direction and readDirection imports for RTL support in SelectTrigger and SelectContent
 import { type Direction, readDirection } from '@/utils/dir-helper.util';
+// CUSTOM: Added Z_INDEX_ABOVE_DOCK import so SelectContent can render above modal dialogs (see
+// its usage below) — matches the fix already applied to PopoverContent for the same reason.
+import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 
 /**
  * Select components display a list of options for the user to pick from—triggered by a button.
@@ -82,6 +85,8 @@ function SelectContent({
   // making the popup width unconstrained. Existing callers all expected popper (dropdown) behavior.
   position = 'popper',
   align = 'center',
+  // CUSTOM: Destructure style to merge with the shared z-index constant below
+  style,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   // CUSTOM: Added readDirection() call; children wrapped in <div dir={dir}> for RTL text direction
@@ -96,12 +101,19 @@ function SelectContent({
         // width as minimum (prevents popup being much wider than a narrow w-fit trigger like
         // ScrollGroupSelector); popper keeps the 144px floor for comfortable list readability.
         // CUSTOM: Fixed tw: prefix not being on some classes and removed erroneous empty tw: tokens
+        // CUSTOM: Removed tw:z-50 — z-index is set via the style prop using the shared
+        // Z_INDEX_ABOVE_DOCK constant below instead
         className={cn(
-          'pr-twp tw:relative tw:z-50 tw:max-h-(--radix-select-content-available-height) tw:data-[align-trigger=true]:min-w-(--radix-select-trigger-width) tw:data-[align-trigger=false]:min-w-36 tw:origin-(--radix-select-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[align-trigger=true]:animate-none tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
+          'pr-twp tw:relative tw:max-h-(--radix-select-content-available-height) tw:data-[align-trigger=true]:min-w-(--radix-select-trigger-width) tw:data-[align-trigger=false]:min-w-36 tw:origin-(--radix-select-content-transform-origin) tw:overflow-x-hidden tw:overflow-y-auto tw:rounded-lg tw:bg-popover tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:duration-100 tw:data-[align-trigger=true]:animate-none tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95 tw:animate-none! tw:bg-popover/70 tw:before:-z-1 tw:**:data-[slot$=-item]:focus:bg-foreground/10 tw:**:data-[slot$=-item]:data-highlighted:bg-foreground/10 tw:**:data-[slot$=-separator]:bg-foreground/5 tw:**:data-[slot$=-trigger]:focus:bg-foreground/10 tw:**:data-[slot$=-trigger]:aria-expanded:bg-foreground/10! tw:**:data-[variant=destructive]:focus:bg-foreground/10! tw:**:data-[variant=destructive]:text-accent-foreground! tw:**:data-[variant=destructive]:**:text-accent-foreground! tw:relative tw:before:pointer-events-none tw:before:absolute tw:before:inset-0 tw:before:rounded-[inherit] tw:before:backdrop-blur-2xl tw:before:backdrop-saturate-150',
           position === 'popper' &&
             'tw:data-[side=bottom]:translate-y-1 tw:data-[side=left]:-translate-x-1 tw:rtl:data-[side=left]:translate-x-1 tw:data-[side=right]:translate-x-1 tw:rtl:data-[side=right]:-translate-x-1 tw:data-[side=top]:-translate-y-1',
           className,
         )}
+        // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring the dropdown
+        // renders above modal dialogs (Z_INDEX_MODAL=500) — matches the fix already applied to
+        // PopoverContent for the same reason (a Select rendered inside a modal dialog would
+        // otherwise open its dropdown behind the modal, making it invisible and unclickable)
+        style={{ zIndex: Z_INDEX_ABOVE_DOCK, ...style }}
         position={position}
         align={align}
         {...props}

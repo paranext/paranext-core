@@ -64,6 +64,29 @@ describe('ResourcePickerDialog', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it('allows selecting an already-selected resource when allowDeselect is true', () => {
+    const { onSelect } = renderDialog({ allowDeselect: true });
+    const nivText = screen.getByText('NIV');
+    const nivRow = nivText.closest('tr');
+    if (!nivRow) throw new Error('NIV row not found');
+    fireEvent.click(nivRow);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ dblEntryUid: 'selected-1' }));
+  });
+
+  it('keeps the already-selected row clickable (not pointer-events-none) when allowDeselect is true', () => {
+    renderDialog({ allowDeselect: true });
+    const nivText = screen.getByText('NIV');
+    const nivRow = nivText.closest('tr');
+    if (!nivRow) throw new Error('NIV row not found');
+    // fireEvent.click (used in the test above) dispatches directly on the node and ignores
+    // pointer-events, so it can't catch a regression that leaves pointer-events-none on this row.
+    // This jsdom unit-test project doesn't load Tailwind, so there's no computed style to assert on
+    // either — checking the class list directly is the only way to guard this CSS-driven state.
+    expect(nivRow.className).not.toContain('pointer-events-none');
+    expect(nivRow.className).toContain('cursor-pointer');
+  });
+
   it('shows "Installed" section with selectable rows for installed, non-selected resources', () => {
     renderDialog();
     expect(screen.getByText('Installed')).toBeInTheDocument();

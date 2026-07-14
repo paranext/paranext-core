@@ -13,6 +13,7 @@ import {
 export interface UserResourceWriter {
   setUserReferencedProjectsAndResources: (list: ResourceReferenceList) => Promise<unknown>;
   setTextCollectionOverlay: (overlay: TextCollectionOverlay) => Promise<unknown>;
+  setCellOrder: (order: string[]) => Promise<unknown>;
 }
 
 /**
@@ -61,4 +62,12 @@ export function persistUserAddition(
   const next = addToUserResources(reference, userReferenced);
   if (next === userReferenced) return undefined;
   return writer.setUserReferencedProjectsAndResources(next);
+}
+
+/**
+ * Persists the user's preferred cell order through the text-connection PDP; always fires a write,
+ * so callers must call only when the order has actually changed.
+ */
+export function persistCellOrder(writer: UserResourceWriter, order: string[]): Promise<unknown> {
+  return writer.setCellOrder(order);
 }

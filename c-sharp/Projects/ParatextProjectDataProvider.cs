@@ -82,6 +82,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private const string OverlayInitializedMarkerName = OverlaySettingName + "Initialized";
     private const string OverlaySchemaVersion = "1.0.0";
 
+    private const string CellOrderSettingName = ProjectDataType.CELL_ORDER;
+    private const string CellOrderSchemaVersion = "1.0.0";
+
     #endregion
 
     #region Constructors
@@ -159,6 +162,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("setTextCollectionOverlay", SetTextCollectionOverlay));
         retVal.Add(("resetTextCollectionOverlay", ResetTextCollectionOverlay));
         retVal.Add(("initializeTextCollectionOverlay", InitializeTextCollectionOverlay));
+        retVal.Add(("getCellOrder", GetCellOrder));
+        retVal.Add(("setCellOrder", SetCellOrder));
+        retVal.Add(("resetCellOrder", ResetCellOrder));
         retVal.Add(
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
@@ -2142,6 +2148,67 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             "text-collection overlay reset event"
         );
         return true;
+    }
+
+    public List<string> GetCellOrder(object? param = null)
+    {
+        var (schemaVersion, content) = GetUserProjectSettings().GetSetting(CellOrderSettingName);
+        if (content == null || string.IsNullOrEmpty(content.Value))
+            return [];
+        ValidateCellOrderSchemaVersion(schemaVersion);
+        return content.Value.DeserializeFromJson<List<string>>() ?? [];
+    }
+
+    public bool SetCellOrder(object? value)
+    {
+        string? json = value?.ToString();
+        List<string>? order;
+        try
+        {
+            // Deserialize inside try/catch so a wrong-SHAPE value (JSON object/number/string) surfaces
+            // the same InvalidDataException as a null/empty value, rather than leaking a raw
+            // JsonException (mirrors SetTextCollectionOverlay).
+            order = string.IsNullOrEmpty(json) ? null : json.DeserializeFromJson<List<string>>();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("CellOrder value must be a JSON array of strings", ex);
+        }
+        if (order is null || order.Any(element => element is null))
+            throw new InvalidDataException("CellOrder value must be a JSON array of strings");
+        WriteCellOrder(order);
+        SendDataUpdateEvent(ProjectDataType.CELL_ORDER, "cell order update event");
+        return true;
+    }
+
+    public bool ResetCellOrder()
+    {
+        GetUserProjectSettings().RemoveSetting(CellOrderSettingName);
+        SendDataUpdateEvent(ProjectDataType.CELL_ORDER, "cell order reset event");
+        return true;
+    }
+
+    private void WriteCellOrder(List<string> order)
+    {
+        GetUserProjectSettings()
+            .SetSetting(
+                CellOrderSettingName,
+                CellOrderSchemaVersion,
+                new XElement("Items", order.SerializeToJson())
+            );
+    }
+
+    private static void ValidateCellOrderSchemaVersion(string? schemaVersion)
+    {
+        int expectedMajor = new Version(CellOrderSchemaVersion).Major;
+        if (!Version.TryParse(schemaVersion, out Version? parsed))
+            throw new InvalidDataException(
+                $"CellOrder has invalid version format: '{schemaVersion}'"
+            );
+        if (parsed.Major != expectedMajor)
+            throw new InvalidDataException(
+                $"CellOrder has incompatible major version {parsed.Major}; expected {expectedMajor}"
+            );
     }
 
     /// <summary>

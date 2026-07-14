@@ -190,17 +190,20 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // GetProjectDataProviderID throws "Project not found".
   let projectA: CommentTestProject;
   let projectB: CommentTestProject;
+  let projectScroll: CommentTestProject;
 
   test.beforeAll(async () => {
     project = await createCommentTestProject([]);
     projectA = await createCommentTestProject([]);
     projectB = await createCommentTestProject([]);
+    projectScroll = await createCommentTestProject([]);
   });
 
   test.afterAll(() => {
     cleanupCommentTestProject(project);
     cleanupCommentTestProject(projectA);
     cleanupCommentTestProject(projectB);
+    cleanupCommentTestProject(projectScroll);
   });
 
   test('Comments tab is visible in Column 3 in the English UI', async ({ mainPage }) => {
@@ -270,6 +273,182 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await expect(commentsFrame.locator('body')).toContainText('Visible comment for PT-4068 test', {
       timeout: 90_000,
     });
+  });
+
+  test('filter toolbar stays visible when the comment list is scrolled to the bottom (PT-4070)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage, 180_000);
+    await waitForSimpleLayout(mainPage);
+
+    // Seed enough threads to force the comment list to scroll. GEN 1 has 31 verses, so 30
+    // distinct single-verse threads are all valid and comfortably overflow the panel height.
+    const COMMENT_COUNT = 30;
+    const verseRefs = Array.from({ length: COMMENT_COUNT }, (_, i) => `GEN 1:${i + 1}`);
+    const contents = Array.from(
+      { length: COMMENT_COUNT },
+      (_, i) => `PT-4070 scroll comment ${i + 1}`,
+    );
+    await createCommentThreads(projectScroll, verseRefs, contents);
+
+    // Point the Column 3 Comments tab at the seeded project (same direct-open path the
+    // "has comments" test uses — see that test for why we avoid openScriptureEditor here).
+    await waitForPapiMethodRegistered(
+      'command:legacyCommentManager.openCommentListPanel',
+      DEFAULT_WEBSOCKET_PORT,
+      SETTINGS_TIMEOUT_MS,
+    );
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+
+    await clickCommentsTab(mainPage);
+
+    const commentsFrame = commentsFrameLocator(mainPage);
+    // The filter dropdowns are the toolbar; the first one is the resolved-status filter. Its
+    // visibility is a faithful proxy for "the filtering bar is visible" (PT-4070 DoD).
+    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+    const threads = commentsFrame.locator('#comment-list [role="option"]');
+
+    // Wait for the seeded threads to render, then confirm the toolbar starts out visible.
+    await expect(threads.first()).toBeVisible({ timeout: 90_000 });
+    await expect(firstFilter).toBeInViewport();
+
+    // Scroll the iframe DOCUMENT explicitly, not "whichever container happens to scroll". In the
+    // real web view nothing bounds html/body/#root, so the document is the scroll container and
+    // tw:sticky is what pins the toolbar; targeting the document scroller directly keeps this test
+    // load-bearing. If a future layout change (PT-4173) bounds the height so the inner list becomes
+    // the scroller instead, the document won't move, the first-thread guard below fails, and the
+    // test flags for review rather than converting into a false green.
+    await commentsFrame.locator(':root').evaluate((root) => {
+      const scroller = root.ownerDocument.scrollingElement ?? root;
+      scroller.scrollTop = scroller.scrollHeight;
+    });
+
+    // Guard against a false green: after scrolling the document, the FIRST thread must be out of the
+    // viewport, proving the document actually overflowed and scrolled. If this fails, raise
+    // COMMENT_COUNT until it does (or the scroll model changed — see above).
+    await expect(threads.first()).not.toBeInViewport();
+
+    // The point of PT-4070: the sticky filter row must remain on-screen after scrolling to bottom.
+    await expect(firstFilter).toBeInViewport();
+  });
+
+  // NOTE: The keyboard and scope-filter tests below MUST stay ahead of the PT-4069 test. That test
+  // calls openScriptureEditor, which in Simple mode dispatches `replace-tab` and swaps the Column 2
+  // scripture-editor slot (SCRIPTURE_EDITOR_SLOT_UUID) for a fresh GUID. Nothing re-applies the
+  // simple layout in-session and the Electron app is worker-scoped, so any later test's
+  // waitForSimpleLayout would block the full 120 s on a slot that no longer exists and fail its
+  // first attempt (relying on Playwright's worker-relaunch retry to recover — a guaranteed slow
+  // flake, and a hard failure under --retries=0).
+  test('filter dropdowns are operable with the keyboard (PT-4070)', async ({ mainPage }) => {
+    await waitForAppReady(mainPage, 180_000);
+    await waitForSimpleLayout(mainPage);
+
+    // The toolbar renders in the loaded state even with zero threads, but seed a few so the panel
+    // never sits in the skeleton state when we go to interact (keeps the test self-sufficient when
+    // run alone via -g).
+    await createCommentThreads(
+      projectScroll,
+      ['GEN 2:1', 'GEN 2:2', 'GEN 2:3'],
+      ['PT-4070 keyboard a11y 1', 'PT-4070 keyboard a11y 2', 'PT-4070 keyboard a11y 3'],
+    );
+
+    await waitForPapiMethodRegistered(
+      'command:legacyCommentManager.openCommentListPanel',
+      DEFAULT_WEBSOCKET_PORT,
+      SETTINGS_TIMEOUT_MS,
+    );
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+
+    await clickCommentsTab(mainPage);
+
+    const commentsFrame = commentsFrameLocator(mainPage);
+    const firstFilter = commentsFrame.locator('[data-slot="select-trigger"]').first();
+
+    // Wait for the loaded toolbar, then drive the first filter entirely by keyboard.
+    await expect(firstFilter).toBeVisible({ timeout: 90_000 });
+    await firstFilter.focus();
+    await expect(firstFilter).toBeFocused();
+
+    // Open with the keyboard.
+    await firstFilter.press('Enter');
+    const dropdown = commentsFrame.locator('[data-slot="select-content"]');
+    await expect(dropdown).toBeVisible({ timeout: 10_000 });
+
+    // Navigate to the next option and commit it with the keyboard; the dropdown closes on select.
+    await mainPage.keyboard.press('ArrowDown');
+    await mainPage.keyboard.press('Enter');
+    await expect(dropdown).toBeHidden({ timeout: 10_000 });
+
+    // Assert the OUTCOME, not merely that the popover closed. The first filter is the resolved-status
+    // axis, whose options are All / Unresolved / Resolved; ArrowDown from the selected "All resolved
+    // statuses" lands on "Unresolved", so the trigger must now display it. This fails if Enter closed
+    // the popover without committing a value, or re-selected the same value — cases a bare
+    // toBeHidden() (satisfied even by the toolbar re-rendering) would pass.
+    await expect(firstFilter).toContainText('Unresolved');
+  });
+
+  test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage, 180_000);
+    await waitForSimpleLayout(mainPage);
+
+    await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
+
+    await waitForPapiMethodRegistered(
+      'command:legacyCommentManager.openCommentListPanel',
+      DEFAULT_WEBSOCKET_PORT,
+      SETTINGS_TIMEOUT_MS,
+    );
+    await sendPapiRequestOnce(
+      'command:legacyCommentManager.openCommentListPanel',
+      [projectScroll.projectId],
+      DEFAULT_WEBSOCKET_PORT,
+      OPEN_EDITOR_TIMEOUT_MS,
+    );
+
+    const commentsFrame = commentsFrameLocator(mainPage);
+    // Find the scope dropdown by its stable data-testid rather than by trigger index — the index
+    // holds only while the scope trigger stays the 5th of exactly five and no comment card renders a
+    // Select, which is a coincidence rather than a contract. Click the tab inside a retry loop: a
+    // "workspace updating" overlay can intercept pointer events during dock rebuilds, so wait it out
+    // and retry (same pattern as the panel-display test).
+    const scopeTrigger = commentsFrame.locator('[data-testid="comment-scope-filter"]');
+    await expect(async () => {
+      await waitForOverlayGone(mainPage, 60_000);
+      await clickCommentsTab(mainPage, 5_000);
+      await expect(scopeTrigger).toBeVisible({ timeout: 15_000 });
+    }).toPass({ timeout: 180_000 });
+
+    // With the overlay cleared, open the scope dropdown and confirm the Column 3 panel actually
+    // offers the "Current chapter" option — the exact capability this fix adds. Before the fix the
+    // option was gated on a wired editor (which the panel lacks even though it follows the active
+    // project's scroll group), so only "All books" appeared. Assert on the localized labels rather
+    // than the option count, so a future change that swapped in a different second scope value while
+    // dropping current-chapter could not keep this test green.
+    //
+    // This overlay wait is NOT redundant with the one inside the retry loop above: the loop only
+    // guarantees the overlay is gone at the moment the trigger becomes visible, but a fresh dock
+    // rebuild can raise it again before the click below — which is a new pointer action. Keep it.
+    await waitForOverlayGone(mainPage, 30_000);
+    await scopeTrigger.click();
+    const scopeOptions = commentsFrame.locator(
+      '[data-slot="select-content"] [data-slot="select-item"]',
+    );
+    await expect(scopeOptions.filter({ hasText: 'Current chapter' })).toHaveCount(1, {
+      timeout: 10_000,
+    });
+    await expect(scopeOptions.filter({ hasText: 'All books' })).toHaveCount(1);
   });
 
   test('Comments tab updates when the active project changes (PT-4069)', async ({ mainPage }) => {

@@ -4,6 +4,7 @@ public static class ProjectDataType
 {
     public const string BOOK_USFM = "BookUSFM";
     public const string BOOK_USX = "BookUSX";
+    public const string CELL_ORDER = "CellOrder";
     public const string CHAPTER_USFM = "ChapterUSFM";
     public const string CHAPTER_USX = "ChapterUSX";
     public const string COMMENTS = "Comments";

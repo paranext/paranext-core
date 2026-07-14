@@ -9,7 +9,7 @@ import {
   Skeleton,
 } from 'platform-bible-react';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
-import { ComponentProps } from 'react';
+import { ComponentProps, ReactNode } from 'react';
 import {
   areCommentFiltersAtDefault,
   assignmentFilterToLabelKey,
@@ -30,6 +30,11 @@ import {
 
 /** Extra localization keys this panel needs beyond `COMMENT_LIST_STRING_KEYS`. */
 export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
+  '%comment_filter_aria_assignment%',
+  '%comment_filter_aria_read%',
+  '%comment_filter_aria_resolved%',
+  '%comment_filter_aria_scope%',
+  '%comment_filter_aria_type%',
   '%comment_filter_assignment_all%',
   '%comment_filter_assignment_me%',
   '%comment_filter_assignment_team%',
@@ -83,11 +88,12 @@ export type CommentListPanelProps = Pick<
   /** Called when the scope filter changes. */
   onScopeFilterChange: (filter: ScopeFilter) => void;
   /**
-   * Whether an editor is wired to this list. When false (e.g. a cross-project open), the "current
-   * chapter" scope option is hidden because there is no editor to derive the chapter from. Defaults
-   * to `true`.
+   * Whether this list can scope to the "current chapter". True when it follows a live Scripture
+   * reference — an editor-anchored list via its wired editor, or the Column 3 panel via the active
+   * project's scroll group. When false (e.g. a cross-project open with no matching reference), the
+   * "current chapter" scope option is hidden. Defaults to `true`.
    */
-  hasEditorContext?: boolean;
+  canScopeToCurrentChapter?: boolean;
 };
 
 /**
@@ -101,15 +107,25 @@ function FilterDropdown<T extends string>({
   isValue,
   onChange,
   localizedStrings,
+  ariaLabel,
   hiddenValues,
+  testId,
 }: {
   value: T;
   labelKeys: Readonly<Record<T, LocalizeKey>>;
   isValue: (value: string) => value is T;
   onChange: (value: T) => void;
   localizedStrings: LanguageStrings;
+  /**
+   * Accessible name for the trigger. The dropdown's displayed value doubles as its only visible
+   * label, so a screen reader would otherwise announce just the value with no indication of which
+   * axis it filters.
+   */
+  ariaLabel: string;
   /** Option values to omit from the list (e.g. a scope that doesn't apply without editor context). */
   hiddenValues?: readonly T[];
+  /** Optional stable test hook placed on the trigger (e.g. for the scope dropdown in E2E tests). */
+  testId?: string;
 }) {
   return (
     <Select
@@ -118,7 +134,7 @@ function FilterDropdown<T extends string>({
         if (isValue(next)) onChange(next);
       }}
     >
-      <SelectTrigger className="tw:w-auto tw:min-w-32">
+      <SelectTrigger className="tw:w-auto tw:min-w-32" aria-label={ariaLabel} data-testid={testId}>
         <SelectValue>
           <div className="tw:text-start tw:overflow-hidden tw:text-ellipsis tw:text-sm tw:font-normal">
             {localizedStrings[labelKeys[value]]}
@@ -156,7 +172,7 @@ export function CommentListPanel({
   onFiltersChange,
   scopeFilter,
   onScopeFilterChange,
-  hasEditorContext = true,
+  canScopeToCurrentChapter = true,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -171,9 +187,14 @@ export function CommentListPanel({
   onSelectedThreadChange,
   onVerseRefClick,
 }: CommentListPanelProps) {
+  const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === UNFILTERED;
+
+  // The list area swaps between skeletons (loading), an empty-state message, and the list — but the
+  // toolbar below always renders, so isLoading only governs this region (see PT-4070).
+  let listContent: ReactNode;
   if (isLoading) {
-    return (
-      <div className="tw:bg-background tw:flex-1 tw:p-2 tw:space-y-4">
+    listContent = (
+      <div className="tw:p-2 tw:space-y-4">
         {[...Array(10)].map((_, index) => (
           <Skeleton
             // There are no other unique identifiers for these items
@@ -184,20 +205,55 @@ export function CommentListPanel({
         ))}
       </div>
     );
+  } else if (threads.length === 0) {
+    listContent = (
+      <div className="tw:m-4 tw:flex tw:justify-center">
+        <Label>
+          {noFiltersActive
+            ? localizedStrings['%no_comments%']
+            : localizedStrings['%no_comments_match_filter%']}
+        </Label>
+      </div>
+    );
+  } else {
+    listContent = (
+      <CommentList
+        classNameForVerseText="scripture-font"
+        threads={threads}
+        currentUser={currentUser}
+        localizedStrings={localizedStrings}
+        handleAddCommentToThread={handleAddCommentToThread}
+        handleUpdateComment={handleUpdateComment}
+        handleDeleteComment={handleDeleteComment}
+        handleReadStatusChange={handleReadStatusChange}
+        assignableUsers={assignableUsers}
+        canUserAddCommentToThread={canUserAddCommentToThread}
+        canUserAssignThreadCallback={canUserAssignThreadCallback}
+        canUserResolveThreadCallback={canUserResolveThreadCallback}
+        conflictResolution={conflictResolution}
+        canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+        selectedThreadId={selectedThreadId}
+        onSelectedThreadChange={onSelectedThreadChange}
+        onVerseRefClick={onVerseRefClick}
+      />
+    );
   }
-
-  const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === UNFILTERED;
 
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
-      {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown */}
-      <div className="tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
+      {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Sticky so it stays
+          pinned to the top of whichever ancestor scrolls (PT-4070). Rendered regardless of the
+          loading state: it must stay mounted across filter changes (each of which briefly flips
+          `isLoading` true while the query resubscribes), or the control the user is interacting with
+          would unmount from under them — the exact strobe PT-4070 exists to prevent. */}
+      <div className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0 tw:border-b tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
         <FilterDropdown
           value={filters.resolved}
           labelKeys={resolvedFilterToLabelKey}
           isValue={isResolvedFilter}
           onChange={(resolved) => onFiltersChange({ ...filters, resolved })}
           localizedStrings={localizedStrings}
+          ariaLabel={localizedStrings['%comment_filter_aria_resolved%']}
         />
         <FilterDropdown
           value={filters.read}
@@ -205,6 +261,7 @@ export function CommentListPanel({
           isValue={isReadFilter}
           onChange={(read) => onFiltersChange({ ...filters, read })}
           localizedStrings={localizedStrings}
+          ariaLabel={localizedStrings['%comment_filter_aria_read%']}
         />
         <FilterDropdown
           value={filters.type}
@@ -212,6 +269,7 @@ export function CommentListPanel({
           isValue={isTypeFilter}
           onChange={(type) => onFiltersChange({ ...filters, type })}
           localizedStrings={localizedStrings}
+          ariaLabel={localizedStrings['%comment_filter_aria_type%']}
         />
         <FilterDropdown
           value={filters.assignment}
@@ -219,6 +277,7 @@ export function CommentListPanel({
           isValue={isAssignmentFilter}
           onChange={(assignment) => onFiltersChange({ ...filters, assignment })}
           localizedStrings={localizedStrings}
+          ariaLabel={localizedStrings['%comment_filter_aria_assignment%']}
         />
         <FilterDropdown
           value={scopeFilter}
@@ -226,42 +285,15 @@ export function CommentListPanel({
           isValue={isScopeFilter}
           onChange={onScopeFilterChange}
           localizedStrings={localizedStrings}
-          hiddenValues={hasEditorContext ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
+          ariaLabel={localizedStrings['%comment_filter_aria_scope%']}
+          hiddenValues={canScopeToCurrentChapter ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
+          testId="comment-scope-filter"
         />
       </div>
 
-      {/* Comments list */}
-      <div className="tw:flex-1 tw:overflow-auto">
-        {threads.length === 0 ? (
-          <div className="tw:m-4 tw:flex tw:justify-center">
-            <Label>
-              {noFiltersActive
-                ? localizedStrings['%no_comments%']
-                : localizedStrings['%no_comments_match_filter%']}
-            </Label>
-          </div>
-        ) : (
-          <CommentList
-            classNameForVerseText="scripture-font"
-            threads={threads}
-            currentUser={currentUser}
-            localizedStrings={localizedStrings}
-            handleAddCommentToThread={handleAddCommentToThread}
-            handleUpdateComment={handleUpdateComment}
-            handleDeleteComment={handleDeleteComment}
-            handleReadStatusChange={handleReadStatusChange}
-            assignableUsers={assignableUsers}
-            canUserAddCommentToThread={canUserAddCommentToThread}
-            canUserAssignThreadCallback={canUserAssignThreadCallback}
-            canUserResolveThreadCallback={canUserResolveThreadCallback}
-            conflictResolution={conflictResolution}
-            canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
-            selectedThreadId={selectedThreadId}
-            onSelectedThreadChange={onSelectedThreadChange}
-            onVerseRefClick={onVerseRefClick}
-          />
-        )}
-      </div>
+      {/* Comments list (or skeletons while loading / empty state). Only this region swaps on load,
+          so the toolbar above stays mounted. */}
+      <div className="tw:flex-1 tw:overflow-auto">{listContent}</div>
     </div>
   );
 }
