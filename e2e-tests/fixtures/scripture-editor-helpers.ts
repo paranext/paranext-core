@@ -86,32 +86,33 @@ export async function makeSampleProjectEditable(): Promise<void> {
 }
 
 /**
- * Opens the EDITABLE scripture editor for the given project, waits for its iframe to attach, and
- * returns the editor's webViewId (usable as an `iframe[data-web-view-id="..."]` locator).
+ * Shared engine for the open-editor helpers: waits for the dock layout's initial loadLayout() to
+ * finish (signalled by the first iframe — the Home webview — appearing) so loadLayout can't wipe
+ * the newly added editor tab, waits for `commandName` to register, then retries the open command up
+ * to 5 times, each attempt waiting for the returned web view's iframe to attach.
  *
- * Mirrors {@link openScriptureEditorForProject} (which opens the read-only resource viewer) and
- * `openCommentList` Phase A in `comment-test-helpers.ts`, including the loadLayout-race guard and
- * retry loop; see `openCommentList` for the full explanation of the race. The 60s per-request
- * timeout follows `openCommentList`: under the simple-mode layout (five auto-loading webviews) a
- * cold xvfb startup makes the command response slow enough that a 30s timeout flakes.
+ * Mirrors `openCommentList` in `comment-test-helpers.ts`, including its loadLayout-race guard and
+ * retry loop; see that helper for the full explanation of the race. The 60s per-request timeout
+ * also follows `openCommentList`: under the simple-mode layout (five auto-loading webviews) a cold
+ * xvfb startup makes the command response slow enough that a 30s timeout flakes.
  *
  * @param mainPage The Electron main window page
- * @param projectId The id of the project to open the editable Scripture editor for
- * @returns The editor's webViewId
+ * @param commandName The PAPI command that opens the editor, without the `command:` prefix
+ * @param projectId The id of the project to open the editor for
+ * @param editorDescription Human-readable editor name used in the "could not open" failure message
+ * @returns The opened editor's webViewId (usable as an `iframe[data-web-view-id="..."]` locator)
  */
-export async function openEditableScriptureEditorForProject(
+async function openEditorViaCommand(
   mainPage: Page,
+  commandName: string,
   projectId: string,
+  editorDescription: string,
 ): Promise<string> {
-  // Wait for the dock layout's initial loadLayout() to complete (signalled by the first iframe
-  // appearing) so loadLayout can't wipe the newly added editor tab.
+  // Wait for the dock layout's initial loadLayout() to complete (signalled by the first iframe —
+  // the Home webview — appearing) so loadLayout can't wipe the newly added editor tab.
   await mainPage.waitForSelector('iframe', { state: 'attached', timeout: 30_000 });
 
-  await waitForPapiMethodRegistered(
-    'command:platformScriptureEditor.openScriptureEditor',
-    WEBSOCKET_PORT,
-    60_000,
-  );
+  await waitForPapiMethodRegistered(`command:${commandName}`, WEBSOCKET_PORT, 60_000);
 
   // Sequential retry loop: each attempt must await the PAPI response and iframe appearance before
   // deciding whether to retry (see openCommentList for the dock-layout race this covers).
@@ -124,7 +125,7 @@ export async function openEditableScriptureEditorForProject(
     }
 
     const editorId = await sendPapiRequestOnce<string | undefined>(
-      'command:platformScriptureEditor.openScriptureEditor',
+      `command:${commandName}`,
       [projectId],
       WEBSOCKET_PORT,
       60_000,
@@ -140,8 +141,26 @@ export async function openEditableScriptureEditorForProject(
   }
   /* eslint-enable no-await-in-loop, no-continue */
 
-  throw new Error(
-    `Could not open an editable Scripture editor for project ${projectId} after 5 attempts`,
+  throw new Error(`Could not open ${editorDescription} for project ${projectId} after 5 attempts`);
+}
+
+/**
+ * Opens the EDITABLE scripture editor for the given project, waits for its iframe to attach, and
+ * returns the editor's webViewId (usable as an `iframe[data-web-view-id="..."]` locator).
+ *
+ * @param mainPage The Electron main window page
+ * @param projectId The id of the project to open the editable Scripture editor for
+ * @returns The editor's webViewId
+ */
+export async function openEditableScriptureEditorForProject(
+  mainPage: Page,
+  projectId: string,
+): Promise<string> {
+  return openEditorViaCommand(
+    mainPage,
+    'platformScriptureEditor.openScriptureEditor',
+    projectId,
+    'an editable Scripture editor',
   );
 }
 
@@ -170,9 +189,6 @@ export async function waitForHomeTab(mainPage: Page): Promise<void> {
  * (nothing to navigate), and a fresh test profile opens none on its own — so tests that exercise
  * the top control open an editor first, then assert the enabled state as a hard expectation.
  *
- * Mirrors `openCommentList` in `comment-test-helpers.ts`, including its loadLayout-race guard and
- * retry loop; see that helper for the full explanation of the race.
- *
  * @param mainPage The Electron main window page
  * @param projectId The id of the project to open a Scripture editor for
  */
@@ -180,38 +196,11 @@ export async function openScriptureEditorForProject(
   mainPage: Page,
   projectId: string,
 ): Promise<void> {
-  // Wait for the dock layout's initial loadLayout() to complete (signalled by the first iframe —
-  // the Home webview — appearing) so loadLayout can't wipe the newly added editor tab
-  await mainPage.waitForSelector('iframe', { state: 'attached', timeout: 30_000 });
-
-  await waitForPapiMethodRegistered('command:platformScriptureEditor.openResourceViewer');
-
-  // Sequential retry loop: each attempt must await the PAPI response and iframe appearance before
-  // deciding whether to retry (see openCommentList for the dock-layout race this covers).
-  /* eslint-disable no-await-in-loop, no-continue */
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 1_000);
-      });
-    }
-
-    const editorId = await sendPapiRequestOnce<string | undefined>(
-      'command:platformScriptureEditor.openResourceViewer',
-      [projectId],
-      undefined,
-      60_000,
-    );
-    if (!editorId) continue;
-
-    const editorIframeFound = await mainPage
-      .locator(`iframe[data-web-view-id="${editorId}"]`)
-      .waitFor({ state: 'attached', timeout: attempt < 4 ? 8_000 : 20_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (editorIframeFound) return;
-  }
-  /* eslint-enable no-await-in-loop, no-continue */
-
-  throw new Error(`Could not open a Scripture editor for project ${projectId} after 5 attempts`);
+  // The resource viewer's webViewId is not needed by callers of this function; discard it.
+  await openEditorViaCommand(
+    mainPage,
+    'platformScriptureEditor.openResourceViewer',
+    projectId,
+    'a Scripture editor',
+  );
 }
