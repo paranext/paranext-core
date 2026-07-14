@@ -22,6 +22,18 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [WORKSPACE_UPDATING_KEY];
 /** Z-index below modals so modal dialogs remain accessible during a project switch */
 const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL - 1;
 
+/**
+ * Whether focus has landed in a layer that legitimately renders above this overlay: a modal dialog
+ * (`aria-modal="true"`) or another overlay-host subtree (`[data-overlay-host]`). The overlay sits
+ * at `Z_INDEX_MODAL - 1` precisely so modals opened mid-sync stay usable, and those modals are
+ * Radix Dialogs with their own focus trap. So the overlay's blur re-containment must yield to them
+ * — yanking focus back would ping-pong with the dialog's trap. `Element.closest` walks the node's
+ * own ancestors (the node itself included).
+ */
+function isInHigherFocusLayer(node: Element | null): boolean {
+  return !!node?.closest('[data-overlay-host], [aria-modal="true"]');
+}
+
 type Props = {
   label: string;
   /** Localized label for the Cancel button. Only rendered when onCancel is provided. */
@@ -81,17 +93,23 @@ export function WorkspaceUpdatingOverlayPresentational({
 
   // Re-contain focus if it leaves the overlay (e.g. programmatic focus elsewhere, or the button
   // disabling itself after a click). relatedTarget is where focus is headed; when it is missing
-  // (body/nowhere) or outside the container, pull focus back.
+  // (body/nowhere) or outside the container, pull focus back — UNLESS it went to a modal/overlay
+  // layer above us, whose own focus trap must win (otherwise focus ping-pongs with it).
   const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
     const container = containerRef.current;
     if (!container) return;
     if (event.relatedTarget && container.contains(event.relatedTarget)) return;
+    // Focus moved up into a modal/overlay-host layer that renders above this overlay: yield to it.
+    if (isInHigherFocusLayer(event.relatedTarget)) return;
     // Refocus after the in-flight focus transition completes: while focusout is dispatching, the
     // focus move has not been committed yet, so a synchronous focus() here can be dropped. The
-    // activeElement re-check avoids stealing focus back if it ended up inside after all.
+    // activeElement re-check avoids stealing focus back if it ended up inside after all — and,
+    // as above, yields if it settled in a higher layer (Radix moves dialog focus asynchronously,
+    // so relatedTarget may still be empty here even when a modal is where focus is heading).
     queueMicrotask(() => {
       const active = document.activeElement;
       if (active && container.contains(active)) return;
+      if (isInHigherFocusLayer(active)) return;
       container.focus();
     });
   }, []);
@@ -109,11 +127,18 @@ export function WorkspaceUpdatingOverlayPresentational({
       {/* Focus containment is only active in cancel mode (onCancel provided); without it the
           rendered output and behavior are unchanged from the original project-switch overlay.
           tabIndex -1 makes the container programmatically focusable without adding a tab stop. */}
-      {/* The container is a focus sink, not an interactive control; key handling only traps Tab */}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
+      {/* The container is a focus sink, not an interactive control; key handling only traps Tab.
+          The role is a runtime expression jsx-a11y can't resolve, so it flags the handlers. */}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         ref={onCancel ? containerRef : undefined}
-        role="status"
+        // Legacy passive overlay is a live region (role="status"). Cancel mode is a focus-trapping
+        // blocking surface, so it takes modal-dialog semantics with an accessible name from the
+        // label the component already renders (no new l10n key). Both are omitted/left as-is when
+        // the new props are absent, keeping the legacy render byte-identical.
+        role={onCancel ? 'dialog' : 'status'}
+        aria-modal={onCancel ? true : undefined}
+        aria-label={onCancel ? label : undefined}
         tabIndex={onCancel ? -1 : undefined}
         onKeyDown={onCancel ? handleKeyDown : undefined}
         onBlur={onCancel ? handleBlur : undefined}

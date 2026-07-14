@@ -8,6 +8,7 @@ import {
 } from '@renderer/services/auto-sync-blocking-store';
 import { getNetworkEvent, request } from '@shared/services/network.service';
 import { AutoSyncBlockingOverlay } from './overlay-auto-sync-blocking.component';
+import { WorkspaceUpdatingOverlayPresentational } from './overlay-workspace-updating.component';
 
 /** Must match SHOW_GRACE_MS in auto-sync-blocking-store.ts */
 const SHOW_GRACE_MS = 200;
@@ -114,13 +115,13 @@ describe('AutoSyncBlockingOverlay', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
     // Both must be present as separate class tokens (guards against the class strings being
     // concatenated without a separating space)
-    expect(screen.getByRole('status')).toHaveClass('tw:bg-background', 'tw:outline-none');
+    expect(screen.getByRole('dialog')).toHaveClass('tw:bg-background', 'tw:outline-none');
   });
 
   it('focuses the container (not the button) when shown — mid-word Space/Enter cannot cancel', () => {
     render(<AutoSyncBlockingOverlay />);
     showOverlay();
-    const overlay = screen.getByRole('status');
+    const overlay = screen.getByRole('dialog');
     expect(overlay).toHaveFocus();
     expect(screen.getByRole('button', { name: 'Cancel' })).not.toHaveFocus();
     // A user typing when the overlay appears may hit Space/Enter before noticing — that keypress
@@ -135,7 +136,7 @@ describe('AutoSyncBlockingOverlay', () => {
   it('traps Tab inside the overlay (keyboard cannot reach the covered editor)', () => {
     render(<AutoSyncBlockingOverlay />);
     showOverlay();
-    const overlay = screen.getByRole('status');
+    const overlay = screen.getByRole('dialog');
     // fireEvent returns false when preventDefault was called — the browser's tabbing is suppressed
     expect(fireEvent.keyDown(overlay, { key: 'Tab' })).toBe(false);
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
@@ -152,8 +153,56 @@ describe('AutoSyncBlockingOverlay', () => {
     await act(async () => {
       outside.focus();
     });
-    expect(screen.getByRole('status')).toHaveFocus();
+    expect(screen.getByRole('dialog')).toHaveFocus();
     outside.remove();
+  });
+
+  it('yields focus to a modal above it — does not re-contain focus that moved into an aria-modal layer', async () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    // A modal dialog opened during the sync renders above this overlay (Z_INDEX_MODAL) with its own
+    // focus trap. The overlay must not yank focus back out of it, or the two traps ping-pong.
+    const modal = document.createElement('div');
+    modal.setAttribute('aria-modal', 'true');
+    const modalButton = document.createElement('button');
+    modal.appendChild(modalButton);
+    document.body.appendChild(modal);
+    // Async act so any deferred (microtask) refocus would have run — proving it did not
+    await act(async () => {
+      modalButton.focus();
+    });
+    expect(modalButton).toHaveFocus();
+    expect(screen.getByRole('dialog')).not.toHaveFocus();
+    modal.remove();
+  });
+
+  it('re-contains focus that drops to nothing (blurred to <body>, no relatedTarget)', async () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    const overlay = screen.getByRole('dialog');
+    // The Cancel button disabling itself drops focus to <body> with no relatedTarget; that real
+    // escape must still be re-contained.
+    await act(async () => {
+      overlay.blur();
+    });
+    expect(overlay).toHaveFocus();
+  });
+
+  it('uses dialog semantics in cancel mode and the passive status role in legacy mode', () => {
+    const { unmount } = render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    // Accessible name comes from the localized label already rendered — no new l10n key
+    expect(dialog).toHaveAttribute('aria-label', 'Automatic Send/Receive in progress');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    unmount();
+
+    // Legacy project-switch overlay (no onCancel): passive live region, no modal semantics
+    render(<WorkspaceUpdatingOverlayPresentational label="Updating workspace" />);
+    const status = screen.getByRole('status');
+    expect(status).not.toHaveAttribute('aria-modal');
+    expect(status).not.toHaveAttribute('aria-label');
   });
 
   it('hides the overlay when blocking clears', () => {

@@ -39,3 +39,33 @@ export const Default: Story = {
     label: 'Updating workspace',
   },
 };
+
+export const WithCancel: Story = {
+  args: {
+    label: 'Automatic Send/Receive in progress',
+    cancelLabel: 'Cancel',
+    isCancelEnabled: true,
+    onCancel: () => console.log('Cancel'),
+  },
+};
+
+export const WithDeterminateProgress: Story = {
+  args: {
+    label: 'Automatic Send/Receive in progress',
+    cancelLabel: 'Cancel',
+    isCancelEnabled: true,
+    onCancel: () => console.log('Cancel'),
+    progressText: 'MyProject',
+    progressValue: 0.4,
+  },
+};
+
+export const WithIndeterminateProgress: Story = {
+  args: {
+    label: 'Automatic Send/Receive in progress',
+    cancelLabel: 'Cancel',
+    isCancelEnabled: true,
+    onCancel: () => console.log('Cancel'),
+    progressText: 'Looking for changes',
+  },
+};
