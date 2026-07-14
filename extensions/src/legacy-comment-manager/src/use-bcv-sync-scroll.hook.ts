@@ -24,7 +24,12 @@ import {
  *       inside the comment list must never scroll the comment list. Any other change clears the
  *       record.
  *   - `cancelPendingSyncScroll`: drops any due sync scroll (an explicit selectThread navigation is the
- *       more specific intent, so it wins).
+ *       more specific intent, so it wins). The drop is permanent — nothing re-arms the scroll
+ *       except a later scrRef change. Safe only because every current caller of this — the "go to
+ *       comment" flow — always navigates the editor first, which changes the scroll-group reference
+ *       and arms a fresh scroll for the thread's verse. A caller that sets a pending thread
+ *       selection WITHOUT moving the editor would leave the list out of sync with the BCV with no
+ *       recovery.
  */
 export function useBcvSyncScroll({
   scrRef,
@@ -66,7 +71,7 @@ export function useBcvSyncScroll({
   const selfInitiatedNavigationRef = useRef<NavigationRecord | undefined>(undefined);
 
   // Arm a sync scroll whenever the scroll-group reference changes. This also runs on mount, where
-  // `?? ` preserves the initial 'instant' behavior instead of downgrading it to 'smooth'. The
+  // `??` preserves the initial 'instant' behavior instead of downgrading it to 'smooth'. The
   // dependency list is the three primitive values on purpose: re-selecting the same verse (or a
   // scrRef object identity change without a value change) must not arm a scroll. A change this
   // view itself initiated (see selfInitiatedNavigationRef) is swallowed instead of armed.
@@ -93,6 +98,9 @@ export function useBcvSyncScroll({
     if (pendingSyncScrollBehavior === undefined || isLoadingCommentThreads) return;
 
     if (hasPendingThreadSelection) {
+      // Permanent drop, not a defer: relies on the caller invariant documented on
+      // cancelPendingSyncScroll above (every hasPendingThreadSelection caller also moves the editor,
+      // which re-arms a fresh scroll). Without that, this leaves the list unsynced with no recovery.
       setPendingSyncScrollBehavior(undefined);
       return;
     }
@@ -108,6 +116,11 @@ export function useBcvSyncScroll({
     const target = findScrollTarget(commentThreads, scrRef);
     if (target) scrollToTarget(target, pendingSyncScrollBehavior);
     setPendingSyncScrollBehavior(undefined);
+    // Unlike the arm effect above, this depends on the full scrRef object rather than its primitive
+    // fields: it only runs when a scroll is already pending (gated by pendingSyncScrollBehavior), so
+    // an identity-only change can't spuriously re-arm anything here — it can at most re-run this
+    // consume step with the same values, which is harmless. findScrollTarget also wants the whole
+    // object, not the three fields individually.
   }, [
     pendingSyncScrollBehavior,
     isLoadingCommentThreads,

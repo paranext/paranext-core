@@ -186,6 +186,7 @@ const commentListPanelProvider: IWebViewProvider = {
       localizeKey: '%webView_legacyCommentManager_commentListPanel_title%',
     });
 
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
 
     return {
