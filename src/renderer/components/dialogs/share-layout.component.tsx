@@ -186,17 +186,21 @@ export function ShareLayoutDialogContent({
     });
   }, []);
 
-  // Only scripture resources have a "shown by default" toggle in the Text Collection Resources
-  // section — commentary no longer has a per-resource checkbox list.
-  const handleToggleShownByDefault = useCallback((ref: ResourceReference, checked: boolean) => {
-    setScriptureResources((existing) =>
-      existing.map((item) =>
-        referenceKey(item) === referenceKey(ref)
-          ? { ...item, isResourceShownByDefault: checked }
-          : item,
-      ),
-    );
-  }, []);
+  // Both scripture resources and commentaries are selectable to be in the text collection.
+  const handleToggleShownByDefault = useCallback(
+    (tab: TabKey, ref: ResourceReference, checked: boolean) => {
+      const setResources =
+        tab === 'ScriptureResource' ? setScriptureResources : setCommentaryResources;
+      setResources((existing) =>
+        existing.map((item) =>
+          referenceKey(item) === referenceKey(ref)
+            ? { ...item, isInTextCollection: checked }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
 
   const handleConfirm = useCallback(() => {
     onConfirm({ modelText, activeTab, scriptureResources, commentaryResources });
@@ -376,7 +380,10 @@ export function ShareLayoutDialogContent({
             </span>
           </div>
           <div className="tw:divide-y tw:divide-border">
-            {scriptureResources.map((ref) => (
+            {[
+              ...scriptureResources.map((ref) => ({ tab: 'ScriptureResource' as const, ref })),
+              ...commentaryResources.map((ref) => ({ tab: 'CommentaryResource' as const, ref })),
+            ].map(({ tab, ref }) => (
               <div
                 key={referenceKey(ref)}
                 className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2"
@@ -386,7 +393,9 @@ export function ShareLayoutDialogContent({
                 </span>
                 <Checkbox
                   checked={!!ref.isInTextCollection}
-                  onCheckedChange={(checked: boolean) => handleToggleShownByDefault(ref, checked)}
+                  onCheckedChange={(checked: boolean) =>
+                    handleToggleShownByDefault(tab, ref, checked)
+                  }
                   aria-label={formatReplacementString(
                     localizeString(strings, '%shareLayoutDialog_shownByDefault_label%'),
                     { resourceName: formatResourceDisplayName(ref, allResources) },

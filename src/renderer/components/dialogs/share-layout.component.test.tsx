@@ -25,14 +25,14 @@ const ESV: ResourceReference = {
   type: 'dblResource',
   name: 'ESV',
   id: 'esv-uid',
-  isResourceShownByDefault: true,
+  isInTextCollection: true,
 };
 const NIV: ResourceReference = { type: 'dblResource', name: 'NIV', id: 'niv-uid' };
 const IVP: ResourceReference = {
   type: 'dblResource',
   name: 'IVP Commentary',
   id: 'ivp-uid',
-  isResourceShownByDefault: true,
+  isInTextCollection: true,
 };
 
 const ALL_RESOURCES: DblResourceData[] = [
@@ -106,7 +106,7 @@ describe('ShareLayoutDialogContent', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('toggles isResourceShownByDefault when the checkbox for a resource is toggled', () => {
+  it('toggles isInTextCollection when the checkbox for a resource is toggled', () => {
     const { onConfirm } = renderContent();
 
     // Rows render in array order (ESV, then NIV) — no sorting. NIV starts unchecked; toggling
@@ -117,7 +117,7 @@ describe('ShareLayoutDialogContent', () => {
 
     const [result] = onConfirm.mock.calls[0];
     expect(result.scriptureResources).toContainEqual(
-      expect.objectContaining({ id: 'niv-uid', isResourceShownByDefault: true }),
+      expect.objectContaining({ id: 'niv-uid', isInTextCollection: true }),
     );
   });
 
@@ -200,15 +200,29 @@ describe('ShareLayoutDialogContent', () => {
     expect(screen.queryByRole('button', { name: 'NLT' })).not.toBeInTheDocument();
   });
 
-  it('renders the Text Collection Resources section with a checkbox per scripture resource, and no checkboxes for commentary resources', () => {
+  it('renders the Text Collection Resources section with a checkbox per scripture and commentary resource', () => {
     renderContent({ initialCommentaryResources: [IVP] });
 
     expect(
       screen.getByText('%shareLayoutDialog_textCollectionResources_label%'),
     ).toBeInTheDocument();
 
-    // Only the two scripture resources (ESV, NIV) get a "shown by default" checkbox — commentary
-    // resources no longer have a checkbox list at all.
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+    // ESV, NIV (scripture) and IVP (commentary) each get a "shown by default" checkbox.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3);
+  });
+
+  it('toggles isInTextCollection on a commentary resource without touching scripture resources', () => {
+    const { onConfirm } = renderContent({ initialCommentaryResources: [IVP] });
+
+    // Rows render scripture first (ESV, NIV), then commentary (IVP) — the third checkbox is IVP's.
+    const [, , ivpCheckbox] = screen.getAllByRole('checkbox');
+    fireEvent.click(ivpCheckbox);
+    fireEvent.click(screen.getByText('%shareLayoutDialog_confirm_label%'));
+
+    const [result] = onConfirm.mock.calls[0];
+    expect(result.commentaryResources).toContainEqual(
+      expect.objectContaining({ id: 'ivp-uid', isInTextCollection: false }),
+    );
+    expect(result.scriptureResources).toEqual([ESV, NIV]);
   });
 });

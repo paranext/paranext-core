@@ -48,14 +48,14 @@ const ESV: ResourceReference = {
   type: 'dblResource',
   name: 'ESV',
   id: 'esv-uid',
-  isResourceShownByDefault: true,
+  isInTextCollection: true,
 };
 const NIV: ResourceReference = { type: 'dblResource', name: 'NIV', id: 'niv-uid' };
 const IVP: ResourceReference = {
   type: 'dblResource',
   name: 'IVP New Testament Commentary',
   id: 'ivp-uid',
-  isResourceShownByDefault: true,
+  isInTextCollection: true,
 };
 
 const ALL_RESOURCES: DblResourceData[] = [
@@ -114,7 +114,7 @@ const MANY_SCRIPTURE_REFERENCES: ResourceReference[] = MANY_SCRIPTURE_RESOURCES.
     type: 'dblResource',
     name: resource.displayName,
     id: resource.dblEntryUid,
-    isResourceShownByDefault: i % 2 === 0,
+    isInTextCollection: i % 2 === 0,
   }),
 );
 
