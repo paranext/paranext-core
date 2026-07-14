@@ -150,7 +150,9 @@ export class SharedLayoutReceiver {
   }
 
   /**
-   * "Apply now" handler: apply the layout for the project tied to the notification, then dismiss.
+   * "Apply now" handler: apply the layout for the project tied to the notification.
+   * `applyForProject` dismisses and unmaps the outstanding notification as part of applying, so no
+   * separate cleanup is needed here.
    *
    * @param notificationId The id of the "Apply now" notification whose project should be applied; a
    *   no-op if the id is not mapped to a project.
@@ -159,13 +161,6 @@ export class SharedLayoutReceiver {
     const projectId = this.projectIdByNotificationId.get(notificationId);
     if (!projectId) return;
     await this.applyForProject(projectId);
-    try {
-      await this.papi.notifications.dismiss(notificationId);
-    } finally {
-      // Drop the mappings even if dismiss throws so the entries can't leak.
-      this.projectIdByNotificationId.delete(notificationId);
-      this.notificationIdByProjectId.delete(projectId);
-    }
   }
 
   dispose(): void {
@@ -226,9 +221,9 @@ export class SharedLayoutReceiver {
     // layout notifies again rather than being silently suppressed as "already asked".
     const notificationId = await this.papi.notifications.send({
       severity: 'info',
-      message: '%sharedLayout_newLayoutAvailable%',
+      message: '%platformScriptureEditor_sharedLayout_newLayoutAvailable%',
       clickCommand: 'platformScriptureEditor.applySharedLayout',
-      clickCommandLabel: '%sharedLayout_applyNow%',
+      clickCommandLabel: '%platformScriptureEditor_sharedLayout_applyNow%',
     });
     this.projectIdByNotificationId.set(notificationId, projectId);
     this.notificationIdByProjectId.set(projectId, notificationId);
