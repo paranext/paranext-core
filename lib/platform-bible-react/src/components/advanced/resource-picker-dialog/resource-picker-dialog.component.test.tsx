@@ -79,6 +79,10 @@ describe('ResourcePickerDialog', () => {
     const nivText = screen.getByText('NIV');
     const nivRow = nivText.closest('tr');
     if (!nivRow) throw new Error('NIV row not found');
+    // fireEvent.click (used in the test above) dispatches directly on the node and ignores
+    // pointer-events, so it can't catch a regression that leaves pointer-events-none on this row.
+    // This jsdom unit-test project doesn't load Tailwind, so there's no computed style to assert on
+    // either — checking the class list directly is the only way to guard this CSS-driven state.
     expect(nivRow.className).not.toContain('pointer-events-none');
     expect(nivRow.className).toContain('cursor-pointer');
   });
