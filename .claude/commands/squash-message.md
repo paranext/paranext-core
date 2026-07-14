@@ -12,12 +12,12 @@ Reminder: squash-merge is the team default, but **never** squash-merge template 
 
 Parse `$ARGUMENTS` to extract:
 
-```
+```text
 [PR-number] [--repo <owner/name>]
 ```
 
-- **PR number**: Optional (numeric token). If omitted, resolve from the current branch.
-- **`--repo`**: Optional. If omitted, use the current directory's repo (`gh repo view --json nameWithOwner -q .nameWithOwner`).
+- **PR number**: Optional (numeric token). If omitted, leave `PR` unset so it can be resolved from the current branch.
+- **`--repo`**: Optional. If omitted, resolve `REPO` using `gh repo view --json nameWithOwner -q .nameWithOwner`.
 
 ## Step 1: Collect the branch history
 
