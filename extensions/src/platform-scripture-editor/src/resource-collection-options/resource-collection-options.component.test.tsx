@@ -249,6 +249,27 @@ describe('ResourceCollectionOptions — truncated names', () => {
     renderComponent({ bottom: [row('u1', longName)] });
     expect(screen.getByText(longName)).toHaveAttribute('title', longName);
   });
+
+  it('renders the short name and long name when longName is set', () => {
+    renderComponent({
+      bottom: [row('niv', 'NIV', { longName: 'New International Version' })],
+    });
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.getByText('— New International Version')).toBeInTheDocument();
+  });
+
+  it('exposes the full "short — long" label via the title attribute', () => {
+    renderComponent({
+      bottom: [row('niv', 'NIV', { longName: 'New International Version' })],
+    });
+    expect(screen.getByTitle('NIV — New International Version')).toBeInTheDocument();
+  });
+
+  it('renders only the short name (no separator) when longName is absent', () => {
+    renderComponent({ bottom: [row('niv', 'NIV')] });
+    expect(screen.getByText('NIV')).toBeInTheDocument();
+    expect(screen.queryByText(/—/)).not.toBeInTheDocument();
+  });
 });
 
 describe('ResourceCollectionOptions locked-admin indicator', () => {
