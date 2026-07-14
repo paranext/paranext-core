@@ -15,6 +15,7 @@ import {
   setUserDisplay,
   type TextCollectionSources,
 } from './scripture-text-grid-contents.utils';
+import type { DownloadedResource } from './downloaded-resources.utils';
 
 // #region fixtures
 
@@ -420,6 +421,34 @@ describe('getViewOptionsTexts', () => {
     );
     expect(bottom).toHaveLength(1);
     expect(bottom[0].longName).toBe('English Standard Version');
+  });
+
+  it('appends downloaded projects not already listed to the bottom section (unchecked, not removable)', () => {
+    const sources = makeSources();
+    const downloaded: DownloadedResource[] = [
+      { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
+    ];
+    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    expect(bottom).toContainEqual(
+      expect.objectContaining({
+        reference: expect.objectContaining({ id: 'proj-kjn' }),
+        checked: false,
+        isUserRemovable: false,
+        isAdminLocked: false,
+      }),
+    );
+  });
+
+  it('does not append a downloaded project that is already an admin/user row', () => {
+    const sources = makeSources({
+      adminReferenced: list([project('proj-web', { isResourceShownByDefault: true })]),
+    });
+    const downloaded: DownloadedResource[] = [
+      { projectId: 'proj-web', name: 'WEB', fullName: 'World English Bible', language: 'English' },
+    ];
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const allForWeb = [...top, ...bottom].filter((r) => r.reference.id === 'proj-web');
+    expect(allForWeb).toHaveLength(1);
   });
 });
 
