@@ -7,6 +7,7 @@ import type {
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
+import type { DownloadedResource } from './downloaded-resources.utils';
 
 /**
  * A Bible-text reference — the only reference types that carry `id` and
@@ -174,10 +175,8 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
 export function getViewOptionsTexts(
   sources: TextCollectionSources,
   resolveLongName?: (reference: BibleTextReference) => string | undefined,
-): {
-  top: ViewOptionsTextEntry[];
-  bottom: ViewOptionsTextEntry[];
-} {
+  options?: { downloaded?: DownloadedResource[] },
+): { top: ViewOptionsTextEntry[]; bottom: ViewOptionsTextEntry[] } {
   const { adminReferenced, userReferenced, overlay } = sources;
   const adminOwned = getAdminOwnedEntries(adminReferenced, overlay);
   const top: ViewOptionsTextEntry[] = [];
@@ -207,6 +206,17 @@ export function getViewOptionsTexts(
       isAdminLocked: false,
       isUserRemovable: true,
       ...(longName ? { longName } : {}),
+    });
+  });
+
+  const listedIds = new Set([...top, ...bottom].map((r) => r.reference.id));
+  (options?.downloaded ?? []).forEach((dl) => {
+    if (listedIds.has(dl.projectId)) return;
+    bottom.push({
+      reference: { type: 'project', name: dl.name, id: dl.projectId },
+      checked: false,
+      isAdminLocked: false,
+      isUserRemovable: false,
     });
   });
 
