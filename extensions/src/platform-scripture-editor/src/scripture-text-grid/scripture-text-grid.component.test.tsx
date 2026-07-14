@@ -128,7 +128,7 @@ describe('ScriptureTextGrid', () => {
   it('renders a single resource as a whole-chapter region, not a verse list', () => {
     render(
       <ScriptureTextGrid
-        resources={[{ projectId: 'a', label: 'WEB' }]}
+        resources={[{ resourceId: 'dbl-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
         ariaLabel="Text Collection"
@@ -303,7 +303,7 @@ describe('ScriptureTextGrid — chapter view', () => {
   it('renders a single resource as a whole-chapter region in chapter mode too', () => {
     render(
       <ScriptureTextGrid
-        resources={[{ projectId: 'a', label: 'WEB' }]}
+        resources={[{ resourceId: 'dbl-a', projectId: 'a', label: 'WEB' }]}
         scrRef={scrRef}
         setScrRef={setScrRef}
         viewMode="chapter"

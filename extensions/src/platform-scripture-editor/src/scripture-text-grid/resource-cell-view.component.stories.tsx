@@ -19,6 +19,8 @@ import {
  *
  * `ResourceCellView` is purely presentational — role, focus, and accessible name live on the parent
  * verse `listitem` in `ScriptureTextGrid`. Stories wrap it in a plain bounded box.
+ *
+ * States covered: `downloading`, `failed`, `unavailable`, and `ready` (LTR and RTL).
  */
 const meta: Meta<typeof ResourceCellView> = {
   title: 'Bundled Extensions/platform-scripture-editor/ResourceCell',
@@ -118,6 +120,25 @@ export const Failed: Story = {
       <ResourceCellView
         state="failed"
         label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * The resource is not installed (or could not be resolved after installation) — shows "Resource not
+ * installed." No spinner, no "Download failed" secondary line. Distinct from `Failed` so users can
+ * tell whether they need to install the resource or retry a failed download.
+ */
+export const NotInstalled: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="unavailable"
+        label="NIV"
         textDirection="ltr"
         localizedStrings={localizedStrings}
         editor={undefined}
@@ -232,6 +253,22 @@ export const VerseInlineWrapping: Story = {
   ),
 };
 
+/** Verse mode, not installed — the inline name stays beside the "Resource not installed" label. */
+export const VerseNotInstalled: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="unavailable"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={undefined}
+      />
+    </CellBox>
+  ),
+};
+
 /** Verse mode, downloading — the inline name stays beside the offline placeholder + spinner. */
 export const VerseDownloading: Story = {
   render: () => (
@@ -300,8 +337,10 @@ export const VerseLongNameRightToLeft: Story = {
 };
 
 /**
- * Partial-failure row smoke: ready, failed, and downloading cells side by side. Neighbors stay
- * independent — one offline cell does not blank its siblings.
+ * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
+ * Neighbors stay independent — one offline cell does not blank its siblings. The `unavailable` cell
+ * shows "Resource not installed" (not "Download failed") so the two failure modes are
+ * distinguishable at a glance.
  */
 export const PartialFailureRow: Story = {
   render: () => (
@@ -319,6 +358,15 @@ export const PartialFailureRow: Story = {
         <ResourceCellView
           state="failed"
           label="ASV"
+          textDirection="ltr"
+          localizedStrings={localizedStrings}
+          editor={undefined}
+        />
+      </div>
+      <div style={CELL_BOX_STYLE}>
+        <ResourceCellView
+          state="unavailable"
+          label="NIV"
           textDirection="ltr"
           localizedStrings={localizedStrings}
           editor={undefined}

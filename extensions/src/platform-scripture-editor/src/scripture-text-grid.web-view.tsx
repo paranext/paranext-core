@@ -163,8 +163,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // Increment to re-fetch cachedResources. The initial fetch runs once at mount; after any resource
   // installation (including one done in the picker dialog before it returned), the `installed` flag
   // in the cached list is stale, so `toGridResources` can't resolve the new resource to a projectId.
-  // Bumping this key triggers a fresh getCachedResources call which re-validates installed flags.
-  const [cacheRefreshKey, setCacheRefreshKey] = useState(0);
+  // Bumping this counter triggers a fresh getCachedResources call which re-validates installed flags.
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
   // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
@@ -206,17 +206,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
   // installed project id the cell fetches chapter text with; project references need no lookup.
-  // Re-fetched on `cacheRefreshKey` bumps so a newly-installed resource's `installed` flag is
+  // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
   // current when `toGridResources` resolves it.
   const [cachedResources, isLoadingCachedResources] = usePromise(
-    useCallback(
-      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
-      // cacheRefreshKey is a refresh-trigger counter: the factory doesn't read it, but each bump
-      // creates a new function reference so usePromise re-runs and getCachedResources re-validates
-      // installed flags — necessary after any installation completes.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [cacheRefreshKey],
-    ),
+    useCallback(() => {
+      // Read refreshCounter so each bump produces a new function reference, causing usePromise
+      // to re-run getCachedResources and re-validate installed flags after installation completes.
+      void refreshCounter;
+      return papi.commands.sendCommand('platformGetResources.getCachedResources');
+    }, [refreshCounter]),
     undefined,
   );
 
@@ -370,7 +368,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         // Resource was just installed; bump the cache key so `getCachedResources` re-validates the
         // `installed` flag — without this, `cachedResources` loaded at mount still shows the resource
         // as not-installed and `toGridResources` can't resolve it to a projectId.
-        setCacheRefreshKey((k) => k + 1);
+        setRefreshCounter((k) => k + 1);
       }
 
       // Re-read after the await: the subscription may have advanced during the install.
