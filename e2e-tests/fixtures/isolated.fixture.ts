@@ -5,7 +5,12 @@ import {
   TestInfo,
   ConsoleMessage,
 } from '@playwright/test';
-import { launchElectronApp, LaunchElectronAppOptions, teardownElectronApp } from './helpers';
+import {
+  launchElectronApp,
+  LaunchElectronAppOptions,
+  preConfigureSettings,
+  teardownElectronApp,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -37,6 +42,22 @@ export interface IsolatedFixtures {
    * name throws "Fixture ... has already been registered as a { scope: 'worker' } fixture".
    */
   electronLaunchOptions: LaunchElectronAppOptions;
+  /**
+   * The `platform.interfaceMode` value seeded into the shared dev-appdata settings file before the
+   * app launches (restored after teardown); set with `test.use({ interfaceMode: 'simple' })`.
+   *
+   * Defaults to `'power'`: the isolated suite's specs are written against the power-mode layout —
+   * simple mode always loads the static `simpleLayout` (simple-layout.data.ts), which has NO Home
+   * tab, so power-layout patterns like `waitForHomeTab` and "close all non-Home tabs" sweeps can
+   * never succeed there. Before this option existed, these specs silently inherited whatever mode
+   * the developer's dev-appdata happened to hold (the app's own no-settings default is 'simple',
+   * under which they cannot pass); seeding makes the requirement explicit and deterministic.
+   *
+   * The mode also changes editor DOM that specs assert on: in power mode the scripture editor
+   * defaults to Standard view (inline, editable markers — PT-4190), while simple mode keeps the
+   * 'formatted' view.
+   */
+  interfaceMode: 'simple' | 'power';
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -45,14 +66,23 @@ export const test = base.extend<IsolatedFixtures>({
   // Option fixture: suites override via test.use(); default launches with no special options.
   electronLaunchOptions: [{}, { option: true }],
 
+  // Option fixture: see the IsolatedFixtures doc for why the default is 'power'.
+  interfaceMode: ['power', { option: true }],
+
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
-  electronApp: async ({ electronLaunchOptions }, use) => {
+  electronApp: async ({ electronLaunchOptions, interfaceMode }, use) => {
+    // Seed the interface mode BEFORE launch (the app reads dev-appdata settings at startup).
+    // workers=1 (playwright.config.ts) means no other test can race this shared file.
+    const restoreSettings = preConfigureSettings({ 'platform.interfaceMode': interfaceMode });
     const ctx = await launchElectronApp(electronLaunchOptions);
 
     await use(ctx.electronApp);
 
     console.log('[teardown] Test-scoped app teardown starting...');
     await teardownElectronApp(ctx);
+    // Restore the developer's settings file only after the app has fully closed so the app's own
+    // shutdown writes cannot clobber the restored contents (same ordering as comment.fixture.ts).
+    restoreSettings();
     console.log('[teardown] Test-scoped app teardown complete');
   },
 

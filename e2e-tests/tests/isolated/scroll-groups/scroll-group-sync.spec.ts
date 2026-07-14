@@ -19,18 +19,14 @@
  * so the tested navigations (1:1 -> 1:21 external change, 1:1 -> 1:15 click-follow) never cross a
  * chapter/book boundary and no document reload races with the scroll.
  */
-import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
-  sendPapiRequestOnce,
-  waitForAtLeastOneProjectMetadata,
-  waitForPapiMethodRegistered,
-} from '../../../fixtures/helpers';
-
-/** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
-const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
-const WEBSOCKET_PORT = 8876;
-const COMMAND_TIMEOUT_MS = 30_000;
+  makeSampleProjectEditable,
+  navigateToolbarBcv,
+  SAMPLE_WEB_PROJECT_ID,
+  sendPapiCommandWhenRegistered,
+  waitForHomeTab,
+} from '../../../fixtures/scripture-editor-helpers';
 
 // The option fixture is named `electronLaunchOptions`, not `launchOptions` — Playwright's base
 // `test` already registers a worker-scoped `launchOptions` option fixture (browser launch
@@ -41,62 +37,16 @@ const COMMAND_TIMEOUT_MS = 30_000;
 // (src/renderer/testing/test-layout.data.ts), which has NO Home tab — app-ready detection and a
 // clean single-pane layout for the viewport assertions both need the normal Home layout. Same
 // approach as comment.fixture.ts.
+//
+// The fixture's default `interfaceMode: 'power'` (required for the Home-tab layout this suite
+// waits on) now means the editor opens in Standard view by default (PT-4190). The verse selectors
+// below survive that: `VerseNode` renders `data-marker="v"`/`data-number` in every view, and in
+// Standard view the visible `\v N` marker text lives INSIDE the verse span (no separate glyph
+// element is inserted), so the `+ span` marker/text adjacency and the click-in-verse-text gesture
+// behave the same as in the formatted view.
 test.use({
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
-
-/** Send one PAPI command over a short-lived WebSocket JSON-RPC connection. */
-async function sendPapiCommandWhenRegistered(
-  commandName: string,
-  ...args: unknown[]
-): Promise<unknown> {
-  // The extension host can still be activating extensions when the app shell renders; wait for
-  // this exact command to be registered so the request cannot fail with method-not-found.
-  await waitForPapiMethodRegistered(`command:${commandName}`, WEBSOCKET_PORT, 60_000);
-  return sendPapiRequestOnce(`command:${commandName}`, args, WEBSOCKET_PORT, COMMAND_TIMEOUT_MS);
-}
-
-/**
- * Make the installed sample WEB project editable. Its Settings.xml ships `<Editable>F</Editable>`,
- * so `openScriptureEditor` would silently fall back to a read-only editor (main.ts overrides
- * isReadOnly from `platform.isEditable`) — and a read-only Lexical editor never moves the caret on
- * click, so click-follow cannot be exercised without this. Flipping the setting through the PDP
- * (same write path as the Project Settings UI) keeps the change inside the isolated temp project
- * root.
- */
-async function makeSampleProjectEditable(): Promise<void> {
-  // Wait until the sample project is installed and advertised by the Paratext PDP factory.
-  await waitForAtLeastOneProjectMetadata(WEBSOCKET_PORT, 60_000);
-  const pdpId = await sendPapiRequestOnce<string>(
-    'object:platform.Paratext-pdpf.getProjectDataProviderId',
-    [SAMPLE_WEB_PROJECT_ID],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
-  await sendPapiRequestOnce<boolean>(
-    `object:${pdpId}.setSetting`,
-    ['platform.isEditable', true],
-    WEBSOCKET_PORT,
-    COMMAND_TIMEOUT_MS,
-  );
-}
-
-/** Navigate the main toolbar's book-chapter-verse control (drives scroll group A). */
-async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
-  await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
-  const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
-  await input.fill(reference);
-  await input.press('Enter');
-}
-
-/**
- * Wait for the Home dock tab so PAPI commands land in a ready app. (Not the canonical
- * `waitForAppReady` from fixtures/helpers.ts — this additionally proves the normal Home layout
- * rendered, which the DEV_NOISY=false launch depends on.)
- */
-async function waitForHomeTab(mainPage: Page): Promise<void> {
-  await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().waitFor({ timeout: 90_000 });
-}
 
 test.describe('scroll group sync', () => {
   test('an external BCV change scrolls the verse into view, and clicking a verse reports it to the scroll group (PT9-style click-follow)', async ({
