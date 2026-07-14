@@ -11,7 +11,7 @@ vi.mock('@papi/frontend', () => ({
 }));
 
 // eslint-disable-next-line import/first
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 // eslint-disable-next-line import/first
 import {
   matchesDownloaded,
@@ -99,6 +99,21 @@ describe('buildPickerResources', () => {
     expect(rows[0].source).toBe('admin');
   });
 
+  it('marks an enhancedResource reference (name-only, no id) as not installed', () => {
+    const enhancedRef: EffectiveResourceReference = {
+      type: 'enhancedResource',
+      name: 'MyEnhanced',
+      source: 'user',
+      isResourceShownByDefault: false,
+    };
+    const rows = buildPickerResources([enhancedRef], [], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      installed: false,
+      type: 'ScriptureResource',
+    });
+  });
+
   it('adopts DBL type when a downloaded project matches a whitelisted dbl resource', () => {
     const dblResources: DblResourceData[] = [
       {
@@ -153,5 +168,39 @@ describe('fetchDownloadedResources', () => {
   it('returns [] and warns when enumeration throws', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockRejectedValue(new Error('boom'));
     await expect(fetchDownloadedResources()).resolves.toEqual([]);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalled();
+  });
+
+  it('keeps successful projects and warns when one PDP getSetting rejects', async () => {
+    vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'proj-bad', projectInterfaces: [] } as never,
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'proj-ok', projectInterfaces: [] } as never,
+    ]);
+
+    const getSettingOk = vi.fn(
+      async (key: string) =>
+        ({
+          'platform.fullName': 'Good Bible',
+          'platform.name': 'GB',
+          'platform.language': 'English',
+        })[key],
+    );
+
+    vi.mocked(papi.projectDataProviders.get).mockImplementation(async (_type, projectId) => {
+      if (projectId === 'proj-bad') {
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return { getSetting: vi.fn().mockRejectedValue(new Error('PDP failure')) } as never;
+      }
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return { getSetting: getSettingOk } as never;
+    });
+
+    const result = await fetchDownloadedResources();
+    expect(result).toEqual([
+      { projectId: 'proj-ok', name: 'GB', fullName: 'Good Bible', language: 'English' },
+    ]);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('proj-bad'));
   });
 });
