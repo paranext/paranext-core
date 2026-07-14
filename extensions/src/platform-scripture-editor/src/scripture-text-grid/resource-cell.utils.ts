@@ -13,14 +13,15 @@ import { isPlatformError } from 'platform-bible-utils';
 export type ResourceCellState = 'unavailable' | 'downloading' | 'ready' | 'failed';
 
 /**
- * Derives a cell's offline state from observable data. The resource download/management flow owns
- * the actual download; this only visualizes it: PlatformError → `failed`; still loading / no value
- * → `downloading`; else `ready`.
+ * Derives a cell's fetch state from observable data. The resource download/management flow owns the
+ * actual download; this only visualizes it: PlatformError → `failed`; still loading / no value →
+ * `downloading`; else `ready`. The caller must handle the `'unavailable'` state separately (when
+ * `projectId` is `undefined`) before calling this function.
  */
 export function deriveCellState(args: {
   usjPossiblyError: unknown;
   isLoading: boolean;
-}): ResourceCellState {
+}): 'downloading' | 'ready' | 'failed' {
   const { usjPossiblyError, isLoading } = args;
   if (isPlatformError(usjPossiblyError)) return 'failed';
   if (isLoading || usjPossiblyError === undefined) return 'downloading';
