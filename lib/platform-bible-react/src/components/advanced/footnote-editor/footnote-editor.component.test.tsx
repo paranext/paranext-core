@@ -142,27 +142,38 @@ function renderFootnoteEditor(
     getMarkerMenuContext: vi.fn(),
     applyMarkerMenuSelection: vi.fn(),
     splitParagraphWithMarker: vi.fn(),
+    commitPendingMarkerEdits: vi.fn(),
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
     selectNote: vi.fn(),
   } as unknown as EditorRef;
 
-  const utils = render(
+  // Builder so a test can re-render with a different scrRef to exercise the book/chapter-change
+  // close-and-save path (see the "close-and-save settle" suite).
+  const renderElement = (currentScrRef: SerializedVerseRef) => (
     <FootnoteEditor
       noteOps={undefined}
       onClose={() => {}}
-      scrRef={scrRef}
+      scrRef={currentScrRef}
       noteKey={undefined}
       editorOptions={editorOptions}
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
-    />,
+    />
   );
+
+  const utils = render(renderElement(scrRef));
 
   const editorInput = utils.getByTestId('popover-editor-input');
   editorInput.focus();
-  return { ...utils, editorInput, editorRef: mockEditorRefHolder.current };
+  return {
+    ...utils,
+    editorInput,
+    editorRef: mockEditorRefHolder.current,
+    /** Re-render with a new scrRef; a book/chapter change triggers closeAndSave (save-and-close). */
+    rerenderScrRef: (nextScrRef: SerializedVerseRef) => utils.rerender(renderElement(nextScrRef)),
+  };
 }
 
 function makeItem(overrides: Partial<EditorMarkerMenuItem> = {}): EditorMarkerMenuItem {
@@ -509,6 +520,53 @@ describe('FootnoteEditor marker palette wiring', () => {
 
       expect(markerPalette.show).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('close-and-save settle (PT-4187 abandonment window)', () => {
+  // closeAndSave runs commitPendingMarkerEdits() before the final note-op read so a marker rename
+  // the user walked away from mid-edit serializes as what's on screen, not the stale pre-rename
+  // marker — EXCEPT while this popover's own marker-palette session is open, where the palette's
+  // own apply must be the one to consume the typed literal. These tests drive closeAndSave through
+  // the book/chapter-change path (navigating away closes-and-saves the open note), which invokes
+  // the same callback as the Save button without depending on the accept button's enabled state.
+  const editorOptions: EditorOptions = {
+    view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+  };
+  const nextChapterScrRef: SerializedVerseRef = { ...scrRef, chapterNum: 2 };
+
+  it('commits pending marker edits before saving when no palette session is open', () => {
+    const { editorRef, rerenderScrRef } = renderFootnoteEditor(editorOptions, makeMarkerPalette());
+
+    rerenderScrRef(nextChapterScrRef);
+
+    expect(editorRef.commitPendingMarkerEdits).toHaveBeenCalledOnce();
+  });
+
+  it('skips the settle while a marker-palette session is open', () => {
+    mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+    const markerPalette = makeMarkerPalette(vi.fn(() => new Promise<string | undefined>(() => {})));
+    const { editorInput, editorRef, rerenderScrRef } = renderFootnoteEditor(
+      editorOptions,
+      markerPalette,
+    );
+    mockMarkerMenuContext(editorRef, {
+      source: 'character',
+      previousParaMarkers: [],
+      openCharMarkers: [],
+      hasTextSelection: false,
+      inMarkerText: false,
+      anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+    });
+    // Open a live palette session — its `show` promise never resolves, so the session stays open
+    // across the chapter-change close-and-save below.
+    editorInput.ownerDocument.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+    );
+
+    rerenderScrRef(nextChapterScrRef);
+
+    expect(editorRef.commitPendingMarkerEdits).not.toHaveBeenCalled();
   });
 });
 

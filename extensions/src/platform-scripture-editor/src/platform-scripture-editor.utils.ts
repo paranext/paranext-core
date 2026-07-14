@@ -115,6 +115,14 @@ export interface NoteCallerClickDecision {
    * failure benign"). The caller must clear the editing-session refs before acting.
    */
   clearStaleEditingSession: boolean;
+  /**
+   * What the caller click resolves to:
+   *
+   * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
+   * - `focus-pane` — focus/highlight the note in the footnotes pane (PT9 navigate-to-note).
+   * - `open-popover` — open the footnote-editor popover for the clicked note.
+   */
   action: 'ignore-expanded' | 'ignore-popover-open' | 'focus-pane' | 'open-popover';
 }
 
@@ -131,9 +139,11 @@ export interface NoteCallerClickDecision {
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
   if (!state.isCollapsed) return { clearStaleEditingSession: false, action: 'ignore-expanded' };
-  if (state.editingNoteKey !== undefined && state.popoverShown)
+  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
+  // truthiness check; an empty-string key is never a live session).
+  if (state.editingNoteKey && state.popoverShown)
     return { clearStaleEditingSession: false, action: 'ignore-popover-open' };
-  const clearStaleEditingSession = state.editingNoteKey !== undefined;
+  const clearStaleEditingSession = !!state.editingNoteKey;
   if (state.paneRendered) return { clearStaleEditingSession, action: 'focus-pane' };
   return { clearStaleEditingSession, action: 'open-popover' };
 }
