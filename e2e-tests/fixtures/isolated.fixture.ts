@@ -71,19 +71,33 @@ export const test = base.extend<IsolatedFixtures>({
 
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
   electronApp: async ({ electronLaunchOptions, interfaceMode }, use) => {
-    // Seed the interface mode BEFORE launch (the app reads dev-appdata settings at startup).
-    // workers=1 (playwright.config.ts) means no other test can race this shared file.
-    const restoreSettings = preConfigureSettings({ 'platform.interfaceMode': interfaceMode });
-    const ctx = await launchElectronApp(electronLaunchOptions);
-
-    await use(ctx.electronApp);
-
-    console.log('[teardown] Test-scoped app teardown starting...');
-    await teardownElectronApp(ctx);
-    // Restore the developer's settings file only after the app has fully closed so the app's own
-    // shutdown writes cannot clobber the restored contents (same ordering as comment.fixture.ts).
-    restoreSettings();
-    console.log('[teardown] Test-scoped app teardown complete');
+    // Seed settings BEFORE launch (the app reads dev-appdata settings at startup). Pin the
+    // interface mode (see the IsolatedFixtures doc) AND the interface language to English so specs
+    // that match English UI text — `waitForHomeTab`'s 'Home' tab (localized via %home_dialog_title%)
+    // and `navigateToolbarBcv`'s English book names (BookChapterControl matches localizedBookNames) —
+    // are deterministic regardless of the developer's saved locale. Same both-settings seeding as
+    // comment.fixture.ts. workers=1 (playwright.config.ts) means no other test can race this shared file.
+    const restoreSettings = preConfigureSettings({
+      'platform.interfaceMode': interfaceMode,
+      'platform.interfaceLanguage': ['en'],
+    });
+    try {
+      const ctx = await launchElectronApp(electronLaunchOptions);
+      try {
+        await use(ctx.electronApp);
+      } finally {
+        console.log('[teardown] Test-scoped app teardown starting...');
+        await teardownElectronApp(ctx);
+        console.log('[teardown] Test-scoped app teardown complete');
+      }
+    } finally {
+      // Restore the developer's settings file only after the app has fully closed so the app's own
+      // shutdown writes cannot clobber the restored contents (same ordering as comment.fixture.ts).
+      // In a `finally` so a launch/teardown failure cannot leak the seeded test settings into the
+      // developer's real dev-appdata — a stuck value would otherwise be captured as the "original"
+      // by the next test's preConfigureSettings and corrupt every later run.
+      restoreSettings();
+    }
   },
 
   mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {

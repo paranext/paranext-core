@@ -29,6 +29,12 @@ test.use({
 
 test.describe('scripture editor default view', () => {
   test('a first-open editor keeps the formatted view in simple mode', async ({ mainPage }) => {
+    // Heavy isolated test: it launches its own Electron instance, installs the bundled sample
+    // project into a fresh root, opens the editor, and polls several backend-readiness gates. A cold
+    // first run measured ~84s against the default 120s budget (~70%), so a colder or
+    // memory-pressured machine could spuriously time out before the calibrated per-step timeouts
+    // fire. Give it Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
+    test.slow();
     // No `waitForHomeTab` here: simple mode loads the static simpleLayout, which has NO Home tab
     // (simple-layout.data.ts). The open helper below carries its own app-readiness gates (first
     // iframe attached = initial loadLayout() done; PAPI command registration; retry loop).
@@ -45,9 +51,22 @@ test.describe('scripture editor default view', () => {
       timeout: 60_000,
     });
 
-    // Formatted view: no editable-marker mode class on the contentEditable root, and no inline
-    // marker glyphs anywhere in the content (MarkerNodes exist only in Standard view's editable
-    // marker mode). The power-mode corrective effect must never fire in simple mode.
+    // Formatted view POSITIVE signal, asserted with a wait so the view has actually SETTLED to
+    // formatted before the negative checks below (the two toHaveCount(0) checks alone are satisfied
+    // by the pre-settle DOM and could pass vacuously). The contentEditable root carries the
+    // formatted marker-mode class `marker-hidden`: non-power 'formatted' resolves to markerMode
+    // 'hidden' in getViewOptionsForType, which the editor maps onto `.editor-input.marker-hidden`
+    // (see _usj-nodes.scss), symmetric to the power spec's `.editor-input.marker-editable`. A
+    // Simple->Standard regression (the power-default corrective effect wrongly firing in simple
+    // mode) would flip this root class to `marker-editable`, failing HERE by construction instead of
+    // slipping past the count-0 checks.
+    await expect(editorFrame.locator('.editor-input.marker-hidden')).toBeAttached({
+      timeout: 60_000,
+    });
+
+    // And no editable-marker mode class or inline marker glyphs anywhere in the content (MarkerNodes
+    // exist only in Standard view's editable marker mode). The power-mode corrective effect must
+    // never fire in simple mode.
     await expect(editorFrame.locator('.editor-input.marker-editable')).toHaveCount(0);
     await expect(editorFrame.locator('span.opening[data-marker]')).toHaveCount(0);
   });

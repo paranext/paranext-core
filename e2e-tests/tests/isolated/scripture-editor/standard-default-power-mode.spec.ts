@@ -42,6 +42,12 @@ test.use({
 
 test.describe('scripture editor default view', () => {
   test('a first-open editor defaults to Standard view in power mode', async ({ mainPage }) => {
+    // Heavy isolated test: it launches its own Electron instance, installs the bundled sample
+    // project into a fresh root, opens the editor, and polls several backend-readiness gates. A cold
+    // first run measured ~84s against the default 120s budget (~70%), so a colder or
+    // memory-pressured machine could spuriously time out before the calibrated per-step timeouts
+    // fire. Give it Playwright's 3x "slow" budget for headroom (a passing run still exits in seconds).
+    test.slow();
     await waitForHomeTab(mainPage);
 
     // Open the EDITABLE editor — the mainline Standard-view surface (the sample project ships
