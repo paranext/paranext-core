@@ -1,7 +1,15 @@
 import type React from 'react';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { expect, within } from 'storybook/test';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
-import { RESOURCE_CELL_STRING_KEYS, ResourceCellView } from './resource-cell-view.component';
+import {
+  RESET_ZOOM_KEY,
+  RESOURCE_CELL_STRING_KEYS,
+  ResourceCellView,
+  ZOOM_IN_KEY,
+  ZOOM_OPTIONS_KEY,
+  ZOOM_OUT_KEY,
+} from './resource-cell-view.component';
 
 /**
  * One cell of the Scripture Text Grid: a single resource's focused chapter. In the app the
@@ -326,6 +334,300 @@ export const PartialFailureRow: Story = {
         />
       </div>
     </CellRowBox>
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Zoom states — each story supplies `zoomMenuLabels` so the context menu and
+// kebab button are both rendered (the component hides both when it is absent).
+// ---------------------------------------------------------------------------
+
+const zoomMenuLabels = {
+  zoomIn: localizedStrings[ZOOM_IN_KEY] ?? 'Zoom In',
+  zoomOut: localizedStrings[ZOOM_OUT_KEY] ?? 'Zoom Out',
+  reset: localizedStrings[RESET_ZOOM_KEY] ?? 'Reset Zoom',
+  options: localizedStrings[ZOOM_OPTIONS_KEY] ?? 'Zoom options',
+};
+
+/**
+ * Default zoom (factor = 1): both Zoom In and Zoom Out are available, and the kebab / context menu
+ * are visible because `zoomMenuLabels` is provided.
+ */
+export const ZoomDefault: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
+/** Zoomed in (factor = 1.4): the content area is enlarged; both actions remain enabled. */
+export const ZoomedIn: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1.4}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * At maximum zoom (factor = 3): `canZoomIn` is false so the Zoom In menu item is disabled; Zoom Out
+ * and Reset are still enabled.
+ */
+export const AtMaxZoom: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={3}
+        canZoomIn={false}
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * At minimum zoom (factor = 0.5): `canZoomOut` is false so the Zoom Out menu item is disabled; Zoom
+ * In and Reset are still enabled.
+ */
+export const AtMinZoom: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={0.5}
+        canZoomIn
+        canZoomOut={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+};
+
+// ---------------------------------------------------------------------------
+// Zoom interaction stories — play functions exercise the kebab dropdown so
+// reviewers can verify the affordance + ARIA state without running the full
+// app. (Right-click zoom is delivered through the editor's own context menu
+// via `EditorOptions.contextMenu`, which needs the real editor, so it is
+// verified manually in the app rather than in a story.)
+//
+// Radix DropdownMenu relies on PointerEvent sequences that a
+// plain `userEvent.click()` without setup does not synthesise. Using
+// `userEvent.setup({ pointerEventsCheck: 0 })` (the same pattern as the
+// unit tests) keeps things reliable in both jsdom and Storybook's browser
+// test-runner.
+// ---------------------------------------------------------------------------
+
+/**
+ * Opens the kebab dropdown and asserts all three menu items are visible. Lets reviewers confirm the
+ * affordance appears on hover and the menu renders with the correct labels.
+ */
+export const ZoomKebabOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Hover the cell header to reveal the kebab', async () => {
+      // ResourceCellView is presentational (no gridcell role); hover the header label, which sits
+      // inside the `group` whose hover reveals the kebab.
+      const header = canvas.getByText('WEB');
+      await userEvent.hover(header);
+    });
+
+    await step('Click the kebab to open the zoom menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert all three menu items are visible', async () => {
+      // Radix renders the menu portal at the document root; use `within(document.body)`.
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Zoom In' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).toBeVisible();
+      await expect(menu.getByRole('menuitem', { name: 'Reset Zoom' })).toBeVisible();
+    });
+  },
+};
+
+/**
+ * At maximum zoom: "Zoom In" is disabled in the dropdown while "Zoom Out" remains enabled. Lets
+ * reviewers confirm the bound-guarding is reflected in the menu affordance.
+ */
+export const AtMaxZoomMenuOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={3}
+        canZoomIn={false}
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Open the kebab menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert Zoom In is disabled and Zoom Out is enabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Zoom In' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/** At minimum zoom: "Zoom Out" is disabled in the dropdown while "Zoom In" remains enabled. */
+export const AtMinZoomMenuOpen: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={0.5}
+        canZoomIn
+        canZoomOut={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Open the kebab menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert Zoom Out is disabled', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Zoom Out' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * At the default factor (= 1), `canReset` is false: "Reset Zoom" is disabled. Documents the
+ * disable-at-default behavior so reviewers can verify it is reflected in the menu affordance.
+ */
+export const ResetDisabledAtDefault: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="WEB"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        canReset={false}
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
+  ),
+  play: async ({ canvas, userEvent, step }) => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+    await step('Open the kebab menu', async () => {
+      const kebab = canvas.getByRole('button', { name: 'Zoom options for WEB' });
+      await user.click(kebab);
+    });
+
+    await step('Assert Reset Zoom is disabled at the default factor', async () => {
+      const menu = within(canvas.getByRole('menu'));
+      await expect(menu.getByRole('menuitem', { name: 'Reset Zoom' })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      );
+    });
+  },
+};
+
+/**
+ * A very long resource label: shows how the header truncates and the kebab coexists without
+ * overflowing. No interaction needed — a visual smoke check for the layout.
+ */
+export const LongLabelWithZoom: Story = {
+  render: () => (
+    <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="World English Bible Revised 2023 Study Edition"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={<SampleChapter />}
+        zoomFactor={1}
+        canZoomIn
+        canZoomOut
+        zoomMenuLabels={zoomMenuLabels}
+      />
+    </CellBox>
   ),
 };
 
