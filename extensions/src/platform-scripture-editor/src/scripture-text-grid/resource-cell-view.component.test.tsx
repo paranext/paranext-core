@@ -8,6 +8,7 @@ import {
   EMPTY_KEY,
   LOADING_KEY,
   FAILED_KEY,
+  NOT_INSTALLED_KEY,
   UNAVAILABLE_KEY,
   ResourceCellView,
   ZOOM_IN_KEY,
@@ -49,6 +50,7 @@ beforeAll(() => {
 
 const localizedStrings = {
   [UNAVAILABLE_KEY]: 'Resource unavailable',
+  [NOT_INSTALLED_KEY]: 'Resource not installed',
   [LOADING_KEY]: 'Resource is loading…',
   [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
@@ -101,6 +103,24 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.getByText('Resource is loading…')).toBeInTheDocument();
     // Only the failed cell shows "Resource unavailable"; the downloading cell shows the loading text.
     expect(screen.getAllByText('Resource unavailable')).toHaveLength(1);
+    // Neither "not installed" nor the editor appear for the failed/downloading cells.
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+  });
+
+  it('unavailable: shows "Resource not installed" — no spinner, no "Download failed", no editor', () => {
+    renderCells(
+      <ResourceCellView
+        state="unavailable"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('Resource not installed')).toBeInTheDocument();
+    expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
   });
 
   it('mixed direction: LTR and RTL cells apply independent dir', () => {
@@ -316,11 +336,12 @@ describe('ResourceCellView zoom UI', () => {
         zoomMenuLabels={menuLabels}
       />,
     );
-    // jsdom doesn't serialize `zoom` into the style attribute string, so we use parentElement
-    // to reach the content wrapper directly and read its CSSOM style.zoom property.
-    const content = screen.getByText('verse').parentElement;
+    // jsdom doesn't serialize `zoom` into the style attribute string, so we walk up to the
+    // overflow-auto content wrapper and read its CSSOM style.zoom directly.
+    // Structure: span → div.p-2 (inner padding wrapper) → div.overflow-auto (zoom applied here)
+    const content = screen.getByText('verse').parentElement?.parentElement;
     expect(content).not.toBeNull();
-    expect(content?.style.zoom).toBe('1.4');
+    expect(content instanceof HTMLElement && content.style.zoom).toBe('1.4');
   });
 
   it('has no zoom style on the content wrapper when zoomFactor is 1', () => {

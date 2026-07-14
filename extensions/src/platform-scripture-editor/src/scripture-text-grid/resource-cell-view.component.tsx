@@ -29,6 +29,7 @@ import { ResourceCellState } from './resource-cell.utils';
  * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
  */
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
+export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%';
 export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
@@ -39,6 +40,7 @@ export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
 export const COPY_KEY = '%webView_scriptureTextGrid_cell_copy%';
 export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   UNAVAILABLE_KEY,
+  NOT_INSTALLED_KEY,
   LOADING_KEY,
   FAILED_KEY,
   EMPTY_KEY,
@@ -176,8 +178,8 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
 /**
  * Presentational ResourceCell: renders the resource name (inline label or header band), per-cell
  * text direction, and either the editor (`ready`) or the offline placeholder
- * (`downloading`/`failed`). Data-free so Storybook can drive every state; `ResourceCell` wraps it
- * with the PAPI fetch/direction/offline wiring.
+ * (`downloading`/`failed`/`unavailable`). Data-free so Storybook can drive every state;
+ * `ResourceCell` wraps it with the PAPI fetch/direction/offline wiring.
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
@@ -215,26 +217,33 @@ export function ResourceCellView({
     );
   }
 
+  let unavailableContent: ReactNode;
+  if (state === 'downloading') {
+    unavailableContent = (
+      <>
+        <Spinner />
+        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[LOADING_KEY]}</span>
+      </>
+    );
+  } else if (state === 'unavailable') {
+    unavailableContent = (
+      <span className="tw:font-medium">{localizedStrings[NOT_INSTALLED_KEY]}</span>
+    );
+  } else {
+    unavailableContent = (
+      <>
+        <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
+        <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[FAILED_KEY]}</span>
+      </>
+    );
+  }
+
   const stateContent =
     state === 'ready' ? (
       readyContent
     ) : (
       <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-2 tw:text-center">
-        {state === 'downloading' ? (
-          <>
-            <Spinner />
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {localizedStrings[LOADING_KEY]}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
-            <span className="tw:text-sm tw:text-muted-foreground">
-              {localizedStrings[FAILED_KEY]}
-            </span>
-          </>
-        )}
+        {unavailableContent}
       </div>
     );
 
@@ -360,12 +369,8 @@ export function ResourceCellView({
               </TooltipProvider>
             ) : undefined}
           </div>
-          <div
-            className="tw:flex-1 tw:overflow-auto tw:p-2"
-            style={contentStyle}
-            dir={textDirection}
-          >
-            {stateContent}
+          <div className="tw:flex-1 tw:overflow-auto" style={contentStyle} dir={textDirection}>
+            <div className="tw:p-2">{stateContent}</div>
           </div>
         </>
       )}
