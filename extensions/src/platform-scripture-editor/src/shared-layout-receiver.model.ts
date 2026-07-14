@@ -4,7 +4,7 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './platform-scripture-editor.utils
 
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
-const COMMENTS_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.comments';
+const COMMENTS_PANEL_WEBVIEW_TYPE = 'legacyCommentManager.commentListPanel';
 // The Scripture Text Grid panel presents the "Text Collection" tab (its title/tooltip is
 // `%webView_scriptureTextGrid_title_multiple%` = "Text Collection").
 const TEXT_COLLECTION_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
