@@ -123,6 +123,7 @@ import { FootnotesLayout } from './platform-scripture-editor-footnotes.component
 import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
+  decideNoteCallerClickAction,
   deepEqualAcrossIframes,
   findNoteIndexByOps,
   formatEditorTitle,
@@ -306,6 +307,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorX, setNotePopoverAnchorX] = useState<number>();
   const [notePopoverAnchorY, setNotePopoverAnchorY] = useState<number>();
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
+
+  /**
+   * Mirror of {@link showFootnoteEditor} readable from the stable `noteCallerOnClick` closure
+   * (PT-4187 bug 3): an editing-session key whose popover is NOT actually shown is stale
+   * bookkeeping and must not dead-end caller clicks.
+   */
+  const showFootnoteEditorRef = useRef(showFootnoteEditor);
+  useEffect(() => {
+    showFootnoteEditorRef.current = showFootnoteEditor;
+  }, [showFootnoteEditor]);
 
   const editingNoteKey = useRef<string | undefined>(undefined);
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
@@ -611,6 +622,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [footnotesPaneVisible]);
 
   /**
+   * Whether the footnotes pane is ACTUALLY rendered — the render condition below is
+   * `footnotesPaneVisible && usjFromPdp`, not the visibility toggle alone (PT-4187 bug 3: a caller
+   * click routed to a pane that is not really rendered is a dead click). Synced by an effect next
+   * to the `usjFromPdp` derivation.
+   */
+  const footnotesPaneRenderedRef = useRef(false);
+
+  /**
    * Requests that the footnotes pane select/highlight a given note index, mirroring a real pane-row
    * click. Set by `nodeOptions.noteCallerOnClick` when a collapsed note caller is clicked while the
    * pane is visible (PT9 navigate-to-note). Ephemeral UI state — not persisted via
@@ -696,20 +715,53 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       noteCallerOnClick: isReadOnly
         ? undefined
         : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            if (!isCollapsed || editingNoteKey.current) return;
+            // PT-4187 bug 3 instrumentation: the caller-click flow has historically failed
+            // silently (dead click); keep the inputs of every click diagnosable from a debug log.
+            logger.debug(
+              `noteCallerOnClick: noteNodeKey=${noteNodeKey} isCollapsed=${isCollapsed} ` +
+                `editingNoteKey=${editingNoteKey.current} popoverShown=${showFootnoteEditorRef.current} ` +
+                `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current}`,
+            );
+            const decision = decideNoteCallerClickAction({
+              isCollapsed,
+              editingNoteKey: editingNoteKey.current,
+              popoverShown: showFootnoteEditorRef.current,
+              // The render condition, not just the toggle: the pane only consumes focus
+              // requests when it is actually rendered.
+              paneRendered: footnotesPaneRenderedRef.current,
+            });
+            if (decision.clearStaleEditingSession) {
+              // A prior session's key survived without its popover — orphaned bookkeeping that
+              // would otherwise dead-end every caller click from here on (PT-4187 bug 3).
+              logger.warn(
+                `noteCallerOnClick: clearing stale editing session for note ${editingNoteKey.current}`,
+              );
+              editingNoteIsNew.current = false;
+              editingNoteKey.current = undefined;
+              editingNoteOps.current = undefined;
+            }
+            if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
+              return;
 
-            // Pane visible → focus/highlight the note there (PT9 navigate-to-note) instead of
+            // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
             // opening the popover, regardless of the auto-show setting (Decision 6).
-            if (footnotesPaneVisibleRef.current) {
+            if (decision.action === 'focus-pane') {
               const noteOps = getNoteOps();
               const index = noteOps ? findNoteIndexByOps(editorRef, noteOps) : undefined;
               if (index !== undefined) setFootnotePaneFocusRequest({ index });
+              else
+                logger.warn(
+                  'noteCallerOnClick: note not found among editor notes; pane focus request dropped',
+                );
               return;
             }
 
             // Pane hidden → open the popover (existing behavior).
             const noteOp = getNoteOps()?.at(0);
-            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
+              logger.warn('noteCallerOnClick: clicked note produced no valid note op; ignoring');
+              return;
+            }
 
             const targetRect = event.currentTarget.getBoundingClientRect();
             setNotePopoverAnchorX(targetRect.left);
@@ -1175,6 +1227,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // getViewOptionsForType overrides only noteMode, not markerMode), so a markerMode-based
           // cycle would orphan 'formatted'.
           const nextViewType: ScriptureEditorViewType =
+            // A three-way cycle reads clearest as one chained conditional (see block comment
+            // above for why it switches on viewType rather than markerMode).
             // eslint-disable-next-line no-nested-ternary
             viewType === 'formatted'
               ? 'standard'
@@ -1810,6 +1864,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+
+  // Keep the pane-rendered mirror in sync with the ACTUAL render condition of the footnotes
+  // pane (`footnotesPaneVisible && usjFromPdp`, see the FootnotesLayout render below) so
+  // `noteCallerOnClick` never routes a click to a pane that is not really there (PT-4187 bug 3).
+  useEffect(() => {
+    footnotesPaneRenderedRef.current = footnotesPaneVisible && !!usjFromPdp;
+  }, [footnotesPaneVisible, usjFromPdp]);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
   // entire layout phase of each render. If a useLayoutEffect fires during a chapter-change render
   // (e.g. footnote-editor closing), this ref still holds the OLD chapter's setter — preventing
@@ -1999,7 +2060,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * flush/cancel) so pending edits survive lifecycle boundaries — see the effects below.
    */
   const saveUsjToPdpDebounced = useMemo(
-    () => createFlushableDebouncer((usj: Usj) => saveUsjToPdpIfUpdatedRef.current(usj), 700),
+    () =>
+      createFlushableDebouncer((usj: Usj) => {
+        // PT-4187 (abandonment window, follow-ups register §1): settle pending mid-edit marker
+        // text right before the save reads the USJ, so a marker rename walked away from
+        // mid-edit serializes as what the screen shows instead of the stale pre-rename marker.
+        // Never while a marker-palette session is open — the palette's apply must be the one to
+        // consume the typed literal (Task 8 corruption class). The editor itself keeps the node
+        // under a live caret (and the app-placed-caret window) pending, so a mid-typing pause
+        // still never settles under the user.
+        if (paletteSession.current) {
+          saveUsjToPdpIfUpdatedRef.current(usj);
+          return;
+        }
+        editorRef.current?.commitPendingMarkerEdits();
+        saveUsjToPdpIfUpdatedRef.current(editorRef.current?.getUsj() ?? usj);
+      }, 700),
     [],
   );
 

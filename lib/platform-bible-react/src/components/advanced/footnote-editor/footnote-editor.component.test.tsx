@@ -441,10 +441,44 @@ describe('FootnoteEditor marker palette wiring', () => {
   });
 
   describe('Enter inside the popover', () => {
-    it('is never intercepted by the palette wiring (no session, so no preventDefault/dismiss/commit)', () => {
+    it('with the caret inside the note content: never intercepted (stays on the library \\fp path)', () => {
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette();
       const { editorInput } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      // Give the mocked editor a note whose content holds the DOM caret — the state where the
+      // library's own KEY_ENTER handler ($handleEnterInNote → \fp) must receive the event.
+      const doc = editorInput.ownerDocument;
+      const note = doc.createElement('span');
+      note.classList.add('note');
+      note.textContent = 'note text';
+      editorInput.appendChild(note);
+      const selection = doc.getSelection();
+      const range = doc.createRange();
+      if (!note.firstChild || !selection) throw new Error('mock note text/selection missing');
+      range.setStart(note.firstChild, 2);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+
+      const notPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(markerPalette.show).not.toHaveBeenCalled();
+      expect(markerPalette.commit).not.toHaveBeenCalled();
+    });
+
+    it('with the DOM caret outside the note content: claimed and rerouted into the note (PT-4187 bug 2)', () => {
+      // Radix's open-autofocus can park the DOM caret at the wrapper-para start; Enter there
+      // used to plain-split the wrapper instead of inserting \fp. The guard claims the key and
+      // routes the caret into the note instead.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette();
+      const { editorInput, editorRef } = renderFootnoteEditor(
         { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
         markerPalette,
       );
@@ -453,7 +487,8 @@ describe('FootnoteEditor marker palette wiring', () => {
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
       );
 
-      expect(notPrevented).toBe(true);
+      expect(notPrevented).toBe(false); // claimed — must not reach Lexical's split path
+      expect(editorRef.selectNote).toHaveBeenCalledWith(0);
       expect(markerPalette.show).not.toHaveBeenCalled();
       expect(markerPalette.commit).not.toHaveBeenCalled();
     });
