@@ -38,7 +38,7 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * @returns `[heldSetting, isLoading]`. `heldSetting` may be a {@link PlatformError} (same as
  *   `useProjectSetting`); check with `isPlatformError`.
  */
-export function useBufferedProjectSetting<ProjectSettingName extends ProjectSettingNames>(
+export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSettingNames>(
   projectId: string | undefined,
   key: ProjectSettingName,
   defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -48,7 +48,7 @@ export function useBufferedProjectSetting<ProjectSettingName extends ProjectSett
   const [shouldApply, setShouldApply] = useState(true);
   const [heldSetting, setHeldSetting] = useState<
     ProjectSettingTypes[ProjectSettingName] | PlatformError
-  >(() => rawSetting);
+  >(rawSetting);
 
   // Tripwire: this hook assumes consumers remount on a project switch, so `projectId` should never
   // change in place. If it does, the held copy may show the previous project's value — warn so the
@@ -59,7 +59,7 @@ export function useBufferedProjectSetting<ProjectSettingName extends ProjectSett
   useEffect(() => {
     if (previousProjectIdRef.current !== undefined && previousProjectIdRef.current !== projectId) {
       logger.warn(
-        `useBufferedProjectSetting: projectId changed in place from "${previousProjectIdRef.current}" to "${projectId}" without a remount. This hook assumes consumers remount on a project switch (e.g. via reloadWebView); an in-place change may show a stale value. Such a consumer needs a PDP-subscription reset pattern instead (see use-structure-protection-state.hook.ts).`,
+        `useBufferedLayoutSetting: projectId changed in place from "${previousProjectIdRef.current}" to "${projectId}" without a remount. This hook assumes consumers remount on a project switch (e.g. via reloadWebView); an in-place change may show a stale value. Such a consumer needs a PDP-subscription reset pattern instead (see use-structure-protection-state.hook.ts).`,
       );
     }
     previousProjectIdRef.current = projectId;
@@ -88,4 +88,4 @@ export function useBufferedProjectSetting<ProjectSettingName extends ProjectSett
   return [heldSetting, isLoading];
 }
 
-export default useBufferedProjectSetting;
+export default useBufferedLayoutSetting;

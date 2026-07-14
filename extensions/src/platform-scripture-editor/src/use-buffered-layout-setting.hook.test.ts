@@ -10,7 +10,7 @@ import {
 import { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
-import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
+import { useBufferedLayoutSetting } from './use-buffered-layout-setting.hook';
 
 vi.mock('@papi/frontend/react', () => ({ useProjectSetting: vi.fn() }));
 vi.mock('@papi/frontend', () => ({
@@ -40,7 +40,7 @@ const setRaw = (value: unknown, isLoading = false) =>
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   mockUseProjectSetting.mockReturnValue([value, undefined, undefined, isLoading] as never);
 
-describe('useBufferedProjectSetting', () => {
+describe('useBufferedLayoutSetting', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     capturedHandler = undefined;
@@ -50,7 +50,7 @@ describe('useBufferedProjectSetting', () => {
     const first = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] };
     setRaw(first);
     const { result } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     expect(result.current[0]).toEqual(first);
   });
@@ -60,7 +60,7 @@ describe('useBufferedProjectSetting', () => {
     // Initial mount: still loading, so `useProjectSetting` returns the default placeholder.
     setRaw(DEFAULT, true);
     const { result, rerender } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     // The subscription resolves: the real value arrives and loading finishes.
     setRaw(real, false);
@@ -73,7 +73,7 @@ describe('useBufferedProjectSetting', () => {
     const second = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] };
     setRaw(first);
     const { result, rerender } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     setRaw(second);
     rerender();
@@ -85,7 +85,7 @@ describe('useBufferedProjectSetting', () => {
     const second = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] };
     setRaw(first);
     const { result, rerender } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     // Subscribing to the re-arm event is what makes this apply possible.
     expect(vi.mocked(useEvent)).toHaveBeenCalled();
@@ -100,7 +100,7 @@ describe('useBufferedProjectSetting', () => {
     const second = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'B', id: '2' }] };
     setRaw(first);
     const { result, rerender } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     setRaw(second);
     rerender();
@@ -111,7 +111,7 @@ describe('useBufferedProjectSetting', () => {
   it('handles an undefined projectId without applying or throwing', () => {
     setRaw(DEFAULT);
     const { result } = renderHook(() =>
-      useBufferedProjectSetting(undefined, 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting(undefined, 'platformScripture.modelTexts', DEFAULT),
     );
     expect(result.current[0]).toEqual(DEFAULT);
     // A re-arm event for some real project must not affect an undefined-projectId hold.
@@ -125,7 +125,7 @@ describe('useBufferedProjectSetting', () => {
     const error: PlatformError = newPlatformError('boom');
     setRaw(error);
     const { result } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     expect(result.current[0]).toBe(error);
   });
@@ -133,7 +133,7 @@ describe('useBufferedProjectSetting', () => {
   it('warns when projectId changes in place (the unsupported no-remount case)', () => {
     setRaw(DEFAULT);
     const { rerender } = renderHook(
-      ({ pid }) => useBufferedProjectSetting(pid, 'platformScripture.modelTexts', DEFAULT),
+      ({ pid }) => useBufferedLayoutSetting(pid, 'platformScripture.modelTexts', DEFAULT),
       { initialProps: { pid: 'proj-1' } },
     );
     expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe('useBufferedProjectSetting', () => {
   it('does not warn on a stable projectId across rerenders', () => {
     setRaw(DEFAULT);
     const { rerender } = renderHook(() =>
-      useBufferedProjectSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
     );
     rerender();
     rerender();

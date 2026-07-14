@@ -36,6 +36,9 @@ function webViewTypeForTab(tab: string | undefined): string | undefined {
  * Applies the admin's col-3 active tab for a project by bringing the matching resource panel to
  * front (PAPI has no direct `focusTab` for extensions; bring-to-front on an existing web view is
  * equivalent). No-op when the setting is unset/unrecognized. Never throws.
+ *
+ * @param papi The backend PAPI instance used to read the setting and open/bring-to-front the panel.
+ * @param projectId The project whose `sharedLayoutDefaultTab` setting selects which panel to focus.
  */
 export async function focusSharedLayoutDefaultTab(
   papi: typeof PapiBackend,
@@ -62,6 +65,10 @@ export async function focusSharedLayoutDefaultTab(
  * member with an "Apply now" action; the reactive panels keep holding until the member applies.
  * Auto-syncs (project switch) and confirmations apply immediately: re-arm the panels + focus the
  * col-3 tab. All state is in-memory and lost on app close.
+ *
+ * @param papi The backend PAPI instance used for network events, project data, and notifications.
+ * @param reArmEmitter Emitter fired (with the affected `projectId`) to re-arm the reactive panels
+ *   so they apply the newly synced layout.
  */
 export class SharedLayoutReceiver {
   private readonly lastAppliedSignatureByProjectId = new Map<string, string>();
@@ -114,12 +121,18 @@ export class SharedLayoutReceiver {
    * never emits `isSyncing: false`), the mark self-expires rather than persisting for the session.
    * Otherwise a leaked mark would route the next genuine manual sync through the silent
    * auto-branch, applying with no notification and overwriting the member's held view.
+   *
+   * @param projectId The project whose next in-flight sync completion should apply silently.
    */
   markAutoSync(projectId: string): void {
     this.autoSyncExpiryByProjectId.set(projectId, Date.now() + AUTO_SYNC_MARK_TTL_MS);
   }
 
-  /** Apply the current synced layout for a project: re-arm panels, focus col-3 tab, note applied. */
+  /**
+   * Apply the current synced layout for a project: re-arm panels, focus col-3 tab, note applied.
+   *
+   * @param projectId The project whose synced layout should be applied.
+   */
   async applyForProject(projectId: string): Promise<void> {
     this.reArmEmitter.emit({ projectId });
     await focusSharedLayoutDefaultTab(this.papi, projectId);
@@ -136,7 +149,12 @@ export class SharedLayoutReceiver {
     await this.dismissOutstandingNotification(projectId);
   }
 
-  /** "Apply now" handler: apply the layout for the project tied to the notification, then dismiss. */
+  /**
+   * "Apply now" handler: apply the layout for the project tied to the notification, then dismiss.
+   *
+   * @param notificationId The id of the "Apply now" notification whose project should be applied; a
+   *   no-op if the id is not mapped to a project.
+   */
   async applyFromNotification(notificationId: string | number): Promise<void> {
     const projectId = this.projectIdByNotificationId.get(notificationId);
     if (!projectId) return;

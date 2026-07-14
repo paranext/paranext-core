@@ -5,7 +5,7 @@ import type { ResourceReferenceList, TextCollectionOverlay } from 'platform-scri
 import { useProjectDataProvider } from '@papi/frontend/react';
 import type { TextCollectionSources } from './scripture-text-grid-contents.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST } from './resource-reference-list.const';
-import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
+import { useBufferedLayoutSetting } from './use-buffered-layout-setting.hook';
 
 /** A user with no recorded checkbox interactions has an empty overlay. */
 const DEFAULT_OVERLAY: TextCollectionOverlay = {};
@@ -26,7 +26,7 @@ export function useTextCollectionSources(projectId: string | undefined) {
   // Buffered (not raw `useProjectSetting`) so a manual-sync change to the admin layout is held
   // in memory until the member applies it, matching the resource/model-text panels. The per-user
   // list and the text-collection overlay below stay live (unbuffered).
-  const [adminReferenced, isReferencedLoading] = useBufferedProjectSetting(
+  const [adminReferenced, isReferencedLoading] = useBufferedLayoutSetting(
     projectId,
     'platformScripture.referencedProjectsAndResources',
     DEFAULT_LIST,

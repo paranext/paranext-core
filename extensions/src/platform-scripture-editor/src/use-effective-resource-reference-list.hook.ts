@@ -11,7 +11,7 @@ import {
   CURRENT_DATA_VERSION,
   DEFAULT_RESOURCE_REFERENCE_LIST as DEFAULT_LIST,
 } from './resource-reference-list.const';
-import { useBufferedProjectSetting } from './use-buffered-project-setting.hook';
+import { useBufferedLayoutSetting } from './use-buffered-layout-setting.hook';
 
 const KNOWN_RESOURCE_TYPES = new Set([
   'project',
@@ -73,7 +73,7 @@ export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
 ): [EffectiveResourceReferenceList | undefined, boolean] {
-  const [projectResourceReferenceList, isProjectSettingLoading] = useBufferedProjectSetting(
+  const [projectResourceReferenceList, isProjectSettingLoading] = useBufferedLayoutSetting(
     projectId,
     settingName,
     DEFAULT_LIST,

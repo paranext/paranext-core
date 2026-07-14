@@ -20,7 +20,7 @@ vi.mock('@papi/frontend', () => ({
   logger: { warn: vi.fn() },
 }));
 
-// The admin layer is read through `useBufferedProjectSetting`, which re-arms on a captured
+// The admin layer is read through `useBufferedLayoutSetting`, which re-arms on a captured
 // `useEvent` handler. Capture it here so a test can drive the re-arm.
 let capturedApplyHandler: ((payload: { projectId: string }) => void) | undefined;
 vi.mock('platform-bible-react', () => ({
