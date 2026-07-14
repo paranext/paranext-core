@@ -11,6 +11,11 @@ const AUTO_SYNC_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlo
 /**
  * Subscribes to the auto-sync blocking network event and drives the auto-sync-blocking store. Call
  * once at app startup. Returns a cleanup function.
+ *
+ * Known limitation (deliberate): the protocol is event-only, so a renderer reload during an
+ * in-flight scheduled sync misses the earlier raise and leaves the rest of that sync unblocked.
+ * Upgrade path when PT-4163 lands is a queryable state on the emitter side (a command to read the
+ * current blocking state, or a periodic re-emit) that this service consults on init.
  */
 export function initAutoSyncBlockingService(): () => void {
   return getNetworkEvent<{ isBlocking: boolean }>(AUTO_SYNC_BLOCKING_CHANGED_EVENT)(

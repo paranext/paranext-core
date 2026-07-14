@@ -79,12 +79,48 @@ describe('AutoSyncBlockingOverlay', () => {
     expect(screen.getByText('Automatic Send/Receive in progress')).toBeInTheDocument();
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    // Both must be present as separate class tokens (guards against the class strings being
+    // concatenated without a separating space)
+    expect(screen.getByRole('status')).toHaveClass('tw:bg-background', 'tw:outline-none');
   });
 
-  it('focuses the Cancel button when shown (moves focus off the editor)', () => {
+  it('focuses the container (not the button) when shown — mid-word Space/Enter cannot cancel', () => {
     render(<AutoSyncBlockingOverlay />);
     showOverlay();
+    const overlay = screen.getByRole('status');
+    expect(overlay).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Cancel' })).not.toHaveFocus();
+    // A user typing when the overlay appears may hit Space/Enter before noticing — that keypress
+    // lands on the container and must not trigger the Cancel button
+    fireEvent.keyDown(overlay, { key: 'Enter' });
+    fireEvent.keyUp(overlay, { key: 'Enter' });
+    fireEvent.keyDown(overlay, { key: ' ' });
+    fireEvent.keyUp(overlay, { key: ' ' });
+    expect(vi.mocked(request)).not.toHaveBeenCalled();
+  });
+
+  it('traps Tab inside the overlay (keyboard cannot reach the covered editor)', () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    const overlay = screen.getByRole('status');
+    // fireEvent returns false when preventDefault was called — the browser's tabbing is suppressed
+    expect(fireEvent.keyDown(overlay, { key: 'Tab' })).toBe(false);
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    expect(fireEvent.keyDown(overlay, { key: 'Tab', shiftKey: true })).toBe(false);
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+  });
+
+  it('re-contains focus when it escapes to an element outside the overlay', async () => {
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    // Async act so the deferred (microtask) refocus in the blur handler flushes
+    await act(async () => {
+      outside.focus();
+    });
+    expect(screen.getByRole('status')).toHaveFocus();
+    outside.remove();
   });
 
   it('hides the overlay when blocking clears', () => {
@@ -123,5 +159,21 @@ describe('AutoSyncBlockingOverlay', () => {
     });
     showOverlay(); // a later scheduled sync raises the block again
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
+
+  it('re-enables Cancel when the cancel request fails so the user can retry', async () => {
+    vi.mocked(request).mockRejectedValueOnce(new Error('extension unavailable'));
+    render(<AutoSyncBlockingOverlay />);
+    showOverlay();
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    fireEvent.click(cancelButton);
+    expect(cancelButton).toBeDisabled();
+    // Let the rejection propagate through the request's catch handler
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(cancelButton).toBeEnabled();
+    fireEvent.click(cancelButton);
+    expect(vi.mocked(request)).toHaveBeenCalledTimes(2);
   });
 });

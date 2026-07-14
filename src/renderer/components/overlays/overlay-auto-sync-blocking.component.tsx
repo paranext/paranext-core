@@ -48,7 +48,12 @@ export function AutoSyncBlockingOverlay() {
     // serialized request type (same idiom as shutdown-tasks.ts). Fire-and-forget: the overlay
     // hides when the extension clears the block, whether the sync was cancelled or completed.
     request(serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.cancelSync')).catch(
-      (e) => logger.warn(`Auto-sync blocking overlay failed to cancel sync: ${getErrorMessage(e)}`),
+      (e) => {
+        logger.warn(`Auto-sync blocking overlay failed to cancel sync: ${getErrorMessage(e)}`);
+        // The cancel request never took effect and the sync is still running — re-enable the
+        // button so the user can retry instead of being stuck with a dead Cancel
+        setIsCancelEnabled(true);
+      },
     );
   }, []);
 
