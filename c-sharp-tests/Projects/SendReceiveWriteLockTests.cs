@@ -13,65 +13,6 @@ using SIL.Scripture;
 namespace TestParanextDataProvider.Projects
 {
     /// <summary>
-    /// Test helper that simulates an automatic Send/Receive holding the write-gate. It runs
-    /// <see cref="SendReceiveWriteLock.SetSyncing"/> on a dedicated background thread (matching
-    /// production, where the sync worker — not a PAPI write thread — arms and later clears the gate),
-    /// waits until it has armed and acquired the write lock, and on <see cref="Dispose"/> runs
-    /// <see cref="SendReceiveWriteLock.Clear"/> on that SAME thread (the RWLS is thread-affine) and
-    /// joins.
-    ///
-    /// <para>A separate thread is REQUIRED: because the read lock is thread-affine, a gated write run
-    /// on the test thread must see the write lock held by ANOTHER thread to be rejected with the
-    /// sentinel. A same-thread hold would instead raise <see cref="LockRecursionException"/> under the
-    /// gate's <c>NoRecursion</c> policy.</para>
-    /// </summary>
-    [ExcludeFromCodeCoverage]
-    internal sealed class FakeSync : IDisposable
-    {
-        private readonly Thread _thread;
-        private readonly ManualResetEventSlim _armed = new(false);
-        private readonly ManualResetEventSlim _release = new(false);
-        private Exception? _armException;
-
-        public FakeSync(params string[] projectIds)
-        {
-            _thread = new Thread(() =>
-            {
-                try
-                {
-                    SendReceiveWriteLock.SetSyncing(projectIds);
-                }
-                catch (Exception ex)
-                {
-                    _armException = ex;
-                    _armed.Set();
-                    return;
-                }
-                _armed.Set();
-                _release.Wait();
-                SendReceiveWriteLock.Clear();
-            })
-            {
-                IsBackground = true,
-                Name = "FakeSyncWorker",
-            };
-            _thread.Start();
-            if (!_armed.Wait(TimeSpan.FromSeconds(10)))
-                throw new TimeoutException("FakeSync did not arm within 10 seconds");
-            if (_armException is not null)
-                throw new InvalidOperationException("FakeSync arming threw", _armException);
-        }
-
-        public void Dispose()
-        {
-            _release.Set();
-            _thread.Join(TimeSpan.FromSeconds(10));
-            _armed.Dispose();
-            _release.Dispose();
-        }
-    }
-
-    /// <summary>
     /// Unit tests for the process-wide <see cref="SendReceiveWriteLock"/> write-gate. Every test
     /// clears the (static) gate before and after so state never leaks between tests or to other
     /// fixtures. The fixture runs single-threaded (no NUnit parallelism), so the shared static lock is
@@ -134,8 +75,7 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void SetSyncing_CalledAgain_ReplacesPreviousSet()
         {
-            // Re-arming on the same thread must not re-acquire the (already held) write lock — the
-            // NoRecursion guard in SetSyncing handles this — it just swaps the armed set.
+            // Re-arming while already armed just swaps the armed set (one global sync slot).
             SendReceiveWriteLock.SetSyncing(["projectA"]);
             SendReceiveWriteLock.SetSyncing(["projectB"]);
 
@@ -159,7 +99,7 @@ namespace TestParanextDataProvider.Projects
             });
         }
 
-        // ---- EnterWrite scope (the RWLS "reader" side) ----
+        // ---- EnterWrite scope (the in-flight write side) ----
 
         [Test]
         public void EnterWrite_NotArmed_ReturnsScope_AndReleasesOnDispose()
@@ -169,7 +109,7 @@ namespace TestParanextDataProvider.Projects
 
             scope.Dispose();
 
-            // Re-entering proves the read lock was released on dispose.
+            // Re-entering proves the in-flight write was released on dispose.
             Assert.DoesNotThrow(() =>
             {
                 using var _ = SendReceiveWriteLock.EnterWrite("projectA");
@@ -182,10 +122,10 @@ namespace TestParanextDataProvider.Projects
             var scope = SendReceiveWriteLock.EnterWrite("projectA");
             scope.Dispose();
 
-            // Second dispose must be a no-op (never call ExitReadLock twice).
+            // Second dispose must be a no-op (never decrement the in-flight count twice).
             Assert.DoesNotThrow(scope.Dispose);
 
-            // The lock is fully released — a fresh scope still works.
+            // The scope is fully released — a fresh scope still works.
             Assert.DoesNotThrow(() =>
             {
                 using var _ = SendReceiveWriteLock.EnterWrite("projectA");
@@ -201,8 +141,9 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void EnterWrite_Armed_ThrowsWithSentinel()
         {
-            // A sync is armed and holds the write lock on another thread.
-            using var sync = new FakeSync("projectA");
+            // A sync is armed (the gate has no thread affinity, so arming on the test thread is
+            // exactly what production writes would observe from any thread).
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
 
             var ex = Assert.Throws<InvalidOperationException>(
                 () => SendReceiveWriteLock.EnterWrite("projectA")
@@ -213,11 +154,11 @@ namespace TestParanextDataProvider.Projects
         [Test]
         public void EnterWrite_WhileAnotherProjectSyncs_RejectsAllProjects_GlobalGate()
         {
-            // The write gate is GLOBAL (a single process-wide lock): while a sync holds the write
-            // lock, writes to EVERY project fail fast, not just the syncing one. This is the intended
-            // coarse exclusion (a sync is globally exclusive). IsBlocked stays per-project pure data,
-            // so it is deliberately narrower than the gate.
-            using var sync = new FakeSync("projectA");
+            // The write gate is GLOBAL (a single process-wide gate): while a sync is armed, writes
+            // to EVERY project fail fast, not just the syncing one. This is the intended coarse
+            // exclusion (a sync is globally exclusive). IsBlocked stays per-project pure data, so it
+            // is deliberately narrower than the gate.
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
 
             Assert.Multiple(() =>
             {
@@ -233,20 +174,92 @@ namespace TestParanextDataProvider.Projects
             });
         }
 
+        // ---- Forgiving lifecycle contract (no thread affinity, no recursion policy) ----
+
         [Test]
-        public void EnterWrite_NestedOnSameThread_ThrowsLockRecursion_DocumentingNoRecursionPolicy()
+        public void EnterWrite_NestedOnSameThread_BothScopesSucceed()
         {
-            // Documents the NoRecursion policy. No gated write path re-enters the gate on one thread
-            // (a delegating method calls an un-gated core inside its single outer scope), so an
-            // accidental nested EnterWrite is a loud LockRecursionException, not a silent deadlock.
+            // A gated method that (directly or via refactor) calls another gated method must not
+            // crash: the gate is re-entrant, because the outer scope already provides the
+            // sync-exclusion guarantee the inner one would.
             using var outer = SendReceiveWriteLock.EnterWrite("projectA");
 
-            Assert.Throws<LockRecursionException>(
-                () => SendReceiveWriteLock.EnterWrite("projectB")
-            );
+            Assert.DoesNotThrow(() =>
+            {
+                using var inner = SendReceiveWriteLock.EnterWrite("projectB");
+            });
         }
 
-        // ---- SetSyncing drains in-flight writes (the RWLS "writer" side) ----
+        [Test]
+        public void Clear_FromDifferentThreadThanSetSyncing_DisarmsAndUnblocks()
+        {
+            // Arm on a worker thread that then goes away (as an async sync worker's pool thread
+            // might). Clear from ANY other thread must fully disarm — recovery must never depend on
+            // the arming thread still existing.
+            var worker = new Thread(() => SendReceiveWriteLock.SetSyncing(["projectA"]))
+            {
+                IsBackground = true,
+                Name = "ArmingWorker",
+            };
+            worker.Start();
+            Assert.That(
+                worker.Join(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "worker should finish arming"
+            );
+
+            Assert.DoesNotThrow(SendReceiveWriteLock.Clear);
+
+            Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.False);
+            Assert.DoesNotThrow(() =>
+            {
+                using var _ = SendReceiveWriteLock.EnterWrite("projectA");
+            });
+        }
+
+        [Test]
+        public void WriteScope_DisposedOnDifferentThread_ReleasesTheInFlightWrite()
+        {
+            // A write scope that crosses an await can resume — and dispose — on a different pool
+            // thread. The release must work from any thread, and a subsequent sync must then see
+            // zero in-flight writes (drain immediately rather than wait for the DrainTimeout).
+            var scope = SendReceiveWriteLock.EnterWrite("projectA");
+
+            var disposeTask = Task.Run(scope.Dispose);
+            Assert.DoesNotThrow(
+                () => disposeTask.Wait(TimeSpan.FromSeconds(10)),
+                "disposing on another thread must release cleanly"
+            );
+
+            var stopwatch = Stopwatch.StartNew();
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            stopwatch.Stop();
+            Assert.That(
+                stopwatch.Elapsed,
+                Is.LessThan(TimeSpan.FromSeconds(2)),
+                "the released write must not count as in-flight during the sync's drain"
+            );
+
+            SendReceiveWriteLock.Clear();
+        }
+
+        [Test]
+        public void SetSyncing_NullOrEmptyIdsInBatch_AreIgnored()
+        {
+            // A defective batch must not crash the arming thread or leave a torn arm state; the
+            // valid ids must still be armed.
+            Assert.DoesNotThrow(() => SendReceiveWriteLock.SetSyncing(["projectA", null!, ""]));
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.True);
+                Assert.That(SendReceiveWriteLock.IsBlocked(""), Is.False);
+            });
+
+            SendReceiveWriteLock.Clear();
+        }
+
+        // ---- SetSyncing drains in-flight writes ----
 
         [Test]
         public void SetSyncing_WaitsForInFlightWriteOnAnotherThread_ToDrain()
@@ -255,8 +268,8 @@ namespace TestParanextDataProvider.Projects
             var release = new ManualResetEventSlim(false);
             const int holdMs = 500;
 
-            // An in-flight write held on ANOTHER thread. The RWLS read lock is thread-affine, so
-            // SetSyncing (on the test thread) must WAIT for this thread's scope to dispose.
+            // An in-flight write held on another thread. SetSyncing (on the test thread) must WAIT
+            // for the scope to dispose before returning.
             var writer = Task.Run(() =>
             {
                 using var scope = SendReceiveWriteLock.EnterWrite("projectA");
@@ -291,17 +304,22 @@ namespace TestParanextDataProvider.Projects
                     "SetSyncing should have blocked until the in-flight write on the other thread drained"
                 );
                 Assert.That(
-                    SendReceiveWriteLock.WriteLockHeld,
+                    SendReceiveWriteLock.InFlightWriteCount,
+                    Is.Zero,
+                    "after draining, no write scopes remain open"
+                );
+                Assert.That(
+                    SendReceiveWriteLock.IsArmed,
                     Is.True,
-                    "after draining, SetSyncing holds the write lock"
+                    "after draining, the sync is armed"
                 );
             });
 
-            SendReceiveWriteLock.Clear(); // release the write lock now held by THIS (test) thread
+            SendReceiveWriteLock.Clear();
         }
 
         [Test]
-        public void SetSyncing_DrainTimesOut_ProceedsUnheld_AndBeltCheckStillRejects()
+        public void SetSyncing_DrainTimesOut_ProceedsDegraded_AndNewWritesStayRejected()
         {
             var previousTimeout = SendReceiveWriteLock.DrainTimeout;
             SendReceiveWriteLock.DrainTimeout = TimeSpan.FromMilliseconds(300);
@@ -335,16 +353,56 @@ namespace TestParanextDataProvider.Projects
                         "SetSyncing must not hang past its bounded DrainTimeout"
                     );
                     Assert.That(
-                        SendReceiveWriteLock.WriteLockHeld,
-                        Is.False,
-                        "on drain timeout the sync proceeds WITHOUT holding the write lock"
+                        SendReceiveWriteLock.InFlightWriteCount,
+                        Is.EqualTo(1),
+                        "the stuck write is still in flight on the degraded path"
                     );
 
-                    // Belt check: writes stay rejected while armed, even though no write lock is held.
+                    // New writes stay rejected while armed, even though the drain timed out.
                     var ex = Assert.Throws<InvalidOperationException>(
                         () => SendReceiveWriteLock.EnterWrite("projectA")
                     );
-                    Assert.That(ex!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
+                    Assert.That(
+                        ex!.Message,
+                        Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel)
+                    );
+                });
+            }
+            finally
+            {
+                release.Set();
+                stuck?.Wait(TimeSpan.FromSeconds(10));
+                SendReceiveWriteLock.DrainTimeout = previousTimeout;
+                SendReceiveWriteLock.Clear();
+            }
+        }
+
+        [Test]
+        public void Clear_WhileAWriteIsStillStuck_RecoversNewWritesImmediately()
+        {
+            // Recovery must not depend on the stuck write ever completing: Clear disarms the gate,
+            // new writes flow again, and the straggler's eventual dispose is a harmless decrement.
+            var previousTimeout = SendReceiveWriteLock.DrainTimeout;
+            SendReceiveWriteLock.DrainTimeout = TimeSpan.FromMilliseconds(300);
+            var opened = new ManualResetEventSlim(false);
+            var release = new ManualResetEventSlim(false);
+            Task? stuck = null;
+            try
+            {
+                stuck = Task.Run(() =>
+                {
+                    using var scope = SendReceiveWriteLock.EnterWrite("projectA");
+                    opened.Set();
+                    release.Wait(TimeSpan.FromSeconds(15));
+                });
+                Assert.That(opened.Wait(TimeSpan.FromSeconds(5)), Is.True);
+
+                SendReceiveWriteLock.SetSyncing(["projectA"]); // degraded (stuck write never drains)
+                SendReceiveWriteLock.Clear();
+
+                Assert.DoesNotThrow(() =>
+                {
+                    using var _ = SendReceiveWriteLock.EnterWrite("projectA");
                 });
             }
             finally
@@ -359,11 +417,11 @@ namespace TestParanextDataProvider.Projects
         // ---- Clear / round-trip ----
 
         [Test]
-        public void Clear_WhenWriteLockNeverHeld_IsSafeNoOp()
+        public void Clear_WhenNeverArmed_IsSafeNoOp()
         {
-            // No SetSyncing → the write lock was never taken. Clear must not throw (it only disarms).
+            // No SetSyncing → nothing armed. Clear must not throw (it only disarms).
             Assert.DoesNotThrow(SendReceiveWriteLock.Clear);
-            Assert.That(SendReceiveWriteLock.WriteLockHeld, Is.False);
+            Assert.That(SendReceiveWriteLock.IsArmed, Is.False);
 
             // And a subsequent write still works.
             Assert.DoesNotThrow(() =>
@@ -373,16 +431,16 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void SetSyncing_ThenClear_SameThread_RoundTrips()
+        public void SetSyncing_ThenClear_RoundTrips()
         {
-            // Both on the test thread (RWLS thread affinity). No in-flight writes → acquires at once.
+            // No in-flight writes → SetSyncing returns at once, armed.
             SendReceiveWriteLock.SetSyncing(["projectA"]);
             Assert.Multiple(() =>
             {
                 Assert.That(
-                    SendReceiveWriteLock.WriteLockHeld,
+                    SendReceiveWriteLock.IsArmed,
                     Is.True,
-                    "SetSyncing should hold the write lock when there is nothing to drain"
+                    "SetSyncing should arm the gate when there is nothing to drain"
                 );
                 Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.True);
             });
@@ -390,60 +448,15 @@ namespace TestParanextDataProvider.Projects
             SendReceiveWriteLock.Clear();
             Assert.Multiple(() =>
             {
-                Assert.That(
-                    SendReceiveWriteLock.WriteLockHeld,
-                    Is.False,
-                    "Clear should release the write lock"
-                );
+                Assert.That(SendReceiveWriteLock.IsArmed, Is.False, "Clear should disarm the gate");
                 Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.False);
             });
 
-            // The lock is reusable after a clean same-thread round-trip.
+            // The gate is reusable after a clean round-trip.
             Assert.DoesNotThrow(() =>
             {
                 using var _ = SendReceiveWriteLock.EnterWrite("projectA");
             });
-        }
-
-        [Test]
-        public void Clear_OnDifferentThreadThanSetSyncing_ThrowsAndLeavesStateIntact()
-        {
-            // Defends the single-thread contract: a sync armed on one thread must be cleared on THAT
-            // thread. A cross-thread Clear must fail fast (InvalidOperationException) and — crucially —
-            // NOT touch the armed set or the still-held write lock, so the owning thread can still
-            // clean up correctly. Without the owner-thread guard the degraded path would slip through
-            // silently (nothing is held for the RWLS to reject).
-            var armed = new ManualResetEventSlim(false);
-            var release = new ManualResetEventSlim(false);
-            var worker = new Thread(() =>
-            {
-                SendReceiveWriteLock.SetSyncing(["projectA"]);
-                armed.Set();
-                release.Wait(TimeSpan.FromSeconds(10));
-                SendReceiveWriteLock.Clear(); // proper cleanup on the OWNING thread
-            })
-            {
-                IsBackground = true,
-                Name = "CrossThreadClearWorker",
-            };
-            worker.Start();
-            Assert.That(armed.Wait(TimeSpan.FromSeconds(10)), Is.True, "worker should have armed");
-
-            // Clear on the TEST thread (not the arming thread) is rejected...
-            Assert.Throws<InvalidOperationException>(SendReceiveWriteLock.Clear);
-            // ...and left the sync intact for the owner to clean up.
-            Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.True);
-
-            release.Set();
-            Assert.That(
-                worker.Join(TimeSpan.FromSeconds(10)),
-                Is.True,
-                "worker should have cleared"
-            );
-            Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.False);
-
-            armed.Dispose();
-            release.Dispose();
         }
 
         // ---- Concurrency stress: the core safety invariant ----
@@ -534,10 +547,9 @@ namespace TestParanextDataProvider.Projects
     /// direct wiring test; the gate call itself is the same one-line <c>EnterWrite</c> scope covered
     /// by <see cref="SendReceiveWriteLockTests"/>.
     ///
-    /// <para>Each test arms the sync via <see cref="FakeSync"/> (on a background thread) rather than
-    /// calling <see cref="SendReceiveWriteLock.SetSyncing"/> on the test thread: the RWLS read lock is
-    /// thread-affine, so a gated write on the test thread must see the write lock held by ANOTHER
-    /// thread to be rejected with the sentinel.</para>
+    /// <para>Each test arms the sync with <see cref="SendReceiveWriteLock.SetSyncing"/> directly on
+    /// the test thread — the gate has no thread affinity, so a gated write observes the armed state
+    /// identically from any thread.</para>
     /// </summary>
     [ExcludeFromCodeCoverage]
     internal class SendReceiveWriteLockGateTests : PapiTestBase
@@ -591,13 +603,13 @@ namespace TestParanextDataProvider.Projects
         }
 
         /// <summary>
-        /// Arms this fixture's project as syncing (on a background thread, via <see cref="FakeSync"/>),
-        /// invokes <paramref name="write"/> on the test thread, and asserts it is rejected with the
-        /// sentinel-suffixed exception (before any mutation can happen).
+        /// Arms this fixture's project as syncing, invokes <paramref name="write"/>, and asserts it
+        /// is rejected with the sentinel-suffixed exception (before any mutation can happen). The
+        /// TearDown Clear disarms afterward.
         /// </summary>
         private void AssertWriteBlocked(TestDelegate write)
         {
-            using var sync = new FakeSync(ProjectId);
+            SendReceiveWriteLock.SetSyncing([ProjectId]);
 
             var ex = Assert.Throws<InvalidOperationException>(write);
             Assert.That(ex!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
@@ -613,15 +625,14 @@ namespace TestParanextDataProvider.Projects
         {
             var verseRef = new VerseRef(1, 2, 0);
 
-            using (new FakeSync(ProjectId))
-            {
-                var ex = Assert.Throws<InvalidOperationException>(
-                    () => _provider.SetChapterUsfm(verseRef, @"\c 2 \p \v 2 New chapter text.")
-                );
-                Assert.That(ex!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
-            }
+            SendReceiveWriteLock.SetSyncing([ProjectId]);
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => _provider.SetChapterUsfm(verseRef, @"\c 2 \p \v 2 New chapter text.")
+            );
+            Assert.That(ex!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
 
-            // Sync ended (FakeSync disposed → Clear ran on its thread → write lock released).
+            // Sync ended (Clear disarms the gate).
+            SendReceiveWriteLock.Clear();
             Assert.That(
                 _provider.SetChapterUsfm(verseRef, @"\c 2 \p \v 2 New chapter text."),
                 Is.True,
@@ -746,7 +757,7 @@ namespace TestParanextDataProvider.Projects
                     BindingFlags.NonPublic | BindingFlags.Instance
                 ) ?? throw new MissingMethodException(nameof(CheckRunner), methodName);
 
-            using var sync = new FakeSync(ProjectId);
+            SendReceiveWriteLock.SetSyncing([ProjectId]);
 
             var tie = Assert.Throws<TargetInvocationException>(
                 () =>

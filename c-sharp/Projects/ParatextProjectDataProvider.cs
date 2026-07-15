@@ -2418,10 +2418,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// The body of <see cref="SetBookUsfm"/> WITHOUT opening its own sync-write scope. Callers MUST
     /// already hold one (via <see cref="EnterSyncWriteScope"/>). This exists so a gated method that
-    /// delegates to the book-USFM write (<see cref="SetBookUsx"/>) can reuse it inside a single outer
-    /// scope instead of nesting a second <see cref="SendReceiveWriteLock.EnterWrite"/> on the same
-    /// thread — which the write-gate's <c>NoRecursion</c> policy forbids (it would throw
-    /// <see cref="System.Threading.LockRecursionException"/>).
+    /// delegates to the book-USFM write (<see cref="SetBookUsx"/>) can reuse it inside a single
+    /// outer scope. (Nesting a second <see cref="SendReceiveWriteLock.EnterWrite"/> would be benign
+    /// — the gate is re-entrant — but one scope per mutation keeps the gating easy to reason about.)
     /// </summary>
     private bool SetBookUsfmInScope(VerseRef verseRef, string data)
     {
@@ -2588,8 +2587,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         // Open ONE sync-write scope for the whole convert-then-write mutation. Rejecting here also
         // skips the USX→USFM conversion when sync-blocked. We then call the un-gated
-        // SetBookUsfmInScope (NOT the public SetBookUsfm) so we do not nest a second EnterWrite on
-        // this thread — the write-gate's NoRecursion policy would throw. Inert in public core.
+        // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
+        // scope — nesting would be benign (the gate is re-entrant), but one scope per mutation
+        // keeps the gating easy to reason about. Inert in public core.
         using var _ = EnterSyncWriteScope();
         // Don't need to take a write lock in this function because SetBookUsfmInScope will do it
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);

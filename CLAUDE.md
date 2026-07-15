@@ -172,13 +172,12 @@ armed/queued automatic Send/Receive rejects the write fail-fast (the `(SR_EDIT_B
 while a starting sync waits, bounded, for open write scopes to drain before it replaces files on
 disk.
 
-The gated method MUST hold that scope **synchronously**: no `await` or `Task.Run` between
-`EnterWrite` and its dispose. The lock is a thread-affine `ReaderWriterLockSlim`, so the read lock
-must be released on the very thread that took it — an `await` could resume on a different pool thread
-and release a lock it never held. (Several gated methods are named `...Async` but are synchronous
-today; if one ever needs real asynchrony, `await` OUTSIDE the scope, never across it.) The same
-single-thread rule applies to the sync side: `SetSyncing`/`Clear` must be called on one thread for
-the whole arm→clear bracket.
+The gate has **no thread affinity** (its state is a single atomic word — an armed flag plus an
+in-flight write count — not an OS lock): a scope may be disposed on a different thread, holding one
+across an `await` is safe, nested `EnterWrite` calls are benign, and `SetSyncing`/`Clear` may run on
+any threads (`Clear` is idempotent and doubles as crash recovery). Still, keep scopes **tight** —
+the mutation and nothing else — because every open scope delays a starting sync's bounded drain
+toward its timeout.
 
 This is an **in-process** gate, distinct from the S/R server-side repository lock
 (`lockrepo`/`unlockrepo` between clients) — do not conflate the two. `SendReceiveWriteLockCoverageTests`
