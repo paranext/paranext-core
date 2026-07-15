@@ -25,7 +25,17 @@ async function send(notification: PlatformNotification): Promise<string | number
   }
   logger.info(`Notification service host received notification: ${notificationString}`);
 
-  const { message, severity, clickCommand, clickCommandLabel, notificationId } = notification;
+  const {
+    message,
+    severity,
+    clickCommand,
+    clickCommandLabel,
+    secondaryClickCommand,
+    secondaryClickCommandLabel,
+    position,
+    dismissible,
+    notificationId,
+  } = notification;
   const localizedMessage = await localize(message);
   let toastId = notificationId ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;
   // Need to define effectiveNotificationId here to access it in onClick, but we need toastId to
@@ -47,6 +57,21 @@ async function send(notification: PlatformNotification): Promise<string | number
             onClick: () => commandService.sendCommand(clickCommand, effectiveNotificationId),
           }
         : undefined,
+    // Second action button, rendered by Sonner as its `cancel` slot alongside `action`. Built the
+    // same way as `action`, and like it, sends the notification id as the command's single argument.
+    cancel:
+      secondaryClickCommandLabel && secondaryClickCommand
+        ? {
+            label: await localize(secondaryClickCommandLabel),
+            onClick: () =>
+              commandService.sendCommand(secondaryClickCommand, effectiveNotificationId),
+          }
+        : undefined,
+    // Per-toast placement override; undefined leaves the Toaster's default placement in effect.
+    position,
+    // Whether the user can swipe/drag the toast away; undefined leaves Sonner's default (true). Set
+    // false (with duration 0) for a toast that must be answered via an action button.
+    dismissible,
     // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
     duration,
   };
@@ -107,6 +132,10 @@ export async function startNotificationService(): Promise<void> {
                   severity: { type: 'string' },
                   clickCommand: { type: 'string' },
                   clickCommandLabel: { type: 'string' },
+                  secondaryClickCommand: { type: 'string' },
+                  secondaryClickCommandLabel: { type: 'string' },
+                  position: { type: 'string' },
+                  dismissible: { type: 'boolean' },
                   notificationId: { type: ['string', 'number'] },
                   duration: { type: 'number' },
                 },

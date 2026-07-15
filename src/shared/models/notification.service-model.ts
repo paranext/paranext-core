@@ -3,6 +3,18 @@ import { LocalizeKey } from 'platform-bible-utils';
 
 export type Severity = 'info' | 'warning' | 'error';
 
+/**
+ * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
+ * Omit to use the app's default placement.
+ */
+export type NotificationPosition =
+  | 'top-left'
+  | 'top-center'
+  | 'top-right'
+  | 'bottom-left'
+  | 'bottom-center'
+  | 'bottom-right';
+
 /** Data needed to display a notification to the user */
 export interface PlatformNotification {
   /**
@@ -28,6 +40,33 @@ export interface PlatformNotification {
    * The command handler should have the type signature {@link NotificationClickCommandHandler}.
    */
   clickCommand?: keyof CommandHandlers;
+  /**
+   * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
+   * this together with {@link secondaryClickCommand} to give the notification two actions.
+   *
+   * Automatically localized if this is a {@link LocalizeKey}.
+   */
+  secondaryClickCommandLabel?: string | LocalizeKey;
+  /**
+   * Optional command to run if users click on the secondary label in the notification. Like
+   * {@link clickCommand}, the command is sent one argument:
+   *
+   * - NotificationId: The ID of the notification that was clicked
+   *
+   * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+   */
+  secondaryClickCommand?: keyof CommandHandlers;
+  /**
+   * Optional placement of the notification on screen. When omitted, the app's default placement is
+   * used.
+   */
+  position?: NotificationPosition;
+  /**
+   * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away).
+   * Defaults to `true`. Set to `false` for a notification that must be acknowledged through one of
+   * its action buttons — combine with a `duration` of `0` or less to keep it up until then.
+   */
+  dismissible?: boolean;
   /** Optional ID of a previous notification to update instead of showing a new notification */
   notificationId?: string | number;
   /**
