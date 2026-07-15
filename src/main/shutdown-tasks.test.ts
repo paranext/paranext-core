@@ -37,10 +37,30 @@ beforeEach(() => {
 });
 
 describe('performShutdownTasks', () => {
-  it('returns without any network calls when interface mode is not simple', async () => {
-    mockSettingsGet.mockResolvedValue('power');
+  it('returns without any network calls when interface mode is neither simple nor power', async () => {
+    mockSettingsGet.mockResolvedValue('somethingElse');
     await performShutdownTasks();
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
+  });
+
+  it('fires runScheduledSessionSync("shutdown") when interface mode is power', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('runScheduledSessionSync'),
+      'shutdown',
+    );
+    // Power mode selects by schedule, not open editors/cancelSync — neither Simple-mode call fires.
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+  });
+
+  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
+    await expect(performShutdownTasks()).resolves.toBeUndefined();
   });
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
