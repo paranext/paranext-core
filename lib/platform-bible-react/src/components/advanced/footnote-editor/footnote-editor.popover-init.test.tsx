@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 /**
- * Task 14 (Phase 5) wrapper-para glyph artifact: the popover's init effect applies the note op into
- * a hardcoded `PARAGRAPH_USJ` wrapper doc via `applyUpdate`, inserting at OT index 0. In editable
- * marker mode the wrapper paragraph renders a visible `\p` glyph prefix (`MarkerNode` + NBSP
- * trailing-space `TextNode`, per the library's `usj-editor.adaptor.ts` `createPara`); an insert at
- * index 0 lands the note BEFORE that prefix, and the engine then re-materializes a FRESH prefix
- * ahead of the note, leaving the ORIGINAL prefix as visible trailing glyph junk after the note
- * (confirmed empirically: pre-fix, the wrapper para ends up with node types `['marker', 'text',
- * 'note', 'marker', 'text']` — a second, orphaned `\p`/NBSP pair trails the note). Display-only;
- * never written on Save (the note-ops content contract is unchanged either way — see the
+ * Wrapper-para glyph artifact: the popover's init effect applies the note op into a hardcoded
+ * `PARAGRAPH_USJ` wrapper doc via `applyUpdate`, inserting at OT index 0. In editable marker mode
+ * the wrapper paragraph renders a visible `\p` glyph prefix (`MarkerNode` + NBSP trailing-space
+ * `TextNode`, per the library's `usj-editor.adaptor.ts` `createPara`); an insert at index 0 lands
+ * the note BEFORE that prefix, and the engine then re-materializes a FRESH prefix ahead of the
+ * note, leaving the ORIGINAL prefix as visible trailing glyph junk after the note (confirmed
+ * empirically: pre-fix, the wrapper para ends up with node types `['marker', 'text', 'note',
+ * 'marker', 'text']` — a second, orphaned `\p`/NBSP pair trails the note). Display-only; never
+ * written on Save (the note-ops content contract is unchanged either way — see the
  * `PARAGRAPH_USJ`-sibling `EDITABLE_WRAPPER_PARA_PREFIX_RETAIN` doc comment).
  *
  * Unlike `footnote-editor.component.test.tsx` (marker-palette wiring), this suite does NOT mock
@@ -29,7 +29,7 @@ function wrapperParaChildTypes(lexical: LexicalEditor): string[] {
   });
 }
 
-describe('FootnoteEditor popover init (Task 14 Phase 5: wrapper-para glyph artifact)', () => {
+describe('FootnoteEditor popover init (wrapper-para glyph artifact)', () => {
   it('editable marker mode: lands the note after the wrapper para prefix, no trailing glyph junk', async () => {
     // This suite only asserts on the post-`applyUpdate` node shape, so wait just for that macrotask
     // (not the later new-note selection re-assert).

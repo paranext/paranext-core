@@ -11,7 +11,6 @@ import type {
 } from '@eten-tech-foundation/platform-editor';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import FootnoteEditor, {
-  clearPaletteSessionIfCurrent,
   FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItemLike,
 } from './footnote-editor.component';
@@ -344,7 +343,7 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
 
     it('claims in-session Enter in CAPTURE so the editor never mutates before the commit (no double mutation)', () => {
-      // Final-review Important 1: pre-fix this handler was bubble-phase without stopPropagation,
+      // Pre-fix this handler was bubble-phase without stopPropagation,
       // so an in-session Enter reached MarkerEditPlugin's KEY_ENTER first — the editor inserted
       // `\fp`/plain-split BEFORE the palette commit applied (double mutation with an uncleaned
       // literal). The claim must prevent default AND stop the event from propagating onward.
@@ -385,7 +384,7 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
 
     it('tracks a SELECTION session for the focused wrap palette and claims typed keys', () => {
-      // Final-review Important 1 (round-3 port): the wrap palette previously set the session to
+      // The wrap palette previously set the session to
       // undefined, so typing landed in the document and replaced the wrapped selection.
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette(
@@ -483,7 +482,7 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(markerPalette.commit).not.toHaveBeenCalled();
     });
 
-    it('with the DOM caret outside the note content: claimed and rerouted into the note (PT-4187 bug 2)', () => {
+    it('with the DOM caret outside the note content: claimed and rerouted into the note', () => {
       // Radix's open-autofocus can park the DOM caret at the wrapper-para start; Enter there
       // used to plain-split the wrapper instead of inserting \fp. The guard claims the key and
       // routes the caret into the note instead.
@@ -523,7 +522,7 @@ describe('FootnoteEditor marker palette wiring', () => {
   });
 });
 
-describe('close-and-save settle (PT-4187 abandonment window)', () => {
+describe('close-and-save settle (abandonment window)', () => {
   // closeAndSave runs commitPendingMarkerEdits() before the final note-op read so a marker rename
   // the user walked away from mid-edit serializes as what's on screen, not the stale pre-rename
   // marker — EXCEPT while this popover's own marker-palette session is open, where the palette's
@@ -607,28 +606,5 @@ describe('markerMenuItemToPaletteItemLike', () => {
     expect(
       markerMenuItemToPaletteItemLike({ marker: 'wj', kind: 'character', isBasic: true }).muted,
     ).toBe(false);
-  });
-});
-
-describe('clearPaletteSessionIfCurrent', () => {
-  it('clears the ref when the token matches the current session', () => {
-    const session: { token: number } | undefined = { token: 1 };
-    const ref = { current: session };
-    clearPaletteSessionIfCurrent(ref, 1);
-    expect(ref.current).toBeUndefined();
-  });
-
-  it('leaves a newer session in place when the token is stale', () => {
-    const session: { token: number } | undefined = { token: 2 };
-    const ref = { current: session };
-    clearPaletteSessionIfCurrent(ref, 1);
-    expect(ref.current).toEqual({ token: 2 });
-  });
-
-  it('is a no-op when no session is live', () => {
-    const session: { token: number } | undefined = undefined;
-    const ref = { current: session };
-    clearPaletteSessionIfCurrent(ref, 1);
-    expect(ref.current).toBeUndefined();
   });
 });

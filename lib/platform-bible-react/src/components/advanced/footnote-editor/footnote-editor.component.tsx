@@ -17,9 +17,11 @@ import {
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
-import { handleMarkerPaletteSessionKeyDown } from '@/components/advanced/marker-palette-keydown.util';
 import {
-  MutableRefObject,
+  clearPaletteSessionIfCurrent,
+  handleMarkerPaletteSessionKeyDown,
+} from '@/components/advanced/marker-palette-keydown.util';
+import {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -85,12 +87,12 @@ export interface FootnoteEditorProps {
    */
   parentEditorRef?: RefObject<EditorRef | null>;
   /**
-   * Optional marker-palette driver (standard-view host wiring — Task 10/11 PT9 parity). When
-   * provided in editable marker mode, a typed `\` inside this popover's own editor opens the same
-   * palette the main editor uses instead of the built-in inline markers menu below; when absent,
-   * editable mode falls back to pass-through-only behavior (literal typing works, no menu) — a
-   * graceful degradation for hosts that haven't wired one up. Never consulted outside editable
-   * marker mode — the built-in `MarkerMenu` popup below owns that path unconditionally.
+   * Optional marker-palette driver (standard-view host wiring for PT9 parity). When provided in
+   * editable marker mode, a typed `\` inside this popover's own editor opens the same palette the
+   * main editor uses instead of the built-in inline markers menu below; when absent, editable mode
+   * falls back to pass-through-only behavior (literal typing works, no menu) — a graceful
+   * degradation for hosts that haven't wired one up. Never consulted outside editable marker mode —
+   * the built-in `MarkerMenu` popup below owns that path unconditionally.
    */
   markerPalette?: FootnoteEditorMarkerPalette;
 }
@@ -98,8 +100,8 @@ export interface FootnoteEditorProps {
 /**
  * Structural subset of the overlay service's `CommandPaletteItem` (`overlay.service-model.ts` in
  * the renderer) — defined locally because platform-bible-react must not import renderer or
- * extension types. Mirrors the extension's `markerMenuItemToCommandPaletteItem` mapping (Task 10):
- * close-tag items get an `'end'` badge, non-basic items are muted.
+ * extension types. Mirrors the extension's `markerMenuItemToCommandPaletteItem` mapping: close-tag
+ * items get an `'end'` badge, non-basic items are muted.
  */
 export interface PaletteItemLike {
   id: string;
@@ -111,9 +113,9 @@ export interface PaletteItemLike {
 }
 
 /**
- * Driver for the standard-view `\` marker palette (Task 10/11 PT9 parity), supplied by a host that
- * wires it to its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by
- * `webViewId` in the platform-scripture-editor web view).
+ * Driver for the standard-view `\` marker palette (PT9 parity), supplied by a host that wires it to
+ * its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by `webViewId` in
+ * the platform-scripture-editor web view).
  */
 export interface FootnoteEditorMarkerPalette {
   /**
@@ -138,8 +140,8 @@ export interface FootnoteEditorMarkerPalette {
 
 /**
  * Maps a library marker-menu item to this popover's palette-item shape. Mirrors the extension's
- * `markerMenuItemToCommandPaletteItem` (Task 10) exactly, redefined locally because
- * platform-bible-react must not import extension code.
+ * `markerMenuItemToCommandPaletteItem` exactly, redefined locally because platform-bible-react must
+ * not import extension code.
  */
 export function markerMenuItemToPaletteItemLike(item: EditorMarkerMenuItem): PaletteItemLike {
   return {
@@ -149,19 +151,6 @@ export function markerMenuItemToPaletteItemLike(item: EditorMarkerMenuItem): Pal
     badge: item.kind === 'closeTag' ? 'end' : undefined,
     muted: !item.isBasic,
   };
-}
-
-/**
- * Clears a palette-session ref only when it still holds the session identified by `token`. Mirrors
- * the extension's `clearPaletteSessionIfCurrent` (Task 10) — see there for the stale-promise race
- * this guards against (dismiss one session, immediately open another before the first's show
- * promise settles) — redefined locally for the same reason as the mapping above.
- */
-export function clearPaletteSessionIfCurrent<TSession extends { token: number }>(
-  sessionRef: MutableRefObject<TSession | undefined>,
-  token: number,
-): void {
-  if (sessionRef.current?.token === token) sessionRef.current = undefined;
 }
 
 /**
@@ -242,8 +231,8 @@ const PARAGRAPH_USJ: Usj = {
  * Retaining past this prefix before inserting the note op (see the init effect below) lands the
  * note AFTER the paragraph's own glyph prefix. Without the retain, the note lands at OT index 0 —
  * BEFORE the prefix — and the engine then re-materializes a fresh prefix ahead of the note, leaving
- * the ORIGINAL prefix as visible trailing glyph junk after it (display-only; never written on Save;
- * see Task 14, Phase 5 standard-view plan).
+ * the ORIGINAL prefix as visible trailing glyph junk after it (display-only; never written on
+ * Save).
  *
  * Non-editable marker modes don't get this treatment: `createPara` only pushes this two-node prefix
  * shape for `"editable"`; other modes are left at the pre-existing retain of 0.
@@ -318,14 +307,13 @@ export default function FootnoteEditor({
   /**
    * Session state for a `\`-triggered marker palette open inside this popover's own editor (single
    * owner: the keydown flow below). Mirrors the main editor's `paletteSession` in
-   * `platform-scripture-editor.web-view.tsx` (Task 10) — see there for the full session-shape
-   * rationale — scoped to this popover's own `.editor-input` and driven by its own `editorRef`. The
+   * `platform-scripture-editor.web-view.tsx` — see there for the full session-shape rationale —
+   * scoped to this popover's own `.editor-input` and driven by its own `editorRef`. The
    * collapsed-caret trigger opens a PASSIVE palette (`kind: 'backslash'`, literal keeps landing);
    * the selection-wrap trigger opens a FOCUSED palette tracked as `kind: 'selection'` — its keys
    * are forwarded through the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`)
    * because the cross-frame focus handoff can lose, and an unclaimed keystroke would replace the
-   * wrapped selection (Task 15 final review, Important 1: this copy had drifted behind the web
-   * view's round-3 semantics).
+   * wrapped selection.
    */
   const paletteSession = useRef<
     | {
@@ -389,8 +377,8 @@ export default function FootnoteEditor({
   /**
    * True when the DOM selection's anchor sits inside this popover's note content (the `span.note`
    * element). The popover's document is a lone wrapper `\p` paragraph hosting exactly one note, so
-   * a caret anywhere else (e.g. parked at the wrapper-para start by Radix's open-autofocus, PT-4187
-   * bug 2) is never where the user means to edit.
+   * a caret anywhere else (e.g. parked at the wrapper-para start by Radix's open-autofocus) is
+   * never where the user means to edit.
    */
   const isDomCaretInsideNote = useCallback(() => {
     const editorInput = editorParentRef.current?.querySelector('.editor-input');
@@ -442,9 +430,9 @@ export default function FootnoteEditor({
         if (isNewNote) {
           editorRef.current?.selectNote(0);
           editorRef.current?.focus();
-          // PT-4187 bug 2: Radix's open-autofocus (load-bearing for the focus handoff into this
-          // popover — preventing it was falsified live) can land AFTER this and park the DOM
-          // caret at the wrapper-para start, where Enter plain-splits instead of inserting \fp.
+          // Radix's open-autofocus (load-bearing for the focus handoff into this popover —
+          // preventing it was falsified live) can land AFTER this and park the DOM caret at the
+          // wrapper-para start, where Enter plain-splits instead of inserting \fp.
           // Re-assert the note selection once the autofocus has settled (a frame plus a
           // macrotask later); skipped when the caret is already inside the note so a user's own
           // click is never overridden.
@@ -501,7 +489,7 @@ export default function FootnoteEditor({
   );
 
   const closeAndSave = useCallback(() => {
-    // PT-4187 (abandonment window): settle pending mid-edit marker text before the final read
+    // Abandonment window: settle pending mid-edit marker text before the final read
     // of the note ops, so a marker rename walked away from mid-edit saves as what's on screen
     // rather than the stale pre-rename marker. Clicking Save blurs this popover's editor, so
     // the settle covers everything; skipped while this popover's own marker-palette session is
@@ -666,7 +654,7 @@ export default function FootnoteEditor({
 
   /**
    * Opens this popover's `\`-triggered marker palette via the host-supplied `markerPalette` prop
-   * (Task 10 parity, scoped to this popover's own editor). Mirrors `openMarkerPalette` in
+   * (PT9 parity, scoped to this popover's own editor). Mirrors `openMarkerPalette` in
    * `platform-scripture-editor.web-view.tsx` function-for-function; the only structural difference
    * is driving `markerPalette` instead of `papi.overlays` directly, so platform-bible-react never
    * depends on the overlay service.
@@ -756,8 +744,8 @@ export default function FootnoteEditor({
       // character (pass-through-only degradation for non-P10 consumers). The Enter guard below
       // still applies either way.
 
-      // CAPTURE phase (Task 15 final review, Important 1 — the round-3 semantics ported from the
-      // web view): session-ending keys must be claimed BEFORE Lexical's own root-element keydown
+      // CAPTURE phase (semantics ported from the web view): session-ending keys must be claimed
+      // BEFORE Lexical's own root-element keydown
       // listener runs, otherwise an in-session Enter lets MarkerEditPlugin's KEY_ENTER insert
       // `\fp`/split FIRST and the palette commit then applies on top (double mutation with an
       // uncleaned `\fr`-style literal). The shared forwarding table also claims every key during
@@ -772,7 +760,7 @@ export default function FootnoteEditor({
           return;
         }
 
-        // PT-4187 bug 2: Enter with the DOM caret OUTSIDE the note content (Radix's
+        // Enter with the DOM caret OUTSIDE the note content (Radix's
         // open-autofocus can park it at the wrapper-para start; Lexical's keydown path follows
         // the DOM) plain-splits the wrapper instead of inserting `\fp`. Enter has no legitimate
         // job outside the note in this popover — the wrapper para exists only to host the note —

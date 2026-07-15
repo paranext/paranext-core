@@ -11,12 +11,12 @@ import {
 } from './footnote-editor.fixtures';
 
 /**
- * Real-browser (Chromium) interaction tests for the PT-4187 bug-2 popover-Enter behavior. jsdom
- * cannot reproduce this: it can't mount the Radix popover without polyfills and, even polyfilled,
- * its FocusScope focuses a `<button>` rather than parking a caret inside the contenteditable, and
- * it has no real Lexical Enter handling. These stories mount FootnoteEditor inside a REAL open
- * Radix popover (exactly as the web view does) and drive real Enter keystrokes, so they exercise
- * the autofocus → reassert → Enter-guard → Lexical `$handleEnterInNote` chain end to end.
+ * Real-browser (Chromium) interaction tests for the popover-Enter behavior. jsdom cannot reproduce
+ * this: it can't mount the Radix popover without polyfills and, even polyfilled, its FocusScope
+ * focuses a `<button>` rather than parking a caret inside the contenteditable, and it has no real
+ * Lexical Enter handling. These stories mount FootnoteEditor inside a REAL open Radix popover
+ * (exactly as the web view does) and drive real Enter keystrokes, so they exercise the autofocus →
+ * reassert → Enter-guard → Lexical `$handleEnterInNote` chain end to end.
  */
 
 /** The mounted Lexical editor instance, read off the popover's `.editor-input` DOM node. */
@@ -108,9 +108,9 @@ function PopoverHost() {
 }
 
 /**
- * Happy path (PT-4187 bug 2): opening a new-note popover and pressing Enter inserts a footnote
- * paragraph (`\fp`) inside the note and does NOT split the wrapper paragraph. Pre-fix, the DOM
- * caret parked by Radix's open-autofocus left Enter splitting the wrapper instead.
+ * Happy path: opening a new-note popover and pressing Enter inserts a footnote paragraph (`\fp`)
+ * inside the note and does NOT split the wrapper paragraph. Pre-fix, the DOM caret parked by
+ * Radix's open-autofocus left Enter splitting the wrapper instead.
  */
 export const EnterInsertsFootnoteParagraph: Story = {
   render: () => <PopoverHost />,

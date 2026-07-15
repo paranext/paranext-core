@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  clearPaletteSessionIfCurrent,
   handleMarkerPaletteSessionKeyDown,
   MarkerPaletteSessionDriver,
   MarkerPaletteSessionState,
@@ -139,5 +140,36 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     handleMarkerPaletteSessionKeyDown(focusedEvent, focusedState, focused);
     expect(focusedState.filter).toBe('w');
     expect(focusedEvent.defaultPrevented).toBe(true);
+  });
+});
+
+describe('clearPaletteSessionIfCurrent', () => {
+  it('clears the ref when the token matches the live session', () => {
+    const liveSession: { token: number } | undefined = { token: 3 };
+    const sessionRef = { current: liveSession };
+
+    clearPaletteSessionIfCurrent(sessionRef, 3);
+
+    expect(sessionRef.current).toBeUndefined();
+  });
+
+  it('leaves a NEWER session in place when a stale token tries to clear (dismiss/re-trigger race)', () => {
+    // Session A (token 1) was dismissed synchronously; session B (token 2) is live when A's
+    // show-promise finally settles and runs its async cleanup with A's captured token.
+    const sessionB: { token: number } | undefined = { token: 2 };
+    const sessionRef = { current: sessionB };
+
+    clearPaletteSessionIfCurrent(sessionRef, 1);
+
+    expect(sessionRef.current).toBe(sessionB);
+  });
+
+  it('no-ops when no session is live', () => {
+    const noSession: { token: number } | undefined = undefined;
+    const sessionRef = { current: noSession };
+
+    clearPaletteSessionIfCurrent(sessionRef, 1);
+
+    expect(sessionRef.current).toBeUndefined();
   });
 });

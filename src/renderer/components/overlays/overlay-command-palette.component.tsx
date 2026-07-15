@@ -104,7 +104,7 @@ function PaletteItemContent({ item }: { item: CommandPaletteItem }) {
       {/* `muted` de-emphasizes the text only (e.g. PT9's grey cue for non-basic markers) — unlike
           `disabled`, the item stays highlightable/selectable, so the opacity lives here on the text
           block rather than on the item container where the disabled styling goes. Inline style
-          rather than tw:opacity-60 (QA run 3 item 4): the renderer has no Tailwind build of its
+          rather than tw:opacity-60: the renderer has no Tailwind build of its
           own — all tw: utilities come from platform-bible-react's prebuilt stylesheet, whose
           content scan does not include this file, so the class only worked when some unrelated
           PBR component happened to use the same utility. An inline style is build-independent. */}
@@ -273,7 +273,7 @@ export function OverlayCommandPalettePresentational({
   // Auto-focus the search input on mount. Skipped entirely in passive mode, which renders no
   // search input and must never steal focus from the requesting WebView.
   //
-  // Task 15 round 3 (QA run 3 item 4): a single synchronous focus() reliably LOSES the focus
+  // A single synchronous focus() reliably LOSES the focus
   // fight when the palette opens while an editor webview iframe holds focus — the iframe's own
   // focus handling lands after this effect, leaving document.activeElement on the iframe, so
   // typing went to the document (replacing the selection), arrows never reached cmdk, and the

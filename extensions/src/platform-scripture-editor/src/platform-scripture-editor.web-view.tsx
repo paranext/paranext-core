@@ -47,6 +47,7 @@ import {
   AlertTitle,
   BookChapterControl,
   Button,
+  clearPaletteSessionIfCurrent,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
   DisabledActionTooltip,
@@ -120,6 +121,8 @@ import {
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
 import { createFlushableDebouncer } from './flushable-debouncer.util';
+import { performDebouncedPdpSave } from './debounced-pdp-save.util';
+import { withWriteInFlightGuard } from './write-in-flight-guard.util';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
@@ -143,7 +146,6 @@ import {
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
-  clearPaletteSessionIfCurrent,
   generateInlineMarkerMenuListItems,
   markerMenuItemToCommandPaletteItem,
 } from './platform-scripture-editor.web-view.utils';
@@ -340,9 +342,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [notePopoverAnchorHeight, setNotePopoverAnchorHeight] = useState<number>();
 
   /**
-   * Mirror of {@link showFootnoteEditor} readable from the stable `noteCallerOnClick` closure
-   * (PT-4187 bug 3): an editing-session key whose popover is NOT actually shown is stale
-   * bookkeeping and must not dead-end caller clicks.
+   * Mirror of {@link showFootnoteEditor} readable from the stable `noteCallerOnClick` closure: an
+   * editing-session key whose popover is NOT actually shown is stale bookkeeping and must not
+   * dead-end caller clicks.
    */
   const showFootnoteEditorRef = useRef(showFootnoteEditor);
   useEffect(() => {
@@ -430,9 +432,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * round-trip to the overlay service is still in flight — its palette is always focused too. It
    * and `'selection'` also carry a capture-phase forwarding table as a SAFETY NET: focused palettes
    * are designed to be driven by the renderer overlay's own input, but the cross-frame focus
-   * handoff can lose (the editor iframe re-grabs focus on Lexical commits), and pre-fix the
-   * keystrokes then hit the document instead — typing REPLACED the wrapped selection and Escape
-   * fell through to Lexical (QA run 3 items 4/5).
+   * handoff can lose (the editor iframe re-grabs focus on Lexical commits), and without the safety
+   * net the keystrokes then hit the document instead — typing REPLACED the wrapped selection and
+   * Escape fell through to Lexical.
    *
    * `token` (allocated from the monotonic counter below) identifies which session an async
    * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
@@ -596,7 +598,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // not offer verse selection (the picker falls back to chapter-level submission).
   const currentBookNum = useMemo(() => Canon.bookIdToNumber(scrRef.book), [scrRef.book]);
 
-  // Project stylesheet-derived style info for the current book (spec §8 stage 4); feeds
+  // Project stylesheet-derived style info for the current book; feeds
   // `generateUsjCss` via `useProjectStylesheet` below and `EditorOptions.styleInfo`.
   const [styleInfoPossiblyError] = useProjectData(
     'platformScripture.StyleInfo',
@@ -674,10 +676,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Whether the footnotes pane is ACTUALLY rendered — `footnotesPaneVisible && usjFromPdp`, not the
-   * visibility toggle alone (PT-4187 bug 3: a caller click routed to a pane that is not really
-   * rendered is a dead click). Mirrors the single `footnotesPaneRendered` value (derived next to
-   * the `usjFromPdp` derivation) that also gates the `FootnotesLayout` render, so the click routing
-   * and the render gate cannot drift apart.
+   * visibility toggle alone (a caller click routed to a pane that is not really rendered is a dead
+   * click). Mirrors the single `footnotesPaneRendered` value (derived next to the `usjFromPdp`
+   * derivation) that also gates the `FootnotesLayout` render, so the click routing and the render
+   * gate cannot drift apart.
    */
   const footnotesPaneRenderedRef = useRef(false);
 
@@ -770,8 +772,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         isReadOnly || isSyncBlocked
           ? undefined
           : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-              // PT-4187 bug 3 instrumentation: the caller-click flow has historically failed
-              // silently (dead click); keep the inputs of every click diagnosable from a debug log.
+              // The caller-click flow has historically failed silently (dead click); keep the inputs
+              // of every click diagnosable from a debug log.
               logger.debug(
                 `noteCallerOnClick: noteNodeKey=${noteNodeKey} isCollapsed=${isCollapsed} ` +
                   `editingNoteKey=${editingNoteKey.current} popoverShown=${showFootnoteEditorRef.current} ` +
@@ -787,7 +789,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               });
               if (decision.clearStaleEditingSession) {
                 // A prior session's key survived without its popover — orphaned bookkeeping that
-                // would otherwise dead-end every caller click from here on (PT-4187 bug 3).
+                // would otherwise dead-end every caller click from here on.
+                logger.warn(
+                  `noteCallerOnClick: clearing stale editing session for note ${editingNoteKey.current}`,
+                );
+                editingNoteIsNew.current = false;
+                editingNoteKey.current = undefined;
+                editingNoteOps.current = undefined;
+              }
+              if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
+                return;
+
+              // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
+              // opening the popover, regardless of the auto-show setting.
+              if (decision.action === 'focus-pane') {
+                const noteOps = getNoteOps();
+                const index = noteOps ? findNoteIndexByOps(editorRef, noteOps) : undefined;
+                if (index !== undefined) setFootnotePaneFocusRequest({ index });
+                else
                 logger.warn(
                   `noteCallerOnClick: clearing stale editing session for note ${editingNoteKey.current}`,
                 );
@@ -900,10 +919,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [viewType, isPowerMode]);
 
   /**
-   * PT9-divergent NN3 setting (default off, so PT9's manual/persistent behavior is unchanged by
-   * default): when on, the footnotes pane auto-shows/hides in standard view based on whether the
-   * current chapter has notes. See the `chapterHasNotes`/auto-show `useEffect` below, which runs
-   * once `usjFromPdp` is available.
+   * Footnotes-pane auto-show/hide setting that diverges from PT9 (default off, so PT9's
+   * manual/persistent behavior is unchanged by default): when on, the footnotes pane
+   * auto-shows/hides in standard view based on whether the current chapter has notes. See the
+   * `chapterHasNotes`/auto-show `useEffect` below, which runs once `usjFromPdp` is available.
    */
   const [footnotesAutoShow, setFootnotesAutoShow] = useWebViewState<boolean>(
     'footnotesAutoShow',
@@ -1140,17 +1159,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Corrects `editingNoteKey.current` to the newly-inserted note's TRUE Lexical key after
    * `insertMarker` creates it (Ctrl+T footnote/cross-reference insertion). `insertMarker`'s return
-   * value IS that true key (`platform-editor`'s `EditorRef.insertMarker`, Task 14b), but the
-   * auto-open path below (`handleEditorialUsjChange` -> `openFootnoteEditorOnNewNote`) hasn't run
-   * yet at this point: Lexical's `editor.update()` callback runs synchronously, but the DOM
-   * reconciliation + update-listener dispatch that fires `onUsjChange` is deferred to a microtask
-   * (confirmed empirically against `lexical@0.43`'s `updateEditor`/`scheduleMicroTask` - see the
-   * Task 14b report). `openFootnoteEditorOnNewNote` therefore runs on an EARLIER-queued microtask
-   * and sets `editingNoteKey.current` to the WRONG key - derived from "delta-doc" OT coordinates
-   * via `getInsertedNodeKey`, which double-counts editable VerseNodes and lands past the note when
-   * one precedes it (root cause of Cancel's `replaceEmbedUpdate` silently no-opping on the wrong
-   * key). Queuing this correction as a SECOND microtask guarantees FIFO ordering behind that first
-   * one, so it runs after and overwrites it - fixing the bug without touching
+   * value IS that true key (`platform-editor`'s `EditorRef.insertMarker`), but the auto-open path
+   * below (`handleEditorialUsjChange` -> `openFootnoteEditorOnNewNote`) hasn't run yet at this
+   * point: Lexical's `editor.update()` callback runs synchronously, but the DOM reconciliation +
+   * update-listener dispatch that fires `onUsjChange` is deferred to a microtask (confirmed
+   * empirically against `lexical@0.43`'s `updateEditor`/`scheduleMicroTask`).
+   * `openFootnoteEditorOnNewNote` therefore runs on an EARLIER-queued microtask and sets
+   * `editingNoteKey.current` to the WRONG key - derived from "delta-doc" OT coordinates via
+   * `getInsertedNodeKey`, which double-counts editable VerseNodes and lands past the note when one
+   * precedes it (root cause of Cancel's `replaceEmbedUpdate` silently no-opping on the wrong key).
+   * Queuing this correction as a SECOND microtask guarantees FIFO ordering behind that first one,
+   * so it runs after and overwrites it - fixing the bug without touching
    * `openFootnoteEditorOnNewNote`, `DeltaOnChangePlugin`, or any other OT coordinate code.
    */
   const correctEditingNoteKeyAfterInsert = useCallback((insertedNoteKey: string | undefined) => {
@@ -1166,8 +1185,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, []);
 
   /**
-   * Inserts a footnote at the current selection (spec §6/§9). Shared by the "Insert footnote"
-   * context-menu item, the Ctrl+T keyboard shortcut, and the top-menu
+   * Inserts a footnote at the current selection. Shared by the "Insert footnote" context-menu item,
+   * the Ctrl+T keyboard shortcut, and the top-menu
    * `platformScriptureEditor.insertFootnoteAtSelection` command (via the `webViewMessageListener`
    * effect below), so the version-history commit + `insertMarker` behavior stays identical across
    * every entry point.
@@ -1186,8 +1205,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
 
   /**
-   * Inserts a cross-reference at the current selection (spec §6/§9). Shared by the "Insert
-   * cross-reference" context-menu item, the Ctrl+Shift+T keyboard shortcut, and the top-menu
+   * Inserts a cross-reference at the current selection. Shared by the "Insert cross-reference"
+   * context-menu item, the Ctrl+Shift+T keyboard shortcut, and the top-menu
    * `platformScriptureEditor.insertCrossReferenceAtSelection` command (via the
    * `webViewMessageListener` effect below).
    */
@@ -1282,8 +1301,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'changeScriptureView': {
-          // Cycle formatted -> standard -> markers -> formatted for QA (Phase 5 will replace this
-          // with the polished power-default + menu). Switch on the current `viewType` state
+          // Cycle formatted -> standard -> markers -> formatted for QA (a temporary affordance, to
+          // be replaced by the polished power-default view + menu). Switch on the current `viewType`
+          // state
           // directly rather than `viewOptions.markerMode`: in non-power mode both 'formatted' and
           // 'markers' resolve to markerMode 'hidden' (the non-power markers branch of
           // getViewOptionsForType overrides only noteMode, not markerMode), so a markerMode-based
@@ -1565,7 +1585,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Opens a marker-menu palette (the standard-view `\` trigger's apply path — see
    * `EditorRef.applyMarkerMenuSelection`). Takes the already-resolved context/items so it can be
-   * reused wherever a marker menu needs to be shown from a `MarkerMenuContext` (e.g. Task 11's
+   * reused wherever a marker menu needs to be shown from a `MarkerMenuContext` (e.g. the
    * marker-glyph click popover), not just from the live keydown flow below.
    *
    * `passive` sets up the `'backslash'` session used by the while-open forwarding table (only
@@ -1654,14 +1674,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   /**
-   * `FootnoteEditor`'s marker-palette driver (Task 11), wrapping `papi.overlays.*` with this web
-   * view's `webViewId`. Built once and passed down so the popover's own editor gets the same
-   * PT9-parity `\` palette as the main editor (Task 10) without `platform-bible-react` depending on
-   * the overlay service directly. Unlike `openMarkerPalette`/`openEnterPalette` above, this carries
-   * no session tracking of its own — the popover's `FootnoteEditor` owns its own session state and
-   * only needs the four overlay primitives forwarded through. Anchor coordinates from the popover's
-   * own inner editor are already iframe-relative (same iframe as this web view), so they're passed
-   * straight through with no translation.
+   * `FootnoteEditor`'s marker-palette driver, wrapping `papi.overlays.*` with this web view's
+   * `webViewId`. Built once and passed down so the popover's own editor gets the same PT9-parity
+   * `\` palette as the main editor without `platform-bible-react` depending on the overlay service
+   * directly. Unlike `openMarkerPalette`/`openEnterPalette` above, this carries no session tracking
+   * of its own — the popover's `FootnoteEditor` owns its own session state and only needs the four
+   * overlay primitives forwarded through. Anchor coordinates from the popover's own inner editor
+   * are already iframe-relative (same iframe as this web view), so they're passed straight through
+   * with no translation.
    */
   const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
     () => ({
@@ -1675,33 +1695,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Listen for Ctrl+F to open find dialog, for the marker menu trigger to open the marker menu,
-  // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference (spec §6/§9), and for
+  // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
-    const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
     // root-element keydown listener. Lexical dispatches KEY_ENTER_COMMAND synchronously from that
     // listener, so a window BUBBLE-phase handler runs too late — the paragraph has already split
-    // before it can preventDefault (QA item 6). Registering in capture puts this ahead of Lexical.
+    // before it can preventDefault. Registering in capture puts this ahead of Lexical.
     // Keys we fully claim (Enter trigger, selection `\`, and the in-session Arrow/Enter/Escape
     // controls) additionally stopPropagation so Lexical never processes them; keys that must land as
     // literal document text (the collapsed `\`, filter characters, Space/`*`) are deliberately left
     // to propagate — capture phase doesn't change that, the literal still lands. The legacy
     // non-standard-view interception stays in the bubble-phase `handleKeyDown` below, unchanged.
     const handleStandardViewTriggers = (event: KeyboardEvent) => {
-      if (
-        viewType === 'standard' &&
-        !isReadOnlyEffective &&
-        editorInput &&
-        document.activeElement === editorInput
-      ) {
+      // Scoped to the MAIN editor instance via `isFocused()`, not a global `.editor-input` query:
+      // the footnote-editor popover renders its own `.editor-input`, and a captured element goes
+      // stale across an editor remount. Evaluated per-event so it always reflects current focus.
+      if (viewType === 'standard' && !isReadOnlyEffective && editorRef.current?.isFocused()) {
         const session = paletteSession.current;
 
         if (session) {
           // Shared while-open forwarding table (platform-bible-react), the single source of the
           // session key semantics for BOTH this web view and the FootnoteEditor popover — the
-          // per-consumer copies drifted once already (Task 15 final review, Important 1). Driver
-          // wraps the overlay service for this web view.
+          // per-consumer copies drifted once already. Driver wraps the overlay service for this web
+          // view.
           const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
             update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
             commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
@@ -1757,8 +1774,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (currentSelectionRef.current) {
         if (
           !showMarkersMenu &&
-          editorInput &&
-          document.activeElement === editorInput &&
+          editorRef.current?.isFocused() &&
           viewType !== 'standard' &&
           event.key === defaultMarkersMenuTrigger
         ) {
@@ -1778,14 +1794,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       } else if (
         !isReadOnlyEffective &&
         viewType === 'standard' &&
-        editorInput &&
-        document.activeElement === editorInput &&
+        editorRef.current?.isFocused() &&
         event.ctrlKey &&
         event.key.toLowerCase() === 't'
       ) {
-        // Ctrl+T inserts a footnote; Ctrl+Shift+T inserts a cross-reference. Scoped to the main
-        // editor via the same `editorInput`/`activeElement` check used for the marker menu
-        // trigger above, so the shortcut doesn't fire while the FootnoteEditor/CommentEditor
+        // Ctrl+T inserts a footnote; Ctrl+Shift+T inserts a cross-reference. Scoped to
+        // the main editor via the same `editorRef.current.isFocused()` check used for the marker
+        // menu trigger above, so the shortcut doesn't fire while the FootnoteEditor/CommentEditor
         // popovers (which have their own separate `.editor-input`) have focus. Standard-view only,
         // matching the other Standard view PT9-parity entry points.
         event.preventDefault();
@@ -1835,7 +1850,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
 
-  // Apply the project stylesheet-derived CSS (standard view only; spec §8 stage 4)
+  // Apply the project stylesheet-derived CSS (standard view only)
   useProjectStylesheet(styleInfo, textDirectionEffective === 'rtl', viewType === 'standard');
 
   // Load PT9-derived marker styles when the open project is a supported commentary
@@ -1931,8 +1946,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Single source of truth for "is the footnotes pane ACTUALLY rendered": the same value gates the
   // `FootnotesLayout` render below AND (mirrored into `footnotesPaneRenderedRef`) the
   // `noteCallerOnClick` routing, so a caller click can never be routed to a pane that is not really
-  // there (PT-4187 bug 3). Deriving it once keeps the render gate and the click routing from
-  // drifting apart.
+  // there. Deriving it once keeps the render gate and the click routing from drifting apart.
   const footnotesPaneRendered = footnotesPaneVisible && !!usjFromPdp;
   useEffect(() => {
     footnotesPaneRenderedRef.current = footnotesPaneRendered;
@@ -2076,16 +2090,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
     async function saveUsjToPdpInternal(newUsj: Usj) {
-      if (!saveUsjToPdpRawStableRef.current) return;
+      const rawSave = saveUsjToPdpRawStableRef.current;
+      if (!rawSave) return;
 
-      // Don't start writing to the PDP again if we're in the middle of writing now
-      if (currentlyWritingUsjToPdp.current) return;
-
-      // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
-      currentlyWritingUsjToPdp.current = true;
-      usjSentToPdp.current = newUsj;
       try {
-        const saveResult = await saveUsjToPdpRawStableRef.current(newUsj);
+        // `withWriteInFlightGuard` holds `currentlyWritingUsjToPdp` for exactly the duration of the
+        // write and clears it when the write settles — so it is never reset mid-write by an
+        // unrelated PDP update and never left stuck. It is a no-op (`ran: false`) when a write is
+        // already in flight, which is how we avoid triggering multiple concurrent writes.
+        const outcome = await withWriteInFlightGuard(currentlyWritingUsjToPdp, () => {
+          usjSentToPdp.current = newUsj;
+          return rawSave(newUsj);
+        });
+        if (!outcome.ran) return;
+        const { result: saveResult } = outcome;
 
         // Prompts the PDP to commit changes to the version history once a day if the save was successfully
         if (saveResult && projectId) {
@@ -2104,20 +2122,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               );
             }
           }
-        } else if (!saveResult && currentlyWritingUsjToPdp.current) {
-          currentlyWritingUsjToPdp.current = false;
-
-          // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
-          // chance the editor has more updates since the last attempted save. Let's check and save
-          // again if there have been updates
+        } else if (!saveResult) {
+          // The set was unsuccessful, so there is a chance the editor has more updates since the
+          // last attempted save. Let's check and save again if there have been updates
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
       } catch (e) {
+        // The write rejected; the guard's `finally` already cleared the in-flight flag.
         const errorMessage = getErrorMessage(e);
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
-        currentlyWritingUsjToPdp.current = false;
 
         // Two recoverable backend rejections revert the editor to the last PDP state and notify;
         // only the message differs. A sync-edit-block is expected/transient (editing paused during
@@ -2208,9 +2223,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     saveUsjToPdpIfUpdatedRef.current = saveUsjToPdpIfUpdated;
   }, [saveUsjToPdpIfUpdated]);
 
+  // `book|chapterNum` of the chapter currently loaded, kept in a ref so the debounced save's fire
+  // (below) can compare the chapter active NOW against the chapter a pending save was scheduled for
+  // (Fix 2, `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an
+  // effect — so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it
+  // already reflects the NEW chapter and the guard sees the mismatch.
+  const chapterKey = `${scrRef.book}|${scrRef.chapterNum}`;
+  const chapterKeyRef = useRef(chapterKey);
+  chapterKeyRef.current = chapterKey;
+
   /**
-   * Task 15 (fluent marker typing): saving on EVERY editor change round-trips a mid-marker-typing
-   * doc (pending literal `\q1` still in plain text) through the PDP's USFM normalization; the
+   * For fluent marker typing: saving on EVERY editor change round-trips a mid-marker-typing doc
+   * (pending literal `\q1` still in plain text) through the PDP's USFM normalization; the
    * content-different echoes then fight the editor for the doc under the caret ~150-250ms after
    * each keystroke (`useEditorPdpSync` defends the focused editor, but the echo storm itself is the
    * disease). Debounce the keystroke-driven save — trailing edge, so the save always fires once
@@ -2221,38 +2245,40 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * unaffected.
    *
    * Uses the local flushable debouncer (not `platform-bible-utils`' `debounce`, which has no
-   * flush/cancel) so pending edits survive lifecycle boundaries — see the effects below.
+   * flush/cancel) so pending edits survive lifecycle boundaries — see the effects below. Each
+   * `schedule` captures the current chapter's save fn and chapter key into the payload, so
+   * `performDebouncedPdpSave` can guarantee the save targets the chapter the content was typed in.
    */
   const saveUsjToPdpDebounced = useMemo(
     () =>
-      createFlushableDebouncer((usj: Usj) => {
-        // PT-4187 (abandonment window, follow-ups register §1): settle pending mid-edit marker
-        // text right before the save reads the USJ, so a marker rename walked away from
-        // mid-edit serializes as what the screen shows instead of the stale pre-rename marker.
-        // Never while a marker-palette session is open — the palette's apply must be the one to
-        // consume the typed literal (Task 8 corruption class). The editor itself keeps the node
-        // under a live caret (and the app-placed-caret window) pending, so a mid-typing pause
-        // still never settles under the user.
-        if (paletteSession.current) {
-          saveUsjToPdpIfUpdatedRef.current(usj);
-          return;
-        }
-        editorRef.current?.commitPendingMarkerEdits();
-        saveUsjToPdpIfUpdatedRef.current(editorRef.current?.getUsj() ?? usj);
-      }, 700),
+      createFlushableDebouncer(
+        (usj: Usj, capturedSave: (savedUsj: Usj) => void, scheduledChapterKey: string) => {
+          performDebouncedPdpSave({
+            usj,
+            scheduledChapterKey,
+            currentChapterKey: chapterKeyRef.current,
+            capturedSave,
+            latestSave: (savedUsj?: Usj) => saveUsjToPdpIfUpdatedRef.current(savedUsj),
+            isPaletteSessionOpen: paletteSession.current !== undefined,
+            commitPendingMarkerEdits: () => editorRef.current?.commitPendingMarkerEdits(),
+            getEditorUsj: () => editorRef.current?.getUsj(),
+          });
+        },
+        700,
+      ),
     [],
   );
 
-  // Lifecycle for the debounced save (wave review, Important): a pending trailing call must never
-  // be LOST (crash-resilience vs. the prior per-change save) nor fire against the WRONG chapter's
-  // save context.
+  // Lifecycle for the debounced save: a pending trailing call must never be LOST (crash-resilience
+  // vs. the prior per-change save) nor fire against the WRONG chapter's save context.
   //
-  // (1) Chapter/book switch: flush in this effect's CLEANUP, which React runs when book/chapter
-  // change BEFORE the same render pass's later effects re-point `saveUsjToPdpIfUpdatedRef` (refs
-  // are only reassigned in the new effect pass), so the pending call — which captured the OLD
-  // chapter's USJ — resolves against the OLD chapter's save function. This ordering is the
-  // stale-write kill: without it the pending call would write the old chapter's USJ through the
-  // NEW chapter's data selector. Unmount runs the same cleanup, covering web-view dispose.
+  // (1) Chapter/book switch: flush in this effect's CLEANUP so a pending trailing save is not
+  // dropped when the chapter changes or the web view disposes. Chapter-safety no longer rests on
+  // React effect ordering: each `schedule` captured the chapter's save fn and chapter key into the
+  // payload, and `performDebouncedPdpSave` compares the captured chapter key against
+  // `chapterKeyRef.current` (already the NEW chapter here) — a mismatch saves the captured content
+  // via the captured save fn instead of reading the now-swapped editor. Unmount runs the same
+  // cleanup, covering web-view dispose.
   useEffect(() => {
     return () => saveUsjToPdpDebounced.flush();
   }, [saveUsjToPdpDebounced, scrRef.book, scrRef.chapterNum]);
@@ -2275,7 +2301,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
-      saveUsjToPdpDebounced.schedule(usj);
+      // Capture the current chapter's save fn and chapter key into the debounce payload so a
+      // pending trailing save always targets the chapter this content was typed in (Fix 2).
+      saveUsjToPdpDebounced.schedule(usj, saveUsjToPdpIfUpdatedRef.current, chapterKeyRef.current);
       if (editingNoteKey.current) {
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
         // onUsjChange with an insertedNodeKey.
@@ -2336,13 +2364,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [scrRef, webViewId],
   );
 
-  // Sync editor content with PDP data and track write completion
+  // Sync editor content with PDP data. The write-in-flight guard (`currentlyWritingUsjToPdp`) is
+  // owned entirely by the save path (`withWriteInFlightGuard`), so it is no longer passed here.
   useEditorPdpSync({
     usjFromPdp,
     editorRef,
     usjSentToPdp,
     setEditorUsj,
-    currentlyWritingUsjToPdp,
     saveUsjToPdpIfUpdated,
   });
 
@@ -2367,8 +2395,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [usjFromPdp]);
 
-  // PT9-divergent NN3 behavior (behind `footnotesAutoShow`, default off): in standard view,
-  // auto-show the footnotes pane when the loaded chapter has notes and auto-hide it when it
+  // Footnotes-pane auto-show/hide behavior that diverges from PT9 (behind `footnotesAutoShow`,
+  // default off): in standard view, auto-show the footnotes pane when the loaded chapter has notes
+  // and auto-hide it when it
   // doesn't, unless the user has manually overridden the pane's visibility for this chapter (see
   // `footnotesAutoOverrideRef`/`toggleFootnotesPaneVisibility` above).
   useEffect(() => {

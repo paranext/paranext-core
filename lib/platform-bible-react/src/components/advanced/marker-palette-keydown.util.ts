@@ -1,8 +1,8 @@
 /**
- * Shared keydown forwarding table for standard-view marker-palette sessions (Task 15 final review,
- * Important 1). This is THE single source of the while-open key semantics — previously duplicated
- * between `platform-scripture-editor.web-view.tsx` and `footnote-editor.component.tsx`, and the
- * copies drifted: the round-3 capture-phase rework (stopPropagation on session-ending keys, the
+ * Shared keydown forwarding table for standard-view marker-palette sessions. This is THE single
+ * source of the while-open key semantics — previously duplicated between
+ * `platform-scripture-editor.web-view.tsx` and `footnote-editor.component.tsx`, and the copies
+ * drifted: the capture-phase key handling (stopPropagation on session-ending keys, the
  * every-key-claiming 'selection' session that fixed the wrap-palette text loss, Enter-session
  * type-to-filter) landed only in the web view, so the popover's in-session Enter still reached
  * MarkerEditPlugin FIRST (double mutation: `\fp` insert/plain split committed before the palette
@@ -22,7 +22,7 @@
  *   claimed (a typed char must narrow the palette, not land), any other key means the user resumed
  *   editing (dismiss, let it land).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
- *   while it is open, because typing would replace the wrapped selection (the QA run 3 text loss).
+ *   while it is open, because typing would replace the wrapped selection.
  *
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
  * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
@@ -30,6 +30,8 @@
  * the wrapped selection; previously the selection session claimed it and copy was dead while a wrap
  * palette was open).
  */
+
+import type { MutableRefObject } from 'react';
 
 export type MarkerPaletteSessionKind = 'backslash' | 'enter' | 'selection';
 
@@ -45,8 +47,11 @@ export interface MarkerPaletteSessionState {
 
 /** The palette operations the forwarding table drives (overlay service or host-supplied). */
 export interface MarkerPaletteSessionDriver {
+  /** Updates the filter text and/or moves the highlighted selection of the active palette. */
   update(update: { filterText?: string; moveSelection?: number }): void;
+  /** Commits the currently highlighted palette item. */
   commit(): void;
+  /** Dismisses the active palette without committing. */
   dismiss(): void;
 }
 
@@ -141,4 +146,24 @@ export function handleMarkerPaletteSessionKeyDown(
   if (session.kind === 'selection') claim(event);
   driver.dismiss();
   return 'ended';
+}
+
+/**
+ * Clears a palette-session ref only when it still holds the session identified by `token`.
+ *
+ * The keydown flow ends sessions synchronously (Escape/Space/`*`/any-other-key clear the ref before
+ * dismissing), but the show-promise's `.then`/`.catch` also clear it asynchronously. If the user
+ * dismisses session A and immediately re-triggers session B, A's promise settles AFTER B was
+ * created — an unconditional clear there would kill the live session B. Tokens are a monotonic
+ * counter, so a stale session's async cleanup can never touch a newer session.
+ *
+ * Shared by the standard-view marker-palette consumers (`platform-scripture-editor.web-view.tsx`
+ * and `footnote-editor.component.tsx`), which each own a session ref shaped like `{ token: number;
+ * ... }`.
+ */
+export function clearPaletteSessionIfCurrent<TSession extends { token: number }>(
+  sessionRef: MutableRefObject<TSession | undefined>,
+  token: number,
+): void {
+  if (sessionRef.current?.token === token) sessionRef.current = undefined;
 }

@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 /**
- * PT-4187 bug 2 (follow-ups register §3, "Popover Enter → `\fp` broken"): after Radix's
- * open-autofocus the DOM caret can sit at the wrapper-para start instead of inside the note;
- * Lexical's keydown path follows the DOM, so Enter there plain-split the wrapper paragraph instead
- * of inserting `\fp`. The fix claims Enter whenever the DOM caret is outside the note content
- * (`span.note`) and routes the caret into the note — Enter has no legitimate job outside the note
- * in this popover. Enter with the caret inside the note stays on the library's `\fp` path
- * ($handleEnterInNote), pinned here end-to-end through the real editor.
+ * Popover Enter → `\fp` broken: after Radix's open-autofocus the DOM caret can sit at the
+ * wrapper-para start instead of inside the note; Lexical's keydown path follows the DOM, so Enter
+ * there plain-split the wrapper paragraph instead of inserting `\fp`. The fix claims Enter whenever
+ * the DOM caret is outside the note content (`span.note`) and routes the caret into the note —
+ * Enter has no legitimate job outside the note in this popover. Enter with the caret inside the
+ * note stays on the library's `\fp` path ($handleEnterInNote), pinned here end-to-end through the
+ * real editor.
  *
  * Like footnote-editor.popover-init.test.tsx (with which it shares footnote-editor.test-harness),
  * this suite mounts the REAL `Editorial` — the bug is an interaction between DOM focus/selection
@@ -106,7 +106,7 @@ function lexicalCaretInsideNote(lexical: LexicalEditor): boolean {
   });
 }
 
-describe('FootnoteEditor Enter guard (PT-4187 bug 2: popover Enter must not split the wrapper)', () => {
+describe('FootnoteEditor Enter guard (popover Enter must not split the wrapper)', () => {
   it('claims Enter when the DOM caret is outside the note and routes the caret into it', async () => {
     const { editorInput, lexical } = await renderPopoverAndWaitForInit(editableView);
     const childCountBefore = rootChildCount(lexical);

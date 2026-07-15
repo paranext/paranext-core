@@ -54,8 +54,8 @@ export interface IsolatedFixtures {
    * under which they cannot pass); seeding makes the requirement explicit and deterministic.
    *
    * The mode also changes editor DOM that specs assert on: in power mode the scripture editor
-   * defaults to Standard view (inline, editable markers — PT-4190), while simple mode keeps the
-   * 'formatted' view.
+   * defaults to Standard view (inline, editable markers), while simple mode keeps the 'formatted'
+   * view.
    */
   interfaceMode: 'simple' | 'power';
   electronApp: ElectronApplication;

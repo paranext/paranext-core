@@ -8,8 +8,7 @@
  * is fine in the web view (browser iframe, live React), but FATAL in the extension host: `main.js`
  * runs in a sandboxed Node context with no React runtime and a `require` that rejects anything but
  * `@papi/*`-family modules, so the editor bundle's eager `react/jsx-runtime` import throws during
- * `activate()` and the whole extension fails to activate (see the Phase 5 Task 15 cold-start
- * finding).
+ * `activate()` and the whole extension fails to activate.
  *
  * Therefore this module must ONLY ever be imported by web-view code (and its tests) — NEVER by
  * `main.ts` or anything `main.ts` reaches. Main-bundle-safe helpers live in
@@ -126,20 +125,4 @@ export function markerMenuItemToCommandPaletteItem(item: EditorMarkerMenuItem): 
     badge: item.kind === 'closeTag' ? 'end' : undefined,
     muted: !item.isBasic,
   };
-}
-
-/**
- * Clears a palette-session ref only when it still holds the session identified by `token`.
- *
- * The keydown flow ends sessions synchronously (Escape/Space/`*`/any-other-key clear the ref before
- * dismissing), but the show-promise's `.then`/`.catch` also clear it asynchronously. If the user
- * dismisses session A and immediately re-triggers session B, A's promise settles AFTER B was
- * created — an unconditional clear there would kill the live session B. Tokens are a monotonic
- * counter, so a stale session's async cleanup can never touch a newer session.
- */
-export function clearPaletteSessionIfCurrent<TSession extends { token: number }>(
-  sessionRef: MutableRefObject<TSession | undefined>,
-  token: number,
-): void {
-  if (sessionRef.current?.token === token) sessionRef.current = undefined;
 }

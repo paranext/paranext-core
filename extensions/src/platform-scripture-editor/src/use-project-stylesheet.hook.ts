@@ -4,8 +4,8 @@ import { useMemo } from 'react';
 
 /**
  * Injects project-stylesheet-derived CSS (PT9 CSSCreator port) layered after the static
- * usj-nodes.css base, so project styles win where defined (spec §8 stage 4). Standard view only for
- * now (spec non-goal: formatted view keeps current styling).
+ * usj-nodes.css base, so project styles win where defined. Standard view only for now; formatted
+ * view keeps its current styling.
  */
 export function useProjectStylesheet(
   styleInfo: StyleInfo | undefined,

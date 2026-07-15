@@ -1,6 +1,6 @@
 /**
- * Power-mode default-view e2e (PT-4190 / NN-1 default clause): a scripture editor opened with no
- * previously saved view state defaults to Standard view when `platform.interfaceMode` is 'power'.
+ * Power-mode default-view e2e: a scripture editor opened with no previously saved view state
+ * defaults to Standard view when `platform.interfaceMode` is 'power'.
  *
  * The default is applied by a corrective effect in platform-scripture-editor.web-view.tsx that
  * fires only after the interface-mode setting resolves (the first frames may render 'formatted'),

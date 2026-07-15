@@ -5,8 +5,8 @@ using Paranext.DataProvider.Services;
 namespace TestParanextDataProvider.Projects;
 
 /// <summary>
-/// Integration tests for the <c>GetProjectSetting</c> logic that handles the four Paratext
-/// note-caller/separator settings added in Task 12:
+/// Integration tests for the <c>GetProjectSetting</c> logic that handles these four Paratext
+/// note-caller/separator settings:
 ///
 /// <list type="bullet">
 /// <item>
