@@ -410,7 +410,6 @@
   "%overlay_dialog_title_dialog%": "Diálogo",
   "%overlay_commandPalette_searchPlaceholder%": "Buscar...",
   "%overlay_commandPalette_noResults%": "No se encontraron resultados",
-  "%overlay_autoSyncBlocking%": "Enviar/Recibir automático en curso",
   "%overlay_workspaceUpdating%": "Actualizando la vista del proyecto",
   "%project_full_name_missing%": "*Falta el Nombre*",
   "%project_language_missing%": "*Falta el Idioma*",

@@ -3,16 +3,9 @@ import {
   getWorkspaceUpdating,
   subscribeToWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
-import { Button, Progress, Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
+import { Spinner, Z_INDEX_MODAL } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import {
-  type FocusEvent,
-  type KeyboardEvent,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const WORKSPACE_UPDATING_KEY: LocalizeKey = '%overlay_workspaceUpdating%';
@@ -22,130 +15,14 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [WORKSPACE_UPDATING_KEY];
 /** Z-index below modals so modal dialogs remain accessible during a project switch */
 const Z_INDEX_WORKSPACE_UPDATING = Z_INDEX_MODAL - 1;
 
-/**
- * Whether focus has landed inside a modal dialog (`aria-modal="true"`) — the only layer that
- * legitimately renders above this overlay. The overlay sits at `Z_INDEX_MODAL - 1` precisely so
- * modals opened mid-sync (rendered at `Z_INDEX_MODAL`) stay usable, and those modals are Radix
- * Dialogs with their own focus trap, identified by `aria-modal`. So the overlay's blur
- * re-containment must yield to them — yanking focus back would ping-pong with the dialog's trap.
- * Other overlay-host layers (popover, context menu, command palette) all render BELOW this overlay
- * and portal their focusable content to `document.body`, so they are never a legitimate escape
- * target here and must keep being re-contained. `Element.closest` walks the node's own ancestors
- * (the node itself included).
- */
-function isInHigherFocusLayer(node: Element | null): boolean {
-  return !!node?.closest('[aria-modal="true"]');
-}
+type Props = { label: string };
 
-type Props = {
-  label: string;
-  /** Localized label for the Cancel button. Only rendered when onCancel is provided. */
-  cancelLabel?: string;
-  /** Whether the Cancel button can be clicked (e.g. false after a single-shot cancel fired) */
-  isCancelEnabled?: boolean;
-  /**
-   * When provided, a Cancel button is rendered under the label and the overlay contains focus: the
-   * container is focused on mount (so mid-keystroke input can't land in the covered editor) and
-   * Tab/Shift+Tab cannot move focus outside the overlay.
-   */
-  onCancel?: () => void;
-  /**
-   * Live progress status text rendered under the label: for determinate progress the current item
-   * (e.g. a project name), for indeterminate progress a complete localized message. Omitted → no
-   * progress area is rendered (the legacy project-switch overlay).
-   */
-  progressText?: string;
-  /**
-   * Determinate progress as a 0–1 fraction, rendered as a progress bar under the progress text.
-   * Undefined while progressText is provided means indeterminate progress.
-   */
-  progressValue?: number;
-};
-
-export function WorkspaceUpdatingOverlayPresentational({
-  label,
-  cancelLabel,
-  isCancelEnabled,
-  onCancel,
-  progressText,
-  progressValue,
-}: Props) {
-  // React's useRef requires null as the initial value for DOM refs
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
-  // React's useRef requires null as the initial value for DOM refs
-  // eslint-disable-next-line no-null/no-null
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Focus the overlay container on mount so mid-keystroke input lands here instead of a focused
-  // editor. The container rather than the Cancel button, so a Space/Enter typed just as the
-  // overlay appears can't silently cancel the sync — cancelling deliberately remains Tab (to the
-  // button) + Enter, or a click. Focused via ref because jsx-a11y flags the autoFocus attribute.
-  // No-op in legacy (no onCancel) mode: the ref is only attached in cancel mode.
-  useEffect(() => {
-    containerRef.current?.focus();
-  }, []);
-
-  // Trap Tab/Shift+Tab: the Cancel button is the only tab stop under the overlay, so tabbing must
-  // not escape to the (covered but still mounted) editor beneath.
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Tab') return;
-    event.preventDefault();
-    cancelButtonRef.current?.focus();
-  }, []);
-
-  // Re-contain focus if it leaves the overlay (e.g. programmatic focus elsewhere, or the button
-  // disabling itself after a click). relatedTarget is where focus is headed; when it is missing
-  // (body/nowhere) or outside the container, pull focus back — UNLESS it went to a modal/overlay
-  // layer above us, whose own focus trap must win (otherwise focus ping-pongs with it).
-  const handleBlur = useCallback((event: FocusEvent<HTMLDivElement>) => {
-    const container = containerRef.current;
-    if (!container) return;
-    if (event.relatedTarget && container.contains(event.relatedTarget)) return;
-    // Focus moved up into a modal/overlay-host layer that renders above this overlay: yield to it.
-    if (isInHigherFocusLayer(event.relatedTarget)) return;
-    // Refocus after the in-flight focus transition completes: while focusout is dispatching, the
-    // focus move has not been committed yet, so a synchronous focus() here can be dropped. The
-    // activeElement re-check avoids stealing focus back if it ended up inside after all — and,
-    // as above, yields if it settled in a higher layer (Radix moves dialog focus asynchronously,
-    // so relatedTarget may still be empty here even when a modal is where focus is heading).
-    queueMicrotask(() => {
-      const active = document.activeElement;
-      if (active && container.contains(active)) return;
-      if (isInHigherFocusLayer(active)) return;
-      container.focus();
-    });
-  }, []);
-
-  // Two complete literals rather than a template with a conditional suffix: the tailwindcss
-  // prettier plugin rewrites class strings inside template-literal expressions and can drop the
-  // separating space. Cancel mode adds tw:outline-none to suppress the focus ring on the
-  // (programmatically focused) plain background div.
-  const containerClassName = onCancel
-    ? 'tw:fixed tw:inset-0 tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:bg-background tw:outline-none'
-    : 'tw:fixed tw:inset-0 tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:bg-background';
-
+export function WorkspaceUpdatingOverlayPresentational({ label }: Props) {
   return (
     <div className="pr-twp">
-      {/* Focus containment is only active in cancel mode (onCancel provided); without it the
-          rendered output and behavior are unchanged from the original project-switch overlay.
-          tabIndex -1 makes the container programmatically focusable without adding a tab stop. */}
-      {/* The container is a focus sink, not an interactive control; key handling only traps Tab.
-          The role is a runtime expression jsx-a11y can't resolve, so it flags the handlers. */}
-      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
-        ref={onCancel ? containerRef : undefined}
-        // Legacy passive overlay is a live region (role="status"). Cancel mode is a focus-trapping
-        // blocking surface, so it takes modal-dialog semantics with an accessible name from the
-        // label the component already renders (no new l10n key). Both are omitted/left as-is when
-        // the new props are absent, keeping the legacy render byte-identical.
-        role={onCancel ? 'dialog' : 'status'}
-        aria-modal={onCancel ? true : undefined}
-        aria-label={onCancel ? label : undefined}
-        tabIndex={onCancel ? -1 : undefined}
-        onKeyDown={onCancel ? handleKeyDown : undefined}
-        onBlur={onCancel ? handleBlur : undefined}
-        className={containerClassName}
+        role="status"
+        className="tw:fixed tw:inset-0 tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-3 tw:bg-background"
         // For some reason, applying tw:top-12 tw:right-2 tw:bottom-2 tw:left-2 instead of tw:inset-0 did not work.
         // The top value of 48px corresponds to the height (tw:h-12) of the toolbar, and the other insets allow for window borders.
         // Originally, I used 8px insets to match the window border size, but currently some content can drift into the border area,
@@ -154,20 +31,6 @@ export function WorkspaceUpdatingOverlayPresentational({
       >
         <Spinner />
         <p className="tw:text-sm tw:font-medium">{label}</p>
-        {progressText !== undefined && (
-          <p className="tw:text-sm tw:text-muted-foreground">{progressText}</p>
-        )}
-        {/* platform-bible-react's Progress (shadcn/Radix) has no indeterminate visual — without a
-            value it renders an empty track — so the bar only appears for determinate progress;
-            indeterminate progress is shown as text only. */}
-        {progressValue !== undefined && (
-          <Progress value={progressValue * 100} className="tw:w-64" />
-        )}
-        {onCancel && (
-          <Button ref={cancelButtonRef} disabled={!isCancelEnabled} onClick={onCancel}>
-            {cancelLabel}
-          </Button>
-        )}
       </div>
     </div>
   );

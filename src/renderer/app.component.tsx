@@ -7,15 +7,18 @@ import './app.component.scss';
 import './styles/tailwind.css';
 import { NotificationDisplay } from './components/notification-display';
 import { OverlayHost } from './components/overlay-host.component';
-import { AutoSyncBlockingOverlay } from './components/overlays/overlay-auto-sync-blocking.component';
 import { WorkspaceUpdatingOverlay } from './components/overlays/overlay-workspace-updating.component';
 import { PlatformBibleToolbar } from './components/platform-bible-toolbar';
 import { initAutoSyncBlockingService } from './services/auto-sync-blocking-service';
+import { initAutoSyncEditBlockDriver } from './services/auto-sync-edit-block-driver';
 import { initWorkspaceUpdatingService } from './services/workspace-updating-service';
 
 function Main() {
   useEffect(() => initWorkspaceUpdatingService(), []);
   useEffect(() => initAutoSyncBlockingService(), []);
+  // Automatic Send/Receive blocks editing only (no workspace overlay): this driver reflects the
+  // blocking store onto each Scripture editor's isSyncBlocked state. See the driver for details.
+  useEffect(() => initAutoSyncEditBlockDriver(), []);
 
   return (
     <TestContext.Provider value="test">
@@ -24,7 +27,6 @@ function Main() {
       <NotificationDisplay />
       <OverlayHost />
       <WorkspaceUpdatingOverlay />
-      <AutoSyncBlockingOverlay />
     </TestContext.Provider>
   );
 }

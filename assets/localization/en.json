@@ -289,7 +289,6 @@
   "%overlay_dialog_title_dialog%": "Dialog",
   "%overlay_commandPalette_searchPlaceholder%": "Search...",
   "%overlay_commandPalette_noResults%": "No results found",
-  "%overlay_autoSyncBlocking%": "Automatic Send/Receive in progress",
   "%overlay_workspaceUpdating%": "Updating project view",
   "%product_name%": "Platform.Bible",
   "%product_shortName%": "Platform",
