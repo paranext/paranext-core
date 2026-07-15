@@ -21,7 +21,7 @@ import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
-import { AddCommentToThreadOptions, CommentThreadProps } from './comment-list.types';
+import { AddCommentToThreadOptions, CommentThreadProps, getCommentThreadElementId } from './comment-list.types';
 import { ResolveCheckButton } from './resolve-check-button.component';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 
@@ -464,7 +464,7 @@ export function CommentThread({
     <Card
       role="option"
       aria-selected={isSelected}
-      id={threadId}
+      id={getCommentThreadElementId(threadId)}
       className={cn(
         'tw:group tw:w-full tw:rounded-none tw:border-none tw:p-4 tw:outline-hidden tw:transition-all tw:duration-200 tw:focus:ring-2 tw:focus:ring-ring tw:focus:ring-offset-1 tw:focus:ring-offset-background',
         { 'tw:cursor-pointer tw:hover:shadow-md': !isSelected },
