@@ -355,9 +355,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// <returns>Result with success flag, deleted count, warnings, errors.</returns>
     public Task<DeleteBooksResult> DeleteBooksAsync(DeleteBooksRequest request)
     {
-        // Reject while an automatic Send/Receive is syncing this project (inert in public core —
-        // see SendReceiveWriteLock).
-        SendReceiveWriteLock.ThrowIfBlocked(request.ProjectId);
+        // Bracket the whole deletion in a write scope: rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ProjectId);
 
         EnsureBookNumbersNonEmpty(request.BookNumbers);
 
@@ -645,9 +646,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<CreateBooksResult> CreateBooksAsync(CreateBooksRequest request)
     {
-        // Reject while an automatic Send/Receive is syncing this project (inert in public core —
-        // see SendReceiveWriteLock).
-        SendReceiveWriteLock.ThrowIfBlocked(request.ProjectId);
+        // Bracket the whole creation in a write scope: rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ProjectId);
 
         EnsureBookNumbersNonEmpty(request.BookNumbers);
 
@@ -1000,9 +1002,11 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<CopyBooksResult> CopyBooksAsync(CopyBooksRequest request)
     {
-        // Reject while an automatic Send/Receive is syncing the DESTINATION project (the only one
-        // written; the source is read-only). Inert in public core — see SendReceiveWriteLock.
-        SendReceiveWriteLock.ThrowIfBlocked(request.ToProjectId);
+        // Bracket the whole copy in a write scope on the DESTINATION project (the only one written;
+        // the source is read-only): rejects (fail-fast) while it is syncing, and keeps the sync's
+        // drain waiting until this mutation completes. Inert in public core — see
+        // SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ToProjectId);
 
         EnsureBookNumbersNonEmpty(request.BookNumbers);
         EnsureDifferentProjects(request.FromProjectId, request.ToProjectId);
@@ -1069,9 +1073,11 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task CopyCustomVersificationAsync(string sourceProjectId, string destProjectId)
     {
-        // Reject while an automatic Send/Receive is syncing the DESTINATION project (its custom.vrs
-        // and versification table are mutated). Inert in public core — see SendReceiveWriteLock.
-        SendReceiveWriteLock.ThrowIfBlocked(destProjectId);
+        // Bracket the whole copy in a write scope on the DESTINATION project (its custom.vrs and
+        // versification table are mutated): rejects (fail-fast) while it is syncing, and keeps the
+        // sync's drain waiting until this mutation completes. Inert in public core — see
+        // SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(destProjectId);
 
         ScrText fromScrText = ResolveProjectOrThrow(
             sourceProjectId,
@@ -1239,9 +1245,10 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<ImportBooksResult> ImportBooksAsync(ImportBooksInput request)
     {
-        // Reject while an automatic Send/Receive is syncing this project (inert in public core —
-        // see SendReceiveWriteLock).
-        SendReceiveWriteLock.ThrowIfBlocked(request.ProjectId);
+        // Bracket the whole import in a write scope: rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ProjectId);
 
         // Guard 1: project must resolve (NOT_FOUND per Theme 7).
         ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);

@@ -139,10 +139,11 @@ internal sealed class InventoryDataProvider(
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        // Reject while an automatic Send/Receive is syncing this project — inventory.Save() below
-        // persists valid/invalid items into the project's checking settings. Inert in public core —
-        // see SendReceiveWriteLock.
-        SendReceiveWriteLock.ThrowIfBlocked(selector.ProjectId);
+        // Bracket the whole mutation in a write scope — inventory.Save() below persists
+        // valid/invalid items into the project's checking settings. Rejects (fail-fast) while an
+        // automatic Send/Receive is syncing this project, and keeps the sync's drain waiting until
+        // this mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(selector.ProjectId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
@@ -315,10 +316,11 @@ internal sealed class InventoryDataProvider(
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
-        // Reject while an automatic Send/Receive is syncing this project — this method writes the
-        // project's settings (SetSetting/RemoveSetting/Save below). Inert in public core — see
-        // SendReceiveWriteLock.
-        SendReceiveWriteLock.ThrowIfBlocked(selector.ProjectId);
+        // Bracket the whole mutation in a write scope — this method writes the project's settings
+        // (SetSetting/RemoveSetting/Save below). Rejects (fail-fast) while an automatic Send/Receive
+        // is syncing this project, and keeps the sync's drain waiting until this mutation completes.
+        // Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(selector.ProjectId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
