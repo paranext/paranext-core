@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
@@ -343,6 +344,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public override bool SetExtensionData(ProjectDataScope scope, string data)
     {
+        ThrowIfSyncBlocked();
         if (string.IsNullOrEmpty(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
@@ -482,6 +484,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
+        ThrowIfSyncBlocked();
         lock (_commentMutationLock)
         {
             // Find the comment by ID and its parent thread
@@ -523,6 +526,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// in this project.
     public string CreateComment(PlatformCommentWrapper comment)
     {
+        ThrowIfSyncBlocked();
         VerifyUserCanCreateComments();
 
         // Never let the "content could not be displayed" placeholder become a note's real content.
@@ -655,6 +659,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
     public string AddCommentToThread(PlatformCommentWrapper comment)
     {
+        ThrowIfSyncBlocked();
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(comment.Thread))
@@ -767,6 +772,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' or 'merge' and the verse text has changed since the conflict was recorded (stale).</exception>
     public void ResolveConflict(string threadId, string resolution)
     {
+        ThrowIfSyncBlocked();
         if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
@@ -1077,6 +1083,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool UpdateComment(string commentId, string updatedContentHtml)
     {
+        ThrowIfSyncBlocked();
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(commentId))
@@ -1719,6 +1726,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetProjectSetting(string settingName, object? value)
     {
+        ThrowIfSyncBlocked();
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (scrText.IsResourceProject)
             throw new Exception("Cannot change settings on resources");
@@ -2401,6 +2409,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
+        ThrowIfSyncBlocked();
         verseRef.ChapterNum = 0;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
@@ -2429,6 +2438,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
+        ThrowIfSyncBlocked();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2561,6 +2571,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetBookUsx(VerseRef verseRef, string data)
     {
+        // Reject early (SetBookUsfm also guards) to skip the USX→USFM conversion when sync-blocked.
+        ThrowIfSyncBlocked();
         // Don't need to take a write lock in this function because SetBookUsfm will do it
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
@@ -2570,6 +2582,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
+        ThrowIfSyncBlocked();
         string? failedMessage = null;
         bool didChange = true;
         try
@@ -2829,6 +2842,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             myLock.ReleaseAndNotify();
         }
+    }
+
+    /// <summary>
+    /// Rejects a project write while an automatic Send/Receive is syncing this project, so an editor
+    /// change can't race the sync's on-disk file replacement. Inert in public core: nothing calls
+    /// <see cref="SendReceiveWriteLock.SetSyncing"/> there, so this never throws (see that class).
+    /// Called at the top of the project write methods (Scripture, settings, extension data, and
+    /// comment mutations).
+    /// </summary>
+    private void ThrowIfSyncBlocked()
+    {
+        SendReceiveWriteLock.ThrowIfBlocked(ProjectDetails.Metadata.Id);
     }
 
     #endregion
