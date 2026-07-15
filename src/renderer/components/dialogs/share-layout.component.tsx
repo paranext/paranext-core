@@ -217,7 +217,7 @@ export function ShareLayoutDialogContent({
     sectionLabelKey: keyof ShareLayoutDialogLocalizedStrings,
   ) => (
     <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
-      <span>{localizeString(strings, sectionLabelKey)}</span>
+      <span className="tw:font-medium">{localizeString(strings, sectionLabelKey)}</span>
       <Popover
         open={openAddPickerTab === tab}
         onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
@@ -286,7 +286,9 @@ export function ShareLayoutDialogContent({
       <div className="tw:flex tw:min-h-0 tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
         <div className="tw:shrink-0 tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
           <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
-            <span>{localizeString(strings, '%shareLayoutDialog_modelText_label%')}</span>
+            <span className="tw:font-medium">
+              {localizeString(strings, '%shareLayoutDialog_modelText_label%')}
+            </span>
             <Popover open={isModelTextPickerOpen} onOpenChange={setIsModelTextPickerOpen}>
               <PopoverTrigger asChild>
                 <Button
@@ -325,7 +327,9 @@ export function ShareLayoutDialogContent({
 
           <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
             <div className="tw:flex tw:flex-col">
-              <span>{localizeString(strings, '%shareLayoutDialog_activeTab_label%')}</span>
+              <span className="tw:font-medium">
+                {localizeString(strings, '%shareLayoutDialog_activeTab_label%')}
+              </span>
               <span className="tw:text-xs tw:text-muted-foreground">
                 {localizeString(strings, '%shareLayoutDialog_activeTab_sublabel%')}
               </span>
@@ -375,7 +379,7 @@ export function ShareLayoutDialogContent({
           </div>
 
           <div className="tw:border-t tw:border-border tw:px-4 tw:py-3">
-            <span>
+            <span className="tw:font-medium">
               {localizeString(strings, '%shareLayoutDialog_textCollectionResources_label%')}
             </span>
           </div>
