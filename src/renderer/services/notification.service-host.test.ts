@@ -100,6 +100,70 @@ describe('notification service host', () => {
     });
   });
 
+  describe('secondary action and position', () => {
+    it('builds a Sonner cancel action from the secondary click fields', async () => {
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        secondaryClickCommandLabel: 'Postpone',
+        // The host passes this straight to Sonner without validating it against real command names,
+        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        secondaryClickCommand: 'test.secondary' as never,
+      };
+
+      await capturedService.send(notification);
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({
+          cancel: expect.objectContaining({ label: 'Postpone' }),
+        }),
+      );
+    });
+
+    it('forwards a per-toast position to Sonner', async () => {
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        position: 'top-center',
+      };
+
+      await capturedService.send(notification);
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ position: 'top-center' }),
+      );
+    });
+
+    it('forwards dismissible so a toast can be made non-swipe-dismissible', async () => {
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        dismissible: false,
+      };
+
+      await capturedService.send(notification);
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ dismissible: false }),
+      );
+    });
+
+    it('leaves cancel, position, and dismissible undefined when the new fields are omitted (back-compat)', async () => {
+      const notification: PlatformNotification = { message: 'test', severity: 'info' };
+
+      await capturedService.send(notification);
+
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ cancel: undefined, position: undefined, dismissible: undefined }),
+      );
+    });
+  });
+
   describe('send with a reused notificationId', () => {
     it('passes the existing toast id as the top-level id so Sonner updates instead of duplicating', async () => {
       mockToastInfo.mockReturnValueOnce('toast-1');
