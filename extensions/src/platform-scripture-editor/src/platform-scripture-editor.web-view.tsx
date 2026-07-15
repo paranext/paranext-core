@@ -122,6 +122,10 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
+import {
+  SyncBlockedBanner,
+  SYNC_BLOCKED_BANNER_STRING_KEYS,
+} from './sync-blocked-banner.component';
 
 /**
  * Pass-through wrapper for the editor inside {@link InPortal}. `react-reverse-portal`'s `InPortal`
@@ -149,6 +153,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...MARKER_MENU_STRING_KEYS,
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
+  ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -160,6 +165,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
+  '%webView_platformScriptureEditor_error_syncEditBlocked%',
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
@@ -239,6 +245,10 @@ const bookNotFoundRegex = /Book number \d+ not found in project/;
 
 // This regex is connected directly to the exception message within PermissionsException.cs
 const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
+
+// Sentinel appended by the backend write-gate (SendReceiveWriteLock in paranext-core's c-sharp)
+// when a project write is rejected because an automatic Send/Receive is syncing that project.
+const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 
 /**
  * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
@@ -337,6 +347,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
+  // Set by the core auto-sync edit-block driver while an automatic (scheduled) Send/Receive is
+  // syncing this project: editing is frozen (folded into isReadOnlyEffective below) and a slim
+  // banner is shown, but the rest of the UI stays usable. Always defaults false; the web-view
+  // factory forces it back to false when rebuilding saved state so a crash mid-sync can't persist
+  // it (see main.ts).
+  const [isSyncBlocked] = useWebViewState<boolean>('isSyncBlocked', false);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
     defaultEditorDecorations,
@@ -445,24 +461,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
-      noteCallerOnClick: isReadOnly
-        ? undefined
-        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-            if (!isCollapsed || editingNoteKey.current) return;
+      // Also disabled while sync-blocked: opening a note caller can create/edit a note, which is a
+      // project write that must be frozen during an automatic Send/Receive.
+      noteCallerOnClick:
+        isReadOnly || isSyncBlocked
+          ? undefined
+          : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+              if (!isCollapsed || editingNoteKey.current) return;
 
-            const noteOp = getNoteOps()?.at(0);
-            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+              const noteOp = getNoteOps()?.at(0);
+              if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
 
-            const targetRect = event.currentTarget.getBoundingClientRect();
-            setNotePopoverAnchorX(targetRect.left);
-            setNotePopoverAnchorY(targetRect.top);
-            setNotePopoverAnchorHeight(targetRect.height);
-            editingNoteKey.current = noteNodeKey;
-            editingNoteOps.current = [noteOp];
-            setShowFootnoteEditor(true);
-          },
+              const targetRect = event.currentTarget.getBoundingClientRect();
+              setNotePopoverAnchorX(targetRect.left);
+              setNotePopoverAnchorY(targetRect.top);
+              setNotePopoverAnchorHeight(targetRect.height);
+              editingNoteKey.current = noteNodeKey;
+              editingNoteOps.current = [noteOp];
+              setShowFootnoteEditor(true);
+            },
     }),
-    [isReadOnly, editingNoteKey],
+    [isReadOnly, isSyncBlocked, editingNoteKey],
   );
 
   /**
@@ -473,8 +492,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const isReadOnlyEffective = useMemo(
     () =>
       isReadOnly ||
+      // An automatic Send/Receive is syncing this project — freeze editing until it finishes.
+      isSyncBlocked ||
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
-    [isReadOnly, viewType],
+    [isReadOnly, isSyncBlocked, viewType],
   );
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
@@ -587,7 +608,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const insertCommentAtCurrentSelection = useCallback(() => {
     const selection = currentSelectionRef.current;
 
-    if (!selection?.start || !canUserCreateComments) return;
+    // Comment creation is gated by canUserCreateComments (not read-only), so it must be blocked
+    // separately during an automatic Send/Receive. Guarding here covers both the hotkey and the
+    // context-menu item's onSelect.
+    if (!selection?.start || !canUserCreateComments || isSyncBlocked) return;
 
     // Store the selection as annotation range to show it as the pending annotation
     const annotationRange: AnnotationRange = {
@@ -712,7 +736,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     setShowCommentEditor(true);
-  }, [scrRef, canUserCreateComments]);
+  }, [scrRef, canUserCreateComments, isSyncBlocked]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -728,7 +752,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         {
           title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
           onSelect: insertCommentAtCurrentSelection,
-          isDisabled: !canUserCreateComments,
+          // Disabled while sync-blocked too, so the menu reflects the frozen state.
+          isDisabled: !canUserCreateComments || isSyncBlocked,
         },
       ],
     }),
@@ -736,6 +761,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       isReadOnlyEffective,
       isStructureProtected,
       canUserCreateComments,
+      isSyncBlocked,
       textDirectionEffective,
       nodeOptions,
       viewOptions,
@@ -1310,27 +1336,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         logger.error(`Error saving USJ to PDP: ${errorMessage}`);
         currentlyWritingUsjToPdp.current = false;
 
-        if (!PERMISSIONS_EXCEPTION_REGEX.test(errorMessage)) return;
+        // Two recoverable backend rejections revert the editor to the last PDP state and notify;
+        // only the message differs. A sync-edit-block is expected/transient (editing paused during
+        // an automatic Send/Receive), so it is a warning; a permissions failure is an error.
+        const isSyncEditBlocked = SYNC_EDIT_BLOCKED_REGEX.test(errorMessage);
+        const isPermissionsError = PERMISSIONS_EXCEPTION_REGEX.test(errorMessage);
+        if (!isSyncEditBlocked && !isPermissionsError) return;
 
-        // The error is due to a permissions issue, so make a notification to inform the user and
-        // reset the text to how it was before
         try {
           if (usjFromPdp && editorRef.current) {
             usjSentToPdp.current = usjFromPdp;
             setEditorUsj.current(usjFromPdp);
           }
           await papi.notifications.send({
-            severity: 'error',
-            message: formatReplacementString(
-              localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-              { projectName },
-            ),
+            severity: isSyncEditBlocked ? 'warning' : 'error',
+            message: isSyncEditBlocked
+              ? localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%']
+              : formatReplacementString(
+                  localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
+                  { projectName },
+                ),
           });
         } catch (innerError) {
           logger.error(
-            `Error handling permissions exception when saving USJ to PDP: ${getErrorMessage(
-              innerError,
-            )}`,
+            `Error handling ${
+              isSyncEditBlocked ? 'sync-edit-block' : 'permissions'
+            } exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
           );
         }
       }
@@ -1877,6 +1908,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           </>
         }
       />
+      {/* Slim, non-covering banner while an automatic Send/Receive freezes editing. Shown only when
+          sync-blocked and not genuinely read-only (a real viewer shouldn't say "editing paused"). */}
+      {isSyncBlocked && !isReadOnly && <SyncBlockedBanner localizedStrings={localizedStrings} />}
       {/* Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>
         <PortalContents>{renderEditor()}</PortalContents>
