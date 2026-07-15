@@ -1584,6 +1584,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         logger.warn('Cannot create comment: no projectId');
         return;
       }
+      // A comment popover opened before the block began is not closed by it, so Save must be
+      // guarded here too. Early-return keeps the popover open (the user's text isn't lost — they
+      // can save once the sync finishes) and warns like the scripture-edit path.
+      if (isSyncBlocked) {
+        papi.notifications.send({
+          severity: 'warning',
+          message: localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%'],
+        });
+        return;
+      }
 
       const capturedSelection = pendingCommentAnnotationRange.current;
 
@@ -1637,12 +1647,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         if (assignedUser !== undefined) setLastAssignedUser(assignedUser);
         setShowCommentEditor(false);
       } catch (error) {
-        logger.error(`Error creating comment: ${getErrorMessage(error)}`);
+        const errorMessage = getErrorMessage(error);
+        logger.error(`Error creating comment: ${errorMessage}`);
+        // A sync started in the window between the isSyncBlocked guard above and the backend
+        // write, and the backend gate rejected the comment. Warn like the scripture-edit path and
+        // discard the pending state (close the popover, clear the pending highlight) — the
+        // rejected comment cannot be saved as-is.
+        if (SYNC_EDIT_BLOCKED_REGEX.test(errorMessage)) {
+          papi.notifications.send({
+            severity: 'warning',
+            message: localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%'],
+          });
+          onCommentEditorCancel();
+        }
       } finally {
         isSubmittingComment.current = false;
       }
     },
-    [projectId, scrRef, createCommentAnnotationClickHandler, webViewId],
+    [
+      projectId,
+      scrRef,
+      createCommentAnnotationClickHandler,
+      webViewId,
+      isSyncBlocked,
+      localizedStrings,
+      onCommentEditorCancel,
+    ],
   );
 
   // Clear annotation info when the editor clears annotations internally

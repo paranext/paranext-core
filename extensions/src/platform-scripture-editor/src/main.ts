@@ -512,7 +512,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       isReadOnly,
       // Always rebuild un-blocked. isSyncBlocked is transient runtime state owned by the core
       // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
-      // persist a read-only editor into the saved layout.
+      // restore a read-only editor from the saved layout.
       isSyncBlocked: false,
       /**
        * The original title string or localized string key passed in for us to use to format the
