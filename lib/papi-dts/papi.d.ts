@@ -5266,8 +5266,8 @@ declare module 'shared/models/notification.service-model' {
     secondaryClickCommand?: keyof CommandHandlers;
     /**
      * Optional command to run if the user dismisses the notification themselves — by swiping/dragging
-     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments other
-     * than the notification id, like {@link clickCommand}:
+     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
+     * other than the notification id, like {@link clickCommand}:
      *
      * - NotificationId: The ID of the notification that was dismissed
      *
@@ -5276,11 +5276,11 @@ declare module 'shared/models/notification.service-model' {
      * IMPORTANT: this fires ONLY for that user gesture. It does NOT fire when the notification is
      * dismissed programmatically via {@link INotificationService.dismiss}, when it auto-closes because
      * `duration` elapsed, or when the user clicks {@link clickCommand} / {@link secondaryClickCommand}
-     * (verified against the Sonner 1.7.4 source: `onDismiss` is invoked only from the swipe-release and
-     * close-button handlers, never from the programmatic-dismiss or auto-close paths). Use this to treat
-     * a user's swipe-away as an explicit decision — e.g. pairing it with a "postpone" command lets a
-     * two-button, must-answer-style toast still keep {@link dismissible} `true` (see the warning on
-     * {@link dismissible} for why `false` is usually the wrong tool for that).
+     * (verified against the Sonner 1.7.4 source: `onDismiss` is invoked only from the swipe-release
+     * and close-button handlers, never from the programmatic-dismiss or auto-close paths). Use this
+     * to treat a user's swipe-away as an explicit decision — e.g. pairing it with a "postpone"
+     * command lets a two-button, must-answer-style toast still keep {@link dismissible} `true` (see
+     * the warning on {@link dismissible} for why `false` is usually the wrong tool for that).
      */
     dismissClickCommand?: keyof CommandHandlers;
     /**
@@ -5289,8 +5289,8 @@ declare module 'shared/models/notification.service-model' {
      */
     position?: NotificationPosition;
     /**
-     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or via
-     * a close button). Defaults to `true`.
+     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
+     * via a close button). Defaults to `true`.
      *
      * WARNING: the host toast library (Sonner) renders {@link secondaryClickCommandLabel} in the same
      * slot it gates on this flag, so setting `dismissible: false` also disables the secondary action
