@@ -1868,11 +1868,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               localizedStrings={localizedStrings}
               className="tw:h-8"
             />
-            <ShareLayoutButton
-              projectId={projectId}
-              localizedStrings={localizedStrings}
-              className="tw:h-8"
-            />
+            {/* Share Layout is a simple-mode-only action; power mode's scroll groups replace the
+            single shared-layout concept it targets, so hide it there. */}
+            {!isPowerMode && (
+              <ShareLayoutButton
+                projectId={projectId}
+                localizedStrings={localizedStrings}
+                className="tw:h-8"
+              />
+            )}
             {scrollGroupSelector}
           </>
         }

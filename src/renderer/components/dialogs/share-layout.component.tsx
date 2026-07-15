@@ -217,7 +217,7 @@ export function ShareLayoutDialogContent({
     sectionLabelKey: keyof ShareLayoutDialogLocalizedStrings,
   ) => (
     <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:px-4 tw:py-3">
-      <span className="tw:font-medium">{localizeString(strings, sectionLabelKey)}</span>
+      <span>{localizeString(strings, sectionLabelKey)}</span>
       <Popover
         open={openAddPickerTab === tab}
         onOpenChange={(open) => setOpenAddPickerTab(open ? tab : undefined)}
@@ -336,7 +336,7 @@ export function ShareLayoutDialogContent({
                 if (isShareLayoutActiveTab(value)) setActiveTab(value);
               }}
             >
-              <SelectTrigger className="tw:h-8">
+              <SelectTrigger className="tw:h-8 tw:bg-background">
                 <SelectValue
                   placeholder={localizeString(strings, '%shareLayoutDialog_activeTab_none%')}
                 />
@@ -359,27 +359,27 @@ export function ShareLayoutDialogContent({
           </div>
         </div>
 
-        <div className="tw:shrink-0 tw:divide-y tw:divide-border tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
-          {renderResourceHeaderRow(
-            'ScriptureResource',
-            scriptureResources,
-            '%shareLayoutDialog_scriptureResources_label%',
-          )}
-
-          {renderResourceHeaderRow(
-            'CommentaryResource',
-            commentaryResources,
-            '%shareLayoutDialog_commentaryResources_label%',
-          )}
-        </div>
-
         <div className="tw:shrink-0 tw:overflow-hidden tw:rounded-xl tw:border tw:bg-muted/30">
-          <div className="tw:border-b tw:border-border tw:px-4 tw:py-3">
-            <span className="tw:font-medium">
+          <div className="tw:divide-y tw:divide-border">
+            {renderResourceHeaderRow(
+              'ScriptureResource',
+              scriptureResources,
+              '%shareLayoutDialog_scriptureResources_label%',
+            )}
+
+            {renderResourceHeaderRow(
+              'CommentaryResource',
+              commentaryResources,
+              '%shareLayoutDialog_commentaryResources_label%',
+            )}
+          </div>
+
+          <div className="tw:border-t tw:border-border tw:px-4 tw:py-3">
+            <span>
               {localizeString(strings, '%shareLayoutDialog_textCollectionResources_label%')}
             </span>
           </div>
-          <div className="tw:divide-y tw:divide-border">
+          <div>
             {[
               ...scriptureResources.map((ref) => ({ tab: 'ScriptureResource' as const, ref })),
               ...commentaryResources.map((ref) => ({ tab: 'CommentaryResource' as const, ref })),
@@ -388,7 +388,7 @@ export function ShareLayoutDialogContent({
                 key={referenceKey(ref)}
                 className="tw:flex tw:items-center tw:gap-2 tw:px-4 tw:py-2"
               >
-                <span className="tw:flex-1 tw:truncate">
+                <span className="tw:flex-1 tw:truncate tw:text-sm">
                   {formatResourceDisplayName(ref, allResources)}
                 </span>
                 <Checkbox

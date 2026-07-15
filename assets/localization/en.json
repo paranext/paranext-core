@@ -403,7 +403,7 @@
   "%shareLayoutDialog_manageScriptureResources_label%": "Manage",
   "%shareLayoutDialog_modelText_label%": "Model text",
   "%shareLayoutDialog_modelText_none%": "None selected",
-  "%shareLayoutDialog_scriptureResources_label%": "Bible texts",
+  "%shareLayoutDialog_scriptureResources_label%": "Project bible texts",
   "%shareLayoutDialog_shownByDefault_label%": "Show {resourceName} by default",
   "%shareLayoutDialog_textCollectionResources_label%": "Text collection resources",
   "%shareLayoutDialog_title%": "Share layout with team",
