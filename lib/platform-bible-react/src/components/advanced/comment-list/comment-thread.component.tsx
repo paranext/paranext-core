@@ -21,7 +21,11 @@ import { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Command, CommandItem, CommandList } from '@/components/shadcn-ui/command';
 import { CommentItem } from './comment-item.component';
-import { AddCommentToThreadOptions, CommentThreadProps, getCommentThreadElementId } from './comment-list.types';
+import {
+  AddCommentToThreadOptions,
+  CommentThreadProps,
+  getCommentThreadElementId,
+} from './comment-list.types';
 import { ResolveCheckButton } from './resolve-check-button.component';
 import { didPressCtrlOrCmdEnter, getAssignedUserDisplayName } from './comment-list.utils';
 

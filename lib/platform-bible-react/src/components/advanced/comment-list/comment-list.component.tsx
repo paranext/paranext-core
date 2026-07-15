@@ -1,7 +1,11 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui/utils';
 import React, { RefObject, useCallback, useEffect, useState } from 'react';
-import { AddCommentToThreadOptions, COMMENT_LIST_ELEMENT_ID, CommentListProps } from './comment-list.types';
+import {
+  AddCommentToThreadOptions,
+  COMMENT_LIST_ELEMENT_ID,
+  CommentListProps,
+} from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 import { ConflictThread } from './conflict-thread.component';
 

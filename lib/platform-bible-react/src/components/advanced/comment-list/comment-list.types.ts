@@ -75,17 +75,17 @@ export type CommentListLocalizedStrings = {
 };
 
 /**
- * DOM id of the CommentList container element. Exported so consumers that need to interact with
- * the rendered list (e.g. scrolling it into view) can look it up by a shared, typed name instead
- * of a hardcoded string that could silently drift from the actual markup.
+ * DOM id of the CommentList container element. Exported so consumers that need to interact with the
+ * rendered list (e.g. scrolling it into view) can look it up by a shared, typed name instead of a
+ * hardcoded string that could silently drift from the actual markup.
  */
 export const COMMENT_LIST_ELEMENT_ID = 'comment-list';
 
 /**
  * Returns the DOM id used for a comment thread's rendered element, given its thread id. Currently
  * an identity function — the thread element's id is the thread id itself — but centralizes that
- * contract in one place so CommentThread (which sets the id) and any external consumer (which
- * looks it up) can never silently disagree.
+ * contract in one place so CommentThread (which sets the id) and any external consumer (which looks
+ * it up) can never silently disagree.
  */
 export function getCommentThreadElementId(threadId: string): string {
   return threadId;
