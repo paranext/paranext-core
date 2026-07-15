@@ -4,6 +4,7 @@ using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paratext.Checks;
 using PtxUtils;
 
@@ -137,6 +138,11 @@ internal sealed class InventoryDataProvider(
     {
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
+
+        // Reject while an automatic Send/Receive is syncing this project — inventory.Save() below
+        // persists valid/invalid items into the project's checking settings. Inert in public core —
+        // see SendReceiveWriteLock.
+        SendReceiveWriteLock.ThrowIfBlocked(selector.ProjectId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
@@ -308,6 +314,11 @@ internal sealed class InventoryDataProvider(
     {
         ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
         ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
+
+        // Reject while an automatic Send/Receive is syncing this project — this method writes the
+        // project's settings (SetSetting/RemoveSetting/Save below). Inert in public core — see
+        // SendReceiveWriteLock.
+        SendReceiveWriteLock.ThrowIfBlocked(selector.ProjectId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
