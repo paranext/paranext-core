@@ -9287,11 +9287,13 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * today).
      *
      * @remarks
-     * Passive-palette filtering and commit resolution operate on RAW `label` strings (see
-     * {@link filterPaletteItems}), while the component renders localized labels. Items passed to a
-     * passive palette must therefore use plain-string labels (not `LocalizeKey`s), or the
-     * host-computed highlight can diverge from the rendered list. Localization-aware filtering is a
-     * recorded follow-up.
+     * Passive-palette filtering and commit resolution match the externally supplied filter text
+     * case-sensitively against the PREFIX of each item's RAW `label`: a leading `+` in the filter is
+     * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
+     * shows every item. Because this runs on raw label strings while the component renders localized
+     * labels, items passed to a passive palette must use plain-string labels (not `LocalizeKey`s), or
+     * the host-computed highlight can diverge from the rendered list. Localization-aware filtering is
+     * a recorded follow-up.
      */
     passive?: boolean;
   }

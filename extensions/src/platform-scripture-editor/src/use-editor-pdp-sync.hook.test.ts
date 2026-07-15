@@ -18,9 +18,22 @@ import '@testing-library/jest-dom';
 import { act, renderHook } from '@testing-library/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { useRef } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import { NON_CONVERGENCE_WARN_THRESHOLD, useEditorPdpSync } from './use-editor-pdp-sync.hook';
+
+const { mockLoggerDebug, mockLoggerWarn } = vi.hoisted(() => ({
+  mockLoggerDebug: vi.fn(),
+  mockLoggerWarn: vi.fn(),
+}));
+vi.mock('@papi/frontend', () => ({
+  logger: { debug: mockLoggerDebug, warn: mockLoggerWarn, info: vi.fn(), error: vi.fn() },
+}));
+
+beforeEach(() => {
+  mockLoggerDebug.mockClear();
+  mockLoggerWarn.mockClear();
+});
 
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
 const emptyUsj: Usj = { type: 'USJ', version: '3.1', content: [] };
@@ -48,16 +61,17 @@ describe('useEditorPdpSync', () => {
     renderHook(() => {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const editorRef = useRef<EditorRef | null>({ setUsj: setUsjSpy } as unknown as EditorRef);
+      const editorRef = useRef<EditorRef | null>({
+        setUsj: setUsjSpy,
+        isFocused: () => false,
+      } as unknown as EditorRef);
       const usjSentToPdp = useRef<Usj | undefined>(undefined);
       const setEditorUsj = useRef((usj: Usj) => setUsjSpy(usj));
-      const currentlyWritingUsjToPdp = useRef(false);
       useEditorPdpSync({
         usjFromPdp: levUsj,
         editorRef,
         usjSentToPdp,
         setEditorUsj,
-        currentlyWritingUsjToPdp,
         saveUsjToPdpIfUpdated,
       });
     });
@@ -81,11 +95,10 @@ describe('useEditorPdpSync', () => {
     const editorRef: { current: EditorRef | null } = {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+      current: { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
-    const currentlyWritingUsjToPdp = { current: false };
 
     const { rerender } = renderHook(
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
@@ -94,7 +107,6 @@ describe('useEditorPdpSync', () => {
           editorRef,
           usjSentToPdp,
           setEditorUsj,
-          currentlyWritingUsjToPdp,
           saveUsjToPdpIfUpdated,
         });
       },
@@ -111,7 +123,7 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalled();
   });
 
-  // Task 15 (standard-view fix wave): the PDP round-trips USJ through USFM, so a save made
+  // The PDP round-trips USJ through USFM, so a save made
   // MID-marker-typing (a pending literal like `\q1` still in plain text) echoes back
   // NORMALIZED-different from what we sent - sometimes across multiple subscription deliveries
   // per save, so an in-flight-write flag cannot classify them. Hard-replacing the editor with
@@ -151,25 +163,18 @@ describe('useEditorPdpSync', () => {
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
+    // The user is actively editing: the editor instance reports its own root holds focus.
     const editorRef: { current: EditorRef | null } = {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       current: {
         setUsj: setUsjSpy,
         getUsj: () => newerEditorContent,
+        isFocused: () => true,
       } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
-    const currentlyWritingUsjToPdp = { current: false };
-
-    // The user is actively editing: focus sits on the main editor's content-editable root.
-    const editorInput = document.createElement('div');
-    editorInput.className = 'editor-input';
-    editorInput.tabIndex = 0;
-    document.body.appendChild(editorInput);
-    editorInput.focus();
-    expect(document.activeElement).toBe(editorInput);
 
     const { rerender } = renderHook(
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
@@ -178,7 +183,6 @@ describe('useEditorPdpSync', () => {
           editorRef,
           usjSentToPdp,
           setEditorUsj,
-          currentlyWritingUsjToPdp,
           saveUsjToPdpIfUpdated,
         });
       },
@@ -202,11 +206,9 @@ describe('useEditorPdpSync', () => {
     act(() => rerender({ usjFromPdp: confirmationEcho }));
     expect(setUsjSpy).not.toHaveBeenCalled();
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
-
-    document.body.removeChild(editorInput);
   });
 
-  // QA run 4 regression: chapter navigation while focus sits in the editor. The actively-editing
+  // Regression: chapter navigation while focus sits in the editor. The actively-editing
   // deferral must apply ONLY to same-document updates - a DIFFERENT book/chapter arriving means
   // navigation, and deferring would keep the editor on the old chapter forever (and save the old
   // chapter's content through the new chapter's data selector).
@@ -227,21 +229,18 @@ describe('useEditorPdpSync', () => {
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
+    // The user is actively editing (editor reports focus), then navigates chapters.
     const editorRef: { current: EditorRef | null } = {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      current: { setUsj: setUsjSpy, getUsj: () => levUsj } as unknown as EditorRef,
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => levUsj,
+        isFocused: () => true,
+      } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
-    const currentlyWritingUsjToPdp = { current: false };
-
-    const editorInput = document.createElement('div');
-    editorInput.className = 'editor-input';
-    editorInput.tabIndex = 0;
-    document.body.appendChild(editorInput);
-    editorInput.focus();
-    expect(document.activeElement).toBe(editorInput);
 
     const { rerender } = renderHook(
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
@@ -250,7 +249,6 @@ describe('useEditorPdpSync', () => {
           editorRef,
           usjSentToPdp,
           setEditorUsj,
-          currentlyWritingUsjToPdp,
           saveUsjToPdpIfUpdated,
         });
       },
@@ -266,8 +264,56 @@ describe('useEditorPdpSync', () => {
     expect(setUsjSpy).toHaveBeenCalledOnce(); // editor navigates
     expect(setUsjSpy).toHaveBeenCalledWith(lev15);
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // no cross-chapter save-back
+  });
 
-    document.body.removeChild(editorInput);
+  // Defense-in-depth (Fix 3): a document is identified by the book code + chapter number in its own
+  // content. When a document has neither, it cannot be identified, so the hook must NOT assume an
+  // incoming update is the "same document" as what the editor shows — it replaces instead of
+  // deferring, so an unidentifiable update can never silently suppress a real change while typing.
+  it('replaces (does not defer) when neither the incoming update nor the editor content is identifiable', () => {
+    const identitylessEditor: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['editor text with no book or chapter'] }],
+    };
+    const identitylessIncoming: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para', marker: 'p', content: ['incoming text with no book or chapter'] }],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => identitylessEditor,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    act(() => rerender({ usjFromPdp: identitylessIncoming }));
+
+    expect(setUsjSpy).toHaveBeenCalledWith(identitylessIncoming); // replaced, not deferred
   });
 
   it('still replaces the editor for a content-different update that is not our own write echo', () => {
@@ -288,11 +334,10 @@ describe('useEditorPdpSync', () => {
     const editorRef: { current: EditorRef | null } = {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+      current: { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
-    const currentlyWritingUsjToPdp = { current: false };
 
     const { rerender } = renderHook(
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
@@ -301,7 +346,6 @@ describe('useEditorPdpSync', () => {
           editorRef,
           usjSentToPdp,
           setEditorUsj,
-          currentlyWritingUsjToPdp,
           saveUsjToPdpIfUpdated,
         });
       },
@@ -314,6 +358,136 @@ describe('useEditorPdpSync', () => {
 
     expect(setUsjSpy).toHaveBeenCalledOnce();
     expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+  });
+
+  // Fix 1 (editor-owned focus): the "actively editing" decision must come from the editor
+  // instance (editorRef.current.isFocused()), NOT a global document.querySelector('.editor-input')
+  // + document.activeElement check. Two failure modes of the old global query, pinned here:
+  //
+  //   (a) The editor reports focused but there is no matching `.editor-input` in the document — the
+  //       old query returned null and wrongly concluded "not editing", clobbering the caret.
+  it('defers to the editor when editorRef.isFocused() is true even with no .editor-input in the DOM', () => {
+    const normalizedEcho: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. \\q1',
+          ],
+        },
+      ],
+    };
+    const newerEditorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'q1',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. typed more',
+          ],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => newerEditorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    act(() => rerender({ usjFromPdp: normalizedEcho }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled(); // editor NOT clobbered — decided by isFocused()
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local content pushed up instead
+  });
+
+  //   (b) A DIFFERENT editor's `.editor-input` holds focus (e.g. the footnote-editor popover, which
+  //       renders its own `.editor-input`). The old query grabbed the first `.editor-input` and saw
+  //       it focused, wrongly treating THIS editor as actively edited and deferring a real change.
+  it('replaces the editor when editorRef.isFocused() is false even if another .editor-input holds focus', () => {
+    const externalChange: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'Externally edited text.'],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => levUsj,
+        isFocused: () => false,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    // A different editor's `.editor-input` (the footnote popover's own root) holds DOM focus.
+    const otherEditorInput = document.createElement('div');
+    otherEditorInput.className = 'editor-input';
+    otherEditorInput.tabIndex = 0;
+    document.body.appendChild(otherEditorInput);
+    otherEditorInput.focus();
+    expect(document.activeElement).toBe(otherEditorInput);
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+
+    act(() => rerender({ usjFromPdp: externalChange }));
+
+    expect(setUsjSpy).toHaveBeenCalledWith(externalChange); // replaced — THIS editor isn't focused
+
+    document.body.removeChild(otherEditorInput);
   });
 
   it('calls setEditorUsj again after the editor unmounts and remounts with the same chapter data (regression: non-existent book navigation)', () => {
@@ -331,11 +505,10 @@ describe('useEditorPdpSync', () => {
     const editorRef: { current: EditorRef | null } = {
       // EditorRef has many members; casting from a minimal stub is intentional in tests
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      current: { setUsj: setUsjSpy } as unknown as EditorRef,
+      current: { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef,
     };
     const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
-    const currentlyWritingUsjToPdp = { current: false };
 
     const { rerender } = renderHook(
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
@@ -344,7 +517,6 @@ describe('useEditorPdpSync', () => {
           editorRef,
           usjSentToPdp,
           setEditorUsj,
-          currentlyWritingUsjToPdp,
           saveUsjToPdpIfUpdated,
         });
       },
@@ -368,11 +540,156 @@ describe('useEditorPdpSync', () => {
 
     // Step 3: Navigate back to LEV — same chapter data arrives and the editor remounts fresh
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    editorRef.current = { setUsj: setUsjSpy } as unknown as EditorRef;
+    editorRef.current = { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef;
     act(() => rerender({ usjFromPdp: levUsj }));
 
     // The fresh (empty) editor must receive its content even though the data hasn't changed
     expect(setUsjSpy).toHaveBeenCalledOnce();
     expect(setUsjSpy).toHaveBeenCalledWith(levUsj);
+  });
+
+  // Logging: an incoming update that the hook does NOT apply to the editor is logged. A single
+  // deferral during active editing is almost always the editor's own USFM round-trip, so it is a
+  // debug line, not a warning.
+  it('logs a debug line (not a warning) when it defers a single incoming update during active editing', () => {
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'q1', content: ['newer'] }],
+    };
+    const differingEcho: Usj = {
+      ...levUsj,
+      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'p', content: ['echo'] }],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    mockLoggerDebug.mockClear();
+    mockLoggerWarn.mockClear();
+
+    act(() => rerender({ usjFromPdp: differingEcho }));
+
+    expect(mockLoggerDebug).toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('logs a debug line when an incoming update matches the editor content (confirmation echo)', () => {
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'p', content: ['match'] }],
+    };
+    const differentInitial: Usj = {
+      ...levUsj,
+      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'p', content: ['other'] }],
+    };
+    const confirmationEcho: Usj = { ...editorContent, content: [...editorContent.content] };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: differentInitial } },
+    );
+    mockLoggerDebug.mockClear();
+    mockLoggerWarn.mockClear();
+
+    act(() => rerender({ usjFromPdp: confirmationEcho }));
+
+    expect(mockLoggerDebug).toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  // Telemetry: if incoming Scripture keeps getting deferred without the round-trip ever converging,
+  // that is worth a single warning (a non-idempotent round-trip or a concurrent external edit).
+  it('logs a single warning once deferrals reach the non-convergence threshold', () => {
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'q1', content: ['wins'] }],
+    };
+    const makeEcho = (i: number): Usj => ({
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        { type: 'para', marker: 'p', content: [`echo ${i}`] },
+      ],
+    });
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: makeEcho(0) } },
+    );
+
+    // The initial render is deferral #1; drive further distinct differing echoes past the
+    // threshold. The warning must fire exactly once (at the crossing), not once per update.
+    for (let i = 1; i <= NON_CONVERGENCE_WARN_THRESHOLD; i += 1) {
+      act(() => rerender({ usjFromPdp: makeEcho(i) }));
+    }
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
   });
 });

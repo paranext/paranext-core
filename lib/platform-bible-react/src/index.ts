@@ -77,6 +77,7 @@ export {
   type PaletteItemLike,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 export {
+  clearPaletteSessionIfCurrent,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyOutcome,
   type MarkerPaletteSessionDriver,

@@ -111,8 +111,8 @@ export interface NoteCallerClickState {
 export interface NoteCallerClickDecision {
   /**
    * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
-   * bookkeeping that would otherwise dead-end every future caller click (PT-4187 bug 3, "make the
-   * failure benign"). The caller must clear the editing-session refs before acting.
+   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
+   * failure benign. The caller must clear the editing-session refs before acting.
    */
   clearStaleEditingSession: boolean;
   /**
@@ -127,14 +127,14 @@ export interface NoteCallerClickDecision {
 }
 
 /**
- * Decides what a click on a note caller does (PT-4187 bug 3). Pure decision logic extracted from
+ * Decides what a click on a note caller does. Pure decision logic extracted from
  * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
  *
  * - An expanded note's caller does nothing (the note is edited in place).
  * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
  * - An editing-session key without a shown popover is STALE — it must not block the click.
- * - Pane actually rendered → focus/highlight the note there (PT9 navigate-to-note, Decision 6); the
- *   pane's visibility toggle alone is not enough (the pane also needs its data to render).
+ * - Pane actually rendered → focus/highlight the note there (PT9 navigate-to-note); the pane's
+ *   visibility toggle alone is not enough (the pane also needs its data to render).
  * - Otherwise → open the footnote-editor popover.
  */
 export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {

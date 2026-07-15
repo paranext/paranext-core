@@ -699,7 +699,7 @@ describe('overlay.service-host', () => {
     });
 
     it('should apply filterText updates to a non-passive (active) palette (forwarded driving)', async () => {
-      // Task 15 round 3: the extension forwards keystrokes via updateCommandPalette when the
+      // The extension forwards keystrokes via updateCommandPalette when the
       // cross-frame focus handoff loses; the active palette's controlled search input consumes
       // the driven filterText, so the update must be stored (previously passive-only + warn).
       const activeRequest: CommandPaletteRequest = {

@@ -1269,7 +1269,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     {
       method: {
         summary:
-          'Toggle the PT9-divergent NN3 auto-show/hide setting for the footnotes pane (default off)',
+          'Toggle the footnotes-pane auto-show/hide setting (default off; diverges from PT9, whose pane visibility is manual and persistent)',
         params: [
           {
             name: 'webViewId',

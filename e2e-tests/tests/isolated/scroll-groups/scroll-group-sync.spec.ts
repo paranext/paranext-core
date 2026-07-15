@@ -39,7 +39,7 @@ import {
 // approach as comment.fixture.ts.
 //
 // The fixture's default `interfaceMode: 'power'` (required for the Home-tab layout this suite
-// waits on) now means the editor opens in Standard view by default (PT-4190). The verse selectors
+// waits on) now means the editor opens in Standard view by default. The verse selectors
 // below survive that: `VerseNode` renders `data-marker="v"`/`data-number` in every view, and in
 // Standard view the visible `\v N` marker text lives INSIDE the verse span (no separate glyph
 // element is inserted), so the `+ span` marker/text adjacency and the click-in-verse-text gesture

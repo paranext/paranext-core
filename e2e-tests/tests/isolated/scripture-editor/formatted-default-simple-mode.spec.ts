@@ -1,8 +1,8 @@
 /**
- * Simple-mode default-view e2e (PT-4190 / NN-1 "nothing changes for Simple users" clause): a
- * scripture editor opened with no previously saved view state keeps the pre-Standard-view
- * 'formatted' default when `platform.interfaceMode` is 'simple' — the power-mode Standard default
- * (see standard-default-power-mode.spec.ts) must not leak into Simple mode.
+ * Simple-mode default-view e2e: a scripture editor opened with no previously saved view state keeps
+ * the pre-Standard-view 'formatted' default when `platform.interfaceMode` is 'simple', so nothing
+ * changes for Simple users — the power-mode Standard default (see
+ * standard-default-power-mode.spec.ts) must not leak into Simple mode.
  *
  * The flow mirrors the power-mode spec exactly (same project, same open command, same navigation);
  * the ONLY variable is `interfaceMode`, so a failure here isolates the interface-mode gating of the

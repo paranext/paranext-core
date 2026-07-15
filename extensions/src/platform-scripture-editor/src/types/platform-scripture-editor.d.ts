@@ -56,7 +56,7 @@ declare module 'platform-scripture-editor' {
   };
 
   /**
-   * Tell the editor to toggle the PT9-divergent NN3 auto-show/hide setting for the footnotes pane
+   * Tell the editor to toggle the footnotes-pane auto-show/hide setting (which diverges from PT9)
    * in standard view (default off; when on, the pane auto-shows/hides based on whether the current
    * chapter has notes, unless the user has manually overridden it for that chapter)
    */
@@ -142,7 +142,11 @@ declare module 'platform-scripture-editor' {
     action: AnnotationAction;
   };
 
-  /** Messages sent to the editor web view */
+  /**
+   * Messages sent to the editor web view
+   *
+   * @experimental The set of editor messages may expand.
+   */
   export type EditorWebViewMessage =
     | EditorMessageSelectRange
     | EditorMessageUpdateDecorations
@@ -289,6 +293,11 @@ declare module 'platform-scripture-editor' {
 
   // #region editor WebView types
 
+  /**
+   * Ways Scripture project text can be viewed in the editor.
+   *
+   * @experimental The set of view types is expected to grow.
+   */
   export type ScriptureEditorViewType = 'formatted' | 'markers' | 'standard';
 
   /** Options for configuring the editor you are opening */
@@ -299,6 +308,8 @@ declare module 'platform-scripture-editor' {
      * Ways Scripture project text can be viewed in the editor
      *
      * Defaults to 'formatted'.
+     *
+     * @experimental
      */
     viewType?: ScriptureEditorViewType;
     /**
@@ -355,7 +366,7 @@ declare module 'platform-scripture-editor' {
     /** Toggle the visibility of the footnotes pane in the editor */
     toggleFootnotesPaneVisibility(): Promise<void>;
     /**
-     * Toggle the PT9-divergent NN3 auto-show/hide setting for the footnotes pane in standard view
+     * Toggle the footnotes-pane auto-show/hide setting (which diverges from PT9) in standard view
      * (default off)
      */
     toggleFootnotesAutoShow(): Promise<void>;
@@ -765,7 +776,7 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.toggleFootnotes': (webViewId: string | undefined) => Promise<void>;
 
     /**
-     * Toggles the PT9-divergent NN3 auto-show/hide setting for the footnotes pane (default off) for
+     * Toggles the footnotes-pane auto-show/hide setting (which diverges from PT9; default off) for
      * the given the WebView ID. When on, the footnotes pane automatically shows/hides in standard
      * view based on whether the current chapter has notes, unless manually overridden.
      *

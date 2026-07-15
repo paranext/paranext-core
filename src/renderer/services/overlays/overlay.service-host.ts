@@ -628,7 +628,7 @@ function getActiveCommandPalette(webViewId: string): CommandPaletteEntry | undef
  * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
  *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the (controlled)
  *   search input — the extension forwards keystrokes this way when the cross-frame focus handoff
- *   loses and the user's typing lands in the editor instead of the palette (Task 15 round 3).
+ *   loses and the user's typing lands in the editor instead of the palette.
  */
 async function updateCommandPalette(
   webViewId: string,
@@ -761,8 +761,8 @@ function registerAutoDismissListeners(): void {
       // changes that would otherwise immediately dismiss the just-created context menu
       if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
 
-      // Focus moving INTO an overlay is not a reason to dismiss it (Task 15 round 3, QA run 3
-      // item 4: clicking a focused palette's own search input closed the palette). Overlays live
+      // Focus moving INTO an overlay is not a reason to dismiss it (previously, clicking a focused
+      // palette's own search input closed the palette). Overlays live
       // in the parent document, so focusing one is classified as leaving the webview by
       // detectFocus — check whether the newly active element actually sits inside the overlay
       // host (OverlayHost's portal container) or a Radix popover portal (anchored palettes render

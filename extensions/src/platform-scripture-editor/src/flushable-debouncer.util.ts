@@ -1,7 +1,7 @@
 /**
- * Trailing-edge debouncer with an explicit lifecycle, for the web view's keystroke-driven PDP save
- * (Task 15 wave review). `platform-bible-utils`' `debounce` exposes no `flush`/`cancel`, which left
- * two holes once the save became debounced:
+ * Trailing-edge debouncer with an explicit lifecycle, for the web view's keystroke-driven PDP save.
+ * `platform-bible-utils`' `debounce` exposes no `flush`/`cancel`, which left two holes once the
+ * save became debounced:
  *
  * - Renderer death (crash, web-view dispose, app quit) inside the trailing window silently lost the
  *   final edits — a crash-resilience regression vs. the prior per-change save.

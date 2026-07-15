@@ -174,6 +174,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
   },
   {
@@ -223,6 +224,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     // macOS intentionally uses ⌃⇧T (not ⌘⇧T) to match the handler in
     // platform-scripture-editor.web-view.tsx (`event.ctrlKey`), like the find dialog's ⌃F.
     keys: { macOS: '⌃⇧T', windows: 'Ctrl+Shift+T', linux: 'Ctrl+Shift+T' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
+    id: 'scripture-paragraph-markers-menu',
+    purpose: 'Open the paragraph markers menu to split the paragraph (Standard view, editable)',
+    category: 'Editing',
+    context: 'Scripture editor web view',
+    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
     ],
@@ -327,6 +338,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
   },
   {

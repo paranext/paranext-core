@@ -2442,7 +2442,7 @@ describe('generateParagraphMenuListItems', () => {
   });
 });
 
-describe('decideNoteCallerClickAction (PT-4187 bug 3: caller-click must not dead-end)', () => {
+describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
   const base = {
     isCollapsed: true,
     editingNoteKey: undefined,

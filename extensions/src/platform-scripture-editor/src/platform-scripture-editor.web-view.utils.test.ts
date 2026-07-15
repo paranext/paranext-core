@@ -13,7 +13,6 @@ import type {
   StyleInfo,
 } from '@eten-tech-foundation/platform-editor';
 import {
-  clearPaletteSessionIfCurrent,
   generateInlineMarkerMenuListItems,
   markerMenuItemToCommandPaletteItem,
 } from './platform-scripture-editor.web-view.utils';
@@ -222,36 +221,5 @@ describe('markerMenuItemToCommandPaletteItem', () => {
 
     expect(markerMenuItemToCommandPaletteItem(nonBasic).muted).toBe(true);
     expect(markerMenuItemToCommandPaletteItem(basic).muted).toBe(false);
-  });
-});
-
-describe('clearPaletteSessionIfCurrent', () => {
-  it('clears the session when the token matches the live session', () => {
-    const sessionRef: MutableRefObject<{ token: number } | undefined> = {
-      current: { token: 3 },
-    };
-
-    clearPaletteSessionIfCurrent(sessionRef, 3);
-
-    expect(sessionRef.current).toBeUndefined();
-  });
-
-  it('leaves a NEWER session in place when a stale token tries to clear (dismiss/re-trigger race)', () => {
-    // Session A (token 1) was dismissed synchronously; session B (token 2) is live when A's
-    // show-promise finally settles and runs its async cleanup with A's captured token.
-    const sessionB = { token: 2 };
-    const sessionRef: MutableRefObject<{ token: number } | undefined> = { current: sessionB };
-
-    clearPaletteSessionIfCurrent(sessionRef, 1);
-
-    expect(sessionRef.current).toBe(sessionB);
-  });
-
-  it('no-ops when no session is live', () => {
-    const sessionRef: MutableRefObject<{ token: number } | undefined> = { current: undefined };
-
-    clearPaletteSessionIfCurrent(sessionRef, 1);
-
-    expect(sessionRef.current).toBeUndefined();
   });
 });
