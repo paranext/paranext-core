@@ -31,61 +31,89 @@ namespace TestParanextDataProvider.Projects.SendReceive
     {
         /// <summary>
         /// Direct project-write call patterns that must be gated. Matched against raw file text (not
-        /// per-line), so a call wrapped across multiple lines by a formatter is still caught.
+        /// per-line), so a call wrapped across multiple lines by a formatter is still caught. These
+        /// aim to cover the write kinds the AGENTS.md/CLAUDE.md rule promises — <c>ScrText</c> writes
+        /// (<c>PutText</c>, <c>Save</c>), settings writes, comment/note persistence, and project-file
+        /// deletes. The <c>.Save(</c> heuristic is deliberately broad (it catches
+        /// <c>ScrText.Save()</c>, <c>Settings.Save()</c>, <c>ErrorMessageDenials.Save()</c>,
+        /// <c>ScriptureInventoryBase.Save()</c>, and any other persistence <c>.Save(</c>); non-project
+        /// <c>.Save(</c> sites are consciously allowlisted below with a reason. It is a coarse net, not
+        /// a semantic analysis — false positives are expected and handled by the allowlist.
         /// </summary>
         private static readonly (string Label, Regex Pattern)[] s_writePatterns =
         [
+            // Broad persistence heuristic: subsumes Settings.Save and catches ScrText.Save,
+            // denials.Save, inventory.Save, XDocument.Save, etc.
+            ("Save()", new Regex(@"\.Save\(", RegexOptions.Compiled)),
             ("ScrText.PutText", new Regex(@"\.PutText\(", RegexOptions.Compiled)),
-            ("Settings.Save", new Regex(@"\.Settings\.Save\(", RegexOptions.Compiled)),
             ("Settings.SetSetting", new Regex(@"\.Settings\.SetSetting\(", RegexOptions.Compiled)),
             (
                 "Settings.RemoveSetting",
                 new Regex(@"\.Settings\.RemoveSetting\(", RegexOptions.Compiled)
             ),
-            ("FileManager.Delete", new Regex(@"FileManager\.Delete", RegexOptions.Compiled)),
+            // Comment/note persistence (mutations are staged in memory then written by these).
+            ("CommentManager.SaveUser", new Regex(@"\.SaveUser\(", RegexOptions.Compiled)),
+            (
+                "CommentEditHelper.SaveEdits",
+                new Regex(@"CommentEditHelper\.SaveEdits\(", RegexOptions.Compiled)
+            ),
+            // Project-file deletes: ScrText.FileManager.Delete plus raw File.Delete of project files.
+            ("FileManager.Delete", new Regex(@"\.FileManager\.Delete\(", RegexOptions.Compiled)),
+            ("File.Delete", new Regex(@"\bFile\.Delete\(", RegexOptions.Compiled)),
         ];
 
         /// <summary>
         /// Files exempt from the scan, as paths relative to the <c>c-sharp/</c> source root
-        /// (forward-slash, case-sensitive). Two categories:
+        /// (forward-slash, case-sensitive). Each entry carries a one-line reason. Three categories:
         /// <list type="bullet">
         /// <item>
         /// <description>
-        /// The three services that gate every project-write entry point with
+        /// <b>gated</b> — services that gate every project-write entry point with
         /// <c>SendReceiveWriteLock.EnterWrite</c> (see AGENTS.md/CLAUDE.md).
         /// </description>
         /// </item>
         /// <item>
         /// <description>
-        /// Helper/orchestrator files whose write patterns are today only reachable through one of
-        /// those three services' already-gated wire methods, but are not gated at their own entry
-        /// point — discovered by running this scan's patterns ad hoc against the source tree while
-        /// writing this test. Each is marked <c>// TODO(PT-4210): assess</c> since PT-4210 (wiring
-        /// SetSyncing/Clear into the Studio patch) is the natural point to decide whether they need
-        /// their own gate (e.g. if a future caller reaches them without going through the gated
-        /// service).
+        /// <b>TODO(PT-4210): assess</b> — helper/orchestrator files whose write patterns are today
+        /// only reachable through one of those gated services' wire methods, but are not gated at
+        /// their own entry point. PT-4210 (wiring SetSyncing/Clear into the Studio patch) is the
+        /// natural point to decide whether they need their own gate (e.g. if a future caller reaches
+        /// them without going through the gated service).
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// <b>not-project-data</b> — files whose matched writes do not touch the shared
+        /// <c>ScrText</c>/<c>Settings</c> project data the S/R merge replaces (per-user settings,
+        /// resource caches), so the write gate does not apply.
         /// </description>
         /// </item>
         /// </list>
+        /// This is a coarse net over broad patterns (see <see cref="s_writePatterns"/>), so false
+        /// positives are expected; each is triaged here with its reason rather than by narrowing the
+        /// patterns.
         /// </summary>
         private static readonly string[] s_allowlistRelativePaths =
         [
-            // Gated entry-point services (11 + 5 + 2 EnterWrite call sites respectively).
-            "Projects/ParatextProjectDataProvider.cs",
-            "ManageBooks/ManageBooksService.cs",
-            "Checks/InventoryDataProvider.cs",
-            // TODO(PT-4210): assess. PutText calls only reached via ManageBooksService's gated
-            // ImportBooksAsync/CreateBooksAsync today.
-            "ManageBooks/ImportBooksOrchestrator.cs",
-            // TODO(PT-4210): assess. PutText calls only reached via ManageBooksService's gated
-            // CreateBooksAsync (Scripture template creation).
-            "ManageBooks/ScriptureTemplateService.cs",
-            // TODO(PT-4210): assess. PutText calls only reached via ManageBooksService's gated
-            // CopyBooksAsync/CopyCustomVersificationAsync.
-            "ManageBooks/CopyBooksOrchestrator.cs",
-            // TODO(PT-4210): assess. FileManager.Delete only reached via ManageBooksService's gated
-            // DeleteBooksAsync.
-            "ManageBooks/DeleteBooksOrchestrator.cs",
+            // --- gated: every project-write entry point here opens EnterWrite as its first statement.
+            "Projects/ParatextProjectDataProvider.cs", // gated: 11 write methods (Scripture/settings/comment/extension)
+            "ManageBooks/ManageBooksService.cs", // gated: 5 mutating wire methods
+            "Checks/InventoryDataProvider.cs", // gated: SetInventoryItemStatus/SetInventoryOptionValues
+            "Checks/CheckRunner.cs", // gated: DenyCheckResult/AllowCheckResult (denials.Save) — PT-4159 review
+            // --- TODO(PT-4210): assess. Reached today only through a gated ManageBooksService wire
+            // method; not gated at their own entry point. PT-4210 (wiring SetSyncing/Clear into the
+            // Studio patch) is the point to decide whether any need their own gate.
+            "ManageBooks/ImportBooksOrchestrator.cs", // PutText via gated ImportBooksAsync/CreateBooksAsync
+            "ManageBooks/ScriptureTemplateService.cs", // PutText + scrText.Save via gated CreateBooksAsync
+            "ManageBooks/CopyBooksOrchestrator.cs", // PutText via gated CopyBooksAsync/CopyCustomVersificationAsync
+            "ManageBooks/DeleteBooksOrchestrator.cs", // FileManager.Delete + scrText.Save via gated DeleteBooksAsync
+            // --- not-project-data (or not the shared ScrText/Settings data the S/R merge replaces).
+            "Projects/UserProjectSettings.cs", // not-project-data: per-user UserSettings-{userId}.xml (XDocument.Save), not shared merged data
+            "EnhancedResources/MarblePackageDiscoverer.cs", // not-project-data: enhanced-resource cache; File.Delete removes a superseded V1 companion file
+            // Extension-data stream manager, constructed only by the gated ParatextProjectDataProvider;
+            // its writes are reached via that service's gated SetExtensionData. Its only matched write —
+            // File.Delete in DeleteDataStream — is currently unused. TODO(PT-4210): assess.
+            "Projects/RawDirectoryProjectStreamManager.cs",
         ];
 
         /// <summary>

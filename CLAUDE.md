@@ -170,10 +170,22 @@ as the first statement of its entry-point method (see
 `c-sharp/Projects/SendReceive/SendReceiveWriteLock.cs`). The gate works in both directions: an
 armed/queued automatic Send/Receive rejects the write fail-fast (the `(SR_EDIT_BLOCKED)` sentinel),
 while a starting sync waits, bounded, for open write scopes to drain before it replaces files on
-disk. This is an **in-process** gate, distinct from the S/R server-side repository lock
+disk.
+
+The gated method MUST hold that scope **synchronously**: no `await` or `Task.Run` between
+`EnterWrite` and its dispose. The lock is a thread-affine `ReaderWriterLockSlim`, so the read lock
+must be released on the very thread that took it — an `await` could resume on a different pool thread
+and release a lock it never held. (Several gated methods are named `...Async` but are synchronous
+today; if one ever needs real asynchrony, `await` OUTSIDE the scope, never across it.) The same
+single-thread rule applies to the sync side: `SetSyncing`/`Clear` must be called on one thread for
+the whole arm→clear bracket.
+
+This is an **in-process** gate, distinct from the S/R server-side repository lock
 (`lockrepo`/`unlockrepo` between clients) — do not conflate the two. `SendReceiveWriteLockCoverageTests`
-(`c-sharp-tests/Projects/SendReceive/`) scans the source tree for ungated write call patterns and
-fails if a new one isn't gated or consciously allowlisted.
+(`c-sharp-tests/Projects/SendReceive/`) scans the source tree for direct project-write call patterns
+(a general `.Save(` heuristic, `PutText`, comment `SaveUser`/`SaveEdits`, and `File`/`FileManager`
+deletes) and fails if a new one isn't gated or consciously allowlisted (with a one-line justification:
+gated / `TODO(PT-4210)` / not-project-data).
 
 ## Never Commit Secrets
 

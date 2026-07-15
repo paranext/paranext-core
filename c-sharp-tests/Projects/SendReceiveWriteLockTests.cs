@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
+using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.ManageBooks;
 using Paranext.DataProvider.Projects;
@@ -403,6 +405,47 @@ namespace TestParanextDataProvider.Projects
             });
         }
 
+        [Test]
+        public void Clear_OnDifferentThreadThanSetSyncing_ThrowsAndLeavesStateIntact()
+        {
+            // Defends the single-thread contract: a sync armed on one thread must be cleared on THAT
+            // thread. A cross-thread Clear must fail fast (InvalidOperationException) and — crucially —
+            // NOT touch the armed set or the still-held write lock, so the owning thread can still
+            // clean up correctly. Without the owner-thread guard the degraded path would slip through
+            // silently (nothing is held for the RWLS to reject).
+            var armed = new ManualResetEventSlim(false);
+            var release = new ManualResetEventSlim(false);
+            var worker = new Thread(() =>
+            {
+                SendReceiveWriteLock.SetSyncing(["projectA"]);
+                armed.Set();
+                release.Wait(TimeSpan.FromSeconds(10));
+                SendReceiveWriteLock.Clear(); // proper cleanup on the OWNING thread
+            })
+            {
+                IsBackground = true,
+                Name = "CrossThreadClearWorker",
+            };
+            worker.Start();
+            Assert.That(armed.Wait(TimeSpan.FromSeconds(10)), Is.True, "worker should have armed");
+
+            // Clear on the TEST thread (not the arming thread) is rejected...
+            Assert.Throws<InvalidOperationException>(SendReceiveWriteLock.Clear);
+            // ...and left the sync intact for the owner to clean up.
+            Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.True);
+
+            release.Set();
+            Assert.That(
+                worker.Join(TimeSpan.FromSeconds(10)),
+                Is.True,
+                "worker should have cleared"
+            );
+            Assert.That(SendReceiveWriteLock.IsBlocked("projectA"), Is.False);
+
+            armed.Dispose();
+            release.Dispose();
+        }
+
         // ---- Concurrency stress: the core safety invariant ----
 
         /// <summary>
@@ -483,11 +526,13 @@ namespace TestParanextDataProvider.Projects
     /// it is rejected (with the sentinel) while the project is registered as syncing. One round-trip
     /// test additionally proves a write succeeds again after the sync ends.
     ///
-    /// Covered here: all 11 <see cref="ParatextProjectDataProvider"/> write methods and the 5
-    /// mutating <see cref="ManageBooksService"/> wire methods. The two <c>InventoryDataProvider</c>
-    /// setters are gated identically but are private (only reachable through the PAPI wire dispatch),
-    /// so they have no direct wiring test; the gate call itself is the same one-line <c>EnterWrite</c>
-    /// scope covered by <see cref="SendReceiveWriteLockTests"/>.
+    /// Covered here: all 11 <see cref="ParatextProjectDataProvider"/> write methods, the 5 mutating
+    /// <see cref="ManageBooksService"/> wire methods, and the two <c>CheckRunner</c> denial writers
+    /// (<c>DenyCheckResult</c>/<c>AllowCheckResult</c>, invoked via reflection since they are private
+    /// and <c>CheckRunner</c> is sealed). The two <c>InventoryDataProvider</c> setters are gated
+    /// identically but are private (only reachable through the PAPI wire dispatch), so they have no
+    /// direct wiring test; the gate call itself is the same one-line <c>EnterWrite</c> scope covered
+    /// by <see cref="SendReceiveWriteLockTests"/>.
     ///
     /// <para>Each test arms the sync via <see cref="FakeSync"/> (on a background thread) rather than
     /// calling <see cref="SendReceiveWriteLock.SetSyncing"/> on the test thread: the RWLS read lock is
@@ -681,5 +726,55 @@ namespace TestParanextDataProvider.Projects
                 () =>
                     _manageBooksService.ImportBooksAsync(new ImportBooksInput(ProjectId, [], false))
             );
+
+        // CheckRunner denial writers (DenyCheckResult/AllowCheckResult persist ErrorMessageDenials
+        // into the project folder via denials.Save()). They are private and CheckRunner is sealed, so
+        // they can neither be called nor overridden directly; invoke them through reflection. The gate
+        // is their first statement, so it throws before the check cache or project is touched — the
+        // arguments only need to satisfy the signature. MethodInfo.Invoke wraps the throw in a
+        // TargetInvocationException, so assert on its InnerException.
+
+        private void AssertCheckRunnerDenialBlocked(string methodName)
+        {
+            var checkRunner = new CheckRunner(
+                Client,
+                new InventoryDataProvider(Client, ParatextProjects)
+            );
+            var method =
+                typeof(CheckRunner).GetMethod(
+                    methodName,
+                    BindingFlags.NonPublic | BindingFlags.Instance
+                ) ?? throw new MissingMethodException(nameof(CheckRunner), methodName);
+
+            using var sync = new FakeSync(ProjectId);
+
+            var tie = Assert.Throws<TargetInvocationException>(
+                () =>
+                    method.Invoke(
+                        checkRunner,
+                        [
+                            "checkId",
+                            "checkResultType",
+                            ProjectId,
+                            new VerseRef(1, 1, 0),
+                            "itemText",
+                            null,
+                        ]
+                    )
+            );
+            Assert.That(tie!.InnerException, Is.InstanceOf<InvalidOperationException>());
+            Assert.That(
+                tie.InnerException!.Message,
+                Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel)
+            );
+        }
+
+        [Test]
+        public void DenyCheckResult_ProjectSyncing_ThrowsWithSentinel() =>
+            AssertCheckRunnerDenialBlocked("DenyCheckResult");
+
+        [Test]
+        public void AllowCheckResult_ProjectSyncing_ThrowsWithSentinel() =>
+            AssertCheckRunnerDenialBlocked("AllowCheckResult");
     }
 }

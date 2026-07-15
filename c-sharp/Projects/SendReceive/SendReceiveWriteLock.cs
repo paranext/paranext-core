@@ -175,6 +175,15 @@ internal static class SendReceiveWriteLock
     // not hold.
     private static bool _writeLockHeld;
 
+    // The managed-thread id that armed the current sync (via SetSyncing), or 0 when no sync is armed.
+    // SetSyncing/Clear MUST run on the same thread (RWLS thread affinity + the plain-bool _writeLockHeld
+    // has no cross-thread synchronization). This records the owner so Clear can DEFEND that contract:
+    // a cross-thread Clear throws a clear InvalidOperationException instead of silently corrupting the
+    // held-flag (on the degraded path the RWLS itself would not catch it — nothing is held to exit).
+    // Managed-thread ids are always positive, so 0 is an unambiguous "no owner". volatile for safe
+    // publication of the id to whatever thread calls Clear.
+    private static volatile int _ownerThreadId;
+
     // How long SetSyncing waits (via TryEnterWriteLock) for in-flight writes to drain before giving
     // up. BOUNDED on purpose: a sync start must never be able to deadlock behind a write scope that
     // (through a bug, a stuck ParatextData call, or an editor that forgot to dispose) never
@@ -201,12 +210,23 @@ internal static class SendReceiveWriteLock
     /// held or, on the degraded path, because the belt check sees the armed set). Replaces any
     /// previously set list; call once per sync batch with the full set of projects. The drain is
     /// bounded (<see cref="DrainTimeout"/>); on timeout it logs a warning and proceeds UNHELD so a
-    /// sync start can never deadlock. MUST be called on the same thread that will later call
-    /// <see cref="Clear"/> (RWLS thread affinity — see the class remarks).
+    /// sync start can never deadlock.
+    /// <para>
+    /// <b>Single-thread contract.</b> <see cref="SetSyncing"/> and <see cref="Clear"/> MUST be
+    /// serialized on ONE thread — the sync worker's — for the whole arm→clear bracket (the Paratext 10
+    /// Studio PT-4210 patch does exactly this in a <c>try</c>/<c>finally</c>). Two reasons: the RWLS is
+    /// thread-affine (the thread that enters the write lock must exit it), and <c>_writeLockHeld</c> is
+    /// a plain bool with no cross-thread synchronization. This method records the arming thread so
+    /// <see cref="Clear"/> can defend the contract with a clear exception on a cross-thread call.
+    /// </para>
     /// </summary>
     public static void SetSyncing(IEnumerable<string> projectIds)
     {
         ArgumentNullException.ThrowIfNull(projectIds);
+
+        // Record the owning thread so Clear can enforce the single-thread contract (see the field and
+        // Clear). On a same-thread re-arm this simply re-stamps the same id.
+        _ownerThreadId = Environment.CurrentManagedThreadId;
 
         // FIRST swap the armed set (pure data). Publishing this before acquiring the lock means the
         // belt check in EnterWrite already rejects writes even during the write-lock acquisition
@@ -242,12 +262,28 @@ internal static class SendReceiveWriteLock
 
     /// <summary>
     /// Ends the sync: disarms all projects and releases the write lock if it was held. Safe to call
-    /// when the lock was never taken (the degraded path) — it simply disarms. MUST run on the same
-    /// thread that called <see cref="SetSyncing"/> (RWLS thread affinity — see the class remarks).
+    /// when the lock was never taken (the degraded path) or when no sync is active at all — it simply
+    /// disarms. MUST run on the same thread that called <see cref="SetSyncing"/> (RWLS thread affinity,
+    /// and <c>_writeLockHeld</c> is an unsynchronized bool — see the class remarks and the
+    /// single-thread contract on <see cref="SetSyncing"/>). Defends that contract: if a sync is armed
+    /// and this runs on a DIFFERENT thread, it throws <see cref="InvalidOperationException"/> rather
+    /// than silently mismanaging the held-flag (on the degraded path the RWLS would not otherwise catch
+    /// it — nothing is held to exit).
     /// </summary>
     public static void Clear()
     {
+        // Enforce the single-thread contract. Only fires when a sync is actually armed (owner id is 0
+        // otherwise), so a plain no-op Clear — no prior SetSyncing — stays safe on any thread.
+        var owner = _ownerThreadId;
+        if (owner != 0 && owner != Environment.CurrentManagedThreadId)
+            throw new InvalidOperationException(
+                $"SendReceiveWriteLock.Clear() called on thread {Environment.CurrentManagedThreadId} "
+                    + $"but the sync was armed on thread {owner}. SetSyncing/Clear must run on the same "
+                    + "thread (see SetSyncing's single-thread contract)."
+            );
+
         _blockedProjectIds = ImmutableHashSet<string>.Empty;
+        _ownerThreadId = 0;
         if (_writeLockHeld)
         {
             _writeLockHeld = false;
@@ -279,6 +315,15 @@ internal static class SendReceiveWriteLock
     /// the life of the scope, so a sync starting via <see cref="SetSyncing"/> waits for this write to
     /// finish before it replaces files. Dispose the returned scope (via <c>using</c>, on the same
     /// thread) to release the read lock. A no-op gate in public core (nothing arms the lock there).
+    /// <para>
+    /// <b>Hold the scope synchronously — NO <c>await</c>.</b> The RWLS read lock is thread-affine: it
+    /// must be released on the thread that took it. A gated method must therefore run from
+    /// <see cref="EnterWrite"/> to the scope's dispose synchronously on ONE thread — do NOT
+    /// <c>await</c> or hand off to <c>Task.Run</c> between opening the scope and disposing it (an
+    /// <c>await</c> can resume the continuation on a different pool thread, which would then release a
+    /// lock it never took). Several gated methods are named <c>...Async</c> but are synchronous today;
+    /// if one ever needs real asynchrony, do the awaiting OUTSIDE the scope, not across it.
+    /// </para>
     /// Because any active sync holds the global write lock, this is a global gate: while ANY project
     /// is syncing, ALL project writes are rejected (syncs are globally exclusive by design).
     /// </summary>
