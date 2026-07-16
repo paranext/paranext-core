@@ -262,6 +262,54 @@ describe('initAutoSyncEditBlockDriver', () => {
   });
 
   it(
+    'swaps blocking from one project to another on a pure swap transition {A} → {B}, and does not ' +
+      "let a stale update from A's editor bounce it back to blocked once B is the (only) live " +
+      'handler (regression: a swapped-out project must not bounce back)',
+    () => {
+      const writes: { id: string; blocked: boolean }[] = [];
+      vi.mocked(updateWebViewDefinitionSync).mockImplementation((id, updateInfo) => {
+        if (updateInfo.state) writes.push({ id, blocked: Boolean(updateInfo.state.isSyncBlocked) });
+        dispatchUpdate(id, updateInfo);
+        return true;
+      });
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        editor('a1', 'projA'),
+        editor('b1', 'projB'),
+      ]);
+      initAutoSyncEditBlockDriver();
+      if (!storeListener) throw new Error('store listener not registered');
+
+      // projA syncing → a1 flagged.
+      setBlockedProjects('projA');
+      storeListener();
+      expect(writes).toEqual([{ id: 'a1', blocked: true }]);
+
+      // Pure swap: projA finishes and projB starts syncing in the same notification. a1 must unflag
+      // and b1 must flag, with no bounce-back write for a1 in between — the ordering fix (teardown
+      // before apply) keeps the stale {A}-scoped handler from observing its own unflag write.
+      writes.length = 0;
+      setBlockedProjects('projB');
+      storeListener();
+      expect(writes).toEqual([
+        { id: 'a1', blocked: false },
+        { id: 'b1', blocked: true },
+      ]);
+
+      // The re-subscribed handler now closes over {B}. A's editor firing a stale onDidUpdateWebView
+      // (e.g. a reload already in flight when the swap happened) must not re-flag it: A is no longer
+      // in the blocked set, so isEditorBlocked's early return keeps the handler from acting on it.
+      if (!updateHandler) throw new Error('update handler not registered');
+      writes.length = 0;
+      updateHandler({ webView: editor('a1', 'projA', { isSyncBlocked: false }) });
+      expect(writes).toEqual([]);
+
+      // Sanity: B's editor, if rebuilt mid-block, IS still re-flagged by the new handler.
+      updateHandler({ webView: editor('b1', 'projB', { isSyncBlocked: false }) });
+      expect(writes).toEqual([{ id: 'b1', blocked: true }]);
+    },
+  );
+
+  it(
     'does not let a still-live re-flag handler bounce an editor back to blocked when unblocking ' +
       '(regression: the driver must unsubscribe onDidUpdateWebView before applying the unblock)',
     () => {
