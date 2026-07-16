@@ -317,9 +317,14 @@ export async function registerRequestHandler(
   if (requestHandlerOptions?.timeoutMilliseconds !== undefined)
     setTimeoutMsForRequestType(requestType, requestHandlerOptions.timeoutMilliseconds);
   return async () => {
-    if (!jsonRpc) return false;
+    if (!jsonRpc) {
+      logger.warn(`Could not unregister request handler for "${requestType}": jsonRpc is not set`);
+      return false;
+    }
     removeTimeoutMsForRequestType(requestType);
-    return jsonRpc.unregisterMethod(requestType);
+    const unregistered = await jsonRpc.unregisterMethod(requestType);
+    if (!unregistered) logger.warn(`Failed to unregister request handler for "${requestType}"`);
+    return unregistered;
   };
 }
 
