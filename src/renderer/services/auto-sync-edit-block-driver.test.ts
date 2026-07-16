@@ -7,6 +7,7 @@ import {
 import {
   getAllOpenWebViewDefinitionsSync,
   onDidOpenWebView,
+  onDidUpdateWebView,
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 import { initAutoSyncEditBlockDriver } from './auto-sync-edit-block-driver';
@@ -19,6 +20,7 @@ vi.mock('@renderer/services/auto-sync-blocking-store', () => ({
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getAllOpenWebViewDefinitionsSync: vi.fn(),
   onDidOpenWebView: vi.fn(),
+  onDidUpdateWebView: vi.fn(),
   updateWebViewDefinitionSync: vi.fn(),
 }));
 
@@ -54,13 +56,18 @@ describe('initAutoSyncEditBlockDriver', () => {
   /** The onDidOpenWebView callback the driver registers while blocking. */
   let openHandler: ((event: { webView: SavedWebViewDefinition }) => void) | undefined;
   let openUnsub: ReturnType<typeof vi.fn>;
+  /** The onDidUpdateWebView callback the driver registers while blocking. */
+  let updateHandler: ((event: { webView: SavedWebViewDefinition }) => void) | undefined;
+  let updateUnsub: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     storeListener = undefined;
     openHandler = undefined;
+    updateHandler = undefined;
     storeUnsub = vi.fn();
     openUnsub = vi.fn(() => true);
+    updateUnsub = vi.fn(() => true);
 
     vi.mocked(subscribeToAutoSyncBlocking).mockImplementation((listener) => {
       storeListener = listener;
@@ -72,6 +79,16 @@ describe('initAutoSyncEditBlockDriver', () => {
       ((handler: (event: { webView: SavedWebViewDefinition }) => void) => {
         openHandler = handler;
         return openUnsub;
+        // Same cast as above: closing the type assertion needed for the complex generic signature
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+    vi.mocked(onDidUpdateWebView).mockImplementation(
+      // The network-event type is a complex generic; capture the handler for the test.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      ((handler: (event: { webView: SavedWebViewDefinition }) => void) => {
+        updateHandler = handler;
+        return updateUnsub;
         // Same cast as above: closing the type assertion needed for the complex generic signature
         // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       }) as any,
@@ -171,7 +188,74 @@ describe('initAutoSyncEditBlockDriver', () => {
     expect(onDidOpenWebView).toHaveBeenCalledTimes(1);
   });
 
-  it('cleanup unsubscribes from the store and any open-web-view subscription', () => {
+  it('re-flags a Scripture editor rebuilt (updated) mid-block that came back unblocked', () => {
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+
+    // Start blocking → subscribes to onDidUpdateWebView
+    vi.mocked(getAutoSyncBlocking).mockReturnValue(true);
+    storeListener();
+    expect(onDidUpdateWebView).toHaveBeenCalledTimes(1);
+
+    // A rebuilt editor comes back with isSyncBlocked forced to false → re-flagged to true
+    if (!updateHandler) throw new Error('update handler not registered');
+    updateHandler({ webView: editor('rebuilt', { viewType: 'formatted', isSyncBlocked: false }) });
+    expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('rebuilt', {
+      state: { viewType: 'formatted', isSyncBlocked: true },
+    });
+
+    // A non-editor update mid-block is ignored
+    vi.mocked(updateWebViewDefinitionSync).mockClear();
+    updateHandler({ webView: nonEditor('other') });
+    expect(updateWebViewDefinitionSync).not.toHaveBeenCalled();
+  });
+
+  it('does not re-flag an already-blocked editor update (the driver does not loop on its own update)', () => {
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+    vi.mocked(getAutoSyncBlocking).mockReturnValue(true);
+    storeListener();
+    if (!updateHandler) throw new Error('update handler not registered');
+
+    // Model the real service: the driver's own re-flag write re-emits onDidUpdateWebView with the
+    // now-blocked definition. If the handler acted on that it would recurse forever.
+    vi.mocked(updateWebViewDefinitionSync).mockImplementation((id) => {
+      updateHandler?.({ webView: editor(id, { isSyncBlocked: true }) });
+      return true;
+    });
+
+    updateHandler({ webView: editor('rebuilt', { isSyncBlocked: false }) });
+
+    // Exactly one write: the original re-flag. The re-emitted (already-blocked) update is a no-op.
+    expect(updateWebViewDefinitionSync).toHaveBeenCalledTimes(1);
+    expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('rebuilt', {
+      state: { isSyncBlocked: true },
+    });
+  });
+
+  it('only subscribes to onDidUpdateWebView once across overlapping blocking notifications', () => {
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+    vi.mocked(getAutoSyncBlocking).mockReturnValue(true);
+    storeListener();
+    storeListener();
+    expect(onDidUpdateWebView).toHaveBeenCalledTimes(1);
+  });
+
+  it('unsubscribes from onDidUpdateWebView when blocking ends', () => {
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+
+    vi.mocked(getAutoSyncBlocking).mockReturnValue(true);
+    storeListener();
+    expect(onDidUpdateWebView).toHaveBeenCalledTimes(1);
+
+    vi.mocked(getAutoSyncBlocking).mockReturnValue(false);
+    storeListener();
+    expect(updateUnsub).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleanup unsubscribes from the store and the open/update web-view subscriptions', () => {
     const cleanup = initAutoSyncEditBlockDriver();
     if (!storeListener) throw new Error('store listener not registered');
     vi.mocked(getAutoSyncBlocking).mockReturnValue(true);
@@ -180,6 +264,7 @@ describe('initAutoSyncEditBlockDriver', () => {
     cleanup();
     expect(storeUnsub).toHaveBeenCalledTimes(1);
     expect(openUnsub).toHaveBeenCalledTimes(1);
+    expect(updateUnsub).toHaveBeenCalledTimes(1);
   });
 
   it('does not throw if the dock layout is not ready when enumerating web views', () => {

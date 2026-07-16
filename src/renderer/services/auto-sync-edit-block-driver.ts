@@ -13,7 +13,10 @@
  * store's derived visibility onto the editors and needs none of that logic itself.
  *
  * While blocking is active it also flags editors opened mid-block (via `onDidOpenWebView`), so an
- * editor a user opens during a sync is blocked too.
+ * editor a user opens during a sync is blocked too, and re-flags editors that are rebuilt mid-block
+ * (via `onDidUpdateWebView`) — the Scripture editor factory forces `isSyncBlocked: false` on every
+ * rebuild (e.g. `reloadWebView`, an interface-mode switch, or `loadLayout`), so without this a
+ * rebuild during a sustained block would come back editable with the banner gone.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -29,6 +32,7 @@ import {
 import {
   getAllOpenWebViewDefinitionsSync,
   onDidOpenWebView,
+  onDidUpdateWebView,
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 
@@ -78,12 +82,13 @@ function applyToAllEditors(isBlocked: boolean): void {
 
 /**
  * Starts the driver: mirrors the auto-sync-blocking store's visible state onto every open Scripture
- * editor's `isSyncBlocked` state, and — while blocking — onto editors opened mid-block. Call once
- * at app startup. Returns a cleanup function that stops the driver (it does NOT clear any flags it
- * set; the store clearing to `false` is what unblocks the editors).
+ * editor's `isSyncBlocked` state, and — while blocking — onto editors opened or rebuilt mid-block.
+ * Call once at app startup. Returns a cleanup function that stops the driver (it does NOT clear any
+ * flags it set; the store clearing to `false` is what unblocks the editors).
  */
 export function initAutoSyncEditBlockDriver(): () => void {
   let unsubscribeOpen: (() => void) | undefined;
+  let unsubscribeUpdate: (() => void) | undefined;
 
   const syncState = () => {
     const isBlocking = getAutoSyncBlocking();
@@ -102,9 +107,32 @@ export function initAutoSyncEditBlockDriver(): () => void {
           unsubscribe();
         };
       }
-    } else if (unsubscribeOpen) {
-      unsubscribeOpen();
-      unsubscribeOpen = undefined;
+      // Re-flag editors rebuilt mid-block. The Scripture editor factory forces `isSyncBlocked:
+      // false` on every in-place rebuild (reloadWebView / interface-mode switch / loadLayout), which
+      // emits `onDidUpdateWebView` (not `onDidOpenWebView`), so without this the editor comes back
+      // editable with no banner for the rest of the sync.
+      if (!unsubscribeUpdate) {
+        const unsubscribe = onDidUpdateWebView(({ webView }) => {
+          if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+          // Guard against self-triggering: our own re-flag below calls updateWebViewDefinitionSync,
+          // which fires another onDidUpdateWebView. Only act when the definition came back unblocked;
+          // once we set it back to true the next event is a no-op, so this cannot loop.
+          if (webView.state?.[IS_SYNC_BLOCKED_STATE_KEY]) return;
+          setEditorSyncBlocked(webView, true);
+        });
+        unsubscribeUpdate = () => {
+          unsubscribe();
+        };
+      }
+    } else {
+      if (unsubscribeOpen) {
+        unsubscribeOpen();
+        unsubscribeOpen = undefined;
+      }
+      if (unsubscribeUpdate) {
+        unsubscribeUpdate();
+        unsubscribeUpdate = undefined;
+      }
     }
   };
 
@@ -117,6 +145,10 @@ export function initAutoSyncEditBlockDriver(): () => void {
     if (unsubscribeOpen) {
       unsubscribeOpen();
       unsubscribeOpen = undefined;
+    }
+    if (unsubscribeUpdate) {
+      unsubscribeUpdate();
+      unsubscribeUpdate = undefined;
     }
   };
 }

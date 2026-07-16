@@ -50,13 +50,6 @@ vi.mock('@renderer/components/platform-bible-toolbar', () => ({
   default: /** PlatformBibleToolbar Mock */ () => <div />,
   PlatformBibleToolbar: /** PlatformBibleToolbar Named Export Mock */ () => <div />,
 }));
-// The real driver transitively imports `web-view.service-host` -> `papi-frontend.service.ts`,
-// whose module-level `theme.service-host.ts` initialization calls `window.matchMedia`, which jsdom
-// does not implement (same trap documented in `share-layout.dialog.test.tsx`). This smoke test
-// never exercises the driver.
-vi.mock('@renderer/services/auto-sync-edit-block-driver', () => ({
-  initAutoSyncEditBlockDriver: /** Cleanup-returning init mock */ () => () => {},
-}));
 
 describe('App', () => {
   it('should render', async () => {
