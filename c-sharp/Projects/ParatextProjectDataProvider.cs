@@ -2419,8 +2419,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// The body of <see cref="SetBookUsfm"/> WITHOUT opening its own sync-write scope. Callers MUST
     /// already hold one (via <see cref="EnterSyncWriteScope"/>). This exists so a gated method that
     /// delegates to the book-USFM write (<see cref="SetBookUsx"/>) can reuse it inside a single
-    /// outer scope. (Nesting a second <see cref="SendReceiveWriteLock.EnterWrite"/> would be benign
-    /// — the gate is re-entrant — but one scope per mutation keeps the gating easy to reason about.)
+    /// outer scope. (Nesting a second <see cref="SendReceiveWriteLock.EnterWrite"/> is NOT a safe
+    /// alternative: if a sync armed while the outer scope was open, the nested call would throw
+    /// mid-mutation and tear the write. One scope per mutation is required, not stylistic.)
     /// </summary>
     private bool SetBookUsfmInScope(VerseRef verseRef, string data)
     {
@@ -2588,10 +2589,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // Open ONE sync-write scope for the whole convert-then-write mutation. Rejecting here also
         // skips the USX→USFM conversion when sync-blocked. We then call the un-gated
         // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
-        // scope — nesting would be benign (the gate is re-entrant), but one scope per mutation
-        // keeps the gating easy to reason about. Inert in public core.
+        // scope — nesting is unsafe under an arm race; see SetBookUsfmInScope. Inert in public core.
         using var _ = EnterSyncWriteScope();
-        // Don't need to take a write lock in this function because SetBookUsfmInScope will do it
+        // The ParatextData project write lock (RunWithinLock) is taken inside SetBookUsfmInScope —
+        // unrelated to the S/R gate scope above, despite the similar name.
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
         return SetBookUsfmInScope(verseRef, usfm);

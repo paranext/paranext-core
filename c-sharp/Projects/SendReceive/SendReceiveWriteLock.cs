@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Diagnostics;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
 
@@ -41,9 +40,13 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// flag, so after the arming operation NO new write scope can open, and the in-flight count the
 /// drain then waits on can only fall. Because a write's mutation happens entirely between its enter
 /// and exit operations (both full fences), a drained count also means every finished write's
-/// effects are visible to the sync. No mutual exclusion depends on any other field:
-/// <c>_blockedProjectIds</c> is pure data (it only feeds <see cref="IsBlocked"/> queries), and
-/// there is deliberately no "is the lock held" bookkeeping to fall out of step with reality.
+/// effects are visible to the sync. The word also carries an 8-bit arm generation — the token
+/// <see cref="SetSyncing"/> returns — so <see cref="Clear(long)"/> can check-and-disarm in the
+/// same single CAS (see the overlap remarks below). No mutual exclusion depends on any other
+/// field: <c>_blockedProjectIds</c> is pure data (it only feeds <see cref="IsBlocked"/> queries,
+/// and can transiently disagree with the gate while racing arm/clear calls overlap — rejection
+/// never consults it), and there is deliberately no "is the lock held" bookkeeping to fall out of
+/// step with reality.
 /// </para>
 /// <para>
 /// <b>Forgiving lifecycle contract (deliberate).</b> The arm→clear bracket is activated by code
@@ -52,8 +55,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <list type="bullet">
 /// <item>
 /// <description>
-/// <see cref="SetSyncing"/> and <see cref="Clear"/> may run on ANY thread, including different
-/// threads — an <c>await</c> between them (which resumes on a different pool thread) is fine.
+/// <see cref="SetSyncing"/> and <see cref="Clear()"/>/<see cref="Clear(long)"/> may run on ANY
+/// thread, including different threads — an <c>await</c> between them (which resumes on a
+/// different pool thread) is fine.
 /// </description>
 /// </item>
 /// <item>
@@ -65,16 +69,26 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </item>
 /// <item>
 /// <description>
-/// Nested <see cref="EnterWrite"/> calls are benign (a gated method may call another gated method);
-/// the inner scope simply counts as one more in-flight write until disposed.
+/// Nested <see cref="EnterWrite"/> calls do not crash or deadlock (there is no recursion policy) —
+/// while nothing is armed, an inner scope simply counts as one more in-flight write. They are NOT
+/// rejection-safe, though: the gate tracks no ownership, so if a sync arms while the outer scope
+/// is open (the normal drain window), the inner call throws the sentinel MID-mutation and tears
+/// the outer write. Keep one scope per mutation — a method that delegates to another write must
+/// call an un-gated core inside its single outer scope (see <c>SetBookUsfmInScope</c>), never a
+/// second gated entry point.
 /// </description>
 /// </item>
 /// <item>
 /// <description>
-/// <see cref="Clear"/> is idempotent and safe to call when nothing is armed, so it can serve as
+/// <see cref="Clear()"/> is idempotent and safe to call when nothing is armed, so it can serve as
 /// crash recovery: if a sync worker dies without clearing, ANY thread (e.g. a watchdog or the next
-/// sync) can call <see cref="Clear"/> to recover. Double-disposing a scope and over-releasing are
-/// guarded no-ops. No call sequence, on any combination of threads, can wedge the gate permanently.
+/// sync) can call it to recover. Bracket code should prefer <see cref="Clear(long)"/> with the
+/// token its <see cref="SetSyncing"/> returned — a newer arm turns that into a logged no-op, so a
+/// late or duplicate Clear cannot disarm a sync it does not own. Double-disposing a scope and
+/// over-releasing are guarded no-ops. No SetSyncing/Clear/Dispose sequence, on any combination of
+/// threads, can leave writes permanently rejected. (A write scope that is never disposed is the
+/// one durable failure: its count is deliberately NOT reset by Clear, so every later sync waits
+/// out the full <see cref="DrainTimeout"/> and proceeds degraded.)
 /// </description>
 /// </item>
 /// </list>
@@ -84,18 +98,24 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <see cref="DrainTimeout"/>, <see cref="SetSyncing"/> logs a warning and returns anyway — a sync
 /// start must never hang forever behind a stuck write. The armed flag keeps rejecting NEW writes
 /// exactly as on the normal path; only the already-stuck write(s) may still overlap the sync. This
-/// is an accepted residual risk, traded against deadlocking every future sync.
+/// is an accepted residual risk, traded against deadlocking every future sync. A caller that must
+/// not run concurrently with even a stuck write can opt out per call: <see cref="SetSyncing"/>
+/// with <c>throwOnDrainTimeout: true</c> rolls the arm back and throws
+/// <see cref="TimeoutException"/> instead, leaving the retry/defer decision to the scheduler.
 /// </para>
 /// <para>
 /// <b>One global sync slot; overlap semantics.</b> The gate is global: while ANY sync is armed, ALL
 /// project writes are rejected (automatic syncs are globally exclusive by design), which is why
 /// rejection does not consult the per-project set. A repeat <see cref="SetSyncing"/> while armed
-/// replaces the armed project-id set (call it once per sync batch with the full set), and any
-/// <see cref="Clear"/> fully disarms. Overlapping arm→clear brackets from two concurrent syncs are
-/// therefore not meaningful — the scheduler must serialize sync runs — but no interleaving of calls
-/// can corrupt the gate; the worst outcome of an overlap is disarming earlier than one of the two
-/// syncs expected. <see cref="IsBlocked"/> answers per-project queries from the pure-data set and is
-/// deliberately narrower than the global gate.
+/// takes over the slot: it replaces the armed project-id set and returns a NEW token, invalidating
+/// every earlier one (call it once per sync batch with the full set, and Clear with the latest
+/// token). A parameterless <see cref="Clear()"/> always disarms; <see cref="Clear(long)"/> disarms
+/// only the bracket that owns the slot, so a stale bracket's late Clear is a logged no-op instead
+/// of silently disarming a newer sync. Overlapping arm→clear brackets are still not meaningful —
+/// the scheduler must serialize sync runs — but no interleaving of calls can corrupt the state
+/// word; the worst outcome of an overlap is now an early disarm via a force-<see cref="Clear()"/>
+/// (or a transiently stale pure-data set — see above). <see cref="IsBlocked"/> answers per-project
+/// queries from the pure-data set and is deliberately narrower than the global gate.
 /// </para>
 /// <para>
 /// <b>Distinct from the Send/Receive server-side repository lock.</b> This class is an
@@ -121,11 +141,17 @@ internal static class SendReceiveWriteLock
     // generic permissions message) and revert the un-saved change.
     public const string EditBlockedSentinel = "(SR_EDIT_BLOCKED)";
 
-    // The single atomic word all mutual exclusion rests on (see the class remarks): bit 32 is the
-    // "a sync is armed" flag, bits 0–31 count in-flight write scopes. Mutate ONLY via Interlocked
-    // operations; read via Volatile.Read (a long read is not atomic on 32-bit without it).
+    // The single atomic word all mutual exclusion rests on (see the class remarks): bits 0–31
+    // count in-flight write scopes, bit 32 is the "a sync is armed" flag, and bits 33–40 hold the
+    // 8-bit arm generation — the token SetSyncing returns and Clear(token) checks, riding in the
+    // same word so the check-and-disarm stays one CAS. It wraps mod 256; a stale token could only
+    // false-match after 256 intervening arms, and even then the damage is just a disarm-early
+    // (the pre-token status quo). Mutate ONLY via Interlocked operations; read via Volatile.Read
+    // (a long read is not atomic on 32-bit without it).
     private const long ArmedFlag = 1L << 32;
     private const long InFlightCountMask = 0xFFFF_FFFFL;
+    private const int GenerationShift = 33;
+    private const long GenerationMask = 0xFFL << GenerationShift;
     private static long _state;
 
     // Pure data (no synchronization role — the atomic word does all exclusion): drives IsBlocked
@@ -150,6 +176,22 @@ internal static class SendReceiveWriteLock
     /// <summary>The number of write scopes currently open. For tests only.</summary>
     internal static long InFlightWriteCount => Volatile.Read(ref _state) & InFlightCountMask;
 
+    /// <summary>The armed project-id set exactly as stored. For tests only.</summary>
+    internal static IImmutableSet<string> ArmedProjectIds => _blockedProjectIds;
+
+    /// <summary>
+    /// Resets ALL gate state, INCLUDING the in-flight count that <see cref="Clear()"/> deliberately
+    /// leaves alone. For tests only: contains the blast radius of a test that leaked a write scope
+    /// (otherwise every later <see cref="SetSyncing"/> in the run would burn its full
+    /// <see cref="DrainTimeout"/>). Never call in production — a straggler scope disposed after
+    /// this reset would decrement a newer scope's count.
+    /// </summary>
+    internal static void ResetForTests()
+    {
+        _blockedProjectIds = EmptyProjectIds;
+        Volatile.Write(ref _state, 0);
+    }
+
     private static InvalidOperationException EditBlocked(string projectId) =>
         new(
             $"Cannot write to project '{projectId}' while an automatic Send/Receive is in "
@@ -160,19 +202,38 @@ internal static class SendReceiveWriteLock
     /// Marks the given projects as being synced, then waits (bounded by <see cref="DrainTimeout"/>)
     /// for any already-in-flight writes to drain before returning. From the moment this arms the
     /// gate, new <see cref="EnterWrite"/> calls for ANY project fail fast; after it returns, either
-    /// no write scopes remain open (normal path) or the drain timed out and it has logged a warning
-    /// and proceeded anyway (degraded path — new writes are still rejected either way). Replaces any
+    /// no write scopes remain open (normal path), or the drain timed out and it has logged a
+    /// warning and proceeded anyway (degraded path — new writes are still rejected either way; or,
+    /// with <paramref name="throwOnDrainTimeout"/>, it rolled this arm back and threw instead), or
+    /// a concurrent <see cref="Clear()"/> / newer <see cref="SetSyncing"/> ended this arm mid-drain
+    /// (logged — the gate is then no longer rejecting on behalf of THIS sync). Replaces any
     /// previously set project list; call once per sync batch with the full set of projects. Null or
-    /// empty ids in the batch are ignored.
+    /// empty ids in the batch are ignored (an all-invalid batch still arms the global gate, with a
+    /// logged warning).
     /// <para>
-    /// May be called from any thread; <see cref="Clear"/> may later run on a different thread (an
-    /// <c>await</c> between them is fine). Do not call while holding an open <see cref="EnterWrite"/>
-    /// scope this call would wait for — the drain cannot finish and will time out into the degraded
-    /// path. Overlapping sync brackets are not meaningful (see the class remarks); the scheduler
+    /// May be called from any thread; the bracket-ending Clear may later run on a different thread
+    /// (an <c>await</c> between them is fine). End the bracket with <see cref="Clear(long)"/> and
+    /// the returned token — a stale token is a logged no-op, so a late Clear can never disarm a
+    /// newer sync's arm. Do not call while holding an open <see cref="EnterWrite"/> scope this
+    /// call would wait for — the drain cannot finish and will time out into the degraded path.
+    /// Overlapping sync brackets are still not meaningful (see the class remarks); the scheduler
     /// must serialize sync runs.
     /// </para>
     /// </summary>
-    public static void SetSyncing(IEnumerable<string> projectIds)
+    /// <param name="projectIds">The full set of project ids in this sync batch (null or empty
+    /// entries are ignored).</param>
+    /// <param name="throwOnDrainTimeout">When <c>true</c>, a drain timeout aborts the sync start
+    /// instead of degrading: this arm is rolled back (nothing stays armed on this bracket's
+    /// behalf, so writes flow again and the caller has NO cleanup obligation) and a
+    /// <see cref="TimeoutException"/> is thrown — the sync must not proceed; the caller decides
+    /// whether to retry, defer, or notify. When <c>false</c> (the default), the degraded path
+    /// applies (see the class remarks). This affects ONLY the drain-timeout outcome — an arm
+    /// ended or replaced mid-drain still returns normally with a logged warning.</param>
+    /// <returns>The arm token identifying this bracket; pass it to <see cref="Clear(long)"/>.</returns>
+    /// <exception cref="TimeoutException">The drain timed out and
+    /// <paramref name="throwOnDrainTimeout"/> was <c>true</c>; the arm has been rolled back.
+    /// </exception>
+    public static long SetSyncing(IEnumerable<string> projectIds, bool throwOnDrainTimeout = false)
     {
         ArgumentNullException.ThrowIfNull(projectIds);
 
@@ -182,44 +243,131 @@ internal static class SendReceiveWriteLock
             .Where(projectId => !string.IsNullOrEmpty(projectId))
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
 
-        // Publish the pure data first, then arm. Arming is a single interlocked bit-set on the
-        // state word: every write that enters afterward must observe the flag (all transitions on
-        // the word are totally ordered) and is rejected.
-        _blockedProjectIds = armedProjectIds;
-        Interlocked.Or(ref _state, ArmedFlag);
+        // An all-invalid batch is almost certainly a caller bug (e.g. a failed project lookup).
+        // Still arm — fail-safe: an armed gate with an empty set rejects writes exactly like any
+        // other arm — but say so, because IsBlocked will report false for every project while
+        // every write is rejected, which is otherwise baffling to diagnose.
+        if (armedProjectIds.Count == 0)
+            Console.Error.WriteLine(
+                "[SendReceiveWriteLock] Warning: SetSyncing was called with no valid project ids; "
+                    + "the global gate is armed anyway (all writes rejected), but IsBlocked will "
+                    + "report false for every project."
+            );
 
-        // Drain: wait (bounded) until no write scopes remain open. New writes can no longer enter,
-        // so the count only falls. SpinWait escalates spin → yield → sleep, so a long drain does
-        // not burn a core.
-        var spinner = new SpinWait();
-        var stopwatch = Stopwatch.StartNew();
-        while ((Volatile.Read(ref _state) & InFlightCountMask) != 0)
+        // Publish the pure data first, then arm. Arming is a single CAS on the state word that
+        // sets the flag AND advances the 8-bit generation (the returned token): every write that
+        // enters afterward must observe the flag (all transitions on the word are totally ordered)
+        // and is rejected, and every earlier token goes stale in the same atomic step.
+        _blockedProjectIds = armedProjectIds;
+        long token;
+        while (true)
         {
-            if (stopwatch.Elapsed >= DrainTimeout)
-            {
-                // Degraded: proceed rather than deadlock the sync. The armed flag keeps rejecting
-                // new writes; only the already-stuck write(s) we couldn't drain may still overlap.
-                Console.Error.WriteLine(
-                    "[SendReceiveWriteLock] Warning: in-flight project write(s) did not drain "
-                        + $"within {DrainTimeout.TotalSeconds:0.#}s; proceeding with Send/Receive "
-                        + "anyway (new writes stay blocked while the sync is armed)."
-                );
-                return;
-            }
-            spinner.SpinOnce();
+            long state = Volatile.Read(ref _state);
+            token = (((state & GenerationMask) >> GenerationShift) + 1) & 0xFF;
+            long armedState = (state & InFlightCountMask) | ArmedFlag | (token << GenerationShift);
+            if (Interlocked.CompareExchange(ref _state, armedState, state) == state)
+                break;
         }
+
+        // Drain: wait (bounded) until no write scopes remain open — or until this arm is ended by
+        // a concurrent Clear (without that second condition the loop's premise would be gone: once
+        // disarmed, writes enter again and the count may never settle, so the wait would just burn
+        // the whole timeout for nothing). SpinUntil escalates spin → yield → sleep, so a long
+        // drain does not burn a core.
+        SpinWait.SpinUntil(
+            static () =>
+            {
+                long state = Volatile.Read(ref _state);
+                return (state & InFlightCountMask) == 0 || (state & ArmedFlag) == 0;
+            },
+            DrainTimeout
+        );
+
+        // Triage on a fresh read (the authority), not SpinUntil's return value: the state may have
+        // settled between the last poll and here.
+        long observed = Volatile.Read(ref _state);
+        if (
+            (observed & ArmedFlag) == 0
+            || ((observed & GenerationMask) >> GenerationShift) != token
+        )
+        {
+            Console.Error.WriteLine(
+                "[SendReceiveWriteLock] Warning: this arm was ended (Clear) or replaced (a newer "
+                    + "SetSyncing) while its drain was still waiting; proceeding, but the gate is "
+                    + "no longer rejecting writes on behalf of THIS sync."
+            );
+            return token;
+        }
+        long stillInFlight = observed & InFlightCountMask;
+        if (stillInFlight != 0)
+        {
+            if (throwOnDrainTimeout)
+            {
+                // Roll this arm back BEFORE throwing (own-token disarm — a safe no-op if something
+                // else already took or cleared the slot in the meantime), so a throw always means
+                // "nothing armed on this bracket's behalf, writes flow again, no cleanup owed".
+                Clear(token);
+                throw new TimeoutException(
+                    $"{stillInFlight} in-flight project write(s) did not drain within "
+                        + $"{DrainTimeout.TotalSeconds:0.#}s; the Send/Receive arm was rolled "
+                        + "back and the sync must not proceed."
+                );
+            }
+
+            // Degraded: proceed rather than deadlock the sync. The armed flag keeps rejecting
+            // new writes; only the already-stuck write(s) we couldn't drain may still overlap.
+            Console.Error.WriteLine(
+                $"[SendReceiveWriteLock] Warning: {stillInFlight} in-flight project write(s) did "
+                    + $"not drain within {DrainTimeout.TotalSeconds:0.#}s; proceeding with "
+                    + "Send/Receive anyway (new writes stay rejected while the sync is armed)."
+            );
+        }
+        return token;
     }
 
     /// <summary>
-    /// Ends the sync: disarms the gate and clears the armed project set, so writes are accepted
-    /// again. May be called from ANY thread (not just the one that called <see cref="SetSyncing"/>),
-    /// is idempotent, and is safe to call when no sync is active at all — so it doubles as the
-    /// recovery path if a sync worker dies without clearing.
+    /// Ends the sync UNCONDITIONALLY: disarms the gate (whichever bracket armed it) and clears the
+    /// armed project set, so writes are accepted again. May be called from ANY thread, is
+    /// idempotent, and is safe to call when no sync is active at all — this is the force/crash
+    /// recovery path (e.g. a watchdog, or the next sync finding a dead worker's arm still set).
+    /// Normal bracket code should prefer <see cref="Clear(long)"/>, which cannot disarm a sync it
+    /// does not own.
     /// </summary>
     public static void Clear()
     {
         _blockedProjectIds = EmptyProjectIds;
         Interlocked.And(ref _state, ~ArmedFlag);
+    }
+
+    /// <summary>
+    /// Ends the sync bracket identified by <paramref name="token"/> (returned by
+    /// <see cref="SetSyncing"/>): disarms only if that bracket still owns the sync slot. A stale
+    /// token — a newer <see cref="SetSyncing"/> has taken the slot — is a logged no-op, so a late
+    /// or duplicate Clear can never disarm a newer sync's arm. When nothing is armed at all this
+    /// is a silent no-op (idempotent). Runs on any thread.
+    /// </summary>
+    public static void Clear(long token)
+    {
+        while (true)
+        {
+            long state = Volatile.Read(ref _state);
+            if ((state & ArmedFlag) == 0)
+                return; // Idempotent: nothing armed (this bracket was already cleared).
+            if (((state & GenerationMask) >> GenerationShift) != token)
+            {
+                Console.Error.WriteLine(
+                    "[SendReceiveWriteLock] Warning: Clear(token) ignored a stale token — a newer "
+                        + "SetSyncing owns the sync slot (late Clear from an overlapping bracket?)."
+                );
+                return;
+            }
+            if (Interlocked.CompareExchange(ref _state, state & ~ArmedFlag, state) == state)
+            {
+                // The disarm won atomically against the token check; now drop the pure-data set.
+                _blockedProjectIds = EmptyProjectIds;
+                return;
+            }
+        }
     }
 
     /// <summary>
@@ -245,8 +393,9 @@ internal static class SendReceiveWriteLock
     /// <para>
     /// The scope is forgiving: it may be disposed on a different thread (holding it across an
     /// <c>await</c> is safe, though scopes should stay tight — a long-held scope delays a sync's
-    /// drain toward its timeout), double-dispose is a no-op, and nesting (a gated method calling
-    /// another gated method) is benign.
+    /// drain toward its timeout), and double-dispose is a no-op. Nesting does not crash, but it is
+    /// NOT safe around a live sync — if a sync arms while the outer scope is open, the inner call
+    /// throws mid-mutation (see the class remarks); keep one scope per mutation.
     /// </para>
     /// Because arming is global, this is a global gate: while ANY project is syncing, ALL project
     /// writes are rejected (syncs are globally exclusive by design).
