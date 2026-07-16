@@ -10,19 +10,38 @@ import {
 } from '@shared/services/web-view.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
+  type ScheduledSessionSyncResult,
+  type SessionSyncBoundary,
+} from '@main/scheduled-session-sync.util';
 import type { SettingTypes } from 'papi-shared-types';
 import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 
 /**
- * Outcome of a {@link runBoundedShutdownSync} bounded wait:
+ * Behaviour-driving outcome of a bounded shutdown sync. Now that the extension reports its own
+ * result (PT-4162), this carries what actually happened so {@link logShutdownSyncOutcome} can log it
+ * truthfully rather than always claiming "complete":
  *
- * - `succeeded`: `performSync` resolved before the timeout.
- * - `failed`: `performSync` rejected (or the command was missing/unregistered) before the timeout;
- *   the failure itself is already logged by {@link runBoundedShutdownSync} as a warning.
- * - `timed-out`: neither a resolution nor a rejection arrived within
- *   {@link SHUTDOWN_SYNC_TIME_OUT_MS}.
+ * - `synced`: the sync ran and completed (Simple: the S/R resolved; Power: the command returned
+ *   `'synced'`).
+ * - `failed`: the sync ran but did not succeed (Power: the command returned `'failed'`). Warned.
+ * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`).
+ * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
+ *   failure detail was already warned inside {@link runBoundedShutdownSync}.
+ * - `timed-out`: neither settled within {@link SHUTDOWN_SYNC_TIME_OUT_MS} (also already warned there).
  */
-type ShutdownSyncOutcome = 'succeeded' | 'failed' | 'timed-out';
+type ShutdownSyncOutcome = 'synced' | 'failed' | 'skipped' | 'unreachable' | 'timed-out';
+
+/**
+ * How a {@link runBoundedShutdownSync} bounded wait settled, before the mode-specific caller maps it
+ * to a {@link ShutdownSyncOutcome}: `performSync` resolved (its value is in `result`), rejected
+ * (already warned), or the wait timed out (already warned).
+ */
+type BoundedSyncSettlement<T> =
+  | { status: 'completed'; result: T }
+  | { status: 'failed' }
+  | { status: 'timedOut' };
 
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
@@ -35,8 +54,8 @@ type ShutdownSyncOutcome = 'succeeded' | 'failed' | 'timed-out';
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract — if the command
  * isn't registered (e.g. plain Platform.Bible with no S/R extension), this is a logged no-op, never
  * a crash or a wedged shutdown. No edit-block and no conflict surfacing here: the app is closing,
- * so there is nothing left to protect and no UI to show a result in (PT-4162 design D5; conflicts
- * are picked up again on next startup).
+ * so there is nothing left to protect and no UI to show a result in — conflicts are surfaced again
+ * on next startup instead (PT-4162).
  *
  * If the interface-mode setting can't be read: skips the automatic shutdown S/R entirely and warns,
  * rather than falling through to Simple mode's open-editor S/R. The read can fail exactly when the
@@ -113,12 +132,18 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   logger.info('Syncing project on shutdown...');
   // Copy to a const so TypeScript knows the type is string inside the bounded-wait callback.
   const syncProjectId = projectId;
-  const outcome = await runBoundedShutdownSync('shutdown sync', () =>
+  const settlement = await runBoundedShutdownSync('shutdown sync', () =>
     networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
       [syncProjectId],
     ),
   );
+  // Simple mode has no "skipped" state: reaching here means a writable project was selected, so a
+  // resolution is a completed S/R.
+  let outcome: ShutdownSyncOutcome;
+  if (settlement.status === 'timedOut') outcome = 'timed-out';
+  else if (settlement.status === 'failed') outcome = 'unreachable';
+  else outcome = 'synced';
   logShutdownSyncOutcome(outcome);
 }
 
@@ -126,70 +151,113 @@ async function performSimpleModeShutdownSync(): Promise<void> {
  * Power mode: triggers the S/R extension's session-boundary sync for the projects scheduled "On
  * startup/shutdown" (PT-4162). The extension owns selecting that subset (from PT-4160's schedule
  * store), running the sync, and — deliberately — NOT surfacing conflicts, since the app is closing
- * and there's no UI left to show them in (PT9 parity, PT-4162 design D5). Core only triggers it and
- * bounds the wait with the same scaffold Simple mode uses, so a hung sync can't wedge shutdown open
- * forever.
+ * and there's no UI left to show them in (PT9 parity). Core only triggers it and bounds the wait
+ * with the same scaffold Simple mode uses, logging the reported outcome.
+ *
+ * There is deliberately no boot-race retry here, unlike startup
+ * (`requestSessionSyncWithBootRetry`). A shutdown boot race is near-impossible: this only runs when
+ * the user closes the window, which in normal use is long after the extension host has activated
+ * and registered its commands — the cold-boot activation window the startup retry exists to absorb
+ * has closed by the time anyone quits. If the command genuinely isn't registered (e.g. no S/R
+ * extension), it rejects fast and this is a logged no-op, the right outcome at shutdown anyway;
+ * retrying would only fight the window hang below, since the window is already held open waiting on
+ * this one sync.
+ *
+ * {@link SHUTDOWN_SYNC_TIME_OUT_MS} is the ONLY real bound on this call: the S/R extension registers
+ * `runScheduledSessionSync` with its per-request timeout disabled (a scheduled sync can
+ * legitimately run long), so `requestNoRetry` has no client-side timeout of its own here. If the
+ * extension ever stopped disabling that timeout, this would silently become a ~30 s truncation that
+ * could kill a real sync mid-flight — so that cross-repo dependency is called out on purpose.
  */
 async function performPowerModeShutdownSync(): Promise<void> {
-  logger.info('Syncing scheduled projects on shutdown...');
-  const outcome = await runBoundedShutdownSync('power-mode shutdown session sync', () =>
-    networkService.requestNoRetry(
-      serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.runScheduledSessionSync'),
+  const settlement = await runBoundedShutdownSync('power-mode shutdown session sync', () =>
+    networkService.requestNoRetry<[SessionSyncBoundary], ScheduledSessionSyncResult | undefined>(
+      RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
       'shutdown',
     ),
   );
+  let outcome: ShutdownSyncOutcome;
+  if (settlement.status === 'timedOut') outcome = 'timed-out';
+  else if (settlement.status === 'failed') outcome = 'unreachable';
+  // Tolerate a legacy void resolution (an older extension that returned `Promise<void>`): treat a
+  // missing result as a completed sync.
+  else outcome = settlement.result ?? 'synced';
   logShutdownSyncOutcome(outcome);
 }
 
 /**
- * Logs the result of a bounded shutdown sync truthfully: "complete" only when `performSync`
- * actually succeeded. A settled-but-failed sync gets its own distinct message (the failure detail
- * itself was already warned about inside {@link runBoundedShutdownSync}); a timed-out sync logs
- * nothing here because {@link runBoundedShutdownSync} already logged the timeout.
+ * Logs a {@link ShutdownSyncOutcome} truthfully — "complete" only when a sync actually ran and
+ * succeeded. A sync that ran but reported failure warns; a deliberate skip (nothing scheduled) is
+ * debug-only; and the already-warned cases (`unreachable`, `timed-out`) add nothing here.
  */
 function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
-  if (outcome === 'succeeded') logger.info('Sync on shutdown complete');
-  else if (outcome === 'failed')
-    logger.info('Sync on shutdown finished without succeeding (see warning above)');
+  switch (outcome) {
+    case 'synced':
+      logger.info('Sync on shutdown complete');
+      break;
+    case 'failed':
+      logger.warn('Sync on shutdown ran but reported failure');
+      break;
+    case 'skipped':
+      logger.debug('Sync on shutdown skipped (nothing scheduled, not due, or already syncing)');
+      break;
+    case 'unreachable':
+    case 'timed-out':
+      // The failure detail was already logged inside runBoundedShutdownSync; nothing truthful to add.
+      break;
+    default:
+      break;
+  }
 }
 
 /**
  * Runs `performSync` in the background and waits for it to settle, bounded by
- * {@link SHUTDOWN_SYNC_TIME_OUT_MS} so a hung sync (or a `runScheduledSessionSync` command that
- * never resolves because it isn't registered — see module doc) can never wedge shutdown open
- * forever. Failures from `performSync` are logged and swallowed here; the caller only decides how
- * to log the overall outcome (see {@link logShutdownSyncOutcome}), it doesn't need to know why a
- * failure happened.
+ * {@link SHUTDOWN_SYNC_TIME_OUT_MS} so a genuinely hung sync can never wedge shutdown open forever.
+ * The timeout is load-bearing for a _hung_ sync specifically: an unregistered command does NOT hang
+ * — it rejects fast with MethodNotFound, which surfaces as a `failed` settlement (this is exactly
+ * what startup's retry loop is built on). What the bound actually guards against is that the S/R
+ * extension registers `runScheduledSessionSync` with its per-request timeout disabled (see
+ * {@link performPowerModeShutdownSync}), so `requestNoRetry` has no client-side timeout of its own.
+ *
+ * Failures from `performSync` are warned and swallowed here; the caller maps the returned
+ * settlement to a {@link ShutdownSyncOutcome} for the truthful summary log.
  *
  * This is the one bounded-wait mechanism for shutdown; both Simple mode's `sendReceiveProjects` and
  * Power mode's `runScheduledSessionSync` go through it rather than each inventing their own.
- *
- * @returns The {@link ShutdownSyncOutcome} — `'succeeded'` if `performSync` resolved before the
- *   timeout, `'failed'` if it rejected before the timeout (already warned about above), or
- *   `'timed-out'` if neither happened in time (also already warned about above).
  */
-async function runBoundedShutdownSync(
+async function runBoundedShutdownSync<T>(
   variableName: string,
-  performSync: () => Promise<unknown>,
-): Promise<ShutdownSyncOutcome> {
-  const syncComplete = new AsyncVariable<boolean>(variableName, SHUTDOWN_SYNC_TIME_OUT_MS);
+  performSync: () => Promise<T>,
+): Promise<BoundedSyncSettlement<T>> {
+  const syncComplete = new AsyncVariable<BoundedSyncSettlement<T>>(
+    variableName,
+    SHUTDOWN_SYNC_TIME_OUT_MS,
+  );
   (async () => {
-    let succeeded = false;
+    let settlement: BoundedSyncSettlement<T>;
     try {
-      await performSync();
-      succeeded = true;
+      settlement = { status: 'completed', result: await performSync() };
     } catch (e) {
       logger.warn(`${variableName} failed or skipped: ${getErrorMessage(e)}`);
-    } finally {
-      if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(succeeded);
+      settlement = { status: 'failed' };
     }
+    // `resolveToValue` is a no-op (not a throw) once the timeout already settled the variable, so no
+    // `hasTimedOut` guard is needed to avoid a double-settle here.
+    syncComplete.resolveToValue(settlement);
   })();
   try {
-    return (await syncComplete.promise) ? 'succeeded' : 'failed';
-  } catch {
-    logger.warn(
-      `${variableName} timed out after ${SHUTDOWN_SYNC_TIME_OUT_MS} ms; continuing shutdown`,
-    );
-    return 'timed-out';
+    return await syncComplete.promise;
+  } catch (e) {
+    // Branch on `hasTimedOut` rather than assuming every rejection is the timeout: the AsyncVariable
+    // timer is the only rejection path today, but a future cancel-on-quit path shouldn't be
+    // mislabelled as a 10-minute timeout.
+    if (syncComplete.hasTimedOut) {
+      logger.warn(
+        `${variableName} timed out after ${SHUTDOWN_SYNC_TIME_OUT_MS} ms; continuing shutdown`,
+      );
+      return { status: 'timedOut' };
+    }
+    logger.warn(`${variableName} did not complete: ${getErrorMessage(e)}`);
+    return { status: 'failed' };
   }
 }

@@ -19,12 +19,15 @@ vi.mock('@shared/services/network-object.service', () => ({
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  // `debug` matches the sibling startup-tasks.test.ts mock; logShutdownSyncOutcome logs a scheduled
+  // skip at debug, so leaving it out would throw "logger.debug is not a function".
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockNetworkObjectGet = vi.mocked(networkObjectService.get);
+const mockLoggerDebug = vi.mocked(logger.debug);
 const mockLoggerInfo = vi.mocked(logger.info);
 const mockLoggerWarn = vi.mocked(logger.warn);
 
@@ -41,8 +44,9 @@ beforeEach(() => {
 });
 
 describe('performShutdownTasks', () => {
-  it('fires runScheduledSessionSync("shutdown") when interface mode is power', async () => {
+  it('fires runScheduledSessionSync("shutdown") and logs "complete" when the command reports "synced"', async () => {
     mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('synced');
     await performShutdownTasks();
     expect(mockRequestNoRetry).toHaveBeenCalledWith(
       expect.stringContaining('runScheduledSessionSync'),
@@ -53,18 +57,41 @@ describe('performShutdownTasks', () => {
       expect.stringContaining('cancelSync'),
     );
     expect(mockNetworkObjectGet).not.toHaveBeenCalled();
-    // The sync actually succeeded, so — and only so — the truthful "complete" log fires.
+    // A reported "synced" is the only thing that produces the truthful "complete" log.
     expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
   });
 
-  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing, and logs failure truthfully (not "complete")', async () => {
+  it('treats a legacy void resolution as "synced" (logs "complete")', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue(undefined);
+    await performShutdownTasks();
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('warns (does not log "complete") when the command reports "failed"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('failed');
+    await performShutdownTasks();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('reported failure'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('logs a debug-only skip (no info, no warn) when the command reports "skipped"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('skipped');
+    await performShutdownTasks();
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing, and does not log "complete"', async () => {
     mockSettingsGet.mockResolvedValue('power');
     mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
     await expect(performShutdownTasks()).resolves.toBeUndefined();
-    // The bounded wait settled (the rejection was caught, not a timeout), so the failure gets its
-    // own distinct message rather than the misleading "complete" — this is the PT-4213 item 8 fix.
+    // The bounded wait settled (the rejection was caught, not a timeout), so the failure is warned
+    // and the misleading "complete" is never logged.
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
-    expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('without succeeding'));
     expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
   });
 
