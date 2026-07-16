@@ -136,14 +136,16 @@ internal sealed class InventoryDataProvider(
 
     private bool SetInventoryItemStatus(InventoryItemStatusSelector selector, JsonElement status)
     {
-        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
-        ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
-
         // Bracket the whole mutation in a write scope — inventory.Save() below persists
         // valid/invalid items into the project's checking settings. Rejects (fail-fast) while an
         // automatic Send/Receive is syncing this project, and keeps the sync's drain waiting until
-        // this mutation completes. Inert in public core — see SendReceiveWriteLock.
+        // this mutation completes. Inert in public core — see SendReceiveWriteLock. Opened as the
+        // first statement per the write-gate rule; the argument guards below only validate (no
+        // mutation) and EnterWrite already rejects a null project id.
         using var _ = SendReceiveWriteLock.EnterWrite(selector.ProjectId);
+
+        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
+        ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,
@@ -313,14 +315,16 @@ internal sealed class InventoryDataProvider(
 
     private bool SetInventoryOptionValues(InventoryOptionsSelector selector, JsonElement values)
     {
-        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
-        ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
-
         // Bracket the whole mutation in a write scope — this method writes the project's settings
         // (SetSetting/RemoveSetting/Save below). Rejects (fail-fast) while an automatic Send/Receive
         // is syncing this project, and keeps the sync's drain waiting until this mutation completes.
-        // Inert in public core — see SendReceiveWriteLock.
+        // Inert in public core — see SendReceiveWriteLock. Opened as the first statement per the
+        // write-gate rule; the argument guards below only validate (no mutation) and EnterWrite
+        // already rejects a null project id.
         using var _ = SendReceiveWriteLock.EnterWrite(selector.ProjectId);
+
+        ArgumentException.ThrowIfNullOrEmpty(selector.ProjectId);
+        ArgumentException.ThrowIfNullOrEmpty(selector.InventoryId);
 
         var inventory = InventoryFactory.CreateInventory(
             selector.InventoryId,

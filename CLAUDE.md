@@ -185,10 +185,15 @@ nothing else — because every open scope delays a starting sync's bounded drain
 
 This is an **in-process** gate, distinct from the S/R server-side repository lock
 (`lockrepo`/`unlockrepo` between clients) — do not conflate the two. `SendReceiveWriteLockCoverageTests`
-(`c-sharp-tests/Projects/SendReceive/`) scans the source tree for direct project-write call patterns
-(a general `.Save(` heuristic, `PutText`, comment `SaveUser`/`SaveEdits`, and `File`/`FileManager`
-deletes) and fails if a new one isn't gated or consciously allowlisted (with a one-line justification:
-gated / `TODO(PT-4210)` / not-project-data).
+(`c-sharp-tests/Projects/SendReceive/`) scans the source tree (excluding `bin`/`obj`) for direct
+project-write call patterns (a general `.Save(` heuristic, `PutText`, comment `SaveUser`/`SaveEdits`,
+and `File`/`FileManager` deletes) and fails on any hit that isn't covered per site by ONE of: gate
+evidence (an `EnterWrite`/`EnterSyncWriteScope` call above it in the same method); an inline
+`// SR-write-gate: exempt — <reason>` marker on/above the write (for writes reached only through an
+already-gated caller — the un-gated `SetBookUsfmInScope` core and the ManageBooks orchestrators,
+each citing its gated caller + `TODO(PT-4210)`); or a whole-file entry on the test's exempt list,
+which is reserved for **not-project-data** files only. Per-site (not whole-file), so a NEW ungated
+write added to an already-gated file is still caught.
 
 ## Never Commit Secrets
 

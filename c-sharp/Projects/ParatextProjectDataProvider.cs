@@ -2437,6 +2437,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
                 isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
+                // SR-write-gate: exempt — un-gated core; the whole mutation runs inside SetBookUsfm/SetBookUsx's write scope (nesting a 2nd gate is unsafe; see SendReceiveWriteLock).
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
         );

@@ -816,6 +816,7 @@ public static class ImportBooksOrchestrator
             // per-chapter writes correctly without a special test seam.
             if (replaceEntireBook)
             {
+                // SR-write-gate: exempt — reached only via the gated ManageBooksService.ImportBooksAsync/CreateBooksAsync (TODO(PT-4210): assess).
                 scrText.PutText(bookNum, 0, false, bookText, null);
                 return true;
             }
@@ -895,6 +896,7 @@ public static class ImportBooksOrchestrator
         // PutText(0) call so BooksPresentSet picks it up via the existing fast path.
         if (!destBookExists)
         {
+            // SR-write-gate: exempt — reached only via the gated ManageBooksService.ImportBooksAsync/CreateBooksAsync (TODO(PT-4210): assess).
             scrText.PutText(bookNum, 0, false, bookText, null);
             return true;
         }
@@ -956,6 +958,7 @@ public static class ImportBooksOrchestrator
             }
             try
             {
+                // SR-write-gate: exempt — reached only via the gated ManageBooksService.ImportBooksAsync/CreateBooksAsync (TODO(PT-4210): assess).
                 scrText.PutText(bookNum, i + 1, false, chapterText, null);
             }
             catch (Exception ex)
