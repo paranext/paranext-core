@@ -236,9 +236,12 @@ async function main() {
   const startupTasksAbort = new AbortController();
   let mainWindowInteractiveAt: number | undefined;
 
-  // Fire-and-forget startup tasks (e.g. simple-mode initial S/R). Must not block window creation.
-  // The S/R command is registered by the .NET data provider, which may not yet be reachable;
-  // performStartupTasks uses retrying sendCommand semantics and swallows failures internally.
+  // Fire-and-forget startup tasks (initial S/R). Must not block window creation. In Simple mode the
+  // S/R command is served by the .NET data provider and is driven through the retrying
+  // `commandService.sendCommand`. In Power mode the trigger is `runScheduledSessionSync`, which the
+  // send-receive extension registers in the extension host (not the .NET data provider) and which
+  // performStartupTasks drives via `requestNoRetry` inside its own bounded 120 s boot-race loop —
+  // deliberately NOT sendCommand's retry semantics. Either way failures are swallowed internally.
   // Wrapped in an async IIFE per code-style preference for try/catch over `.catch()` chains.
   (async () => {
     try {

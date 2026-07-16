@@ -97,9 +97,10 @@ describe('performShutdownTasks', () => {
 
   it('returns after the timeout when runScheduledSessionSync never settles, logs the timeout, and never logs "complete"', async () => {
     mockSettingsGet.mockResolvedValue('power');
-    // Never-resolving promise: simulates a hung sync (or an unregistered command that never
-    // rejects), exercising the `completed === false` branch of runBoundedShutdownSync that PT-4213
-    // item 9 flagged as untested.
+    // Never-resolving promise: simulates a genuinely hung sync. `performSync` never settles, so the
+    // AsyncVariable's timeout rejects `syncComplete.promise` and runBoundedShutdownSync takes its
+    // `timedOut` branch — the one path SHUTDOWN_SYNC_TIME_OUT_MS exists to bound. (An unregistered
+    // command does NOT reach here; it rejects fast and settles as `failed`, covered above.)
     mockRequestNoRetry.mockImplementation(() => new Promise(() => {}));
     vi.useFakeTimers();
     try {
