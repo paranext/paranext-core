@@ -9,7 +9,9 @@ import {
   EventHandler,
   fixupResponse,
   GET_METHODS,
+  getJsonRpcRequestErrorMessagePrefix,
   InternalRequestHandler,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
 } from '@shared/data/rpc.model';
 import {
   AsyncVariable,
@@ -270,13 +272,13 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;
     platformErrorCode = response.error.data?.data?.platformErrorCode;
-    response = `JSON-RPC Request error (${response.error.code}): ${response.error.message}`;
+    response = `${getJsonRpcRequestErrorMessagePrefix(response.error.code)}: ${response.error.message}`;
   } else if (isPlatformError(response)) {
     logger.debug(response.message);
     throw response;
   } else {
     response = responseAsyncVariable.hasTimedOut
-      ? `JSON-RPC Request timed out: ${requestType} ${JSON.stringify(args)}`
+      ? `${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} ${requestType} ${JSON.stringify(args)}`
       : `Invalid JSON-RPC Response: ${response}`;
   }
   logger.debug(response);

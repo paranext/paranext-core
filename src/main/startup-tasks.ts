@@ -1,3 +1,7 @@
+import {
+  getJsonRpcRequestErrorMessagePrefix,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+} from '@shared/data/rpc.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
@@ -251,12 +255,13 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
  * embedded in that message is therefore the only signal available today. This mirrors the same
  * message-substring-matching pattern already used by
  * `isErrorMessageAboutParatextBlockingInternetAccess` / `isErrorMessageAboutRegistryAuthFailure` in
- * `platform-bible-utils` for the same reason (no richer signal exposed). If `network.service.ts`
- * ever changes that message format, this needs to change with it.
+ * `platform-bible-utils` for the same reason (no richer signal exposed). The exact format comes
+ * from {@link getJsonRpcRequestErrorMessagePrefix}, the same producer `doRequest` builds the message
+ * with, so a reformat there can't silently stop this matcher (and its test fixture) from matching.
  */
 function isMethodNotFoundError(error: unknown): boolean {
   return getErrorMessage(error).includes(
-    `JSON-RPC Request error (${JSONRPCErrorCode.MethodNotFound})`,
+    getJsonRpcRequestErrorMessagePrefix(JSONRPCErrorCode.MethodNotFound),
   );
 }
 
@@ -273,11 +278,11 @@ function isMethodNotFoundError(error: unknown): boolean {
  * collapse the whole boot budget to a single attempt against a handler that is present and
  * working.
  *
- * Matches by message substring for the same reason as {@link isMethodNotFoundError} — this shape
- * carries no machine-readable marker either.
+ * Matches by message substring for the same reason as {@link isMethodNotFoundError}, deriving the
+ * format from the same producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}).
  */
 function isRequestTimedOutError(error: unknown): boolean {
-  return getErrorMessage(error).includes('JSON-RPC Request timed out:');
+  return getErrorMessage(error).includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX);
 }
 
 /**
