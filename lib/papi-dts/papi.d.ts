@@ -5213,16 +5213,23 @@ declare module 'shared/models/notification.service-model' {
   import { LocalizeKey } from 'platform-bible-utils';
   export type Severity = 'info' | 'warning' | 'error';
   /**
+   * The placements a notification can appear in, as a frozen array so it can be the single source of
+   * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
+   * `position` enum (which the service host spreads from this).
+   */
+  export const NOTIFICATION_POSITIONS: readonly [
+    'top-left',
+    'top-center',
+    'top-right',
+    'bottom-left',
+    'bottom-center',
+    'bottom-right',
+  ];
+  /**
    * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
    * Omit to use the app's default placement.
    */
-  export type NotificationPosition =
-    | 'top-left'
-    | 'top-center'
-    | 'top-right'
-    | 'bottom-left'
-    | 'bottom-center'
-    | 'bottom-right';
+  export type NotificationPosition = (typeof NOTIFICATION_POSITIONS)[number];
   /** Data needed to display a notification to the user */
   export interface PlatformNotification {
     /**
@@ -5273,14 +5280,16 @@ declare module 'shared/models/notification.service-model' {
      *
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      *
-     * IMPORTANT: this fires ONLY for that user gesture. It does NOT fire when the notification is
-     * dismissed programmatically via {@link INotificationService.dismiss}, when it auto-closes because
-     * `duration` elapsed, or when the user clicks {@link clickCommand} / {@link secondaryClickCommand}
-     * (verified against the Sonner 1.7.4 source: `onDismiss` is invoked only from the swipe-release
-     * and close-button handlers, never from the programmatic-dismiss or auto-close paths). Use this
-     * to treat a user's swipe-away as an explicit decision — e.g. pairing it with a "postpone"
-     * command lets a two-button, must-answer-style toast still keep {@link dismissible} `true` (see
-     * the warning on {@link dismissible} for why `false` is usually the wrong tool for that).
+     * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
+     * away, or clicking a close button if the host ever enables one) AND when the notification
+     * auto-closes because its `duration` elapsed — a timeout is treated as an implicit dismissal, so
+     * a must-answer toast that times out still runs this command instead of vanishing silently. It
+     * does NOT fire when the notification is dismissed programmatically via
+     * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
+     * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
+     * decision — e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
+     * keep {@link dismissible} `true` (see the warning on {@link dismissible}). If you need the toast
+     * to persist until the user actually answers, also set `duration` to `0`.
      */
     dismissClickCommand?: keyof CommandHandlers;
     /**
@@ -5292,16 +5301,24 @@ declare module 'shared/models/notification.service-model' {
      * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
      * via a close button). Defaults to `true`.
      *
-     * WARNING: the host toast library (Sonner) renders {@link secondaryClickCommandLabel} in the same
-     * slot it gates on this flag, so setting `dismissible: false` also disables the secondary action
-     * button (and the close button) — the secondary button will still render but silently do nothing
-     * when clicked. Only set this to `false` on a notification with no secondary action. For a
-     * notification the user must explicitly answer, prefer leaving `dismissible: true` and using
-     * {@link dismissClickCommand} so a swipe-away still counts as a real (e.g. "postpone") decision
-     * instead of a dead button.
+     * The host toast library (Sonner) gates both the {@link secondaryClickCommand} button and the
+     * user-dismiss gesture that fires {@link dismissClickCommand} on this same flag, so a naive
+     * `dismissible: false` would silently turn those controls into dead buttons. To prevent that, the
+     * platform IGNORES `dismissible: false` when a {@link secondaryClickCommand} or
+     * {@link dismissClickCommand} is also set — the notification stays user-dismissible so those
+     * controls keep working. `dismissible: false` therefore only takes effect on a notification with
+     * no secondary/dismiss command. For a notification the user must explicitly answer, prefer
+     * leaving `dismissible: true` and using {@link dismissClickCommand} so a swipe-away still counts
+     * as a real (e.g. "postpone") decision.
      */
     dismissible?: boolean;
-    /** Optional ID of a previous notification to update instead of showing a new notification */
+    /**
+     * Optional ID of a previous notification to update instead of showing a new notification.
+     *
+     * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
+     * the value it had on the previous `send` for that id — omitting a field never clears it. Pass
+     * the field explicitly to change it.
+     */
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the

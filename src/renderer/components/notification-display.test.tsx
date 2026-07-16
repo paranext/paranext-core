@@ -22,7 +22,7 @@ vi.mock('@shared/services/localization.service', () => ({
   },
 }));
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 let capturedService: INotificationService;
