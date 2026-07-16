@@ -1,4 +1,25 @@
-// File copied from https://github.com/paranext/paratext-bible-internal-extensions/blob/eb0c22f8cf90b5e0b028fb833d03ab6f70ca0dc2/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// Core's copy of the type seam with the closed-source `paratext-bible-send-receive` extension
+// (shipped with Paratext 10 Studio). It declares the subset of that extension's contract that this
+// repository consumes — commands, network events, and the payload types they reference — so core
+// and its bundled extensions can talk to Send/Receive with real types.
+//
+// Derived from
+// https://github.com/paranext/paratext-bible-internal-extensions/blob/b50ebb16505f8069fd517af39dea29de7d7569bb/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// When the Send/Receive contract changes, re-sync the parts declared here from that file.
+//
+// Why this lives in `src/@types` and not under an extension's `src/types`:
+//
+// - This folder is a `typeRoots` entry for core and for every bundled extension, so one copy here
+//   is ambient in all of this repo's TypeScript programs (see `src/@types/react-19-compat`, which
+//   uses the same mechanism). A copy under one extension's `src` is only in that extension's own
+//   program, which is how this repo previously ended up with two drifting copies.
+// - Extension repos developed against core (including `paratext-bible-internal-extensions` itself)
+//   list core's `extensions/src` — but not core's `src/@types` — in their `typeRoots`. Anything
+//   send-receive declared in a core extension's advertised types file (e.g.
+//   `platform-get-resources.d.ts`) therefore merges into the Send/Receive extension's own program,
+//   where it collides with the authoritative declarations (duplicate identifiers for the module's
+//   types, TS2717 for any command whose signature drifts). Declaring the seam here keeps it out of
+//   those programs entirely.
 
 declare module 'paratext-bible-send-receive' {
   /**
@@ -14,6 +35,10 @@ declare module 'paratext-bible-send-receive' {
    *   administrator must upgrade it
    * - `projectVersionUpgraded` = S/R sort-of failed. The project was upgraded to a higher version of
    *   Paratext. You must update Paratext to open the project
+   * - `sentChanges` = S/R sent ≥1 non-merge revision
+   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
+   * - `noChangesToSend` = S/R sent no non-merge revisions
+   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
    */
   export type ResultStatus =
     | 'succeeded'
@@ -21,7 +46,11 @@ declare module 'paratext-bible-send-receive' {
     | 'initialReceive'
     | 'failed'
     | 'notUpgraded'
-    | 'projectVersionUpgraded';
+    | 'projectVersionUpgraded'
+    | 'sentChanges'
+    | 'receivedChanges'
+    | 'noChangesToSend'
+    | 'noChangesReceived';
 
   /** Base information common to multiple types of revisions */
   type RevisionBase = {
@@ -89,11 +118,6 @@ declare module 'paratext-bible-send-receive' {
    * - `autoreplace` = Autoreplace.txt
    */
   export type ProjectFileType =
-    | ''
-    | 'edited'
-    | 'new'
-    | 'unregistered'
-    | 'stuff'
     | 'notAProjectFile'
     | 'autocorrect'
     | 'bookNames'
@@ -164,12 +188,16 @@ declare module 'paratext-bible-send-receive' {
     conflictsInfo: ConflictInfo[];
     /** Additional information provided in some cases when a S/R fails */
     failureMessage?: string;
+    /** Granular statuses that apply to this result (multiple can apply, e.g., sent AND received) */
+    resultStatuses?: ResultStatus[];
+    /** Total conflict count computed by C# */
+    conflictCount?: number;
   };
 
   /**
    * Map of results for running S/R on projects to display in the S/R results dialog.
    *
-   * Maps project id to {@link SharedProjectInfo} for that project id
+   * Maps project id to {@link ResultInfo} for that project id
    */
   export type ResultsInfo = { [projectId: string]: ResultInfo };
 
@@ -181,13 +209,49 @@ declare module 'paratext-bible-send-receive' {
     /** DateTimeOffset of when the S/R was performed */
     sendReceiveDate: string;
     resultsInfo: ResultsInfo;
+    /**
+     * Non-fatal warnings from secondary operations (e.g. connected-resource scans, DBL installs)
+     * that did not prevent the primary S/R from completing. Includes warning-level alerts captured
+     * from ParatextData during the sync.
+     */
+    warnings?: string[];
+    /**
+     * Unexpected error conditions from secondary operations that likely indicate a program error
+     * but did not prevent the primary S/R from completing. Includes error-level alerts captured
+     * from ParatextData during the sync.
+     */
+    errors?: string[];
+  };
+
+  /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
+  export type SyncProgressEvent = {
+    isSyncing: boolean;
+  };
+
+  /**
+   * Payload emitted by the `paratextBibleSendReceive.onSyncProgress` network event during a sync.
+   * Fire-and-forget; subscribers use it to drive progress UI.
+   */
+  export type SyncProgressDetail = {
+    /**
+     * Current status text. For determinate progress this is the bare current item (e.g. a project
+     * name like "GreekNT"), which the subscriber formats together with the percent; for
+     * indeterminate progress it is a complete localized message shown verbatim (e.g.
+     * "Reconnecting…").
+     */
+    progressText: string;
+    /** 0–1 fraction; null/undefined ⇒ indeterminate. */
+    progressValue?: number | null;
   };
 }
 
 declare module 'papi-shared-types' {
-  import type { ResultsData, RevisionInfo } from 'paratext-bible-send-receive';
+  import type {
+    ResultsData,
+    SyncProgressDetail,
+    SyncProgressEvent,
+  } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
-  import { VerseRef } from '@sillsdev/scripture';
 
   export interface SettingTypes {
     /** Selected project ids in the send receive dialog */
@@ -216,45 +280,65 @@ declare module 'papi-shared-types' {
      * @returns Paratext projects eligible for Send/Receive
      */
     'paratextBibleSendReceive.getSharedProjects': () => Promise<SharedProjectsInfo>;
+
     /**
      * Send/Receive Paratext projects
      *
      * Note: this command is served from the dotnet process.
      *
      * @param projectIds Ids of projects to send/receive
+     * @param suppressNotification When `true`, the dotnet process skips its own progress toast (the
+     *   caller — e.g. the open S/R dialog — shows its own progress + Cancel). Defaults to `false`.
      * @returns S/R results
      */
-    'paratextBibleSendReceive.sendReceiveProjects': (projectIds?: string[]) => Promise<ResultsData>;
-    /**
-     * Opens a new Send/Receive web view and returns the WebView id
-     *
-     * @returns WebView id for new S/R WebView or `undefined` if not created
-     */
-    'paratextBibleSendReceive.openSendReceive': () => Promise<string | undefined>;
-    /**
-     * Compare versions of project associated with a web view
-     *
-     * @param webViewId Id of the web view whose project to compare versions
-     */
-    'paratextBibleSendReceive.compareVersionsByWebViewId': (webViewId: string) => Promise<string>;
-    /**
-     * Send/Receive the project primarily associated with a web view
-     *
-     * @param webViewId Id of web view whose project to send/receive
-     * @returns S/R results
-     */
-    'paratextBibleSendReceive.sendReceiveProjectsByWebViewId': (
-      webViewId: string,
+    'paratextBibleSendReceive.sendReceiveProjects': (
+      projectIds: string[],
+      suppressNotification?: boolean,
     ) => Promise<ResultsData>;
+
+    /**
+     * Opens the sync status web view and returns its WebView id
+     *
+     * @returns WebView id for the sync status WebView or `undefined` if not created
+     */
+    'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
+
+    /**
+     * Commits changes in the specified project to the version history. Unless `forceCommit` is
+     * `true`, will only commit if there are changes/revisions detected.
+     *
+     * @param projectId Id of the project
+     * @param comment Specified comment describing the change/revisions
+     * @param forceCommit Whether to force a commit even if there are no changes
+     * @returns Whether or not changes were committed
+     */
+    'paratextBibleSendReceive.commitChanges': (
+      projectId: string,
+      comment: string,
+      forceCommit?: boolean,
+    ) => Promise<boolean>;
+
+    /**
+     * Commits changes only if it's been a day since the last commit.
+     *
+     * @param projectId Id of the project
+     */
+    'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
+
     /**
      * Syncs projects: sends/receives each project, then reads each project's connected resources
      * and projects (one level deep — connections of connections are not included) and
      * sends/receives connected translation projects or DBL-updates connected resources as needed.
      * Unknown project IDs are skipped. Deduplication is handled internally.
      *
-     * @param projectIds IDs of the projects to sync. If omitted, all shared projects already
-     *   present locally are synced. If provided, only projects already present locally are synced;
-     *   new projects (not yet received) and unknown IDs are skipped.
+     * This signature matches this repository's C# stub (`String[]? projectIds`, no return value),
+     * which core itself calls (e.g. the startup sync passes `undefined` to mean "sync all"). The
+     * Send/Receive extension's own declaration also returns the S/R results; core does not consume
+     * them.
+     *
+     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
+     *   already present locally (i.e., not new) are synced. If provided, only projects already
+     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */
@@ -279,39 +363,31 @@ declare module 'papi-shared-types' {
       boundary: 'startup' | 'shutdown',
     ) => Promise<'synced' | 'failed' | 'skipped'>;
     /**
-     * Accepts a project id, and returns a RevisionInfo[] of all revisions for the given project.
+     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
+     * them.
      *
-     * @param projectId Id of project to retrieve revisions from
-     * @returns RevisionInfo[] of all revisions for project
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
      */
-    'paratextBibleSendReceive.getRevisions': (projectId: string) => Promise<RevisionInfo[]>;
+    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
+
     /**
-     * Accepts a project id, revision id, and verse reference, and returns the string USFM for the
-     * given revision at that verse reference.
+     * Cancels an in-progress sync operation if one is running. The process will finish dealing with
+     * the current project/resource and then it will abort. It will not undo what has been done.
      *
-     * @param projectId Id of project to retrieve text from
-     * @param revisionId Specific revision to retrieve text from
-     * @param verseRef The reference to retrieve text for
-     * @returns USFM for the given revision at the verseRef
+     * @param notificationId ID of the notification that triggered this cancel, if any.
+     *   Implementations may use this to validate that the cancel is for the expected sync
+     *   operation.
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
      */
-    'paratextBibleSendReceive.getUSFMForRevision': (
-      projectId: string,
-      revisionId: string,
-      verseRef: VerseRef,
-    ) => Promise<string>;
-    /**
-     * Accepts a project id and the id of the other currently selected revision and returns the
-     * string USFM for the baseline version.
-     *
-     * @param projectId Id of project to retrieve text from
-     * @param otherRevisionId Id of the other selected revision to get baseline of
-     * @param verseRef The reference to retrieve text for
-     * @returns USFM for the baseline at the verseRef
-     */
-    'paratextBibleSendReceive.getUSFMForBaseVersion': (
-      projectId: string,
-      otherRevisionId: string,
-      verseRef: VerseRef,
-    ) => Promise<string>;
+    'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
+  }
+
+  export interface NetworkEvents {
+    /** Emitted whenever a sync starts or ends */
+    'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
+    /** Emitted repeatedly during a sync with the current project name or reconnect status */
+    'paratextBibleSendReceive.onSyncProgress': SyncProgressDetail;
   }
 }
