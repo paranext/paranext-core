@@ -77,7 +77,7 @@ export interface StartupTasksSignals {
    * Aborts the Power-mode boot-race retry loop once the app has begun quitting. Stops it from (a)
    * firing `runScheduledSessionSync('startup')` after `('shutdown')` already fired and (b) issuing
    * a request that would resurrect the network connection `networkService.shutdown()` is tearing
-   * down. Wired to `before-quit` / `will-quit` / the window close in `main.ts`.
+   * down. Wired to `will-quit` and the window close in `main.ts`.
    */
   abortSignal?: AbortSignal;
   /**

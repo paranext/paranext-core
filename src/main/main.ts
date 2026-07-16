@@ -575,14 +575,13 @@ async function main() {
     // the window until the sync completes.
     let isWindowClosing = false;
     mainWindow.on('close', async (event) => {
-      // A second close click while the first shutdown is still running must NOT fall through to
-      // Electron's default close — that would tear the window down mid-sync and kill it. Keep
-      // suppressing the close; the in-flight performShutdownTasks and its bounded timeout own when
-      // the window actually goes away.
-      if (isWindowClosing) {
-        event.preventDefault();
-        return;
-      }
+      // A second close click while the first shutdown is still running falls through to Electron's
+      // default close on purpose: with the shutdown sync's request timeout disabled by the
+      // extension, the bounded wait below can hold the window up to SHUTDOWN_SYNC_TIME_OUT_MS with
+      // no feedback, and this fall-through is the user's only escape hatch until a real
+      // feedback/cancel UX exists (tracked on the shutdown-cancel follow-up ticket). It abandons
+      // the in-flight sync mid-flight — same risk profile as force-quitting the app.
+      if (isWindowClosing) return;
 
       // Prevents the main window from initially closing
       event.preventDefault();
