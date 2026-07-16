@@ -9,15 +9,3 @@
 .card-content {
   margin-bottom: 1rem;
 }
-
-/* Slim "editing paused during Send/Receive" notice shown above a project settings list while that
-   project's automatic sync is blocking edits. Non-covering; the editors below are disabled. */
-.sync-blocked-notice {
-  margin-bottom: 1rem;
-  padding: 0.375rem 0.75rem;
-  border: 1px solid hsl(var(--border));
-  border-radius: var(--radius);
-  background-color: hsl(var(--muted));
-  color: hsl(var(--muted-foreground));
-  font-size: 0.875rem;
-}

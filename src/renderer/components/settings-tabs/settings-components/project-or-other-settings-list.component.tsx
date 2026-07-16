@@ -1,25 +1,11 @@
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
-import {
-  Localized,
-  LocalizeKey,
-  ProjectSettingProperties,
-  SettingProperties,
-} from 'platform-bible-utils';
-import { useMemo } from 'react';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
 import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import { OtherSetting } from './other-setting.component';
 import './project-or-other-settings-list.component.scss';
 import { ProjectSetting } from './project-setting.component';
 import { OtherSettingValues, ProjectSettingValues } from './setting.component';
-
-/**
- * Slim notice shown per project settings list while that project's automatic Send/Receive blocks
- * edits.
- */
-const SYNC_BLOCKED_NOTICE_KEY: LocalizeKey = '%settings_projectSyncBlocked_notice%';
-const LOCALIZE_KEYS: LocalizeKey[] = [SYNC_BLOCKED_NOTICE_KEY];
 
 /** Properties for a settings list component that displays either project or user settings */
 type ProjectOrOtherSettingsListProps = {
@@ -46,9 +32,12 @@ export function ProjectOrOtherSettingsList({
   groupDescription,
   className,
 }: ProjectOrOtherSettingsListProps) {
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_KEYS, []));
   // Only project settings (projectId defined) can be edit-blocked; user/general settings never are
-  // (the hook treats an undefined project id as never blocked).
+  // (the hook treats an undefined project id as never blocked). The blocked NOTICE itself is no
+  // longer rendered here — a project can have several of these lists (one per settings group), which
+  // used to stack one identical banner per group. It now renders once at the settings-tab level
+  // (SettingsTab, using the same hook with the tab's projectId), above all of a project's groups
+  // (PT-4214). This component keeps only the per-editor `disabled` wiring below.
   const isSyncBlocked = useIsProjectAutoSyncBlocked(projectId);
 
   if (Object.entries(settingProperties).length === 0) return undefined;
@@ -60,13 +49,6 @@ export function ProjectOrOtherSettingsList({
         {groupDescription && <CardDescription>{groupDescription}</CardDescription>}
       </CardHeader>
       <CardContent>
-        {/* One slim, non-covering notice per project settings list while this project's automatic
-            Send/Receive is blocking edits. The individual setting editors are disabled below. */}
-        {isSyncBlocked && (
-          <div role="status" className="sync-blocked-notice">
-            {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
-          </div>
-        )}
         {Object.entries(settingProperties)
           .filter(([, property]) => !property.isHidden)
           .map(([key, property]) =>

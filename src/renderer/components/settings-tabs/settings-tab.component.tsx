@@ -14,12 +14,21 @@ import './settings-tab.component.scss';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import { formatReplacementString, Localized, LocalizeKey } from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import { ProjectOrOtherSettingsList } from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
+
+/**
+ * Slim notice shown once above a project's settings groups while that project's automatic
+ * Send/Receive blocks edits. Rendered here at the tab level — not per settings-group list — because
+ * a project's settings are split across several `ProjectOrOtherSettingsList` groups, which used to
+ * each render their own identical banner (PT-4214).
+ */
+const SYNC_BLOCKED_NOTICE_KEY: LocalizeKey = '%settings_projectSyncBlocked_notice%';
 
 type SettingsTabProps = {
   /** Optional project Id, when passed in, will only show settings for that project */
@@ -47,6 +56,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettings%',
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
+  SYNC_BLOCKED_NOTICE_KEY,
 ];
 
 const filterSettingsContributions = (
@@ -85,6 +95,12 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     projectId: undefined,
   });
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // The tab's current project, whichever of the two modes below is active: pinned to one project
+  // (projectIdToLimitSettings) or a project picked in the sidebar (selectedSidebarItem.projectId).
+  // Undefined (general/user settings) is never blocked — see the hook's own doc comment.
+  const tabProjectId = projectIdToLimitSettings ?? selectedSidebarItem.projectId;
+  const isProjectSyncBlocked = useIsProjectAutoSyncBlocked(tabProjectId);
 
   const handleSearchInput = (newSearchTerm: string) => {
     setSearchQuery(newSearchTerm);
@@ -230,7 +246,14 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     return (
       <div className="project-settings-tab">
         {filteredProjectSettingsContributions ? (
-          renderProjectSettingsList(projectIdToLimitSettings)
+          <>
+            {isProjectSyncBlocked && (
+              <div role="status" className="sync-blocked-notice">
+                {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
+              </div>
+            )}
+            {renderProjectSettingsList(projectIdToLimitSettings)}
+          </>
         ) : (
           <div>{localizedStrings['%settings_defaultMessage_loadingSettings%']}</div>
         )}
@@ -277,18 +300,27 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
         >
           <div className="project-or-settings-list-container">
-            {selectedSidebarItem.projectId
-              ? renderProjectSettingsList(selectedSidebarItem.projectId)
-              : matchedSettingsContributions &&
-                matchedSettingsContributions[selectedSidebarItem.label]?.map((group) => (
-                  <ProjectOrOtherSettingsList
-                    key={group.label}
-                    groupLabel={group.label}
-                    groupDescription={group.description}
-                    settingProperties={group.properties}
-                    className="project-or-settings-list"
-                  />
-                ))}
+            {selectedSidebarItem.projectId ? (
+              <>
+                {isProjectSyncBlocked && (
+                  <div role="status" className="sync-blocked-notice">
+                    {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
+                  </div>
+                )}
+                {renderProjectSettingsList(selectedSidebarItem.projectId)}
+              </>
+            ) : (
+              matchedSettingsContributions &&
+              matchedSettingsContributions[selectedSidebarItem.label]?.map((group) => (
+                <ProjectOrOtherSettingsList
+                  key={group.label}
+                  groupLabel={group.label}
+                  groupDescription={group.description}
+                  settingProperties={group.properties}
+                  className="project-or-settings-list"
+                />
+              ))
+            )}
 
             {showZeroResultsState && (
               <div className="zero-search-results">
