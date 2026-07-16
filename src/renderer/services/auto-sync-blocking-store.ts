@@ -92,17 +92,17 @@ export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
   }
 }
 
-/** True when any project is (visibly) blocked. Preserved for existing boolean consumers. */
-export function getAutoSyncBlocking(): boolean {
-  return visibleBlockedProjectIds.size > 0;
-}
-
 /** The (visible, grace-debounced) set of projects currently blocked by an automatic Send/Receive. */
 export function getBlockedProjectIds(): ReadonlySet<string> {
   return visibleBlockedProjectIds;
 }
 
-/** True when a specific project is (visibly) blocked. An undefined project id is never blocked. */
+/**
+ * True when a specific project is (visibly) blocked. An undefined project id is never blocked.
+ *
+ * No consumer in this diff — the project-settings UI (a stacked follow-up PR) is about to consume
+ * it to disable per-project actions while that project's automatic sync is blocking edits.
+ */
 export function isProjectBlocked(projectId: string | undefined): boolean {
   if (projectId === undefined) return false;
   return visibleBlockedProjectIds.has(projectId);
