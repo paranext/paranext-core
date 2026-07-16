@@ -30,7 +30,7 @@ import { getErrorMessage, wait } from 'platform-bible-utils';
  * budget locally instead of changing the shared default.
  *
  * Exported so the retry tests can drive fake timers by the exact same duration rather than
- * duplicating the literal (mirrors `SHUTDOWN_SYNC_TIME_OUT_MS` in `shutdown-tasks.ts`).
+ * duplicating the literal (mirrors `AUTO_SYNC_MAX_DURATION_MS` in `shutdown-tasks.ts`).
  */
 export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
 

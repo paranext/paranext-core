@@ -21,9 +21,7 @@ export const MIN_ZOOM_FACTOR = 0.5;
 export const MAX_ZOOM_FACTOR = 3.0;
 
 /**
- * Upper bound (10 minutes) for how long an automatic Send/Receive is allowed to run before we stop
- * waiting on it. Used as the shutdown-sync timeout in the main process and as the auto-sync
- * edit-block safety leash in the renderer. A scheduled sync of a large repo can run for minutes, so
- * this is deliberately long.
+ * Upper bound (10 minutes) on how long a single automatic Send/Receive is allowed to run. A
+ * scheduled sync of a large repo can run for minutes, so this is deliberately long.
  */
-export const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000;
+export const AUTO_SYNC_MAX_DURATION_MS = 10 * 60 * 1000;
