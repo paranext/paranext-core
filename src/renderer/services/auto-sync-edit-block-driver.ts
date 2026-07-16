@@ -1,25 +1,27 @@
 /**
  * Headless driver that translates the auto-sync-blocking store's visible blocked-project set into a
- * per-editor `isSyncBlocked` flag on the open Scripture editor web views whose project is syncing.
+ * per-web-view `isSyncBlocked` flag on the open edit-blockable web views whose project is syncing —
+ * the Scripture editor plus the legacy-comment-manager comment views (the editor-anchored comment
+ * list and the fixed Column 3 comment panel).
  *
  * This replaces the earlier full-workspace blocking overlay: instead of covering the whole
  * workspace and trapping focus, an automatic (scheduled or session) Send/Receive now blocks only
- * _editing_, and only of the projects actually being synced. The Scripture editor web view reads
+ * _editing_, and only of the projects actually being synced. Each edit-blockable web view reads
  * `isSyncBlocked` from its own web view state (via `useWebViewState`), folds it into its read-only
- * computation, and shows a slim non-covering banner — the rest of the UI (menus, dialogs,
- * navigation) and every editor of a project that is NOT syncing stays fully usable.
+ * computation, and shows a slim non-covering notice — the rest of the UI (menus, dialogs,
+ * navigation) and every web view of a project that is NOT syncing stays fully usable.
  *
- * An editor is flagged iff its `projectId` is in the store's blocked set; editors with no
+ * A web view is flagged iff its `projectId` is in the store's blocked set; web views with no
  * `projectId` are never flagged. The driver reacts to SET CHANGES (backend snapshots), not a
  * boolean raise/clear: on each store notification it re-applies the current blocked set to every
- * open editor. The store (see auto-sync-blocking-store.ts) provides the 200 ms show-grace, so this
- * driver just mirrors the store's derived visible set onto the editors.
+ * open web view. The store (see auto-sync-blocking-store.ts) provides the 200 ms show-grace, so
+ * this driver just mirrors the store's derived visible set onto the web views.
  *
- * While a set is blocking it also flags editors opened mid-block (via `onDidOpenWebView`) and
- * re-flags editors rebuilt mid-block (via `onDidUpdateWebView`) whose project is in the blocked set
- * — the Scripture editor factory forces `isSyncBlocked: false` on every rebuild (e.g.
- * `reloadWebView`, an interface-mode switch, or `loadLayout`), so without this a rebuild during a
- * sustained block would come back editable with the banner gone.
+ * While a set is blocking it also flags web views opened mid-block (via `onDidOpenWebView`) and
+ * re-flags web views rebuilt mid-block (via `onDidUpdateWebView`) whose project is in the blocked
+ * set — both the Scripture editor factory and the comment-view providers force `isSyncBlocked:
+ * false` on every rebuild (e.g. `reloadWebView`, an interface-mode switch, or `loadLayout`), so
+ * without this a rebuild during a sustained block would come back editable with the notice gone.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -39,7 +41,27 @@ import {
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 
-/** Web view state key the Scripture editor reads to know it is edit-blocked by an automatic sync. */
+/**
+ * Web view types this driver edit-blocks while their project is syncing.
+ * `SCRIPTURE_EDITOR_WEBVIEW_TYPE` is a core shared-model constant; the two legacy-comment-manager
+ * comment views are hard-coded string literals because core must NOT import from an extension. This
+ * intentionally duplicates the type strings the way each extension duplicates its own
+ * sync-edit-blocked handling (no cross-boundary imports); if those extension web-view types are
+ * ever renamed, update them here to match. Each of these web views reads `isSyncBlocked` from its
+ * own web view state and folds it into a read-only / write-disabled mode.
+ */
+const EDIT_BLOCKABLE_WEB_VIEW_TYPES: ReadonlySet<string> = new Set([
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  // legacy-comment-manager `commentListWebViewType` (editor-anchored comment list).
+  'legacyCommentManager.commentList',
+  // legacy-comment-manager `COMMENT_LIST_PANEL_WEB_VIEW_TYPE` (fixed Column 3 comment panel).
+  'legacyCommentManager.commentListPanel',
+]);
+
+/**
+ * Web view state key edit-blockable web views read to know they are edit-blocked by an automatic
+ * sync.
+ */
 const IS_SYNC_BLOCKED_STATE_KEY = 'isSyncBlocked';
 
 /** Content equality for two id sets (both come from the store, which replaces sets wholesale). */
@@ -49,7 +71,7 @@ function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   return [...a].every((id) => b.has(id));
 }
 
-/** True when a Scripture editor definition's project is in the blocked set. No project → never. */
+/** True when an edit-blockable web view's project is in the blocked set. No project → never. */
 function isEditorBlocked(
   definition: SavedWebViewDefinition,
   blockedProjectIds: ReadonlySet<string>,
@@ -58,10 +80,10 @@ function isEditorBlocked(
 }
 
 /**
- * Sets `isSyncBlocked` on a single Scripture editor's saved definition, but only when it differs
- * from the current value — `updateWebViewDefinitionSync` always emits an update event when `state`
- * is present (it is compared by reference), so the equality guard keeps a no-op from rippling
- * through every editor's update subscribers.
+ * Sets `isSyncBlocked` on a single edit-blockable web view's saved definition, but only when it
+ * differs from the current value — `updateWebViewDefinitionSync` always emits an update event when
+ * `state` is present (it is compared by reference), so the equality guard keeps a no-op from
+ * rippling through every editor's update subscribers.
  */
 function setEditorSyncBlocked(definition: SavedWebViewDefinition, isBlocked: boolean): void {
   const currentState = definition.state ?? {};
@@ -80,9 +102,9 @@ function setEditorSyncBlocked(definition: SavedWebViewDefinition, isBlocked: boo
 }
 
 /**
- * Applies the blocked set to every currently open Scripture editor: each editor whose project is in
- * the set is flagged, every other editor is unflagged. The per-editor equality guard turns this
- * into a diff — unchanged editors get no write (and thus emit no update event).
+ * Applies the blocked set to every currently open edit-blockable web view: each one whose project
+ * is in the set is flagged, every other is unflagged. The per-web-view equality guard turns this
+ * into a diff — unchanged web views get no write (and thus emit no update event).
  */
 function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): void {
   let definitions: SavedWebViewDefinition[];
@@ -97,7 +119,7 @@ function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): vo
     return;
   }
   definitions.forEach((definition) => {
-    if (definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
+    if (EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(definition.webViewType))
       setEditorSyncBlocked(definition, isEditorBlocked(definition, blockedProjectIds));
   });
 }
@@ -132,7 +154,7 @@ export function initAutoSyncEditBlockDriver(): () => void {
   const setupHandlers = (blockedProjectIds: ReadonlySet<string>) => {
     const openUnsub = onDidOpenWebView(({ webView }) => {
       if (
-        webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE &&
+        EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(webView.webViewType) &&
         isEditorBlocked(webView, blockedProjectIds)
       )
         setEditorSyncBlocked(webView, true);
@@ -143,9 +165,9 @@ export function initAutoSyncEditBlockDriver(): () => void {
     };
 
     const updateUnsub = onDidUpdateWebView(({ webView }) => {
-      if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
-      // Only re-flag editors whose project is blocked; a rebuilt editor of a non-synced project must
-      // stay editable.
+      if (!EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(webView.webViewType)) return;
+      // Only re-flag web views whose project is blocked; a rebuilt web view of a non-synced project
+      // must stay editable.
       if (!isEditorBlocked(webView, blockedProjectIds)) return;
       // Guard against self-triggering: our own re-flag below calls updateWebViewDefinitionSync, which
       // fires another onDidUpdateWebView. Only act when the definition came back unblocked; once we

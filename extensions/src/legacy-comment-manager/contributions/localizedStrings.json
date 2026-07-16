@@ -77,6 +77,8 @@
       "%no_comments_match_filter%": "No comments match your filter settings.",
       "%webView_legacyCommentManager_commentList_title%": "Comments",
       "%webView_legacyCommentManager_commentListPanel_title%": "Comments",
+      "%webView_legacyCommentManager_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_legacyCommentManager_syncEditBlocked_notice%": "Editing paused — Send/Receive in progress",
       "%webView_legacyCommentManager_openComments%": "Open Comments"
     },
     "es": {
@@ -142,6 +144,8 @@
       "%no_comments_match_filter%": "No hay comentarios que coincidan con sus parámetros de filtros.",
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",
       "%webView_legacyCommentManager_commentListPanel_title%": "Comentarios de proyecto",
+      "%webView_legacyCommentManager_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_legacyCommentManager_syncEditBlocked_notice%": "Edición pausada — Enviar/Recibir en curso",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
     }
   }
