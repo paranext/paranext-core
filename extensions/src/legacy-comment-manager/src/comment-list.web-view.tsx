@@ -35,6 +35,7 @@ import type { CommentListScrollTarget } from './comment-list-scroll.utils';
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
 
@@ -540,22 +541,26 @@ global.webViewComponent = function CommentListWebView({
   // platform-bible-react's CommentList exposes no `disabled`/`readOnly` prop; these per-capability
   // callbacks ARE its existing mechanism for hiding/disabling the reply box, assign, edit/delete, and
   // conflict-resolve, so gating them here is the real disable path (not a cosmetic no-op). The write
-  // handlers above additionally catch the backend write-gate rejection as defense-in-depth.
-  const gatedCanUserAddCommentToThread = isSyncBlocked ? false : canUserAddCommentToThread;
-  const gatedCanUserAssignThreadCallback = useCallback(
-    async (threadId: string): Promise<boolean> =>
-      isSyncBlocked ? false : canUserAssignThreadCallback(threadId),
-    [isSyncBlocked, canUserAssignThreadCallback],
-  );
-  const gatedCanUserResolveThreadCallback = useCallback(
-    async (threadId: string): Promise<boolean> =>
-      isSyncBlocked ? false : canUserResolveThreadCallback(threadId),
-    [isSyncBlocked, canUserResolveThreadCallback],
-  );
-  const gatedCanUserEditOrDeleteCommentCallback = useCallback(
-    async (commentId: string): Promise<boolean> =>
-      isSyncBlocked ? false : canUserEditOrDeleteCommentCallback(commentId),
-    [isSyncBlocked, canUserEditOrDeleteCommentCallback],
+  // handlers above additionally catch the backend write-gate rejection as defense-in-depth. The
+  // deny-while-blocked / pass-through-when-not decision itself lives in
+  // gateCommentWriteCapabilities (unit tested in comment-list-capability-gating.util.test.ts); this
+  // component only memoizes the result so unrelated re-renders don't churn the props CommentList
+  // sees.
+  const gatedCapabilities = useMemo(
+    () =>
+      gateCommentWriteCapabilities(isSyncBlocked, {
+        canUserAddCommentToThread,
+        canUserAssignThreadCallback,
+        canUserResolveThreadCallback,
+        canUserEditOrDeleteCommentCallback,
+      }),
+    [
+      isSyncBlocked,
+      canUserAddCommentToThread,
+      canUserAssignThreadCallback,
+      canUserResolveThreadCallback,
+      canUserEditOrDeleteCommentCallback,
+    ],
   );
 
   return (
@@ -582,10 +587,10 @@ global.webViewComponent = function CommentListWebView({
         handleDeleteComment={handleDeleteComment}
         handleReadStatusChange={handleReadStatusChange}
         assignableUsers={assignableUsers}
-        canUserAddCommentToThread={gatedCanUserAddCommentToThread}
-        canUserAssignThreadCallback={gatedCanUserAssignThreadCallback}
-        canUserResolveThreadCallback={gatedCanUserResolveThreadCallback}
-        canUserEditOrDeleteCommentCallback={gatedCanUserEditOrDeleteCommentCallback}
+        canUserAddCommentToThread={gatedCapabilities.canUserAddCommentToThread}
+        canUserAssignThreadCallback={gatedCapabilities.canUserAssignThreadCallback}
+        canUserResolveThreadCallback={gatedCapabilities.canUserResolveThreadCallback}
+        canUserEditOrDeleteCommentCallback={gatedCapabilities.canUserEditOrDeleteCommentCallback}
         selectedThreadId={selectedThreadId}
         onSelectedThreadChange={setSelectedThreadId}
         onVerseRefClick={handleVerseRefClick}
