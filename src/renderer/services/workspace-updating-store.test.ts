@@ -125,13 +125,34 @@ describe('workspace-updating-store', () => {
       expect(listener).toHaveBeenCalledTimes(2); // true, then false — no extra firing
     });
 
-    it('resets the safety timer when a new switch starts while one is in flight', () => {
+    it('arms a leash per switch — a later switch outlives an earlier start expiring', () => {
       setWorkspaceUpdating(true);
       vi.advanceTimersByTime(20_000);
-      setWorkspaceUpdating(true); // second switch — timer resets to 30 s from now
-      vi.advanceTimersByTime(10_000); // 30 s from first start, but only 10 s from second
-      expect(getWorkspaceUpdating()).toBe(true); // second switch reset the timer — still alive
-      vi.advanceTimersByTime(20_000); // 30 s from second switch — safety fires
+      setWorkspaceUpdating(true); // second switch — gets its own 30 s leash
+      vi.advanceTimersByTime(10_000); // 30 s from first start (its leash fires), 10 s from second
+      expect(getWorkspaceUpdating()).toBe(true); // second switch's own leash is still alive
+      vi.advanceTimersByTime(20_000); // 30 s from second switch — its leash fires
+      expect(getWorkspaceUpdating()).toBe(false);
+    });
+
+    it('releases only its own switch when a stale leash expires — the newer switch stays visible until it finishes', () => {
+      setWorkspaceUpdating(true); // switch A starts at t=0 and is abandoned
+      vi.advanceTimersByTime(15_000);
+      setWorkspaceUpdating(true); // switch B starts at t=15s
+      vi.advanceTimersByTime(15_000); // t=30s — A's leash expires
+      expect(getWorkspaceUpdating()).toBe(true); // B still in flight — stays visible
+      setWorkspaceUpdating(false); // B finishes — the count stayed correct, so one finish clears
+      expect(getWorkspaceUpdating()).toBe(false);
+    });
+
+    it('pairs a finish with the oldest leash — the newest switch keeps its own full leash', () => {
+      setWorkspaceUpdating(true); // switch A starts at t=0
+      vi.advanceTimersByTime(5_000);
+      setWorkspaceUpdating(true); // switch B starts at t=5s and is abandoned
+      setWorkspaceUpdating(false); // A finishes — cancels the oldest leash (A's)
+      vi.advanceTimersByTime(25_000); // t=30s — A's cancelled leash is silent
+      expect(getWorkspaceUpdating()).toBe(true); // B is still inside its own leash
+      vi.advanceTimersByTime(5_000); // t=35s — B's own leash expires
       expect(getWorkspaceUpdating()).toBe(false);
     });
   });
