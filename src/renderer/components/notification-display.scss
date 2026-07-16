@@ -1,0 +1,42 @@
+// PT-4193: a toast with BOTH a primary action ("action") and a secondary/cancel action ("cancel")
+// renders, by Sonner's own stylesheet (node_modules/sonner/dist/styles.css), as a single un-wrapped
+// flex row: icon, content, cancel button, action button. Sonner's buttons are `flex-shrink: 0`, so
+// two wide buttons crush the message content down to a sliver - confirmed live via a screenshot of a
+// real Send/Receive consent toast. Scope the fix to exactly that two-button shape via `:has()` so
+// plain-message and single-button toasts stay pixel-identical to before.
+.notification-toast:has(.notification-toast-cancel-button):has(.notification-toast-action-button) {
+  flex-wrap: wrap;
+
+  .notification-toast-content {
+    // Let the message take the rest of the row next to the icon, instead of shrink-wrapping to the
+    // text width - matching the "full toast width" content row of a plain or single-button toast.
+    flex-grow: 1;
+    min-inline-size: 0;
+  }
+
+  // Force a line break between the content row and the button row without an extra wrapper element:
+  // an empty, zero-size flex item whose `flex-basis: 100%` can't fit on the content's line, so the
+  // wrap algorithm starts a new line with it - and the buttons (next in flex order below) start
+  // fresh on the line after that. Sonner's own `[data-button]` auto-margin then right-aligns
+  // whichever buttons end up sharing that new line, and lets a second button wrap to a third,
+  // stacked row if the two together still don't fit - both behaviors come for free, no extra rules
+  // needed here.
+  &::after {
+    content: '';
+    order: 1;
+    flex-basis: 100%;
+    block-size: 0;
+  }
+}
+
+// Ordered above the default (0) so both buttons sort after the content/break-point above, in
+// whichever single- or multi-line layout is in effect. Harmless when only one of the two exists (or
+// neither does): it keeps the same after-content position a plain-message or single-button toast
+// already had.
+.notification-toast-cancel-button {
+  order: 2;
+}
+
+.notification-toast-action-button {
+  order: 3;
+}

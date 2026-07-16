@@ -86,4 +86,94 @@ describe('NotificationDisplay with real Sonner', () => {
 
     expect(mockSendCommand).toHaveBeenCalledWith('test.secondary', notificationId);
   });
+
+  // PT-4193 layout fix: a live E2E screenshot showed a toast with BOTH an action and a cancel
+  // button collapsing its message down to a ~1-character-wide sliver - Sonner's default layout
+  // puts icon/content/cancel/action in a single un-wrapped flex row, and two non-shrinking buttons
+  // crush the content column. notification-display.scss fixes this with a `:has()`-scoped stylesheet
+  // rule keyed off the classNames wired up in notification-display.tsx. jsdom doesn't compute actual
+  // flex-wrap layout, so these tests pin the DOM shape (classes + shared flex-container ancestry)
+  // that stylesheet rule depends on, rather than pixel positions.
+  it('gives a two-button toast the content/action/cancel class hooks the layout fix keys off, and keeps both buttons working', async () => {
+    render(<NotificationDisplay />);
+
+    const notification: PlatformNotification = {
+      message: 'Time to sync',
+      severity: 'info',
+      clickCommandLabel: 'Send/Receive now',
+      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      clickCommand: 'test.primary' as never,
+      secondaryClickCommandLabel: 'Postpone until 3:24 PM',
+      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      secondaryClickCommand: 'test.secondary' as never,
+    };
+
+    const notificationId = await capturedService.send(notification);
+
+    const actionButton = await screen.findByRole('button', { name: 'Send/Receive now' });
+    const cancelButton = await screen.findByRole('button', { name: 'Postpone until 3:24 PM' });
+    const title = await screen.findByText('Time to sync');
+    const content = title.closest('.notification-toast-content');
+    const toastRoot = document.querySelector('.notification-toast');
+
+    // The fix's CSS rule is
+    // `.notification-toast:has(.notification-toast-cancel-button):has(.notification-toast-action-button)`
+    // - assert that shape exists: one shared flex-container ancestor directly containing the
+    // content, the action button, and the cancel button as siblings (not nested inside each other),
+    // which is what lets `flex-grow` on the content and `order` on the buttons rearrange them into
+    // separate rows.
+    expect(toastRoot).not.toBeNull();
+    expect(content).not.toBeNull();
+    expect(actionButton).toHaveClass('notification-toast-action-button');
+    expect(cancelButton).toHaveClass('notification-toast-cancel-button');
+    expect(content?.parentElement).toBe(toastRoot);
+    expect(actionButton.parentElement).toBe(toastRoot);
+    expect(cancelButton.parentElement).toBe(toastRoot);
+
+    fireEvent.click(actionButton);
+    fireEvent.click(cancelButton);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('test.primary', notificationId);
+    expect(mockSendCommand).toHaveBeenCalledWith('test.secondary', notificationId);
+  });
+
+  it('does not add the action-button hook to a single-button (cancel-only) toast', async () => {
+    render(<NotificationDisplay />);
+
+    const notification: PlatformNotification = {
+      message: 'A decision is needed',
+      severity: 'info',
+      secondaryClickCommandLabel: 'Postpone',
+      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      secondaryClickCommand: 'test.secondary' as never,
+    };
+
+    await capturedService.send(notification);
+
+    const cancelButton = await screen.findByRole('button', { name: 'Postpone' });
+    // The layout fix only engages when BOTH button classes are present under the same toast (see
+    // the `:has()...:has()` rule in notification-display.scss). A single-button toast must not
+    // accidentally satisfy that condition, so the content keeps its plain, un-grown structure.
+    expect(cancelButton).toHaveClass('notification-toast-cancel-button');
+    expect(document.querySelector('.notification-toast-action-button')).not.toBeInTheDocument();
+  });
+
+  it('renders a plain string toast with the content hook and no button hooks', async () => {
+    render(<NotificationDisplay />);
+
+    const notification: PlatformNotification = {
+      message: 'Just an update',
+      severity: 'info',
+    };
+
+    await capturedService.send(notification);
+
+    const title = await screen.findByText('Just an update');
+    expect(title.closest('.notification-toast-content')).not.toBeNull();
+    expect(document.querySelector('.notification-toast-cancel-button')).not.toBeInTheDocument();
+    expect(document.querySelector('.notification-toast-action-button')).not.toBeInTheDocument();
+  });
 });
