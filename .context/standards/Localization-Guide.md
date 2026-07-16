@@ -1,10 +1,10 @@
 ---
 title: Localization Guide
 description: Mandatory localization patterns for all user-facing text in paranext-core — UI web views (TS) and C# backend services.
-version: 1.4.0
+version: 1.5.0
 status: active
 created: 2026-03-04
-last_updated: 2026-06-17
+last_updated: 2026-07-16
 toc: true
 ---
 
@@ -27,6 +27,8 @@ This guide documents localization patterns for paranext-core. All user-facing te
 <!-- | [Reusing Existing Strings (IMPORTANT)](#reusing-existing-strings-important) | -->
 <!-- | [Existing Strings Are Immutable (CRITICAL)](#existing-strings-are-immutable-critical) | -->
 <!-- | [Dynamic Values with formatReplacementString](#dynamic-values-with-formatreplacementstring) | -->
+<!-- | [Embedding JSX in Localized Text with formatReplacementStringToArray](#embedding-jsx-in-localized-text-with-formatreplacementstringtoarray) | -->
+<!-- | [Spanish (es) Localization Decisions](#spanish-es-localization-decisions) | -->
 <!-- | [Localization Checklist](#localization-checklist) | -->
 <!-- | [Blocking Issues](#blocking-issues) | -->
 <!-- | [C# Backend Localization](#c-backend-localization) | -->
@@ -217,6 +219,46 @@ Add `...` to labels that open dialogs:
 
 ---
 
+## Spanish (es) Localization Decisions
+
+Distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab — the doc's French tab is not yet fleshed out enough to be authoritative, so no French guidance is captured here yet). Apply these when writing or reviewing `es` strings; if using an AI-assisted translator, feed it these decisions as context.
+
+### Priority and regional variant
+
+- Prioritize industry best practices first, Paratext 9 precedent second.
+- Target broadly-understood **Latin American Spanish** rather than defaulting to a European "standard" — Platform.Bible's localization strategy supports regional variants layered on top of a general one. If no single term covers all regions well, use the best general term and add region-specific strings only if truly needed.
+- Prefer simple vocabulary and sentence structure — many users run the software in a non-native language.
+- Translations don't need to be literal. Prioritize clarity: if the English string is vague or leaves something implicit, make it explicit in Spanish. Consider where the string appears in the UI so the translation makes sense in context.
+- Watch for length: long strings can break layouts (e.g. menus). Test in-app where possible; if a translation must be shortened, put the fuller explanation in a tooltip/description instead, or flag it to the dev team so the UI can accommodate it.
+
+### Formality
+
+Always use formal **usted** — never *tú*, *vos*, or *vosotros*. Keep the tone respectful and professional but not cold or distant; avoid colloquialisms or the joking tone sometimes seen in other apps' error messages.
+
+### Error and exception messages
+
+Two templates:
+- **"No se pudo…"** ("Could not…") — the action did not complete (e.g. failed save, failed project open).
+- **"Se produjo un error al…"** ("An error occurred while…") — a system-level failure where the action started but failed mid-process.
+
+Never blame the user. Use neutral phrasing and, where possible, briefly suggest how to resolve the issue.
+
+### Capitalization
+
+Sentence case only — capitalize just the first word of a sentence/instruction plus proper nouns. Do not mirror English title case, even for tab/window/section names (e.g. "Show Recent Searches" → "Mostrar búsquedas recientes"). Exceptions that stay capitalized: proper nouns (*Internet*, *Paratext*), single letters identifying scroll groups/additional books/etc., and acronyms (*ISO*, *JSON*).
+
+### Verb mood
+
+- **Infinitive** for actions the user invokes — buttons, menus, commands: *Guardar*, *Abrir proyecto*, *Cancelar*, *Aceptar*.
+- **Conjugated imperative** only when the software is directly telling the user what to do — messages/alerts: *Inténtelo de nuevo*.
+- Courtesy phrasing is **"Por favor, + imperative"** (e.g. *Por favor, cierre otras ventanas antes de continuar*) — avoid the non-standard "Favor de + infinitive" construction.
+
+### Revising an existing decision
+
+If a later localizer disagrees with a decision here, document the new decision and its rationale (in this section), then update the existing `es` strings to match the revised guideline. This is a narrow, deliberate exception to [Existing Strings Are Immutable](#existing-strings-are-immutable-critical): it applies only to bringing old translations in line with a revised style rule, not to casual rewording.
+
+---
+
 ## Text Direction (RTL/LTR)
 
 **Per-content text direction MUST come from the `platform.textDirection` project setting.** Read it via:
@@ -342,6 +384,35 @@ In `localizedStrings.json`:
 
 ---
 
+## Embedding JSX in Localized Text with formatReplacementStringToArray
+
+`formatReplacementString` only produces a plain string, so it can't carry a React element (a link, an icon, a `<kbd>`) embedded mid-sentence. For that case, use its sibling `formatReplacementStringToArray` from `platform-bible-utils`: it tokenizes the same `{placeholder}` syntax but returns an array of strings interleaved with whatever replacer values you pass — including JSX — which you render directly as children.
+
+```tsx
+import { formatReplacementStringToArray } from 'platform-bible-utils';
+
+// localized string: "{intro} {websiteLink} ({license})"
+<p>
+  {formatReplacementStringToArray(introFormat, {
+    intro: introText,
+    websiteLink: (
+      <a target="_blank" rel="noreferrer" href={WEBSITE_LINK}>
+        {WEBSITE_NAME}
+      </a>
+    ),
+    license: licenseText,
+  })}
+</p>
+```
+
+**Why this matters:** embedding a non-text element (a `<kbd>`, an icon, a link) by string-concatenating it before or after a localized string — e.g. `<kbd>Backspace</kbd> {message}` — bakes in an assumption about word order and spacing that not every language shares, and forces the element into a fixed position the string can't control. Letting the *localized string itself* place the `{placeholder}` fixes both problems: each translation decides where the embedded element goes, and any surrounding punctuation/spacing lives in the translated string, not in code.
+
+**Reference implementation:** `src/renderer/components/dialogs/about-dialog.component.tsx` (the `%about_db_ip_attribution_format%` string interpolates two `<a>` links this way).
+
+**Don't reimplement this.** A second, parallel `{placeholder}`-splitting helper (`interleavePlaceholders`) exists in `extensions/src/platform-enhanced-resources/src/components/guide/marble-guide.component.tsx` because that code didn't find `formatReplacementStringToArray` first. Reuse the shared utility instead of writing a local one.
+
+---
+
 ## Localization Checklist
 
 Before completing any UI work:
@@ -459,6 +530,7 @@ Alternative design: use a dedicated `xxxKey` field (e.g. `ErrorMessageKey`) alon
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
+| 1.5.0   | 2026-07-16 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/kbd elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |
 | 1.4.0   | 2026-06-17 | Added "Localizing Shared Library Components (`lib/platform-bible-react/`)" section: process-agnostic library components must not call `useLocalizedStrings`/PAPI; they expose a frozen `STRING_KEYS` tuple + a `Partial<Record<…>>` type + an optional `localizedStrings?` prop with English-fallback reads, and the consumer resolves and passes strings down. Named the hardcoded-string enforcer as the real ESLint rule `paranext/no-hardcoded-jsx-strings`. Added a "one key-prefix convention per feature namespace" subsection under Conventions › Key Format (prefer camelCase feature-prefix with `_` subsegments; don't mix camelCase and snake_case variants of the same prefix). Grounded against `book-chapter-control`, `book-selector`, and `marker-menu`. |
 | 1.3.0   | 2026-04-29 | Added "Text Direction (RTL/LTR)" section codifying per-content direction via `useProjectSetting('platform.textDirection', defaultTextDirection)`. Forbids hardcoded language-code equality checks (`x === 'he' \|\| x === 'ar'`). References `platform-scripture-editor.web-view.tsx` (the `defaultTextDirection` constant and the `OHEBGRK` branch) as the canonical pattern. Clarifies separation between global UI direction (`readDirection()`) and per-content direction. Sourced from markers-checklist PR feedback (RTL-hardcoding comment). |
 | 1.2.0   | 2026-04-21 | Added `toc: true` + machine-readable TOC block now that the guide has grown past the stub-patterns.md threshold. No content changes. |
