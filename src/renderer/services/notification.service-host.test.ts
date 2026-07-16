@@ -8,12 +8,14 @@ import { logger } from '@shared/services/logger.service';
 
 /**
  * Minimal shape of the toastOptions object the host passes to Sonner's `toast.*` functions - typed
- * just precisely enough to invoke `cancel.onClick` / `onDismiss` from tests without a type
- * assertion (see `.eslintrc.cjs` `no-type-assertion` rule).
+ * just precisely enough to invoke `action.onClick` / `cancel.onClick` / `onDismiss` / `onAutoClose`
+ * from tests without a type assertion (see `.eslintrc.cjs` `no-type-assertion` rule).
  */
 interface CapturedToastOptions {
-  cancel?: { label: string; onClick: () => Promise<void> };
-  onDismiss?: () => Promise<void>;
+  action?: { label: string; onClick: () => Promise<void> | void };
+  cancel?: { label: string; onClick: () => Promise<void> | void };
+  onDismiss?: () => Promise<void> | void;
+  onAutoClose?: () => Promise<void> | void;
 }
 
 // Typed via the explicit generic (rather than named-but-unused parameters on the implementation)
@@ -171,20 +173,78 @@ describe('notification service host', () => {
       );
     });
 
-    it('leaves cancel, position, dismissible, and onDismiss undefined when the new fields are omitted (back-compat)', async () => {
+    it('ignores dismissible:false when a secondary command is present so that button stays live', async () => {
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        dismissible: false,
+        secondaryClickCommandLabel: 'Postpone',
+        // The host passes this straight to Sonner without validating it against real command names,
+        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        secondaryClickCommand: 'test.secondary' as never,
+      };
+
+      await capturedService.send(notification);
+
+      // Sonner gates the cancel/secondary button on `dismissible`, so forwarding false would make it
+      // a dead button; the host must drop the false and keep the toast dismissible.
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ dismissible: undefined }),
+      );
+    });
+
+    it('renders no action/cancel button and no position/dismissible override when those fields are omitted (back-compat)', async () => {
       const notification: PlatformNotification = { message: 'test', severity: 'info' };
 
       await capturedService.send(notification);
 
+      // Assert the rendered outcome (no buttons, default placement, default dismissibility) rather
+      // than the exact option-object shape, so this doesn't cement any particular way of passing the
+      // omitted fields through to Sonner.
       expect(mockToastInfo).toHaveBeenCalledWith(
         'test',
         expect.objectContaining({
+          action: undefined,
           cancel: undefined,
           position: undefined,
           dismissible: undefined,
-          onDismiss: undefined,
         }),
       );
+    });
+
+    it('keeps an omitted optional field at its previous value on an update-send instead of clobbering it', async () => {
+      const first: PlatformNotification = {
+        message: 'Consent?',
+        severity: 'info',
+        notificationId: 'consent',
+        position: 'top-center',
+        secondaryClickCommandLabel: 'Postpone',
+        // The host passes this straight to Sonner without validating it against real command names,
+        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        secondaryClickCommand: 'test.postpone' as never,
+        dismissible: false,
+      };
+      await capturedService.send(first);
+
+      // Update that omits position, the secondary action, and dismissible entirely.
+      await capturedService.send({
+        message: 'Consent? (retrying)',
+        severity: 'info',
+        notificationId: 'consent',
+      });
+
+      const secondOptions = mockToastInfo.mock.calls[1][1];
+      // The position the first send set is preserved, not reverted to the Toaster default...
+      expect(mockToastInfo).toHaveBeenNthCalledWith(
+        2,
+        'Consent? (retrying)',
+        expect.objectContaining({ position: 'top-center' }),
+      );
+      // ...and the secondary (cancel) button survives the update.
+      expect(secondOptions?.cancel?.label).toBe('Postpone');
     });
 
     it('invokes the secondary command with the notification id when the cancel button is clicked', async () => {
@@ -285,6 +345,90 @@ describe('notification service host', () => {
         'Syncing...',
         expect.objectContaining({ id: 'toast-1' }),
       );
+    });
+
+    it('updates instead of duplicating for the legal id 0 (does not treat it as absent)', async () => {
+      mockToastInfo.mockReturnValueOnce('toast-0');
+      const notification: PlatformNotification = {
+        message: 'first',
+        severity: 'info',
+        notificationId: 0,
+      };
+
+      await capturedService.send(notification);
+      await capturedService.send({ message: 'second', severity: 'info', notificationId: 0 });
+
+      expect(mockToastInfo).toHaveBeenCalledTimes(2);
+      // The second send must UPDATE (pass the mapped toast id), not create a fresh toast with id
+      // undefined - which a truthiness test of `notificationId` would wrongly do for 0.
+      expect(mockToastInfo).toHaveBeenNthCalledWith(
+        2,
+        'second',
+        expect.objectContaining({ id: 'toast-0' }),
+      );
+    });
+
+    it('gives an id-less send an id in its own namespace so a numeric caller id cannot collide', async () => {
+      const autoId = await capturedService.send({ message: 'A', severity: 'info' });
+      // The returned id is our own string handle, not Sonner's internal numeric auto-id.
+      expect(typeof autoId).toBe('string');
+      expect(autoId).not.toBe(1);
+
+      // An unrelated caller using the numeric id 1 must get a brand-new toast, not an update of A.
+      await capturedService.send({ message: 'B', severity: 'info', notificationId: 1 });
+
+      expect(mockToastInfo).toHaveBeenCalledTimes(2);
+      expect(mockToastInfo).toHaveBeenNthCalledWith(
+        2,
+        'B',
+        expect.objectContaining({ id: undefined }),
+      );
+    });
+  });
+
+  describe('primary action command', () => {
+    it('logs a warning instead of leaving an unhandled rejection when the primary command rejects', async () => {
+      mockSendCommand.mockRejectedValueOnce(new Error('boom'));
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        clickCommandLabel: 'Send/Receive now',
+        // The host passes this straight to Sonner without validating it against real command names,
+        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        clickCommand: 'test.primary' as never,
+      };
+
+      await capturedService.send(notification);
+      const options = mockToastInfo.mock.calls[0][1];
+
+      // The primary action must have a .catch too (it historically did not) - awaiting must not throw.
+      await expect(options?.action?.onClick()).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('boom'));
+    });
+  });
+
+  describe('onAutoClose', () => {
+    it('runs the dismiss command and cleans up bookkeeping when the toast auto-closes', async () => {
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        // The host passes this straight to Sonner without validating it against real command names,
+        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        dismissClickCommand: 'test.dismiss' as never,
+      };
+
+      const notificationId = await capturedService.send(notification);
+      const options = mockToastInfo.mock.calls[0][1];
+      // Timer expiry: Sonner fires onAutoClose (not onDismiss). It must run the same dismiss command.
+      await options?.onAutoClose?.();
+
+      expect(mockSendCommand).toHaveBeenCalledWith('test.dismiss', notificationId);
+
+      // And the mapping is cleaned up, so a later dismiss() for that id is a no-op (no leak).
+      await capturedService.dismiss(notificationId);
+      expect(mockToast.dismiss).not.toHaveBeenCalled();
     });
   });
 });
