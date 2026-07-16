@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
 
@@ -40,13 +41,13 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// flag, so after the arming operation NO new write scope can open, and the in-flight count the
 /// drain then waits on can only fall. Because a write's mutation happens entirely between its enter
 /// and exit operations (both full fences), a drained count also means every finished write's
-/// effects are visible to the sync. The word also carries an 8-bit arm generation — the token
+/// effects are visible to the sync. The word also carries an arm generation — the token
 /// <see cref="SetSyncing"/> returns — so <see cref="Clear(long)"/> can check-and-disarm in the
 /// same single CAS (see the overlap remarks below). No mutual exclusion depends on any other
 /// field: <c>_blockedProjectIds</c> is pure data (it only feeds <see cref="IsBlocked"/> queries,
-/// and can transiently disagree with the gate while racing arm/clear calls overlap — rejection
-/// never consults it), and there is deliberately no "is the lock held" bookkeeping to fall out of
-/// step with reality.
+/// and can disagree with the gate while racing arm/clear calls overlap — potentially for that
+/// whole bracket, not just momentarily; rejection never consults it), and there is deliberately
+/// no "is the lock held" bookkeeping to fall out of step with reality.
 /// </para>
 /// <para>
 /// <b>Forgiving lifecycle contract (deliberate).</b> The arm→clear bracket is activated by code
@@ -114,8 +115,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// of silently disarming a newer sync. Overlapping arm→clear brackets are still not meaningful —
 /// the scheduler must serialize sync runs — but no interleaving of calls can corrupt the state
 /// word; the worst outcome of an overlap is now an early disarm via a force-<see cref="Clear()"/>
-/// (or a transiently stale pure-data set — see above). <see cref="IsBlocked"/> answers per-project
-/// queries from the pure-data set and is deliberately narrower than the global gate.
+/// (or a stale pure-data set, possibly for that whole bracket — see above).
+/// <see cref="IsBlocked"/> answers per-project queries from the pure-data set and is deliberately
+/// narrower than the global gate.
 /// </para>
 /// <para>
 /// <b>Distinct from the Send/Receive server-side repository lock.</b> This class is an
@@ -130,8 +132,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <see cref="SetSyncing"/>, so the gate is never armed, <see cref="IsBlocked"/> always returns
 /// <c>false</c>, every <see cref="EnterWrite"/> scope succeeds, and no write is ever rejected —
 /// public behavior is unchanged by this class. The Paratext 10 Studio closed-source patch brackets
-/// each automatic sync with <see cref="SetSyncing"/> / <see cref="Clear"/> (Jira PT-4210), which is
-/// what activates the gate. This class is the public seam; the activation lives in the patch.
+/// each automatic sync with <see cref="SetSyncing"/> / <see cref="Clear(long)"/> (Jira PT-4210),
+/// which is what activates the gate. This class is the public seam; the activation lives in the
+/// patch.
 /// </para>
 /// </remarks>
 internal static class SendReceiveWriteLock
@@ -142,25 +145,36 @@ internal static class SendReceiveWriteLock
     public const string EditBlockedSentinel = "(SR_EDIT_BLOCKED)";
 
     // The single atomic word all mutual exclusion rests on (see the class remarks): bits 0–31
-    // count in-flight write scopes, bit 32 is the "a sync is armed" flag, and bits 33–40 hold the
-    // 8-bit arm generation — the token SetSyncing returns and Clear(token) checks, riding in the
-    // same word so the check-and-disarm stays one CAS. It wraps mod 256; a stale token could only
-    // false-match after 256 intervening arms, and even then the damage is just a disarm-early
-    // (the pre-token status quo). Mutate ONLY via Interlocked operations; read via Volatile.Read
-    // (a long read is not atomic on 32-bit without it).
+    // count in-flight write scopes, bit 32 is the "a sync is armed" flag, and bits 33–62 hold the
+    // 30-bit arm generation — the token SetSyncing returns and Clear(token) checks, riding in the
+    // same word so the check-and-disarm stays one CAS. Token 0 is never issued (it is skipped on
+    // wrap) so callers can safely treat default(long) as "no arm"; at 30 bits a stale token could
+    // only false-match after ~10^9 intervening arms. Mutate ONLY via Interlocked operations; read
+    // via Volatile.Read — it gives acquire ordering, and the BCL implements the long overload with
+    // an interlocked read on 32-bit runtimes, so (unlike a plain long read, which can tear there)
+    // it is also atomic. The shipping targets are 64-bit; that is defense for ports.
     private const long ArmedFlag = 1L << 32;
     private const long InFlightCountMask = 0xFFFF_FFFFL;
     private const int GenerationShift = 33;
-    private const long GenerationMask = 0xFFL << GenerationShift;
+    private const long GenerationMask = 0x3FFF_FFFFL << GenerationShift;
     private static long _state;
+
+    private static long CountOf(long state) => state & InFlightCountMask;
+
+    private static long GenerationOf(long state) => (state & GenerationMask) >> GenerationShift;
+
+    // Cached empty set: the non-default comparer defeats ImmutableHashSet's Empty singleton, so a
+    // computed property would allocate on every access. MUST stay declared ABOVE _blockedProjectIds
+    // (static field initializers run in textual order, and _blockedProjectIds reads this one — the
+    // other way around it would silently initialize to null).
+    private static readonly IImmutableSet<string> EmptyProjectIds = ImmutableHashSet.Create<string>(
+        StringComparer.OrdinalIgnoreCase
+    );
 
     // Pure data (no synchronization role — the atomic word does all exclusion): drives IsBlocked
     // per-project queries. Published (volatile) before the armed flag is set and replaced wholesale,
     // never mutated. Case-insensitive because project ID casing varies across call sites.
     private static volatile IImmutableSet<string> _blockedProjectIds = EmptyProjectIds;
-
-    private static IImmutableSet<string> EmptyProjectIds =>
-        ImmutableHashSet.Create<string>(StringComparer.OrdinalIgnoreCase);
 
     // How long SetSyncing waits for in-flight writes to drain before giving up. BOUNDED on purpose:
     // a sync start must never be able to deadlock behind a write scope that (through a bug, a stuck
@@ -174,22 +188,28 @@ internal static class SendReceiveWriteLock
     internal static bool IsArmed => (Volatile.Read(ref _state) & ArmedFlag) != 0;
 
     /// <summary>The number of write scopes currently open. For tests only.</summary>
-    internal static long InFlightWriteCount => Volatile.Read(ref _state) & InFlightCountMask;
+    internal static long InFlightWriteCount => CountOf(Volatile.Read(ref _state));
 
     /// <summary>The armed project-id set exactly as stored. For tests only.</summary>
     internal static IImmutableSet<string> ArmedProjectIds => _blockedProjectIds;
+
+    /// <summary>The largest value the arm generation can hold before wrapping. For tests only
+    /// (lets a test park the generation at the wrap boundary via
+    /// <see cref="ResetForTests"/>).</summary>
+    internal static long MaxGeneration => GenerationMask >> GenerationShift;
 
     /// <summary>
     /// Resets ALL gate state, INCLUDING the in-flight count that <see cref="Clear()"/> deliberately
     /// leaves alone. For tests only: contains the blast radius of a test that leaked a write scope
     /// (otherwise every later <see cref="SetSyncing"/> in the run would burn its full
-    /// <see cref="DrainTimeout"/>). Never call in production — a straggler scope disposed after
-    /// this reset would decrement a newer scope's count.
+    /// <see cref="DrainTimeout"/>). Optionally seeds the arm generation (e.g. to
+    /// <see cref="MaxGeneration"/>, to exercise the wrap). Never call in production — a straggler
+    /// scope disposed after this reset would decrement a newer scope's count.
     /// </summary>
-    internal static void ResetForTests()
+    internal static void ResetForTests(long generation = 0)
     {
         _blockedProjectIds = EmptyProjectIds;
-        Volatile.Write(ref _state, 0);
+        Volatile.Write(ref _state, (generation << GenerationShift) & GenerationMask);
     }
 
     private static InvalidOperationException EditBlocked(string projectId) =>
@@ -255,16 +275,19 @@ internal static class SendReceiveWriteLock
             );
 
         // Publish the pure data first, then arm. Arming is a single CAS on the state word that
-        // sets the flag AND advances the 8-bit generation (the returned token): every write that
-        // enters afterward must observe the flag (all transitions on the word are totally ordered)
-        // and is rejected, and every earlier token goes stale in the same atomic step.
+        // sets the flag AND advances the generation (the returned token): every write that enters
+        // afterward must observe the flag (all transitions on the word are totally ordered) and is
+        // rejected, and every earlier token goes stale in the same atomic step. Token 0 is skipped
+        // on wrap — it stays reserved as a natural "no arm" default for callers.
         _blockedProjectIds = armedProjectIds;
         long token;
         while (true)
         {
             long state = Volatile.Read(ref _state);
-            token = (((state & GenerationMask) >> GenerationShift) + 1) & 0xFF;
-            long armedState = (state & InFlightCountMask) | ArmedFlag | (token << GenerationShift);
+            token = (GenerationOf(state) + 1) & (GenerationMask >> GenerationShift);
+            if (token == 0)
+                token = 1;
+            long armedState = CountOf(state) | ArmedFlag | (token << GenerationShift);
             if (Interlocked.CompareExchange(ref _state, armedState, state) == state)
                 break;
         }
@@ -272,24 +295,26 @@ internal static class SendReceiveWriteLock
         // Drain: wait (bounded) until no write scopes remain open — or until this arm is ended by
         // a concurrent Clear (without that second condition the loop's premise would be gone: once
         // disarmed, writes enter again and the count may never settle, so the wait would just burn
-        // the whole timeout for nothing). SpinUntil escalates spin → yield → sleep, so a long
-        // drain does not burn a core.
-        SpinWait.SpinUntil(
-            static () =>
-            {
-                long state = Volatile.Read(ref _state);
-                return (state & InFlightCountMask) == 0 || (state & ArmedFlag) == 0;
-            },
-            DrainTimeout
-        );
+        // the whole timeout for nothing). Poll with SpinWait.SpinOnce(), which escalates
+        // spin → yield → Sleep(1): after the first ~20 iterations the loop wakes ~once per ms and
+        // uses negligible CPU. (Deliberately NOT SpinWait.SpinUntil — it never escalates to
+        // Sleep(1), so it would busy-burn a core for the whole drain.)
+        var spinner = new SpinWait();
+        var stopwatch = Stopwatch.StartNew();
+        while (true)
+        {
+            long current = Volatile.Read(ref _state);
+            if (CountOf(current) == 0 || (current & ArmedFlag) == 0)
+                break;
+            if (stopwatch.Elapsed >= DrainTimeout)
+                break;
+            spinner.SpinOnce();
+        }
 
-        // Triage on a fresh read (the authority), not SpinUntil's return value: the state may have
-        // settled between the last poll and here.
+        // Triage on a fresh read (the authority — the state may have settled between the last poll
+        // and here).
         long observed = Volatile.Read(ref _state);
-        if (
-            (observed & ArmedFlag) == 0
-            || ((observed & GenerationMask) >> GenerationShift) != token
-        )
+        if ((observed & ArmedFlag) == 0 || GenerationOf(observed) != token)
         {
             Console.Error.WriteLine(
                 "[SendReceiveWriteLock] Warning: this arm was ended (Clear) or replaced (a newer "
@@ -298,9 +323,12 @@ internal static class SendReceiveWriteLock
             );
             return token;
         }
-        long stillInFlight = observed & InFlightCountMask;
+        long stillInFlight = CountOf(observed);
         if (stillInFlight != 0)
         {
+            string drainFailure =
+                $"{stillInFlight} in-flight project write(s) did not drain within "
+                + $"{DrainTimeout.TotalSeconds:0.#}s";
             if (throwOnDrainTimeout)
             {
                 // Roll this arm back BEFORE throwing (own-token disarm — a safe no-op if something
@@ -308,18 +336,16 @@ internal static class SendReceiveWriteLock
                 // "nothing armed on this bracket's behalf, writes flow again, no cleanup owed".
                 Clear(token);
                 throw new TimeoutException(
-                    $"{stillInFlight} in-flight project write(s) did not drain within "
-                        + $"{DrainTimeout.TotalSeconds:0.#}s; the Send/Receive arm was rolled "
-                        + "back and the sync must not proceed."
+                    $"{drainFailure}; the Send/Receive arm was rolled back and the sync must "
+                        + "not proceed."
                 );
             }
 
             // Degraded: proceed rather than deadlock the sync. The armed flag keeps rejecting
             // new writes; only the already-stuck write(s) we couldn't drain may still overlap.
             Console.Error.WriteLine(
-                $"[SendReceiveWriteLock] Warning: {stillInFlight} in-flight project write(s) did "
-                    + $"not drain within {DrainTimeout.TotalSeconds:0.#}s; proceeding with "
-                    + "Send/Receive anyway (new writes stay rejected while the sync is armed)."
+                $"[SendReceiveWriteLock] Warning: {drainFailure}; proceeding with Send/Receive "
+                    + "anyway (new writes stay rejected while the sync is armed)."
             );
         }
         return token;
@@ -353,7 +379,7 @@ internal static class SendReceiveWriteLock
             long state = Volatile.Read(ref _state);
             if ((state & ArmedFlag) == 0)
                 return; // Idempotent: nothing armed (this bracket was already cleared).
-            if (((state & GenerationMask) >> GenerationShift) != token)
+            if (GenerationOf(state) != token)
             {
                 Console.Error.WriteLine(
                     "[SendReceiveWriteLock] Warning: Clear(token) ignored a stale token — a newer "
@@ -429,7 +455,7 @@ internal static class SendReceiveWriteLock
         while (true)
         {
             long state = Volatile.Read(ref _state);
-            if ((state & InFlightCountMask) == 0)
+            if (CountOf(state) == 0)
             {
                 Console.Error.WriteLine(
                     "[SendReceiveWriteLock] Error: a write scope was released with no write "

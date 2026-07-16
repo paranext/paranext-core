@@ -401,6 +401,11 @@ namespace TestParanextDataProvider.Projects
                 {
                     Assert.That(
                         stopwatch.Elapsed,
+                        Is.GreaterThanOrEqualTo(TimeSpan.FromMilliseconds(250)),
+                        "the degraded path must actually wait out the DrainTimeout, not skip the drain"
+                    );
+                    Assert.That(
+                        stopwatch.Elapsed,
                         Is.LessThan(TimeSpan.FromSeconds(5)),
                         "SetSyncing must not hang past its bounded DrainTimeout"
                     );
@@ -593,6 +598,30 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void SetSyncing_GenerationWrap_SkipsTokenZero()
+        {
+            // Token 0 is reserved as a natural "no arm" default for callers (e.g.
+            // `long token = 0; ... if (token != 0) Clear(token);`), so the arm at the wrap
+            // boundary must skip it — and its bracket must still round-trip.
+            SendReceiveWriteLock.ResetForTests(generation: SendReceiveWriteLock.MaxGeneration);
+
+            var wrappedToken = SendReceiveWriteLock.SetSyncing(["projectA"]);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(wrappedToken, Is.Not.Zero, "token 0 must never be issued");
+                Assert.That(SendReceiveWriteLock.IsArmed, Is.True);
+            });
+
+            SendReceiveWriteLock.Clear(wrappedToken);
+            Assert.That(
+                SendReceiveWriteLock.IsArmed,
+                Is.False,
+                "the wrapped token must still end its own bracket"
+            );
+        }
+
+        [Test]
         public void SetSyncing_ClearedMidDrain_ReturnsPromptlyInsteadOfBurningTheTimeout()
         {
             // A Clear that lands while SetSyncing is still draining removes the drain's premise
@@ -706,6 +735,7 @@ namespace TestParanextDataProvider.Projects
             var syncReplacing = 0; // 1 while the "sync" is in its file-replacement window
             var violations = 0; // a write ran while syncReplacing == 1
             var writesObserved = 0; // sanity: writers actually got through
+            var rejectionsDuringReplacement = 0; // sanity: writers CONTENDED during the windows
 
             var writers = Enumerable
                 .Range(0, writerCount)
@@ -723,7 +753,12 @@ namespace TestParanextDataProvider.Projects
                             }
                             catch (InvalidOperationException)
                             {
-                                // Fail-fast rejection while a sync is armed — expected; keep trying.
+                                // Fail-fast rejection while a sync is armed — expected; keep
+                                // trying. Rejections inside the replacement window prove writers
+                                // were actively contending exactly when it matters (see the
+                                // vacuity assert below).
+                                if (Volatile.Read(ref syncReplacing) == 1)
+                                    Interlocked.Increment(ref rejectionsDuringReplacement);
                             }
                         }
                     })
@@ -732,16 +767,22 @@ namespace TestParanextDataProvider.Projects
 
             for (var i = 0; i < iterations; i++)
             {
-                Thread.SpinWait(300); // unarmed window so writers make progress
+                // Yielding sleeps (NOT Thread.SpinWait, which monopolizes the core on a 1-2 vCPU
+                // CI runner so writers never get scheduled inside the windows that matter).
+                Thread.Sleep(1); // unarmed window so writers make progress
                 SendReceiveWriteLock.SetSyncing([project]); // arm + drain in-flight writes
                 Volatile.Write(ref syncReplacing, 1);
-                Thread.SpinWait(300); // "file replacement" window
+                Thread.Sleep(1); // "file replacement" window
                 Volatile.Write(ref syncReplacing, 0);
                 SendReceiveWriteLock.Clear();
             }
 
             Volatile.Write(ref stop, true);
-            Task.WaitAll(writers, TimeSpan.FromSeconds(30));
+            Assert.That(
+                Task.WaitAll(writers, TimeSpan.FromSeconds(30)),
+                Is.True,
+                "writer tasks must finish before the counters are inspected"
+            );
 
             Assert.Multiple(() =>
             {
@@ -754,6 +795,12 @@ namespace TestParanextDataProvider.Projects
                     writesObserved,
                     Is.GreaterThan(0),
                     "writers never succeeded; the test would be vacuous"
+                );
+                Assert.That(
+                    rejectionsDuringReplacement,
+                    Is.GreaterThan(0),
+                    "no writer ever attempted a write during a replacement window; violations == 0 "
+                        + "would be vacuous"
                 );
             });
         }
@@ -831,7 +878,7 @@ namespace TestParanextDataProvider.Projects
         /// <summary>
         /// Arms this fixture's project as syncing, invokes <paramref name="write"/>, and asserts it
         /// is rejected with the sentinel-suffixed exception (before any mutation can happen). The
-        /// TearDown Clear disarms afterward.
+        /// TearDown gate reset disarms afterward.
         /// </summary>
         private void AssertWriteBlocked(TestDelegate write)
         {
