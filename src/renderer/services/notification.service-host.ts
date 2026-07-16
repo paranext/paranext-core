@@ -2,13 +2,26 @@ import { toast } from 'sonner';
 import {
   NotificationServiceNetworkObjectName,
   type INotificationService,
+  type NotificationPosition,
   type PlatformNotification,
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { isLocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, isLocalizeKey } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
+
+// The six placements accepted by `NotificationPosition`. OpenRPC schemas are plain data with no
+// link back to the TS type, so this can't be derived automatically; the `NotificationPosition[]`
+// annotation at least guards against typos. Keep in sync with that type by hand.
+const notificationPositionValues: NotificationPosition[] = [
+  'top-left',
+  'top-center',
+  'top-right',
+  'bottom-left',
+  'bottom-center',
+  'bottom-right',
+];
 
 const mapOfNotificationIdsToToastIds = new Map<string | number, string | number>();
 
@@ -25,7 +38,18 @@ async function send(notification: PlatformNotification): Promise<string | number
   }
   logger.info(`Notification service host received notification: ${notificationString}`);
 
-  const { message, severity, clickCommand, clickCommandLabel, notificationId } = notification;
+  const {
+    message,
+    severity,
+    clickCommand,
+    clickCommandLabel,
+    secondaryClickCommand,
+    secondaryClickCommandLabel,
+    position,
+    dismissible,
+    dismissClickCommand,
+    notificationId,
+  } = notification;
   const localizedMessage = await localize(message);
   let toastId = notificationId ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;
   // Need to define effectiveNotificationId here to access it in onClick, but we need toastId to
@@ -47,6 +71,43 @@ async function send(notification: PlatformNotification): Promise<string | number
             onClick: () => commandService.sendCommand(clickCommand, effectiveNotificationId),
           }
         : undefined,
+    // Second action button, rendered by Sonner as its `cancel` slot alongside `action`. Built the
+    // same way as `action`, and like it, sends the notification id as the command's single argument.
+    cancel:
+      secondaryClickCommandLabel && secondaryClickCommand
+        ? {
+            label: await localize(secondaryClickCommandLabel),
+            onClick: () =>
+              commandService
+                .sendCommand(secondaryClickCommand, effectiveNotificationId)
+                .catch((e) =>
+                  logger.warn(
+                    `Notification service host secondary click command '${secondaryClickCommand}' failed: ${getErrorMessage(e)}`,
+                  ),
+                ),
+          }
+        : undefined,
+    // Per-toast placement override; undefined leaves the Toaster's default placement in effect.
+    position,
+    // Whether the user can swipe/drag the toast away; undefined leaves Sonner's default (true). Set
+    // false only for a toast with no secondary action - see the warning on
+    // PlatformNotification.dismissible for why: Sonner gates the cancel/secondary button's onClick on
+    // this same flag, so `false` silently disables a second action button too.
+    dismissible,
+    // Fires only when the USER dismisses the toast (swipe/drag past Sonner's threshold, or a close
+    // button click if one is ever enabled) - never for our own programmatic `dismiss()`, nor for
+    // auto-close when `duration` elapses. See PlatformNotification.dismissClickCommand for the full
+    // contract (verified against the Sonner 1.7.4 source).
+    onDismiss: dismissClickCommand
+      ? () =>
+          commandService
+            .sendCommand(dismissClickCommand, effectiveNotificationId)
+            .catch((e) =>
+              logger.warn(
+                `Notification service host dismiss command '${dismissClickCommand}' failed: ${getErrorMessage(e)}`,
+              ),
+            )
+      : undefined,
     // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
     duration,
   };
@@ -107,6 +168,11 @@ export async function startNotificationService(): Promise<void> {
                   severity: { type: 'string' },
                   clickCommand: { type: 'string' },
                   clickCommandLabel: { type: 'string' },
+                  secondaryClickCommand: { type: 'string' },
+                  secondaryClickCommandLabel: { type: 'string' },
+                  dismissClickCommand: { type: 'string' },
+                  position: { type: 'string', enum: notificationPositionValues },
+                  dismissible: { type: 'boolean' },
                   notificationId: { type: ['string', 'number'] },
                   duration: { type: 'number' },
                 },

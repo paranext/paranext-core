@@ -5212,6 +5212,17 @@ declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
   export type Severity = 'info' | 'warning' | 'error';
+  /**
+   * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
+   * Omit to use the app's default placement.
+   */
+  export type NotificationPosition =
+    | 'top-left'
+    | 'top-center'
+    | 'top-right'
+    | 'bottom-left'
+    | 'bottom-center'
+    | 'bottom-right';
   /** Data needed to display a notification to the user */
   export interface PlatformNotification {
     /**
@@ -5237,6 +5248,59 @@ declare module 'shared/models/notification.service-model' {
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      */
     clickCommand?: keyof CommandHandlers;
+    /**
+     * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
+     * this together with {@link secondaryClickCommand} to give the notification two actions.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     */
+    secondaryClickCommandLabel?: string | LocalizeKey;
+    /**
+     * Optional command to run if users click on the secondary label in the notification. Like
+     * {@link clickCommand}, the command is sent one argument:
+     *
+     * - NotificationId: The ID of the notification that was clicked
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     */
+    secondaryClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional command to run if the user dismisses the notification themselves — by swiping/dragging
+     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
+     * other than the notification id, like {@link clickCommand}:
+     *
+     * - NotificationId: The ID of the notification that was dismissed
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * IMPORTANT: this fires ONLY for that user gesture. It does NOT fire when the notification is
+     * dismissed programmatically via {@link INotificationService.dismiss}, when it auto-closes because
+     * `duration` elapsed, or when the user clicks {@link clickCommand} / {@link secondaryClickCommand}
+     * (verified against the Sonner 1.7.4 source: `onDismiss` is invoked only from the swipe-release
+     * and close-button handlers, never from the programmatic-dismiss or auto-close paths). Use this
+     * to treat a user's swipe-away as an explicit decision — e.g. pairing it with a "postpone"
+     * command lets a two-button, must-answer-style toast still keep {@link dismissible} `true` (see
+     * the warning on {@link dismissible} for why `false` is usually the wrong tool for that).
+     */
+    dismissClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional placement of the notification on screen. When omitted, the app's default placement is
+     * used.
+     */
+    position?: NotificationPosition;
+    /**
+     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
+     * via a close button). Defaults to `true`.
+     *
+     * WARNING: the host toast library (Sonner) renders {@link secondaryClickCommandLabel} in the same
+     * slot it gates on this flag, so setting `dismissible: false` also disables the secondary action
+     * button (and the close button) — the secondary button will still render but silently do nothing
+     * when clicked. Only set this to `false` on a notification with no secondary action. For a
+     * notification the user must explicitly answer, prefer leaving `dismissible: true` and using
+     * {@link dismissClickCommand} so a swipe-away still counts as a real (e.g. "postpone") decision
+     * instead of a dead button.
+     */
+    dismissible?: boolean;
     /** Optional ID of a previous notification to update instead of showing a new notification */
     notificationId?: string | number;
     /**

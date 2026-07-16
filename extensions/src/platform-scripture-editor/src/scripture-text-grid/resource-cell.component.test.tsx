@@ -23,6 +23,7 @@ vi.mock('@papi/frontend/react', () => ({
   useLocalizedStrings: () => [
     {
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
+      '%webView_scriptureTextGrid_cell_not_installed%': 'Resource not installed',
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
       '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
@@ -117,6 +118,20 @@ beforeEach(() => {
 });
 
 describe('ResourceCell', () => {
+  it('shows "Resource not installed" and no editor when projectId is undefined (unavailable resource)', () => {
+    setUsjResult(undefined, true);
+    render(
+      <ResourceCell
+        resourceRef={{ resourceId: 'dbl-uid-1', projectId: undefined, label: 'NIV' }}
+        scrRef={scrRef}
+        setScrRef={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Resource not installed')).toBeInTheDocument();
+    expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
   it('shows the Spinner and neutral loading message while downloading', () => {
     setUsjResult(undefined, true);
     render(<ResourceCell {...props} />);

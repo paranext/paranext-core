@@ -96,8 +96,8 @@ export function ScriptureTextGrid({
   // React's ref API requires `null` as the initial value for DOM refs.
   // eslint-disable-next-line no-null/no-null
   const gridRef = useRef<HTMLDivElement>(null);
-  // projectId of the listitem that opened the split, so focus can return to it when the split closes.
-  const focusRestoreProjectIdRef = useRef<string | undefined>(undefined);
+  // resourceId of the listitem that opened the split, so focus can return to it when the split closes.
+  const focusRestoreResourceIdRef = useRef<string | undefined>(undefined);
   const draggedIdRef = useRef<string | undefined>(undefined);
   const [dragOverId, setDragOverId] = useState<string | undefined>(undefined);
   // Resource id whose grip should regain focus after a keyboard move re-renders the row.
@@ -169,14 +169,15 @@ export function ScriptureTextGrid({
   }, [resources]);
 
   // On close, return focus to the listitem that opened the split (WCAG 2.4.3). The list remounts
-  // when the split toggles, so restore by identity (projectId) against the freshly-rendered DOM,
-  // not by a stale element reference.
+  // when the split toggles, so restore by identity (resourceId) against the freshly-rendered DOM,
+  // not by a stale element reference. Uses data-resource-id (always present) rather than
+  // data-project-id (absent for unavailable resources whose projectId is undefined).
   useEffect(() => {
     if (chapterContext) return;
-    const projectId = focusRestoreProjectIdRef.current;
-    if (!projectId) return;
-    focusRestoreProjectIdRef.current = undefined;
-    gridRef.current?.querySelector<HTMLElement>(`[data-project-id="${projectId}"]`)?.focus();
+    const resourceId = focusRestoreResourceIdRef.current;
+    if (!resourceId) return;
+    focusRestoreResourceIdRef.current = undefined;
+    gridRef.current?.querySelector<HTMLElement>(`[data-resource-id="${resourceId}"]`)?.focus();
   }, [chapterContext]);
 
   const resourceIds = useMemo(() => resources.map((r) => r.resourceId), [resources]);
@@ -347,7 +348,7 @@ export function ScriptureTextGrid({
         // change. Shared by the click and keyboard paths so they can never drift apart.
         const activate = onChapterContextChange
           ? () => {
-              focusRestoreProjectIdRef.current = resource.projectId;
+              focusRestoreResourceIdRef.current = resource.resourceId;
               onChapterContextChange(resource);
             }
           : undefined;
@@ -358,7 +359,7 @@ export function ScriptureTextGrid({
           // justified by the explicit handler and tabIndex below.
           /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
           <div
-            key={resource.projectId}
+            key={resource.resourceId}
             role="listitem"
             data-project-id={resource.projectId}
             data-resource-id={resource.resourceId}
