@@ -11,7 +11,20 @@ import { serializeRequestType } from '@shared/utils/util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 
-const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
+// Exported so the timeout test can drive fake timers by the exact same duration rather than
+// duplicating the literal.
+export const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
+
+/**
+ * Outcome of a {@link runBoundedShutdownSync} bounded wait:
+ *
+ * - `succeeded`: `performSync` resolved before the timeout.
+ * - `failed`: `performSync` rejected (or the command was missing/unregistered) before the timeout;
+ *   the failure itself is already logged by {@link runBoundedShutdownSync} as a warning.
+ * - `timed-out`: neither a resolution nor a rejection arrived within
+ *   {@link SHUTDOWN_SYNC_TIME_OUT_MS}.
+ */
+type ShutdownSyncOutcome = 'succeeded' | 'failed' | 'timed-out';
 
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
@@ -90,13 +103,13 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   logger.info('Syncing project on shutdown...');
   // Copy to a const so TypeScript knows the type is string inside the bounded-wait callback.
   const syncProjectId = projectId;
-  const completed = await runBoundedShutdownSync('shutdown sync', () =>
+  const outcome = await runBoundedShutdownSync('shutdown sync', () =>
     networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
       [syncProjectId],
     ),
   );
-  if (completed) logger.info('Sync on shutdown complete');
+  logShutdownSyncOutcome(outcome);
 }
 
 /**
@@ -109,47 +122,64 @@ async function performSimpleModeShutdownSync(): Promise<void> {
  */
 async function performPowerModeShutdownSync(): Promise<void> {
   logger.info('Syncing scheduled projects on shutdown...');
-  const completed = await runBoundedShutdownSync('power-mode shutdown session sync', () =>
+  const outcome = await runBoundedShutdownSync('power-mode shutdown session sync', () =>
     networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.runScheduledSessionSync'),
       'shutdown',
     ),
   );
-  if (completed) logger.info('Sync on shutdown complete');
+  logShutdownSyncOutcome(outcome);
+}
+
+/**
+ * Logs the result of a bounded shutdown sync truthfully: "complete" only when `performSync`
+ * actually succeeded. A settled-but-failed sync gets its own distinct message (the failure detail
+ * itself was already warned about inside {@link runBoundedShutdownSync}); a timed-out sync logs
+ * nothing here because {@link runBoundedShutdownSync} already logged the timeout.
+ */
+function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
+  if (outcome === 'succeeded') logger.info('Sync on shutdown complete');
+  else if (outcome === 'failed')
+    logger.info('Sync on shutdown finished without succeeding (see warning above)');
 }
 
 /**
  * Runs `performSync` in the background and waits for it to settle, bounded by
  * {@link SHUTDOWN_SYNC_TIME_OUT_MS} so a hung sync (or a `runScheduledSessionSync` command that
  * never resolves because it isn't registered — see module doc) can never wedge shutdown open
- * forever. Failures from `performSync` are logged and swallowed: the caller only cares whether the
- * wait completed or timed out, not why.
+ * forever. Failures from `performSync` are logged and swallowed here; the caller only decides how
+ * to log the overall outcome (see {@link logShutdownSyncOutcome}), it doesn't need to know why a
+ * failure happened.
  *
  * This is the one bounded-wait mechanism for shutdown; both Simple mode's `sendReceiveProjects` and
  * Power mode's `runScheduledSessionSync` go through it rather than each inventing their own.
  *
- * @returns `true` if the wait settled before the timeout (regardless of whether `performSync`
- *   itself succeeded or failed — a failed-but-settled sync is not a timeout); `false` if it timed
- *   out.
+ * @returns The {@link ShutdownSyncOutcome} — `'succeeded'` if `performSync` resolved before the
+ *   timeout, `'failed'` if it rejected before the timeout (already warned about above), or
+ *   `'timed-out'` if neither happened in time (also already warned about above).
  */
 async function runBoundedShutdownSync(
   variableName: string,
   performSync: () => Promise<unknown>,
-): Promise<boolean> {
-  const syncComplete = new AsyncVariable<void>(variableName, SHUTDOWN_SYNC_TIME_OUT_MS);
+): Promise<ShutdownSyncOutcome> {
+  const syncComplete = new AsyncVariable<boolean>(variableName, SHUTDOWN_SYNC_TIME_OUT_MS);
   (async () => {
+    let succeeded = false;
     try {
       await performSync();
+      succeeded = true;
     } catch (e) {
       logger.warn(`${variableName} failed or skipped: ${getErrorMessage(e)}`);
     } finally {
-      if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(undefined);
+      if (!syncComplete.hasTimedOut) syncComplete.resolveToValue(succeeded);
     }
   })();
   try {
-    await syncComplete.promise;
-    return true;
+    return (await syncComplete.promise) ? 'succeeded' : 'failed';
   } catch {
-    return false; // timed out
+    logger.warn(
+      `${variableName} timed out after ${SHUTDOWN_SYNC_TIME_OUT_MS} ms; continuing shutdown`,
+    );
+    return 'timed-out';
   }
 }
