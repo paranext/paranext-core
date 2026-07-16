@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
+import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { INVENTORY_STRING_KEYS, Scope } from 'platform-bible-react';
@@ -23,7 +23,7 @@ import {
   REPEATED_WORDS_INVENTORY_STRING_KEYS,
 } from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
-import { SYNC_EDIT_BLOCKED_MESSAGE_KEY, isSyncEditBlockedError } from './sync-edit-blocked.util';
+import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 
 const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
@@ -313,12 +313,15 @@ global.webViewComponent = function InventoryWebView({
   const handleApprovedItemsChange = useCallback(
     async (items: string[]) => {
       try {
-        await setValidItems?.(items.join(' '));
+        // `useProjectSetting`'s declared setter type erases the promise the setter actually
+        // returns at runtime; adopt it via Promise.resolve so this await genuinely waits and the
+        // catch below sees a write-gate rejection.
+        await Promise.resolve(setValidItems?.(items.join(' ')));
       } catch (error) {
         // The write-gate rejects this settings write while an automatic Send/Receive is syncing.
         // Show the shared "editing paused" warning instead of only logging (which is invisible).
         if (isSyncEditBlockedError(error)) {
-          papi.notifications.send({ message: SYNC_EDIT_BLOCKED_MESSAGE_KEY, severity: 'warning' });
+          notifySyncEditBlocked();
           return;
         }
         logger.error(`Error updating approved items: ${getErrorMessage(error)}`);
@@ -331,12 +334,14 @@ global.webViewComponent = function InventoryWebView({
   const handleUnapprovedItemsChange = useCallback(
     async (items: string[]) => {
       try {
-        await setInvalidItems?.(items.join(' '));
+        // Same promise-adoption as handleApprovedItemsChange above — the declared setter type
+        // erases the runtime promise.
+        await Promise.resolve(setInvalidItems?.(items.join(' ')));
       } catch (error) {
         // The write-gate rejects this settings write while an automatic Send/Receive is syncing.
         // Show the shared "editing paused" warning instead of only logging (which is invisible).
         if (isSyncEditBlockedError(error)) {
-          papi.notifications.send({ message: SYNC_EDIT_BLOCKED_MESSAGE_KEY, severity: 'warning' });
+          notifySyncEditBlocked();
           return;
         }
         logger.error(`Error updating unapproved items: ${getErrorMessage(error)}`);

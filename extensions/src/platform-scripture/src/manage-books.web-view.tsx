@@ -49,7 +49,7 @@ import {
   GreekEstherTemplatePicker,
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
-import { SYNC_EDIT_BLOCKED_MESSAGE_KEY, isSyncEditBlockedError } from './sync-edit-blocked.util';
+import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
@@ -866,25 +866,28 @@ global.webViewComponent = function ManageBooksWebView({
   const onMutationResult = useCallback((result: MutationResult) => {
     const entries: AlertEntry[] = [...result.errors, ...result.warnings];
     entries.forEach((entry) => {
-      try {
-        // notificationService is exposed on @papi/frontend; per
-        // ui-spec-manage-books.md:118 toasts are the canonical surface. A write-gate rejection
-        // reaches here as an error entry whose text carries the `(SR_EDIT_BLOCKED)` sentinel (the
-        // dialog turns a thrown backend error into a MutationResult error) — show the shared
-        // "editing paused" warning instead of leaking the raw technical message at error severity.
-        papi.notifications.send(
-          isSyncEditBlockedError(entry.text)
-            ? { message: SYNC_EDIT_BLOCKED_MESSAGE_KEY, severity: 'warning' }
-            : {
-                message: entry.caption ? `${entry.caption}: ${entry.text}` : entry.text,
-                severity: alertLevelToSeverity(entry.level),
-              },
-        );
-      } catch (e) {
-        logger.warn(
-          `manage-books: notifications.send failed for AlertEntry: ${e instanceof Error ? e.message : String(e)}`,
-        );
+      // A write-gate rejection reaches here as an error entry whose text carries the
+      // `(SR_EDIT_BLOCKED)` sentinel (the dialog turns a thrown backend error into a
+      // MutationResult error) — show the shared "editing paused" warning (self-catching) instead
+      // of leaking the raw technical message at error severity.
+      if (isSyncEditBlockedError(entry.text)) {
+        notifySyncEditBlocked();
+        return;
       }
+      // notificationService is exposed on @papi/frontend; per ui-spec-manage-books.md:118 toasts
+      // are the canonical surface. `.catch` rather than try/catch: the send is fire-and-forget
+      // (this callback cannot await inside forEach), so a try/catch would only ever see
+      // synchronous throws and a rejection would leak as an unhandled promise rejection.
+      papi.notifications
+        .send({
+          message: entry.caption ? `${entry.caption}: ${entry.text}` : entry.text,
+          severity: alertLevelToSeverity(entry.level),
+        })
+        .catch((e) => {
+          logger.warn(
+            `manage-books: notifications.send failed for AlertEntry: ${getErrorMessage(e)}`,
+          );
+        });
     });
   }, []);
 
