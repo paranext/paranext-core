@@ -5,6 +5,7 @@ import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
+import type { SettingTypes } from 'papi-shared-types';
 import { getErrorMessage, wait } from 'platform-bible-utils';
 
 /**
@@ -21,8 +22,11 @@ import { getErrorMessage, wait } from 'platform-bible-utils';
  * Simple mode — if the S/R extension hasn't registered the command yet (or at all, e.g. plain
  * Platform.Bible), this is a logged no-op, never a crash or a blocked startup.
  *
- * Any other (unrecognized) mode: returns immediately with no automatic sync. Mirrors the mode
- * gating in {@link performShutdownTasks}.
+ * If the interface-mode setting can't be read: skips the automatic startup sync entirely and warns,
+ * rather than falling through to Simple mode's "sync everything". The read can fail under the same
+ * slow-cold-boot conditions the Power retry budget exists for, and Simple's no-ID `syncProjects`
+ * would S/R every locally-known shared project — overriding a Power user's schedule (PT-4162).
+ * Mirrors the symmetric gating in {@link performShutdownTasks}.
  */
 export async function performStartupTasks(): Promise<void> {
   try {
@@ -35,14 +39,19 @@ export async function performStartupTasks(): Promise<void> {
 async function performStartupTasksInternal(): Promise<void> {
   logger.debug('performStartupTasks invoked');
 
-  // If the setting can't be read, default to simple mode to avoid skipping sync.
-  let interfaceMode: string | undefined;
+  // An unreadable mode must NOT fall through to Simple mode's "sync everything": the read can fail
+  // under exactly the slow-cold-boot conditions the Power retry budget exists to tolerate, and
+  // Simple's no-ID `syncProjects` fires an S/R of every locally-known shared project, overriding a
+  // Power user's schedule and syncing projects they deliberately excluded. When we can't tell the
+  // mode, the safe default is to skip the automatic startup sync this session and warn.
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
   try {
     interfaceMode = await settingsService.get('platform.interfaceMode');
   } catch (e) {
     logger.warn(
-      `Could not read platform.interfaceMode; defaulting to simple-mode behavior: ${getErrorMessage(e)}`,
+      `Could not read platform.interfaceMode; skipping automatic startup sync: ${getErrorMessage(e)}`,
     );
+    return;
   }
   logger.debug(`performStartupTasks: interfaceMode=${interfaceMode}`);
 
@@ -51,8 +60,11 @@ async function performStartupTasksInternal(): Promise<void> {
     return;
   }
 
-  // Any other non-simple mode: no automatic sync on startup.
-  if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
+  // The setting's type and its runtime validator (`interfaceModeValidator`) close the union to
+  // 'simple' | 'power', so once 'power' is handled and an unreadable mode has already returned
+  // above, 'simple' is the only value left — hence Simple mode is the fall-through rather than a
+  // checked branch. A future third mode would be a compile error here (interfaceMode is typed from
+  // the setting), not a silent no-sync.
 
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
   // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
@@ -165,16 +177,49 @@ function isMethodNotFoundError(error: unknown): boolean {
 }
 
 /**
+ * Whether `error` is what `networkService`'s request plumbing throws when a request times out
+ * client-side before any response arrives (`doRequest` in `network.service.ts` builds `JSON-RPC
+ * Request timed out: <requestType> <args>` when its per-request `AsyncVariable` fires).
+ *
+ * At cold boot a timeout is the same "not ready yet" condition as a missing handler, not a genuine
+ * failure, so it belongs in the retryable set. Concretely, the S/R extension registers
+ * `runScheduledSessionSync` with its request timeout disabled (a scheduled sync can legitimately
+ * run long); until that override propagates to this process, `doRequest` still applies the default
+ * 30 s timeout, so a slow-but-registered first sync can trip it. Excluding that from retry would
+ * collapse the whole boot budget to a single attempt against a handler that is present and
+ * working.
+ *
+ * Matches by message substring for the same reason as {@link isMethodNotFoundError} — this shape
+ * carries no machine-readable marker either.
+ */
+function isRequestTimedOutError(error: unknown): boolean {
+  return getErrorMessage(error).includes('JSON-RPC Request timed out:');
+}
+
+/**
+ * Whether `error` from a `runScheduledSessionSync` attempt is a boot-race condition worth retrying
+ * within the budget rather than a genuine handler failure. Both retryable shapes mean "the handler
+ * isn't answering yet", not "the handler ran and failed": a {@link isMethodNotFoundError} (no
+ * handler registered anywhere on the network yet) or a {@link isRequestTimedOutError} (a handler may
+ * be present but hasn't responded in time this early in boot). Anything else — a registered handler
+ * that threw — is a real failure and must NOT be retried blindly.
+ */
+function isRetryableBootRaceError(error: unknown): boolean {
+  return isMethodNotFoundError(error) || isRequestTimedOutError(error);
+}
+
+/**
  * Retries `paratextBibleSendReceive.runScheduledSessionSync('startup')` on its own boot-appropriate
  * schedule (see {@link STARTUP_SYNC_RETRY_BUDGET_MS}), using `networkService.requestNoRetry` for
  * each individual attempt rather than the shared retrying `networkService.request` — whose fixed ~9
  * s retry ceiling lost the race against extension host activation in live E2E testing (PT-4162,
  * 2026-07-16; see {@link STARTUP_SYNC_RETRY_BUDGET_MS}'s doc for the observed timing).
  *
- * Only {@link isMethodNotFoundError} failures are retried (the command hasn't registered yet); any
- * other error — the command exists but its handler threw — is NOT retried and is rethrown
- * immediately, since blindly retrying a genuine handler failure would just repeat it for no benefit
- * and delay reporting it to the caller (who logs it as a warning and moves on).
+ * Only {@link isRetryableBootRaceError} failures are retried — a missing handler or an early request
+ * timeout, both meaning "not answering yet"; any other error — the command exists but its handler
+ * threw — is NOT retried and is rethrown immediately, since blindly retrying a genuine handler
+ * failure would just repeat it for no benefit and delay reporting it to the caller (who logs it as
+ * a warning and moves on).
  *
  * This is deliberately a narrow, local retry loop rather than a new per-call retry option on
  * `networkService.request`: it only serves this one boot-time race, and the shared retry policy
@@ -199,7 +244,7 @@ async function requestSessionSyncWithBootRetry(): Promise<void> {
       await networkService.requestNoRetry(requestType, 'startup');
       return;
     } catch (e) {
-      if (!isMethodNotFoundError(e)) throw e;
+      if (!isRetryableBootRaceError(e)) throw e;
       if (Date.now() >= deadline) throw e;
 
       logger.debug(

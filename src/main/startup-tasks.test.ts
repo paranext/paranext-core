@@ -72,20 +72,17 @@ describe('performStartupTasks', () => {
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
   });
 
-  it('fires syncProjects (simple-mode fallback) when settings service throws', async () => {
+  it('skips the automatic startup sync and warns when settings service throws (no sync-everything fallback)', async () => {
+    // An unreadable mode must not fall through to Simple's no-ID syncProjects (= S/R every shared
+    // project), which would override a Power user's schedule under the exact slow-boot conditions
+    // the read fails in. Do nothing this session and warn instead.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
-    await performStartupTasks();
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      undefined,
-    );
-  });
-
-  it('returns without firing any sync when interface mode is neither simple nor power', async () => {
-    mockSettingsGet.mockResolvedValue('somethingElse');
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read platform.interfaceMode'),
+    );
   });
 
   it('swallows sync failures without throwing', async () => {
@@ -128,6 +125,33 @@ describe('performStartupTasks', () => {
 
       expect(callCount).toBe(SUCCEED_ON_CALL);
       // A successful retry never reaches the "failed or skipped" warn.
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
+    it('retries a client-side request timeout (not just MethodNotFound) and succeeds when it clears', async () => {
+      // A request timeout at cold boot is a "not ready yet" condition, not a genuine failure (e.g.
+      // the extension's timeout override hasn't propagated yet), so it must be retried within budget.
+      mockSettingsGet.mockResolvedValue('power');
+      let callCount = 0;
+      mockRequestNoRetry.mockImplementation(async () => {
+        callCount += 1;
+        if (callCount === 1)
+          throw new Error(
+            'JSON-RPC Request timed out: command:paratextBibleSendReceive.runScheduledSessionSync ["startup"]',
+          );
+        return undefined;
+      });
+
+      vi.useFakeTimers();
+      try {
+        const startupPromise = performStartupTasks();
+        await vi.advanceTimersByTimeAsync(5_000);
+        await expect(startupPromise).resolves.toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(callCount).toBe(2);
       expect(mockLoggerWarn).not.toHaveBeenCalled();
     });
 
