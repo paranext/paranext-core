@@ -92,6 +92,28 @@ export function initAutoSyncEditBlockDriver(): () => void {
 
   const syncState = () => {
     const isBlocking = getAutoSyncBlocking();
+
+    if (!isBlocking) {
+      // Unsubscribe BEFORE applying the unblock below. `setEditorSyncBlocked`'s unflag write goes
+      // through `updateWebViewDefinitionSync`, which fires `onDidUpdateWebView` SYNCHRONOUSLY — the
+      // web-view service host's buffered emitter and this subscription resolve to the same
+      // underlying PapiNetworkEventEmitter instance, so a local emit dispatches inline, not on a
+      // later tick. If the re-flag handler below were still subscribed when `applyToAllEditors(
+      // false)` runs, it would observe the just-written `isSyncBlocked: false`, pass its "came back
+      // unblocked" guard, and set the editor straight back to `true` — permanently blocking every
+      // open Scripture editor, with no recovery (the store's safety timer's value-unchanged
+      // early-return means it never renotifies, and the banner's Cancel becomes inert). Found live
+      // in E2E, 2026-07-16.
+      if (unsubscribeOpen) {
+        unsubscribeOpen();
+        unsubscribeOpen = undefined;
+      }
+      if (unsubscribeUpdate) {
+        unsubscribeUpdate();
+        unsubscribeUpdate = undefined;
+      }
+    }
+
     applyToAllEditors(isBlocking);
 
     if (isBlocking) {
@@ -123,15 +145,6 @@ export function initAutoSyncEditBlockDriver(): () => void {
         unsubscribeUpdate = () => {
           unsubscribe();
         };
-      }
-    } else {
-      if (unsubscribeOpen) {
-        unsubscribeOpen();
-        unsubscribeOpen = undefined;
-      }
-      if (unsubscribeUpdate) {
-        unsubscribeUpdate();
-        unsubscribeUpdate = undefined;
       }
     }
   };
