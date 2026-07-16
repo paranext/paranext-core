@@ -12,7 +12,7 @@
  * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted).
  */
 
-import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
+import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 
 /**
  * How long blocking must persist before it becomes visible; a sync finishing inside this window
@@ -22,11 +22,10 @@ const SHOW_GRACE_MS = 200;
 
 /**
  * Heuristic upper bound; if a blocker never clears (e.g. extension deactivates mid-sync),
- * auto-clear after this long. Tracks SHUTDOWN_SYNC_TIME_OUT_MS (the shutdown-sync timeout) because
- * both bound the same operation — a single automatic Send/Receive — so they should never diverge; a
- * scheduled sync of a large repo can run minutes, so the leash is deliberately long.
+ * auto-clear after this long. Each blocker leash bounds a single automatic Send/Receive — exactly
+ * what {@link AUTO_SYNC_MAX_DURATION_MS} is.
  */
-const SAFETY_TIMEOUT_MS = SHUTDOWN_SYNC_TIME_OUT_MS;
+const SAFETY_TIMEOUT_MS = AUTO_SYNC_MAX_DURATION_MS;
 
 let blockCount = 0;
 let isBlockingVisible = false;
