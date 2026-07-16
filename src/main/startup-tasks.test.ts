@@ -25,6 +25,7 @@ vi.mock('@shared/services/logger.service', () => ({
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
+const mockLoggerDebug = vi.mocked(logger.debug);
 const mockLoggerWarn = vi.mocked(logger.warn);
 
 /**
@@ -99,6 +100,53 @@ describe('performStartupTasks', () => {
     await expect(performStartupTasks()).resolves.toBeUndefined();
   });
 
+  describe('power-mode startup sync outcome', () => {
+    it('warns (not "complete") when the command reports "failed"', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+      mockRequestNoRetry.mockResolvedValue('failed');
+      await performStartupTasks();
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('reported failure'));
+    });
+
+    it('logs a debug-only skip (no warn) when the command reports "skipped"', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+      mockRequestNoRetry.mockResolvedValue('skipped');
+      await performStartupTasks();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+    });
+
+    it('treats a legacy void resolution as "synced" (no warn)', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+      mockRequestNoRetry.mockResolvedValue(undefined);
+      await performStartupTasks();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Power-mode startup sync complete'),
+      );
+    });
+
+    it('drops a stale startup trigger without firing when the window has been interactive too long', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+      // The command is registered, but the user has had the window well past the freshness window,
+      // so firing now would raise the edit-block on an editor they are already using.
+      await performStartupTasks({ getWindowInteractiveElapsedMs: () => 10 * 60 * 1000 });
+      expect(mockRequestNoRetry).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('no longer fresh'));
+    });
+
+    it('does not fire (or warn) when the app is already quitting before the command registers', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+      const abort = new AbortController();
+      abort.abort();
+      await performStartupTasks({ abortSignal: abort.signal });
+      expect(mockRequestNoRetry).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('quitting'));
+    });
+  });
+
   // #region PT-4162 boot-race retry: distinguishes "not registered yet" (retry) from a genuine
   // handler failure (don't retry), and bounds the retry budget so startup is never blocked.
 
@@ -164,7 +212,11 @@ describe('performStartupTasks', () => {
       // Exactly one attempt: blindly retrying a genuine handler error would just repeat it.
       expect(mockRequestNoRetry).toHaveBeenCalledTimes(1);
       expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
+      // A registered handler that threw is a real failure — the message must not blame missing
+      // registration (it says "failed", not "never registered").
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Power-mode startup sync failed'),
+      );
     });
 
     it('gives up once the retry budget is exhausted, warns once, and never blocks startup', async () => {
@@ -185,7 +237,8 @@ describe('performStartupTasks', () => {
 
       expect(mockRequestNoRetry.mock.calls.length).toBeGreaterThan(1);
       expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
-      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
+      // Budget exhausted on MethodNotFound means the command never registered — the message says so.
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('never registered'));
     });
   });
 

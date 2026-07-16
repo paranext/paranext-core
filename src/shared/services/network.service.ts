@@ -86,11 +86,23 @@ const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) =>
 
 const connectionMutex = new Mutex();
 let jsonRpc: IRpcMethodRegistrar | undefined;
+// Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
+// connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
+// both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
+let hasShutDown = false;
 
 export async function initialize(): Promise<void> {
   if (jsonRpc) return;
+  // Once shutdown has begun (app quit), never re-open the connection. Without this a request still
+  // in flight at quit — e.g. the Power-mode startup boot-race retry loop — would reach
+  // `doRequest` -> `initialize()` after `shutdown()` set `jsonRpc = undefined`, and the `if (jsonRpc)`
+  // guards below would be false, so it would call `createRpcHandler()`/`connect()` again and
+  // resurrect the connection mid-quit (paranext-core PR #2560 / PT-4162).
+  if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
   await connectionMutex.runExclusive(async () => {
     if (jsonRpc) return;
+    // Re-check inside the mutex in case shutdown ran while we awaited it.
+    if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
 
     try {
       jsonRpc = await createRpcHandler();
@@ -105,6 +117,9 @@ export async function initialize(): Promise<void> {
 
 /** Closes the network services gracefully */
 export const shutdown = async () => {
+  // Mark shutdown as begun before anything else so a concurrent {@link initialize} can't race in and
+  // re-open the connection we're about to tear down.
+  hasShutDown = true;
   if (!jsonRpc) return;
   await connectionMutex.runExclusive(async () => {
     if (!jsonRpc) return;

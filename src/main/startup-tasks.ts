@@ -1,9 +1,12 @@
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
-import { serializeRequestType } from '@shared/utils/util';
+import {
+  RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
+  type ScheduledSessionSyncResult,
+  type SessionSyncBoundary,
+} from '@main/scheduled-session-sync.util';
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import type { SettingTypes } from 'papi-shared-types';
 import { getErrorMessage, wait } from 'platform-bible-utils';
@@ -28,15 +31,15 @@ import { getErrorMessage, wait } from 'platform-bible-utils';
  * would S/R every locally-known shared project — overriding a Power user's schedule (PT-4162).
  * Mirrors the symmetric gating in {@link performShutdownTasks}.
  */
-export async function performStartupTasks(): Promise<void> {
+export async function performStartupTasks(signals?: StartupTasksSignals): Promise<void> {
   try {
-    await performStartupTasksInternal();
+    await performStartupTasksInternal(signals);
   } catch (e) {
     logger.warn(`Unexpected error during startup tasks: ${getErrorMessage(e)}`);
   }
 }
 
-async function performStartupTasksInternal(): Promise<void> {
+async function performStartupTasksInternal(signals?: StartupTasksSignals): Promise<void> {
   logger.debug('performStartupTasks invoked');
 
   // An unreadable mode must NOT fall through to Simple mode's "sync everything": the read can fail
@@ -56,7 +59,7 @@ async function performStartupTasksInternal(): Promise<void> {
   logger.debug(`performStartupTasks: interfaceMode=${interfaceMode}`);
 
   if (interfaceMode === 'power') {
-    await performPowerModeStartupSync();
+    await performPowerModeStartupSync(signals);
     return;
   }
 
@@ -87,27 +90,61 @@ async function performStartupTasksInternal(): Promise<void> {
  * startup/shutdown" (PT-4162). The extension owns everything else — reading PT-4160's schedule
  * store for the `onStartupShutdown` subset, running the sync, raising/clearing the PT-4159
  * editing-block for its duration, stamping `lastRunAt`, and opening the results view on
- * conflicts/errors. Core only triggers it and swallows failures, same contract as Simple mode's
- * `syncProjects` call above.
+ * conflicts/errors. Core only triggers it and logs the reported outcome; startup is never blocked
+ * or failed by it.
  *
- * Uses `requestSessionSyncWithBootRetry` (rather than `commandService.sendCommand`, or the shared
- * retrying `networkService.request`) because `runScheduledSessionSync` isn't declared in
- * `CommandHandlers` yet — it's a new command the S/R extension adds; core doesn't own that type
- * contract (PT-4162 design D1). Retry semantics still matter here: like the C# S/R command, the
- * extension-hosted command may not have registered yet this early in startup, and retrying gives it
- * time to come up instead of failing the one sync attempt this session boundary gets — see
- * `requestSessionSyncWithBootRetry`'s doc for why the shared `networkService.request` retry policy
- * isn't good enough for this particular race.
+ * Goes through `requestSessionSyncWithBootRetry` (raw `networkService.requestNoRetry` under its own
+ * boot-race budget) rather than the typed `commandService.sendCommand`. The reason is retry
+ * semantics, not typing: `sendCommand` always applies the shared network retry policy, whose fixed
+ * ~9 s ceiling loses the cold-boot race against extension-host activation (see
+ * `requestSessionSyncWithBootRetry`). The command name and boundary come from the shared
+ * {@link RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE} / {@link SessionSyncBoundary} contract so this raw
+ * call still can't drift from the shutdown call site.
+ *
+ * Logs the command's self-reported {@link ScheduledSessionSyncResult} truthfully — a real failure
+ * warns; a deliberate skip (nothing scheduled, stale startup, or app quitting) is debug-only — so
+ * the log never claims a sync that didn't happen.
  */
-async function performPowerModeStartupSync(): Promise<void> {
+async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promise<void> {
   logger.debug('Power-mode startup sync starting');
+  let outcome: StartupSyncTriggerOutcome;
   try {
-    await requestSessionSyncWithBootRetry();
-    logger.debug('Power-mode startup sync complete');
+    outcome = await requestSessionSyncWithBootRetry(signals);
   } catch (e) {
-    logger.warn(
-      `Power-mode startup sync failed or skipped (command absent / extension not yet activated): ${getErrorMessage(e)}`,
-    );
+    // The loop only throws for a non-retryable error or an exhausted budget. Branch the message on
+    // which: a MethodNotFound at the deadline means the command never registered within the budget
+    // (e.g. no S/R extension installed); anything else means the command was present but the call
+    // failed (a request timeout, or a registered handler that threw) — so don't blame missing
+    // registration for a failure that isn't one.
+    if (isMethodNotFoundError(e))
+      logger.warn(
+        `Power-mode startup sync skipped: runScheduledSessionSync never registered within the boot retry budget: ${getErrorMessage(e)}`,
+      );
+    else logger.warn(`Power-mode startup sync failed: ${getErrorMessage(e)}`);
+    return;
+  }
+  switch (outcome) {
+    case 'synced':
+      logger.debug('Power-mode startup sync complete');
+      break;
+    case 'failed':
+      logger.warn('Power-mode startup sync ran but reported failure');
+      break;
+    case 'skipped':
+      logger.debug(
+        'Power-mode startup sync skipped (nothing scheduled, not due, or already syncing)',
+      );
+      break;
+    case 'skipped-stale':
+      logger.debug(
+        'Power-mode startup sync skipped: startup no longer fresh; a late trigger would block an active editor',
+      );
+      break;
+    case 'aborted':
+      logger.debug('Power-mode startup sync aborted: app is quitting');
+      break;
+    default:
+      break;
   }
 }
 
@@ -127,6 +164,53 @@ async function performPowerModeStartupSync(): Promise<void> {
  * duplicating the literal (mirrors `SHUTDOWN_SYNC_TIME_OUT_MS` in `shutdown-tasks.ts`).
  */
 export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
+
+/**
+ * How long (ms) after the main window becomes interactive a still-pending "startup" sync may still
+ * be fired. The boot-race loop keeps retrying up to {@link STARTUP_SYNC_RETRY_BUDGET_MS}, but a
+ * trigger that only lands well into the session is no longer a "startup" moment: firing it would
+ * raise the extension's editing-block (PT-4159) on an editor the user has by now opened and started
+ * typing in, with no apparent cause. Past this window the trigger is dropped (those projects sync
+ * at the next session boundary instead).
+ *
+ * Anchored to window-interactive time (supplied by main via
+ * {@link StartupTasksSignals.getWindowInteractiveElapsedMs}), not process start, so a slow _window_
+ * boot still gets its startup sync — only a slow _user_ does not — and the full retry budget stays
+ * usable when the window itself comes up late. Shorter than the budget so the block-raising window
+ * is bounded even though the budget is longer.
+ */
+const STARTUP_SYNC_FRESHNESS_WINDOW_MS = 30_000;
+
+/**
+ * Optional signals `performStartupTasks` receives from the main process. Both are omitted where
+ * there is no boot-race loop to steer (Simple mode) or in unit tests that drive the loop directly,
+ * in which case behavior is unchanged (never aborts, never goes stale).
+ */
+export interface StartupTasksSignals {
+  /**
+   * Aborts the Power-mode boot-race retry loop once the app has begun quitting. Stops it from (a)
+   * firing `runScheduledSessionSync('startup')` after `('shutdown')` already fired and (b) issuing
+   * a request that would resurrect the network connection `networkService.shutdown()` is tearing
+   * down. Wired to `before-quit` / `will-quit` / the window close in `main.ts`.
+   */
+  abortSignal?: AbortSignal;
+  /**
+   * How long (ms) the main window has been interactive, or `undefined` if it has not been shown
+   * yet. The freshness anchor for {@link STARTUP_SYNC_FRESHNESS_WINDOW_MS}.
+   */
+  getWindowInteractiveElapsedMs?: () => number | undefined;
+}
+
+/**
+ * Why {@link requestSessionSyncWithBootRetry} stopped without throwing, so
+ * {@link performPowerModeStartupSync} can log each case truthfully:
+ *
+ * - One of {@link ScheduledSessionSyncResult} — the command ran and reported that result;
+ * - `'skipped-stale'` — the startup moment went stale before the command registered, so the trigger
+ *   was dropped rather than fired late onto an active editor;
+ * - `'aborted'` — the app began quitting before the command registered.
+ */
+type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 'aborted';
 
 /**
  * Cadence (ms) for the first {@link INITIAL_RETRY_ATTEMPTS} retry attempts. Matches the shared
@@ -223,32 +307,60 @@ function isRetryableBootRaceError(error: unknown): boolean {
  *
  * This is deliberately a narrow, local retry loop rather than a new per-call retry option on
  * `networkService.request`: it only serves this one boot-time race, and the shared retry policy
- * other callers rely on should stay as-is. The cleaner long-term shape — the S/R extension
+ * other callers rely on should stay as-is. The cleaner long-term shape would be the S/R extension
  * self-triggering its own startup sync at the end of its own activation, so core never has to race
- * extension-host startup at all — is deliberately out of scope for this fix; see the module doc
- * above `performStartupTasks`.
+ * extension-host startup at all; that is a larger cross-repo change and is out of scope here (core
+ * has no signal today for "a method just registered" — the RPC registry set is not surfaced as an
+ * event; see the standing `TODO (maybe): Wait for signal from the extension host` in `main.ts`).
+ *
+ * Returns a {@link StartupSyncTriggerOutcome} for the cases the caller logs as non-failures (the
+ * command ran and reported a result, the startup went stale, or the app is quitting), and throws
+ * for a genuine failure (a non-retryable handler error, or the budget exhausted with the command
+ * never registering) so the caller can warn with the right cause.
+ *
+ * Uses a monotonic `performance.now()` deadline rather than wall-clock `Date.now()`: this runs
+ * during OS cold boot, exactly when the wall clock gets stepped (fresh boot / dual-boot RTC skew /
+ * VM resume), which would otherwise make the loop give up early or overrun its budget.
  */
-async function requestSessionSyncWithBootRetry(): Promise<void> {
-  const requestType = serializeRequestType(
-    CATEGORY_COMMAND,
-    'paratextBibleSendReceive.runScheduledSessionSync',
-  );
-  const deadline = Date.now() + STARTUP_SYNC_RETRY_BUDGET_MS;
+async function requestSessionSyncWithBootRetry(
+  signals?: StartupTasksSignals,
+): Promise<StartupSyncTriggerOutcome> {
+  const deadline = performance.now() + STARTUP_SYNC_RETRY_BUDGET_MS;
   let attempt = 0;
   for (;;) {
+    // Stop before firing if the app is quitting: a late fire could run `('startup')` after
+    // `('shutdown')` already fired and would try to reach a network connection being torn down
+    // (network.service `initialize` refuses to reconnect post-shutdown as a backstop).
+    if (signals?.abortSignal?.aborted) return 'aborted';
+
+    // Freshness gate, checked BEFORE firing because firing is what raises the editing-block: if the
+    // window has been interactive long enough that the user is likely editing, drop a still-pending
+    // startup trigger rather than block them (see STARTUP_SYNC_FRESHNESS_WINDOW_MS).
+    const windowInteractiveMs = signals?.getWindowInteractiveElapsedMs?.();
+    if (
+      windowInteractiveMs !== undefined &&
+      windowInteractiveMs >= STARTUP_SYNC_FRESHNESS_WINDOW_MS
+    )
+      return 'skipped-stale';
+
     attempt += 1;
     try {
       // Intentionally awaiting inside the loop so we attempt once at a time (mirrors
       // `requestWithRetry` in rpc.model.ts).
       // eslint-disable-next-line no-await-in-loop
-      await networkService.requestNoRetry(requestType, 'startup');
-      return;
+      const result = await networkService.requestNoRetry<
+        [SessionSyncBoundary],
+        ScheduledSessionSyncResult | undefined
+      >(RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE, 'startup');
+      // Tolerate a legacy void resolution (an older extension that returned `Promise<void>`): treat
+      // a missing result as a completed sync.
+      return result ?? 'synced';
     } catch (e) {
       if (!isRetryableBootRaceError(e)) throw e;
-      if (Date.now() >= deadline) throw e;
+      if (performance.now() >= deadline) throw e;
 
       logger.debug(
-        `Power-mode startup sync: runScheduledSessionSync not yet registered on attempt ${attempt}; retrying`,
+        `Power-mode startup sync: runScheduledSessionSync not answering on attempt ${attempt}; retrying`,
       );
       const intervalMs =
         attempt <= INITIAL_RETRY_ATTEMPTS ? INITIAL_RETRY_INTERVAL_MS : EXTENDED_RETRY_INTERVAL_MS;
