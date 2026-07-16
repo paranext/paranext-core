@@ -10,6 +10,7 @@ import {
 } from '@shared/services/web-view.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import type { SettingTypes } from 'papi-shared-types';
 import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 
 /**
@@ -37,7 +38,11 @@ type ShutdownSyncOutcome = 'succeeded' | 'failed' | 'timed-out';
  * so there is nothing left to protect and no UI to show a result in (PT-4162 design D5; conflicts
  * are picked up again on next startup).
  *
- * Any other (unrecognized) mode: returns immediately with no automatic S/R.
+ * If the interface-mode setting can't be read: skips the automatic shutdown S/R entirely and warns,
+ * rather than falling through to Simple mode's open-editor S/R. The read can fail exactly when the
+ * app is closing (the extension host may already be tearing down), and Simple mode would S/R
+ * whichever writable editor happens to be open — for a Power user, possibly a project they
+ * deliberately excluded from their schedule. Symmetric with {@link performStartupTasks} (PT-4162).
  */
 export async function performShutdownTasks(): Promise<void> {
   try {
@@ -48,12 +53,18 @@ export async function performShutdownTasks(): Promise<void> {
 }
 
 async function performShutdownTasksInternal(): Promise<void> {
-  // If the setting can't be read, default to simple mode to avoid skipping S/R and risking data loss.
-  let interfaceMode: string | undefined;
+  // An unreadable mode must NOT fall through to Simple mode's open-editor S/R (symmetric with
+  // startup): the read can fail exactly when the app is closing, and Simple mode S/Rs whatever
+  // writable editor happens to be open — for a Power user, possibly a project they excluded from
+  // their schedule. When we can't tell the mode, skip the automatic shutdown S/R and warn.
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
   try {
     interfaceMode = await settingsService.get('platform.interfaceMode');
-  } catch {
-    /* settings service unavailable — treat as simple mode to avoid data loss */
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode; skipping automatic shutdown sync: ${getErrorMessage(e)}`,
+    );
+    return;
   }
 
   if (interfaceMode === 'power') {
@@ -61,9 +72,9 @@ async function performShutdownTasksInternal(): Promise<void> {
     return;
   }
 
-  // Any other non-simple mode: close immediately — no automatic S/R on shutdown.
-  if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
-
+  // The setting's type and its runtime validator close the union to 'simple' | 'power', so 'simple'
+  // is the only value left here — Simple mode is the fall-through, not a checked branch. A future
+  // third mode would be a compile error here, not a silent no-S/R.
   await performSimpleModeShutdownSync();
 }
 
@@ -85,8 +96,10 @@ async function performSimpleModeShutdownSync(): Promise<void> {
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     );
     const openDefs = await webViewService?.getAllOpenWebViewDefinitions();
-    // Simple mode allows at most one writable Scripture Editor at a time, so find() is sufficient.
-    // Power mode selects by schedule instead (see performPowerModeShutdownSync), not open editors.
+    // Only genuine Simple mode reaches here — Power mode selects by schedule (see
+    // performPowerModeShutdownSync) and an unreadable mode now returns early above rather than
+    // falling through. Simple mode allows at most one writable Scripture Editor at a time, so find()
+    // is sufficient.
     const activeEditor = openDefs?.find(
       (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly,
     );

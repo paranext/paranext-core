@@ -41,12 +41,6 @@ beforeEach(() => {
 });
 
 describe('performShutdownTasks', () => {
-  it('returns without any network calls when interface mode is neither simple nor power', async () => {
-    mockSettingsGet.mockResolvedValue('somethingElse');
-    await performShutdownTasks();
-    expect(mockRequestNoRetry).not.toHaveBeenCalled();
-  });
-
   it('fires runScheduledSessionSync("shutdown") when interface mode is power', async () => {
     mockSettingsGet.mockResolvedValue('power');
     await performShutdownTasks();
@@ -146,7 +140,9 @@ describe('performShutdownTasks', () => {
     );
   });
 
-  it('proceeds with S/R (simple-mode fallback) when settings service throws', async () => {
+  it('skips the automatic shutdown S/R and warns when settings service throws (no open-editor fallback)', async () => {
+    // Symmetric with startup: an unreadable mode must not fall through to Simple's open-editor S/R,
+    // which could sync a project a Power user excluded from their schedule. Do nothing and warn.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
     mockNetworkObjectGet.mockResolvedValue(
       makeWebViewService([
@@ -158,10 +154,10 @@ describe('performShutdownTasks', () => {
       ]),
     );
     await performShutdownTasks();
-    expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
-    expect(mockRequestNoRetry).toHaveBeenCalledWith(
-      expect.stringContaining('sendReceiveProjects'),
-      ['fallback-project'],
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read platform.interfaceMode'),
     );
   });
 
