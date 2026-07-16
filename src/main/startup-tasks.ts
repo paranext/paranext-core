@@ -12,6 +12,89 @@ import type { SettingTypes } from 'papi-shared-types';
 import { getErrorMessage, wait } from 'platform-bible-utils';
 
 /**
+ * How long (ms) to keep retrying `runScheduledSessionSync` while it's still unregistered before
+ * giving up. Boot-appropriate budget: live E2E testing (PT-4162, 2026-07-16) observed the extension
+ * host take longer than the shared `networkService.request` retry policy's ~9 s ceiling
+ * (`MAX_REQUEST_ATTEMPTS` × `REQUEST_ATTEMPT_WAIT_TIME_MS` in `rpc.model.ts`) to activate the
+ * send-receive extension — all 10 attempts got back a "method not found" response, and the startup
+ * sync silently never ran even though the extension activated moments later. That shared policy is
+ * tuned for steady-state requests against handlers that are normally already registered; it isn't
+ * meant to (and shouldn't, for every other caller's sake) absorb the much longer, one-time race
+ * against extension-host activation at cold boot. Hence this module keeps its own longer, gentler
+ * retry budget locally instead of changing the shared default.
+ *
+ * Exported so the retry tests can drive fake timers by the exact same duration rather than
+ * duplicating the literal (mirrors `SHUTDOWN_SYNC_TIME_OUT_MS` in `shutdown-tasks.ts`).
+ */
+export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
+
+/**
+ * How long (ms) after the main window becomes interactive a still-pending "startup" sync may still
+ * be fired. The boot-race loop keeps retrying up to {@link STARTUP_SYNC_RETRY_BUDGET_MS}, but a
+ * trigger that only lands well into the session is no longer a "startup" moment: firing it would
+ * raise the extension's editing-block (PT-4159) on an editor the user has by now opened and started
+ * typing in, with no apparent cause. Past this window the trigger is dropped (those projects sync
+ * at the next session boundary instead).
+ *
+ * Anchored to window-interactive time (supplied by main via
+ * {@link StartupTasksSignals.getWindowInteractiveElapsedMs}), not process start, so a slow _window_
+ * boot still gets its startup sync — only a slow _user_ does not — and the full retry budget stays
+ * usable when the window itself comes up late. Shorter than the budget so the block-raising window
+ * is bounded even though the budget is longer.
+ */
+const STARTUP_SYNC_FRESHNESS_WINDOW_MS = 30_000;
+
+/**
+ * Cadence (ms) for the first {@link INITIAL_RETRY_ATTEMPTS} retry attempts. Matches the shared
+ * `requestWithRetry`'s cadence (`REQUEST_ATTEMPT_WAIT_TIME_MS` in `rpc.model.ts`) so the common
+ * case — the extension activates within the first few seconds — behaves the same as it did before
+ * this fix; only the long tail beyond that gets the gentler {@link EXTENDED_RETRY_INTERVAL_MS}
+ * cadence.
+ */
+const INITIAL_RETRY_INTERVAL_MS = 1000;
+
+/**
+ * Number of attempts at {@link INITIAL_RETRY_INTERVAL_MS} before backing off to the gentler
+ * {@link EXTENDED_RETRY_INTERVAL_MS} cadence for the remainder of
+ * {@link STARTUP_SYNC_RETRY_BUDGET_MS}.
+ */
+const INITIAL_RETRY_ATTEMPTS = 10;
+
+/** Cadence (ms) for retry attempts once {@link INITIAL_RETRY_ATTEMPTS} is exhausted. */
+const EXTENDED_RETRY_INTERVAL_MS = 2000;
+
+/**
+ * Optional signals `performStartupTasks` receives from the main process. Both are omitted where
+ * there is no boot-race loop to steer (Simple mode) or in unit tests that drive the loop directly,
+ * in which case behavior is unchanged (never aborts, never goes stale).
+ */
+export interface StartupTasksSignals {
+  /**
+   * Aborts the Power-mode boot-race retry loop once the app has begun quitting. Stops it from (a)
+   * firing `runScheduledSessionSync('startup')` after `('shutdown')` already fired and (b) issuing
+   * a request that would resurrect the network connection `networkService.shutdown()` is tearing
+   * down. Wired to `before-quit` / `will-quit` / the window close in `main.ts`.
+   */
+  abortSignal?: AbortSignal;
+  /**
+   * How long (ms) the main window has been interactive, or `undefined` if it has not been shown
+   * yet. The freshness anchor for {@link STARTUP_SYNC_FRESHNESS_WINDOW_MS}.
+   */
+  getWindowInteractiveElapsedMs?: () => number | undefined;
+}
+
+/**
+ * Why {@link requestSessionSyncWithBootRetry} stopped without throwing, so
+ * {@link performPowerModeStartupSync} can log each case truthfully:
+ *
+ * - One of {@link ScheduledSessionSyncResult} — the command ran and reported that result;
+ * - `'skipped-stale'` — the startup moment went stale before the command registered, so the trigger
+ *   was dropped rather than fired late onto an active editor;
+ * - `'aborted'` — the app began quitting before the command registered.
+ */
+type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 'aborted';
+
+/**
  * Runs initialization tasks (currently: triggering an initial project sync) shortly after the app
  * finishes starting up.
  *
@@ -147,89 +230,6 @@ async function performPowerModeStartupSync(signals?: StartupTasksSignals): Promi
       break;
   }
 }
-
-/**
- * How long (ms) to keep retrying `runScheduledSessionSync` while it's still unregistered before
- * giving up. Boot-appropriate budget: live E2E testing (PT-4162, 2026-07-16) observed the extension
- * host take longer than the shared `networkService.request` retry policy's ~9 s ceiling
- * (`MAX_REQUEST_ATTEMPTS` × `REQUEST_ATTEMPT_WAIT_TIME_MS` in `rpc.model.ts`) to activate the
- * send-receive extension — all 10 attempts got back a "method not found" response, and the startup
- * sync silently never ran even though the extension activated moments later. That shared policy is
- * tuned for steady-state requests against handlers that are normally already registered; it isn't
- * meant to (and shouldn't, for every other caller's sake) absorb the much longer, one-time race
- * against extension-host activation at cold boot. Hence this module keeps its own longer, gentler
- * retry budget locally instead of changing the shared default.
- *
- * Exported so the retry tests can drive fake timers by the exact same duration rather than
- * duplicating the literal (mirrors `SHUTDOWN_SYNC_TIME_OUT_MS` in `shutdown-tasks.ts`).
- */
-export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
-
-/**
- * How long (ms) after the main window becomes interactive a still-pending "startup" sync may still
- * be fired. The boot-race loop keeps retrying up to {@link STARTUP_SYNC_RETRY_BUDGET_MS}, but a
- * trigger that only lands well into the session is no longer a "startup" moment: firing it would
- * raise the extension's editing-block (PT-4159) on an editor the user has by now opened and started
- * typing in, with no apparent cause. Past this window the trigger is dropped (those projects sync
- * at the next session boundary instead).
- *
- * Anchored to window-interactive time (supplied by main via
- * {@link StartupTasksSignals.getWindowInteractiveElapsedMs}), not process start, so a slow _window_
- * boot still gets its startup sync — only a slow _user_ does not — and the full retry budget stays
- * usable when the window itself comes up late. Shorter than the budget so the block-raising window
- * is bounded even though the budget is longer.
- */
-const STARTUP_SYNC_FRESHNESS_WINDOW_MS = 30_000;
-
-/**
- * Optional signals `performStartupTasks` receives from the main process. Both are omitted where
- * there is no boot-race loop to steer (Simple mode) or in unit tests that drive the loop directly,
- * in which case behavior is unchanged (never aborts, never goes stale).
- */
-export interface StartupTasksSignals {
-  /**
-   * Aborts the Power-mode boot-race retry loop once the app has begun quitting. Stops it from (a)
-   * firing `runScheduledSessionSync('startup')` after `('shutdown')` already fired and (b) issuing
-   * a request that would resurrect the network connection `networkService.shutdown()` is tearing
-   * down. Wired to `before-quit` / `will-quit` / the window close in `main.ts`.
-   */
-  abortSignal?: AbortSignal;
-  /**
-   * How long (ms) the main window has been interactive, or `undefined` if it has not been shown
-   * yet. The freshness anchor for {@link STARTUP_SYNC_FRESHNESS_WINDOW_MS}.
-   */
-  getWindowInteractiveElapsedMs?: () => number | undefined;
-}
-
-/**
- * Why {@link requestSessionSyncWithBootRetry} stopped without throwing, so
- * {@link performPowerModeStartupSync} can log each case truthfully:
- *
- * - One of {@link ScheduledSessionSyncResult} — the command ran and reported that result;
- * - `'skipped-stale'` — the startup moment went stale before the command registered, so the trigger
- *   was dropped rather than fired late onto an active editor;
- * - `'aborted'` — the app began quitting before the command registered.
- */
-type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 'aborted';
-
-/**
- * Cadence (ms) for the first {@link INITIAL_RETRY_ATTEMPTS} retry attempts. Matches the shared
- * `requestWithRetry`'s cadence (`REQUEST_ATTEMPT_WAIT_TIME_MS` in `rpc.model.ts`) so the common
- * case — the extension activates within the first few seconds — behaves the same as it did before
- * this fix; only the long tail beyond that gets the gentler {@link EXTENDED_RETRY_INTERVAL_MS}
- * cadence.
- */
-const INITIAL_RETRY_INTERVAL_MS = 1000;
-
-/**
- * Number of attempts at {@link INITIAL_RETRY_INTERVAL_MS} before backing off to the gentler
- * {@link EXTENDED_RETRY_INTERVAL_MS} cadence for the remainder of
- * {@link STARTUP_SYNC_RETRY_BUDGET_MS}.
- */
-const INITIAL_RETRY_ATTEMPTS = 10;
-
-/** Cadence (ms) for retry attempts once {@link INITIAL_RETRY_ATTEMPTS} is exhausted. */
-const EXTENDED_RETRY_INTERVAL_MS = 2000;
 
 /**
  * Whether `error` is what `networkService`'s request plumbing (`doRequest` in `network.service.ts`)
