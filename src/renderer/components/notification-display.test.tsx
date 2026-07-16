@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type {
   INotificationService,
@@ -175,5 +175,44 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(title.closest('.notification-toast-content')).not.toBeNull();
     expect(document.querySelector('.notification-toast-cancel-button')).not.toBeInTheDocument();
     expect(document.querySelector('.notification-toast-action-button')).not.toBeInTheDocument();
+  });
+
+  // PT-4193 (review C61-2): a per-toast `position` makes Sonner render one <ol data-sonner-toaster>
+  // per distinct position, all sharing a single ref, so Sonner's own Alt+T hotkey only ever focuses
+  // the last list. NotificationDisplay layers a focus-cycling handler on top so repeated Alt+T
+  // reaches every list. (This pins that both lists become the active element across presses; jsdom
+  // does not model Sonner's real-browser per-<ol> focus-trap, so the blur-reset guarding that is
+  // manually verified - see the PR notes.)
+  it('cycles keyboard focus across every toast position list on the Alt+T hotkey', async () => {
+    render(<NotificationDisplay />);
+
+    // One default-position (bottom-right) toast and one top-center toast => two separate <ol> lists.
+    await capturedService.send({ message: 'Bottom toast', severity: 'info' });
+    await capturedService.send({ message: 'Top toast', severity: 'info', position: 'top-center' });
+    await screen.findByText('Bottom toast');
+    await screen.findByText('Top toast');
+
+    const lists = Array.from(document.querySelectorAll<HTMLElement>('[data-sonner-toaster]'));
+    expect(lists).toHaveLength(2);
+
+    async function pressHotkey() {
+      await act(async () => {
+        document.dispatchEvent(
+          new KeyboardEvent('keydown', { altKey: true, code: 'KeyT', bubbles: true }),
+        );
+        // Let the handler's queued microtask (which does the actual focus move) run.
+        await Promise.resolve();
+      });
+      return document.activeElement;
+    }
+
+    const firstFocused = await pressHotkey();
+    const secondFocused = await pressHotkey();
+
+    // Each press lands on one of the two lists, and the two presses reach different lists - so no
+    // position group is left keyboard-unreachable.
+    expect(lists).toContain(firstFocused);
+    expect(lists).toContain(secondFocused);
+    expect(firstFocused).not.toBe(secondFocused);
   });
 });
