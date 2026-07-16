@@ -1,4 +1,4 @@
-import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
+import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -74,7 +74,7 @@ async function performShutdownTasksInternal(): Promise<void> {
 
   // Copy to a const so TypeScript knows the type is string inside the async IIFE below.
   const syncProjectId = projectId;
-  const syncComplete = new AsyncVariable<void>('shutdown sync', SHUTDOWN_SYNC_TIME_OUT_MS);
+  const syncComplete = new AsyncVariable<void>('shutdown sync', AUTO_SYNC_MAX_DURATION_MS);
   (async () => {
     try {
       await networkService.requestNoRetry(
