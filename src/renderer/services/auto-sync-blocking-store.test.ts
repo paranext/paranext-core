@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   setBlockedProjects,
-  getAutoSyncBlocking,
   getBlockedProjectIds,
   isProjectBlocked,
   subscribeToAutoSyncBlocking,
@@ -24,7 +23,6 @@ describe('auto-sync-blocking-store', () => {
 
   describe('initial state', () => {
     it('reports nothing blocked', () => {
-      expect(getAutoSyncBlocking()).toBe(false);
       expect(getBlockedProjectIds().size).toBe(0);
       expect(isProjectBlocked('p1')).toBe(false);
     });
@@ -37,7 +35,6 @@ describe('auto-sync-blocking-store', () => {
   describe('show grace', () => {
     it('is not visible immediately when blocking starts', () => {
       setBlockedProjects(['p1']);
-      expect(getAutoSyncBlocking()).toBe(false);
       expect(getBlockedProjectIds().size).toBe(0);
       expect(isProjectBlocked('p1')).toBe(false);
     });
@@ -45,7 +42,6 @@ describe('auto-sync-blocking-store', () => {
     it('becomes visible once the 200 ms grace elapses', () => {
       setBlockedProjects(['p1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(getAutoSyncBlocking()).toBe(true);
       expect(isProjectBlocked('p1')).toBe(true);
       expect([...getBlockedProjectIds()]).toEqual(['p1']);
     });
@@ -57,7 +53,7 @@ describe('auto-sync-blocking-store', () => {
       vi.advanceTimersByTime(150); // still inside the grace window
       setBlockedProjects([]);
       vi.advanceTimersByTime(SHOW_GRACE_MS); // well past when the grace would have fired
-      expect(getAutoSyncBlocking()).toBe(false);
+      expect(isProjectBlocked('p1')).toBe(false);
       expect(listener).not.toHaveBeenCalled(); // nothing ever showed, so nothing ever notified
     });
 
@@ -75,7 +71,7 @@ describe('auto-sync-blocking-store', () => {
       setBlockedProjects(['p1']);
       vi.advanceTimersByTime(100); // inside the grace
       setBlockedProjects(['p1', 'p2']); // a second project joins the in-flight batch
-      expect(getAutoSyncBlocking()).toBe(false); // still inside the grace
+      expect(getBlockedProjectIds().size).toBe(0); // still inside the grace
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect([...getBlockedProjectIds()].sort()).toEqual(['p1', 'p2']);
     });
@@ -104,9 +100,8 @@ describe('auto-sync-blocking-store', () => {
     it('clears blocking when replaced with an empty set', () => {
       setBlockedProjects(['p1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(getAutoSyncBlocking()).toBe(true);
+      expect(isProjectBlocked('p1')).toBe(true);
       setBlockedProjects([]);
-      expect(getAutoSyncBlocking()).toBe(false);
       expect(getBlockedProjectIds().size).toBe(0);
     });
 
@@ -140,10 +135,10 @@ describe('auto-sync-blocking-store', () => {
     it('never auto-clears a long-running block (no safety timeout)', () => {
       setBlockedProjects(['p1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(getAutoSyncBlocking()).toBe(true);
+      expect(isProjectBlocked('p1')).toBe(true);
       // Far beyond the old 10-minute leash — the block persists until the backend clears it.
       vi.advanceTimersByTime(60 * 60 * 1000);
-      expect(getAutoSyncBlocking()).toBe(true);
+      expect(isProjectBlocked('p1')).toBe(true);
       expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -192,7 +187,7 @@ describe('auto-sync-blocking-store', () => {
       setBlockedProjects(['p1']);
       resetAutoSyncBlocking();
       vi.advanceTimersByTime(SHOW_GRACE_MS); // the grace should not fire
-      expect(getAutoSyncBlocking()).toBe(false);
+      expect(getBlockedProjectIds().size).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
       expect(listener).not.toHaveBeenCalled();
     });
