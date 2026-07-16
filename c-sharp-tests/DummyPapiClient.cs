@@ -119,6 +119,20 @@ namespace TestParanextDataProvider
         public bool IsHandlerRegistered(string requestType) =>
             _localMethods.ContainsKey(requestType);
 
+        /// <summary>
+        /// Test-only helper that invokes a locally-registered request handler directly (bypassing the
+        /// websocket the base client would use) and returns its result. Lets a test assert what a
+        /// registered command handler returns without a live PAPI connection.
+        /// </summary>
+        public object? InvokeRequestHandler(string requestType, params object?[] args)
+        {
+            if (!_localMethods.TryGetValue(requestType, out var handler))
+                throw new InvalidOperationException(
+                    $"No handler registered for request type \"{requestType}\""
+                );
+            return handler.DynamicInvoke(args);
+        }
+
         #endregion
     }
 }
