@@ -32,6 +32,23 @@
   max-width: 100%;
 }
 
+/* Slim "editing paused during Send/Receive" notice shown once above a project's settings groups
+   while that project's automatic sync is blocking edits. Non-covering; the individual setting
+   editors below are disabled instead (see ProjectOrOtherSettingsList / Setting `disabled` wiring).
+   Sized to match the 600px settings cards (.card) it sits above so it lines up with them in both
+   the single-project tab and the sidebar-selected-project view. */
+.sync-blocked-notice {
+  width: 600px;
+  max-width: 100%;
+  margin-bottom: 1rem;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background-color: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
 .zero-search-results {
   display: flex;
   flex-grow: 1;
