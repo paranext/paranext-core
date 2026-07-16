@@ -25,6 +25,36 @@ const notificationPositionValues: NotificationPosition[] = [
 
 const mapOfNotificationIdsToToastIds = new Map<string | number, string | number>();
 
+/**
+ * How long, in milliseconds, `dismiss()` remembers a notification id after dismissing it. Guards
+ * against a stale in-flight `send()` update for that same id arriving shortly after its own
+ * dismissal (e.g. a fire-and-forget progress update racing the producer's own `dismiss()` call,
+ * observed live with the Send/Receive progress toast when a sync aborted quickly): without this,
+ * `send()` would find no toast mapping and resurrect a brand-new toast that nothing then dismisses.
+ * Deliberately short - long enough to catch a race, short enough that a caller legitimately reusing
+ * the id later still works normally.
+ */
+const dismissedNotificationIdGracePeriodMs = 5000;
+
+/**
+ * NotificationId -> the `Date.now()` timestamp `dismiss()` was called for it. Read and pruned by
+ * {@link pruneRecentlyDismissedNotificationIds}; see {@link dismissedNotificationIdGracePeriodMs}.
+ */
+const recentlyDismissedNotificationIds = new Map<string | number, number>();
+
+/**
+ * Drop entries from {@link recentlyDismissedNotificationIds} older than
+ * {@link dismissedNotificationIdGracePeriodMs}. Called opportunistically from `send()` and
+ * `dismiss()` so the map doesn't grow unboundedly; no timers involved.
+ */
+function pruneRecentlyDismissedNotificationIds(): void {
+  const now = Date.now();
+  recentlyDismissedNotificationIds.forEach((dismissedAt, notificationId) => {
+    if (now - dismissedAt > dismissedNotificationIdGracePeriodMs)
+      recentlyDismissedNotificationIds.delete(notificationId);
+  });
+}
+
 async function localize(text: string): Promise<string> {
   return isLocalizeKey(text) ? localizationService.getLocalizedString({ localizeKey: text }) : text;
 }
@@ -50,6 +80,18 @@ async function send(notification: PlatformNotification): Promise<string | number
     dismissClickCommand,
     notificationId,
   } = notification;
+
+  pruneRecentlyDismissedNotificationIds();
+  // Only update-style sends (an explicit, existing notificationId) are ever suppressed here - a
+  // brand-new notification (no notificationId passed in) is never affected by this check, and a
+  // notificationId reused after the grace period has elapsed is treated as a normal, new send.
+  if (notificationId !== undefined && recentlyDismissedNotificationIds.has(notificationId)) {
+    logger.debug(
+      `Notification service host dropped send() for notification id '${notificationId}': it was dismissed within the last ${dismissedNotificationIdGracePeriodMs}ms, so this is treated as a stale in-flight update racing its own dismiss() rather than a new toast.`,
+    );
+    return notificationId;
+  }
+
   const localizedMessage = await localize(message);
   let toastId = notificationId ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;
   // Need to define effectiveNotificationId here to access it in onClick, but we need toastId to
@@ -130,12 +172,23 @@ async function send(notification: PlatformNotification): Promise<string | number
   return effectiveNotificationId;
 }
 
+/**
+ * Dismisses a notification from the user's UI.
+ *
+ * Also remembers `notificationId` for a short grace period
+ * ({@link dismissedNotificationIdGracePeriodMs}) after dismissing it. If `send()` is called again
+ * with the same id while it's still in that window, the send is dropped rather than resurrecting a
+ * new toast - see the comment on {@link dismissedNotificationIdGracePeriodMs} for why. Reusing the
+ * id again after the grace period elapses works normally.
+ */
 async function dismiss(notificationId: string | number): Promise<void> {
+  pruneRecentlyDismissedNotificationIds();
   const toastId = mapOfNotificationIdsToToastIds.get(notificationId);
   if (toastId !== undefined) {
     toast.dismiss(toastId);
     mapOfNotificationIdsToToastIds.delete(notificationId);
   }
+  recentlyDismissedNotificationIds.set(notificationId, Date.now());
 }
 
 const notificationService: INotificationService = {
