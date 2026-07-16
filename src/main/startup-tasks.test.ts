@@ -1,5 +1,9 @@
 import { vi } from 'vitest';
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
+import {
+  getJsonRpcRequestErrorMessagePrefix,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+} from '@shared/data/rpc.model';
 import { settingsService } from '@shared/services/settings.service';
 import * as commandService from '@shared/services/command.service';
 import * as networkService from '@shared/services/network.service';
@@ -30,13 +34,21 @@ const mockLoggerWarn = vi.mocked(logger.warn);
 
 /**
  * Builds a rejection shaped like what `networkService`'s request plumbing actually throws for a
- * JSON-RPC "method not found" response (see `doRequest` in `network.service.ts`): a value whose
- * `message` embeds `JSON-RPC Request error (${JSONRPCErrorCode.MethodNotFound})`. This is the only
- * signal `isMethodNotFoundError` (in `startup-tasks.ts`) has to key off of — see its doc comment.
+ * JSON-RPC "method not found" response (see `doRequest` in `network.service.ts`). The message
+ * prefix is derived from `getJsonRpcRequestErrorMessagePrefix` — the same producer `doRequest` uses
+ * — rather than hand-copied, so if that format is ever reformatted this fixture (and the matcher)
+ * move with it and can't silently stop matching real errors while the test stays green.
  */
 function methodNotFoundError() {
   return new Error(
-    `JSON-RPC Request error (${JSONRPCErrorCode.MethodNotFound}): 'command:paratextBibleSendReceive.runScheduledSessionSync' not found`,
+    `${getJsonRpcRequestErrorMessagePrefix(JSONRPCErrorCode.MethodNotFound)}: 'command:paratextBibleSendReceive.runScheduledSessionSync' not found`,
+  );
+}
+
+/** Builds a rejection shaped like a client-side request timeout, derived from the same producer. */
+function requestTimedOutError() {
+  return new Error(
+    `${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} command:paratextBibleSendReceive.runScheduledSessionSync ["startup"]`,
   );
 }
 
@@ -55,12 +67,6 @@ describe('performStartupTasks', () => {
       'startup',
     );
     expect(mockSendCommand).not.toHaveBeenCalled();
-  });
-
-  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing', async () => {
-    mockSettingsGet.mockResolvedValue('power');
-    mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
-    await expect(performStartupTasks()).resolves.toBeUndefined();
   });
 
   it('fires syncProjects with no project IDs when interface mode is simple', async () => {
@@ -151,9 +157,21 @@ describe('performStartupTasks', () => {
   // handler failure (don't retry), and bounds the retry budget so startup is never blocked.
 
   describe('power-mode startup sync boot-race retry', () => {
-    it('keeps retrying past the shared ~9s ceiling on MethodNotFound and succeeds once the handler appears late (t+30s)', async () => {
+    // Retry cadence (see startup-tasks.ts): the first INITIAL_RETRY_ATTEMPTS (10) waits are
+    // INITIAL_RETRY_INTERVAL_MS (1s); every wait after that is EXTENDED_RETRY_INTERVAL_MS (2s).
+    const INITIAL_RETRY_ATTEMPTS = 10;
+    const INITIAL_RETRY_INTERVAL_MS = 1000;
+    const EXTENDED_RETRY_INTERVAL_MS = 2000;
+
+    it('keeps retrying MethodNotFound past the shared ~9s ceiling and pins the two-phase backoff cadence', async () => {
       mockSettingsGet.mockResolvedValue('power');
-      const SUCCEED_ON_CALL = 21; // see startup-tasks.ts retry cadence: 10 attempts @1s + N @2s
+      // Succeed on a deliberately NON-symmetric attempt so the two-phase cadence is observable: 10
+      // waits @1s + 4 waits @2s before the 15th attempt = 18s. Deleting the backoff (all @1s = 14s)
+      // or inverting the phases (@2s then @1s = 22s) both change this elapsed time and fail below.
+      const SUCCEED_ON_CALL = 15;
+      const EXPECTED_ELAPSED_MS =
+        INITIAL_RETRY_ATTEMPTS * INITIAL_RETRY_INTERVAL_MS +
+        (SUCCEED_ON_CALL - 1 - INITIAL_RETRY_ATTEMPTS) * EXTENDED_RETRY_INTERVAL_MS; // 18_000
       let callCount = 0;
       mockRequestNoRetry.mockImplementation(async () => {
         callCount += 1;
@@ -164,8 +182,11 @@ describe('performStartupTasks', () => {
       vi.useFakeTimers();
       try {
         const startupPromise = performStartupTasks();
-        // 35s comfortably covers the ~30s it takes to reach the 21st attempt at this cadence.
-        await vi.advanceTimersByTimeAsync(35_000);
+        // 1ms before the expected time the succeeding attempt has not fired yet.
+        await vi.advanceTimersByTimeAsync(EXPECTED_ELAPSED_MS - 1);
+        expect(callCount).toBe(SUCCEED_ON_CALL - 1);
+        // Crossing the expected elapsed time triggers exactly the succeeding attempt.
+        await vi.advanceTimersByTimeAsync(1);
         await expect(startupPromise).resolves.toBeUndefined();
       } finally {
         vi.useRealTimers();
@@ -183,10 +204,7 @@ describe('performStartupTasks', () => {
       let callCount = 0;
       mockRequestNoRetry.mockImplementation(async () => {
         callCount += 1;
-        if (callCount === 1)
-          throw new Error(
-            'JSON-RPC Request timed out: command:paratextBibleSendReceive.runScheduledSessionSync ["startup"]',
-          );
+        if (callCount === 1) throw requestTimedOutError();
         return undefined;
       });
 
@@ -219,7 +237,7 @@ describe('performStartupTasks', () => {
       );
     });
 
-    it('gives up once the retry budget is exhausted, warns once, and never blocks startup', async () => {
+    it('honors the retry budget: retries on the expected cadence up to ~66 attempts, then stops and warns once', async () => {
       mockSettingsGet.mockResolvedValue('power');
       mockRequestNoRetry.mockRejectedValue(methodNotFoundError());
 
@@ -227,15 +245,24 @@ describe('performStartupTasks', () => {
       try {
         const startupPromise = performStartupTasks();
         // Comfortably past the full retry budget so the deadline check is guaranteed to trip.
-        await vi.advanceTimersByTimeAsync(STARTUP_SYNC_RETRY_BUDGET_MS + 5_000);
-        // Startup itself was never blocked: this resolves once fake time has been advanced past
-        // the budget, proving the retry loop is bounded rather than looping forever.
+        await vi.advanceTimersByTimeAsync(STARTUP_SYNC_RETRY_BUDGET_MS + 10_000);
+        // Startup itself was never blocked: this resolves once fake time is past the budget.
         await expect(startupPromise).resolves.toBeUndefined();
       } finally {
         vi.useRealTimers();
       }
 
-      expect(mockRequestNoRetry.mock.calls.length).toBeGreaterThan(1);
+      // Cadence over the 120s budget: attempts 1-10 fire through t=9s (their 10 waits are @1s), then
+      // one every 2s from t=10s. The deadline check is `>=`, so the attempt landing exactly at the
+      // t=120s deadline still fires before the loop gives up — 10 @1s + 56 @2s = 66 attempts. Pinning
+      // the count (rather than just ">1") is what makes an `if (attempt >= 2) throw` mutation — or any
+      // budget that ignores STARTUP_SYNC_RETRY_BUDGET_MS — fail this test.
+      const EXPECTED_ATTEMPTS =
+        INITIAL_RETRY_ATTEMPTS +
+        (STARTUP_SYNC_RETRY_BUDGET_MS - INITIAL_RETRY_ATTEMPTS * INITIAL_RETRY_INTERVAL_MS) /
+          EXTENDED_RETRY_INTERVAL_MS +
+        1; // 66 (the final attempt lands on the deadline itself)
+      expect(mockRequestNoRetry).toHaveBeenCalledTimes(EXPECTED_ATTEMPTS);
       expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
       // Budget exhausted on MethodNotFound means the command never registered — the message says so.
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('never registered'));

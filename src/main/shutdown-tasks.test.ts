@@ -30,6 +30,7 @@ const mockNetworkObjectGet = vi.mocked(networkObjectService.get);
 const mockLoggerDebug = vi.mocked(logger.debug);
 const mockLoggerInfo = vi.mocked(logger.info);
 const mockLoggerWarn = vi.mocked(logger.warn);
+const mockLoggerError = vi.mocked(logger.error);
 
 function makeWebViewService(defs: object[]) {
   return {
@@ -189,13 +190,29 @@ describe('performShutdownTasks', () => {
     );
   });
 
-  it('swallows unexpected errors and does not throw', async () => {
+  it('swallows unexpected errors and does not throw (exercises the outer try/catch)', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(makeWebViewService([]));
-    // Force an unexpected throw deep inside by making cancelSync throw a non-Error value
-    mockRequestNoRetry.mockImplementation(() => {
-      throw new Error('unexpected non-error throw');
+    // A WRITABLE editor so the flow runs past the `if (!projectId) return` early return and into
+    // performSimpleModeShutdownSync's unguarded region (an empty list would return early and never
+    // exercise the outer catch — the whole point of this test).
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'p1',
+        },
+      ]),
+    );
+    // Inject an unexpected error from an UNGUARDED spot — the "Syncing project on shutdown..." log,
+    // which is not wrapped in an inner try/catch. It escapes the inner handlers so that only
+    // performShutdownTasks's outer try/catch can swallow it. (Verified falsifiable: deleting that
+    // outer try/catch makes performShutdownTasks reject and this `resolves` assertion fail.)
+    mockLoggerInfo.mockImplementationOnce(() => {
+      throw new Error('unexpected logging failure');
     });
     await expect(performShutdownTasks()).resolves.toBeUndefined();
+    // The outer catch handled it via logger.error.
+    expect(mockLoggerError).toHaveBeenCalled();
   });
 });

@@ -256,3 +256,25 @@ export const GET_METHODS = 'rpc.discover';
 
 /** Prefix on requests that indicates that the request is a command */
 export const CATEGORY_COMMAND = 'command';
+
+/**
+ * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+ * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+ * followed by `: <error message>`.
+ *
+ * Exported so the few callers that must classify these thrown errors by message (there is no richer
+ * machine-readable marker for a "method not found" response) derive the format from this single
+ * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
+ * producer and a separate matcher/fixture keeps matching its old string while real errors stop
+ * matching, and the tests stay green. Everything routing through this function stays in lockstep.
+ */
+export function getJsonRpcRequestErrorMessagePrefix(code: number): string {
+  return `JSON-RPC Request error (${code})`;
+}
+
+/**
+ * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
+ * out client-side before any response arrives. Exported for the same drift-prevention reason as
+ * {@link getJsonRpcRequestErrorMessagePrefix}.
+ */
+export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
