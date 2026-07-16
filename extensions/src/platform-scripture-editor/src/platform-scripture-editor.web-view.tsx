@@ -592,6 +592,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [],
   );
 
+  /**
+   * Show the standard "editing paused during Send/Receive" warning notification (the
+   * `(SR_EDIT_BLOCKED)` gate rejection surfaced to the user). Extracted so the severity/message
+   * cannot drift across the several call sites that report it, and self-catching so fire-and-forget
+   * callers (the ones that cannot `await`) never surface an unhandled promise rejection from the
+   * notification service.
+   */
+  const notifySyncEditBlocked = useCallback(async () => {
+    try {
+      await papi.notifications.send({
+        severity: 'warning',
+        message: localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%'],
+      });
+    } catch (e) {
+      logger.warn(`Failed to send the sync-edit-blocked notification: ${getErrorMessage(e)}`);
+    }
+  }, [localizedStrings]);
+
   const paragraphSwitcherMenuItems = useMemo(
     () =>
       generateParagraphMenuListItems(
@@ -611,7 +629,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // Comment creation is gated by canUserCreateComments (not read-only), so it must be blocked
     // separately during an automatic Send/Receive. Guarding here covers both the hotkey and the
     // context-menu item's onSelect.
-    if (!selection?.start || !canUserCreateComments || isSyncBlocked) return;
+    if (!selection?.start || !canUserCreateComments) return;
+    // The context-menu item is visibly disabled while sync-blocked, but the hotkey reaches here
+    // directly — show the same "editing paused" notice instead of silently no-op'ing.
+    if (isSyncBlocked) {
+      notifySyncEditBlocked();
+      return;
+    }
 
     // Store the selection as annotation range to show it as the pending annotation
     const annotationRange: AnnotationRange = {
@@ -736,7 +760,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     setShowCommentEditor(true);
-  }, [scrRef, canUserCreateComments, isSyncBlocked]);
+  }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -1348,15 +1372,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             usjSentToPdp.current = usjFromPdp;
             setEditorUsj.current(usjFromPdp);
           }
-          await papi.notifications.send({
-            severity: isSyncEditBlocked ? 'warning' : 'error',
-            message: isSyncEditBlocked
-              ? localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%']
-              : formatReplacementString(
-                  localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
-                  { projectName },
-                ),
-          });
+          if (isSyncEditBlocked) {
+            await notifySyncEditBlocked();
+          } else {
+            await papi.notifications.send({
+              severity: 'error',
+              message: formatReplacementString(
+                localizedStrings['%webView_platformScriptureEditor_error_permissions_format%'],
+                { projectName },
+              ),
+            });
+          }
         } catch (innerError) {
           logger.error(
             `Error handling ${
@@ -1368,7 +1394,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
 
     return saveUsjToPdpIfUpdatedInternal;
-  }, [usjFromPdp, projectName, localizedStrings, projectId]);
+  }, [usjFromPdp, projectName, localizedStrings, projectId, notifySyncEditBlocked]);
 
   /**
    * Close the footnote editor, optionally deleting the note from the main editor first. Pass
@@ -1588,10 +1614,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // guarded here too. Early-return keeps the popover open (the user's text isn't lost — they
       // can save once the sync finishes) and warns like the scripture-edit path.
       if (isSyncBlocked) {
-        papi.notifications.send({
-          severity: 'warning',
-          message: localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%'],
-        });
+        await notifySyncEditBlocked();
         return;
       }
 
@@ -1654,10 +1677,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // discard the pending state (close the popover, clear the pending highlight) — the
         // rejected comment cannot be saved as-is.
         if (SYNC_EDIT_BLOCKED_REGEX.test(errorMessage)) {
-          papi.notifications.send({
-            severity: 'warning',
-            message: localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%'],
-          });
+          await notifySyncEditBlocked();
           onCommentEditorCancel();
         }
       } finally {
@@ -1670,7 +1690,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       createCommentAnnotationClickHandler,
       webViewId,
       isSyncBlocked,
-      localizedStrings,
+      notifySyncEditBlocked,
       onCommentEditorCancel,
     ],
   );
