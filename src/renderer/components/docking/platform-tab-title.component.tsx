@@ -294,18 +294,29 @@ export function PlatformTabTitle({
     />
   );
 
+  // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
+  // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
+  // library's own supported way to make part of a draggable tab non-draggable. Simple mode's
+  // Resources column keeps a visible, clickable tab bar (unlike the headless Home/Editor columns),
+  // so its tabs need this to block same-column drag-to-reorder. `tabLocked` (set on the tab group)
+  // only blocks drag-to-create-new-panel, not drag-to-reorder within a group — see the group
+  // config comment in platform-dock-layout-positioning.util.ts. Applied to both the icon/title
+  // spans and the wrapping div because rc-dock checks only the exact pointerdown target, not its
+  // ancestors, so any inner element the pointer might land on also needs the marker.
+  const dragIgnoreClass = isPowerMode ? '' : ' drag-ignore';
+
   const titleWithTooltip = (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <div
             ref={containerRef}
-            className="platform-tab-title"
+            className={`platform-tab-title${dragIgnoreClass}`}
             aria-label={tabLabel}
             data-web-view-id={webViewId}
           >
-            <span>{icon}</span>
-            <span>{title}</span>
+            <span className={dragIgnoreClass.trim()}>{icon}</span>
+            <span className={dragIgnoreClass.trim()}>{title}</span>
           </div>
         </TooltipTrigger>
         {tooltip &&

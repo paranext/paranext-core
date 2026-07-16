@@ -373,17 +373,16 @@ can currently reach. */
 // #endregion TAB HEADER ////////////////////////////////////////////////
 
 // #region SIMPLE-MODE DROP BLOCK //////////////////////////////////////
-// In simple mode the resources column uses its own group (`.dock-style-resources`). rc-dock's
-// `tabLocked: true` blocks the DockDropLayer/DockDropEdge paths (panel edge/middle drops), but
-// the per-tab onDrop handler in `node_modules/rc-dock/lib/DockTabs.js` calls `dockMove` with no
-// group check, which is what lets cross-column drops succeed. Removing pointer events from
-// `.dock-tab-hit-area` (the drop target inside each tab) prevents that handler from firing
-// without breaking tab activation, which happens via the title's drag-initiator. The home and
-// editor columns (`.dock-style-headless`) don't need this rule because the entire dock-bar
-// already has `pointer-events: none` (see SIMPLE-MODE HEADLESS BAR below).
-.dock-panel.dock-style-resources .dock-tab-hit-area {
-  pointer-events: none;
-}
+// Blocking drag-and-drop for simple mode's resources column (`.dock-style-resources`, the one
+// simple-mode column that keeps a visible, interactive tab bar) turned out to need a JS-level fix,
+// not CSS: `tabLocked: true` on the tab group only blocks the DockDropLayer/DockDropEdge paths
+// (panel edge/middle drops), and disabling pointer-events on `.dock-tab-hit-area` (an earlier
+// attempt here) didn't work either — that hit-area is a CHILD of the tab's actual drag-registered
+// element (rc-dock's `.drag-initiator`, added by `DragDropDiv`), so making only the child
+// non-interactive still leaves the parent `.drag-initiator` itself as a fully valid drag source
+// and drop target; pointer hit-testing simply resolves to the parent underneath. The real fix
+// (both same-column reorder and cross-column move) is the `drag-ignore` class rc-dock's own
+// `DragDropDiv.onPointerDown` checks for, applied in simple mode by `platform-tab-title.component`.
 // #endregion SIMPLE-MODE DROP BLOCK ///////////////////////////////////
 
 // #region SIMPLE-MODE DRAG APPEARANCE /////////////////////////////////
