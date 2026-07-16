@@ -1949,11 +1949,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               localizedStrings={localizedStrings}
               className="tw:h-8"
             />
-            <ShareLayoutButton
-              projectId={projectId}
-              localizedStrings={localizedStrings}
-              className="tw:h-8"
-            />
+            {/* Share Layout is only available in 10 Simple right now. Later it will be made available in 10 Power too. */}
+            {!isPowerMode && (
+              <ShareLayoutButton
+                projectId={projectId}
+                localizedStrings={localizedStrings}
+                className="tw:h-8"
+              />
+            )}
             {scrollGroupSelector}
           </>
         }
