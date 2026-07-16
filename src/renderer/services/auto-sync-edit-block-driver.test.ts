@@ -29,6 +29,12 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const EDITOR_TYPE = 'platformScriptureEditor.react';
+/**
+ * Legacy-comment-manager web view types the driver also edit-blocks (see
+ * EDIT_BLOCKABLE_WEB_VIEW_TYPES).
+ */
+const COMMENT_LIST_TYPE = 'legacyCommentManager.commentList';
+const COMMENT_LIST_PANEL_TYPE = 'legacyCommentManager.commentListPanel';
 
 /**
  * Tracks every definition object handed out by `makeDefinition`, keyed by id, so the
@@ -65,6 +71,16 @@ function editor(
 
 function nonEditor(id: string): SavedWebViewDefinition {
   return makeDefinition(id, 'some.other.webView');
+}
+
+/** A legacy-comment-manager comment web view (editor-anchored list or Column 3 panel). */
+function commentView(
+  id: string,
+  webViewType: string,
+  projectId?: string,
+  state?: Record<string, unknown>,
+): SavedWebViewDefinition {
+  return makeDefinition(id, webViewType, projectId, state);
 }
 
 describe('initAutoSyncEditBlockDriver', () => {
@@ -492,6 +508,79 @@ describe('initAutoSyncEditBlockDriver', () => {
     expect(storeUnsub).toHaveBeenCalledTimes(1);
     expect(openUnsub).toHaveBeenCalledTimes(1);
     expect(updateUnsub).toHaveBeenCalledTimes(1);
+  });
+
+  it(
+    "flags a blocked project's legacy-comment-manager comment views (editor-anchored list and " +
+      "Column 3 panel), leaving another project's comment view editable",
+    () => {
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        commentView('cl-a', COMMENT_LIST_TYPE, 'projA'), // syncing project's comment list
+        commentView('panel-a', COMMENT_LIST_PANEL_TYPE, 'projA'), // syncing project's Column 3 panel
+        commentView('cl-b', COMMENT_LIST_TYPE, 'projB'), // a different, NOT-syncing project
+      ]);
+      initAutoSyncEditBlockDriver();
+
+      setBlockedProjects('projA');
+      if (!storeListener) throw new Error('store listener not registered');
+      storeListener();
+
+      expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('cl-a', {
+        state: { isSyncBlocked: true },
+      });
+      expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('panel-a', {
+        state: { isSyncBlocked: true },
+      });
+      expect(updateWebViewDefinitionSync).not.toHaveBeenCalledWith('cl-b', expect.anything());
+      expect(updateWebViewDefinitionSync).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('re-flags a legacy-comment-manager comment view of a blocked project rebuilt mid-block that came back unblocked', () => {
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+
+    setBlockedProjects('projA');
+    storeListener();
+    if (!updateHandler) throw new Error('update handler not registered');
+
+    // A rebuilt comment panel of projA comes back with isSyncBlocked forced to false (its provider
+    // scrubs it on rehydrate) → the driver re-flags it to true.
+    updateHandler({
+      webView: commentView('panel-rebuilt', COMMENT_LIST_PANEL_TYPE, 'projA', {
+        isSyncBlocked: false,
+      }),
+    });
+    expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('panel-rebuilt', {
+      state: { isSyncBlocked: true },
+    });
+
+    // A rebuilt comment view of a NON-blocked project is not re-flagged.
+    vi.mocked(updateWebViewDefinitionSync).mockClear();
+    updateHandler({
+      webView: commentView('cl-other', COMMENT_LIST_TYPE, 'projB', { isSyncBlocked: false }),
+    });
+    expect(updateWebViewDefinitionSync).not.toHaveBeenCalled();
+  });
+
+  it('flags a legacy-comment-manager comment view opened mid-block only for a blocked project', () => {
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+
+    setBlockedProjects('projA');
+    storeListener();
+    if (!openHandler) throw new Error('open handler not registered');
+
+    // A comment list of the blocked project opened mid-block gets flagged.
+    openHandler({ webView: commentView('cl-opened', COMMENT_LIST_TYPE, 'projA') });
+    expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('cl-opened', {
+      state: { isSyncBlocked: true },
+    });
+
+    // A comment panel of a DIFFERENT project opened mid-block is not flagged.
+    vi.mocked(updateWebViewDefinitionSync).mockClear();
+    openHandler({ webView: commentView('panel-other', COMMENT_LIST_PANEL_TYPE, 'projB') });
+    expect(updateWebViewDefinitionSync).not.toHaveBeenCalled();
   });
 
   it('does not throw if the dock layout is not ready when enumerating web views', () => {
