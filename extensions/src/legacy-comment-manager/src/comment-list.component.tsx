@@ -52,7 +52,14 @@ export const COMMENT_LIST_PANEL_EXTRA_STRING_KEYS = [
   '%comment_filter_type_conflicts%',
   '%no_comments%',
   '%no_comments_match_filter%',
+  '%webView_legacyCommentManager_syncEditBlocked_notice%',
 ] as const;
+
+/**
+ * Slim "editing paused during Send/Receive" notice text shown while this project's sync blocks
+ * edits.
+ */
+const SYNC_BLOCKED_NOTICE_KEY = '%webView_legacyCommentManager_syncEditBlocked_notice%';
 
 // Reuse the underlying CommentList prop types so this panel stays in sync with platform-bible-react.
 type CommentListProps = ComponentProps<typeof CommentList>;
@@ -94,6 +101,12 @@ export type CommentListPanelProps = Pick<
    * "current chapter" scope option is hidden. Defaults to `true`.
    */
   canScopeToCurrentChapter?: boolean;
+  /**
+   * Whether this project's automatic Send/Receive is currently blocking edits. When true, a slim
+   * "editing paused" notice is shown above the list; the write affordances are disabled separately
+   * by the web view via the capability callbacks. Defaults to `false`.
+   */
+  isSyncBlocked?: boolean;
 };
 
 /**
@@ -173,6 +186,7 @@ export function CommentListPanel({
   scopeFilter,
   onScopeFilterChange,
   canScopeToCurrentChapter = true,
+  isSyncBlocked = false,
   handleAddCommentToThread,
   handleUpdateComment,
   handleDeleteComment,
@@ -241,6 +255,17 @@ export function CommentListPanel({
 
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
+      {/* Slim, non-covering notice shown while this project's automatic Send/Receive is blocking
+          edits. Stays above the sticky toolbar so filtering/reading comments remains fully usable;
+          only the write affordances are disabled (by the web view's gated capability callbacks). */}
+      {isSyncBlocked && (
+        <div
+          role="status"
+          className="tw:shrink-0 tw:border-b tw:border-border tw:bg-muted tw:px-4 tw:py-1.5 tw:text-sm tw:font-medium"
+        >
+          {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
+        </div>
+      )}
       {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Sticky so it stays
           pinned to the top of whichever ancestor scrolls (PT-4070). Rendered regardless of the
           loading state: it must stay mounted across filter changes (each of which briefly flips
