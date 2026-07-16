@@ -383,6 +383,45 @@ namespace TestParanextDataProvider.Projects
             SendReceiveWriteLock.Clear();
         }
 
+        [Test]
+        public void SetSyncing_AllInvalidBatch_ArmsButBlocksNoProject()
+        {
+            // Pins the ACTUAL per-project behavior of an all-invalid batch: it still arms (and the
+            // drain still runs, and the token is still valid — none of that machinery cares whether
+            // the blocked set is empty), but the per-project filter (armed && set.Contains(id)) can
+            // never match an empty set, so this arm rejects NOTHING for ANY project. This is the
+            // opposite of the old global-gate behavior, where an armed-with-empty-set gate rejected
+            // every write.
+            long token = 0;
+            Assert.DoesNotThrow(
+                () => token = SendReceiveWriteLock.SetSyncing([null!, ""]),
+                "an all-invalid batch must not crash the arming thread"
+            );
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    SendReceiveWriteLock.IsArmed,
+                    Is.True,
+                    "the gate still arms even though the batch had no valid ids"
+                );
+                Assert.That(
+                    SendReceiveWriteLock.ArmedProjectIds,
+                    Is.Empty,
+                    "no valid id means the armed set is empty"
+                );
+
+                IDisposable scope = null!;
+                Assert.DoesNotThrow(
+                    () => scope = SendReceiveWriteLock.EnterWrite("anyProject"),
+                    "an armed gate with an EMPTY blocked set must reject NO project's writes"
+                );
+                scope.Dispose();
+            });
+
+            SendReceiveWriteLock.Clear(token);
+        }
+
         // ---- SetSyncing drains in-flight writes ----
 
         [Test]

@@ -38,23 +38,24 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// scopes. Every transition — enter a write, exit a write, arm, disarm — is a single interlocked
 /// read-modify-write on that one word, so all transitions are totally ordered and each one sees the
 /// exact state it replaces. The safety invariant falls out directly: a write scope can only open by
-/// atomically incrementing the count on the same word arming sets the flag on, so every scope is
-/// ordered strictly before or strictly after the arm. A scope that opened BEFORE the arm is one the
-/// drain then waits for; a scope that opens AFTER the arm is rejected for any project in the synced
-/// set (the per-project filter — see below), so no write to a synced project can open once that
-/// project is armed. Because a write's mutation happens entirely between its enter and exit
-/// operations (both full fences), a drained count also means every finished write's effects are
-/// visible to the sync. (One consequence of the per-project filter: the drain is still GLOBAL — it
-/// waits for the count to reach zero across ALL projects — but writes to NON-synced projects may
-/// keep opening while armed, so a busy unrelated project can push the drain toward its timeout and
-/// into the degraded path. That is an accepted cost of letting unrelated edits continue; it never
-/// threatens safety, since only synced-project writes are what a synced project's replacement could
-/// race, and those are barred.) The word also carries an arm generation — the token
-/// <see cref="SetSyncing"/> returns — so <see cref="Clear(long)"/> can check-and-disarm in the
-/// same single CAS (see the overlap remarks below). The core mutual-exclusion invariant — no write
-/// executes inside its scope during a synced project's file-replacement window — depends ONLY on
-/// the atomic word: the count++/arm ordering proves it, and there is deliberately no "is the lock
-/// held" bookkeeping to fall out of step with reality. <c>_blockedProjectIds</c> is pure data that
+/// atomically incrementing the count on the very same word that arming sets the flag on, so every
+/// scope-open is ordered strictly before or strictly after the arm. A scope that opened BEFORE the
+/// arm is one the drain then waits for; a scope that opens AFTER the arm is rejected for any
+/// project in the synced set (the per-project filter — see below), so no write to a synced project
+/// can open once that project is armed. Because a write's mutation happens entirely between its
+/// enter and exit operations (both full fences), a drained count also means every finished write's
+/// effects are visible to the sync. (One consequence of the per-project filter: the drain is still
+/// GLOBAL — it waits for the count to reach zero across ALL projects — but writes to NON-synced
+/// projects may keep opening while armed, so a busy unrelated project can push the drain toward
+/// its timeout and into the degraded path. That is an accepted cost of letting unrelated edits
+/// continue; it never threatens safety, since only synced-project writes are what a synced
+/// project's replacement could race, and those are barred.) The word also carries an arm
+/// generation — the token <see cref="SetSyncing"/> returns — so <see cref="Clear(long)"/> can
+/// check-and-disarm in the same single CAS (see the overlap remarks below). The core
+/// mutual-exclusion invariant — no write executes inside its scope during a synced project's
+/// file-replacement window — depends ONLY on the atomic word: the count++/arm ordering proves it,
+/// and there is deliberately no "is the lock held" bookkeeping to fall out of step with reality.
+/// <c>_blockedProjectIds</c> is pure data that
 /// layers a per-project FILTER on top of that invariant: it selects WHICH projects an armed gate
 /// rejects (both <see cref="EnterWrite"/> and <see cref="IsBlocked"/> now consult it), but it never
 /// weakens the invariant — narrowing rejection can only let MORE writes through, and the
@@ -202,6 +203,25 @@ internal static class SendReceiveWriteLock
     /// belong to the subscriber (see <see cref="SendReceiveBlockNotifierService"/>). Inert in public
     /// core: nothing arms the gate there, so this never fires.
     /// </para>
+    /// <para>
+    /// <b>Honest about ordering (deliberately no sequence stamp).</b> A raise happens AFTER its
+    /// transition's atomic CAS on the state word, not as part of it, and carries no sequence
+    /// number. Under the serialized-scheduler contract (one bracket at a time — see the class
+    /// remarks), that is moot: a single thread's CAS-then-raise pairs are trivially delivered in
+    /// the order they happened. The contract has exactly two documented escapes:
+    /// <see cref="Clear()"/> may run on ANY thread as crash recovery, and a takeover
+    /// <see cref="SetSyncing"/> can race a stale bracket's <see cref="Clear(long)"/>. Off-contract
+    /// like that, two transitions on
+    /// different threads can have their CAS succeed in one order but their raises run in the other
+    /// (the winning thread can be preempted between its CAS and its raise while the other thread's
+    /// CAS-then-raise both complete first) — a subscriber can then briefly observe events out of
+    /// order and hold a stale snapshot. This is self-correcting: <see cref="GetBlockState"/> can
+    /// always re-seed on demand, and the very next transition raises the true state again. Given
+    /// that self-correction and that the reordering is only reachable outside the serialized
+    /// contract this class otherwise guarantees, adding a sequence stamp is deliberately YAGNI — it
+    /// would only ever matter for these two off-contract races, for a staleness window no worse
+    /// than the benign flag/set-skew windows already documented above.
+    /// </para>
     /// </summary>
     public static event Action<SendReceiveBlockState>? BlockStateChanged;
 
@@ -325,15 +345,19 @@ internal static class SendReceiveWriteLock
     /// <summary>
     /// Marks the given projects as being synced, then waits (bounded by <see cref="DrainTimeout"/>)
     /// for any already-in-flight writes to drain before returning. From the moment this arms the
-    /// gate, new <see cref="EnterWrite"/> calls for ANY project fail fast; after it returns, either
-    /// no write scopes remain open (normal path), or the drain timed out and it has logged a
-    /// warning and proceeded anyway (degraded path — new writes are still rejected either way; or,
-    /// with <paramref name="throwOnDrainTimeout"/>, it rolled this arm back and threw instead), or
-    /// a concurrent <see cref="Clear()"/> / newer <see cref="SetSyncing"/> ended this arm mid-drain
+    /// gate, new <see cref="EnterWrite"/> calls for a project IN THIS BATCH fail fast (the
+    /// per-project filter — see the class remarks); a write to a project NOT in the batch is
+    /// unaffected. After it returns, either no write scopes remain open (normal path — the drain
+    /// itself is still GLOBAL, so it waits on in-flight writes to every project, not just this
+    /// batch's), or the drain timed out and it has logged a warning and proceeded anyway (degraded
+    /// path — new writes to this batch's projects are still rejected either way; or, with
+    /// <paramref name="throwOnDrainTimeout"/>, it rolled this arm back and threw instead), or a
+    /// concurrent <see cref="Clear()"/> / newer <see cref="SetSyncing"/> ended this arm mid-drain
     /// (logged — the gate is then no longer rejecting on behalf of THIS sync). Replaces any
     /// previously set project list; call once per sync batch with the full set of projects. Null or
-    /// empty ids in the batch are ignored (an all-invalid batch still arms the global gate, with a
-    /// logged warning).
+    /// empty ids in the batch are ignored — an all-invalid batch still arms (and the drain still
+    /// runs) but then rejects NOTHING, since the per-project filter it arms with is empty (see the
+    /// logged warning below).
     /// <para>
     /// May be called from any thread; the bracket-ending Clear may later run on a different thread
     /// (an <c>await</c> between them is fine). End the bracket with <see cref="Clear(long)"/> and
@@ -368,14 +392,18 @@ internal static class SendReceiveWriteLock
             .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
 
         // An all-invalid batch is almost certainly a caller bug (e.g. a failed project lookup).
-        // Still arm — fail-safe: an armed gate with an empty set rejects writes exactly like any
-        // other arm — but say so, because IsBlocked will report false for every project while
-        // every write is rejected, which is otherwise baffling to diagnose.
+        // Still arm, and the drain still runs and returns a valid token — none of that machinery
+        // cares whether the set is empty. But under the PER-PROJECT filter (EnterWrite/IsBlocked
+        // both check armed && set.Contains(id)), an empty set can never match, so this arm rejects
+        // NO writes for ANY project: it is a fully armed, fully toothless bracket for its whole
+        // lifetime. Say so loudly, because IsBlocked will ALSO report false for every project, so
+        // nothing here looks broken from the outside — otherwise this is baffling to diagnose.
         if (armedProjectIds.Count == 0)
             Console.Error.WriteLine(
                 "[SendReceiveWriteLock] Warning: SetSyncing was called with no valid project ids; "
-                    + "the global gate is armed anyway (all writes rejected), but IsBlocked will "
-                    + "report false for every project."
+                    + "the gate is armed and the drain still ran, but the per-project blocked set "
+                    + "is empty, so this arm blocks NO writes for any project (IsBlocked will also "
+                    + "report false for every project)."
             );
 
         // Publish the pure data first, then arm. Arming is a single CAS on the state word that
