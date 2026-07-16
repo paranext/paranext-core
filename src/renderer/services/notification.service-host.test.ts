@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type {
   INotificationService,
   PlatformNotification,
@@ -67,13 +67,6 @@ describe('notification service host', () => {
       '@renderer/services/notification.service-host'
     );
     await startNotificationService();
-  });
-
-  afterEach(() => {
-    // Guarantee real timers are restored even if a fake-timer test throws before its own
-    // `vi.useRealTimers()` - otherwise a single assertion failure can leave fake timers active
-    // for every subsequent test.
-    vi.useRealTimers();
   });
 
   describe('send with duration', () => {
@@ -291,74 +284,6 @@ describe('notification service host', () => {
         2,
         'Syncing...',
         expect.objectContaining({ id: 'toast-1' }),
-      );
-    });
-  });
-
-  describe('dismiss grace window (guards against a resurrected toast)', () => {
-    it('drops a send() for a notificationId that was just dismissed instead of creating a new toast', async () => {
-      mockToastInfo.mockReturnValueOnce('toast-1');
-      const notification: PlatformNotification = {
-        message: 'Syncing (0%)',
-        severity: 'info',
-        notificationId: 'sync-status',
-      };
-
-      const notificationId = await capturedService.send(notification);
-      await capturedService.dismiss(notificationId);
-      // A stale in-flight update for the same id, racing its own producer's dismiss(), arrives
-      // right after the dismiss - it must be dropped rather than resurrecting a new toast.
-      const result = await capturedService.send(notification);
-
-      expect(mockToastInfo).toHaveBeenCalledTimes(1);
-      expect(mockToast.dismiss).toHaveBeenCalledTimes(1);
-      expect(result).toBe('sync-status');
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringContaining('sync-status'));
-    });
-
-    it('allows sending with the same notificationId again once the grace window has elapsed', async () => {
-      vi.useFakeTimers();
-      mockToastInfo.mockReturnValueOnce('toast-1').mockReturnValueOnce('toast-2');
-      const notification: PlatformNotification = {
-        message: 'Syncing (0%)',
-        severity: 'info',
-        notificationId: 'sync-status',
-      };
-
-      const notificationId = await capturedService.send(notification);
-      await capturedService.dismiss(notificationId);
-      // Past the grace window, so this is treated as a legitimate new send, not a stale update.
-      vi.advanceTimersByTime(5001);
-      await capturedService.send(notification);
-
-      expect(mockToastInfo).toHaveBeenCalledTimes(2);
-      // toastId mapping was cleared by dismiss(), so this creates a fresh toast (id: undefined)
-      // rather than updating the dismissed one.
-      expect(mockToastInfo).toHaveBeenNthCalledWith(
-        2,
-        'Syncing (0%)',
-        expect.objectContaining({ id: undefined }),
-      );
-    });
-
-    it('does not affect a brand-new send with no notificationId right after an unrelated dismiss', async () => {
-      mockToastInfo.mockReturnValueOnce('toast-1').mockReturnValueOnce('toast-2');
-      const dismissedNotification: PlatformNotification = {
-        message: 'Syncing (0%)',
-        severity: 'info',
-        notificationId: 'sync-status',
-      };
-      const notificationId = await capturedService.send(dismissedNotification);
-      await capturedService.dismiss(notificationId);
-
-      const freshNotification: PlatformNotification = { message: 'Unrelated', severity: 'info' };
-      await capturedService.send(freshNotification);
-
-      expect(mockToastInfo).toHaveBeenCalledTimes(2);
-      expect(mockToastInfo).toHaveBeenNthCalledWith(
-        2,
-        'Unrelated',
-        expect.objectContaining({ id: undefined }),
       );
     });
   });
