@@ -2,6 +2,8 @@ import { vi } from 'vitest';
 import { settingsService } from '@shared/services/settings.service';
 import * as networkService from '@shared/services/network.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
+import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
 import { performShutdownTasks } from './shutdown-tasks';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -23,6 +25,8 @@ vi.mock('@shared/services/logger.service', () => ({
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockNetworkObjectGet = vi.mocked(networkObjectService.get);
+const mockLoggerInfo = vi.mocked(logger.info);
+const mockLoggerWarn = vi.mocked(logger.warn);
 
 function makeWebViewService(defs: object[]) {
   return {
@@ -37,10 +41,55 @@ beforeEach(() => {
 });
 
 describe('performShutdownTasks', () => {
-  it('returns without any network calls when interface mode is not simple', async () => {
-    mockSettingsGet.mockResolvedValue('power');
+  it('returns without any network calls when interface mode is neither simple nor power', async () => {
+    mockSettingsGet.mockResolvedValue('somethingElse');
     await performShutdownTasks();
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
+  });
+
+  it('fires runScheduledSessionSync("shutdown") when interface mode is power', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('runScheduledSessionSync'),
+      'shutdown',
+    );
+    // Power mode selects by schedule, not open editors/cancelSync — neither Simple-mode call fires.
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    // The sync actually succeeded, so — and only so — the truthful "complete" log fires.
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing, and logs failure truthfully (not "complete")', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
+    await expect(performShutdownTasks()).resolves.toBeUndefined();
+    // The bounded wait settled (the rejection was caught, not a timeout), so the failure gets its
+    // own distinct message rather than the misleading "complete" — this is the PT-4213 item 8 fix.
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
+    expect(mockLoggerInfo).toHaveBeenCalledWith(expect.stringContaining('without succeeding'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('returns after the timeout when runScheduledSessionSync never settles, logs the timeout, and never logs "complete"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    // Never-resolving promise: simulates a hung sync (or an unregistered command that never
+    // rejects), exercising the `completed === false` branch of runBoundedShutdownSync that PT-4213
+    // item 9 flagged as untested.
+    mockRequestNoRetry.mockImplementation(() => new Promise(() => {}));
+    vi.useFakeTimers();
+    try {
+      const shutdownPromise = performShutdownTasks();
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_SYNC_TIME_OUT_MS);
+      await expect(shutdownPromise).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('complete'));
   });
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
