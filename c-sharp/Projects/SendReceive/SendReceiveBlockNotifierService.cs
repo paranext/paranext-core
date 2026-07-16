@@ -71,18 +71,24 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
     /// <summary>
     /// Forwards a gate transition to the renderer as a PAPI event. Fire-and-forget: the gate raises
     /// <see cref="SendReceiveWriteLock.BlockStateChanged"/> inline on the arming/clearing thread and
-    /// must never be delayed or thrown into, so we do not await the send and we swallow + log any
-    /// failure (mirrors <c>SharedStore.Set</c>'s event-send error handling).
+    /// must never be delayed or thrown into, so we never await the send.
+    /// <para>
+    /// <see cref="PapiClient.SendEventAsync"/> is declared <c>async</c>, so the compiler wraps its
+    /// ENTIRE body — including anything before its first <c>await</c> — in a state machine: no
+    /// exception from it can ever throw synchronously into this method. A bare <c>try/catch</c>
+    /// around the discarded call (the shape <c>SharedStore.Set</c> also uses for its own
+    /// fire-and-forget <c>SendEventAsync</c>) is therefore DEAD here: every failure lands on the
+    /// discarded <see cref="Task"/>, unobserved and unlogged, and the catch never runs. We
+    /// deliberately diverge from that precedent — which has the same dead spot — and instead
+    /// capture the task and attach a fault-only continuation via <see cref="ThreadingUtils.RunTask"/>
+    /// (the same helper other fire-and-forget call sites in this codebase use to observe a task's
+    /// fault without awaiting it), so a failed send is actually logged. This keeps the same
+    /// fire-and-forget semantics — nothing here awaits or re-throws into the gate's event raise.
+    /// </para>
     /// </summary>
-    private void OnBlockStateChanged(SendReceiveBlockState state)
-    {
-        try
-        {
-            _ = PapiClient.SendEventAsync(BlockStateChangedEvent, state);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error sending {BlockStateChangedEvent} event: {ex}");
-        }
-    }
+    private void OnBlockStateChanged(SendReceiveBlockState state) =>
+        ThreadingUtils.RunTask(
+            PapiClient.SendEventAsync(BlockStateChangedEvent, state),
+            $"send {BlockStateChangedEvent} event"
+        );
 }
