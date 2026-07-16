@@ -1598,8 +1598,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             createCommentAnnotationClickHandler(newThreadId),
           );
 
-          // Open the comment list and select the new thread
-          await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
+          // Power mode only: Open the comment list and select the new thread. Simple mode's
+          // fixed Column 3 Comments tab already reflects the new comment via its own PDP
+          // subscription, so opening/focusing the editor-anchored panel here would just pop a
+          // second "Comments" tab and steal focus (PT-4204).
+          if (isPowerMode) {
+            await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
+          }
         }
 
         pendingCommentAnnotationRange.current = undefined;
@@ -1611,7 +1616,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         isSubmittingComment.current = false;
       }
     },
-    [projectId, scrRef, createCommentAnnotationClickHandler, webViewId],
+    [projectId, scrRef, createCommentAnnotationClickHandler, webViewId, isPowerMode],
   );
 
   // Clear annotation info when the editor clears annotations internally
