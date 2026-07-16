@@ -3,61 +3,101 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent, requestNoRetry } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { getErrorMessage } from 'platform-bible-utils';
-import { setAutoSyncBlocking } from './auto-sync-blocking-store';
-
-// String value must match the event emitted by the Send/Receive extension. The extension emits it
-// only around scheduled (unattended) syncs — the surface that blocks the workspace. Manual syncs
-// (driven from the Send/Receive dialog, which has its own progress and Cancel) never raise it.
-// `true` raises a block, `false` clears one; the store ref-counts so nested raises don't clear
-// early.
-const AUTO_SYNC_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlockingChanged';
+import { setBlockedProjects } from './auto-sync-blocking-store';
 
 /**
- * Command on the Send/Receive extension (the emitter of {@link AUTO_SYNC_BLOCKING_CHANGED_EVENT})
- * that reports whether a scheduled sync is currently blocking, so this service can seed the store
- * on init instead of assuming unblocked. Requested untyped (the same pattern as
- * `paratextBibleSendReceive.cancelSync` in shutdown-tasks) because the copied
- * `paratext-bible-send-receive.d.ts` command contract does not declare it; registering the command
- * on the extension side (and declaring it in the contract) is tracked in PT-4214. Until then the
- * request rejects and init keeps the assume-unblocked default — exactly the pre-seeding behavior.
+ * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on.
+ * Carried identically by both the change event and the init-consult command (see the C#
+ * `SendReceiveBlockState`). `isBlocking` false always pairs with an empty `projectIds`.
+ */
+type SyncWriteLockSnapshot = { isBlocking: boolean; projectIds: string[] };
+
+// Backend-authoritative network event: the C# write gate emits a full snapshot on every arm/disarm,
+// for ALL sync types (manual + scheduled + session). It is the SINGLE signal source for blocking
+// (PT-4214 finding 16). Only fires in Paratext 10 Studio builds where the patch arms the gate; plain
+// Platform.Bible never emits it.
+const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
+
+// REPLACED (PT-4214 Stage U): the extension-emitted, renderer-side boolean raise/clear event
+// `paratextBibleSendReceive.onAutoSyncBlockingChanged`. It is no longer subscribed — a second signal
+// source alongside the backend gate is exactly the drift finding 16 indicts, so the backend gate is
+// now the single authority for blocking.
+
+/**
+ * Command served by the C# backend (the emitter of {@link SYNC_WRITE_LOCK_CHANGED_EVENT}) returning
+ * the current {@link SyncWriteLockSnapshot}, so this service can seed the store on init instead of
+ * assuming unblocked. Requested untyped (the same pattern as `paratextBibleSendReceive.cancelSync`
+ * in shutdown-tasks) because the copied `paratext-bible-send-receive.d.ts` command contract does
+ * not declare it. Served now on Paratext 10 Studio (returns not-blocking on plain Platform.Bible);
+ * older cores lack it entirely and the request rejects, leaving the assume-unblocked default.
  */
 const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
 
 /**
- * Subscribes to the auto-sync blocking network event and drives the auto-sync-blocking store. Call
+ * Subscribes to the backend write-gate change event and drives the auto-sync-blocking store. Call
  * once at app startup. Returns a cleanup function.
  *
- * On init it also queries the emitter's current blocking state (best effort — see
+ * On init it also queries the backend's current snapshot (best effort — see
  * {@link GET_AUTO_SYNC_BLOCKING_COMMAND}) and seeds the store from it, so a renderer reload during
- * an in-flight scheduled sync does not come up unblocked while the backend is still syncing (the
- * raise event was emitted before this subscription existed). Any live event wins over the (possibly
- * stale) snapshot, and the store's per-blocker safety leash bounds a seeded block whose clearing
- * event never arrives.
+ * an in-flight sync does not come up unblocked while the backend is still syncing (the change event
+ * was emitted before this subscription existed). Any live event wins over the (possibly stale)
+ * snapshot. Malformed payloads and a rejected consult both fail safe to assume-unblocked, so a
+ * broken or absent signal can never leave editors stuck read-only.
  */
 export function initAutoSyncBlockingService(): () => void {
   let hasReceivedEvent = false;
   let isDisposed = false;
+  let hasWarnedMalformed = false;
 
-  const unsubscribe = getNetworkEvent<{ isBlocking: boolean }>(AUTO_SYNC_BLOCKING_CHANGED_EVENT)(({
-    isBlocking,
-  }) => {
+  /**
+   * Extracts the project ids to block from an untrusted snapshot payload. A well-formed
+   * not-blocking snapshot yields `[]`; a malformed/missing-field payload also yields `[]`
+   * (fail-safe assume-unblocked) and warns once per service lifetime, consistent with the
+   * assume-unblocked init philosophy — a broken signal must never leave the workspace blocked.
+   */
+  const readBlockedProjectIds = (payload: unknown): string[] => {
+    if (
+      typeof payload === 'object' &&
+      payload &&
+      'isBlocking' in payload &&
+      'projectIds' in payload
+    ) {
+      const { isBlocking, projectIds } = payload;
+      if (typeof isBlocking === 'boolean' && Array.isArray(projectIds)) {
+        const stringIds = projectIds.filter((id): id is string => typeof id === 'string');
+        if (stringIds.length === projectIds.length) return isBlocking ? stringIds : [];
+      }
+    }
+    if (!hasWarnedMalformed) {
+      hasWarnedMalformed = true;
+      logger.warn(
+        `auto-sync blocking service received a malformed ${SYNC_WRITE_LOCK_CHANGED_EVENT} snapshot; assuming not blocking`,
+      );
+    }
+    return [];
+  };
+
+  const unsubscribe = getNetworkEvent<SyncWriteLockSnapshot>(SYNC_WRITE_LOCK_CHANGED_EVENT)((
+    event,
+  ) => {
     hasReceivedEvent = true;
-    setAutoSyncBlocking(isBlocking);
+    setBlockedProjects(readBlockedProjectIds(event));
   });
 
   (async () => {
     try {
-      const isBlocking = await requestNoRetry<[], unknown>(
+      const snapshot = await requestNoRetry<[], unknown>(
         serializeRequestType(CATEGORY_COMMAND, GET_AUTO_SYNC_BLOCKING_COMMAND),
       );
-      // Only seed if nothing live has spoken: an event that arrived while the request was in
-      // flight (either direction) supersedes this snapshot, and seeding after it could double
-      // count the same sync's raise.
-      if (isBlocking === true && !hasReceivedEvent && !isDisposed) setAutoSyncBlocking(true);
+      // Only seed if nothing live has spoken: an event that arrived while the request was in flight
+      // (either direction) supersedes this snapshot and must win, so we never clobber it here.
+      if (!hasReceivedEvent && !isDisposed) {
+        const blockedProjectIds = readBlockedProjectIds(snapshot);
+        if (blockedProjectIds.length > 0) setBlockedProjects(blockedProjectIds);
+      }
     } catch (e) {
-      // Extension absent or command not registered (see GET_AUTO_SYNC_BLOCKING_COMMAND) — keep the
-      // assume-unblocked default. Debug, not warn: this is the expected path on plain
-      // Platform.Bible and, until PT-4214 lands, on Paratext 10 Studio too.
+      // Command not served (older core) or the extension is absent — keep the assume-unblocked
+      // default. Debug, not warn: this is the expected path on plain Platform.Bible and older cores.
       logger.debug(
         `auto-sync blocking service could not read the initial blocking state: ${getErrorMessage(e)}`,
       );
