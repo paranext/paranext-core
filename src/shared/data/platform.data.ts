@@ -23,5 +23,11 @@ export const MAX_ZOOM_FACTOR = 3.0;
 /**
  * Upper bound (10 minutes) on how long a single automatic Send/Receive is allowed to run. A
  * scheduled sync of a large repo can run for minutes, so this is deliberately long.
+ *
+ * As of PT-4214 Stage U the renderer auto-sync-blocking store no longer consumes this: the backend
+ * write gate is the single authority for blocking, so the store's own `SAFETY_TIMEOUT_MS` leash was
+ * deleted (renderer-side resilience is re-query of the authority, not a local timer). The constant
+ * now survives in two rightful homes — the shutdown-sync bound in main (`shutdown-tasks.ts`) and,
+ * conceptually, the C# stall watchdog — both of which bound "one automatic Send/Receive".
  */
 export const AUTO_SYNC_MAX_DURATION_MS = 10 * 60 * 1000;

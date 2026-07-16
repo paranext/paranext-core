@@ -1,19 +1,22 @@
 /**
- * Store tracking whether an automatic (scheduled) Send/Receive is currently blocking the workspace.
+ * Store tracking which projects an automatic (scheduled or session) Send/Receive is currently
+ * blocking edits on.
  *
- * Uses a reference counter so overlapping blockers don't prematurely hide the overlay: the visible
- * state (isBlocking) only flips to false once every in-flight blocker has cleared.
+ * BACKEND-AUTHORITATIVE SNAPSHOT model (PT-4214 Stage U): the backend write gate is the single
+ * source of truth. It emits a full snapshot of the blocked project ids on every arm/disarm, and the
+ * producer applies it wholesale via {@link setBlockedProjects} — an empty set means nothing is
+ * blocked. There is no local ref-counting and no timer-driven opinion about blocking: resilience
+ * against a lost event is re-query of the backend authority (the service's init consult), not a
+ * local safety leash. The renderer's old per-blocker `SAFETY_TIMEOUT_MS` leash is deleted, not
+ * retained — a second, timer-driven opinion about blocking is precisely the drift the design's
+ * findings 7/8/16 indict.
  *
- * Visibility has a 200 ms show-grace matching PT9's automatic-sync surface: on the first raise a
- * grace timer is armed, and listeners only ever see `true` if blocking is still in flight when it
- * fires. A sync that finishes within the grace never shows anything.
- *
- * Each raise arms its own one-shot 10-minute safety leash that releases just that block if it never
- * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted), so one
- * stale expiry can never wipe newer in-flight blockers.
+ * Visibility keeps a 200 ms show-grace matching PT9's automatic-sync surface: on the first project
+ * becoming blocked (empty → non-empty) a grace timer is armed, and consumers only ever see a
+ * non-empty visible set if blocking is still in flight when it fires. A sync that finishes within
+ * the grace never shows anything. Set changes while already visible (e.g. a project joins or leaves
+ * an in-flight batch) are reflected immediately, with no fresh grace.
  */
-
-import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 
 /**
  * How long blocking must persist before it becomes visible; a sync finishing inside this window
@@ -21,22 +24,16 @@ import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
  */
 const SHOW_GRACE_MS = 200;
 
-/**
- * Heuristic upper bound; if a blocker never clears (e.g. extension deactivates mid-sync),
- * auto-clear after this long. Each blocker leash bounds a single automatic Send/Receive — exactly
- * what {@link AUTO_SYNC_MAX_DURATION_MS} is.
- */
-const SAFETY_TIMEOUT_MS = AUTO_SYNC_MAX_DURATION_MS;
+const EMPTY_SET: ReadonlySet<string> = new Set();
 
-let blockCount = 0;
-let isBlockingVisible = false;
-let graceTimer: ReturnType<typeof setTimeout> | undefined;
+/** The latest backend snapshot: which projects are blocked right now (raw, pre-grace). */
+let rawBlockedProjectIds: ReadonlySet<string> = EMPTY_SET;
 /**
- * One outstanding safety leash per in-flight blocker, oldest first. Every raise arms its own
- * one-shot leash and every clear cancels the oldest outstanding one, so the array's length always
- * equals `blockCount` and each block is released exactly once — by its clear or by its own leash.
+ * The grace-debounced set consumers see. Empty until the show-grace elapses on the first block;
+ * every public accessor reads this, so all consumers observe the same debounced view.
  */
-const safetyTimers: ReturnType<typeof setTimeout>[] = [];
+let visibleBlockedProjectIds: ReadonlySet<string> = EMPTY_SET;
+let graceTimer: ReturnType<typeof setTimeout> | undefined;
 
 const listeners = new Set<() => void>();
 
@@ -44,56 +41,71 @@ function notifyListeners(): void {
   listeners.forEach((listener) => listener());
 }
 
-/** Flips the derived visibility, notifying listeners only when it actually changes. */
-function setBlockingVisible(value: boolean): void {
-  if (isBlockingVisible === value) return;
-  isBlockingVisible = value;
+/** Content equality for two id sets (the store always replaces sets wholesale, never mutates). */
+function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  return [...a].every((id) => b.has(id));
+}
+
+/** Publishes a new visible set, notifying listeners only when its contents actually change. */
+function setVisible(next: ReadonlySet<string>): void {
+  if (areSetsEqual(visibleBlockedProjectIds, next)) return;
+  visibleBlockedProjectIds = next;
   notifyListeners();
 }
 
-/** Releases one in-flight block, updating the derived visibility when the last one goes. */
-function releaseOneBlock(): void {
-  blockCount = Math.max(0, blockCount - 1);
-  if (blockCount === 0) {
-    // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
+/**
+ * Replaces the set of projects an automatic Send/Receive is blocking edits on. This is the sole
+ * producer API: the backend emits a full snapshot on every gate arm/disarm and the service forwards
+ * it here verbatim (an empty array clears blocking entirely).
+ */
+export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
+  const next: ReadonlySet<string> = new Set(projectIds);
+  rawBlockedProjectIds = next;
+
+  if (next.size === 0) {
+    // Fully cleared: cancel a pending grace (cleared inside the window → nothing ever showed) and
+    // drop the visible set immediately.
     clearTimeout(graceTimer);
     graceTimer = undefined;
-    setBlockingVisible(false);
+    setVisible(EMPTY_SET);
+    return;
+  }
+
+  if (visibleBlockedProjectIds.size > 0) {
+    // Already past the grace and visible: reflect set changes immediately (a project joined or left
+    // an in-flight batch) with no fresh grace.
+    setVisible(next);
+    return;
+  }
+
+  // Empty → non-empty. Arm the show-grace if one is not already pending; visibility only turns on
+  // if blocking survives the grace.
+  if (graceTimer === undefined) {
+    graceTimer = setTimeout(() => {
+      graceTimer = undefined;
+      // Re-read the raw set on fire: if the sync cleared during the grace it is empty and nothing
+      // shows; otherwise publish whatever is blocked now (it may have grown since the grace armed).
+      if (rawBlockedProjectIds.size > 0) setVisible(rawBlockedProjectIds);
+    }, SHOW_GRACE_MS);
   }
 }
 
-export function setAutoSyncBlocking(value: boolean): void {
-  if (value) {
-    blockCount += 1;
-    // Arm this block's own one-shot safety leash, 10 min from this raise. When it fires it
-    // releases only this block — never the whole count — so a stale expiry cannot wipe newer
-    // in-flight blockers.
-    const leash = setTimeout(() => {
-      const index = safetyTimers.indexOf(leash);
-      if (index !== -1) safetyTimers.splice(index, 1);
-      releaseOneBlock();
-    }, SAFETY_TIMEOUT_MS);
-    safetyTimers.push(leash);
-    // On 0→1, arm the show grace; visibility only turns on if blocking survives the grace.
-    if (blockCount === 1) {
-      graceTimer = setTimeout(() => {
-        graceTimer = undefined;
-        if (blockCount > 0) setBlockingVisible(true);
-      }, SHOW_GRACE_MS);
-    }
-  } else {
-    // Cancel the oldest outstanding leash so the block this clear releases cannot be released a
-    // second time when its leash fires. Blockers are anonymous, so oldest-first is a pairing
-    // heuristic — and the conservative one: the still-open blocks keep the newest (longest
-    // remaining) leashes.
-    const oldestLeash = safetyTimers.shift();
-    if (oldestLeash !== undefined) clearTimeout(oldestLeash);
-    releaseOneBlock();
-  }
-}
-
+/** True when any project is (visibly) blocked. Preserved for existing boolean consumers. */
 export function getAutoSyncBlocking(): boolean {
-  return isBlockingVisible;
+  return visibleBlockedProjectIds.size > 0;
+}
+
+/** The (visible, grace-debounced) set of projects currently blocked by an automatic Send/Receive. */
+export function getBlockedProjectIds(): ReadonlySet<string> {
+  return visibleBlockedProjectIds;
+}
+
+/** True when a specific project is (visibly) blocked. An undefined project id is never blocked. */
+export function isProjectBlocked(projectId: string | undefined): boolean {
+  if (projectId === undefined) return false;
+  return visibleBlockedProjectIds.has(projectId);
 }
 
 /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -110,11 +122,9 @@ export function subscribeToAutoSyncBlocking(listener: () => void): () => void {
  * WARNING: Test-only. @internal
  */
 export function resetAutoSyncBlocking(): void {
-  blockCount = 0;
-  isBlockingVisible = false;
+  rawBlockedProjectIds = EMPTY_SET;
+  visibleBlockedProjectIds = EMPTY_SET;
   clearTimeout(graceTimer);
   graceTimer = undefined;
-  safetyTimers.forEach((leash) => clearTimeout(leash));
-  safetyTimers.length = 0;
   listeners.clear();
 }
