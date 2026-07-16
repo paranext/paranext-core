@@ -75,6 +75,7 @@ public static class DeleteBooksOrchestrator
 
                 string bookFileName = scrText.Settings.BookFileName(bookNum, true);
                 if (scrText.FileManager.Exists(bookFileName))
+                    // SR-write-gate: exempt — reached only via the gated ManageBooksService.DeleteBooksAsync (TODO(PT-4210): assess).
                     scrText.FileManager.Delete(bookFileName);
 
                 success = true;
@@ -84,6 +85,7 @@ public static class DeleteBooksOrchestrator
             if (success)
             {
                 scrText.Settings.BooksPresentSet = availableBooks;
+                // SR-write-gate: exempt — reached only via the gated ManageBooksService.DeleteBooksAsync (TODO(PT-4210): assess).
                 scrText.Save();
             }
         }

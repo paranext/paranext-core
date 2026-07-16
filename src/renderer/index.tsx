@@ -4,6 +4,8 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
+import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
@@ -107,6 +109,13 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       initializeThemeService(),
       initializeWindowService(),
     );
+
+    // Drives the auto-sync edit-block banner on Scripture editors during a scheduled Send/Receive.
+    // Needs the network service (already up above) for the blocking event and the web view service
+    // (already up, from the block above) to read/update editor definitions. Both are synchronous and
+    // return unsubscribers we intentionally never call — they run for the renderer's lifetime.
+    initAutoSyncBlockingService();
+    initAutoSyncEditBlockDriver();
 
     // Subscribe to updates to the current theme
     await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {

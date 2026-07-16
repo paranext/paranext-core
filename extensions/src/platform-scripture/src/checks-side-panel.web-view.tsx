@@ -34,6 +34,7 @@ import {
   CHECKS_SIDE_PANEL_STRING_KEYS,
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { SYNC_EDIT_BLOCKED_MESSAGE_KEY, isSyncEditBlockedError } from './sync-edit-blocked.util';
 
 /**
  * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
@@ -614,14 +615,26 @@ global.webViewComponent = function ChecksSidePanelWebView({
     async (result: CheckRunResult) => {
       if (!result || !result.checkId || !projectId || !checkAggregator) return false;
 
-      const denyResultSuccess = await checkAggregator.denyCheckResult(
-        result.checkId,
-        result.checkResultType,
-        projectId,
-        result.verseRef,
-        result.itemText,
-        result.checkResultUniqueId,
-      );
+      let denyResultSuccess: boolean;
+      try {
+        denyResultSuccess = await checkAggregator.denyCheckResult(
+          result.checkId,
+          result.checkResultType,
+          projectId,
+          result.verseRef,
+          result.itemText,
+          result.checkResultUniqueId,
+        );
+      } catch (error) {
+        // The deny/allow buttons are fire-and-forget, so without this catch a write-gate rejection
+        // during an automatic Send/Receive becomes an unhandled promise rejection with no UI. Show
+        // the shared "editing paused" warning; re-throw anything else so real errors still surface.
+        if (isSyncEditBlockedError(error)) {
+          papi.notifications.send({ message: SYNC_EDIT_BLOCKED_MESSAGE_KEY, severity: 'warning' });
+          return false;
+        }
+        throw error;
+      }
       if (!isMountedRef.current) return false;
       if (denyResultSuccess) setDeniedStatusForResult(result, true);
       else logger.debug(`Could not deny check result: ${JSON.stringify(result)}`);
@@ -634,14 +647,26 @@ global.webViewComponent = function ChecksSidePanelWebView({
     async (result: CheckRunResult) => {
       if (!result || !result.checkId || !projectId || !checkAggregator) return false;
 
-      const allowResultStatus = await checkAggregator.allowCheckResult(
-        result.checkId,
-        result.checkResultType,
-        projectId,
-        result.verseRef,
-        result.itemText,
-        result.checkResultUniqueId,
-      );
+      let allowResultStatus: boolean;
+      try {
+        allowResultStatus = await checkAggregator.allowCheckResult(
+          result.checkId,
+          result.checkResultType,
+          projectId,
+          result.verseRef,
+          result.itemText,
+          result.checkResultUniqueId,
+        );
+      } catch (error) {
+        // The deny/allow buttons are fire-and-forget, so without this catch a write-gate rejection
+        // during an automatic Send/Receive becomes an unhandled promise rejection with no UI. Show
+        // the shared "editing paused" warning; re-throw anything else so real errors still surface.
+        if (isSyncEditBlockedError(error)) {
+          papi.notifications.send({ message: SYNC_EDIT_BLOCKED_MESSAGE_KEY, severity: 'warning' });
+          return false;
+        }
+        throw error;
+      }
       if (!isMountedRef.current) return false;
       if (allowResultStatus) setDeniedStatusForResult(result, false);
       else logger.debug(`Could not allow check result: ${JSON.stringify(result)}`);
