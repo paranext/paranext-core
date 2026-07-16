@@ -8,8 +8,9 @@
  * grace timer is armed, and listeners only ever see `true` if blocking is still in flight when it
  * fires. A sync that finishes within the grace never shows anything.
  *
- * A 10-minute safety timer re-arms on every raise and auto-clears the state if a blocker never
- * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted).
+ * Each raise arms its own one-shot 10-minute safety leash that releases just that block if it never
+ * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted), so one
+ * stale expiry can never wipe newer in-flight blockers.
  */
 
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
@@ -30,7 +31,12 @@ const SAFETY_TIMEOUT_MS = AUTO_SYNC_MAX_DURATION_MS;
 let blockCount = 0;
 let isBlockingVisible = false;
 let graceTimer: ReturnType<typeof setTimeout> | undefined;
-let safetyTimer: ReturnType<typeof setTimeout> | undefined;
+/**
+ * One outstanding safety leash per in-flight blocker, oldest first. Every raise arms its own
+ * one-shot leash and every clear cancels the oldest outstanding one, so the array's length always
+ * equals `blockCount` and each block is released exactly once — by its clear or by its own leash.
+ */
+const safetyTimers: ReturnType<typeof setTimeout>[] = [];
 
 const listeners = new Set<() => void>();
 
@@ -45,18 +51,29 @@ function setBlockingVisible(value: boolean): void {
   notifyListeners();
 }
 
+/** Releases one in-flight block, updating the derived visibility when the last one goes. */
+function releaseOneBlock(): void {
+  blockCount = Math.max(0, blockCount - 1);
+  if (blockCount === 0) {
+    // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
+    clearTimeout(graceTimer);
+    graceTimer = undefined;
+    setBlockingVisible(false);
+  }
+}
+
 export function setAutoSyncBlocking(value: boolean): void {
   if (value) {
     blockCount += 1;
-    // Re-arm the safety timer on each raise, giving 10 min from the latest start.
-    clearTimeout(safetyTimer);
-    safetyTimer = setTimeout(() => {
-      blockCount = 0;
-      safetyTimer = undefined;
-      clearTimeout(graceTimer);
-      graceTimer = undefined;
-      setBlockingVisible(false);
+    // Arm this block's own one-shot safety leash, 10 min from this raise. When it fires it
+    // releases only this block — never the whole count — so a stale expiry cannot wipe newer
+    // in-flight blockers.
+    const leash = setTimeout(() => {
+      const index = safetyTimers.indexOf(leash);
+      if (index !== -1) safetyTimers.splice(index, 1);
+      releaseOneBlock();
     }, SAFETY_TIMEOUT_MS);
+    safetyTimers.push(leash);
     // On 0→1, arm the show grace; visibility only turns on if blocking survives the grace.
     if (blockCount === 1) {
       graceTimer = setTimeout(() => {
@@ -65,15 +82,13 @@ export function setAutoSyncBlocking(value: boolean): void {
       }, SHOW_GRACE_MS);
     }
   } else {
-    blockCount = Math.max(0, blockCount - 1);
-    if (blockCount === 0) {
-      // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
-      clearTimeout(graceTimer);
-      graceTimer = undefined;
-      clearTimeout(safetyTimer);
-      safetyTimer = undefined;
-      setBlockingVisible(false);
-    }
+    // Cancel the oldest outstanding leash so the block this clear releases cannot be released a
+    // second time when its leash fires. Blockers are anonymous, so oldest-first is a pairing
+    // heuristic — and the conservative one: the still-open blocks keep the newest (longest
+    // remaining) leashes.
+    const oldestLeash = safetyTimers.shift();
+    if (oldestLeash !== undefined) clearTimeout(oldestLeash);
+    releaseOneBlock();
   }
 }
 
@@ -99,7 +114,7 @@ export function resetAutoSyncBlocking(): void {
   isBlockingVisible = false;
   clearTimeout(graceTimer);
   graceTimer = undefined;
-  clearTimeout(safetyTimer);
-  safetyTimer = undefined;
+  safetyTimers.forEach((leash) => clearTimeout(leash));
+  safetyTimers.length = 0;
   listeners.clear();
 }

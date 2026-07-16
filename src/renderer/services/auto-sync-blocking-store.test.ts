@@ -142,25 +142,46 @@ describe('auto-sync-blocking-store', () => {
       expect(listener).toHaveBeenCalledTimes(2); // shown, then auto-cleared
     });
 
-    it('re-arms the safety timer on every raise', () => {
-      setAutoSyncBlocking(true); // blocker A raises — safety armed
+    it('arms a leash per raise — a later blocker outlives an earlier raise expiring', () => {
+      setAutoSyncBlocking(true); // blocker A raises — A's leash armed
       vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2);
-      setAutoSyncBlocking(true); // blocker B raises — safety re-armed to 10 min from now
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // 10 min from A, but only 5 min from B
-      expect(getAutoSyncBlocking()).toBe(true); // B's raise re-armed the timer — still alive
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // 10 min from B — safety fires
+      setAutoSyncBlocking(true); // blocker B raises — B gets its own 10 min leash
+      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // 10 min from A (A's leash fires), 5 min from B
+      expect(getAutoSyncBlocking()).toBe(true); // B's own leash is still alive
+      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // 10 min from B — B's leash fires
       expect(getAutoSyncBlocking()).toBe(false);
     });
 
-    it('zeroes the count when it fires — a later single raise shows again', () => {
+    it('releases every expired block — a later single raise shows again', () => {
       setAutoSyncBlocking(true);
       setAutoSyncBlocking(true); // count is 2
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS);
+      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS); // both leashes expire
       expect(getAutoSyncBlocking()).toBe(false);
       setAutoSyncBlocking(true); // count 0→1, not 2→3
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(getAutoSyncBlocking()).toBe(true);
       setAutoSyncBlocking(false); // a single clear hides again
+      expect(getAutoSyncBlocking()).toBe(false);
+    });
+
+    it('releases only its own block when a stale leash expires — the newer blocker keeps blocking until it clears', () => {
+      setAutoSyncBlocking(true); // blocker A raises at t=0 and is abandoned
+      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2);
+      setAutoSyncBlocking(true); // blocker B raises at t=5min
+      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // t=10min — A's leash expires
+      expect(getAutoSyncBlocking()).toBe(true); // B still in flight — stays blocked
+      setAutoSyncBlocking(false); // B clears — the count stayed correct, so one clear fully unblocks
+      expect(getAutoSyncBlocking()).toBe(false);
+    });
+
+    it('pairs a clear with the oldest leash — the newest blocker keeps its own full leash', () => {
+      setAutoSyncBlocking(true); // blocker A raises at t=0
+      vi.advanceTimersByTime(60_000);
+      setAutoSyncBlocking(true); // blocker B raises at t=1min and is abandoned
+      setAutoSyncBlocking(false); // A clears — cancels the oldest leash (A's)
+      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS - 60_000); // t=10min — A's cancelled leash is silent
+      expect(getAutoSyncBlocking()).toBe(true); // B is still inside its own leash
+      vi.advanceTimersByTime(60_000); // t=11min — B's own leash expires
       expect(getAutoSyncBlocking()).toBe(false);
     });
 
