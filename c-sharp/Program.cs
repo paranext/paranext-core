@@ -106,6 +106,7 @@ public static class Program
                 new MarbleDataLoader()
             );
             var versificationConversionService = new VersificationConversionService(papi);
+            var sendReceiveBlockNotifierService = new SendReceiveBlockNotifierService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
@@ -117,7 +118,8 @@ public static class Program
                 paratextSendReceiveService.InitializeAsync(),
                 checklistNetworkObject.InitializeAsync(),
                 manageBooksService.RegisterNetworkObjectAsync(),
-                enhancedResourceFactory.InitializeAsync()
+                enhancedResourceFactory.InitializeAsync(),
+                sendReceiveBlockNotifierService.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here
