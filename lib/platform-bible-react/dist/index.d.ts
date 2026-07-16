@@ -485,16 +485,16 @@ export type CommentListLocalizedStrings = {
 	[localizedKey in (typeof COMMENT_LIST_STRING_KEYS)[number]]?: string;
 };
 /**
- * DOM id of the CommentList container element. Exported so consumers that need to interact with
- * the rendered list (e.g. scrolling it into view) can look it up by a shared, typed name instead
- * of a hardcoded string that could silently drift from the actual markup.
+ * DOM id of the CommentList container element. Exported so consumers that need to interact with the
+ * rendered list (e.g. scrolling it into view) can look it up by a shared, typed name instead of a
+ * hardcoded string that could silently drift from the actual markup.
  */
 export declare const COMMENT_LIST_ELEMENT_ID = "comment-list";
 /**
  * Returns the DOM id used for a comment thread's rendered element, given its thread id. Currently
  * an identity function — the thread element's id is the thread id itself — but centralizes that
- * contract in one place so CommentThread (which sets the id) and any external consumer (which
- * looks it up) can never silently disagree.
+ * contract in one place so CommentThread (which sets the id) and any external consumer (which looks
+ * it up) can never silently disagree.
  */
 export declare function getCommentThreadElementId(threadId: string): string;
 /** Props for the CommentList component */
@@ -1932,6 +1932,12 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
 	/**
+	 * Additional inline styles for the toolbar's outer container. Useful for values that can't be
+	 * expressed as a static Tailwind class, e.g. OS window-control reserved space computed at
+	 * runtime.
+	 */
+	style?: React$1.CSSProperties;
+	/**
 	 * Whether the toolbar should be used as a draggable area for moving the application. This will
 	 * add an electron specific style `WebkitAppRegion: 'drag'` to the toolbar in order to make it
 	 * draggable. See:
@@ -1965,7 +1971,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, style, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_fallbackLanguages%"
 ];

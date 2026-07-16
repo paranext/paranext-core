@@ -12,6 +12,7 @@ import {
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
@@ -59,7 +60,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -209,6 +210,17 @@ export function PlatformBibleToolbar() {
     undefined,
   );
 
+  // Overrides the static Windows/Linux padding guess below with the live-measured caption-button
+  // width (see useWindowControlsOverlay). macOS's fixed-width traffic lights still use the static
+  // class as-is.
+  const windowControlsOverlayRect = useWindowControlsOverlay();
+  const toolbarReservedSpaceStyle: CSSProperties | undefined =
+    osPlatformToReserveSpaceFor !== undefined &&
+    osPlatformToReserveSpaceFor !== 'darwin' &&
+    windowControlsOverlayRect
+      ? { paddingInlineEnd: window.innerWidth - windowControlsOverlayRect.right }
+      : undefined;
+
   const [updateMenuData, setUpdateMenuData] = useState<boolean>(false);
 
   const [menuData] = usePromise(
@@ -302,6 +314,7 @@ export function PlatformBibleToolbar() {
         'tw:h-12 tw:bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
       )}
+      style={toolbarReservedSpaceStyle}
       menubarVariant="muted"
       shouldUseAsAppDragArea
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}

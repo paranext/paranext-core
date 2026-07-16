@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import React from 'react';
 import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
@@ -58,6 +59,10 @@ vi.mock('@renderer/hooks/use-navigation-target-web-view.hook', () => ({
   // Typed so tests can mockReturnValue a resolved target (the factory's inferred return type
   // would otherwise be plain `undefined`)
   useNavigationTargetWebView: vi.fn((): ResolvedWebView | undefined => undefined),
+}));
+
+vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
+  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
@@ -129,14 +134,18 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...actual,
+    // `style` is captured on a testid'd wrapper so tests can assert the OS-reserved-space padding
+    // platform-bible-toolbar.tsx computes, without depending on the real Toolbar's DOM structure.
     Toolbar: ({
       configAreaChildren,
       children,
+      style,
     }: {
       configAreaChildren?: React.ReactNode;
       children?: React.ReactNode;
+      style?: React.CSSProperties;
     }) => (
-      <div>
+      <div data-testid="toolbar-root" style={style}>
         <div data-testid="toolbar-config-area">{configAreaChildren}</div>
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
@@ -667,5 +676,65 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
 
     expect(result).toBe(false);
     expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlatformBibleToolbar — title bar reserved space', () => {
+  const mockSendCommandForOS = (osPlatform: string) => {
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+        if (commandName === 'platform.getOSPlatform') return osPlatform;
+        if (commandName === 'platform.isFullScreen') return false;
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // clearAllMocks() does not reset a prior test's mockReturnValue (see precedent above), so
+    // restore the default explicitly
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(undefined);
+  });
+
+  it('reserves exactly the live-measured overlay width on Windows', async () => {
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(0, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-root')).toHaveStyle({ paddingInlineEnd: '150px' });
+    });
+  });
+
+  it('applies no inline override while the overlay geometry is not yet known', async () => {
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar-root')).not.toHaveAttribute('style');
+  });
+
+  it('does not reserve space on macOS regardless of overlay geometry', async () => {
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
+    mockSendCommandForOS('darwin');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar-root')).not.toHaveAttribute('style');
   });
 });
