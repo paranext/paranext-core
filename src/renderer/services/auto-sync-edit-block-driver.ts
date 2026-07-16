@@ -39,7 +39,27 @@ import {
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 
-/** Web view state key the Scripture editor reads to know it is edit-blocked by an automatic sync. */
+/**
+ * Web view types this driver edit-blocks while their project is syncing.
+ * `SCRIPTURE_EDITOR_WEBVIEW_TYPE` is a core shared-model constant; the two legacy-comment-manager
+ * comment views are hard-coded string literals because core must NOT import from an extension. This
+ * intentionally duplicates the type strings the way each extension duplicates its own
+ * sync-edit-blocked handling (no cross-boundary imports); if those extension web-view types are
+ * ever renamed, update them here to match. Each of these web views reads `isSyncBlocked` from its
+ * own web view state and folds it into a read-only / write-disabled mode.
+ */
+const EDIT_BLOCKABLE_WEB_VIEW_TYPES: ReadonlySet<string> = new Set([
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  // legacy-comment-manager `commentListWebViewType` (editor-anchored comment list).
+  'legacyCommentManager.commentList',
+  // legacy-comment-manager `COMMENT_LIST_PANEL_WEB_VIEW_TYPE` (fixed Column 3 comment panel).
+  'legacyCommentManager.commentListPanel',
+]);
+
+/**
+ * Web view state key edit-blockable web views read to know they are edit-blocked by an automatic
+ * sync.
+ */
 const IS_SYNC_BLOCKED_STATE_KEY = 'isSyncBlocked';
 
 /** True when a Scripture editor definition's project is in the blocked set. No project → never. */
@@ -100,7 +120,7 @@ function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): bo
     return false;
   }
   definitions.forEach((definition) => {
-    if (definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
+    if (EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(definition.webViewType))
       setEditorSyncBlocked(definition, isEditorBlocked(definition, blockedProjectIds));
   });
   return true;
@@ -136,7 +156,7 @@ export function initAutoSyncEditBlockDriver(): () => void {
   const setupHandlers = (blockedProjectIds: ReadonlySet<string>) => {
     const openUnsub = onDidOpenWebView(({ webView }) => {
       if (
-        webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE &&
+        EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(webView.webViewType) &&
         isEditorBlocked(webView, blockedProjectIds)
       )
         setEditorSyncBlocked(webView, true);
@@ -147,7 +167,7 @@ export function initAutoSyncEditBlockDriver(): () => void {
     };
 
     const updateUnsub = onDidUpdateWebView(({ webView }) => {
-      if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+      if (!EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(webView.webViewType)) return;
       // Only re-flag editors whose project is blocked; a rebuilt editor of a non-synced project must
       // stay editable.
       if (!isEditorBlocked(webView, blockedProjectIds)) return;
