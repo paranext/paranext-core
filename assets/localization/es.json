@@ -521,7 +521,7 @@
   "%shareLayoutDialog_manageScriptureResources_label%": "Administrar",
   "%shareLayoutDialog_modelText_label%": "Texto modelo",
   "%shareLayoutDialog_modelText_none%": "Ninguno seleccionado",
-  "%shareLayoutDialog_scriptureResources_label%": "Textos bíblicos del proyecto",
+  "%shareLayoutDialog_scriptureResources_label%": "Recursos bíblicos del proyecto",
   "%shareLayoutDialog_shownByDefault_label%": "Mostrar {resourceName} de forma predeterminada",
   "%shareLayoutDialog_textCollectionResources_label%": "Recursos de la colección de textos",
   "%shareLayoutDialog_title%": "Compartir diseño con el equipo",

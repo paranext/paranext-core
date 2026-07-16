@@ -22,7 +22,7 @@ const SHARE_LAYOUT_STRINGS: ShareLayoutDialogLocalizedStrings = {
   '%shareLayoutDialog_activeTab_comments%': 'Comments',
   '%shareLayoutDialog_activeTab_textCollection%': 'Text collection',
   '%shareLayoutDialog_scriptureResources_label%': 'Project Bible texts',
-  '%shareLayoutDialog_commentaryResources_label%': 'Project Commentaries',
+  '%shareLayoutDialog_commentaryResources_label%': 'Project commentaries',
   '%shareLayoutDialog_manageScriptureResources_label%': 'Manage',
   '%shareLayoutDialog_manageCommentaryResources_label%': 'Manage',
   '%shareLayoutDialog_textCollectionResources_label%': 'Text collection resources',
