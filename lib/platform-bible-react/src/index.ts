@@ -32,7 +32,11 @@ export type {
   CommentListLocalizedStrings,
   AddCommentToThreadOptions,
 } from './components/advanced/comment-list/comment-list.types';
-export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
+export {
+  COMMENT_LIST_STRING_KEYS,
+  COMMENT_LIST_ELEMENT_ID,
+  getCommentThreadElementId,
+} from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
 export type {
   ConflictNoteCardProps,

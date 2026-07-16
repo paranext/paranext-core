@@ -1,9 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { LanguageStrings, LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+import { expect } from 'storybook/test';
 import CommentList from './comment-list.component';
 import { sampleComments, verseTextConflictReplacementSample } from './comment-sample.data';
-import { AddCommentToThreadOptions } from './comment-list.types';
+import {
+  AddCommentToThreadOptions,
+  COMMENT_LIST_ELEMENT_ID,
+  getCommentThreadElementId,
+} from './comment-list.types';
 import { ConflictResolution, ConflictResolutionOptions } from './conflict-note-card.types';
 
 const commentListLocalizedStrings: LanguageStrings = {
@@ -350,6 +355,18 @@ export const Default: Story = {
       }}
     />
   ),
+  play: async ({ canvasElement, step }) => {
+    await step('Container id matches the exported constant', async () => {
+      await expect(canvasElement.querySelector(`#${COMMENT_LIST_ELEMENT_ID}`)).toBeInTheDocument();
+    });
+    await step('Thread id resolves via the exported helper', async () => {
+      const knownThreadId = sampleComments[0].id; // 'c5bfd1ac'
+      const threadElement = canvasElement.querySelector(
+        `#${CSS.escape(getCommentThreadElementId(knownThreadId))}`,
+      );
+      await expect(threadElement).toBeInTheDocument();
+    });
+  },
 };
 
 /** Story demonstrating restricted permissions - user cannot add comments, assign, or resolve */

@@ -4,6 +4,7 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { LegacyComment, LegacyCommentThread } from 'platform-bible-utils';
 import { CommentThread } from './comment-thread.component';
+import { getCommentThreadElementId } from './comment-list.types';
 
 vi.mock('@/components/advanced/editor/editor', () => ({
   Editor: vi.fn(({ onClear }: { onClear?: (fn: () => void) => void }) => {
@@ -287,5 +288,14 @@ describe('CommentThread generic resolve check', () => {
     expect(handleAddCommentToThread).toHaveBeenCalledWith(
       expect.objectContaining({ threadId: 'thread-1', status: 'Resolved' }),
     );
+  });
+});
+
+describe('CommentThread DOM id', () => {
+  it('sets its root element id via getCommentThreadElementId(threadId)', () => {
+    render(<CommentThread {...defaultProps} />);
+
+    const threadElement = screen.getByRole('option');
+    expect(threadElement).toHaveAttribute('id', getCommentThreadElementId(defaultProps.threadId));
   });
 });
