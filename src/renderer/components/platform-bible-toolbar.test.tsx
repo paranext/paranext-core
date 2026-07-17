@@ -134,18 +134,18 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...actual,
-    // `style` is captured on a testid'd wrapper so tests can assert the OS-reserved-space padding
-    // platform-bible-toolbar.tsx computes, without depending on the real Toolbar's DOM structure.
+    // `className` is captured on a testid'd wrapper so tests can assert whether the static
+    // OS-reserved-space class is applied, without depending on the real Toolbar's DOM structure.
     Toolbar: ({
+      className,
       configAreaChildren,
       children,
-      style,
     }: {
+      className?: string;
       configAreaChildren?: React.ReactNode;
       children?: React.ReactNode;
-      style?: React.CSSProperties;
     }) => (
-      <div data-testid="toolbar-root" style={style}>
+      <div data-testid="toolbar-root" className={className}>
         <div data-testid="toolbar-config-area">{configAreaChildren}</div>
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
@@ -702,7 +702,7 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     vi.mocked(useWindowControlsOverlay).mockReturnValue(undefined);
   });
 
-  it('reserves exactly the live-measured overlay width on Windows', async () => {
+  it('reserves the live-measured overlay width plus breathing room on Windows, and does not also apply the static class', async () => {
     vi.mocked(useWindowControlsOverlay).mockReturnValue(
       new DOMRect(0, 0, window.innerWidth - 150, 32),
     );
@@ -711,11 +711,21 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('toolbar-root')).toHaveStyle({ paddingInlineEnd: '150px' });
+      // 150px measured overlay width + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingInlineEnd: '154px',
+      });
     });
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-[calc(138px+1rem)]');
+    // Toolbar's own container has an unconditional border and tw:px-4 (16px end padding) on all/both
+    // sides; when the wrapper above reserves the trailing space, both of Toolbar's own end-side
+    // contributions must be suppressed, or the border renders at Toolbar's now-narrower edge and the
+    // wrapper's live measurement stacks on top of the 16px, over-reserving space.
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:border-e-0');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-0');
   });
 
-  it('applies no inline override while the overlay geometry is not yet known', async () => {
+  it('applies no inline override while the overlay geometry is not yet known, falling back to the static class', async () => {
     mockSendCommandForOS('win32');
 
     render(<PlatformBibleToolbar />);
@@ -723,10 +733,13 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     await waitFor(() => {
       expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('toolbar-root')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-[calc(138px+1rem)]');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-e-0');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
   });
 
-  it('does not reserve space on macOS regardless of overlay geometry', async () => {
+  it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
     vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
     mockSendCommandForOS('darwin');
 
@@ -735,6 +748,9 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     await waitFor(() => {
       expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('toolbar-root')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:ps-[85px]');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-e-0');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
   });
 });
