@@ -29,10 +29,10 @@ function eventMatchesHotkey(event: KeyboardEvent, hotkey: readonly string[]): bo
   });
 }
 
-// PT-4193: class hooks for notification-display.scss's fix for the two-button (action + cancel)
-// toast layout collapse - see that file for the full explanation. Applied here (the `Toaster`'s
-// shared `toastOptions`) rather than per-notification in notification.service-host.ts so every
-// toast gets the hooks uniformly; the CSS itself only changes layout when both buttons are present.
+// PT-4193: class hooks for notification-display.scss's fix for the buttoned-toast layout collapse -
+// see that file for the full explanation. Applied here (the `Toaster`'s shared `toastOptions`)
+// rather than per-notification in notification.service-host.ts so every toast gets the hooks
+// uniformly; the CSS itself only changes layout when at least one button is present.
 export function NotificationDisplay() {
   // Index of the toast list Alt+T last focused, so repeated presses cycle across every list.
   const focusedListIndexRef = useRef(-1);

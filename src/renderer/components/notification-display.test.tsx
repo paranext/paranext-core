@@ -87,13 +87,14 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(mockSendCommand).toHaveBeenCalledWith('test.secondary', notificationId);
   });
 
-  // PT-4193 layout fix: a live E2E screenshot showed a toast with BOTH an action and a cancel
-  // button collapsing its message down to a ~1-character-wide sliver - Sonner's default layout
-  // puts icon/content/cancel/action in a single un-wrapped flex row, and two non-shrinking buttons
-  // crush the content column. notification-display.scss fixes this with a `:has()`-scoped stylesheet
-  // rule keyed off the classNames wired up in notification-display.tsx. jsdom doesn't compute actual
-  // flex-wrap layout, so these tests pin the DOM shape (classes + shared flex-container ancestry)
-  // that stylesheet rule depends on, rather than pixel positions.
+  // PT-4193 layout fix: live E2E screenshots showed toasts with buttons collapsing their message
+  // down to a sliver - first a toast with BOTH an action and a cancel button, then (round-4 E2E)
+  // a single-action break-lock toast. Sonner's default layout puts icon/content/cancel/action in a
+  // single un-wrapped flex row, and non-shrinking buttons crush the content column.
+  // notification-display.scss fixes this with a `:has()`-scoped stylesheet rule - engaging for ANY
+  // toast with at least one button - keyed off the classNames wired up in notification-display.tsx.
+  // jsdom doesn't compute actual flex-wrap layout, so these tests pin the DOM shape (classes +
+  // shared flex-container ancestry) that stylesheet rule depends on, rather than pixel positions.
   it('gives a two-button toast the content/action/cancel class hooks the layout fix keys off, and keeps both buttons working', async () => {
     render(<NotificationDisplay />);
 
@@ -119,7 +120,7 @@ describe('NotificationDisplay with real Sonner', () => {
     const toastRoot = document.querySelector('.notification-toast');
 
     // The fix's CSS rule is
-    // `.notification-toast:has(.notification-toast-cancel-button):has(.notification-toast-action-button)`
+    // `.notification-toast:has(.notification-toast-cancel-button, .notification-toast-action-button)`
     // - assert that shape exists: one shared flex-container ancestor directly containing the
     // content, the action button, and the cancel button as siblings (not nested inside each other),
     // which is what lets `flex-grow` on the content and `order` on the buttons rearrange them into
@@ -139,6 +140,45 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(mockSendCommand).toHaveBeenCalledWith('test.secondary', notificationId);
   });
 
+  // Round-4 E2E finding: the break-lock toast (one long warning + one wide "Break lock and retry"
+  // action button, no cancel button) rendered text and button crammed side-by-side because the
+  // original rule only engaged when BOTH buttons were present. The rule now engages for any
+  // buttoned toast, so a single-action toast must present the same shape it keys off.
+  it('gives a single-button (action-only) toast the content/action class hooks the layout fix keys off, and keeps the button working', async () => {
+    render(<NotificationDisplay />);
+
+    const notification: PlatformNotification = {
+      message:
+        'The project is locked on the server by another user. Breaking the lock may discard their unfinished send.',
+      severity: 'warning',
+      clickCommandLabel: 'Break lock and retry',
+      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      clickCommand: 'test.primary' as never,
+    };
+
+    const notificationId = await capturedService.send(notification);
+
+    const actionButton = await screen.findByRole('button', { name: 'Break lock and retry' });
+    const title = await screen.findByText(/locked on the server/);
+    const content = title.closest('.notification-toast-content');
+    const toastRoot = document.querySelector('.notification-toast');
+
+    // Same structural pin as the two-button case: the `:has()` rule matches on either button class,
+    // and content + action button must be direct siblings under the toast flex container for the
+    // `flex-grow`/`order` reflow to put them on separate rows.
+    expect(toastRoot).not.toBeNull();
+    expect(content).not.toBeNull();
+    expect(actionButton).toHaveClass('notification-toast-action-button');
+    expect(content?.parentElement).toBe(toastRoot);
+    expect(actionButton.parentElement).toBe(toastRoot);
+    expect(document.querySelector('.notification-toast-cancel-button')).not.toBeInTheDocument();
+
+    fireEvent.click(actionButton);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('test.primary', notificationId);
+  });
+
   it('does not add the action-button hook to a single-button (cancel-only) toast', async () => {
     render(<NotificationDisplay />);
 
@@ -154,9 +194,9 @@ describe('NotificationDisplay with real Sonner', () => {
     await capturedService.send(notification);
 
     const cancelButton = await screen.findByRole('button', { name: 'Postpone' });
-    // The layout fix only engages when BOTH button classes are present under the same toast (see
-    // the `:has()...:has()` rule in notification-display.scss). A single-button toast must not
-    // accidentally satisfy that condition, so the content keeps its plain, un-grown structure.
+    // A cancel-only toast now gets the two-row layout too (the `:has()` rule matches either button
+    // class), but it must do so with ONLY the cancel hook present - a spurious action button here
+    // would both render a button nobody asked for and trip the pair-only margin override.
     expect(cancelButton).toHaveClass('notification-toast-cancel-button');
     expect(document.querySelector('.notification-toast-action-button')).not.toBeInTheDocument();
   });
