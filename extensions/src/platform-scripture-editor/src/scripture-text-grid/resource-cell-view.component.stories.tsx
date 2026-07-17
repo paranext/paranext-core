@@ -57,9 +57,12 @@ function CellRowBox({ children }: { children: React.ReactNode }) {
   return <div style={ROW_BOX_STYLE}>{children}</div>;
 }
 
-/** Wraps one cell in a bounded column (preserves single-cell stories). */
-function CellBox({ children }: { children: React.ReactNode }) {
-  return <div style={CELL_BOX_STYLE}>{children}</div>;
+/**
+ * Wraps one cell in a bounded column (preserves single-cell stories). `width` overrides the default
+ * column width for stories that need a narrower pane.
+ */
+function CellBox({ children, width }: { children: React.ReactNode; width?: string }) {
+  return <div style={{ ...CELL_BOX_STYLE, ...(width ? { width } : {}) }}>{children}</div>;
 }
 
 /** Stand-in for the read-only `Editorial` the connected cell supplies once the chapter is ready. */
@@ -308,6 +311,25 @@ export const VerseFailed: Story = {
 export const VerseLongName: Story = {
   render: () => (
     <CellBox>
+      <ResourceCellView
+        state="ready"
+        label="New International Version 2011"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
+ * Verse mode, long name in a pane narrower than the label's width cap — the inline name must still
+ * show its truncation "…" at the visible edge (not a hard cut); hover reveals the full name.
+ */
+export const VerseLongNameNarrowPane: Story = {
+  render: () => (
+    <CellBox width="110px">
       <ResourceCellView
         state="ready"
         label="New International Version 2011"

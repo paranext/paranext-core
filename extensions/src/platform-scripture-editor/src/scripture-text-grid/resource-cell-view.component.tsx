@@ -287,11 +287,11 @@ export function ResourceCellView({
       {nameDisplay === 'inline' ? (
         // Verse-row cell: hang the name at the inline-start beside the verse text. `dir` on the row
         // makes flex place the name on the resource's own inline-start (right in RTL). The name is a
-        // shrink-0, width-capped column; the verse text flows and scrolls in the remaining min-w-0
-        // column, so the hanging name stays pinned even when the verse overflows. Only the verse
-        // text scales with zoom; the hanging name keeps a fixed size (as in header mode).
+        // width-capped column (max-w-24) that can shrink (min-w-0, not shrink-0) so its truncation
+        // "…" stays at the visible edge in a narrow pane; the verse text flows and scrolls in the
+        // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
-          <ResourceNameLabel label={label} className="tw:max-w-24 tw:shrink-0 tw:text-sm" />
+          <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
           <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto" style={contentStyle}>
             {stateContent}
           </div>
