@@ -68,4 +68,24 @@
   &:has(.notification-toast-cancel-button) .notification-toast-action-button {
     margin-inline-start: 0;
   }
+
+  // Settle the DEFAULT look of the secondary (cancel-slot) button as the shadcn `secondary` button
+  // variant (button.tsx: bg-secondary / text-secondary-foreground / hover:bg-secondary/80), per UX
+  // direction on PR #2561. Without this, Sonner 1.7.4's styled mode renders BOTH buttons
+  // identically dark: its base `[data-sonner-toast][data-styled='true'] [data-button]` rule
+  // (specificity (0,3,0)) sets the action colors on every `[data-button]` - including the cancel
+  // button, which also carries `data-button` - and its softer `:where([data-cancel])` defaults are
+  // zero-specificity so they never win. Which button gets this look is deterministic: the service
+  // host maps `clickCommand` to Sonner's `action` slot (keeps the emphasized primary look) and
+  // `secondaryClickCommand` to the `cancel` slot, whose class this targets. The extra `&:has()`
+  // keeps specificity at (0,4,0) so this beats Sonner's (0,3,0) base rule regardless of which
+  // stylesheet loads last (same pattern as the margin rule above).
+  &:has(.notification-toast-cancel-button) .notification-toast-cancel-button {
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+
+    &:hover {
+      background: color-mix(in oklab, var(--secondary) 80%, transparent);
+    }
+  }
 }

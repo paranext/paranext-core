@@ -38,7 +38,9 @@ export interface PlatformNotification {
   /** Severity of the notification */
   severity: Severity;
   /**
-   * Optional label for users to click when the notification shows.
+   * Optional label for users to click when the notification shows. Always rendered as the
+   * notification's PRIMARY action button - the visually emphasized one - while
+   * {@link secondaryClickCommandLabel} always gets the muted secondary styling.
    *
    * Automatically localized if this is a {@link LocalizeKey}.
    */
@@ -55,6 +57,10 @@ export interface PlatformNotification {
   /**
    * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
    * this together with {@link secondaryClickCommand} to give the notification two actions.
+   *
+   * Always rendered as the visually SECONDARY button (muted styling, like the shadcn `secondary`
+   * button variant) so the {@link clickCommandLabel} button keeps the emphasis - the platform
+   * decides each button's styling from which field it came from, never from ordering.
    *
    * Automatically localized if this is a {@link LocalizeKey}.
    *
