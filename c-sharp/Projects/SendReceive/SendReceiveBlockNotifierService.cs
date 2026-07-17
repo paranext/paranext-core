@@ -27,13 +27,19 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// to report until the Paratext 10 Studio patch brackets a sync with the gate (PT-4210).
 /// </para>
 /// <para>
-/// <b>Why the event is an "unregistered announcement".</b> <see cref="PapiClient"/> exposes
-/// <c>network:registerMethod</c> (via <see cref="PapiClient.RegisterRequestHandlerAsync"/>) but has
-/// no <c>network:registerEvent</c> counterpart, so C# cannot formally register an event type. We
-/// therefore emit this event with <see cref="PapiClient.SendEventAsync"/> without a prior
-/// registration, following the existing precedent of <c>SharedStore</c>'s <c>shared-store:change</c>
-/// event. The main process logs at most a deprecation warning for such an event today; when C# gains
-/// a registerEvent API this should register the event properly (TODO PT-4214 follow-up).
+/// <b>Central-registry registration.</b> Unlike the other C#-origin events (the PDP
+/// <c>&lt;id&gt;-pdp-data:onDidUpdate</c> family, <c>SharedStore</c>'s <c>shared-store:change</c>),
+/// which still announce unregistered and draw main's once-per-name deprecation warning pending a
+/// platform-wide migration, this event IS formally registered with main's central event registry:
+/// <see cref="InitializeAsync"/> sends a <c>network:registerEvent</c> request — the same
+/// main-process JSON-RPC method TypeScript's <c>createNetworkEventEmitterAsync</c> registration
+/// path calls — before subscribing to the gate, making this connection the event's single
+/// registered source. <see cref="PapiClient"/> has no dedicated wrapper for that method, so the
+/// request goes out generically via <see cref="PapiClient.SendRequestAsync{T}"/>, mirroring how
+/// <see cref="PapiClient.RegisterRequestHandlerAsync"/> calls <c>network:registerMethod</c>.
+/// Registration is best-effort: on rejection or failure we log and still emit, because announcing
+/// unregistered remains functional (main just logs the deprecation warning) and a registry hiccup
+/// must never break backend startup.
 /// </para>
 /// </summary>
 internal class SendReceiveBlockNotifierService(PapiClient papiClient)
@@ -50,10 +56,39 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
     private const string GetAutoSyncBlockingCommand =
         "command:paratextBibleSendReceive.getAutoSyncBlocking";
 
+    /// <summary>
+    /// Wire name of the main-process JSON-RPC method that registers a network event with the
+    /// central event registry (the TypeScript <c>REGISTER_EVENT</c> constant).
+    /// </summary>
+    private const string RegisterEventMethod = "network:registerEvent";
+
     private PapiClient PapiClient { get; } = papiClient;
 
     public async Task InitializeAsync()
     {
+        // Register the event with main's central event registry FIRST, so no announcement can
+        // precede the registration (see the class doc: best-effort — on rejection or failure, log
+        // and continue; emitting unregistered still works, and startup must never break over this).
+        try
+        {
+            bool accepted = await PapiClient.SendRequestAsync<bool>(
+                RegisterEventMethod,
+                [BlockStateChangedEvent]
+            );
+            if (!accepted)
+                Console.Error.WriteLine(
+                    $"Central registry rejected network event '{BlockStateChangedEvent}' (already "
+                        + "registered by another process?); announcements will warn as unregistered"
+                );
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"Failed to register network event '{BlockStateChangedEvent}' with the central "
+                    + $"registry; announcements will warn as unregistered. {ex}"
+            );
+        }
+
         // Forward every gate transition to the renderer. The subscription lives for the process
         // lifetime (this service is a startup singleton, like the other PAPI services), so there is
         // no unsubscribe — mirrors SharedStore's process-lifetime change-event handler.

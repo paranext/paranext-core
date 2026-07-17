@@ -48,6 +48,26 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public void InitializeAsync_RegistersTheEventWithTheCentralRegistry()
+        {
+            Assert.That(
+                Client.SentRequestCount,
+                Is.EqualTo(1),
+                "InitializeAsync must send exactly one wire request: the event registration"
+            );
+            var (requestType, requestContents) = Client.NextSentRequest;
+            Assert.Multiple(() =>
+            {
+                Assert.That(requestType, Is.EqualTo("network:registerEvent"));
+                Assert.That(
+                    requestContents,
+                    Is.EqualTo(new object?[] { BlockStateChangedEvent }),
+                    "the registration must name the onSyncWriteLockChanged event"
+                );
+            });
+        }
+
+        [Test]
         public void GateArm_PushesOnSyncWriteLockChangedEventWithBlockingSnapshot()
         {
             Assert.That(Client.SentEventCount, Is.Zero, "no events before any transition");
