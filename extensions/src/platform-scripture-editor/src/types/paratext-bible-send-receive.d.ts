@@ -273,6 +273,7 @@ declare module 'papi-shared-types' {
      * @returns `'synced'` if a scheduled sync ran and completed, `'failed'` if one ran but did not
      *   complete successfully, or `'skipped'` if nothing ran (nothing scheduled, not due, or
      *   another sync already in progress).
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.runScheduledSessionSync': (
       boundary: 'startup' | 'shutdown',
