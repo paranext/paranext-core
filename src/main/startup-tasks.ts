@@ -39,6 +39,23 @@ async function performStartupTasksInternal(): Promise<void> {
   logger.debug(`performStartupTasks: interfaceMode=${interfaceMode}`);
   if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
 
+  // First-run gate: don't auto-sync until the simple-mode setup wizard has completed, so a fresh
+  // user never syncs before consenting. If the flag can't be read, default to NOT syncing to stay
+  // on the safe side of consent. (Existing users get this flag backfilled by the renderer on first
+  // launch of this build; from the next launch on, auto-sync resumes normally.)
+  let firstRunComplete = false;
+  try {
+    firstRunComplete = (await settingsService.get('platform.firstRunComplete')) === true;
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.firstRunComplete; skipping startup sync: ${getErrorMessage(e)}`,
+    );
+  }
+  if (!firstRunComplete) {
+    logger.debug('Startup sync skipped: first run not complete');
+    return;
+  }
+
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
   // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
   // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
