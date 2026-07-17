@@ -1,12 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import type { CommandHandlers } from 'papi-shared-types';
 import type {
   INotificationService,
   PlatformNotification,
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
 import { NotificationDisplay } from './notification-display';
+
+/**
+ * Make a `keyof CommandHandlers` value from a test-only command name. These tests only need a
+ * command NAME to send/assert on - it never resolves to a real handler - so this single cast
+ * satisfies the field type without repeating the assertion (and its eslint-disable) at every use
+ * site.
+ */
+function commandStub(name: string): keyof CommandHandlers {
+  // No real handler is ever registered for these names, so a cast is the only way to type them
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return name as keyof CommandHandlers;
+}
 
 // This is the ONE render-level test in the notification suite that uses REAL Sonner instead of
 // mocking it (every other notification.service-host.test.ts case mocks 'sonner' wholesale, which is
@@ -22,7 +35,7 @@ vi.mock('@shared/services/localization.service', () => ({
   },
 }));
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 let capturedService: INotificationService;
@@ -72,9 +85,7 @@ describe('NotificationDisplay with real Sonner', () => {
       message: 'A decision is needed',
       severity: 'info',
       secondaryClickCommandLabel: 'Postpone',
-      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      secondaryClickCommand: 'test.secondary' as never,
+      secondaryClickCommand: commandStub('test.secondary'),
       // Left true (the default) deliberately: this is the exact "two working buttons" shape the
       // blocker was about - dismissible: false would render this same button inert.
     };
@@ -102,13 +113,9 @@ describe('NotificationDisplay with real Sonner', () => {
       message: 'Time to sync',
       severity: 'info',
       clickCommandLabel: 'Send/Receive now',
-      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      clickCommand: 'test.primary' as never,
+      clickCommand: commandStub('test.primary'),
       secondaryClickCommandLabel: 'Postpone until 3:24 PM',
-      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      secondaryClickCommand: 'test.secondary' as never,
+      secondaryClickCommand: commandStub('test.secondary'),
     };
 
     const notificationId = await capturedService.send(notification);
@@ -152,9 +159,7 @@ describe('NotificationDisplay with real Sonner', () => {
         'The project is locked on the server by another user. Breaking the lock may discard their unfinished send.',
       severity: 'warning',
       clickCommandLabel: 'Break lock and retry',
-      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      clickCommand: 'test.primary' as never,
+      clickCommand: commandStub('test.primary'),
     };
 
     const notificationId = await capturedService.send(notification);
@@ -197,13 +202,9 @@ describe('NotificationDisplay with real Sonner', () => {
       message: 'Time to sync',
       severity: 'info',
       clickCommandLabel: 'Send/Receive now',
-      // The test only needs a command NAME to exist; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      clickCommand: 'test.primary' as never,
+      clickCommand: commandStub('test.primary'),
       secondaryClickCommandLabel: 'Postpone until 3:24 PM',
-      // The test only needs a command NAME to exist; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      secondaryClickCommand: 'test.secondary' as never,
+      secondaryClickCommand: commandStub('test.secondary'),
     };
 
     await capturedService.send(notification);
@@ -248,9 +249,7 @@ describe('NotificationDisplay with real Sonner', () => {
       message: 'A decision is needed',
       severity: 'info',
       secondaryClickCommandLabel: 'Postpone',
-      // The test only needs a command NAME to send/assert on; it never resolves to a real handler.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      secondaryClickCommand: 'test.secondary' as never,
+      secondaryClickCommand: commandStub('test.secondary'),
     };
 
     await capturedService.send(notification);
@@ -302,8 +301,10 @@ describe('NotificationDisplay with real Sonner', () => {
         document.dispatchEvent(
           new KeyboardEvent('keydown', { altKey: true, code: 'KeyT', bubbles: true }),
         );
-        // Let the handler's queued microtask (which does the actual focus move) run.
-        await Promise.resolve();
+        // Let the handler's queued macrotask (which does the actual focus move) run.
+        await new Promise((resolve) => {
+          setTimeout(resolve, 0);
+        });
       });
       return document.activeElement;
     }

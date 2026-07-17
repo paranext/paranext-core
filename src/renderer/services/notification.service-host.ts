@@ -8,36 +8,33 @@ import {
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
 import { networkObjectService } from '@shared/services/network-object.service';
-import { getErrorMessage, isLocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, isLocalizeKey, newGuid } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 
-/** Caller-facing notification id -> the toast id Sonner actually rendered it under. */
-const mapOfNotificationIdsToToastIds = new Map<string | number, string | number>();
-
 /**
- * Caller-facing notification id -> the last notification we sent for it. An update-send merges over
- * this so omitting an optional field keeps its previously-set value instead of clobbering it.
+ * Caller-facing notification id -> everything we track for its live toast: the toast id Sonner
+ * actually rendered it under, and the last notification we sent for it (an update-send merges over
+ * this so omitting an optional field keeps its previously-set value instead of clobbering it). One
+ * map rather than parallel maps so no removal path can clean up one half and leak the other.
  */
-const lastNotificationById = new Map<string | number, PlatformNotification>();
+const trackedNotificationsById = new Map<
+  string | number,
+  { toastId: string | number; lastNotification: PlatformNotification }
+>();
 
 /**
- * Counter backing {@link generateAutoNotificationId}. A send without a `notificationId` gets an id
- * from our own namespace rather than Sonner's internal numeric auto-ids, which would otherwise
+ * Mint a unique caller-facing id, in our own namespace, for a notification sent without one. Uses
+ * `newGuid` (non-numeric) rather than Sonner's internal numeric auto-ids, which would otherwise
  * share a namespace with caller-supplied numeric ids and collide.
  */
-let autoAssignedNotificationIdCount = 0;
-
-/** Mint a unique caller-facing id, in our own namespace, for a notification sent without one. */
 function generateAutoNotificationId(): string {
-  autoAssignedNotificationIdCount += 1;
-  return `platform-notification-auto-${autoAssignedNotificationIdCount}`;
+  return `platform-notification-auto-${newGuid()}`;
 }
 
 /** Drop all bookkeeping for a notification once its toast is removed (via any removal path). */
 function forgetNotification(notificationId: string | number): void {
-  mapOfNotificationIdsToToastIds.delete(notificationId);
-  lastNotificationById.delete(notificationId);
+  trackedNotificationsById.delete(notificationId);
 }
 
 async function localize(text: string): Promise<string> {
@@ -58,10 +55,10 @@ async function send(notification: PlatformNotification): Promise<string | number
   // keeps its previous value. Sonner's own update re-derives every field from the incoming object
   // (and even forces `dismissible` back to true when omitted), so we merge here rather than relying
   // on it. A brand-new send (no id, or an id we no longer track) has nothing to merge over.
-  const previousNotification =
-    notificationId !== undefined ? lastNotificationById.get(notificationId) : undefined;
-  const mergedNotification: PlatformNotification = previousNotification
-    ? { ...previousNotification, ...notification }
+  const trackedNotification =
+    notificationId !== undefined ? trackedNotificationsById.get(notificationId) : undefined;
+  const mergedNotification: PlatformNotification = trackedNotification
+    ? { ...trackedNotification.lastNotification, ...notification }
     : notification;
 
   const {
@@ -93,17 +90,24 @@ async function send(notification: PlatformNotification): Promise<string | number
   // legal ids `0` and `''`.
   const effectiveNotificationId: string | number = notificationId ?? generateAutoNotificationId();
   // Reuse the existing toast id (if we're updating a still-showing notification) so Sonner updates
-  // in place instead of duplicating. `!== undefined` so the legal ids `0` and `''` update too.
+  // in place instead of duplicating. Read the map AFTER the localization awaits above (not from the
+  // pre-await `trackedNotification` snapshot) so a concurrent send for the same id that lands
+  // during the await gets updated in place rather than duplicated. `!== undefined` so the legal ids
+  // `0` and `''` update too.
   const existingToastId =
-    notificationId !== undefined ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;
+    notificationId !== undefined
+      ? trackedNotificationsById.get(notificationId)?.toastId
+      : undefined;
 
   // Sonner gates BOTH the cancel/secondary button and the swipe/close gesture (which fires
   // `onDismiss`) on `dismissible`, so honoring `dismissible: false` alongside either would silently
   // kill the very control the caller also asked for. Drop the `false` in that case so those controls
-  // keep working (see the warning on PlatformNotification.dismissible).
+  // keep working (see the warning on PlatformNotification.dismissible). The button check keys on
+  // the same condition the `cancel:` block below uses - a secondary command WITHOUT a label renders
+  // no button, so there is nothing to protect and the caller's `false` stands.
   const effectiveDismissible =
     dismissible === false &&
-    (secondaryClickCommand !== undefined || dismissClickCommand !== undefined)
+    (localizedSecondaryLabel !== undefined || dismissClickCommand !== undefined)
       ? undefined
       : dismissible;
 
@@ -175,16 +179,18 @@ async function send(notification: PlatformNotification): Promise<string | number
       toastId = toast(localizedMessage, toastOptions);
       break;
   }
-  mapOfNotificationIdsToToastIds.set(effectiveNotificationId, toastId);
-  lastNotificationById.set(effectiveNotificationId, mergedNotification);
+  trackedNotificationsById.set(effectiveNotificationId, {
+    toastId,
+    lastNotification: mergedNotification,
+  });
   return effectiveNotificationId;
 }
 
 /** Dismisses a notification from the user's UI. A no-op if the notification id is not found. */
 async function dismiss(notificationId: string | number): Promise<void> {
-  const toastId = mapOfNotificationIdsToToastIds.get(notificationId);
-  if (toastId !== undefined) {
-    toast.dismiss(toastId);
+  const trackedNotification = trackedNotificationsById.get(notificationId);
+  if (trackedNotification !== undefined) {
+    toast.dismiss(trackedNotification.toastId);
     forgetNotification(notificationId);
   }
 }

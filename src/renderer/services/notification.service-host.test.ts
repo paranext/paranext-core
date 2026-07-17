@@ -1,10 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CommandHandlers } from 'papi-shared-types';
 import type {
   INotificationService,
   PlatformNotification,
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+
+/**
+ * Make a `keyof CommandHandlers` value from a test-only command name. The host passes command names
+ * straight through to Sonner/commandService without validating them against real registered
+ * commands, so a stub name suffices; this single cast satisfies the field type without repeating
+ * the assertion (and its eslint-disable) at every use site.
+ */
+function commandStub(name: string): keyof CommandHandlers {
+  // No real handler is ever registered for these names, so a cast is the only way to type them
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return name as keyof CommandHandlers;
+}
 
 /**
  * Minimal shape of the toastOptions object the host passes to Sonner's `toast.*` functions - typed
@@ -45,7 +58,7 @@ vi.mock('@shared/services/localization.service', () => ({
   },
 }));
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const mockSendCommand = vi.mocked(commandService.sendCommand);
@@ -127,10 +140,7 @@ describe('notification service host', () => {
         message: 'test',
         severity: 'info',
         secondaryClickCommandLabel: 'Postpone',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        secondaryClickCommand: 'test.secondary' as never,
+        secondaryClickCommand: commandStub('test.secondary'),
       };
 
       await capturedService.send(notification);
@@ -179,10 +189,7 @@ describe('notification service host', () => {
         severity: 'info',
         dismissible: false,
         secondaryClickCommandLabel: 'Postpone',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        secondaryClickCommand: 'test.secondary' as never,
+        secondaryClickCommand: commandStub('test.secondary'),
       };
 
       await capturedService.send(notification);
@@ -192,6 +199,25 @@ describe('notification service host', () => {
       expect(mockToastInfo).toHaveBeenCalledWith(
         'test',
         expect.objectContaining({ dismissible: undefined }),
+      );
+    });
+
+    it('keeps dismissible:false when the secondary command has no label (no button renders)', async () => {
+      const notification: PlatformNotification = {
+        message: 'test',
+        severity: 'info',
+        dismissible: false,
+        secondaryClickCommand: commandStub('test.secondary'),
+      };
+
+      await capturedService.send(notification);
+
+      // Without a label the cancel button never renders, so there is no control for
+      // `dismissible: false` to kill - the caller's explicit request must be honored, not silently
+      // dropped based on the raw command field alone.
+      expect(mockToastInfo).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({ dismissible: false, cancel: undefined }),
       );
     });
 
@@ -221,10 +247,7 @@ describe('notification service host', () => {
         notificationId: 'consent',
         position: 'top-center',
         secondaryClickCommandLabel: 'Postpone',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        secondaryClickCommand: 'test.postpone' as never,
+        secondaryClickCommand: commandStub('test.postpone'),
         dismissible: false,
       };
       await capturedService.send(first);
@@ -252,10 +275,7 @@ describe('notification service host', () => {
         message: 'test',
         severity: 'info',
         secondaryClickCommandLabel: 'Postpone',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        secondaryClickCommand: 'test.secondary' as never,
+        secondaryClickCommand: commandStub('test.secondary'),
       };
 
       const notificationId = await capturedService.send(notification);
@@ -271,10 +291,7 @@ describe('notification service host', () => {
         message: 'test',
         severity: 'info',
         secondaryClickCommandLabel: 'Postpone',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        secondaryClickCommand: 'test.secondary' as never,
+        secondaryClickCommand: commandStub('test.secondary'),
       };
 
       await capturedService.send(notification);
@@ -291,10 +308,7 @@ describe('notification service host', () => {
       const notification: PlatformNotification = {
         message: 'test',
         severity: 'info',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        dismissClickCommand: 'test.dismiss' as never,
+        dismissClickCommand: commandStub('test.dismiss'),
       };
 
       const notificationId = await capturedService.send(notification);
@@ -309,10 +323,7 @@ describe('notification service host', () => {
       const notification: PlatformNotification = {
         message: 'test',
         severity: 'info',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        dismissClickCommand: 'test.dismiss' as never,
+        dismissClickCommand: commandStub('test.dismiss'),
       };
 
       await capturedService.send(notification);
@@ -393,10 +404,7 @@ describe('notification service host', () => {
         message: 'test',
         severity: 'info',
         clickCommandLabel: 'Send/Receive now',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        clickCommand: 'test.primary' as never,
+        clickCommand: commandStub('test.primary'),
       };
 
       await capturedService.send(notification);
@@ -413,10 +421,7 @@ describe('notification service host', () => {
       const notification: PlatformNotification = {
         message: 'test',
         severity: 'info',
-        // The host passes this straight to Sonner without validating it against real command names,
-        // so a stub literal suffices; the cast only satisfies the keyof CommandHandlers field type.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        dismissClickCommand: 'test.dismiss' as never,
+        dismissClickCommand: commandStub('test.dismiss'),
       };
 
       const notificationId = await capturedService.send(notification);

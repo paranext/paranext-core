@@ -61,9 +61,12 @@ export function NotificationDisplay() {
     function handleKeyDown(event: KeyboardEvent) {
       if (!eventMatchesHotkey(event, NOTIFICATION_TOASTER_HOTKEY)) return;
       // Run after Sonner's own synchronous hotkey handler (which expands the stack and focuses its
-      // single shared ref) has finished for this event, so our focus target wins regardless of
-      // listener order.
-      queueMicrotask(cycleToastListFocus);
+      // single shared ref) has finished for this event, so our focus target wins. A macrotask (not
+      // a microtask) makes that ordering independent of listener registration order: a timer
+      // callback never runs until the whole keydown dispatch task - every listener, in any order -
+      // has completed, whereas a microtask queued by a listener that happened to run BEFORE
+      // Sonner's would flush between listeners and let Sonner steal the focus back.
+      setTimeout(cycleToastListFocus, 0);
     }
 
     document.addEventListener('keydown', handleKeyDown);
