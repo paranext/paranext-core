@@ -34,5 +34,7 @@ export const MAX_ZOOM_FACTOR = 3.0;
  *
  * If they diverged, a shutdown sync could outlive the renderer's opinion of it (or vice versa);
  * tune this value knowing it retimes both.
+ *
+ * @experimental
  */
 export const AUTO_SYNC_MAX_DURATION_MS = 10 * 60 * 1000;
