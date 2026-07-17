@@ -359,6 +359,25 @@ export const VerseLongNameRightToLeft: Story = {
 };
 
 /**
+ * Verse mode, RTL long name in a pane narrower than the label's width cap — the truncation "…" must
+ * still show at the visible inline-start (right) edge, mirroring the LTR narrow-pane case.
+ */
+export const VerseLongNameNarrowPaneRightToLeft: Story = {
+  render: () => (
+    <CellBox width="110px">
+      <ResourceCellView
+        state="ready"
+        label="תרגום השבעים המלא לפי מהדורת רלפס"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse rtl />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
  * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
  * Neighbors stay independent — one non-ready cell does not blank its siblings. The `unavailable`
  * cell shows "Resource not installed" (not "Download failed") so the two failure modes are
