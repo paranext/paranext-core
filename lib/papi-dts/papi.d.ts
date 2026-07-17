@@ -8255,6 +8255,8 @@ declare module 'shared/data/platform.data' {
    *
    * If they diverged, a shutdown sync could outlive the renderer's opinion of it (or vice versa);
    * tune this value knowing it retimes both.
+   *
+   * @experimental
    */
   export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
