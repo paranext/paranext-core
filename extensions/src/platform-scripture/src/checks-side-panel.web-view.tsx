@@ -626,14 +626,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
           result.checkResultUniqueId,
         );
       } catch (error) {
-        // The deny/allow buttons are fire-and-forget, so without this catch a write-gate rejection
-        // during an automatic Send/Receive becomes an unhandled promise rejection with no UI. Show
-        // the shared "editing paused" warning; re-throw anything else so real errors still surface.
-        if (isSyncEditBlockedError(error)) {
-          notifySyncEditBlocked();
-          return false;
-        }
-        throw error;
+        // The deny/allow buttons are fire-and-forget, so without this catch any rejection becomes
+        // an unhandled promise rejection with no UI. Show the shared "editing paused" warning for a
+        // write-gate rejection during an automatic Send/Receive; log everything else (rethrowing
+        // would land in the void — no caller awaits these handlers).
+        if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+        else logger.warn(`Could not deny check result: ${getErrorMessage(error)}`);
+        return false;
       }
       if (!isMountedRef.current) return false;
       if (denyResultSuccess) setDeniedStatusForResult(result, true);
@@ -658,14 +657,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
           result.checkResultUniqueId,
         );
       } catch (error) {
-        // The deny/allow buttons are fire-and-forget, so without this catch a write-gate rejection
-        // during an automatic Send/Receive becomes an unhandled promise rejection with no UI. Show
-        // the shared "editing paused" warning; re-throw anything else so real errors still surface.
-        if (isSyncEditBlockedError(error)) {
-          notifySyncEditBlocked();
-          return false;
-        }
-        throw error;
+        // The deny/allow buttons are fire-and-forget, so without this catch any rejection becomes
+        // an unhandled promise rejection with no UI. Show the shared "editing paused" warning for a
+        // write-gate rejection during an automatic Send/Receive; log everything else (rethrowing
+        // would land in the void — no caller awaits these handlers).
+        if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+        else logger.warn(`Could not allow check result: ${getErrorMessage(error)}`);
+        return false;
       }
       if (!isMountedRef.current) return false;
       if (allowResultStatus) setDeniedStatusForResult(result, false);

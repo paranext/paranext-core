@@ -17,9 +17,10 @@ export const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 /**
  * Localization key for the shared "editing is paused during Send/Receive" warning shown when one of
  * this extension's mutations is rejected by the write-gate. Contributed in this extension's
- * `contributions/localizedStrings.json`.
+ * `contributions/localizedStrings.json`. Deliberately not exported: every caller goes through
+ * {@link notifySyncEditBlocked} so the severity/message pair cannot drift across call sites.
  */
-export const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_syncEditBlocked%';
+const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_syncEditBlocked%';
 
 /**
  * Whether `error` was thrown by the write-gate because an automatic Send/Receive is in progress
