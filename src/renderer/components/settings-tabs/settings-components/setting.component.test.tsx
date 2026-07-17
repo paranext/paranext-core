@@ -72,4 +72,40 @@ describe('Setting disabled forwarding (PT-4214)', () => {
     );
     expect(screen.getByRole('switch')).not.toBeDisabled();
   });
+
+  // An object-valued project setting (typeof setting === 'object', and not the
+  // platform.interfaceLanguage UiLanguageSelector special case) renders the JSON-editor Input — a
+  // distinct branch from the string/number Input above. Confirm `disabled` reaches that Input too so
+  // a blocked project's object settings are also read-only during its Send/Receive.
+  // platformScripture.modelTexts is a real ResourceReferenceList-typed project setting.
+  const modelTextsValue = { dataVersion: '1.1.0', items: [] };
+
+  it('forwards disabled to the JSON-editor Input for an object setting', () => {
+    render(
+      <Setting
+        settingKey="platformScripture.modelTexts"
+        setting={modelTextsValue}
+        setSetting={vi.fn()}
+        isLoading={false}
+        validateProjectSetting={vi.fn()}
+        label="Model texts"
+        disabled
+      />,
+    );
+    expect(screen.getByRole('textbox')).toBeDisabled();
+  });
+
+  it('leaves the JSON-editor Input enabled when disabled is not passed for an object setting', () => {
+    render(
+      <Setting
+        settingKey="platformScripture.modelTexts"
+        setting={modelTextsValue}
+        setSetting={vi.fn()}
+        isLoading={false}
+        validateProjectSetting={vi.fn()}
+        label="Model texts"
+      />,
+    );
+    expect(screen.getByRole('textbox')).not.toBeDisabled();
+  });
 });
