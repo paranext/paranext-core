@@ -2,10 +2,12 @@ import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   AddCommentToThreadOptions,
+  COMMENT_LIST_ELEMENT_ID,
   COMMENT_LIST_STRING_KEYS,
   CONFLICT_NOTE_STRING_KEYS,
   ConflictResolution,
   ConflictResolutionOptions,
+  getCommentThreadElementId,
   Sonner,
   sonner,
   usePromise,
@@ -225,7 +227,7 @@ global.webViewComponent = function CommentListWebView({
   const scrollToTarget = useCallback(
     (target: NonNullable<CommentListScrollTarget>, behavior: ScrollBehavior) => {
       if (target.type === 'thread') {
-        const threadElement = document.getElementById(target.threadId);
+        const threadElement = document.getElementById(getCommentThreadElementId(target.threadId));
         if (threadElement) threadElement.scrollIntoView({ behavior, block: 'start' });
         else logger.debug(`BCV-sync scroll: thread element not found: ${target.threadId}`);
         return;
@@ -233,12 +235,12 @@ global.webViewComponent = function CommentListWebView({
       // Past every loaded thread: show the end of the list (the user can scroll up). A 'bottom'
       // target guarantees at least one loaded thread, so the list and its children should exist;
       // either miss below means the DOM contract with platform-bible-react's CommentList broke.
-      const listElement = document.getElementById('comment-list');
+      const listElement = document.getElementById(COMMENT_LIST_ELEMENT_ID);
       const lastThreadElement = listElement?.lastElementChild;
       if (lastThreadElement) lastThreadElement.scrollIntoView({ behavior, block: 'end' });
       else
         logger.debug(
-          `BCV-sync scroll: #comment-list ${listElement ? 'has no children to scroll to' : 'element not found'}`,
+          `BCV-sync scroll: #${COMMENT_LIST_ELEMENT_ID} ${listElement ? 'has no children to scroll to' : 'element not found'}`,
         );
     },
     [],
@@ -263,7 +265,7 @@ global.webViewComponent = function CommentListWebView({
    */
   const trySelectThread = useCallback(
     (threadId: string, isDataLoading: boolean): boolean => {
-      const threadElement = document.getElementById(threadId);
+      const threadElement = document.getElementById(getCommentThreadElementId(threadId));
       if (threadElement) {
         setSelectedThreadId(threadId);
         threadElement.scrollIntoView({ behavior: 'smooth', block: 'center' });

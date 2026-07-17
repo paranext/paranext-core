@@ -1,7 +1,11 @@
 import { ListboxOption, useListbox } from '@/hooks/listbox-keyboard-navigation.hook';
 import { cn } from '@/utils/shadcn-ui/utils';
 import React, { RefObject, useCallback, useEffect, useState } from 'react';
-import { AddCommentToThreadOptions, CommentListProps } from './comment-list.types';
+import {
+  AddCommentToThreadOptions,
+  COMMENT_LIST_ELEMENT_ID,
+  CommentListProps,
+} from './comment-list.types';
 import { CommentThread } from './comment-thread.component';
 import { ConflictThread } from './conflict-thread.component';
 
@@ -123,7 +127,7 @@ export default function CommentList({
 
   return (
     <div
-      id="comment-list"
+      id={COMMENT_LIST_ELEMENT_ID}
       role="listbox"
       tabIndex={0}
       // The listboxRef is an HTMLElement so that the keyboard navigation can be used with multiple types of elements

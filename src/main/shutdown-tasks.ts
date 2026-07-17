@@ -1,3 +1,4 @@
+import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -10,8 +11,6 @@ import {
 import { serializeRequestType } from '@shared/utils/util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { AsyncVariable } from 'platform-bible-utils';
-
-const SHUTDOWN_SYNC_TIME_OUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.

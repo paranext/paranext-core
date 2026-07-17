@@ -830,6 +830,7 @@ public static class CopyBooksOrchestrator
             string sourceUsfm = fromScrText.GetText(bookNum);
             if (replaceEntireBook)
             {
+                // SR-write-gate: exempt — reached only via the gated ManageBooksService.CopyBooksAsync/CopyCustomVersificationAsync (TODO(PT-4210): assess).
                 toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
                 return true;
             }
@@ -888,6 +889,7 @@ public static class CopyBooksOrchestrator
         bool destBookExists = toScrText.Settings.BooksPresentSet.IsSelected(bookNum);
         if (!destBookExists)
         {
+            // SR-write-gate: exempt — reached only via the gated ManageBooksService.CopyBooksAsync/CopyCustomVersificationAsync (TODO(PT-4210): assess).
             toScrText.PutText(bookNum, 0, false, sourceUsfm, null);
             return true;
         }
@@ -940,6 +942,7 @@ public static class CopyBooksOrchestrator
             }
             try
             {
+                // SR-write-gate: exempt — reached only via the gated ManageBooksService.CopyBooksAsync/CopyCustomVersificationAsync (TODO(PT-4210): assess).
                 toScrText.PutText(bookNum, i + 1, false, chapterText, null);
             }
             catch (Exception ex)

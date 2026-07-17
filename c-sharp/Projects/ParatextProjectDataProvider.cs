@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
@@ -343,6 +344,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public override bool SetExtensionData(ProjectDataScope scope, string data)
     {
+        using var _ = EnterSyncWriteScope();
         if (string.IsNullOrEmpty(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
@@ -482,6 +484,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
+        using var _ = EnterSyncWriteScope();
         lock (_commentMutationLock)
         {
             // Find the comment by ID and its parent thread
@@ -523,6 +526,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// in this project.
     public string CreateComment(PlatformCommentWrapper comment)
     {
+        using var _ = EnterSyncWriteScope();
         VerifyUserCanCreateComments();
 
         // Never let the "content could not be displayed" placeholder become a note's real content.
@@ -655,6 +659,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
     public string AddCommentToThread(PlatformCommentWrapper comment)
     {
+        using var _ = EnterSyncWriteScope();
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(comment.Thread))
@@ -767,6 +772,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' or 'merge' and the verse text has changed since the conflict was recorded (stale).</exception>
     public void ResolveConflict(string threadId, string resolution)
     {
+        // Named (not `_`) because this method later uses `out _` discards, which would bind to a
+        // using variable named `_` and fail to compile.
+        using var syncWriteScope = EnterSyncWriteScope();
         if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
@@ -1077,6 +1085,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool UpdateComment(string commentId, string updatedContentHtml)
     {
+        using var _ = EnterSyncWriteScope();
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(commentId))
@@ -1719,6 +1728,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetProjectSetting(string settingName, object? value)
     {
+        using var _ = EnterSyncWriteScope();
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (scrText.IsResourceProject)
             throw new Exception("Cannot change settings on resources");
@@ -2401,6 +2411,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
+        using var _ = EnterSyncWriteScope();
+        return SetBookUsfmInScope(verseRef, data);
+    }
+
+    /// <summary>
+    /// The body of <see cref="SetBookUsfm"/> WITHOUT opening its own sync-write scope. Callers MUST
+    /// already hold one (via <see cref="EnterSyncWriteScope"/>). This exists so a gated method that
+    /// delegates to the book-USFM write (<see cref="SetBookUsx"/>) can reuse it inside a single
+    /// outer scope. (Nesting a second <see cref="SendReceiveWriteLock.EnterWrite"/> is NOT a safe
+    /// alternative: if a sync armed while the outer scope was open, the nested call would throw
+    /// mid-mutation and tear the write. One scope per mutation is required, not stylistic.)
+    /// </summary>
+    private bool SetBookUsfmInScope(VerseRef verseRef, string data)
+    {
         verseRef.ChapterNum = 0;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
@@ -2413,6 +2437,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
                 isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
+                // SR-write-gate: exempt — un-gated core; the whole mutation runs inside SetBookUsfm/SetBookUsx's write scope (nesting a 2nd gate is unsafe; see SendReceiveWriteLock).
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
         );
@@ -2429,6 +2454,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
+        using var _ = EnterSyncWriteScope();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2561,15 +2587,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetBookUsx(VerseRef verseRef, string data)
     {
-        // Don't need to take a write lock in this function because SetBookUsfm will do it
+        // Open ONE sync-write scope for the whole convert-then-write mutation. Rejecting here also
+        // skips the USX→USFM conversion when sync-blocked. We then call the un-gated
+        // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
+        // scope — nesting is unsafe under an arm race; see SetBookUsfmInScope. Inert in public core.
+        using var _ = EnterSyncWriteScope();
+        // The ParatextData project write lock (RunWithinLock) is taken inside SetBookUsfmInScope —
+        // unrelated to the S/R gate scope above, despite the similar name.
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
-        SetBookUsfm(verseRef, usfm);
-        return true;
+        return SetBookUsfmInScope(verseRef, usfm);
     }
 
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
+        using var _ = EnterSyncWriteScope();
         string? failedMessage = null;
         bool didChange = true;
         try
@@ -2829,6 +2861,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             myLock.ReleaseAndNotify();
         }
+    }
+
+    /// <summary>
+    /// Opens a write scope that brackets a project mutation while an automatic Send/Receive is
+    /// syncing this project, so an editor change can't race the sync's on-disk file replacement. If
+    /// the project is sync-blocked the scope throws immediately (fail-fast); otherwise it counts the
+    /// write as in-flight until disposed, so a sync starting mid-write drains it first. Inert in
+    /// public core: nothing calls <see cref="SendReceiveWriteLock.SetSyncing"/> there, so this never
+    /// throws (see that class). Use as the FIRST statement of the project write methods (Scripture,
+    /// settings, extension data, and comment mutations):
+    /// <c>using var _ = EnterSyncWriteScope();</c> so the scope covers the whole mutation.
+    /// </summary>
+    private IDisposable EnterSyncWriteScope()
+    {
+        return SendReceiveWriteLock.EnterWrite(ProjectDetails.Metadata.Id);
     }
 
     #endregion
