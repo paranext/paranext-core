@@ -125,6 +125,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/reference-history-keyboard.util.ts'],
   },
   {
+    id: 'focus-notification-toasts',
+    purpose: 'Focus the notification toasts, cycling across position groups on repeated presses',
+    category: 'Navigation',
+    context: 'Renderer (global)',
+    // Sonner's built-in Toaster hotkey and NotificationDisplay's focus-cycling handler share this
+    // combo (NOTIFICATION_TOASTER_HOTKEY) - they must not drift apart.
+    keys: { macOS: '⌥T', windows: 'Alt+T', linux: 'Alt+T' },
+    locations: ['src/renderer/components/notification-display.tsx'],
+  },
+  {
     id: 'zoom-in',
     purpose: 'Zoom in',
     category: 'Zoom',
