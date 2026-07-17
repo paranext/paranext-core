@@ -80,16 +80,13 @@ export function FirstRunShell({
     }
   }, []);
 
-  const onNext = useCallback(
-    () =>
-      runAction(() => {
-        const next = STEP_ORDER[index + 1];
-        if (next) setStep(next);
-        else return completeFirstRun();
-        return undefined;
-      }),
-    [index, runAction],
-  );
+  const onNext = useCallback(() => {
+    const next = STEP_ORDER[index + 1];
+    // Sync step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
+    // Only the final step calls completeFirstRun(), which is async and needs the busy state.
+    if (next) setStep(next);
+    else runAction(() => completeFirstRun());
+  }, [index, runAction]);
 
   const onBack = useMemo(
     () => (index > 0 ? () => setStep(STEP_ORDER[index - 1]) : undefined),

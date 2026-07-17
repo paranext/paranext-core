@@ -16,6 +16,19 @@ const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
 const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped';
 
+// Mirror of the cache written by use-interface-mode.hook.ts so a transient settings-read
+// failure on cold startup doesn't route a power-mode user into the wizard.
+const INTERFACE_MODE_CACHE_KEY = 'platform-bible.interfaceMode';
+function readCachedInterfaceMode(): 'simple' | 'power' | undefined {
+  try {
+    const raw = localStorage.getItem(INTERFACE_MODE_CACHE_KEY);
+    if (raw === 'power' || raw === 'simple') return raw;
+  } catch {
+    // localStorage unavailable
+  }
+  return undefined;
+}
+
 function readBooleanFlag(key: string): boolean {
   try {
     return localStorage.getItem(key) === 'true';
@@ -42,6 +55,8 @@ function computeInitialStatus(): FirstRunStatus {
 let status: FirstRunStatus = computeInitialStatus();
 // Dedupes duplicate resolve calls (e.g. React StrictMode double-invoking the startup effect).
 let resolvePromise: Promise<void> | undefined;
+// In-flight guard: true while a resolveInternal() run is in progress, preventing concurrent runs.
+let resolving = false;
 
 const listeners = new Set<() => void>();
 
@@ -83,6 +98,9 @@ async function resolveInternal(): Promise<void> {
       interfaceMode = await settingsService.get('platform.interfaceMode');
     } catch (e) {
       logger.warn(`Could not read platform.interfaceMode: ${getErrorMessage(e)}`);
+      // Fall back to the cached mode so a transient read failure on cold startup doesn't
+      // route a power-mode user into the wizard (leaves interfaceMode undefined if no cache).
+      interfaceMode = readCachedInterfaceMode();
     }
     if (interfaceMode !== undefined && interfaceMode !== 'simple') {
       setStatus({ kind: 'app' });
@@ -127,8 +145,8 @@ async function resolveInternal(): Promise<void> {
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
         setStatus({ kind: 'wizard', step: decision.step });
         break;
-      case 'showApp':
       default:
+        // 'showApp' can't occur here: firstRunComplete is pre-checked above and returns early.
         setStatus({ kind: 'app' });
         break;
     }
@@ -138,12 +156,22 @@ async function resolveInternal(): Promise<void> {
   }
 }
 
+/** Tracks the in-flight resolution and clears the guard when it settles. */
+async function runResolution(): Promise<void> {
+  resolving = true;
+  try {
+    await resolveInternal();
+  } finally {
+    resolving = false;
+  }
+}
+
 /**
  * Resolves the first-run gating status once at startup. Idempotent: duplicate calls (e.g. React
  * StrictMode's double effect invocation) share one in-flight resolution.
  */
 export async function resolveFirstRunState(): Promise<void> {
-  if (!resolvePromise) resolvePromise = resolveInternal();
+  if (!resolvePromise) resolvePromise = runResolution();
   return resolvePromise;
 }
 
@@ -156,8 +184,10 @@ export async function completeFirstRun(options?: { syncSkipped?: boolean }): Pro
 
 /** Re-run resolution after an error (e.g. the Retry button on the "couldn't verify" screen). */
 export async function retryFirstRunResolution(): Promise<void> {
+  // If a resolution is already in flight (e.g. two rapid Retry clicks), don't start another.
+  if (resolving) return resolvePromise ?? Promise.resolve();
   setStatus({ kind: 'loading' });
-  resolvePromise = resolveInternal();
+  resolvePromise = runResolution();
   return resolvePromise;
 }
 
@@ -170,5 +200,6 @@ export async function retryFirstRunResolution(): Promise<void> {
 export function resetFirstRunStore(): void {
   status = computeInitialStatus();
   resolvePromise = undefined;
+  resolving = false;
   listeners.clear();
 }

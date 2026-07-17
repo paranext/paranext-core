@@ -6,7 +6,13 @@
  * this contract by swapping entries in the shell's `stepComponents` map.
  */
 export interface FirstRunStepProps {
-  /** Advance to the next step (or finish, on the last step). May do async work; the shell awaits it. */
+  /**
+   * Advance to the next step (or finish, on the last step). Calling this advances immediately and
+   * is NOT gated by `canProceed` — `setCanProceed(false)` only disables the shell's footer Next
+   * button. A step that calls `onNext()` directly is responsible for only doing so when it is valid
+   * to advance (e.g. after a form validates). May do async work; the shell awaits it only on the
+   * final step (completeFirstRun).
+   */
   onNext: () => void | Promise<void>;
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;

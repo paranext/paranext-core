@@ -13,6 +13,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%firstRun_title%': 'Set up Platform.Bible',
+      '%firstRun_description%': 'Complete the initial setup to start using Platform.Bible.',
       '%firstRun_loading%': 'Starting setup…',
       '%firstRun_error_title%': "Couldn't verify your registration",
       '%firstRun_error_body%': 'Check your connection and try again.',

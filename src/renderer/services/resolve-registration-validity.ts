@@ -26,7 +26,13 @@ export async function resolveRegistrationValidity(
   try {
     const query = commandService
       .sendCommand('paratextRegistration.doesUserHaveValidRegistration')
-      .then((isValid): RegistrationValidity => (isValid ? 'valid' : 'invalid'));
+      .then((isValid): RegistrationValidity => {
+        if (isValid === true) return 'valid';
+        if (isValid === false) return 'invalid';
+        // Non-boolean (null/undefined/0 from a misbehaving provider) is indeterminate, not
+        // 'invalid' — treating it as 'invalid' would wrongly re-onboard a registered user.
+        return 'unknown';
+      });
     return await Promise.race([query, timeout]);
   } catch (e) {
     logger.warn(`Could not resolve registration validity: ${getErrorMessage(e)}`);

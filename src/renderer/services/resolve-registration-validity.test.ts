@@ -35,4 +35,9 @@ describe('resolveRegistrationValidity', () => {
     await vi.advanceTimersByTimeAsync(15000);
     await expect(promise).resolves.toBe('unknown');
   });
+
+  it('returns "unknown" when the command resolves with a non-boolean (e.g. null) (FIX 2)', async () => {
+    mockSendCommand.mockResolvedValue(null);
+    await expect(resolveRegistrationValidity(1000)).resolves.toBe('unknown');
+  });
 });

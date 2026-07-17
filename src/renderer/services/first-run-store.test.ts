@@ -6,6 +6,7 @@ import {
   getFirstRunStatus,
   resetFirstRunStore,
   resolveFirstRunState,
+  retryFirstRunResolution,
 } from './first-run-store';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -123,5 +124,36 @@ describe('completeFirstRun', () => {
   it('records a sync-skipped hint when skipping', async () => {
     await completeFirstRun({ syncSkipped: true });
     expect(localStorage.getItem('platform-bible.firstRunSyncSkipped')).toBe('true');
+  });
+});
+
+describe('retryFirstRunResolution', () => {
+  it('two concurrent retry calls only invoke resolveRegistrationValidity once (FIX 1)', async () => {
+    // Simulate a slow resolution so the second retry arrives while the first is in-flight.
+    stubSettings({ firstRunComplete: false });
+    let resolveSlowCall!: () => void;
+    mockResolveReg.mockReturnValue(
+      new Promise<'invalid'>((res) => {
+        resolveSlowCall = () => res('invalid');
+      }),
+    );
+
+    const first = retryFirstRunResolution();
+    const second = retryFirstRunResolution(); // in-flight, should be a no-op
+    resolveSlowCall();
+    await Promise.all([first, second]);
+
+    expect(mockResolveReg).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('resolveFirstRunState — power mode cache fallback (FIX 3)', () => {
+  it('routes a power-mode user to app when the settings read throws but cache says power', async () => {
+    localStorage.setItem('platform-bible.interfaceMode', 'power');
+    resetFirstRunStore();
+    mockGet.mockRejectedValue(new Error('settings unavailable'));
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockResolveReg).not.toHaveBeenCalled();
   });
 });

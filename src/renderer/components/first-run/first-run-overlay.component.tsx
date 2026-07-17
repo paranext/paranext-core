@@ -1,5 +1,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import {
+  FirstRunStatus,
   getFirstRunStatus,
   retryFirstRunResolution,
   subscribeToFirstRun,
@@ -20,6 +21,7 @@ import { FirstRunShell } from './first-run-shell.component';
 
 const KEYS: LocalizeKey[] = [
   '%firstRun_title%',
+  '%firstRun_description%',
   '%firstRun_loading%',
   '%firstRun_error_title%',
   '%firstRun_error_body%',
@@ -32,22 +34,11 @@ const FULL_SCREEN_CONTENT =
   'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:overflow-auto tw:rounded-none tw:bg-background tw:p-0 tw:ring-0';
 
 /**
- * Non-dismissable, app-gating overlay for the first-run wizard. Renders nothing once first run is
- * complete. Uses a Radix Dialog for the focus trap; Escape / outside-click are blocked and there is
- * no close button, so the app cannot be reached until the wizard finishes.
+ * Inner gate component. Only mounts when the wizard is active, so the localization subscription
+ * only runs while the gate is actually showing (not for the app's lifetime after onboarding).
  */
-export function FirstRunOverlay() {
-  const [status, setStatus] = useState(getFirstRunStatus);
-  const syncState = useCallback(() => setStatus(getFirstRunStatus()), []);
-
-  useEffect(() => {
-    syncState();
-    return subscribeToFirstRun(syncState);
-  }, [syncState]);
-
+function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kind: 'app' }> }) {
   const [strings] = useLocalizedStrings(KEYS);
-
-  if (status.kind === 'app') return undefined;
 
   return (
     <Dialog open onOpenChange={() => {}}>
@@ -63,7 +54,7 @@ export function FirstRunOverlay() {
           <DialogTitle>{strings['%firstRun_title%']}</DialogTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
-          <DialogDescription>{strings['%firstRun_title%']}</DialogDescription>
+          <DialogDescription>{strings['%firstRun_description%']}</DialogDescription>
         </VisuallyHidden.Root>
 
         {status.kind === 'loading' && (
@@ -92,6 +83,28 @@ export function FirstRunOverlay() {
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * Non-dismissable, app-gating overlay for the first-run wizard. Renders nothing once first run is
+ * complete. Uses a Radix Dialog for the focus trap; Escape / outside-click are blocked and there is
+ * no close button, so the app cannot be reached until the wizard finishes.
+ *
+ * Delegates to {@link FirstRunGate} so the localization subscription only runs while gating is
+ * active — already-onboarded users don't hold a live subscription for the app's lifetime.
+ */
+export function FirstRunOverlay() {
+  const [status, setStatus] = useState(getFirstRunStatus);
+  const syncState = useCallback(() => setStatus(getFirstRunStatus()), []);
+
+  useEffect(() => {
+    syncState();
+    return subscribeToFirstRun(syncState);
+  }, [syncState]);
+
+  if (status.kind === 'app') return undefined;
+
+  return <FirstRunGate status={status} />;
 }
 
 export default FirstRunOverlay;
