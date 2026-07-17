@@ -1,11 +1,12 @@
-// PT-4193: a toast with BOTH a primary action ("action") and a secondary/cancel action ("cancel")
-// renders, by Sonner 1.7.4's own stylesheet (node_modules/sonner/dist/styles.css), as a single
-// un-wrapped flex row: icon, content, cancel button, action button. Sonner's buttons are
-// `flex-shrink: 0` and its toast width is a fixed `--width` (356px), so two wide buttons crush the
-// message content down to a sliver - confirmed live via a screenshot of a real Send/Receive consent
-// toast. We give exactly that two-button shape a two-row layout instead: [icon][message] on the
-// first row, and the [cancel][action] pair right-aligned on a row of their own. Scope the fix to
-// that shape via `:has()` so plain-message and single-button toasts stay pixel-identical to before.
+// PT-4193: a toast with buttons renders, by Sonner 1.7.4's own stylesheet
+// (node_modules/sonner/dist/styles.css), as a single un-wrapped flex row: icon, content, cancel
+// button, action button. Sonner's buttons are `flex-shrink: 0` and its toast width is a fixed
+// `--width` (356px), so wide buttons crush the message content down to a sliver - confirmed live
+// twice: a two-button Send/Receive consent toast squeezed its message to ~1 character, and (round-4
+// E2E) a single-action break-lock toast ("Break lock and retry" beside a long warning) was just as
+// cramped. So give EVERY toast with at least one button a two-row layout instead: [icon][message]
+// on the first row, and the button(s) right-aligned on a row of their own. Scope the fix to
+// buttoned toasts via `:has()` so plain-message toasts stay pixel-identical to before.
 //
 // Sonner exposes no supported API for a two-row toast body (the only real escape hatch,
 // `toast.custom`, means re-implementing Sonner's severity icon/colour rendering), so this reaches
@@ -14,7 +15,7 @@
 // Deliberately avoids Sonner's own `::after` (its hover-bridge between stacked toasts) and only
 // touches `::before` while the toast is at rest (Sonner styles `::before` transiently mid-swipe/
 // removal). See PT-4193 review C61-3/4/15/23/26 for the failure modes this replaces.
-.notification-toast:has(.notification-toast-cancel-button):has(.notification-toast-action-button) {
+.notification-toast:has(.notification-toast-cancel-button, .notification-toast-action-button) {
   flex-wrap: wrap;
 
   .notification-toast-content {
@@ -37,10 +38,11 @@
     block-size: 0;
   }
 
-  // Collect the two buttons as a right-aligned pair on the button row. Sonner puts
-  // `margin-inline-start: auto` on *every* button, which on a shared row splits the free space
-  // *between* them instead of pushing them together; keep the auto margin only on the leading
-  // (cancel) button so the pair sits flush at the row's end, separated by the toast's own gap.
+  // Collect the button(s) right-aligned on the button row. Sonner puts `margin-inline-start: auto`
+  // on *every* button, which right-aligns a lone button all by itself but, when both buttons share
+  // a row, splits the free space *between* them instead of pushing them together; so leave the auto
+  // margin alone except on an action button whose toast also has a cancel button - zeroing only
+  // that one leaves the pair flush at the row's end, separated by the toast's own gap.
   .notification-toast-cancel-button {
     order: 2;
     margin-inline-start: auto;
@@ -48,6 +50,9 @@
 
   .notification-toast-action-button {
     order: 3;
+  }
+
+  &:has(.notification-toast-cancel-button) .notification-toast-action-button {
     margin-inline-start: 0;
   }
 }
