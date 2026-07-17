@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
 import {
   AnchorRect,
   ArmedHint,
@@ -123,11 +123,11 @@ export function VerseDeleteTooltipOverlay({ children }: Props) {
             }}
           />
           <TooltipContent side="bottom" align="start" showArrow={false}>
-            {armed ? (
-              <>
-                <kbd>{confirmingKey(armed.intent)}</kbd> {message}
-              </>
-            ) : undefined}
+            {armed
+              ? formatReplacementStringToArray(message, {
+                  key: <kbd>{confirmingKey(armed.intent)}</kbd>,
+                })
+              : undefined}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
