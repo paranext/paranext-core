@@ -365,6 +365,7 @@
   "%settings_errorMessages_viewError%": "View error",
   "%settings_platform_comments_enabled_description%": "Whether reading and writing comments in projects is enabled. This is an experimental feature.",
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
+  "%settings_platform_firstRunComplete_label%": "First run complete",
   "%settings_platform_group1_description%": "Settings pertaining to the software overall",
   "%settings_platform_group1_label_alternative%": "General",
   "%settings_platform_group1_label%": "Platform Settings",

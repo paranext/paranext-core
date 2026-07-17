@@ -40,6 +40,11 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_interfaceMode_description%',
         default: 'simple',
       },
+      'platform.firstRunComplete': {
+        label: '%settings_platform_firstRunComplete_label%',
+        default: false,
+        isHidden: true,
+      },
     },
   },
 ];
@@ -66,9 +71,9 @@ const serializableStringDictionarySettingValidator: SettingValidator<
   return typeof newValue === 'object' && Object.values(newValue).every((value) => isString(value));
 };
 
-const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
-  newValue: boolean,
-): Promise<boolean> => {
+const booleanValidator: SettingValidator<
+  'platform.commentsEnabled' | 'platform.firstRunComplete'
+> = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
 
@@ -121,4 +126,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.requestTimeout': requestTimeoutValidator,
   'platform.zoomFactor': zoomFactorValidator,
   'platform.interfaceMode': interfaceModeValidator,
+  'platform.firstRunComplete': booleanValidator,
 };
