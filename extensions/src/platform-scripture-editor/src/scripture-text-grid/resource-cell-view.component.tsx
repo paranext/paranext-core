@@ -25,7 +25,7 @@ import {
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
- * Localization keys for the ResourceCell offline states. Import to resolve them via
+ * Localization keys for the ResourceCell's status and action labels. Import to resolve them via
  * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
  */
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
@@ -177,9 +177,9 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
 
 /**
  * Presentational ResourceCell: renders the resource name (inline label or header band), per-cell
- * text direction, and either the editor (`ready`) or the offline placeholder
+ * text direction, and either the editor (`ready`) or the unavailable placeholder
  * (`downloading`/`failed`/`unavailable`). Data-free so Storybook can drive every state;
- * `ResourceCell` wraps it with the PAPI fetch/direction/offline wiring.
+ * `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the

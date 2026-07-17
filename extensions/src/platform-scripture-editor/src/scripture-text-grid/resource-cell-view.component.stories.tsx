@@ -272,7 +272,7 @@ export const VerseNotInstalled: Story = {
   ),
 };
 
-/** Verse mode, downloading — the inline name stays beside the offline placeholder + spinner. */
+/** Verse mode, downloading — the inline name stays beside the unavailable placeholder + spinner. */
 export const VerseDownloading: Story = {
   render: () => (
     <CellBox>
@@ -360,8 +360,8 @@ export const VerseLongNameRightToLeft: Story = {
 
 /**
  * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
- * Neighbors stay independent — one offline cell does not blank its siblings. The `unavailable` cell
- * shows "Resource not installed" (not "Download failed") so the two failure modes are
+ * Neighbors stay independent — one non-ready cell does not blank its siblings. The `unavailable`
+ * cell shows "Resource not installed" (not "Download failed") so the two failure modes are
  * distinguishable at a glance.
  */
 export const PartialFailureRow: Story = {
