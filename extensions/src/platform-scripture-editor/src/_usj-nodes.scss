@@ -2273,7 +2273,7 @@
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
    Destructive styling — light-destructive background, destructive text, roomier padding, and a
    caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
-   tokens (`--destructive`, `--popover`) so it adapts to light/dark. The blink is gated on the
+   token (`--destructive`) so it adapts to light/dark. The blink is gated on the
    `verse-delete-armed` root class so a verse merely inside an ordinary range selection shows the
    tint but does not blink. `verse-selected` is on the inner VerseDecorator span (the element that
    paints the red), NOT the outer `.verse`/`.usfm_v` element — so padding lives here, with an equal

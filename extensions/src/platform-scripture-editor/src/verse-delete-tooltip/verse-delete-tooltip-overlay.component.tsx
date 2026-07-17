@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
 import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
@@ -126,7 +126,12 @@ export function VerseDeleteTooltipOverlay({ children }: Props) {
             {armed
               ? formatReplacementStringToArray(message, {
                   key: <kbd>{confirmingKey(armed.intent)}</kbd>,
-                })
+                }).map((part, index) => (
+                  // The array is static per render (one fixed localized string + one kbd), so index
+                  // is a stable, safe key — mirrors the about-dialog.component.tsx precedent.
+                  // eslint-disable-next-line react/no-array-index-key
+                  <Fragment key={`key-${index}`}>{part}</Fragment>
+                ))
               : undefined}
           </TooltipContent>
         </Tooltip>
