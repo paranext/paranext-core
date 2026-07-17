@@ -3,10 +3,10 @@ import { serializeRequestType } from '@shared/utils/util';
 
 /**
  * Fully-qualified name of the S/R extension command that runs the sync scheduled for a session
- * boundary ("On startup/shutdown", PT-4162). Shared by the startup and shutdown task modules so the
- * two call sites can't drift apart: a typo in one bare string literal compiles cleanly and both
- * suites still pass (they only assert `stringContaining('runScheduledSessionSync')`), so a single
- * source for the name is the only thing that actually pins them together.
+ * boundary ("On startup/shutdown"). Shared by the startup and shutdown task modules so the two call
+ * sites can't drift apart: a typo in one bare string literal compiles cleanly and both suites still
+ * pass (they only assert `stringContaining('runScheduledSessionSync')`), so a single source for the
+ * name is the only thing that actually pins them together.
  *
  * This is deliberately NOT wired through the typed `commandService.sendCommand`. That path always
  * applies the shared network retry policy, which both call sites exist specifically to avoid — the
@@ -24,14 +24,13 @@ export const RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE = serializeRequestType(
   RUN_SCHEDULED_SESSION_SYNC_COMMAND,
 );
 
-/** The two session boundaries at which a scheduled sync can be triggered (PT-4162). */
+/** The two session boundaries at which a scheduled sync can be triggered. */
 export type SessionSyncBoundary = 'startup' | 'shutdown';
 
 /**
- * Result the S/R extension's `runScheduledSessionSync` command resolves with (PT-4162). The command
- * handles its own errors internally and always resolves (it never rejects for an internal failure),
- * so core distinguishes the three real outcomes from this value rather than from
- * resolve-vs-reject:
+ * Result the S/R extension's `runScheduledSessionSync` command resolves with. The command handles
+ * its own errors internally and always resolves (it never rejects for an internal failure), so core
+ * distinguishes the three real outcomes from this value rather than from resolve-vs-reject:
  *
  * - `synced`: a scheduled sync ran and completed successfully.
  * - `failed`: a scheduled sync ran but did not complete successfully (the extension logged detail).

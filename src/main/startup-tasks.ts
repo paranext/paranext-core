@@ -1,6 +1,8 @@
 import {
   getJsonRpcRequestErrorMessagePrefix,
   JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+  MAX_REQUEST_ATTEMPTS,
+  REQUEST_ATTEMPT_WAIT_TIME_MS,
 } from '@shared/data/rpc.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -17,15 +19,15 @@ import { getErrorMessage, wait } from 'platform-bible-utils';
 
 /**
  * How long (ms) to keep retrying `runScheduledSessionSync` while it's still unregistered before
- * giving up. Boot-appropriate budget: live E2E testing (PT-4162, 2026-07-16) observed the extension
- * host take longer than the shared `networkService.request` retry policy's ~9 s ceiling
- * (`MAX_REQUEST_ATTEMPTS` × `REQUEST_ATTEMPT_WAIT_TIME_MS` in `rpc.model.ts`) to activate the
- * send-receive extension — all 10 attempts got back a "method not found" response, and the startup
- * sync silently never ran even though the extension activated moments later. That shared policy is
- * tuned for steady-state requests against handlers that are normally already registered; it isn't
- * meant to (and shouldn't, for every other caller's sake) absorb the much longer, one-time race
- * against extension-host activation at cold boot. Hence this module keeps its own longer, gentler
- * retry budget locally instead of changing the shared default.
+ * giving up. Boot-appropriate budget: live E2E testing (2026-07-16) observed the extension host
+ * take longer than the shared `networkService.request` retry policy's ~9 s ceiling
+ * ({@link MAX_REQUEST_ATTEMPTS} × {@link REQUEST_ATTEMPT_WAIT_TIME_MS}) to activate the send-receive
+ * extension — all 10 attempts got back a "method not found" response, and the startup sync silently
+ * never ran even though the extension activated moments later. That shared policy is tuned for
+ * steady-state requests against handlers that are normally already registered; it isn't meant to
+ * (and shouldn't, for every other caller's sake) absorb the much longer, one-time race against
+ * extension-host activation at cold boot. Hence this module keeps its own longer, gentler retry
+ * budget locally instead of changing the shared default.
  *
  * Exported so the retry tests can drive fake timers by the exact same duration rather than
  * duplicating the literal (mirrors `SHUTDOWN_SYNC_TIME_OUT_MS` in `shutdown-tasks.ts`).
@@ -36,9 +38,9 @@ export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
  * How long (ms) after the main window becomes interactive a still-pending "startup" sync may still
  * be fired. The boot-race loop keeps retrying up to {@link STARTUP_SYNC_RETRY_BUDGET_MS}, but a
  * trigger that only lands well into the session is no longer a "startup" moment: firing it would
- * raise the extension's editing-block (PT-4159) on an editor the user has by now opened and started
- * typing in, with no apparent cause. Past this window the trigger is dropped (those projects sync
- * at the next session boundary instead).
+ * raise the extension's editing-block on an editor the user has by now opened and started typing
+ * in, with no apparent cause. Past this window the trigger is dropped (those projects sync at the
+ * next session boundary instead).
  *
  * Anchored to window-interactive time (supplied by main via
  * {@link StartupTasksSignals.getWindowInteractiveElapsedMs}), not process start, so a slow _window_
@@ -49,20 +51,21 @@ export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
 const STARTUP_SYNC_FRESHNESS_WINDOW_MS = 30_000;
 
 /**
- * Cadence (ms) for the first {@link INITIAL_RETRY_ATTEMPTS} retry attempts. Matches the shared
- * `requestWithRetry`'s cadence (`REQUEST_ATTEMPT_WAIT_TIME_MS` in `rpc.model.ts`) so the common
- * case — the extension activates within the first few seconds — behaves the same as it did before
- * this fix; only the long tail beyond that gets the gentler {@link EXTENDED_RETRY_INTERVAL_MS}
- * cadence.
+ * Cadence (ms) for the first {@link INITIAL_RETRY_ATTEMPTS} retry attempts. Aliased from the shared
+ * `requestWithRetry` cadence ({@link REQUEST_ATTEMPT_WAIT_TIME_MS}) — rather than re-declaring the
+ * literal — so the common case (the extension activates within the first few seconds) behaves the
+ * same as the shared policy, including if that policy is ever retuned; only the long tail beyond
+ * that gets the gentler {@link EXTENDED_RETRY_INTERVAL_MS} cadence.
  */
-const INITIAL_RETRY_INTERVAL_MS = 1000;
+const INITIAL_RETRY_INTERVAL_MS = REQUEST_ATTEMPT_WAIT_TIME_MS;
 
 /**
  * Number of attempts at {@link INITIAL_RETRY_INTERVAL_MS} before backing off to the gentler
  * {@link EXTENDED_RETRY_INTERVAL_MS} cadence for the remainder of
- * {@link STARTUP_SYNC_RETRY_BUDGET_MS}.
+ * {@link STARTUP_SYNC_RETRY_BUDGET_MS}. Aliased from the shared {@link MAX_REQUEST_ATTEMPTS} for the
+ * same stay-in-lockstep reason as {@link INITIAL_RETRY_INTERVAL_MS}.
  */
-const INITIAL_RETRY_ATTEMPTS = 10;
+const INITIAL_RETRY_ATTEMPTS = MAX_REQUEST_ATTEMPTS;
 
 /** Cadence (ms) for retry attempts once {@link INITIAL_RETRY_ATTEMPTS} is exhausted. */
 const EXTENDED_RETRY_INTERVAL_MS = 2000;
@@ -107,16 +110,16 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * installed (e.g. Platform.Bible), the command may not yet be registered, or the sync may fail.
  * Startup must never be blocked or visibly affected by this.
  *
- * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" (PT-4162),
- * via the S/R extension's `runScheduledSessionSync` command. Same error-swallowing contract as
- * Simple mode — if the S/R extension hasn't registered the command yet (or at all, e.g. plain
- * Platform.Bible), this is a logged no-op, never a crash or a blocked startup.
+ * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown", via the S/R
+ * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
+ * the S/R extension hasn't registered the command yet (or at all, e.g. plain Platform.Bible), this
+ * is a logged no-op, never a crash or a blocked startup.
  *
  * If the interface-mode setting can't be read: skips the automatic startup sync entirely and warns,
  * rather than falling through to Simple mode's "sync everything". The read can fail under the same
  * slow-cold-boot conditions the Power retry budget exists for, and Simple's no-ID `syncProjects`
- * would S/R every locally-known shared project — overriding a Power user's schedule (PT-4162).
- * Mirrors the symmetric gating in {@link performShutdownTasks}.
+ * would S/R every locally-known shared project — overriding a Power user's schedule. Mirrors the
+ * symmetric gating in {@link performShutdownTasks}.
  */
 export async function performStartupTasks(signals?: StartupTasksSignals): Promise<void> {
   try {
@@ -174,11 +177,10 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
 
 /**
  * Power mode: triggers the S/R extension's session-boundary sync for the projects scheduled "On
- * startup/shutdown" (PT-4162). The extension owns everything else — reading PT-4160's schedule
- * store for the `onStartupShutdown` subset, running the sync, raising/clearing the PT-4159
- * editing-block for its duration, stamping `lastRunAt`, and opening the results view on
- * conflicts/errors. Core only triggers it and logs the reported outcome; startup is never blocked
- * or failed by it.
+ * startup/shutdown". The extension owns everything else — reading its schedule store for the
+ * `onStartupShutdown` subset, running the sync, raising/clearing the editing-block for its
+ * duration, stamping `lastRunAt`, and opening the results view on conflicts/errors. Core only
+ * triggers it and logs the reported outcome; startup is never blocked or failed by it.
  *
  * Goes through `requestSessionSyncWithBootRetry` (raw `networkService.requestNoRetry` under its own
  * boot-race budget) rather than the typed `commandService.sendCommand`. The reason is retry
@@ -186,8 +188,7 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
  * ~9 s ceiling loses the cold-boot race against extension-host activation (see
  * `requestSessionSyncWithBootRetry`). The command name and boundary come from the shared
  * {@link RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE} / {@link SessionSyncBoundary} contract so this raw
- * call still can't drift from the shutdown call site. Full design record:
- * docs/specs/donna-auto-syncs/2026-07-14-pt-4162-startup-shutdown-design.md.
+ * call still can't drift from the shutdown call site.
  *
  * Logs the command's self-reported {@link ScheduledSessionSyncResult} truthfully — a real failure
  * warns; a deliberate skip (nothing scheduled, stale startup, or app quitting) is debug-only — so
@@ -302,8 +303,8 @@ function isRetryableBootRaceError(error: unknown): boolean {
  * Retries `paratextBibleSendReceive.runScheduledSessionSync('startup')` on its own boot-appropriate
  * schedule (see {@link STARTUP_SYNC_RETRY_BUDGET_MS}), using `networkService.requestNoRetry` for
  * each individual attempt rather than the shared retrying `networkService.request` — whose fixed ~9
- * s retry ceiling lost the race against extension host activation in live E2E testing (PT-4162,
- * 2026-07-16; see {@link STARTUP_SYNC_RETRY_BUDGET_MS}'s doc for the observed timing).
+ * s retry ceiling lost the race against extension host activation in live E2E testing (2026-07-16;
+ * see {@link STARTUP_SYNC_RETRY_BUDGET_MS}'s doc for the observed timing).
  *
  * Only {@link isRetryableBootRaceError} failures are retried — a missing handler or an early request
  * timeout, both meaning "not answering yet"; any other error — the command exists but its handler

@@ -20,7 +20,7 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Behaviour-driving outcome of a bounded shutdown sync. Now that the extension reports its own
- * result (PT-4162), this carries what actually happened so {@link logShutdownSyncOutcome} can log it
+ * result, this carries what actually happened so {@link logShutdownSyncOutcome} can log it
  * truthfully rather than always claiming "complete":
  *
  * - `synced`: the sync ran and completed (Simple: the S/R resolved; Power: the command returned
@@ -50,19 +50,18 @@ type BoundedSyncSettlement<T> =
  * project. All errors are swallowed — extension may not be installed, or may fail — shutdown must
  * never be permanently blocked.
  *
- * In Power mode: S/Rs the projects scheduled "On startup/shutdown" (PT-4162), via the S/R
- * extension's `runScheduledSessionSync` command. Same error-swallowing contract — if the command
- * isn't registered (e.g. plain Platform.Bible with no S/R extension), this is a logged no-op, never
- * a crash or a wedged shutdown. No edit-block and no conflict surfacing here: the app is closing,
- * so there is nothing left to protect and no UI to show a result in — conflicts are surfaced again
- * on next startup instead (PT-4162). Full design record:
- * docs/specs/donna-auto-syncs/2026-07-14-pt-4162-startup-shutdown-design.md.
+ * In Power mode: S/Rs the projects scheduled "On startup/shutdown", via the S/R extension's
+ * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
+ * registered (e.g. plain Platform.Bible with no S/R extension), this is a logged no-op, never a
+ * crash or a wedged shutdown. No edit-block and no conflict surfacing here: the app is closing, so
+ * there is nothing left to protect and no UI to show a result in — conflicts are surfaced again on
+ * next startup instead.
  *
  * If the interface-mode setting can't be read: skips the automatic shutdown S/R entirely and warns,
  * rather than falling through to Simple mode's open-editor S/R. The read can fail exactly when the
  * app is closing (the extension host may already be tearing down), and Simple mode would S/R
  * whichever writable editor happens to be open — for a Power user, possibly a project they
- * deliberately excluded from their schedule. Symmetric with {@link performStartupTasks} (PT-4162).
+ * deliberately excluded from their schedule. Symmetric with {@link performStartupTasks}.
  */
 export async function performShutdownTasks(): Promise<void> {
   try {
@@ -150,11 +149,10 @@ async function performSimpleModeShutdownSync(): Promise<void> {
 
 /**
  * Power mode: triggers the S/R extension's session-boundary sync for the projects scheduled "On
- * startup/shutdown" (PT-4162). The extension owns selecting that subset (from PT-4160's schedule
- * store), running the sync, and — deliberately — NOT surfacing conflicts, since the app is closing
- * and there's no UI left to show them in (PT9 parity). Core only triggers it and bounds the wait
- * with the same scaffold Simple mode uses, logging the reported outcome. Full design record:
- * docs/specs/donna-auto-syncs/2026-07-14-pt-4162-startup-shutdown-design.md.
+ * startup/shutdown". The extension owns selecting that subset (from its schedule store), running
+ * the sync, and — deliberately — NOT surfacing conflicts, since the app is closing and there's no
+ * UI left to show them in (PT9 parity). Core only triggers it and bounds the wait with the same
+ * scaffold Simple mode uses, logging the reported outcome.
  *
  * There is deliberately no boot-race retry here, unlike startup
  * (`requestSessionSyncWithBootRetry`). A shutdown boot race is near-impossible: this only runs when

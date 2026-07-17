@@ -99,7 +99,7 @@ export async function initialize(): Promise<void> {
   // in flight at quit — e.g. the Power-mode startup boot-race retry loop — would reach
   // `doRequest` -> `initialize()` after `shutdown()` set `jsonRpc = undefined`, and the `if (jsonRpc)`
   // guards below would be false, so it would call `createRpcHandler()`/`connect()` again and
-  // resurrect the connection mid-quit (paranext-core PR #2560 / PT-4162).
+  // resurrect the connection mid-quit.
   if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
   await connectionMutex.runExclusive(async () => {
     if (jsonRpc) return;

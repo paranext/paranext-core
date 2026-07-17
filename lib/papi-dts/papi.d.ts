@@ -1023,6 +1023,22 @@ declare module 'shared/data/rpc.model' {
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
   /**
+   * How many times to try sending a request before giving up if the request is not yet registered.
+   * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
+   * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
+   * re-declaring the literal and silently diverging if it is ever retuned.
+   *
+   * @experimental
+   */
+  export const MAX_REQUEST_ATTEMPTS = 10;
+  /**
+   * How long in ms to wait between request attempts if the request is not yet registered. Exported
+   * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
+   *
+   * @experimental
+   */
+  export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
+  /**
    * Whether an RPC object is setting up or has finished setting up its connection and is ready to
    * communicate on the network
    */
@@ -1163,6 +1179,8 @@ declare module 'shared/data/rpc.model' {
    * producer and a separate matcher/fixture keeps matching its old string while real errors stop
    * matching, and the tests stay green. Everything routing through this function stays in lockstep.
    *
+   * @param code The JSON-RPC error code from the error response being classified
+   * @returns The exact message prefix `doRequest` uses for an error response with that `code`
    * @experimental
    */
   export function getJsonRpcRequestErrorMessagePrefix(code: number): string;

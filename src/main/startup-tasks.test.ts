@@ -3,6 +3,8 @@ import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import {
   getJsonRpcRequestErrorMessagePrefix,
   JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+  MAX_REQUEST_ATTEMPTS,
+  REQUEST_ATTEMPT_WAIT_TIME_MS,
 } from '@shared/data/rpc.model';
 import { settingsService } from '@shared/services/settings.service';
 import * as commandService from '@shared/services/command.service';
@@ -142,6 +144,19 @@ describe('performStartupTasks', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('no longer fresh'));
     });
 
+    it('fires the sync when the window has been interactive for less than the freshness window', async () => {
+      mockSettingsGet.mockResolvedValue('power');
+      // Counterpart to the stale-drop test above: main.ts always supplies this signal in
+      // production, so without this case an inverted freshness gate (or a zeroed window) would
+      // silently drop every real boot's startup sync while the suite stays green.
+      await performStartupTasks({ getWindowInteractiveElapsedMs: () => 1_000 });
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('runScheduledSessionSync'),
+        'startup',
+      );
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    });
+
     it('does not fire (or warn) when the app is already quitting before the command registers', async () => {
       mockSettingsGet.mockResolvedValue('power');
       const abort = new AbortController();
@@ -153,14 +168,16 @@ describe('performStartupTasks', () => {
     });
   });
 
-  // #region PT-4162 boot-race retry: distinguishes "not registered yet" (retry) from a genuine
+  // #region Boot-race retry: distinguishes "not registered yet" (retry) from a genuine
   // handler failure (don't retry), and bounds the retry budget so startup is never blocked.
 
   describe('power-mode startup sync boot-race retry', () => {
-    // Retry cadence (see startup-tasks.ts): the first INITIAL_RETRY_ATTEMPTS (10) waits are
-    // INITIAL_RETRY_INTERVAL_MS (1s); every wait after that is EXTENDED_RETRY_INTERVAL_MS (2s).
-    const INITIAL_RETRY_ATTEMPTS = 10;
-    const INITIAL_RETRY_INTERVAL_MS = 1000;
+    // Retry cadence (see startup-tasks.ts): the first INITIAL_RETRY_ATTEMPTS waits are
+    // INITIAL_RETRY_INTERVAL_MS; every wait after that is EXTENDED_RETRY_INTERVAL_MS (2s). The
+    // initial phase derives from the shared rpc.model constants — the same source startup-tasks.ts
+    // aliases — so a retune of the shared retry policy flows through both without silent drift.
+    const INITIAL_RETRY_ATTEMPTS = MAX_REQUEST_ATTEMPTS;
+    const INITIAL_RETRY_INTERVAL_MS = REQUEST_ATTEMPT_WAIT_TIME_MS;
     const EXTENDED_RETRY_INTERVAL_MS = 2000;
 
     it('keeps retrying MethodNotFound past the shared ~9s ceiling and pins the two-phase backoff cadence', async () => {
