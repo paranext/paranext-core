@@ -4,7 +4,7 @@ import {
 } from '@/components/advanced/menus/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { CSSProperties, PropsWithChildren, ReactNode, useRef } from 'react';
+import { PropsWithChildren, ReactNode, useRef } from 'react';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -28,13 +28,6 @@ export type ToolbarProps = PropsWithChildren<{
 
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
-
-  /**
-   * Additional inline styles for the toolbar's outer container. Useful for values that can't be
-   * expressed as a static Tailwind class, e.g. OS window-control reserved space computed at
-   * runtime.
-   */
-  style?: CSSProperties;
 
   /**
    * Whether the toolbar should be used as a draggable area for moving the application. This will
@@ -91,7 +84,6 @@ export function Toolbar({
   onOpenChange,
   onSelectMenuItem,
   className,
-  style,
   id,
   children,
   appMenuAreaChildren,
@@ -107,7 +99,7 @@ export function Toolbar({
     <div
       className={cn('tw:border tw:px-4 tw:text-foreground', className)}
       ref={containerRef}
-      style={{ position: 'relative', ...style }}
+      style={{ position: 'relative' }}
       id={id}
     >
       <div

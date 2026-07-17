@@ -1932,12 +1932,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
 	/**
-	 * Additional inline styles for the toolbar's outer container. Useful for values that can't be
-	 * expressed as a static Tailwind class, e.g. OS window-control reserved space computed at
-	 * runtime.
-	 */
-	style?: React$1.CSSProperties;
-	/**
 	 * Whether the toolbar should be used as a draggable area for moving the application. This will
 	 * add an electron specific style `WebkitAppRegion: 'drag'` to the toolbar in order to make it
 	 * draggable. See:
@@ -1971,7 +1965,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, style, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_fallbackLanguages%"
 ];
