@@ -118,10 +118,12 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       initializeWindowService(),
     );
 
-    // Drives the auto-sync edit-block banner on Scripture editors during a scheduled Send/Receive.
-    // Needs the network service (already up above) for the blocking event and the web view service
-    // (already up, from the block above) to read/update editor definitions. Both are synchronous and
-    // return unsubscribers we intentionally never call — they run for the renderer's lifetime.
+    // Drives the auto-sync edit-block banner on Scripture editors during a Send/Receive. Needs the
+    // network service (already up above) for the blocking event and the web view service (already
+    // up, from the block above) to read/update editor definitions. Both return unsubscribers we
+    // intentionally never call — they run for the renderer's lifetime. The blocking service also
+    // launches a fire-and-forget consult of the backend's current blocking snapshot, so a renderer
+    // reload during an in-flight sync seeds the store instead of assuming unblocked.
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
 
