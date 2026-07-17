@@ -7,6 +7,8 @@ export type Severity = 'info' | 'warning' | 'error';
  * The placements a notification can appear in, as a frozen array so it can be the single source of
  * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
  * `position` enum (which the service host spreads from this).
+ *
+ * @experimental
  */
 export const NOTIFICATION_POSITIONS = Object.freeze([
   'top-left',
@@ -20,6 +22,8 @@ export const NOTIFICATION_POSITIONS = Object.freeze([
 /**
  * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
  * Omit to use the app's default placement.
+ *
+ * @experimental
  */
 export type NotificationPosition = (typeof NOTIFICATION_POSITIONS)[number];
 
@@ -53,6 +57,8 @@ export interface PlatformNotification {
    * this together with {@link secondaryClickCommand} to give the notification two actions.
    *
    * Automatically localized if this is a {@link LocalizeKey}.
+   *
+   * @experimental
    */
   secondaryClickCommandLabel?: string | LocalizeKey;
   /**
@@ -62,6 +68,8 @@ export interface PlatformNotification {
    * - NotificationId: The ID of the notification that was clicked
    *
    * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+   *
+   * @experimental
    */
   secondaryClickCommand?: keyof CommandHandlers;
   /**
@@ -83,11 +91,15 @@ export interface PlatformNotification {
    * decision — e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
    * keep {@link dismissible} `true` (see the warning on {@link dismissible}). If you need the toast
    * to persist until the user actually answers, also set `duration` to `0`.
+   *
+   * @experimental
    */
   dismissClickCommand?: keyof CommandHandlers;
   /**
    * Optional placement of the notification on screen. When omitted, the app's default placement is
    * used.
+   *
+   * @experimental
    */
   position?: NotificationPosition;
   /**
@@ -103,6 +115,8 @@ export interface PlatformNotification {
    * no secondary/dismiss command. For a notification the user must explicitly answer, prefer
    * leaving `dismissible: true` and using {@link dismissClickCommand} so a swipe-away still counts
    * as a real (e.g. "postpone") decision.
+   *
+   * @experimental
    */
   dismissible?: boolean;
   /**
