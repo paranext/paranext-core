@@ -1555,10 +1555,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (id !== undefined) {
             const selected = items.find((item) => item.marker === id);
             if (selected) {
-              editorRef.current?.applyMarkerMenuSelection(selected, {
-                trigger: 'backslash',
-                literalPrefixLanded,
-              });
+              // A note-kind selection creates a footnote/cross-reference; the returned TRUE key
+              // feeds the same editing-session correction the Ctrl+T path uses — the auto-open
+              // path's delta-doc-derived key can land past the note (silent replaceEmbedUpdate
+              // no-ops from the popover).
+              correctEditingNoteKeyAfterInsert(
+                editorRef.current?.applyMarkerMenuSelection(selected, {
+                  trigger: 'backslash',
+                  literalPrefixLanded,
+                }),
+              );
             }
             editorRef.current?.focus();
           } else if (!passive) {
@@ -1609,7 +1615,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.focus();
         });
     },
-    [webViewId],
+    [webViewId, correctEditingNoteKeyAfterInsert],
   );
 
   /**
@@ -2106,6 +2112,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             capturedSave,
             latestSave: (savedUsj?: Usj) => saveUsjToPdpIfUpdatedRef.current(savedUsj),
             isPaletteSessionOpen: paletteSession.current !== undefined,
+            // Passive sessions have a literal `\`+filter sitting in the document; a flush must
+            // strip it from the SAVED copy (ParatextData tokenizes the unknown marker as a
+            // paragraph, echoing garbage back). Focused sessions claim their filter chars, so
+            // there is no literal to strip.
+            paletteLiteralRun:
+              paletteSession.current?.kind === 'backslash'
+                ? `\\${paletteSession.current.filter}`
+                : undefined,
             commitPendingMarkerEdits: () => editorRef.current?.commitPendingMarkerEdits(),
             getEditorUsj: () => editorRef.current?.getUsj(),
           });

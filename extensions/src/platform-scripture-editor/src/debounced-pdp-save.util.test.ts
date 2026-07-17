@@ -108,3 +108,76 @@ describe('performDebouncedPdpSave', () => {
     expect(latestSave).toHaveBeenCalledWith(scheduledUsj);
   });
 });
+
+describe('performDebouncedPdpSave — palette literal stripping', () => {
+  it('strips the un-settled `\\`+filter literal from a palette-open flush (last occurrence)', () => {
+    // Live corruption this pins: clicking a palette entry blurs the iframe, the blur-flush saved
+    // the raw literal (`...tell\f,`) to the PDP, and ParatextData tokenized the unknown marker as
+    // a PARAGRAPH — a garbage paragraph echoed back into the document.
+    const latestSave = vi.fn();
+    performDebouncedPdpSave({
+      usj: usjWith('Den God tell\\f, more text'),
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      isPaletteSessionOpen: true,
+      paletteLiteralRun: '\\f',
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+
+    expect(latestSave).toHaveBeenCalledWith(usjWith('Den God tell, more text'));
+  });
+
+  it('saves unchanged when the literal is not present in the content', () => {
+    const latestSave = vi.fn();
+    const usj = usjWith('no literal here');
+    performDebouncedPdpSave({
+      usj,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      isPaletteSessionOpen: true,
+      paletteLiteralRun: '\\zz',
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+    expect(latestSave).toHaveBeenCalledWith(usj);
+  });
+
+  it('does not mutate the scheduled USJ when stripping', () => {
+    const latestSave = vi.fn();
+    const usj = usjWith('tell\\f,');
+    performDebouncedPdpSave({
+      usj,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      isPaletteSessionOpen: true,
+      paletteLiteralRun: '\\f',
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+    expect(usj).toEqual(usjWith('tell\\f,')); // caller's object untouched
+    expect(latestSave).toHaveBeenCalledWith(usjWith('tell,'));
+  });
+
+  it('keeps the old behavior when no literal run is provided (focused sessions)', () => {
+    const latestSave = vi.fn();
+    const usj = usjWith('tell\\f,');
+    performDebouncedPdpSave({
+      usj,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      isPaletteSessionOpen: true,
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+    expect(latestSave).toHaveBeenCalledWith(usj);
+  });
+});
