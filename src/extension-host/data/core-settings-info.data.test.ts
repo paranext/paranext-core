@@ -3,12 +3,11 @@ import { platformSettings, coreSettingsValidators } from './core-settings-info.d
 
 describe('platform.firstRunComplete setting', () => {
   it('is declared as a hidden setting with a false default', () => {
-    // @ts-expect-error ts(7053) - platformSettings is an array per the implementation
-    const group = platformSettings[0];
+    const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
     const setting = group.properties['platform.firstRunComplete'];
     expect(setting).toBeDefined();
-    expect(setting.default).toBe(false);
-    expect(setting.isHidden).toBe(true);
+    expect(setting?.default).toBe(false);
+    expect(setting?.isHidden).toBe(true);
   });
 
   it('validates that the value is a boolean', async () => {
