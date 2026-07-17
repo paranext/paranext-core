@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import LanguagePlaceholderStep from './language.placeholder.component';
-import SyncConsentPlaceholderStep from './sync-consent.placeholder.component';
+import { LanguagePlaceholderStep } from './language.placeholder.component';
+import { SyncConsentPlaceholderStep } from './sync-consent.placeholder.component';
 
 // Without a PAPI backend, useLocalizedStrings returns raw keys; mock it to return English.
 vi.mock('@renderer/hooks/papi-hooks', () => ({

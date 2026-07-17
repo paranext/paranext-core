@@ -5,10 +5,10 @@ import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FirstRunStepProps } from './first-run.model';
-import LanguagePlaceholderStep from './steps/language.placeholder.component';
-import IdentifyPlaceholderStep from './steps/identify.placeholder.component';
-import SyncConsentPlaceholderStep from './steps/sync-consent.placeholder.component';
-import SyncProgressPlaceholderStep from './steps/sync-progress.placeholder.component';
+import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
+import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
+import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
+import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
 
 /** Runtime order of the wizard steps. */
 export const STEP_ORDER: FirstRunStep[] = ['language', 'identify', 'syncConsent', 'syncProgress'];
