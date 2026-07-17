@@ -313,10 +313,7 @@ global.webViewComponent = function InventoryWebView({
   const handleApprovedItemsChange = useCallback(
     async (items: string[]) => {
       try {
-        // `useProjectSetting`'s declared setter type erases the promise the setter actually
-        // returns at runtime; adopt it via Promise.resolve so this await genuinely waits and the
-        // catch below sees a write-gate rejection.
-        await Promise.resolve(setValidItems?.(items.join(' ')));
+        await setValidItems?.(items.join(' '));
       } catch (error) {
         // The write-gate rejects this settings write while an automatic Send/Receive is syncing.
         // Show the shared "editing paused" warning instead of only logging (which is invisible).
@@ -334,9 +331,7 @@ global.webViewComponent = function InventoryWebView({
   const handleUnapprovedItemsChange = useCallback(
     async (items: string[]) => {
       try {
-        // Same promise-adoption as handleApprovedItemsChange above — the declared setter type
-        // erases the runtime promise.
-        await Promise.resolve(setInvalidItems?.(items.join(' ')));
+        await setInvalidItems?.(items.join(' '));
       } catch (error) {
         // The write-gate rejects this settings write while an automatic Send/Receive is syncing.
         // Show the shared "editing paused" warning instead of only logging (which is invisible).
