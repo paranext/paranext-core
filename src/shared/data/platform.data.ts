@@ -21,7 +21,18 @@ export const MIN_ZOOM_FACTOR = 0.5;
 export const MAX_ZOOM_FACTOR = 3.0;
 
 /**
- * Upper bound (10 minutes) on how long a single automatic Send/Receive is allowed to run. A
- * scheduled sync of a large repo can run for minutes, so this is deliberately long.
+ * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+ * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+ * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
+ * deliberately long.
+ *
+ * Two different consumers share this value and must never diverge:
+ *
+ * - The main process (`shutdown-tasks.ts`) bounds how long app shutdown waits on its final sync.
+ * - The renderer (`auto-sync-blocking-store.ts`) bounds each edit-block safety leash — how long a
+ *   single blocker may block editing if its clearing event never arrives.
+ *
+ * If they diverged, a shutdown sync could outlive the renderer's opinion of it (or vice versa);
+ * tune this value knowing it retimes both.
  */
 export const AUTO_SYNC_MAX_DURATION_MS = 10 * 60 * 1000;
