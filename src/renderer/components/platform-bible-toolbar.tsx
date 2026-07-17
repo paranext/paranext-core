@@ -314,7 +314,18 @@ export function PlatformBibleToolbar() {
   useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
   return (
-    <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
+    <div
+      data-testid="toolbar-reserved-space-wrapper"
+      // Takes over Toolbar's own border entirely when the wrapper is reserving the trailing space
+      // (see the className comment below) so the outline encloses the full toolbar-plus-reserved-
+      // space region on every side, matching how it looked when the padding lived inside Toolbar's
+      // own bordered box. Suppressing only the end side left the top/bottom border stopping short
+      // at Toolbar's narrower edge instead of continuing across the reserved strip. Plain tw:border
+      // (no color suffix) resolves through the same default border-color mechanism as Toolbar's own
+      // tw:border, so the two render identically.
+      className={cn(toolbarReservedSpaceStyle && 'tw:border')}
+      style={toolbarReservedSpaceStyle}
+    >
       <Toolbar
         menuData={menuData}
         onOpenChange={(isOpen: boolean) => {
@@ -329,10 +340,10 @@ export function PlatformBibleToolbar() {
             getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
           // Toolbar's own outer container has an unconditional border and tw:px-4 (16px inline
           // padding both sides). When the wrapper above reserves the trailing space instead, drop
-          // both of Toolbar's own end-side contributions — otherwise the border renders at Toolbar's
-          // now-narrower edge (right after the profile button) and the wrapper's live measurement
-          // stacks on top of tw:px-4's 16px, over-reserving space by that same 16px.
-          toolbarReservedSpaceStyle && 'tw:border-e-0 tw:pe-0',
+          // Toolbar's own border entirely (the wrapper carries it — see its className above) and
+          // Toolbar's own end-side padding, which would otherwise stack on top of the wrapper's live
+          // measurement, over-reserving space by that same 16px.
+          toolbarReservedSpaceStyle && 'tw:border-0 tw:pe-0',
         )}
         menubarVariant="muted"
         shouldUseAsAppDragArea
