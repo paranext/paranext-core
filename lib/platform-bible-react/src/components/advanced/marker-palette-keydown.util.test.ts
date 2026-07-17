@@ -92,6 +92,66 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
+  it('backslash session: hyphen and uppercase are filter chars (milestones like ts-s, custom capitals)', () => {
+    const driver = makeDriver();
+    const state = session('backslash', 'ts');
+    const hyphen = makeEvent('-');
+    expect(handleMarkerPaletteSessionKeyDown(hyphen, state, driver)).toBe('continue');
+    expect(hyphen.defaultPrevented).toBe(false); // still mirrored — the char must land in the doc
+    expect(state.filter).toBe('ts-');
+    const upper = makeEvent('S');
+    expect(handleMarkerPaletteSessionKeyDown(upper, state, driver)).toBe('continue');
+    expect(state.filter).toBe('ts-S');
+  });
+
+  it('backslash session: Space COMMITS (claimed, like Enter) when shouldSpaceCommit approves the filter', () => {
+    // Typing `\f` then Space must insert an empty footnote exactly like `\f` + Enter — letting
+    // the literal ` ` land would hand `\f ` to the Tier-2 tokenizer, which absorbs the rest of
+    // the paragraph into the new footnote.
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('backslash', 'f'),
+      shouldSpaceCommit: (filter) => filter === 'f',
+    };
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true); // claimed: no literal space lands
+    expect(driver.commit).toHaveBeenCalledOnce();
+    expect(driver.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('backslash session: Space still lands + dismisses when shouldSpaceCommit declines', () => {
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('backslash', 'wj'),
+      shouldSpaceCommit: (filter) => filter === 'f', // 'wj' is not a note marker
+    };
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(false); // unclaimed: the literal completes via Tier-2
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+    expect(driver.commit).not.toHaveBeenCalled();
+  });
+
+  it('backslash session: Backspace on an empty filter deletes the trigger `\\` and ends the session', () => {
+    const driver = makeDriver();
+    const event = makeEvent('Backspace');
+    expect(handleMarkerPaletteSessionKeyDown(event, session('backslash', ''), driver)).toBe(
+      'ended',
+    );
+    expect(event.defaultPrevented).toBe(false); // unclaimed: the `\` deletion lands in the document
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('backslash session: Backspace with a non-empty filter still edits the filter (stays open)', () => {
+    const driver = makeDriver();
+    const state = session('backslash', 'wj');
+    const event = makeEvent('Backspace');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
+    expect(state.filter).toBe('w');
+    expect(driver.dismiss).not.toHaveBeenCalled();
+  });
+
   it('enter session: filter chars (incl. digits) are CLAIMED and forwarded', () => {
     const driver = makeDriver();
     const state = session('enter', 'q');

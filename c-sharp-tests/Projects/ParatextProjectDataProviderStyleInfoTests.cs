@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 
@@ -173,6 +175,102 @@ namespace TestParanextDataProvider.Projects
 
             Assert.That(result.DefaultFont, Is.EqualTo(_scrText.Language.FontName));
             Assert.That(result.DefaultFontSize, Is.EqualTo((double)_scrText.Language.FontSize));
+        }
+
+        [Test]
+        [Description(
+            "Wire-shape contract: serializing GetStyleInfo's result through the REAL PAPI "
+                + "serializer (SerializationOptions.CreateSerializationOptions, the same options "
+                + "PapiClient's JSON-RPC formatter copies) must produce the scripture-editors "
+                + "StyleInfo TS shape — camelCase property keys, unset optionals omitted entirely "
+                + "(WhenWritingNull), and marker dictionary keys left raw (no DictionaryKeyPolicy)."
+        )]
+        public void GetStyleInfo_SerializedThroughPapiWireSerializer_MatchesTsStyleInfoShape()
+        {
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            string json = JsonSerializer.Serialize(
+                result,
+                SerializationOptions.CreateSerializationOptions()
+            );
+
+            Assert.Multiple(() =>
+            {
+                // camelCase property keys (TS: defaultFont, defaultFontSize, markers, styleType),
+                // never the C# PascalCase names.
+                Assert.That(json, Does.Contain("\"defaultFont\""));
+                Assert.That(json, Does.Contain("\"defaultFontSize\""));
+                Assert.That(json, Does.Contain("\"markers\""));
+                Assert.That(json, Does.Contain("\"styleType\""));
+                Assert.That(json, Does.Not.Contain("\"DefaultFont\""));
+                Assert.That(json, Does.Not.Contain("\"DefaultFontSize\""));
+                Assert.That(json, Does.Not.Contain("\"Markers\""));
+                Assert.That(json, Does.Not.Contain("\"StyleType\""));
+
+                // Unset optionals are ABSENT, not null: no DummyScrStylesheet tag sets Bold, so
+                // no marker may carry a "bold" key — and nothing anywhere may serialize as null
+                // (every optional is [JsonIgnore(Condition = WhenWritingNull)]).
+                Assert.That(json, Does.Not.Contain("\"bold\""));
+                Assert.That(json, Does.Not.Contain(":null"));
+
+                // Marker dictionary keys stay raw (PropertyNamingPolicy must not leak into
+                // dictionary keys — markers are looked up verbatim TS-side).
+                Assert.That(json, Does.Contain("\"ip\":"));
+                Assert.That(json, Does.Not.Contain("\"Ip\""));
+            });
+        }
+
+        /// <summary>
+        /// The style types <see cref="ParatextProjectDataProvider.GetStyleInfo"/> filters out
+        /// (derived end tags and unknown placeholders are never serialized). Mirrors the filter
+        /// list inside GetStyleInfo — if that list changes, update this set to match.
+        /// </summary>
+        private static readonly ScrStyleType[] s_styleTypesFilteredByGetStyleInfo =
+        [
+            ScrStyleType.scEndStyle,
+            ScrStyleType.scMilestoneEnd,
+            ScrStyleType.scUnknownStyle,
+        ];
+
+        /// <summary>The scripture-editors TS `StyleType` union (styleInfo.ts).</summary>
+        private static readonly string[] s_tsStyleTypeUnion =
+        [
+            "paragraph",
+            "character",
+            "note",
+            "milestone",
+        ];
+
+        [Test]
+        [Description(
+            "Exhaustiveness guard: GetStyleInfo's filter list and PlatformMarkerStyleInfo's "
+                + "StyleType switch are separately maintained. Every ScrStyleType enum value must "
+                + "be either filtered out by GetStyleInfo or mapped onto the TS StyleType union — "
+                + "a future ScrStyleType addition must fail here loudly instead of silently "
+                + "emitting styleType:\"unknown\" off the TS union."
+        )]
+        public void PlatformMarkerStyleInfo_EveryScrStyleType_IsFilteredOrMapsToTsUnion()
+        {
+            Assert.Multiple(() =>
+            {
+                foreach (ScrStyleType styleType in Enum.GetValues<ScrStyleType>())
+                {
+                    if (s_styleTypesFilteredByGetStyleInfo.Contains(styleType))
+                        continue;
+
+                    var markerInfo = new PlatformMarkerStyleInfo(
+                        new ScrTag("zz") { StyleType = styleType }
+                    );
+
+                    Assert.That(
+                        s_tsStyleTypeUnion,
+                        Does.Contain(markerInfo.StyleType),
+                        $"ScrStyleType.{styleType} is neither in GetStyleInfo's filter list nor "
+                            + "mapped by PlatformMarkerStyleInfo.StyleType onto the TS StyleType "
+                            + "union — extend the switch (and the TS union) or the filter."
+                    );
+                }
+            });
         }
     }
 }

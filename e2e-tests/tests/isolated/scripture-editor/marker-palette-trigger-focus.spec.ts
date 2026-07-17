@@ -1,7 +1,7 @@
 /**
  * The Standard-view keyboard triggers — the `\`/Enter marker palettes and Ctrl+T / Ctrl+Shift+T
  * footnote/cross-reference shortcuts — must fire only when the MAIN editor holds focus. That focus
- * gate is now `editorRef.current.isFocused()` (PT-4187 stabilization), replacing a global
+ * gate is now `editorRef.current.isFocused()`, replacing a global
  * `document.querySelector('.editor-input')` + `activeElement` check that a footnote-editor
  * popover's own `.editor-input` could confuse and that went stale across an editor remount.
  *

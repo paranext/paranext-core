@@ -661,6 +661,26 @@ describe('overlay.service-host', () => {
       expect(result).toBe('fig');
     });
 
+    it('commits the exact marker for a bare-marker palette filtered to "f" (the `\\f` Space/Enter flow)', async () => {
+      // The standard-view marker palette maps items with label = the bare marker (id = marker),
+      // so `startsWith('f')` keeps [f, fig, fr] in original order and index 0 must be `f` itself —
+      // committing anything else would insert the wrong marker on `\f` + Space/Enter.
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'add', label: 'add' },
+          { id: 'f', label: 'f' },
+          { id: 'fig', label: 'fig' },
+          { id: 'fr', label: 'fr' },
+          { id: 'wj', label: 'wj' },
+        ],
+        passive: true,
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'f' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+      expect(await promise).toBe('f');
+    });
+
     it('should skip disabled items when committing, selecting the next enabled item', async () => {
       const request: CommandPaletteRequest = {
         items: [

@@ -12,6 +12,13 @@ import { MutableRefObject } from 'react';
  * This replaces the previous arrangement where a successful write's guard was cleared only when the
  * next PDP update reached `useEditorPdpSync` — which meant any unrelated update could reset the
  * guard mid-write, and the write path itself never owned the flag's full lifecycle.
+ *
+ * Known tradeoff (deliberate, OK to rework later): if `write` NEVER settles — a wedged extension
+ * host or a lost JSON-RPC request — the guard stays set and every later save is silently skipped.
+ * That failure mode means the PDP connection itself is dead (no save could succeed anyway), and
+ * the old "clear on the next PDP update" recovery valve is intentionally NOT restored because it
+ * reintroduces the mid-write reset bug above. If recovery ever matters, prefer a timeout that
+ * clears the guard AND surfaces the failure, not a silent unlatch.
  */
 export async function withWriteInFlightGuard<T>(
   isWritingRef: MutableRefObject<boolean>,
