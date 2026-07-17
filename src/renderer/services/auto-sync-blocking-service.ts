@@ -1,71 +1,43 @@
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
-import { logger } from '@shared/services/logger.service';
-import { getNetworkEvent, requestNoRetry } from '@shared/services/network.service';
-import { serializeRequestType } from '@shared/utils/util';
-import { getErrorMessage } from 'platform-bible-utils';
-import { setAutoSyncBlocking } from './auto-sync-blocking-store';
+import { getNetworkEvent } from '@shared/services/network.service';
+import { raiseAutoSyncBlock } from './auto-sync-blocking-store';
 
 // String value must match the event emitted by the Send/Receive extension. The extension emits it
 // only around scheduled (unattended) syncs — the surface that blocks the workspace. Manual syncs
 // (driven from the Send/Receive dialog, which has its own progress and Cancel) never raise it.
-// `true` raises a block, `false` clears one; the store ref-counts so nested raises don't clear
-// early.
+// `true` raises a block, `false` clears one.
 const AUTO_SYNC_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlockingChanged';
-
-/**
- * Command on the Send/Receive extension (the emitter of {@link AUTO_SYNC_BLOCKING_CHANGED_EVENT})
- * that reports whether a scheduled sync is currently blocking, so this service can seed the store
- * on init instead of assuming unblocked. Requested untyped (the same pattern as
- * `paratextBibleSendReceive.cancelSync` in shutdown-tasks) because the copied
- * `paratext-bible-send-receive.d.ts` command contract does not declare it; registering the command
- * on the extension side (and declaring it in the contract) is tracked in PT-4214. Until then the
- * request rejects and init keeps the assume-unblocked default — exactly the pre-seeding behavior.
- */
-const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
 
 /**
  * Subscribes to the auto-sync blocking network event and drives the auto-sync-blocking store. Call
  * once at app startup. Returns a cleanup function.
  *
- * On init it also queries the emitter's current blocking state (best effort — see
- * {@link GET_AUTO_SYNC_BLOCKING_COMMAND}) and seeds the store from it, so a renderer reload during
- * an in-flight scheduled sync does not come up unblocked while the backend is still syncing (the
- * raise event was emitted before this subscription existed). Any live event wins over the (possibly
- * stale) snapshot, and the store's per-blocker safety leash bounds a seeded block whose clearing
- * event never arrives.
+ * The event payload is an anonymous boolean, so this service pairs each `false` with the oldest
+ * raise that has not yet consumed a clear. A raise whose own safety leash already fired absorbs its
+ * late clear as a no-op (the store's release tokens are idempotent), so a late clear can never
+ * release a newer, still-live blocker. What anonymous pairing cannot fix: a raise whose clear never
+ * arrives keeps consuming later raises' clears, shifting the unmatched block onto ever-newer raises
+ * — each still bounded by its own leash, but blocking can persist while syncs keep coming. The real
+ * fix is identity on the wire; PT-4214 replaces this event with a backend-authoritative per-project
+ * snapshot, which removes the pairing problem entirely.
+ *
+ * Known limitation (deliberate): this service only learns about blocking from live events, so a
+ * renderer reload during an in-flight scheduled sync comes up unblocked while the backend is still
+ * syncing (the raise event was emitted before this subscription existed). Seeding the initial state
+ * requires a backend query that does not exist yet; PT-4214 adds a C#-served
+ * `paratextBibleSendReceive.getAutoSyncBlocking` snapshot command and an init consult of it.
  */
 export function initAutoSyncBlockingService(): () => void {
-  let hasReceivedEvent = false;
-  let isDisposed = false;
+  // Clear functions for raises, oldest first, in raise order. A leash-released raise stays here as
+  // a tombstone until its (late) clear consumes it, keeping later clears paired with later raises.
+  const pendingClears: (() => void)[] = [];
 
   const unsubscribe = getNetworkEvent<{ isBlocking: boolean }>(AUTO_SYNC_BLOCKING_CHANGED_EVENT)(({
     isBlocking,
   }) => {
-    hasReceivedEvent = true;
-    setAutoSyncBlocking(isBlocking);
+    if (isBlocking) pendingClears.push(raiseAutoSyncBlock());
+    // A clear with no outstanding raise (emitted before this subscription existed) is ignored.
+    else pendingClears.shift()?.();
   });
 
-  (async () => {
-    try {
-      const isBlocking = await requestNoRetry<[], unknown>(
-        serializeRequestType(CATEGORY_COMMAND, GET_AUTO_SYNC_BLOCKING_COMMAND),
-      );
-      // Only seed if nothing live has spoken: an event that arrived while the request was in
-      // flight (either direction) supersedes this snapshot, and seeding after it could double
-      // count the same sync's raise.
-      if (isBlocking === true && !hasReceivedEvent && !isDisposed) setAutoSyncBlocking(true);
-    } catch (e) {
-      // Extension absent or command not registered (see GET_AUTO_SYNC_BLOCKING_COMMAND) — keep the
-      // assume-unblocked default. Debug, not warn: this is the expected path on plain
-      // Platform.Bible and, until PT-4214 lands, on Paratext 10 Studio too.
-      logger.debug(
-        `auto-sync blocking service could not read the initial blocking state: ${getErrorMessage(e)}`,
-      );
-    }
-  })();
-
-  return () => {
-    isDisposed = true;
-    unsubscribe();
-  };
+  return unsubscribe;
 }

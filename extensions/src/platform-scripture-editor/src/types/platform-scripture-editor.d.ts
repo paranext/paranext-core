@@ -692,6 +692,20 @@ declare module 'papi-shared-types' {
      * `papi.network.getNetworkEvent('platformScriptureEditor.onSharedLayoutApply')`.
      */
     'platformScriptureEditor.onSharedLayoutApply': { projectId: string };
+    /**
+     * Emitted just before a scripture editor web view is opened or replaced with a new project.
+     * `switchId` uniquely identifies this switch and pairs it with the matching
+     * `platformScriptureEditor.onDidSwitchProject` event. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+     */
+    'platformScriptureEditor.onWillSwitchProject': { switchId: string };
+    /**
+     * Emitted after the scripture editor web view open/replace call resolves. Carries the
+     * `switchId` of the `platformScriptureEditor.onWillSwitchProject` event that started the
+     * switch. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
+     */
+    'platformScriptureEditor.onDidSwitchProject': { switchId: string };
   }
 
   export interface SettingTypes {
