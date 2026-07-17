@@ -25,6 +25,16 @@ export interface DebouncedPdpSaveParams {
   latestSave: (usj?: Usj) => void;
   /** Whether a marker-palette session is currently open. */
   isPaletteSessionOpen: boolean;
+  /**
+   * The literal trigger run (`\` + typed filter, e.g. `\f`) currently sitting in the document for
+   * a PASSIVE palette session, or undefined for focused sessions (their filter chars never land).
+   * A palette-open flush must not write this un-settled literal to the PDP: ParatextData
+   * tokenizes an unknown marker in body text as a PARAGRAPH, so the raw literal came back as a
+   * garbage paragraph echo (live-observed when clicking a palette entry blurred the iframe and
+   * flushed). The literal is stripped from the SAVED copy only — the document keeps it for the
+   * palette's apply to consume.
+   */
+  paletteLiteralRun?: string;
   /** Settle pending mid-edit marker text in the editor so the saved USJ matches the screen. */
   commitPendingMarkerEdits: () => void;
   /** Read the editor's current (post-commit) USJ. */
@@ -50,6 +60,35 @@ export interface DebouncedPdpSaveParams {
  *   literal); with no palette session, settle pending marker edits then save what the editor
  *   shows.
  */
+/**
+ * Returns a copy of `usj` with the LAST occurrence of `literal` removed from its text content, or
+ * the original `usj` unchanged when the literal is not present. The walk finds the last string
+ * (in document order) containing the literal and removes that string's last occurrence — the
+ * position nearest the caret, where a passive palette's trigger literal lives. Never mutates the
+ * input (the editor still owns that object).
+ */
+function stripLastLiteralRun(usj: Usj, literal: string): Usj {
+  const copy: Usj = JSON.parse(JSON.stringify(usj));
+  let target: { holder: unknown[]; index: number } | undefined;
+  const walk = (content: unknown[] | undefined): void => {
+    content?.forEach((entry, index) => {
+      if (typeof entry === 'string') {
+        if (entry.includes(literal)) target = { holder: content, index };
+        return;
+      }
+      if (entry && typeof entry === 'object' && 'content' in entry)
+        walk((entry as { content?: unknown[] }).content);
+    });
+  };
+  walk(copy.content);
+  if (!target) return usj;
+  const text = target.holder[target.index];
+  if (typeof text !== 'string') return usj;
+  const at = text.lastIndexOf(literal);
+  target.holder[target.index] = text.slice(0, at) + text.slice(at + literal.length);
+  return copy;
+}
+
 export function performDebouncedPdpSave({
   usj,
   scheduledChapterKey,
@@ -57,6 +96,7 @@ export function performDebouncedPdpSave({
   capturedSave,
   latestSave,
   isPaletteSessionOpen,
+  paletteLiteralRun,
   commitPendingMarkerEdits,
   getEditorUsj,
 }: DebouncedPdpSaveParams): void {
@@ -65,7 +105,7 @@ export function performDebouncedPdpSave({
     return;
   }
   if (isPaletteSessionOpen) {
-    latestSave(usj);
+    latestSave(paletteLiteralRun ? stripLastLiteralRun(usj, paletteLiteralRun) : usj);
     return;
   }
   commitPendingMarkerEdits();
