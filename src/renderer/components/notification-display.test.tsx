@@ -25,7 +25,7 @@ function commandStub(name: string): keyof CommandHandlers {
 // This is the ONE render-level test in the notification suite that uses REAL Sonner instead of
 // mocking it (every other notification.service-host.test.ts case mocks 'sonner' wholesale, which is
 // exactly why the cancel-slot-button-is-dead-when-dismissible-is-false blocker slipped through
-// review undetected - see PT-4193's "Review fix" PR notes). Rendering the real Toaster and clicking
+// review undetected). Rendering the real Toaster and clicking
 // the real DOM button pins the actual Sonner contract instead of just the shape we hand it.
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@shared/services/localization.service', () => ({
@@ -115,7 +115,7 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(mockSendCommand).toHaveBeenCalledWith('test.secondary', notificationId);
   });
 
-  // PT-4193 layout fix: live E2E screenshots showed toasts with buttons collapsing their message
+  // Layout fix: live E2E screenshots showed toasts with buttons collapsing their message
   // down to a sliver - first a toast with BOTH an action and a cancel button, then (round-4 E2E)
   // a single-action break-lock toast. Sonner's default layout puts icon/content/cancel/action in a
   // single un-wrapped flex row, and non-shrinking buttons crush the content column.
@@ -201,7 +201,7 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(mockSendCommand).toHaveBeenCalledWith('test.primary', notificationId);
   });
 
-  // PT-4193 press-collapse regression (found in external triage): Sonner flips the toast to
+  // Press-collapse regression (found in external triage): Sonner flips the toast to
   // `data-swiping="true"` on pointerdown - ANY mouse button, on the toast body, BEFORE any movement
   // (its handler checks neither `event.button` nor movement, only that the target is not a BUTTON)
   // - and clears it again on pointerup. An earlier notification-display.scss revision gated the
@@ -295,7 +295,7 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(document.querySelector('.notification-toast-action-button')).not.toBeInTheDocument();
   });
 
-  // PT-4193 (PR #2561): the Toaster follows the app theme from the theme service. Sonner's own
+  // The Toaster follows the app theme from the theme service. Sonner's own
   // default is a fixed light theme, which left dark-themed apps with white toasts - and made the
   // shadcn-token-styled secondary button (which reads the app-level `--secondary` variables) flip
   // to dark-theme colors on a still-white toast, collapsing the primary/secondary hierarchy.
@@ -319,7 +319,7 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(document.querySelector('[data-sonner-toaster]')).toHaveAttribute('data-theme', 'light');
   });
 
-  // PT-4193 (review C61-2): a per-toast `position` makes Sonner render one <ol data-sonner-toaster>
+  // A per-toast `position` makes Sonner render one <ol data-sonner-toaster>
   // per distinct position, all sharing a single ref, so Sonner's own Alt+T hotkey only ever focuses
   // the last list. NotificationDisplay layers a focus-cycling handler on top so repeated Alt+T
   // reaches every list. (This pins that both lists become the active element across presses; jsdom

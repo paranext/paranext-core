@@ -1,4 +1,4 @@
-// PT-4193: a toast with buttons renders, by Sonner 1.7.4's own stylesheet
+// A toast with buttons renders, by Sonner 1.7.4's own stylesheet
 // (node_modules/sonner/dist/styles.css), as a single un-wrapped flex row: icon, content, cancel
 // button, action button. Sonner's buttons are `flex-shrink: 0` and its toast width is a fixed
 // `--width` (356px), so wide buttons crush the message content down to a sliver - confirmed live
@@ -14,8 +14,7 @@
 // and action as direct flex children of the toast `<li>`; revisit if Sonner changes its toast DOM.
 // Deliberately avoids Sonner's own `::after` (its ALWAYS-ON hover-bridge between stacked toasts)
 // and repurposes `::before`, which Sonner only styles in the swiping/removed states - see the
-// comment on the row break below for how that collision is resolved. See PT-4193 review
-// C61-3/4/15/23/26 for the failure modes this replaces.
+// comment on the row break below for how that collision is resolved.
 .notification-toast:has(.notification-toast-cancel-button, .notification-toast-action-button) {
   flex-wrap: wrap;
 
@@ -71,7 +70,7 @@
 
   // Settle the DEFAULT look of the secondary (cancel-slot) button as the shadcn `secondary` button
   // variant (button.tsx: bg-secondary / text-secondary-foreground / hover:bg-secondary/80), per UX
-  // direction on PR #2561. Without this, Sonner 1.7.4's styled mode renders BOTH buttons
+  // direction. Without this, Sonner 1.7.4's styled mode renders BOTH buttons
   // identically dark: its base `[data-sonner-toast][data-styled='true'] [data-button]` rule
   // (specificity (0,3,0)) sets the action colors on every `[data-button]` - including the cancel
   // button, which also carries `data-button` - and its softer `:where([data-cancel])` defaults are

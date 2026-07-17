@@ -46,7 +46,7 @@ function eventMatchesHotkey(event: KeyboardEvent, hotkey: readonly string[]): bo
   });
 }
 
-// PT-4193: class hooks for notification-display.scss's fix for the buttoned-toast layout collapse -
+// Class hooks for notification-display.scss's fix for the buttoned-toast layout collapse -
 // see that file for the full explanation. Applied here (the `Toaster`'s shared `toastOptions`)
 // rather than per-notification in notification.service-host.ts so every toast gets the hooks
 // uniformly; the CSS itself only changes layout when at least one button is present.
@@ -54,9 +54,9 @@ export function NotificationDisplay() {
   // Index of the toast list Alt+T last focused, so repeated presses cycle across every list.
   const focusedListIndexRef = useRef(-1);
 
-  // PT-4193 (PR #2561): follow the app theme so toasts render coherently in dark mode. Sonner's
-  // own default is a fixed light theme, which left dark-themed apps with white toasts - and made
-  // the shadcn-token-styled secondary button (notification-display.scss reads the app-level
+  // Follow the app theme so toasts render coherently in dark mode. Sonner's own default is a
+  // fixed light theme, which left dark-themed apps with white toasts - and made the
+  // shadcn-token-styled secondary button (notification-display.scss reads the app-level
   // `--secondary` variables, which flip with the app theme) render dark-theme colors on a
   // still-white toast, collapsing the primary/secondary button hierarchy.
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
@@ -69,7 +69,7 @@ export function NotificationDisplay() {
   const themeType =
     !isPlatformError(currentTheme) && currentTheme.type === 'dark' ? 'dark' : 'light';
 
-  // PT-4193 (review C61-2): with a per-toast `position`, Sonner 1.7.4 renders one `<ol>` per
+  // With a per-toast `position`, Sonner 1.7.4 renders one `<ol>` per
   // distinct position but assigns them all a single shared `ref`, so its own Alt+T handler only
   // ever focuses the LAST list - leaving toasts in every other position group unreachable by
   // keyboard (each `<ol>` is also its own focus trap that ejects focus when you try to Tab out to a
