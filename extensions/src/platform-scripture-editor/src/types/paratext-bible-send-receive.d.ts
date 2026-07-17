@@ -260,6 +260,25 @@ declare module 'papi-shared-types' {
      */
     'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
     /**
+     * Runs the Send/Receive sync scheduled for a session boundary ("On startup/shutdown") for the
+     * projects the user scheduled for that boundary. The extension owns the schedule, running the
+     * sync, and — on startup only — raising/clearing the block on editing a project while it is
+     * syncing; core only triggers it at the corresponding session boundary.
+     *
+     * Handles its own errors internally and always resolves (never rejects for an internal
+     * failure), reporting the outcome via the return value so the triggering side can log it
+     * truthfully.
+     *
+     * @param boundary Which session boundary is being triggered.
+     * @returns `'synced'` if a scheduled sync ran and completed, `'failed'` if one ran but did not
+     *   complete successfully, or `'skipped'` if nothing ran (nothing scheduled, not due, or
+     *   another sync already in progress).
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.runScheduledSessionSync': (
+      boundary: 'startup' | 'shutdown',
+    ) => Promise<'synced' | 'failed' | 'skipped'>;
+    /**
      * Accepts a project id, and returns a RevisionInfo[] of all revisions for the given project.
      *
      * @param projectId Id of project to retrieve revisions from
