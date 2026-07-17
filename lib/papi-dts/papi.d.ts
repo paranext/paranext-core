@@ -1153,9 +1153,9 @@ declare module 'shared/data/rpc.model' {
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
   /**
-   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for a
-   * JSON-RPC *error response* with the given `code` — the full thrown message is this prefix followed
-   * by `: <error message>`.
+   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+   * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+   * followed by `: <error message>`.
    *
    * Exported so the few callers that must classify these thrown errors by message (there is no richer
    * machine-readable marker for a "method not found" response) derive the format from this single
