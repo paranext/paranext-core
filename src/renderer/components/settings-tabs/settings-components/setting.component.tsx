@@ -67,7 +67,7 @@ type ProjectSettingsControls = {
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setSetting: ((newSetting: any) => void) | undefined;
+  setSetting: ((newSetting: any) => Promise<unknown>) | undefined;
   isLoading: boolean;
 };
 
@@ -224,7 +224,9 @@ export function Setting({
     try {
       if (validateSetting && (await validateSetting(settingKey, newValue, setting))) {
         setErrorMessage(undefined);
-        if (setSetting) setSetting(newValue);
+        // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
+        // and surfaces as an error message instead of vanishing as an unhandled rejection.
+        if (setSetting) await setSetting(newValue);
       } else {
         setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
