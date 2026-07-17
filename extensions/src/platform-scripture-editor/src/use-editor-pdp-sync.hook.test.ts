@@ -431,6 +431,77 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local content pushed up instead
   });
 
+  it('defers to the editor when a note/palette editing session is active even though the editor is BLURRED', () => {
+    // The popover flow: focus sits in the footnote editor (main editor blurred) while its edits
+    // have not reached the PDP yet. A differing same-document echo replacing the main editor
+    // would regenerate every Lexical node key — killing the popover session mid-edit (its Save
+    // then targets a dead key and silently no-ops). The session predicate extends the SAME
+    // "the editor owns the freshest content" deferral that isFocused() drives for live typing.
+    const normalizedEcho: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. \q1',
+          ],
+        },
+      ],
+    };
+    const newerEditorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'q1',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. edited in popover',
+          ],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => newerEditorContent,
+        isFocused: () => false, // main editor blurred — focus is in the popover
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+          isEditingSessionActive: () => true,
+        });
+      },
+      { initialProps: { usjFromPdp: levUsj } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    act(() => rerender({ usjFromPdp: normalizedEcho }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled(); // popover session survives — no key regeneration
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local content pushed up instead
+  });
+
   //   (b) A DIFFERENT editor's `.editor-input` holds focus (e.g. the footnote-editor popover, which
   //       renders its own `.editor-input`). The old query grabbed the first `.editor-input` and saw
   //       it focused, wrongly treating THIS editor as actively edited and deferring a real change.

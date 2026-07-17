@@ -58,6 +58,7 @@ export function useEditorPdpSync({
   usjSentToPdp,
   setEditorUsj,
   saveUsjToPdpIfUpdated,
+  isEditingSessionActive,
 }: {
   usjFromPdp: Usj | undefined;
   editorRef: MutableRefObject<EditorRef | null>;
@@ -65,6 +66,17 @@ export function useEditorPdpSync({
   /** Stable ref whose `.current` is the function to call to update the editor's displayed content */
   setEditorUsj: MutableRefObject<(usj: Usj) => void>;
   saveUsjToPdpIfUpdated: () => void;
+  /**
+   * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing
+   * SESSION owns the editor's content even though the editor itself is blurred — a marker-palette
+   * session (the palette overlay outside the iframe holds focus) or an open footnote-editor
+   * popover (its own inner editor holds focus while its edits haven't reached the PDP yet).
+   * Replacing the editor mid-session would regenerate every Lexical node key, killing the
+   * session (the popover's Save then targets a dead key and silently no-ops). Same-document
+   * deferral only — a different-document update (navigation) always replaces, exactly as for
+   * live typing.
+   */
+  isEditingSessionActive?: () => boolean;
 }): void {
   // Counts consecutive incoming updates deferred to the actively-edited chapter without the
   // round-trip converging (the editor's content matching the echo). Reset whenever an update is
@@ -107,7 +119,7 @@ export function useEditorPdpSync({
       // focus sits in the editor), deferring would keep the editor on the OLD chapter forever —
       // and, worse, save-back would write the old chapter's content through the NEW chapter's
       // data selector. A different-document update always replaces.
-      const isActivelyEditing = editorRef.current.isFocused();
+      const isActivelyEditing = editorRef.current.isFocused() || (isEditingSessionActive?.() ?? false);
       if (isActivelyEditing) {
         const editorUsj = editorRef.current.getUsj();
         // Same document only when BOTH are identifiable and their identities match. An
@@ -164,6 +176,7 @@ export function useEditorPdpSync({
     // re-runs. The refs below are stable (their identities never change), but are listed to
     // satisfy the exhaustive-deps lint rule.
     editorRef,
+    isEditingSessionActive,
     nonConvergingDeferralCount,
     saveUsjToPdpIfUpdated,
     setEditorUsj,

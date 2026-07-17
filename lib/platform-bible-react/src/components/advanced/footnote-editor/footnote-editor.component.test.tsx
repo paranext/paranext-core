@@ -111,6 +111,29 @@ function makeMarkerPalette(show: FootnoteEditorMarkerPalette['show'] = vi.fn()) 
   } satisfies FootnoteEditorMarkerPalette;
 }
 
+/**
+ * Gives the mocked editor a note whose content holds the DOM caret — the "caret inside the note
+ * body" state the popover's caret-discipline guards check via `isDomCaretInsideNote()`. Without
+ * it, Enter and `\` are claimed and rerouted into the note instead of reaching their handlers.
+ */
+function placeDomCaretInsideNote(editorInput: HTMLElement): void {
+  const doc = editorInput.ownerDocument;
+  let note = editorInput.querySelector('span.note');
+  if (!note) {
+    note = doc.createElement('span');
+    note.classList.add('note');
+    note.textContent = 'note text';
+    editorInput.appendChild(note);
+  }
+  const selection = doc.getSelection();
+  const range = doc.createRange();
+  if (!note.firstChild || !selection) throw new Error('mock note text/selection missing');
+  range.setStart(note.firstChild, 2);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
@@ -208,6 +231,7 @@ describe('FootnoteEditor marker palette wiring', () => {
       const { editorInput } = renderFootnoteEditor({
         view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
       });
+      placeDomCaretInsideNote(editorInput);
       const notPrevented = editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -234,6 +258,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       const notPrevented = editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -266,6 +291,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -301,6 +327,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -331,6 +358,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -364,6 +392,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -403,6 +432,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       const doc = editorInput.ownerDocument;
       doc.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
@@ -438,6 +468,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
 
+      placeDomCaretInsideNote(editorInput);
       editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -458,28 +489,37 @@ describe('FootnoteEditor marker palette wiring', () => {
         { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
         markerPalette,
       );
-      // Give the mocked editor a note whose content holds the DOM caret — the state where the
-      // library's own KEY_ENTER handler ($handleEnterInNote → \fp) must receive the event.
-      const doc = editorInput.ownerDocument;
-      const note = doc.createElement('span');
-      note.classList.add('note');
-      note.textContent = 'note text';
-      editorInput.appendChild(note);
-      const selection = doc.getSelection();
-      const range = doc.createRange();
-      if (!note.firstChild || !selection) throw new Error('mock note text/selection missing');
-      range.setStart(note.firstChild, 2);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
+      // The caret sits inside the note — the state where the library's own KEY_ENTER handler
+      // ($handleEnterInNote → \fp) must receive the event.
+      placeDomCaretInsideNote(editorInput);
 
-      const notPrevented = doc.dispatchEvent(
+      const notPrevented = editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
       );
 
       expect(notPrevented).toBe(true);
       expect(markerPalette.show).not.toHaveBeenCalled();
       expect(markerPalette.commit).not.toHaveBeenCalled();
+    });
+
+    it('with the DOM caret outside the note: `\\` is claimed and rerouted (no wrapper-context palette)', () => {
+      // Same discipline as Enter: a `\` typed while the caret is parked on the wrapper para
+      // would open the palette against the WRONG context (paragraph markers instead of \ft/\fq)
+      // and land the literal outside the note.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette();
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+
+      const notPrevented = editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(false); // claimed — the literal must not land outside the note
+      expect(editorRef.selectNote).toHaveBeenCalledWith(0);
+      expect(markerPalette.show).not.toHaveBeenCalled();
     });
 
     it('with the DOM caret outside the note content: claimed and rerouted into the note', () => {
@@ -513,6 +553,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         markerPalette,
       );
 
+      placeDomCaretInsideNote(editorInput);
       editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
@@ -559,6 +600,7 @@ describe('close-and-save settle (abandonment window)', () => {
     });
     // Open a live palette session — its `show` promise never resolves, so the session stays open
     // across the chapter-change close-and-save below.
+    placeDomCaretInsideNote(editorInput);
     editorInput.ownerDocument.dispatchEvent(
       new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
     );

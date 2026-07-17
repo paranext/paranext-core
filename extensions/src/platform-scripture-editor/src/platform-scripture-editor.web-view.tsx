@@ -1257,6 +1257,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'toggleFootnotesAutoShow': {
           const { current } = footnotesAutoShowRef;
+          // Turning auto-show ON must take effect immediately: a manual pane toggle earlier in
+          // this chapter set the override, and without clearing it the auto-show effect
+          // early-returns until the next chapter change — the menu item looks broken.
+          if (!current) footnotesAutoOverrideRef.current = false;
           setFootnotesAutoShow(!current);
           break;
         }
@@ -1555,6 +1559,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (id !== undefined) {
             const selected = items.find((item) => item.marker === id);
             if (selected) {
+              // Restore focus BEFORE applying: a mouse click on the palette blurred the iframe,
+              // which can null Lexical's live selection — and the apply path's literal cleanup
+              // AND note insertion both silently no-op without a range selection (live-observed:
+              // the `\f` literal stranded in the document, no footnote created, and the literal
+              // then reached the PDP as data). Lexical's focus() synchronously restores the
+              // remembered selection.
+              editorRef.current?.focus();
               // A note-kind selection creates a footnote/cross-reference; the returned TRUE key
               // feeds the same editing-session correction the Ctrl+T path uses — the auto-open
               // path's delta-doc-derived key can land past the note (silent replaceEmbedUpdate
@@ -1565,8 +1576,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   literalPrefixLanded,
                 }),
               );
+            } else {
+              editorRef.current?.focus();
             }
-            editorRef.current?.focus();
           } else if (!passive) {
             // Focused palette dismissed: focus never left the passive case, but the focused
             // palette's own search input had it, so bring it back to the editor.
@@ -2232,6 +2244,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     usjSentToPdp,
     setEditorUsj,
     saveUsjToPdpIfUpdated,
+    // The editor owns its content while a marker-palette session or a footnote-popover editing
+    // session is open, even though DOM focus sits in the overlay/popover: a same-document echo
+    // replacing the editor mid-session regenerates every Lexical key and kills the session
+    // (live-observed: the popover's Save no-oping, the editor "jumping to the top" mid-insert).
+    isEditingSessionActive: () =>
+      paletteSession.current !== undefined || editingNoteKey.current !== undefined,
   });
 
   /**

@@ -422,28 +422,28 @@ export default function FootnoteEditor({
             ? [{ retain: EDITABLE_WRAPPER_PARA_PREFIX_RETAIN }, noteOp]
             : [noteOp];
         editorRef.current?.applyUpdate(insertOps);
-        // For a newly-inserted note there's no prior editing position to preserve, so land the
-        // caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match PT9 behavior
-        // of being ready to type immediately. `0` is this popover's own note index — it always
-        // holds exactly one note (see the other `getNoteOps(0)` call sites below). Existing notes
-        // are intentionally left alone here so reopening one doesn't move the caret.
-        if (isNewNote) {
-          editorRef.current?.selectNote(0);
-          editorRef.current?.focus();
-          // Radix's open-autofocus (load-bearing for the focus handoff into this popover —
-          // preventing it was falsified live) can land AFTER this and park the DOM caret at the
-          // wrapper-para start, where Enter plain-splits instead of inserting \fp.
-          // Re-assert the note selection once the autofocus has settled (a frame plus a
-          // macrotask later); skipped when the caret is already inside the note so a user's own
-          // click is never overridden.
-          reassertFrame = requestAnimationFrame(() => {
-            reassertTimeout = setTimeout(() => {
-              if (isDomCaretInsideNote()) return;
-              editorRef.current?.selectNote(0);
-              editorRef.current?.focus();
-            }, 0);
-          });
-        }
+        // Land the caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match
+        // PT9 behavior of being ready to type immediately. `0` is this popover's own note index —
+        // it always holds exactly one note (see the other `getNoteOps(0)` call sites below).
+        // Applies to REOPENED notes too: each popover instance mounts fresh, so there is never a
+        // prior caret to preserve — only Radix's open-autofocus parking the DOM caret at the
+        // wrapper-para start (outside the note body), where Enter plain-split and the `\`
+        // palette both resolved against the WRONG context.
+        editorRef.current?.selectNote(0);
+        editorRef.current?.focus();
+        // Radix's open-autofocus (load-bearing for the focus handoff into this popover —
+        // preventing it was falsified live) can land AFTER this and park the DOM caret at the
+        // wrapper-para start, where Enter plain-splits instead of inserting \fp.
+        // Re-assert the note selection once the autofocus has settled (a frame plus a
+        // macrotask later); skipped when the caret is already inside the note so a user's own
+        // click is never overridden.
+        reassertFrame = requestAnimationFrame(() => {
+          reassertTimeout = setTimeout(() => {
+            if (isDomCaretInsideNote()) return;
+            editorRef.current?.selectNote(0);
+            editorRef.current?.focus();
+          }, 0);
+        });
       }, 0);
     }
 
@@ -777,6 +777,17 @@ export default function FootnoteEditor({
 
         if (!markerPalette) return;
         if (event.key !== defaultMarkerMenuTrigger) return;
+        // Same caret discipline as Enter above (defense in depth behind the open-placement): a
+        // `\` typed while the caret sits OUTSIDE the note body would open the palette against the
+        // wrapper-para context (offering paragraph markers instead of \ft/\fq) and land the
+        // literal outside the note. Route the caret into the note first; the user re-types `\`.
+        if (!isDomCaretInsideNote()) {
+          event.preventDefault();
+          event.stopPropagation();
+          editorRef.current?.selectNote(0);
+          editorRef.current?.focus();
+          return;
+        }
         const ctx = editorRef.current?.getMarkerMenuContext();
         if (!ctx) return;
         const items = getMarkerMenuItems(options.styleInfo ?? defaultStyleInfo, ctx);
