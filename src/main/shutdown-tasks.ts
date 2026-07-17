@@ -55,7 +55,8 @@ type BoundedSyncSettlement<T> =
  * isn't registered (e.g. plain Platform.Bible with no S/R extension), this is a logged no-op, never
  * a crash or a wedged shutdown. No edit-block and no conflict surfacing here: the app is closing,
  * so there is nothing left to protect and no UI to show a result in — conflicts are surfaced again
- * on next startup instead (PT-4162).
+ * on next startup instead (PT-4162). Full design record:
+ * docs/specs/donna-auto-syncs/2026-07-14-pt-4162-startup-shutdown-design.md.
  *
  * If the interface-mode setting can't be read: skips the automatic shutdown S/R entirely and warns,
  * rather than falling through to Simple mode's open-editor S/R. The read can fail exactly when the
@@ -152,7 +153,8 @@ async function performSimpleModeShutdownSync(): Promise<void> {
  * startup/shutdown" (PT-4162). The extension owns selecting that subset (from PT-4160's schedule
  * store), running the sync, and — deliberately — NOT surfacing conflicts, since the app is closing
  * and there's no UI left to show them in (PT9 parity). Core only triggers it and bounds the wait
- * with the same scaffold Simple mode uses, logging the reported outcome.
+ * with the same scaffold Simple mode uses, logging the reported outcome. Full design record:
+ * docs/specs/donna-auto-syncs/2026-07-14-pt-4162-startup-shutdown-design.md.
  *
  * There is deliberately no boot-race retry here, unlike startup
  * (`requestSessionSyncWithBootRetry`). A shutdown boot race is near-impossible: this only runs when

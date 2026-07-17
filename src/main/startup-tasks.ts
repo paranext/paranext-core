@@ -186,7 +186,8 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
  * ~9 s ceiling loses the cold-boot race against extension-host activation (see
  * `requestSessionSyncWithBootRetry`). The command name and boundary come from the shared
  * {@link RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE} / {@link SessionSyncBoundary} contract so this raw
- * call still can't drift from the shutdown call site.
+ * call still can't drift from the shutdown call site. Full design record:
+ * docs/specs/donna-auto-syncs/2026-07-14-pt-4162-startup-shutdown-design.md.
  *
  * Logs the command's self-reported {@link ScheduledSessionSyncResult} truthfully — a real failure
  * warns; a deliberate skip (nothing scheduled, stale startup, or app quitting) is debug-only — so
