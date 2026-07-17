@@ -30,6 +30,16 @@ namespace TestParanextDataProvider
             OpenRpcSingleMethodDocumentation?
         > _documentationByRequestType = new();
 
+        /// <summary>
+        /// Test-only override for how a <c>network:registerEvent</c> request resolves. Defaults to
+        /// "main accepted" (returns <c>true</c>) — the normal happy path that services under test
+        /// rely on so they don't take their registration-failure branches. A test can swap in a
+        /// delegate that returns <c>false</c> (registry rejection) or throws (registry failure) to
+        /// exercise those best-effort branches. Scoped strictly to <c>network:registerEvent</c> so
+        /// no other test's <see cref="SendRequestAsync{T}"/> expectations change.
+        /// </summary>
+        public Func<bool> RegisterEventResponse { get; set; } = () => true;
+
         #region Overrides of PapiClient
 
         public override Task<bool> ConnectAsync()
@@ -112,13 +122,14 @@ namespace TestParanextDataProvider
             if (_localMethods.TryGetValue(requestType, out _))
                 return base.SendRequestAsync<T>(requestType, requestContents);
             _sentRequests.Enqueue((requestType, requestContents));
-            // Central-registry event registration returns an acceptance boolean; pretend main
-            // accepted (mirrors ConnectAsync's "pretend we succeeded") so services under test don't
-            // take their registration-failure paths. Kept strictly to this one request type so no
-            // other test's SendRequestAsync expectations change.
+            // Central-registry event registration returns an acceptance boolean; defer to the
+            // configurable RegisterEventResponse (defaults to "main accepted", mirroring
+            // ConnectAsync's "pretend we succeeded") so a test can drive the registration-failure
+            // paths. Kept strictly to this one request type so no other test's SendRequestAsync
+            // expectations change.
             if (requestType == "network:registerEvent")
                 // T is bool here; there is no non-casting way to satisfy the generic return type.
-                return Task.FromResult<T?>((T)(object)true);
+                return Task.FromResult<T?>((T)(object)RegisterEventResponse());
             return Task.FromResult<T?>(default);
         }
 
