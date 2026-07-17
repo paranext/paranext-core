@@ -5212,6 +5212,28 @@ declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
   export type Severity = 'info' | 'warning' | 'error';
+  /**
+   * The placements a notification can appear in, as a frozen array so it can be the single source of
+   * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
+   * `position` enum (which the service host spreads from this).
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_POSITIONS: readonly [
+    'top-left',
+    'top-center',
+    'top-right',
+    'bottom-left',
+    'bottom-center',
+    'bottom-right',
+  ];
+  /**
+   * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
+   * Omit to use the app's default placement.
+   *
+   * @experimental
+   */
+  export type NotificationPosition = (typeof NOTIFICATION_POSITIONS)[number];
   /** Data needed to display a notification to the user */
   export interface PlatformNotification {
     /**
@@ -5237,7 +5259,80 @@ declare module 'shared/models/notification.service-model' {
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      */
     clickCommand?: keyof CommandHandlers;
-    /** Optional ID of a previous notification to update instead of showing a new notification */
+    /**
+     * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
+     * this together with {@link secondaryClickCommand} to give the notification two actions.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     *
+     * @experimental
+     */
+    secondaryClickCommandLabel?: string | LocalizeKey;
+    /**
+     * Optional command to run if users click on the secondary label in the notification. Like
+     * {@link clickCommand}, the command is sent one argument:
+     *
+     * - NotificationId: The ID of the notification that was clicked
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * @experimental
+     */
+    secondaryClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional command to run if the user dismisses the notification themselves — by swiping/dragging
+     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
+     * other than the notification id, like {@link clickCommand}:
+     *
+     * - NotificationId: The ID of the notification that was dismissed
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
+     * away, or clicking a close button if the host ever enables one) AND when the notification
+     * auto-closes because its `duration` elapsed — a timeout is treated as an implicit dismissal, so
+     * a must-answer toast that times out still runs this command instead of vanishing silently. It
+     * does NOT fire when the notification is dismissed programmatically via
+     * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
+     * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
+     * decision — e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
+     * keep {@link dismissible} `true` (see the warning on {@link dismissible}). If you need the toast
+     * to persist until the user actually answers, also set `duration` to `0`.
+     *
+     * @experimental
+     */
+    dismissClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional placement of the notification on screen. When omitted, the app's default placement is
+     * used.
+     *
+     * @experimental
+     */
+    position?: NotificationPosition;
+    /**
+     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
+     * via a close button). Defaults to `true`.
+     *
+     * The host toast library (Sonner) gates both the {@link secondaryClickCommand} button and the
+     * user-dismiss gesture that fires {@link dismissClickCommand} on this same flag, so a naive
+     * `dismissible: false` would silently turn those controls into dead buttons. To prevent that, the
+     * platform IGNORES `dismissible: false` when a {@link secondaryClickCommand} or
+     * {@link dismissClickCommand} is also set — the notification stays user-dismissible so those
+     * controls keep working. `dismissible: false` therefore only takes effect on a notification with
+     * no secondary/dismiss command. For a notification the user must explicitly answer, prefer
+     * leaving `dismissible: true` and using {@link dismissClickCommand} so a swipe-away still counts
+     * as a real (e.g. "postpone") decision.
+     *
+     * @experimental
+     */
+    dismissible?: boolean;
+    /**
+     * Optional ID of a previous notification to update instead of showing a new notification.
+     *
+     * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
+     * the value it had on the previous `send` for that id — omitting a field never clears it. Pass
+     * the field explicitly to change it.
+     */
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
