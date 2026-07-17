@@ -9553,10 +9553,11 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         /** Items to render */
         items: CommandPaletteItem[];
         /**
-         * Current filter text. Mutable — updated in place by `updateCommandPalette`, which rejects
-         * (no-ops) filter text updates for non-passive palettes since only passive palettes drive
-         * their filter text externally. Undefined when unset or cleared — never the empty string (the
-         * store normalizes `''` to undefined).
+         * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive
+         * and active palettes: a passive palette's list is driven by this filter text directly, while
+         * an active palette uses it to drive its controlled cmdk input from forwarded keystrokes.
+         * Undefined when unset or cleared — never the empty string (the store normalizes `''` to
+         * undefined).
          */
         filterText?: string;
         /**

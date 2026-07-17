@@ -1,5 +1,5 @@
 /**
- * Type-through e2e for the live-typing ↔ PDP save/echo coordination (PT-4187 stabilization wave).
+ * Type-through e2e for the live-typing ↔ PDP save/echo coordination.
  *
  * The PDP round-trips every keystroke-driven save through USFM and echoes it back to the
  * actively-edited editor. This spec guards the invariants that keep that from losing a keystroke or

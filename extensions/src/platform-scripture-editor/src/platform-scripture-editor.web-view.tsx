@@ -413,6 +413,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         literalPrefixLanded: boolean;
         filter: string;
         items: MarkerMenuItem[];
+        /** See {@link MarkerPaletteSessionState.shouldSpaceCommit} — Space commits note markers. */
+        shouldSpaceCommit?: (filter: string) => boolean;
       }
     | { kind: 'enter'; token: number; filter: string; items: MarkerMenuItem[] }
     | { kind: 'selection'; token: number; filter: string; items: MarkerMenuItem[] }
@@ -861,10 +863,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const footnotesAutoOverrideRef = useRef(false);
 
-  // Chapter change resets the manual override so auto-show/hide behavior resumes for the new
-  // chapter.
+  // Chapter change resets per-chapter transient footnotes state: the manual pane override (so
+  // auto-show/hide resumes for the new chapter) and any pending pane-focus request (so a request
+  // that was dropped as out-of-bounds while `footnotes` was momentarily empty can't be retried
+  // against the NEW chapter's notes once they repopulate).
   useEffect(() => {
     footnotesAutoOverrideRef.current = false;
+    setFootnotePaneFocusRequest(undefined);
   }, [scrRef.book, scrRef.chapterNum]);
 
   /**
@@ -1525,7 +1530,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       paletteSessionCounter.current += 1;
       const token = paletteSessionCounter.current;
       paletteSession.current = passive
-        ? { kind: 'backslash', token, literalPrefixLanded, filter: '', items }
+        ? {
+            kind: 'backslash',
+            token,
+            literalPrefixLanded,
+            filter: '',
+            items,
+            // Space COMMITS (like Enter) when the typed filter exactly names a NOTE marker:
+            // letting the literal `\f ` land instead would hand it to the Tier-2 tokenizer,
+            // which absorbs the rest of the paragraph into the new footnote as its
+            // caller/content. Committing inserts an empty footnote exactly like `\f` + Enter.
+            shouldSpaceCommit: (filter: string) =>
+              items.some((item) => item.kind === 'note' && item.marker === filter),
+          }
         : { kind: 'selection', token, filter: '', items };
 
       papi.overlays
@@ -1630,6 +1647,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // to propagate — capture phase doesn't change that, the literal still lands. The legacy
     // non-standard-view interception stays in the bubble-phase `handleKeyDown` below, unchanged.
     const handleStandardViewTriggers = (event: KeyboardEvent) => {
+      // Never intercept IME composition keys: an Enter (or `\`) that confirms or feeds a
+      // CJK/complex-script candidate arrives with `isComposing` (keyCode 229) and must reach
+      // Lexical's own composition-guarded handlers, not open a marker palette. This capture-phase
+      // listener runs ahead of MarkerEditPlugin's `editor.isComposing()` guard, so it needs its own.
+      if (event.isComposing || event.keyCode === 229) return;
+
       // Scoped to the MAIN editor instance via `isFocused()`, not a global `.editor-input` query:
       // the footnote-editor popover renders its own `.editor-input`, and a captured element goes
       // stale across an editor remount. Evaluated per-event so it always reflects current focus.

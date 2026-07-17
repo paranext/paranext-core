@@ -43,6 +43,15 @@ export interface MarkerPaletteSessionState {
    * literal run from the document at apply time, so drift here can never corrupt an insert.
    */
   filter: string;
+  /**
+   * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
+   * the palette selection (claimed, like Enter) instead of landing as a literal and dismissing.
+   * Consumers use this for markers where the literal `\marker ` completion route would misbehave —
+   * e.g. typing `\f ` in Standard view: the Tier-2 tokenizer would absorb the rest of the paragraph
+   * into the new footnote as its caller/content, whereas committing the palette inserts an empty
+   * footnote exactly like `\f` + Enter.
+   */
+  shouldSpaceCommit?: (filter: string) => boolean;
 }
 
 /** The palette operations the forwarding table drives (overlay service or host-supplied). */
@@ -63,8 +72,13 @@ export interface MarkerPaletteSessionDriver {
 export type MarkerPaletteKeyOutcome = 'passed' | 'continue' | 'ended';
 
 const FILTER_CHAR_REGEX: Record<MarkerPaletteSessionKind, RegExp> = {
-  // Passive mirror: PT9 marker characters that land in the document as they filter.
-  backslash: /^[a-z0-9+]$/,
+  // USFM marker characters that filter the palette. Hyphens (milestones `ts-s`/`ts-e`, `qt-s`,
+  // `zpa-xb`) and letter case (custom markers may be capitalized; marker search is
+  // case-insensitive) are valid wherever markers are filtered. `*` is deliberately kept OUT of
+  // `backslash`: in the passive palette `*` is a close/commit trigger handled earlier at keydown
+  // time (the Space/`*` branch in `handleMarkerPaletteSessionKeyDown`), not a filter character —
+  // whereas a focused `selection` palette filters close-tag endmarkers like `nd*`, so it keeps `*`.
+  backslash: /^[a-z0-9+-]$/i,
   // Focused menus: claimed filter characters (digits for q1/s2 etc.).
   enter: /^[a-z0-9]$/i,
   selection: /^[a-z0-9+*-]$/i,
@@ -124,8 +138,23 @@ export function handleMarkerPaletteSessionKeyDown(
   }
 
   if (session.kind === 'backslash' && (event.key === ' ' || event.key === '*')) {
+    if (event.key === ' ' && session.shouldSpaceCommit?.(session.filter)) {
+      // Space commits like Enter for markers where the literal completion route would misbehave
+      // (see MarkerPaletteSessionState.shouldSpaceCommit). Claimed so no literal space lands.
+      claim(event);
+      driver.commit();
+      return 'ended';
+    }
     // PT9 Space-commit / `*`-close: the key lands as literal text and is picked up by the
     // engine's own Tier-2 marker-completion trigger, so the palette is no longer relevant.
+    driver.dismiss();
+    return 'ended';
+  }
+
+  if (session.kind === 'backslash' && event.key === 'Backspace' && session.filter === '') {
+    // Passive palette with an empty filter: the only thing behind the palette is the trigger `\`,
+    // which this (unclaimed) Backspace is about to delete from the document. End the session so the
+    // overlay isn't left orphaned behind a deleted `\`.
     driver.dismiss();
     return 'ended';
   }

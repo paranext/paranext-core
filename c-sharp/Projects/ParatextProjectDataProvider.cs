@@ -2422,8 +2422,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             markers[tag.Marker] = new PlatformMarkerStyleInfo(tag);
         }
         // Default font/size: same ScrText accessors PT9's CSSCreator.CreateUsfmCss(ScrText, ...)
-        // reads (/home/lyonsm/Paratext/ParatextInternalShared/ScriptureEditor/CSSCreator.cs:96-101)
-        // — ScrText has no DefaultFont/DefaultFontSize properties; the language's font is the
+        // reads — ScrText has no DefaultFont/DefaultFontSize properties; the language's font is the
         // project's default font.
         return new PlatformStyleInfo(scrText.Language.FontName, scrText.Language.FontSize, markers);
     }

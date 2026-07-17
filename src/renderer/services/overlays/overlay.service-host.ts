@@ -635,7 +635,15 @@ async function updateCommandPalette(
   update: { filterText?: string; moveSelection?: number },
 ): Promise<void> {
   const entry = getActiveCommandPalette(webViewId);
-  if (!entry) return;
+  if (!entry) {
+    // LOUD: a dropped update means the palette's filter/selection silently diverges from what the
+    // user typed (observed live as `\f` + Space committing nothing and stranding the literal).
+    logger.warn(
+      `updateCommandPalette: no active command palette for WebView ${webViewId} — update dropped ` +
+        `(filterText=${JSON.stringify(update.filterText)}, moveSelection=${update.moveSelection})`,
+    );
+    return;
+  }
 
   let nextFilterText = entry.filterText;
   if (update.filterText !== undefined) {
@@ -663,17 +671,38 @@ async function updateCommandPalette(
  */
 async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
   const entry = getActiveCommandPalette(webViewId);
-  if (!entry) return;
+  if (!entry) {
+    // LOUD: a silent commit no-op strands the requesting flow — the palette promise never
+    // resolves, so e.g. the standard-view `\f` + Space/Enter apply never runs and the typed
+    // literal stays in the document looking like the commit "did nothing".
+    logger.warn(
+      `commitCommandPaletteSelection: no active command palette for WebView ${webViewId} — ` +
+        `commit dropped`,
+    );
+    return;
+  }
 
   const filtered = filterPaletteItems(entry.items, entry.filterText);
-  if (filtered.length === 0) return;
+  if (filtered.length === 0) {
+    logger.warn(
+      `commitCommandPaletteSelection: filter ${JSON.stringify(entry.filterText)} matches 0 of ` +
+        `${entry.items.length} items — commit dropped, palette left open`,
+    );
+    return;
+  }
 
   const startIndex = Math.min(Math.max(entry.selectedIndex, 0), filtered.length - 1);
   let item = filtered[startIndex];
   for (let step = 1; item?.disabled && step < filtered.length; step += 1) {
     item = filtered[(startIndex + step) % filtered.length];
   }
-  if (!item || item.disabled) return;
+  if (!item || item.disabled) {
+    logger.warn(
+      `commitCommandPaletteSelection: every filtered item is disabled — commit dropped, ` +
+        `palette left open`,
+    );
+    return;
+  }
 
   resolveAndRemoveOverlay(entry.id, 'commandPalette', item.id);
 }
