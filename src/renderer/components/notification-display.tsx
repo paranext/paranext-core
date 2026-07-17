@@ -1,6 +1,23 @@
 import { useEffect, useRef } from 'react';
 import { Toaster } from 'sonner';
+import { isPlatformError, type ThemeDefinitionExpanded } from 'platform-bible-utils';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
+import { useData, useDataProvider } from '@renderer/hooks/papi-hooks';
 import './notification-display.scss';
+
+/**
+ * Placeholder passed as the default value for the `CurrentTheme` data hook so it has something
+ * structurally valid to return while the real theme loads (same pattern as
+ * `user-profile-popover.component.tsx`). Only `type` is ever read; the light default matches what
+ * Sonner would render on its own before the theme arrives.
+ */
+const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
+  themeFamilyId: '',
+  type: 'light',
+  id: 'light',
+  label: '%toolbar_theme_loading%',
+  cssVariables: {},
+};
 
 // Sonner's default focus hotkey (Alt+T). Declared here so the exact same combo drives both Sonner's
 // own <Toaster> and our focus-cycling handler below - the two must not drift apart.
@@ -36,6 +53,21 @@ function eventMatchesHotkey(event: KeyboardEvent, hotkey: readonly string[]): bo
 export function NotificationDisplay() {
   // Index of the toast list Alt+T last focused, so repeated presses cycle across every list.
   const focusedListIndexRef = useRef(-1);
+
+  // PT-4193 (PR #2561): follow the app theme so toasts render coherently in dark mode. Sonner's
+  // own default is a fixed light theme, which left dark-themed apps with white toasts - and made
+  // the shadcn-token-styled secondary button (notification-display.scss reads the app-level
+  // `--secondary` variables, which flip with the app theme) render dark-theme colors on a
+  // still-white toast, collapsing the primary/secondary button hierarchy.
+  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
+  const [currentTheme] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+  // Theme `type` is an open string (theme families can define their own types), but Sonner only
+  // understands light/dark - so anything that isn't exactly 'dark' gets the light look, matching
+  // the platform's own fallback behavior for unknown theme types.
+  const themeType =
+    !isPlatformError(currentTheme) && currentTheme.type === 'dark' ? 'dark' : 'light';
 
   // PT-4193 (review C61-2): with a per-toast `position`, Sonner 1.7.4 renders one `<ol>` per
   // distinct position but assigns them all a single shared `ref`, so its own Alt+T handler only
@@ -75,6 +107,7 @@ export function NotificationDisplay() {
 
   return (
     <Toaster
+      theme={themeType}
       hotkey={NOTIFICATION_TOASTER_HOTKEY}
       toastOptions={{
         classNames: {

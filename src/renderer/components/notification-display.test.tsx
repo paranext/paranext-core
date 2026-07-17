@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { CommandHandlers } from 'papi-shared-types';
+import type { ThemeDefinitionExpanded } from 'platform-bible-utils';
 import type {
   INotificationService,
   PlatformNotification,
@@ -38,6 +39,21 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+// Theme type the CurrentTheme data hook reports to NotificationDisplay; tests flip this to 'dark'
+// to pin the Toaster's theme wiring. The papi data hooks are stubbed wholesale because pulling the
+// real ones into jsdom drags the whole data-provider network stack along with them.
+let mockCurrentThemeType = 'light';
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useDataProvider: vi.fn(),
+  useData: vi.fn(() => ({
+    CurrentTheme: (_selector: undefined, defaultValue: ThemeDefinitionExpanded) => [
+      { ...defaultValue, type: mockCurrentThemeType, id: mockCurrentThemeType },
+      vi.fn(),
+      false,
+    ],
+  })),
+}));
+
 let capturedService: INotificationService;
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: {
@@ -70,6 +86,7 @@ describe('NotificationDisplay with real Sonner', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockCurrentThemeType = 'light';
     mockSendCommand.mockResolvedValue(undefined);
     stubMatchMedia();
     const { startNotificationService } = await import(
@@ -276,6 +293,30 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(title.closest('.notification-toast-content')).not.toBeNull();
     expect(document.querySelector('.notification-toast-cancel-button')).not.toBeInTheDocument();
     expect(document.querySelector('.notification-toast-action-button')).not.toBeInTheDocument();
+  });
+
+  // PT-4193 (PR #2561): the Toaster follows the app theme from the theme service. Sonner's own
+  // default is a fixed light theme, which left dark-themed apps with white toasts - and made the
+  // shadcn-token-styled secondary button (which reads the app-level `--secondary` variables) flip
+  // to dark-theme colors on a still-white toast, collapsing the primary/secondary hierarchy.
+  it('themes the toaster to match the current app theme', async () => {
+    mockCurrentThemeType = 'dark';
+    render(<NotificationDisplay />);
+
+    await capturedService.send({ message: 'Dark toast', severity: 'info' });
+    await screen.findByText('Dark toast');
+
+    expect(document.querySelector('[data-sonner-toaster]')).toHaveAttribute('data-theme', 'dark');
+  });
+
+  it('falls back to the light look for a theme type Sonner does not understand', async () => {
+    mockCurrentThemeType = 'paratext-classic';
+    render(<NotificationDisplay />);
+
+    await capturedService.send({ message: 'Custom-theme toast', severity: 'info' });
+    await screen.findByText('Custom-theme toast');
+
+    expect(document.querySelector('[data-sonner-toaster]')).toHaveAttribute('data-theme', 'light');
   });
 
   // PT-4193 (review C61-2): a per-toast `position` makes Sonner render one <ol data-sonner-toaster>
