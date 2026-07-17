@@ -11,6 +11,7 @@ import {
   isInsertEmbedOpOfType,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
+  StructureProtectionMode,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -500,9 +501,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
-  // paragraph/verse markers in the editor (passed to EditorOptions.isStructureProtected below). The
+  // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
   const { isStructureProtected, isProtectionActive } = useStructureProtectionState(projectId);
+
+  // Locked (by admin, personal preference, or both) always yields "protected" (hard block); Power
+  // mode leaves the feature fully inactive regardless of lock state ("off"); otherwise (Simple mode,
+  // not locked) the editor still guards structural deletes with a two-step confirm ("guarded").
+  const structureProtectionMode = useMemo<StructureProtectionMode>(() => {
+    if (!isProtectionActive) return 'off';
+    return isStructureProtected ? 'protected' : 'guarded';
+  }, [isProtectionActive, isStructureProtected]);
 
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
@@ -766,9 +775,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
-      isStructureProtected,
-      // Power mode leaves the feature inactive, so the two-step delete stays off there too.
-      isStructureProtectionActive: isProtectionActive,
+      structureProtectionMode,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -786,8 +793,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }),
     [
       isReadOnlyEffective,
-      isStructureProtected,
-      isProtectionActive,
+      structureProtectionMode,
       canUserCreateComments,
       isSyncBlocked,
       textDirectionEffective,
