@@ -1057,9 +1057,9 @@ export interface MarkerPaletteSessionState {
 	 * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
 	 * the palette selection (claimed, like Enter) instead of landing as a literal and dismissing.
 	 * Consumers use this for markers where the literal `\marker ` completion route would misbehave —
-	 * e.g. typing `\f ` in Standard view: the Tier-2 tokenizer would absorb the rest of the
-	 * paragraph into the new footnote as its caller/content, whereas committing the palette inserts
-	 * an empty footnote exactly like `\f` + Enter.
+	 * e.g. typing `\f ` in Standard view: the Tier-2 tokenizer would absorb the rest of the paragraph
+	 * into the new footnote as its caller/content, whereas committing the palette inserts an empty
+	 * footnote exactly like `\f` + Enter.
 	 */
 	shouldSpaceCommit?: (filter: string) => boolean;
 }

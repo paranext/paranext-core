@@ -113,8 +113,8 @@ function makeMarkerPalette(show: FootnoteEditorMarkerPalette['show'] = vi.fn()) 
 
 /**
  * Gives the mocked editor a note whose content holds the DOM caret — the "caret inside the note
- * body" state the popover's caret-discipline guards check via `isDomCaretInsideNote()`. Without
- * it, Enter and `\` are claimed and rerouted into the note instead of reaching their handlers.
+ * body" state the popover's caret-discipline guards check via `isDomCaretInsideNote()`. Without it,
+ * Enter and `\` are claimed and rerouted into the note instead of reaching their handlers.
  */
 function placeDomCaretInsideNote(editorInput: HTMLElement): void {
   const doc = editorInput.ownerDocument;
