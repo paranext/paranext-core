@@ -15,6 +15,11 @@ namespace TestParanextDataProvider
         private readonly ConcurrentQueue<(string eventType, object? eventParameters)> _sentEvents =
             new();
 
+        private readonly Queue<(
+            string requestType,
+            IReadOnlyList<object?>? requestContents
+        )> _sentRequests = [];
+
         // ConcurrentDictionary (not Dictionary): RegisterRequestHandlerAsync writes this on every
         // PDP registration, and per-project PDP creation registers PDPs concurrently (fire-
         // and-forget, not serialized behind a single creation lock - see
@@ -106,7 +111,34 @@ namespace TestParanextDataProvider
         {
             if (_localMethods.TryGetValue(requestType, out _))
                 return base.SendRequestAsync<T>(requestType, requestContents);
+            _sentRequests.Enqueue((requestType, requestContents));
+            // Central-registry event registration returns an acceptance boolean; pretend main
+            // accepted (mirrors ConnectAsync's "pretend we succeeded") so services under test don't
+            // take their registration-failure paths. Kept strictly to this one request type so no
+            // other test's SendRequestAsync expectations change.
+            if (requestType == "network:registerEvent")
+                // T is bool here; there is no non-casting way to satisfy the generic return type.
+                return Task.FromResult<T?>((T)(object)true);
             return Task.FromResult<T?>(default);
+        }
+
+        /// <summary>
+        /// Test-only count of requests sent through <see cref="SendRequestAsync{T}"/> that were NOT
+        /// handled by a locally-registered handler (i.e. would have gone over the wire to main).
+        /// </summary>
+        public int SentRequestCount
+        {
+            get { return _sentRequests.Count; }
+        }
+
+        /// <summary>
+        /// Test-only dequeue of the oldest captured outgoing request (see
+        /// <see cref="SentRequestCount"/>). Lets tests assert wire calls like
+        /// <c>network:registerEvent</c> without a live PAPI connection.
+        /// </summary>
+        public (string requestType, IReadOnlyList<object?>? requestContents) NextSentRequest
+        {
+            get { return _sentRequests.Dequeue(); }
         }
 
         /// <summary>
