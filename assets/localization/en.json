@@ -380,6 +380,7 @@
   "%settings_platform_zoomFactor_description%": "Applies to the entire application. 1.0 is the default. Allowed range is 0.5 to 3.0.",
   "%settings_platform_zoomFactor_errorMessage%": "Allowed range is {lowerLimit} to {upperLimit}.",
   "%settings_platform_zoomFactor_label%": "Zoom factor",
+  "%settings_projectSyncBlocked_notice%": "Editing paused — an automatic Send/Receive is in progress for this project. Settings are read-only until it finishes.",
   "%settings_sidebar_generalSettingsLabel%": "General Settings",
   "%settings_sidebar_projectsComboBoxPlaceholder%": "Select project",
   "%settings_sidebar_projectSettingsLabel%": "Project Settings",

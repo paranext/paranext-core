@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
+import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 import { settingsService } from '@shared/services/settings.service';
 import * as networkService from '@shared/services/network.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -100,13 +100,13 @@ describe('performShutdownTasks', () => {
     mockSettingsGet.mockResolvedValue('power');
     // Never-resolving promise: simulates a genuinely hung sync. `performSync` never settles, so the
     // AsyncVariable's timeout rejects `syncComplete.promise` and runBoundedShutdownSync takes its
-    // `timedOut` branch — the one path SHUTDOWN_SYNC_TIME_OUT_MS exists to bound. (An unregistered
+    // `timedOut` branch — the one path AUTO_SYNC_MAX_DURATION_MS exists to bound. (An unregistered
     // command does NOT reach here; it rejects fast and settles as `failed`, covered above.)
     mockRequestNoRetry.mockImplementation(() => new Promise(() => {}));
     vi.useFakeTimers();
     try {
       const shutdownPromise = performShutdownTasks();
-      await vi.advanceTimersByTimeAsync(SHUTDOWN_SYNC_TIME_OUT_MS);
+      await vi.advanceTimersByTimeAsync(AUTO_SYNC_MAX_DURATION_MS);
       await expect(shutdownPromise).resolves.toBeUndefined();
     } finally {
       vi.useRealTimers();
