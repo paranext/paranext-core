@@ -179,6 +179,68 @@ describe('NotificationDisplay with real Sonner', () => {
     expect(mockSendCommand).toHaveBeenCalledWith('test.primary', notificationId);
   });
 
+  // PT-4193 press-collapse regression (found in external triage): Sonner flips the toast to
+  // `data-swiping="true"` on pointerdown - ANY mouse button, on the toast body, BEFORE any movement
+  // (its handler checks neither `event.button` nor movement, only that the target is not a BUTTON)
+  // - and clears it again on pointerup. An earlier notification-display.scss revision gated the
+  // button-row flex break out of that state, so merely holding the mouse down on a buttoned toast
+  // collapsed it to a one-character-wide sliver until release. The break is now unconditional
+  // (see the `::before` rule's comment); jsdom computes no CSS layout and exposes no
+  // pseudo-elements, so the stylesheet side cannot be asserted here. What this test pins is the DOM
+  // contract that fix rests on: a plain press really does enter Sonner's swiping state (if a Sonner
+  // upgrade stops doing that, the scss comment needs revisiting), and the class/sibling hooks the
+  // layout rules key off remain in place throughout the press.
+  it('enters Sonner swiping state on a plain press and keeps the layout-fix hooks throughout', async () => {
+    render(<NotificationDisplay />);
+
+    const notification: PlatformNotification = {
+      message: 'Time to sync',
+      severity: 'info',
+      clickCommandLabel: 'Send/Receive now',
+      // The test only needs a command NAME to exist; it never resolves to a real handler.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      clickCommand: 'test.primary' as never,
+      secondaryClickCommandLabel: 'Postpone until 3:24 PM',
+      // The test only needs a command NAME to exist; it never resolves to a real handler.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      secondaryClickCommand: 'test.secondary' as never,
+    };
+
+    await capturedService.send(notification);
+
+    const title = await screen.findByText('Time to sync');
+    const toastRoot = document.querySelector('.notification-toast');
+    expect(toastRoot).toHaveAttribute('data-swiping', 'false');
+
+    // Sonner's pointerdown handler pointer-captures the target; jsdom does not implement pointer
+    // capture, so stub it (same category of jsdom gap as the matchMedia stub above).
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const titleElement = title as HTMLElement & {
+      setPointerCapture: (pointerId: number) => void;
+    };
+    titleElement.setPointerCapture = vi.fn();
+
+    // Left-button press on the toast body (the title div, not a button), no movement.
+    fireEvent.pointerDown(title, { pointerId: 1, button: 0 });
+    expect(toastRoot).toHaveAttribute('data-swiping', 'true');
+    // Mid-press, the hooks the two-row layout keys off must all still be present and siblings.
+    const content = title.closest('.notification-toast-content');
+    const actionButton = screen.getByRole('button', { name: 'Send/Receive now' });
+    const cancelButton = screen.getByRole('button', { name: 'Postpone until 3:24 PM' });
+    expect(content?.parentElement).toBe(toastRoot);
+    expect(actionButton.parentElement).toBe(toastRoot);
+    expect(cancelButton.parentElement).toBe(toastRoot);
+
+    fireEvent.pointerUp(title, { pointerId: 1, button: 0 });
+    expect(toastRoot).toHaveAttribute('data-swiping', 'false');
+
+    // Right-button press behaves identically (the live bug reproduced with either button).
+    fireEvent.pointerDown(title, { pointerId: 1, button: 2 });
+    expect(toastRoot).toHaveAttribute('data-swiping', 'true');
+    fireEvent.pointerUp(title, { pointerId: 1, button: 2 });
+    expect(toastRoot).toHaveAttribute('data-swiping', 'false');
+  });
+
   it('does not add the action-button hook to a single-button (cancel-only) toast', async () => {
     render(<NotificationDisplay />);
 

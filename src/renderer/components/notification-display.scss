@@ -9,12 +9,13 @@
 // buttoned toasts via `:has()` so plain-message toasts stay pixel-identical to before.
 //
 // Sonner exposes no supported API for a two-row toast body (the only real escape hatch,
-// `toast.custom`, means re-implementing Sonner's severity icon/colour rendering), so this reaches
+// `toast.custom`, means re-implementing Sonner's severity icon/color rendering), so this reaches
 // into its flex layout. It therefore DEPENDS on Sonner 1.7.4 rendering the icon, content, cancel,
 // and action as direct flex children of the toast `<li>`; revisit if Sonner changes its toast DOM.
-// Deliberately avoids Sonner's own `::after` (its hover-bridge between stacked toasts) and only
-// touches `::before` while the toast is at rest (Sonner styles `::before` transiently mid-swipe/
-// removal). See PT-4193 review C61-3/4/15/23/26 for the failure modes this replaces.
+// Deliberately avoids Sonner's own `::after` (its ALWAYS-ON hover-bridge between stacked toasts)
+// and repurposes `::before`, which Sonner only styles in the swiping/removed states - see the
+// comment on the row break below for how that collision is resolved. See PT-4193 review
+// C61-3/4/15/23/26 for the failure modes this replaces.
 .notification-toast:has(.notification-toast-cancel-button, .notification-toast-action-button) {
   flex-wrap: wrap;
 
@@ -27,12 +28,24 @@
     min-inline-size: 0;
   }
 
-  // Full-width, zero-height flex break that forces the buttons onto their own row. `::before` is
-  // untouched by Sonner except transiently while swiping/removing a toast, so - unlike the previous
-  // `::after` hack - this does not clobber Sonner's `::after` hover-bridge. Restrict it to the
-  // resting toast so it can't fight Sonner's own swipe/removal `::before`.
-  &:not([data-swiping='true']):not([data-removed='true'])::before {
+  // Full-width, zero-height flex break that forces the buttons onto their own row. Unlike the
+  // previous `::after` hack this leaves Sonner's `::after` hover-bridge alone, and it must apply in
+  // EVERY toast state: Sonner flips the toast to `data-swiping="true"` the instant any mouse button
+  // is pressed on the toast body (before any movement - a plain press-and-hold counts), and an
+  // earlier revision that gated this break out of the swiping/removed states collapsed the toast to
+  // a one-character-wide sliver for the duration of every such press, because the `flex-wrap` and
+  // `flex-basis: 0` rules above stayed active with no row break. Sonner's own use of `::before` in
+  // those states is an invisible, ABSOLUTELY-positioned hover/hit-area extender declared at zero
+  // specificity (`:where(...)`), so this higher-specificity rule wins on every property it declares;
+  // `position: static` is declared explicitly to keep the pseudo-element in flex flow when Sonner's
+  // swipe/removal styles try to absolutely position it (its leftover declarations - inset, height,
+  // transform, z-index - are inert on a zero-height in-flow item, `height` losing to `block-size`
+  // by specificity). Trade-off: buttoned toasts lose Sonner's enlarged swipe/removal hover hit
+  // area; swipe-to-dismiss tracking is unaffected because Sonner captures the pointer at press
+  // time.
+  &::before {
     content: '';
+    position: static;
     order: 1;
     flex-basis: 100%;
     block-size: 0;
