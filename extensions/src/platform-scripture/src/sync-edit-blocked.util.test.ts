@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  SYNC_EDIT_BLOCKED_MESSAGE_KEY,
-  isSyncEditBlockedError,
-  notifySyncEditBlocked,
-} from './sync-edit-blocked.util';
+import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 
 const mockSend = vi.fn<(notification: unknown) => Promise<number | undefined>>();
 const mockLoggerWarn = vi.fn<(message: string) => void>();
@@ -24,8 +20,20 @@ describe('isSyncEditBlockedError', () => {
     expect(isSyncEditBlockedError(new Error('Cannot save now (SR_EDIT_BLOCKED)'))).toBe(true);
   });
 
+  it('detects the sentinel in a bare message string (manage-books passes AlertEntry.text)', () => {
+    // getErrorMessage wraps a bare string as `new Error(JSON.stringify(string))`, so the message
+    // arrives quote-wrapped: `"Cannot create book (SR_EDIT_BLOCKED)"`. The regex is deliberately
+    // unanchored so the sentinel still matches inside the wrapping quotes — anchoring it to the
+    // end of the message would silently kill this path while the Error path stayed green.
+    expect(isSyncEditBlockedError('Cannot create book (SR_EDIT_BLOCKED)')).toBe(true);
+  });
+
   it('returns false for an unrelated error', () => {
     expect(isSyncEditBlockedError(new Error('Something else went wrong'))).toBe(false);
+  });
+
+  it('returns false for an unrelated bare string', () => {
+    expect(isSyncEditBlockedError('Something else went wrong')).toBe(false);
   });
 });
 
@@ -40,8 +48,10 @@ describe('notifySyncEditBlocked', () => {
     await notifySyncEditBlocked();
 
     expect(mockSend).toHaveBeenCalledTimes(1);
+    // The literal key (not the util's own constant) so this fails if the key ever drifts from
+    // the entry contributed in contributions/localizedStrings.json.
     expect(mockSend).toHaveBeenCalledWith({
-      message: SYNC_EDIT_BLOCKED_MESSAGE_KEY,
+      message: '%webView_platformScripture_error_syncEditBlocked%',
       severity: 'warning',
     });
     expect(mockLoggerWarn).not.toHaveBeenCalled();
