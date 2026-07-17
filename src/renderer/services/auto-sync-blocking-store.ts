@@ -1,18 +1,22 @@
 /**
- * Store tracking whether an automatic (scheduled) Send/Receive is currently blocking the workspace.
+ * Store tracking which projects an automatic (scheduled or session) Send/Receive is currently
+ * blocking edits on.
  *
- * Uses a reference counter so overlapping blockers don't prematurely hide the overlay: the visible
- * state (isBlocking) only flips to false once every in-flight blocker has cleared.
+ * BACKEND-AUTHORITATIVE SNAPSHOT model (PT-4214 Stage U): the backend write gate is the single
+ * source of truth. It emits a full snapshot of the blocked project ids on every arm/disarm, and the
+ * producer applies it wholesale via {@link setBlockedProjects} — an empty set means nothing is
+ * blocked. There is no local ref-counting and no timer-driven opinion about blocking: resilience
+ * against a lost event is re-query of the backend authority (the service's init consult), not a
+ * local safety leash. The renderer's old per-blocker `SAFETY_TIMEOUT_MS` leash is deleted, not
+ * retained — a second, timer-driven opinion about blocking is precisely the drift the design's
+ * findings 7/8/16 indict.
  *
- * Visibility has a 200 ms show-grace matching PT9's automatic-sync surface: on the first raise a
- * grace timer is armed, and listeners only ever see `true` if blocking is still in flight when it
- * fires. A sync that finishes within the grace never shows anything.
- *
- * A 10-minute safety timer re-arms on every raise and auto-clears the state if a blocker never
- * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted).
+ * Visibility keeps a 200 ms show-grace matching PT9's automatic-sync surface: on the first project
+ * becoming blocked (empty → non-empty) a grace timer is armed, and consumers only ever see a
+ * non-empty visible set if blocking is still in flight when it fires. A sync that finishes within
+ * the grace never shows anything. Set changes while already visible (e.g. a project joins or leaves
+ * an in-flight batch) are reflected immediately, with no fresh grace.
  */
-
-import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
 
 /**
  * How long blocking must persist before it becomes visible; a sync finishing inside this window
@@ -20,18 +24,16 @@ import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
  */
 const SHOW_GRACE_MS = 200;
 
-/**
- * Heuristic upper bound; if a blocker never clears (e.g. extension deactivates mid-sync),
- * auto-clear after this long. Tracks SHUTDOWN_SYNC_TIME_OUT_MS (the shutdown-sync timeout) because
- * both bound the same operation — a single automatic Send/Receive — so they should never diverge; a
- * scheduled sync of a large repo can run minutes, so the leash is deliberately long.
- */
-const SAFETY_TIMEOUT_MS = SHUTDOWN_SYNC_TIME_OUT_MS;
+const EMPTY_SET: ReadonlySet<string> = new Set();
 
-let blockCount = 0;
-let isBlockingVisible = false;
+/** The latest backend snapshot: which projects are blocked right now (raw, pre-grace). */
+let rawBlockedProjectIds: ReadonlySet<string> = EMPTY_SET;
+/**
+ * The grace-debounced set consumers see. Empty until the show-grace elapses on the first block;
+ * every public accessor reads this, so all consumers observe the same debounced view.
+ */
+let visibleBlockedProjectIds: ReadonlySet<string> = EMPTY_SET;
 let graceTimer: ReturnType<typeof setTimeout> | undefined;
-let safetyTimer: ReturnType<typeof setTimeout> | undefined;
 
 const listeners = new Set<() => void>();
 
@@ -39,47 +41,71 @@ function notifyListeners(): void {
   listeners.forEach((listener) => listener());
 }
 
-/** Flips the derived visibility, notifying listeners only when it actually changes. */
-function setBlockingVisible(value: boolean): void {
-  if (isBlockingVisible === value) return;
-  isBlockingVisible = value;
+/** Content equality for two id sets (the store always replaces sets wholesale, never mutates). */
+function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  return [...a].every((id) => b.has(id));
+}
+
+/** Publishes a new visible set, notifying listeners only when its contents actually change. */
+function setVisible(next: ReadonlySet<string>): void {
+  if (areSetsEqual(visibleBlockedProjectIds, next)) return;
+  visibleBlockedProjectIds = next;
   notifyListeners();
 }
 
-export function setAutoSyncBlocking(value: boolean): void {
-  if (value) {
-    blockCount += 1;
-    // Re-arm the safety timer on each raise, giving 10 min from the latest start.
-    clearTimeout(safetyTimer);
-    safetyTimer = setTimeout(() => {
-      blockCount = 0;
-      safetyTimer = undefined;
-      clearTimeout(graceTimer);
+/**
+ * Replaces the set of projects an automatic Send/Receive is blocking edits on. This is the sole
+ * producer API: the backend emits a full snapshot on every gate arm/disarm and the service forwards
+ * it here verbatim (an empty array clears blocking entirely).
+ */
+export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
+  const next: ReadonlySet<string> = new Set(projectIds);
+  rawBlockedProjectIds = next;
+
+  if (next.size === 0) {
+    // Fully cleared: cancel a pending grace (cleared inside the window → nothing ever showed) and
+    // drop the visible set immediately.
+    clearTimeout(graceTimer);
+    graceTimer = undefined;
+    setVisible(EMPTY_SET);
+    return;
+  }
+
+  if (visibleBlockedProjectIds.size > 0) {
+    // Already past the grace and visible: reflect set changes immediately (a project joined or left
+    // an in-flight batch) with no fresh grace.
+    setVisible(next);
+    return;
+  }
+
+  // Empty → non-empty. Arm the show-grace if one is not already pending; visibility only turns on
+  // if blocking survives the grace.
+  if (graceTimer === undefined) {
+    graceTimer = setTimeout(() => {
       graceTimer = undefined;
-      setBlockingVisible(false);
-    }, SAFETY_TIMEOUT_MS);
-    // On 0→1, arm the show grace; visibility only turns on if blocking survives the grace.
-    if (blockCount === 1) {
-      graceTimer = setTimeout(() => {
-        graceTimer = undefined;
-        if (blockCount > 0) setBlockingVisible(true);
-      }, SHOW_GRACE_MS);
-    }
-  } else {
-    blockCount = Math.max(0, blockCount - 1);
-    if (blockCount === 0) {
-      // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
-      clearTimeout(graceTimer);
-      graceTimer = undefined;
-      clearTimeout(safetyTimer);
-      safetyTimer = undefined;
-      setBlockingVisible(false);
-    }
+      // Re-read the raw set on fire: if the sync cleared during the grace it is empty and nothing
+      // shows; otherwise publish whatever is blocked now (it may have grown since the grace armed).
+      if (rawBlockedProjectIds.size > 0) setVisible(rawBlockedProjectIds);
+    }, SHOW_GRACE_MS);
   }
 }
 
-export function getAutoSyncBlocking(): boolean {
-  return isBlockingVisible;
+/** The (visible, grace-debounced) set of projects currently blocked by an automatic Send/Receive. */
+export function getBlockedProjectIds(): ReadonlySet<string> {
+  return visibleBlockedProjectIds;
+}
+
+/**
+ * True when a specific project is (visibly) blocked. An undefined project id is never blocked.
+ *
+ * No consumer in this diff — the project-settings UI (a stacked follow-up PR) is about to consume
+ * it to disable per-project actions while that project's automatic sync is blocking edits.
+ */
+export function isProjectBlocked(projectId: string | undefined): boolean {
+  if (projectId === undefined) return false;
+  return visibleBlockedProjectIds.has(projectId);
 }
 
 /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -96,11 +122,9 @@ export function subscribeToAutoSyncBlocking(listener: () => void): () => void {
  * WARNING: Test-only. @internal
  */
 export function resetAutoSyncBlocking(): void {
-  blockCount = 0;
-  isBlockingVisible = false;
+  rawBlockedProjectIds = EMPTY_SET;
+  visibleBlockedProjectIds = EMPTY_SET;
   clearTimeout(graceTimer);
   graceTimer = undefined;
-  clearTimeout(safetyTimer);
-  safetyTimer = undefined;
   listeners.clear();
 }
