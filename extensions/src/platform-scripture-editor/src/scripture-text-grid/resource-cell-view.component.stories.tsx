@@ -57,9 +57,12 @@ function CellRowBox({ children }: { children: React.ReactNode }) {
   return <div style={ROW_BOX_STYLE}>{children}</div>;
 }
 
-/** Wraps one cell in a bounded column (preserves single-cell stories). */
-function CellBox({ children }: { children: React.ReactNode }) {
-  return <div style={CELL_BOX_STYLE}>{children}</div>;
+/**
+ * Wraps one cell in a bounded column (preserves single-cell stories). `width` overrides the default
+ * column width for stories that need a narrower pane.
+ */
+function CellBox({ children, width }: { children: React.ReactNode; width?: string }) {
+  return <div style={{ ...CELL_BOX_STYLE, ...(width ? { width } : {}) }}>{children}</div>;
 }
 
 /** Stand-in for the read-only `Editorial` the connected cell supplies once the chapter is ready. */
@@ -269,7 +272,7 @@ export const VerseNotInstalled: Story = {
   ),
 };
 
-/** Verse mode, downloading — the inline name stays beside the offline placeholder + spinner. */
+/** Verse mode, downloading — the inline name stays beside the unavailable placeholder + spinner. */
 export const VerseDownloading: Story = {
   render: () => (
     <CellBox>
@@ -320,6 +323,25 @@ export const VerseLongName: Story = {
   ),
 };
 
+/**
+ * Verse mode, long name in a pane narrower than the label's width cap — the inline name must still
+ * show its truncation "…" at the visible edge (not a hard cut); hover reveals the full name.
+ */
+export const VerseLongNameNarrowPane: Story = {
+  render: () => (
+    <CellBox width="110px">
+      <ResourceCellView
+        state="ready"
+        label="New International Version 2011"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse />}
+      />
+    </CellBox>
+  ),
+};
+
 /** Verse mode, RTL long name — truncates on the inline-start (right) side; tooltip reveals it. */
 export const VerseLongNameRightToLeft: Story = {
   render: () => (
@@ -337,9 +359,28 @@ export const VerseLongNameRightToLeft: Story = {
 };
 
 /**
+ * Verse mode, RTL long name in a pane narrower than the label's width cap — the truncation "…" must
+ * still show at the visible inline-start (right) edge, mirroring the LTR narrow-pane case.
+ */
+export const VerseLongNameNarrowPaneRightToLeft: Story = {
+  render: () => (
+    <CellBox width="110px">
+      <ResourceCellView
+        state="ready"
+        label="תרגום השבעים המלא לפי מהדורת רלפס"
+        textDirection="rtl"
+        localizedStrings={localizedStrings}
+        nameDisplay="inline"
+        editor={<SampleVerse rtl />}
+      />
+    </CellBox>
+  ),
+};
+
+/**
  * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
- * Neighbors stay independent — one offline cell does not blank its siblings. The `unavailable` cell
- * shows "Resource not installed" (not "Download failed") so the two failure modes are
+ * Neighbors stay independent — one non-ready cell does not blank its siblings. The `unavailable`
+ * cell shows "Resource not installed" (not "Download failed") so the two failure modes are
  * distinguishable at a glance.
  */
 export const PartialFailureRow: Story = {

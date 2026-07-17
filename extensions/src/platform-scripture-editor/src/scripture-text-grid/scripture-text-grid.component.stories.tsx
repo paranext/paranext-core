@@ -16,9 +16,8 @@ import type { ResourceZoomController } from './use-resource-zoom.hook';
  * The Scripture Text Grid row: one cell per shown resource, all synced to the active scrRef, laid
  * out as a horizontal row. Clicking a verse cell opens a resizable chapter-context panel beside the
  * row. In Storybook the connected `ResourceCell` runs against inert PAPI stubs, so every cell
- * renders its "Downloading…" offline state (the real `Editorial` never mounts) — these stories
- * capture the row layout, the chapter-context split, and the close button rather than live
- * scripture content.
+ * renders its "Downloading…" state (the real `Editorial` never mounts) — these stories capture the
+ * row layout, the chapter-context split, and the close button rather than live scripture content.
  */
 const meta: Meta<typeof ScriptureTextGrid> = {
   title: 'Bundled Extensions/platform-scripture-editor/ScriptureTextGrid',
