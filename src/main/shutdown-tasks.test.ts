@@ -1,7 +1,9 @@
 import { vi } from 'vitest';
+import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
 import { settingsService } from '@shared/services/settings.service';
 import * as networkService from '@shared/services/network.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
 import { performShutdownTasks } from './shutdown-tasks';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -17,12 +19,18 @@ vi.mock('@shared/services/network-object.service', () => ({
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  // `debug` matches the sibling startup-tasks.test.ts mock; logShutdownSyncOutcome logs a scheduled
+  // skip at debug, so leaving it out would throw "logger.debug is not a function".
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockNetworkObjectGet = vi.mocked(networkObjectService.get);
+const mockLoggerDebug = vi.mocked(logger.debug);
+const mockLoggerInfo = vi.mocked(logger.info);
+const mockLoggerWarn = vi.mocked(logger.warn);
+const mockLoggerError = vi.mocked(logger.error);
 
 function makeWebViewService(defs: object[]) {
   return {
@@ -37,10 +45,74 @@ beforeEach(() => {
 });
 
 describe('performShutdownTasks', () => {
-  it('returns without any network calls when interface mode is not simple', async () => {
+  it('fires runScheduledSessionSync("shutdown") and logs "complete" when the command reports "synced"', async () => {
     mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('synced');
     await performShutdownTasks();
-    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('runScheduledSessionSync'),
+      'shutdown',
+    );
+    // Power mode selects by schedule, not open editors/cancelSync — neither Simple-mode call fires.
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    // A reported "synced" is the only thing that produces the truthful "complete" log.
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('treats a legacy void resolution as "synced" (logs "complete")', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue(undefined);
+    await performShutdownTasks();
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('warns (does not log "complete") when the command reports "failed"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('failed');
+    await performShutdownTasks();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('reported failure'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('logs a debug-only skip (no info, no warn) when the command reports "skipped"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockResolvedValue('skipped');
+    await performShutdownTasks();
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('skipped'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('swallows a missing/failing runScheduledSessionSync command in power mode without throwing, and does not log "complete"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
+    await expect(performShutdownTasks()).resolves.toBeUndefined();
+    // The bounded wait settled (the rejection was caught, not a timeout), so the failure is warned
+    // and the misleading "complete" is never logged.
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('failed or skipped'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('returns after the timeout when runScheduledSessionSync never settles, logs the timeout, and never logs "complete"', async () => {
+    mockSettingsGet.mockResolvedValue('power');
+    // Never-resolving promise: simulates a genuinely hung sync. `performSync` never settles, so the
+    // AsyncVariable's timeout rejects `syncComplete.promise` and runBoundedShutdownSync takes its
+    // `timedOut` branch — the one path SHUTDOWN_SYNC_TIME_OUT_MS exists to bound. (An unregistered
+    // command does NOT reach here; it rejects fast and settles as `failed`, covered above.)
+    mockRequestNoRetry.mockImplementation(() => new Promise(() => {}));
+    vi.useFakeTimers();
+    try {
+      const shutdownPromise = performShutdownTasks();
+      await vi.advanceTimersByTimeAsync(SHUTDOWN_SYNC_TIME_OUT_MS);
+      await expect(shutdownPromise).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith(expect.stringContaining('complete'));
   });
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
@@ -97,7 +169,9 @@ describe('performShutdownTasks', () => {
     );
   });
 
-  it('proceeds with S/R (simple-mode fallback) when settings service throws', async () => {
+  it('skips the automatic shutdown S/R and warns when settings service throws (no open-editor fallback)', async () => {
+    // Symmetric with startup: an unreadable mode must not fall through to Simple's open-editor S/R,
+    // which could sync a project a Power user excluded from their schedule. Do nothing and warn.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
     mockNetworkObjectGet.mockResolvedValue(
       makeWebViewService([
@@ -109,20 +183,36 @@ describe('performShutdownTasks', () => {
       ]),
     );
     await performShutdownTasks();
-    expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
-    expect(mockRequestNoRetry).toHaveBeenCalledWith(
-      expect.stringContaining('sendReceiveProjects'),
-      ['fallback-project'],
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read platform.interfaceMode'),
     );
   });
 
-  it('swallows unexpected errors and does not throw', async () => {
+  it('swallows unexpected errors and does not throw (exercises the outer try/catch)', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(makeWebViewService([]));
-    // Force an unexpected throw deep inside by making cancelSync throw a non-Error value
-    mockRequestNoRetry.mockImplementation(() => {
-      throw new Error('unexpected non-error throw');
+    // A WRITABLE editor so the flow runs past the `if (!projectId) return` early return and into
+    // performSimpleModeShutdownSync's unguarded region (an empty list would return early and never
+    // exercise the outer catch — the whole point of this test).
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'p1',
+        },
+      ]),
+    );
+    // Inject an unexpected error from an UNGUARDED spot — the "Syncing project on shutdown..." log,
+    // which is not wrapped in an inner try/catch. It escapes the inner handlers so that only
+    // performShutdownTasks's outer try/catch can swallow it. (Verified falsifiable: deleting that
+    // outer try/catch makes performShutdownTasks reject and this `resolves` assertion fail.)
+    mockLoggerInfo.mockImplementationOnce(() => {
+      throw new Error('unexpected logging failure');
     });
     await expect(performShutdownTasks()).resolves.toBeUndefined();
+    // The outer catch handled it via logger.error.
+    expect(mockLoggerError).toHaveBeenCalled();
   });
 });
