@@ -68,6 +68,113 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task InitializeAsync_RegistryRejectsEventRegistration_LogsAndStillEmits()
+        {
+            // Best-effort contract: if main's central registry rejects the event registration
+            // (returns false), InitializeAsync must warn and continue — the service still registers
+            // its command handler and still pushes gate transitions. Build a fresh gate + client so
+            // only the service under test here is subscribed (the base SetUp already initialized on
+            // the happy path).
+            SendReceiveWriteLock.ResetForTests();
+            using var client = new DummyPapiClient { RegisterEventResponse = () => false };
+            var service = new SendReceiveBlockNotifierService(client);
+
+            using var consoleError = new StringWriter();
+            var originalError = Console.Error;
+            Console.SetError(consoleError);
+            try
+            {
+                await service.InitializeAsync();
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    consoleError.ToString(),
+                    Does.Contain(BlockStateChangedEvent),
+                    "a rejected registration must be logged, naming the event"
+                );
+                Assert.That(
+                    client.IsHandlerRegistered(GetAutoSyncBlockingCommand),
+                    Is.True,
+                    "a rejected registration must not stop the command handler from registering"
+                );
+            });
+
+            // The service still forwards a gate transition despite the rejected registration.
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            Assert.That(
+                client.SentEventCount,
+                Is.EqualTo(1),
+                "the service must still push the block-state event after a rejected registration"
+            );
+            var (eventType, _) = client.NextSentEvent;
+            Assert.That(eventType, Is.EqualTo(BlockStateChangedEvent));
+        }
+
+        [Test]
+        public async Task InitializeAsync_EventRegistrationThrows_IsCaughtAndStillEmits()
+        {
+            // Best-effort contract: if the registration request itself fails (throws), InitializeAsync
+            // must catch it, log it, and continue — a registry hiccup must never break backend
+            // startup. Fresh gate + client, as above.
+            SendReceiveWriteLock.ResetForTests();
+            using var client = new DummyPapiClient
+            {
+                RegisterEventResponse = () =>
+                    throw new InvalidOperationException("registry offline"),
+            };
+            var service = new SendReceiveBlockNotifierService(client);
+
+            using var consoleError = new StringWriter();
+            var originalError = Console.Error;
+            Console.SetError(consoleError);
+            try
+            {
+                // Must not throw: the registration failure is caught internally.
+                await service.InitializeAsync();
+            }
+            finally
+            {
+                Console.SetError(originalError);
+            }
+
+            Assert.Multiple(() =>
+            {
+                var log = consoleError.ToString();
+                Assert.That(
+                    log,
+                    Does.Contain(BlockStateChangedEvent),
+                    "a thrown registration must be caught and logged, naming the event"
+                );
+                Assert.That(
+                    log,
+                    Does.Contain("registry offline"),
+                    "the caught exception detail must be logged"
+                );
+                Assert.That(
+                    client.IsHandlerRegistered(GetAutoSyncBlockingCommand),
+                    Is.True,
+                    "a thrown registration must not stop the command handler from registering"
+                );
+            });
+
+            // The service still forwards a gate transition despite the thrown registration.
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            Assert.That(
+                client.SentEventCount,
+                Is.EqualTo(1),
+                "the service must still push the block-state event after a thrown registration"
+            );
+            var (eventType, _) = client.NextSentEvent;
+            Assert.That(eventType, Is.EqualTo(BlockStateChangedEvent));
+        }
+
+        [Test]
         public void GateArm_PushesOnSyncWriteLockChangedEventWithBlockingSnapshot()
         {
             Assert.That(Client.SentEventCount, Is.Zero, "no events before any transition");
