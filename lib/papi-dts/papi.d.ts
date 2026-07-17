@@ -8242,8 +8242,8 @@ declare module 'shared/data/platform.data' {
   export const MIN_ZOOM_FACTOR = 0.5;
   export const MAX_ZOOM_FACTOR = 3;
   /**
-   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed
-   * to run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
    * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
    * deliberately long.
    *
