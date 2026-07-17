@@ -262,8 +262,8 @@ declare module 'papi-shared-types' {
     /**
      * Runs the Send/Receive sync scheduled for a session boundary ("On startup/shutdown") for the
      * projects the user scheduled for that boundary. The extension owns the schedule, running the
-     * sync, and — on startup only — raising/clearing the editing-block; core only triggers it at
-     * the corresponding session boundary.
+     * sync, and — on startup only — raising/clearing the block on editing a project while it is
+     * syncing; core only triggers it at the corresponding session boundary.
      *
      * Handles its own errors internally and always resolves (never rejects for an internal
      * failure), reporting the outcome via the return value so the triggering side can log it

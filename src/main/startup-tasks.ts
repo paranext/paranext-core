@@ -38,9 +38,10 @@ export const STARTUP_SYNC_RETRY_BUDGET_MS = 120_000;
  * How long (ms) after the main window becomes interactive a still-pending "startup" sync may still
  * be fired. The boot-race loop keeps retrying up to {@link STARTUP_SYNC_RETRY_BUDGET_MS}, but a
  * trigger that only lands well into the session is no longer a "startup" moment: firing it would
- * raise the extension's editing-block on an editor the user has by now opened and started typing
- * in, with no apparent cause. Past this window the trigger is dropped (those projects sync at the
- * next session boundary instead).
+ * raise the S/R extension's editing-block — the guard that blocks editing a project while it is
+ * syncing — on an editor the user has by now opened and started typing in, with no apparent cause.
+ * Past this window the trigger is dropped (those projects sync at the next session boundary
+ * instead).
  *
  * Anchored to window-interactive time (supplied by main via
  * {@link StartupTasksSignals.getWindowInteractiveElapsedMs}), not process start, so a slow _window_
@@ -110,7 +111,7 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * installed (e.g. Platform.Bible), the command may not yet be registered, or the sync may fail.
  * Startup must never be blocked or visibly affected by this.
  *
- * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown", via the S/R
+ * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" via the S/R
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
  * the S/R extension hasn't registered the command yet (or at all, e.g. plain Platform.Bible), this
  * is a logged no-op, never a crash or a blocked startup.

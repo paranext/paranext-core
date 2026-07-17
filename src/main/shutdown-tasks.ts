@@ -19,9 +19,9 @@ import type { SettingTypes } from 'papi-shared-types';
 import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
 
 /**
- * Behaviour-driving outcome of a bounded shutdown sync. Now that the extension reports its own
- * result, this carries what actually happened so {@link logShutdownSyncOutcome} can log it
- * truthfully rather than always claiming "complete":
+ * Behaviour-driving outcome of a bounded shutdown sync. The extension reports its own result, so
+ * this carries what actually happened and {@link logShutdownSyncOutcome} can log it truthfully
+ * rather than always claiming "complete":
  *
  * - `synced`: the sync ran and completed (Simple: the S/R resolved; Power: the command returned
  *   `'synced'`).
@@ -50,7 +50,7 @@ type BoundedSyncSettlement<T> =
  * project. All errors are swallowed — extension may not be installed, or may fail — shutdown must
  * never be permanently blocked.
  *
- * In Power mode: S/Rs the projects scheduled "On startup/shutdown", via the S/R extension's
+ * In Power mode: S/Rs the projects scheduled "On startup/shutdown" via the S/R extension's
  * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
  * registered (e.g. plain Platform.Bible with no S/R extension), this is a logged no-op, never a
  * crash or a wedged shutdown. No edit-block and no conflict surfacing here: the app is closing, so
