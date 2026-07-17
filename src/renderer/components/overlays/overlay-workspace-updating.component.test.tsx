@@ -2,7 +2,7 @@ import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi, beforeEach } from 'vitest';
 import {
-  setWorkspaceUpdating,
+  startWorkspaceUpdate,
   resetWorkspaceUpdating,
 } from '@renderer/services/workspace-updating-store';
 import { WorkspaceUpdatingOverlay } from './overlay-workspace-updating.component';
@@ -29,7 +29,7 @@ describe('WorkspaceUpdatingOverlay', () => {
   it('renders spinner and localized text when workspace is updating', () => {
     render(<WorkspaceUpdatingOverlay />);
     act(() => {
-      setWorkspaceUpdating(true);
+      startWorkspaceUpdate();
     });
     expect(screen.getByText('Updating workspace...')).toBeInTheDocument();
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
@@ -37,11 +37,12 @@ describe('WorkspaceUpdatingOverlay', () => {
 
   it('hides the overlay when workspace finishes updating', () => {
     render(<WorkspaceUpdatingOverlay />);
+    let release: (() => void) | undefined;
     act(() => {
-      setWorkspaceUpdating(true);
+      release = startWorkspaceUpdate();
     });
     act(() => {
-      setWorkspaceUpdating(false);
+      release?.();
     });
     expect(screen.queryByText('Updating workspace...')).not.toBeInTheDocument();
   });

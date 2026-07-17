@@ -160,26 +160,96 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void EnterWrite_WhileAnotherProjectSyncs_RejectsAllProjects_GlobalGate()
+        public void EnterWrite_WhileAnotherProjectSyncs_AllowsTheUnsyncedProject_PerProjectGate()
         {
-            // The write gate is GLOBAL (a single process-wide gate): while a sync is armed, writes
-            // to EVERY project fail fast, not just the syncing one. This is the intended coarse
-            // exclusion (a sync is globally exclusive). IsBlocked stays per-project pure data, so it
-            // is deliberately narrower than the gate.
+            // The write gate is PER-PROJECT: while projectA is syncing, a write to projectB (which
+            // is NOT in the armed set) must proceed normally — editing an unrelated project stays
+            // possible while another syncs (PT9 parity). This is a deliberate reversal of the old
+            // global gate. IsBlocked agrees: projectB is not in the armed set.
             SendReceiveWriteLock.SetSyncing(["projectA"]);
+
+            Assert.That(
+                SendReceiveWriteLock.IsBlocked("projectB"),
+                Is.False,
+                "projectB is not in the armed set — IsBlocked must be false"
+            );
+
+            IDisposable scope = null!;
+            Assert.DoesNotThrow(
+                () => scope = SendReceiveWriteLock.EnterWrite("projectB"),
+                "a write to the unsynced project must be allowed while another project syncs"
+            );
+            Assert.That(
+                SendReceiveWriteLock.InFlightWriteCount,
+                Is.EqualTo(1),
+                "the allowed write must count as in-flight"
+            );
+
+            scope.Dispose();
+            Assert.That(SendReceiveWriteLock.InFlightWriteCount, Is.Zero, "dispose releases it");
+        }
+
+        [Test]
+        public void EnterWrite_WhileProjectSyncs_RejectsThatProject_PerProjectGate()
+        {
+            // The other half of the per-project gate: a write to a project that IS in the armed set
+            // is rejected with the sentinel, exactly as before.
+            SendReceiveWriteLock.SetSyncing(["projectA", "projectB"]);
 
             Assert.Multiple(() =>
             {
-                Assert.That(
-                    SendReceiveWriteLock.IsBlocked("projectB"),
-                    Is.False,
-                    "IsBlocked is per-project pure data — projectB is not in the armed set"
+                var exA = Assert.Throws<InvalidOperationException>(
+                    () => SendReceiveWriteLock.EnterWrite("projectA")
                 );
-                var ex = Assert.Throws<InvalidOperationException>(
+                Assert.That(exA!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
+                var exB = Assert.Throws<InvalidOperationException>(
                     () => SendReceiveWriteLock.EnterWrite("projectB")
                 );
-                Assert.That(ex!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
+                Assert.That(exB!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
             });
+        }
+
+        [Test]
+        public void EnterWrite_AllowedUnsyncedWrite_ParticipatesInALaterDrain()
+        {
+            // An unsynced-project write that EnterWrite allowed while armed is a genuine in-flight
+            // write: the (global) drain of a SUBSEQUENT sync must wait for it. Arm projectA, open an
+            // allowed projectB write, then start a projectB sync with a shortened DrainTimeout and
+            // prove the drain actually waited it out (degraded), rather than skipping the drain — its
+            // count is what the drain waits on.
+            var previousTimeout = SendReceiveWriteLock.DrainTimeout;
+            SendReceiveWriteLock.DrainTimeout = TimeSpan.FromMilliseconds(300);
+            IDisposable? projectBWrite = null;
+            try
+            {
+                SendReceiveWriteLock.SetSyncing(["projectA"]);
+                projectBWrite = SendReceiveWriteLock.EnterWrite("projectB"); // allowed (out of set)
+                Assert.That(SendReceiveWriteLock.InFlightWriteCount, Is.EqualTo(1));
+
+                var stopwatch = Stopwatch.StartNew();
+                SendReceiveWriteLock.SetSyncing(["projectB"]); // takeover; global drain waits on the scope
+                stopwatch.Stop();
+
+                Assert.Multiple(() =>
+                {
+                    Assert.That(
+                        stopwatch.Elapsed,
+                        Is.GreaterThanOrEqualTo(TimeSpan.FromMilliseconds(250)),
+                        "the global drain must wait for the allowed unsynced write, not skip it"
+                    );
+                    Assert.That(
+                        SendReceiveWriteLock.InFlightWriteCount,
+                        Is.EqualTo(1),
+                        "the still-open allowed write is what the drain waited on"
+                    );
+                });
+            }
+            finally
+            {
+                projectBWrite?.Dispose();
+                SendReceiveWriteLock.DrainTimeout = previousTimeout;
+                SendReceiveWriteLock.Clear();
+            }
         }
 
         // ---- Forgiving lifecycle contract (no thread affinity, no recursion policy) ----
@@ -200,13 +270,15 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
-        public void EnterWrite_NestedWhileSyncArmed_InnerThrowsSentinel()
+        public void EnterWrite_NestedWhileSameProjectSyncArmed_InnerThrowsSentinel()
         {
             // Pins the nesting hazard the docs warn about: the gate tracks no ownership, so once a
-            // sync arms — here on the degraded path, since the outer scope on this thread can
-            // never drain — a nested EnterWrite inside an open outer scope is rejected
-            // MID-mutation. This is why delegating methods must call an un-gated core inside one
-            // scope (see SetBookUsfmInScope) instead of nesting gated entry points.
+            // sync of the SAME project arms — here on the degraded path, since the outer scope on
+            // this thread can never drain — a nested EnterWrite for that project inside an open
+            // outer scope is rejected MID-mutation. A method mutates one project, so its outer and
+            // inner scopes share that project and the per-project filter does not save it. This is
+            // why delegating methods must call an un-gated core inside one scope (see
+            // SetBookUsfmInScope) instead of nesting gated entry points.
             var previousTimeout = SendReceiveWriteLock.DrainTimeout;
             SendReceiveWriteLock.DrainTimeout = TimeSpan.FromMilliseconds(50);
             try
@@ -215,7 +287,7 @@ namespace TestParanextDataProvider.Projects
                 SendReceiveWriteLock.SetSyncing(["projectA"]); // degrades: outer cannot drain
 
                 var ex = Assert.Throws<InvalidOperationException>(
-                    () => SendReceiveWriteLock.EnterWrite("projectB")
+                    () => SendReceiveWriteLock.EnterWrite("projectA")
                 );
                 Assert.That(ex!.Message, Does.EndWith(SendReceiveWriteLock.EditBlockedSentinel));
             }
@@ -309,6 +381,45 @@ namespace TestParanextDataProvider.Projects
             });
 
             SendReceiveWriteLock.Clear();
+        }
+
+        [Test]
+        public void SetSyncing_AllInvalidBatch_ArmsButBlocksNoProject()
+        {
+            // Pins the ACTUAL per-project behavior of an all-invalid batch: it still arms (and the
+            // drain still runs, and the token is still valid — none of that machinery cares whether
+            // the blocked set is empty), but the per-project filter (armed && set.Contains(id)) can
+            // never match an empty set, so this arm rejects NOTHING for ANY project. This is the
+            // opposite of the old global-gate behavior, where an armed-with-empty-set gate rejected
+            // every write.
+            long token = 0;
+            Assert.DoesNotThrow(
+                () => token = SendReceiveWriteLock.SetSyncing([null!, ""]),
+                "an all-invalid batch must not crash the arming thread"
+            );
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    SendReceiveWriteLock.IsArmed,
+                    Is.True,
+                    "the gate still arms even though the batch had no valid ids"
+                );
+                Assert.That(
+                    SendReceiveWriteLock.ArmedProjectIds,
+                    Is.Empty,
+                    "no valid id means the armed set is empty"
+                );
+
+                IDisposable scope = null!;
+                Assert.DoesNotThrow(
+                    () => scope = SendReceiveWriteLock.EnterWrite("anyProject"),
+                    "an armed gate with an EMPTY blocked set must reject NO project's writes"
+                );
+                scope.Dispose();
+            });
+
+            SendReceiveWriteLock.Clear(token);
         }
 
         // ---- SetSyncing drains in-flight writes ----
@@ -711,6 +822,180 @@ namespace TestParanextDataProvider.Projects
             {
                 using var _ = SendReceiveWriteLock.EnterWrite("projectA");
             });
+        }
+
+        // ---- BlockStateChanged event + GetBlockState snapshot ----
+
+        [Test]
+        public void SetSyncing_Arm_RaisesBlockStateChangedOnceWithArmedIds()
+        {
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add;
+
+            SendReceiveWriteLock.SetSyncing(["projectA", "projectB"]);
+
+            Assert.That(events, Has.Count.EqualTo(1), "a clean arm must raise exactly once");
+            Assert.Multiple(() =>
+            {
+                Assert.That(events[0].IsBlocking, Is.True);
+                Assert.That(
+                    events[0].ProjectIds,
+                    Is.EquivalentTo(new[] { "projectA", "projectB" }),
+                    "the event must carry the exact armed ids"
+                );
+            });
+        }
+
+        [Test]
+        public void SetSyncing_Rearm_RaisesBlockStateChangedWithTheNewIds()
+        {
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add; // subscribe after the first arm
+
+            SendReceiveWriteLock.SetSyncing(["projectB"]); // takeover
+
+            Assert.That(events, Has.Count.EqualTo(1), "a takeover re-arm must raise");
+            Assert.Multiple(() =>
+            {
+                Assert.That(events[0].IsBlocking, Is.True);
+                Assert.That(events[0].ProjectIds, Is.EquivalentTo(new[] { "projectB" }));
+            });
+        }
+
+        [Test]
+        public void ClearWithToken_Disarm_RaisesBlockStateChangedEmpty()
+        {
+            var token = SendReceiveWriteLock.SetSyncing(["projectA"]);
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add; // subscribe after arm
+
+            SendReceiveWriteLock.Clear(token);
+
+            Assert.That(events, Has.Count.EqualTo(1), "a real disarm must raise exactly once");
+            Assert.Multiple(() =>
+            {
+                Assert.That(events[0].IsBlocking, Is.False);
+                Assert.That(events[0].ProjectIds, Is.Empty, "a disarm event carries an empty set");
+            });
+        }
+
+        [Test]
+        public void ClearWithToken_StaleToken_DoesNotRaise()
+        {
+            var tokenA = SendReceiveWriteLock.SetSyncing(["projectA"]);
+            SendReceiveWriteLock.SetSyncing(["projectB"]); // takeover -> tokenA is now stale
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add;
+
+            SendReceiveWriteLock.Clear(tokenA); // stale no-op — no transition
+
+            Assert.That(
+                events,
+                Is.Empty,
+                "a stale-token Clear is a no-op and must not raise a spurious event"
+            );
+        }
+
+        [Test]
+        public void Clear_Disarm_RaisesBlockStateChangedEmpty()
+        {
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add; // subscribe after arm
+
+            SendReceiveWriteLock.Clear();
+
+            Assert.That(events, Has.Count.EqualTo(1));
+            Assert.Multiple(() =>
+            {
+                Assert.That(events[0].IsBlocking, Is.False);
+                Assert.That(events[0].ProjectIds, Is.Empty);
+            });
+        }
+
+        [Test]
+        public void Clear_WhenNothingArmed_DoesNotRaise()
+        {
+            // A Clear() that disarms nothing is a no-op — it must not fire a spurious "changed"
+            // signal (consistent with the stale-token Clear(long) no-op). Only real transitions
+            // raise.
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add;
+
+            SendReceiveWriteLock.Clear();
+
+            Assert.That(events, Is.Empty, "a Clear() that disarms nothing must not raise");
+        }
+
+        [Test]
+        public void BlockStateChanged_ThrowingSubscriber_DoesNotBreakArmOrClear()
+        {
+            // A subscriber that throws must never corrupt the gate or abort an arm/clear — the gate
+            // swallows the fault (it has no logger; the notifier service owns real error handling).
+            SendReceiveWriteLock.BlockStateChanged += _ =>
+                throw new InvalidOperationException("subscriber boom");
+
+            long token = 0;
+            Assert.DoesNotThrow(
+                () => token = SendReceiveWriteLock.SetSyncing(["projectA"]),
+                "arm must succeed despite a throwing subscriber"
+            );
+            Assert.That(SendReceiveWriteLock.IsArmed, Is.True, "the arm transition still happened");
+
+            Assert.DoesNotThrow(
+                () => SendReceiveWriteLock.Clear(token),
+                "clear must succeed despite a throwing subscriber"
+            );
+            Assert.That(
+                SendReceiveWriteLock.IsArmed,
+                Is.False,
+                "the disarm transition still happened"
+            );
+        }
+
+        [Test]
+        public void GetBlockState_WhenNotArmed_ReportsNotBlockingAndEmpty()
+        {
+            var state = SendReceiveWriteLock.GetBlockState();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(state.IsBlocking, Is.False);
+                Assert.That(state.ProjectIds, Is.Empty);
+            });
+        }
+
+        [Test]
+        public void GetBlockState_WhenArmed_ReportsBlockingAndTheArmedIds()
+        {
+            SendReceiveWriteLock.SetSyncing(["projectA", "projectB"]);
+
+            var state = SendReceiveWriteLock.GetBlockState();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(state.IsBlocking, Is.True);
+                Assert.That(state.ProjectIds, Is.EquivalentTo(new[] { "projectA", "projectB" }));
+            });
+        }
+
+        [Test]
+        public void ResetForTests_ClearsBlockStateChangedSubscribers()
+        {
+            // The event is static; ResetForTests must drop subscribers so a subscription can never
+            // leak into a later test (and be invoked by ITS transitions).
+            var events = new List<SendReceiveBlockState>();
+            SendReceiveWriteLock.BlockStateChanged += events.Add;
+
+            SendReceiveWriteLock.ResetForTests();
+
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            Assert.That(
+                events,
+                Is.Empty,
+                "ResetForTests must unsubscribe BlockStateChanged handlers"
+            );
         }
 
         // ---- Concurrency stress: the core safety invariant ----

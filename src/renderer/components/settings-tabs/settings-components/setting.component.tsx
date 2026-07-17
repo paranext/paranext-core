@@ -44,6 +44,12 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   defaultSetting: TSettingValue;
   /** Additional css classes to help with unique styling of the Settings component */
   className?: string;
+  /**
+   * When true, the setting's editor is rendered read-only (disabled). Used to make a project's
+   * settings read-only while an automatic Send/Receive is blocking edits on that project (PT-4214).
+   * Defaults to `false`.
+   */
+  disabled?: boolean;
 };
 
 /**
@@ -67,7 +73,7 @@ type ProjectSettingsControls = {
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setSetting: ((newSetting: any) => void) | undefined;
+  setSetting: ((newSetting: any) => Promise<unknown>) | undefined;
   isLoading: boolean;
 };
 
@@ -137,6 +143,7 @@ export function Setting({
   label,
   className,
   description,
+  disabled = false,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -224,7 +231,9 @@ export function Setting({
     try {
       if (validateSetting && (await validateSetting(settingKey, newValue, setting))) {
         setErrorMessage(undefined);
-        if (setSetting) setSetting(newValue);
+        // Await so a rejected write (e.g. the Send/Receive write-gate) reaches the catch below
+        // and surfaces as an error message instead of vanishing as an unhandled rejection.
+        if (setSetting) await setSetting(newValue);
       } else {
         setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
@@ -240,14 +249,26 @@ export function Setting({
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
-        <Input key={settingKey} onChange={debouncedHandleChange} defaultValue={setting} />
+        <Input
+          key={settingKey}
+          onChange={debouncedHandleChange}
+          defaultValue={setting}
+          disabled={disabled}
+        />
       );
     else if (typeof setting === 'boolean')
       component = (
-        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
+        <Switch
+          key={settingKey}
+          onCheckedChange={debouncedHandleChange}
+          defaultChecked={setting}
+          disabled={disabled}
+        />
       );
     else if (typeof setting === 'object')
       if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+        // interfaceLanguage is a user (not project) setting, so it is never subject to per-project
+        // Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled` prop, so none is passed.
         component = (
           <UiLanguageSelector
             className="language-selector"
@@ -265,6 +286,7 @@ export function Setting({
             key={settingKey}
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
+            disabled={disabled}
           />
         );
       }
@@ -294,6 +316,7 @@ export function Setting({
     errorMessage,
     languages,
     defaultLanguages,
+    disabled,
   ]);
 
   return (

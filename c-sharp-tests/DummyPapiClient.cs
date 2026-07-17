@@ -9,6 +9,11 @@ namespace TestParanextDataProvider
     {
         private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
 
+        private readonly Queue<(
+            string requestType,
+            IReadOnlyList<object?>? requestContents
+        )> _sentRequests = [];
+
         private readonly Dictionary<
             string,
             OpenRpcSingleMethodDocumentation?
@@ -89,7 +94,34 @@ namespace TestParanextDataProvider
         {
             if (_localMethods.TryGetValue(requestType, out _))
                 return base.SendRequestAsync<T>(requestType, requestContents);
+            _sentRequests.Enqueue((requestType, requestContents));
+            // Central-registry event registration returns an acceptance boolean; pretend main
+            // accepted (mirrors ConnectAsync's "pretend we succeeded") so services under test don't
+            // take their registration-failure paths. Kept strictly to this one request type so no
+            // other test's SendRequestAsync expectations change.
+            if (requestType == "network:registerEvent")
+                // T is bool here; there is no non-casting way to satisfy the generic return type.
+                return Task.FromResult<T?>((T)(object)true);
             return Task.FromResult<T?>(default);
+        }
+
+        /// <summary>
+        /// Test-only count of requests sent through <see cref="SendRequestAsync{T}"/> that were NOT
+        /// handled by a locally-registered handler (i.e. would have gone over the wire to main).
+        /// </summary>
+        public int SentRequestCount
+        {
+            get { return _sentRequests.Count; }
+        }
+
+        /// <summary>
+        /// Test-only dequeue of the oldest captured outgoing request (see
+        /// <see cref="SentRequestCount"/>). Lets tests assert wire calls like
+        /// <c>network:registerEvent</c> without a live PAPI connection.
+        /// </summary>
+        public (string requestType, IReadOnlyList<object?>? requestContents) NextSentRequest
+        {
+            get { return _sentRequests.Dequeue(); }
         }
 
         /// <summary>
@@ -101,6 +133,20 @@ namespace TestParanextDataProvider
         /// </summary>
         public bool IsHandlerRegistered(string requestType) =>
             _localMethods.ContainsKey(requestType);
+
+        /// <summary>
+        /// Test-only helper that invokes a locally-registered request handler directly (bypassing the
+        /// websocket the base client would use) and returns its result. Lets a test assert what a
+        /// registered command handler returns without a live PAPI connection.
+        /// </summary>
+        public object? InvokeRequestHandler(string requestType, params object?[] args)
+        {
+            if (!_localMethods.TryGetValue(requestType, out var handler))
+                throw new InvalidOperationException(
+                    $"No handler registered for request type \"{requestType}\""
+                );
+            return handler.DynamicInvoke(args);
+        }
 
         #endregion
     }

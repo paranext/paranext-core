@@ -104,6 +104,12 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
+        // Always rebuild un-blocked. `isSyncBlocked` is transient runtime state owned by the core
+        // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+        // restore a read-only comment view from the saved layout (mirrors the scripture editor's
+        // scrub in platform-scripture-editor main.ts). The driver re-flags it if a sync is still in
+        // flight.
+        isSyncBlocked: false,
         editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
         // Seeded only when opening a new view (undefined otherwise, which clears any persisted
         // value). Deliberately NOT persisted across restarts: a restored view has these undefined
@@ -195,6 +201,14 @@ const commentListPanelProvider: IWebViewProvider = {
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
+      state: {
+        ...savedWebView.state,
+        // Always rebuild un-blocked. `isSyncBlocked` is transient runtime state owned by the core
+        // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+        // restore a read-only panel from the saved layout (mirrors the scripture editor's scrub in
+        // platform-scripture-editor main.ts). The driver re-flags it if a sync is still in flight.
+        isSyncBlocked: false,
+      },
       // In simple mode, force the comments panel to scroll group 0 so it stays verse-synced with
       // the Scripture editor (which is also forced to 0 in simple mode). Power mode preserves the
       // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power

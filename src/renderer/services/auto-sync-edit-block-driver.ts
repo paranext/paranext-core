@@ -1,22 +1,27 @@
 /**
- * Headless driver that translates the auto-sync-blocking store's visible state into a per-editor
- * `isSyncBlocked` flag on every open Scripture editor web view.
+ * Headless driver that translates the auto-sync-blocking store's visible blocked-project set into a
+ * per-web-view `isSyncBlocked` flag on the open edit-blockable web views whose project is syncing —
+ * the Scripture editor plus the legacy-comment-manager comment views (the editor-anchored comment
+ * list and the fixed Column 3 comment panel).
  *
  * This replaces the earlier full-workspace blocking overlay: instead of covering the whole
- * workspace and trapping focus, an automatic (scheduled) Send/Receive now blocks only _editing_.
- * The Scripture editor web view reads `isSyncBlocked` from its own web view state (via
- * `useWebViewState`), folds it into its read-only computation, and shows a slim non-covering banner
- * — the rest of the UI (menus, dialogs, navigation) stays fully usable.
+ * workspace and trapping focus, an automatic (scheduled or session) Send/Receive now blocks only
+ * _editing_, and only of the projects actually being synced. Each edit-blockable web view reads
+ * `isSyncBlocked` from its own web view state (via `useWebViewState`), folds it into its read-only
+ * computation, and shows a slim non-covering notice — the rest of the UI (menus, dialogs,
+ * navigation) and every web view of a project that is NOT syncing stays fully usable.
  *
- * The store (see auto-sync-blocking-store.ts) already provides the 200 ms show-grace, the
- * ref-counted overlapping-blocker handling, and the safety timeout, so this driver just mirrors the
- * store's derived visibility onto the editors and needs none of that logic itself.
+ * A web view is flagged iff its `projectId` is in the store's blocked set; web views with no
+ * `projectId` are never flagged. The driver reacts to SET CHANGES (backend snapshots), not a
+ * boolean raise/clear: on each store notification it re-applies the current blocked set to every
+ * open web view. The store (see auto-sync-blocking-store.ts) provides the 200 ms show-grace, so
+ * this driver just mirrors the store's derived visible set onto the web views.
  *
- * While blocking is active it also flags editors opened mid-block (via `onDidOpenWebView`), so an
- * editor a user opens during a sync is blocked too, and re-flags editors that are rebuilt mid-block
- * (via `onDidUpdateWebView`) — the Scripture editor factory forces `isSyncBlocked: false` on every
- * rebuild (e.g. `reloadWebView`, an interface-mode switch, or `loadLayout`), so without this a
- * rebuild during a sustained block would come back editable with the banner gone.
+ * While a set is blocking it also flags web views opened mid-block (via `onDidOpenWebView`) and
+ * re-flags web views rebuilt mid-block (via `onDidUpdateWebView`) whose project is in the blocked
+ * set — both the Scripture editor factory and the comment-view providers force `isSyncBlocked:
+ * false` on every rebuild (e.g. `reloadWebView`, an interface-mode switch, or `loadLayout`), so
+ * without this a rebuild during a sustained block would come back editable with the notice gone.
  */
 
 import { logger } from '@shared/services/logger.service';
@@ -26,7 +31,7 @@ import {
 } from '@shared/models/web-view.model';
 import { getErrorMessage } from 'platform-bible-utils';
 import {
-  getAutoSyncBlocking,
+  getBlockedProjectIds,
   subscribeToAutoSyncBlocking,
 } from '@renderer/services/auto-sync-blocking-store';
 import {
@@ -36,14 +41,49 @@ import {
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 
-/** Web view state key the Scripture editor reads to know it is edit-blocked by an automatic sync. */
-const IS_SYNC_BLOCKED_STATE_KEY = 'isSyncBlocked';
+/**
+ * Web view types this driver edit-blocks while their project is syncing.
+ * `SCRIPTURE_EDITOR_WEBVIEW_TYPE` is a core shared-model constant; the two legacy-comment-manager
+ * comment views are hard-coded string literals because core must NOT import from an extension. This
+ * intentionally duplicates the type strings the way each extension duplicates its own
+ * sync-edit-blocked handling (no cross-boundary imports); if those extension web-view types are
+ * ever renamed, update them here to match. Each of these web views reads `isSyncBlocked` from its
+ * own web view state and folds it into a read-only / write-disabled mode.
+ */
+const EDIT_BLOCKABLE_WEB_VIEW_TYPES: ReadonlySet<string> = new Set([
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  // legacy-comment-manager `commentListWebViewType` (editor-anchored comment list).
+  'legacyCommentManager.commentList',
+  // legacy-comment-manager `COMMENT_LIST_PANEL_WEB_VIEW_TYPE` (fixed Column 3 comment panel).
+  'legacyCommentManager.commentListPanel',
+]);
 
 /**
- * Sets `isSyncBlocked` on a single Scripture editor's saved definition, but only when it differs
- * from the current value — `updateWebViewDefinitionSync` always emits an update event when `state`
- * is present (it is compared by reference), so the equality guard keeps a no-op from rippling
- * through every editor's update subscribers.
+ * Web view state key edit-blockable web views read to know they are edit-blocked by an automatic
+ * sync.
+ */
+const IS_SYNC_BLOCKED_STATE_KEY = 'isSyncBlocked';
+
+/** Content equality for two id sets (both come from the store, which replaces sets wholesale). */
+function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  return [...a].every((id) => b.has(id));
+}
+
+/** True when an edit-blockable web view's project is in the blocked set. No project → never. */
+function isEditorBlocked(
+  definition: SavedWebViewDefinition,
+  blockedProjectIds: ReadonlySet<string>,
+): boolean {
+  return definition.projectId !== undefined && blockedProjectIds.has(definition.projectId);
+}
+
+/**
+ * Sets `isSyncBlocked` on a single edit-blockable web view's saved definition, but only when it
+ * differs from the current value — `updateWebViewDefinitionSync` always emits an update event when
+ * `state` is present (it is compared by reference), so the equality guard keeps a no-op from
+ * rippling through every editor's update subscribers.
  */
 function setEditorSyncBlocked(definition: SavedWebViewDefinition, isBlocked: boolean): void {
   const currentState = definition.state ?? {};
@@ -61,8 +101,12 @@ function setEditorSyncBlocked(definition: SavedWebViewDefinition, isBlocked: boo
   }
 }
 
-/** Applies `isBlocked` to every currently open Scripture editor web view. */
-function applyToAllEditors(isBlocked: boolean): void {
+/**
+ * Applies the blocked set to every currently open edit-blockable web view: each one whose project
+ * is in the set is flagged, every other is unflagged. The per-web-view equality guard turns this
+ * into a diff — unchanged web views get no write (and thus emit no update event).
+ */
+function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): void {
   let definitions: SavedWebViewDefinition[];
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
@@ -75,86 +119,25 @@ function applyToAllEditors(isBlocked: boolean): void {
     return;
   }
   definitions.forEach((definition) => {
-    if (definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-      setEditorSyncBlocked(definition, isBlocked);
+    if (EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(definition.webViewType))
+      setEditorSyncBlocked(definition, isEditorBlocked(definition, blockedProjectIds));
   });
 }
 
 /**
- * Starts the driver: mirrors the auto-sync-blocking store's visible state onto every open Scripture
- * editor's `isSyncBlocked` state, and — while blocking — onto editors opened or rebuilt mid-block.
- * Call once at app startup. Returns a cleanup function that stops the driver (it does NOT clear any
- * flags it set; the store clearing to `false` is what unblocks the editors).
+ * Starts the driver: mirrors the auto-sync-blocking store's visible blocked-project set onto every
+ * open Scripture editor's `isSyncBlocked` state, and — while a set is blocking — onto editors
+ * opened or rebuilt mid-block whose project is in the set. Call once at app startup. Returns a
+ * cleanup function that stops the driver (it does NOT clear any flags it set; the store clearing to
+ * empty is what unblocks the editors).
  */
 export function initAutoSyncEditBlockDriver(): () => void {
   let unsubscribeOpen: (() => void) | undefined;
   let unsubscribeUpdate: (() => void) | undefined;
+  /** The blocked set we last applied to the editors; lets us skip a no-op notification. */
+  let appliedBlockedProjectIds: ReadonlySet<string> = new Set();
 
-  const syncState = () => {
-    const isBlocking = getAutoSyncBlocking();
-
-    if (!isBlocking) {
-      // Unsubscribe BEFORE applying the unblock below. `setEditorSyncBlocked`'s unflag write goes
-      // through `updateWebViewDefinitionSync`, which fires `onDidUpdateWebView` SYNCHRONOUSLY — the
-      // web-view service host's buffered emitter and this subscription resolve to the same
-      // underlying PapiNetworkEventEmitter instance, so a local emit dispatches inline, not on a
-      // later tick. If the re-flag handler below were still subscribed when `applyToAllEditors(
-      // false)` runs, it would observe the just-written `isSyncBlocked: false`, pass its "came back
-      // unblocked" guard, and set the editor straight back to `true` — permanently blocking every
-      // open Scripture editor, with no recovery (the store's safety timer's value-unchanged
-      // early-return means it never renotifies, and the banner's Cancel becomes inert). Found live
-      // in E2E, 2026-07-16.
-      if (unsubscribeOpen) {
-        unsubscribeOpen();
-        unsubscribeOpen = undefined;
-      }
-      if (unsubscribeUpdate) {
-        unsubscribeUpdate();
-        unsubscribeUpdate = undefined;
-      }
-    }
-
-    applyToAllEditors(isBlocking);
-
-    if (isBlocking) {
-      // Block editors opened while a sync is in flight. Subscribe once; the store can notify
-      // multiple times during one blocking episode (overlapping blockers) without re-subscribing.
-      if (!unsubscribeOpen) {
-        const unsubscribe = onDidOpenWebView(({ webView }) => {
-          if (webView.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
-            setEditorSyncBlocked(webView, true);
-        });
-        // Wrapped because a network-event unsubscriber returns a boolean; keep our own type void.
-        unsubscribeOpen = () => {
-          unsubscribe();
-        };
-      }
-      // Re-flag editors rebuilt mid-block. The Scripture editor factory forces `isSyncBlocked:
-      // false` on every in-place rebuild (reloadWebView / interface-mode switch / loadLayout), which
-      // emits `onDidUpdateWebView` (not `onDidOpenWebView`), so without this the editor comes back
-      // editable with no banner for the rest of the sync.
-      if (!unsubscribeUpdate) {
-        const unsubscribe = onDidUpdateWebView(({ webView }) => {
-          if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
-          // Guard against self-triggering: our own re-flag below calls updateWebViewDefinitionSync,
-          // which fires another onDidUpdateWebView. Only act when the definition came back unblocked;
-          // once we set it back to true the next event is a no-op, so this cannot loop.
-          if (webView.state?.[IS_SYNC_BLOCKED_STATE_KEY]) return;
-          setEditorSyncBlocked(webView, true);
-        });
-        unsubscribeUpdate = () => {
-          unsubscribe();
-        };
-      }
-    }
-  };
-
-  // Reflect the current state immediately (in case blocking is already active on init), then track.
-  syncState();
-  const unsubscribeStore = subscribeToAutoSyncBlocking(syncState);
-
-  return () => {
-    unsubscribeStore();
+  const teardownHandlers = () => {
     if (unsubscribeOpen) {
       unsubscribeOpen();
       unsubscribeOpen = undefined;
@@ -163,5 +146,73 @@ export function initAutoSyncEditBlockDriver(): () => void {
       unsubscribeUpdate();
       unsubscribeUpdate = undefined;
     }
+  };
+
+  // Subscribe the mid-block handlers, each closing over the CURRENT blocked set. Because syncState
+  // tears the handlers down and rebuilds them on every real transition, the closures always see the
+  // latest set — which is what makes partial transitions ({A,B} → {A}) correct.
+  const setupHandlers = (blockedProjectIds: ReadonlySet<string>) => {
+    const openUnsub = onDidOpenWebView(({ webView }) => {
+      if (
+        EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(webView.webViewType) &&
+        isEditorBlocked(webView, blockedProjectIds)
+      )
+        setEditorSyncBlocked(webView, true);
+    });
+    // Wrapped because a network-event unsubscriber returns a boolean; keep our own type void.
+    unsubscribeOpen = () => {
+      openUnsub();
+    };
+
+    const updateUnsub = onDidUpdateWebView(({ webView }) => {
+      if (!EDIT_BLOCKABLE_WEB_VIEW_TYPES.has(webView.webViewType)) return;
+      // Only re-flag web views whose project is blocked; a rebuilt web view of a non-synced project
+      // must stay editable.
+      if (!isEditorBlocked(webView, blockedProjectIds)) return;
+      // Guard against self-triggering: our own re-flag below calls updateWebViewDefinitionSync, which
+      // fires another onDidUpdateWebView. Only act when the definition came back unblocked; once we
+      // set it back to true the next event is a no-op, so this cannot loop.
+      if (webView.state?.[IS_SYNC_BLOCKED_STATE_KEY]) return;
+      setEditorSyncBlocked(webView, true);
+    });
+    unsubscribeUpdate = () => {
+      updateUnsub();
+    };
+  };
+
+  const syncState = () => {
+    const next = getBlockedProjectIds();
+    // No content change → nothing to do. This keeps overlapping identical notifications from
+    // needlessly rewriting editors or re-subscribing the handlers.
+    if (areSetsEqual(next, appliedBlockedProjectIds)) return;
+
+    // THE ORDERING FIX. Tear the mid-block handlers down BEFORE applying the diff below. Applying the
+    // diff issues unflag writes (isSyncBlocked: false) for no-longer-blocked projects, and
+    // `updateWebViewDefinitionSync` fires `onDidUpdateWebView` SYNCHRONOUSLY (the buffered emitter and
+    // this subscription resolve to the same underlying PapiNetworkEventEmitter, so a local emit
+    // dispatches inline, not on a later tick). A still-live re-flag handler would observe its own
+    // unflag write, pass its "came back unblocked" guard, and set the editor straight back to
+    // `true` — permanently blocking it. Tearing down first also drops handlers that closed over the
+    // STALE set, so the rebuild below re-subscribes over the new one. This is correct for PARTIAL
+    // transitions too: on {A,B} → {A}, B's editors unflag with no live handler to bounce them, A's
+    // editors keep their flag (the equality guard skips them), and the rebuilt {A} handlers still
+    // protect A. Found live in E2E, 2026-07-16.
+    teardownHandlers();
+
+    applyBlockedSetToAllEditors(next);
+    // Snapshot a copy so a later store reassignment can never alias what we think we applied.
+    appliedBlockedProjectIds = new Set(next);
+
+    // Re-arm the mid-block handlers over the new set, unless nothing is blocked anymore.
+    if (next.size > 0) setupHandlers(next);
+  };
+
+  // Reflect the current state immediately (in case a set is already blocking on init), then track.
+  syncState();
+  const unsubscribeStore = subscribeToAutoSyncBlocking(syncState);
+
+  return () => {
+    unsubscribeStore();
+    teardownHandlers();
   };
 }
