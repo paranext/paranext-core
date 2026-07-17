@@ -1,16 +1,19 @@
 /**
  * Store tracking whether an automatic (scheduled) Send/Receive is currently blocking the workspace.
  *
- * Uses a reference counter so overlapping blockers don't prematurely hide the overlay: the visible
- * state (isBlocking) only flips to false once every in-flight blocker has cleared.
+ * Tracks one entry per in-flight blocker so overlapping blockers don't prematurely hide the
+ * overlay: the visible state (isBlocking) only flips to false once every in-flight blocker has been
+ * released.
+ *
+ * Each block is identified by the token {@link raiseAutoSyncBlock} returns, and is released exactly
+ * once — by its own clear (calling the token) or by its own one-shot 10-minute safety leash if it
+ * never clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted).
+ * Identity pairing means a clear can never release a different block and a stale leash can never
+ * wipe newer in-flight blockers.
  *
  * Visibility has a 200 ms show-grace matching PT9's automatic-sync surface: on the first raise a
  * grace timer is armed, and listeners only ever see `true` if blocking is still in flight when it
  * fires. A sync that finishes within the grace never shows anything.
- *
- * Each raise arms its own one-shot 10-minute safety leash that releases just that block if it never
- * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted), so one
- * stale expiry can never wipe newer in-flight blockers.
  */
 
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
@@ -28,15 +31,21 @@ const SHOW_GRACE_MS = 200;
  */
 const SAFETY_TIMEOUT_MS = AUTO_SYNC_MAX_DURATION_MS;
 
-let blockCount = 0;
+/** One in-flight blocker: its own safety leash. */
+type InFlightBlock = {
+  leash: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * Every in-flight (not yet released) blocker. The raw blocking state is exactly "this set is
+ * non-empty", so there is no separate counter to keep in lockstep. (Same pattern as
+ * workspace-updating-store; extracting a shared abstraction is deliberately deferred — PT-4214
+ * Stage U.)
+ */
+const inFlightBlocks = new Set<InFlightBlock>();
+
 let isBlockingVisible = false;
 let graceTimer: ReturnType<typeof setTimeout> | undefined;
-/**
- * One outstanding safety leash per in-flight blocker, oldest first. Every raise arms its own
- * one-shot leash and every clear cancels the oldest outstanding one, so the array's length always
- * equals `blockCount` and each block is released exactly once — by its clear or by its own leash.
- */
-const safetyTimers: ReturnType<typeof setTimeout>[] = [];
 
 const listeners = new Set<() => void>();
 
@@ -51,10 +60,12 @@ function setBlockingVisible(value: boolean): void {
   notifyListeners();
 }
 
-/** Releases one in-flight block, updating the derived visibility when the last one goes. */
-function releaseOneBlock(): void {
-  blockCount = Math.max(0, blockCount - 1);
-  if (blockCount === 0) {
+/** Releases one block. A no-op if it was already released (identity — released exactly once). */
+function releaseBlock(block: InFlightBlock): void {
+  if (!inFlightBlocks.has(block)) return;
+  inFlightBlocks.delete(block);
+  clearTimeout(block.leash);
+  if (inFlightBlocks.size === 0) {
     // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
     clearTimeout(graceTimer);
     graceTimer = undefined;
@@ -62,34 +73,25 @@ function releaseOneBlock(): void {
   }
 }
 
-export function setAutoSyncBlocking(value: boolean): void {
-  if (value) {
-    blockCount += 1;
-    // Arm this block's own one-shot safety leash, 10 min from this raise. When it fires it
-    // releases only this block — never the whole count — so a stale expiry cannot wipe newer
-    // in-flight blockers.
-    const leash = setTimeout(() => {
-      const index = safetyTimers.indexOf(leash);
-      if (index !== -1) safetyTimers.splice(index, 1);
-      releaseOneBlock();
-    }, SAFETY_TIMEOUT_MS);
-    safetyTimers.push(leash);
-    // On 0→1, arm the show grace; visibility only turns on if blocking survives the grace.
-    if (blockCount === 1) {
-      graceTimer = setTimeout(() => {
-        graceTimer = undefined;
-        if (blockCount > 0) setBlockingVisible(true);
-      }, SHOW_GRACE_MS);
-    }
-  } else {
-    // Cancel the oldest outstanding leash so the block this clear releases cannot be released a
-    // second time when its leash fires. Blockers are anonymous, so oldest-first is a pairing
-    // heuristic — and the conservative one: the still-open blocks keep the newest (longest
-    // remaining) leashes.
-    const oldestLeash = safetyTimers.shift();
-    if (oldestLeash !== undefined) clearTimeout(oldestLeash);
-    releaseOneBlock();
+/**
+ * Registers one in-flight blocker and returns its clear function. Call the returned function when
+ * the blocker's sync finishes; it is idempotent and releases only this block. If the block never
+ * clears, its own safety leash releases it after {@link SAFETY_TIMEOUT_MS} — a stale leash can never
+ * release a newer in-flight blocker.
+ */
+export function raiseAutoSyncBlock(): () => void {
+  const block: InFlightBlock = {
+    leash: setTimeout(() => releaseBlock(block), SAFETY_TIMEOUT_MS),
+  };
+  inFlightBlocks.add(block);
+  // On the first raise, arm the show grace; visibility only turns on if blocking survives it.
+  if (inFlightBlocks.size === 1) {
+    graceTimer = setTimeout(() => {
+      graceTimer = undefined;
+      if (inFlightBlocks.size > 0) setBlockingVisible(true);
+    }, SHOW_GRACE_MS);
   }
+  return () => releaseBlock(block);
 }
 
 export function getAutoSyncBlocking(): boolean {
@@ -110,11 +112,10 @@ export function subscribeToAutoSyncBlocking(listener: () => void): () => void {
  * WARNING: Test-only. @internal
  */
 export function resetAutoSyncBlocking(): void {
-  blockCount = 0;
+  inFlightBlocks.forEach((block) => clearTimeout(block.leash));
+  inFlightBlocks.clear();
   isBlockingVisible = false;
   clearTimeout(graceTimer);
   graceTimer = undefined;
-  safetyTimers.forEach((leash) => clearTimeout(leash));
-  safetyTimers.length = 0;
   listeners.clear();
 }

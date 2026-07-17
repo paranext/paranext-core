@@ -1,12 +1,15 @@
 /**
  * Store tracking whether the workspace is currently switching projects.
  *
- * Uses a reference counter so concurrent switches don't prematurely hide the overlay: the visible
- * state (isUpdating) only flips to false once every in-flight switch has finished.
+ * Tracks one entry per in-flight switch so concurrent switches don't prematurely hide the overlay:
+ * the visible state (isUpdating) only flips to false once every in-flight switch has been
+ * released.
  *
- * Each switch arms its own one-shot 30-second safety leash that releases just that switch if it
- * never resolves (e.g. the extension deactivates mid-switch and the did-finish event is never
- * emitted), so one stale expiry can never wipe newer in-flight switches.
+ * Each switch is identified by the token {@link startWorkspaceUpdate} returns, and is released
+ * exactly once — by its own finish (calling the token) or by its own one-shot 30-second safety
+ * leash if it never resolves (e.g. the extension deactivates mid-switch and the did-finish event is
+ * never emitted). Identity pairing means a finish can never release a different switch and a stale
+ * leash can never wipe newer in-flight switches.
  */
 
 /**
@@ -15,15 +18,19 @@
  */
 const SWITCH_SAFETY_TIMEOUT_MS = 30_000;
 
-let switchCount = 0;
+/** One in-flight switch: its own safety leash plus the caller's release notification. */
+type InFlightSwitch = {
+  leash: ReturnType<typeof setTimeout>;
+  onReleased: (() => void) | undefined;
+};
+
 /**
- * One outstanding safety leash per in-flight switch, oldest first. Every start arms its own
- * one-shot leash and every finish cancels the oldest outstanding one, so the array's length always
- * equals `switchCount` and each switch is released exactly once — by its finish or by its own
- * leash. (Same pattern as auto-sync-blocking-store; extracting a shared abstraction is deliberately
- * deferred — PT-4214 Stage U.)
+ * Every in-flight (not yet released) switch. `getWorkspaceUpdating()` is exactly "this set is
+ * non-empty", so there is no separate counter to keep in lockstep. (Same pattern as
+ * auto-sync-blocking-store; extracting a shared abstraction is deliberately deferred — PT-4214
+ * Stage U.)
  */
-const safetyTimers: ReturnType<typeof setTimeout>[] = [];
+const inFlightSwitches = new Set<InFlightSwitch>();
 
 const listeners = new Set<() => void>();
 
@@ -31,35 +38,38 @@ function notifyListeners(): void {
   listeners.forEach((listener) => listener());
 }
 
-export function setWorkspaceUpdating(value: boolean): void {
-  const wasUpdating = switchCount > 0;
-  if (value) {
-    switchCount += 1;
-    // Arm this switch's own one-shot safety leash, 30 s from this start. When it fires it releases
-    // only this switch — never the whole count — so a stale expiry cannot wipe newer in-flight
-    // switches.
-    const leash = setTimeout(() => {
-      const index = safetyTimers.indexOf(leash);
-      if (index !== -1) safetyTimers.splice(index, 1);
-      switchCount = Math.max(0, switchCount - 1);
-      if (switchCount === 0) notifyListeners();
-    }, SWITCH_SAFETY_TIMEOUT_MS);
-    safetyTimers.push(leash);
-  } else {
-    // Cancel the oldest outstanding leash so the switch this finish releases cannot be released a
-    // second time when its leash fires. Switches are anonymous, so oldest-first is a pairing
-    // heuristic — and the conservative one: the still-open switches keep the newest (longest
-    // remaining) leashes.
-    const oldestLeash = safetyTimers.shift();
-    if (oldestLeash !== undefined) clearTimeout(oldestLeash);
-    switchCount = Math.max(0, switchCount - 1);
-  }
-  const isNowUpdating = switchCount > 0;
-  if (wasUpdating !== isNowUpdating) notifyListeners();
+/** Releases one switch. A no-op if it was already released (identity — released exactly once). */
+function releaseSwitch(inFlightSwitch: InFlightSwitch): void {
+  if (!inFlightSwitches.has(inFlightSwitch)) return;
+  inFlightSwitches.delete(inFlightSwitch);
+  clearTimeout(inFlightSwitch.leash);
+  inFlightSwitch.onReleased?.();
+  if (inFlightSwitches.size === 0) notifyListeners();
+}
+
+/**
+ * Registers the start of a project switch and returns its release function. Call the returned
+ * function when the switch finishes; it is idempotent and releases only this switch. If the switch
+ * never finishes, its own safety leash releases it after {@link SWITCH_SAFETY_TIMEOUT_MS} — a stale
+ * leash can never release a newer in-flight switch.
+ *
+ * @param onReleased Called exactly once when this switch is released, by either path (its finish or
+ *   its leash). Lets the caller drop its own bookkeeping for the switch without leaking entries for
+ *   abandoned switches.
+ */
+export function startWorkspaceUpdate(onReleased?: () => void): () => void {
+  const wasUpdating = inFlightSwitches.size > 0;
+  const inFlightSwitch: InFlightSwitch = {
+    leash: setTimeout(() => releaseSwitch(inFlightSwitch), SWITCH_SAFETY_TIMEOUT_MS),
+    onReleased,
+  };
+  inFlightSwitches.add(inFlightSwitch);
+  if (!wasUpdating) notifyListeners();
+  return () => releaseSwitch(inFlightSwitch);
 }
 
 export function getWorkspaceUpdating(): boolean {
-  return switchCount > 0;
+  return inFlightSwitches.size > 0;
 }
 
 /** Subscribe to state changes. Returns an unsubscribe function. */
@@ -76,8 +86,7 @@ export function subscribeToWorkspaceUpdating(listener: () => void): () => void {
  * WARNING: Test-only. @internal
  */
 export function resetWorkspaceUpdating(): void {
-  switchCount = 0;
-  safetyTimers.forEach((leash) => clearTimeout(leash));
-  safetyTimers.length = 0;
+  inFlightSwitches.forEach((inFlightSwitch) => clearTimeout(inFlightSwitch.leash));
+  inFlightSwitches.clear();
   listeners.clear();
 }

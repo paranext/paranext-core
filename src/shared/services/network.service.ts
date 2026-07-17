@@ -285,6 +285,13 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  * requests where immediate failure is preferable to waiting, such as commands sent during app
  * shutdown.
  *
+ * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
+ * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
+ * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
+ * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
+ * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
+ * it rejects.
+ *
  * @param requestType The type of request
  * @param args Arguments to send in the request (put in request.contents)
  * @returns Promise that resolves with the response message
