@@ -1023,6 +1023,22 @@ declare module 'shared/data/rpc.model' {
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
   /**
+   * How many times to try sending a request before giving up if the request is not yet registered.
+   * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
+   * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
+   * re-declaring the literal and silently diverging if it is ever retuned.
+   *
+   * @experimental
+   */
+  export const MAX_REQUEST_ATTEMPTS = 10;
+  /**
+   * How long in ms to wait between request attempts if the request is not yet registered. Exported
+   * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
+   *
+   * @experimental
+   */
+  export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
+  /**
    * Whether an RPC object is setting up or has finished setting up its connection and is ready to
    * communicate on the network
    */
@@ -1152,6 +1168,30 @@ declare module 'shared/data/rpc.model' {
   export const GET_METHODS = 'rpc.discover';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
+  /**
+   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+   * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+   * followed by `: <error message>`.
+   *
+   * Exported so the few callers that must classify these thrown errors by message (there is no richer
+   * machine-readable marker for a "method not found" response) derive the format from this single
+   * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
+   * producer and a separate matcher/fixture keeps matching its old string while real errors stop
+   * matching, and the tests stay green. Everything routing through this function stays in lockstep.
+   *
+   * @param code The JSON-RPC error code from the error response being classified
+   * @returns The exact message prefix `doRequest` uses for an error response with that `code`
+   * @experimental
+   */
+  export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
+  /**
+   * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
+   * out client-side before any response arrives. Exported for the same drift-prevention reason as
+   * {@link getJsonRpcRequestErrorMessagePrefix}.
+   *
+   * @experimental
+   */
+  export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
 }
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
@@ -5218,6 +5258,28 @@ declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
   export type Severity = 'info' | 'warning' | 'error';
+  /**
+   * The placements a notification can appear in, as a frozen array so it can be the single source of
+   * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
+   * `position` enum (which the service host spreads from this).
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_POSITIONS: readonly [
+    'top-left',
+    'top-center',
+    'top-right',
+    'bottom-left',
+    'bottom-center',
+    'bottom-right',
+  ];
+  /**
+   * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
+   * Omit to use the app's default placement.
+   *
+   * @experimental
+   */
+  export type NotificationPosition = (typeof NOTIFICATION_POSITIONS)[number];
   /** Data needed to display a notification to the user */
   export interface PlatformNotification {
     /**
@@ -5229,7 +5291,9 @@ declare module 'shared/models/notification.service-model' {
     /** Severity of the notification */
     severity: Severity;
     /**
-     * Optional label for users to click when the notification shows.
+     * Optional label for users to click when the notification shows. Always rendered as the
+     * notification's PRIMARY action button - the visually emphasized one - while
+     * {@link secondaryClickCommandLabel} always gets the muted secondary styling.
      *
      * Automatically localized if this is a {@link LocalizeKey}.
      */
@@ -5243,7 +5307,91 @@ declare module 'shared/models/notification.service-model' {
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      */
     clickCommand?: keyof CommandHandlers;
-    /** Optional ID of a previous notification to update instead of showing a new notification */
+    /**
+     * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
+     * this together with {@link secondaryClickCommand} to give the notification two actions.
+     *
+     * Always rendered as the visually SECONDARY button (muted styling, like the shadcn `secondary`
+     * button variant) so the {@link clickCommandLabel} button keeps the emphasis - the platform
+     * decides each button's styling from which field it came from, never from ordering.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     *
+     * @experimental
+     */
+    secondaryClickCommandLabel?: string | LocalizeKey;
+    /**
+     * Optional command to run if users click on the secondary label in the notification. Like
+     * {@link clickCommand}, the command is sent one argument:
+     *
+     * - NotificationId: The ID of the notification that was clicked
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * @experimental
+     */
+    secondaryClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
+     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
+     * other than the notification id, like {@link clickCommand}:
+     *
+     * - NotificationId: The ID of the notification that was dismissed
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
+     * away, or clicking a close button if the host ever enables one) AND when the notification
+     * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
+     * a must-answer toast that times out still runs this command instead of vanishing silently. It
+     * does NOT fire when the notification is dismissed programmatically via
+     * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
+     * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
+     * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
+     * keep {@link dismissible} `true` (see the warning on {@link dismissible}). If you need the toast
+     * to persist until the user actually answers, also set `duration` to `0`.
+     *
+     * @experimental
+     */
+    dismissClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional placement of the notification on screen. When omitted, the app's default placement is
+     * used.
+     *
+     * @experimental
+     */
+    position?: NotificationPosition;
+    /**
+     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
+     * via a close button). Defaults to `true`.
+     *
+     * The host toast library (Sonner) gates both the {@link secondaryClickCommand} button and the
+     * user-dismiss gesture that fires {@link dismissClickCommand} on this same flag, so a naive
+     * `dismissible: false` would silently turn those controls into dead buttons. To prevent that, the
+     * platform IGNORES `dismissible: false` when the notification renders a secondary action button
+     * (a {@link secondaryClickCommand} paired with its {@link secondaryClickCommandLabel}) or has a
+     * {@link dismissClickCommand} - the notification stays user-dismissible so those controls keep
+     * working. `dismissible: false` therefore only takes effect on a notification with no secondary
+     * button and no dismiss command. For a notification the user must explicitly answer, prefer
+     * leaving `dismissible: true` and using {@link dismissClickCommand} so a swipe-away still counts
+     * as a real (e.g. "postpone") decision.
+     *
+     * NOTE: `dismissible: false` does not keep the notification on screen. Auto-close is governed
+     * solely by `duration` (when omitted, 10-35 seconds computed from message length), so a
+     * non-dismissible notification still auto-closes on that timer. Also set `duration` to `0` (or
+     * less) if the notification must stay up until it is answered or programmatically dismissed via
+     * {@link INotificationService.dismiss}.
+     *
+     * @experimental
+     */
+    dismissible?: boolean;
+    /**
+     * Optional ID of a previous notification to update instead of showing a new notification.
+     *
+     * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
+     * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
+     * the field explicitly to change it.
+     */
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
