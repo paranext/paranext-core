@@ -83,4 +83,25 @@ describe('FirstRunShell', () => {
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
   });
+
+  it('disables Next after navigating into a step that calls setCanProceed(false) on mount (PT-4175 FIX 2)', async () => {
+    // BlockingStep calls setCanProceed(false) in a mount effect — simulates a step that gates
+    // on data loading or validation before the user may proceed.
+    function BlockingStep({ setCanProceed: setCP }: FirstRunStepProps) {
+      useEffect(() => setCP?.(false), [setCP]);
+      return <p>blocking step</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: BlockingStep }}
+      />,
+    );
+    // Start on language (Next should be enabled)
+    expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
+    // Navigate into identify (the blocking step)
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    // The blocking step's mount effect must win — Next must be disabled
+    await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
+  });
 });

@@ -3,7 +3,7 @@ import { completeFirstRun } from '@renderer/services/first-run-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentType, useCallback, useMemo, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
@@ -52,21 +52,6 @@ export function FirstRunShell({
   const index = STEP_ORDER.indexOf(step);
   const isLastStep = index === STEP_ORDER.length - 1;
 
-  // Relies on child step effects running before this parent effect, so a step's setCanProceed(false) on mount isn't overridden. Steps must use useEffect (not useLayoutEffect) for that call.
-  const prevStepRef = useRef<FirstRunStep | undefined>(undefined);
-  useEffect(() => {
-    if (prevStepRef.current === undefined) {
-      prevStepRef.current = step;
-      return;
-    }
-    if (prevStepRef.current !== step) {
-      prevStepRef.current = step;
-      setCanProceed(true);
-      setError('');
-      setIsBusy(false);
-    }
-  }, [step]);
-
   const runAction = useCallback(async (action: () => void | Promise<void>) => {
     setError('');
     setIsBusy(true);
@@ -79,17 +64,26 @@ export function FirstRunShell({
     }
   }, []);
 
+  // Reset per-step chrome as part of the navigation itself (same commit as setStep), so the
+  // incoming step's own setCanProceed(false) on mount is applied AFTER this and is not overridden.
+  const goToStep = useCallback((next: FirstRunStep) => {
+    setError('');
+    setIsBusy(false);
+    setCanProceed(true);
+    setStep(next);
+  }, []);
+
   const onNext = useCallback(() => {
     const next = STEP_ORDER[index + 1];
     // Sync step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
     // Only the final step calls completeFirstRun(), which is async and needs the busy state.
-    if (next) setStep(next);
+    if (next) goToStep(next);
     else runAction(() => completeFirstRun());
-  }, [index, runAction]);
+  }, [index, runAction, goToStep]);
 
   const onBack = useMemo(
-    () => (index > 0 ? () => setStep(STEP_ORDER[index - 1]) : undefined),
-    [index],
+    () => (index > 0 ? () => goToStep(STEP_ORDER[index - 1]) : undefined),
+    [index, goToStep],
   );
 
   const onSkip = useMemo(

@@ -14,7 +14,7 @@ type InterfaceMode = SettingTypes['platform.interfaceMode'];
  * (project picker shown, scroll-group selector hidden, etc.) until `useSetting` resolves and
  * triggers a re-render, which is visible as a flicker.
  */
-const INTERFACE_MODE_CACHE_KEY = 'platform-bible.interfaceMode';
+export const INTERFACE_MODE_CACHE_KEY = 'platform-bible.interfaceMode';
 
 function readCachedInterfaceMode(): InterfaceMode {
   try {

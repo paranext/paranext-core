@@ -1,6 +1,7 @@
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { INTERFACE_MODE_CACHE_KEY } from '@renderer/hooks/use-interface-mode.hook';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import { resolveRegistrationValidity } from './resolve-registration-validity';
@@ -16,9 +17,8 @@ const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
 const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped'; // written when the user skips sync consent; read by a later ticket to offer sync from the home screen
 
-// Mirror of the cache written by use-interface-mode.hook.ts so a transient settings-read
-// failure on cold startup doesn't route a power-mode user into the wizard.
-const INTERFACE_MODE_CACHE_KEY = 'platform-bible.interfaceMode';
+// INTERFACE_MODE_CACHE_KEY is imported from use-interface-mode.hook.ts (the canonical writer) so
+// the two files share one string literal — a silent mismatch can never cause a startup routing bug.
 function readCachedInterfaceMode(): 'simple' | 'power' | undefined {
   try {
     const raw = localStorage.getItem(INTERFACE_MODE_CACHE_KEY);
@@ -47,8 +47,9 @@ function writeBooleanFlag(key: string, value: boolean): void {
 }
 
 function computeInitialStatus(): FirstRunStatus {
-  // Seed from the cached completion flag so already-onboarded users never see a gate flash, and
-  // fresh users see a neutral loading gate (not the app) until the wizard resolves.
+  // Power mode is never gated, and already-onboarded simple users are done — seed 'app' for both so
+  // neither flashes the gate before the async settings read resolves. Fresh/unknown → loading gate.
+  if (readCachedInterfaceMode() === 'power') return { kind: 'app' };
   return readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY) ? { kind: 'app' } : { kind: 'loading' };
 }
 

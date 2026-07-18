@@ -176,3 +176,12 @@ describe('resolveFirstRunState — power mode cache fallback (FIX 3)', () => {
     expect(mockResolveReg).not.toHaveBeenCalled();
   });
 });
+
+describe('computeInitialStatus — power mode startup gate flash (PT-4175 FIX 1)', () => {
+  it('seeds status as app synchronously when cached interface mode is power (no async needed)', () => {
+    localStorage.setItem('platform-bible.interfaceMode', 'power');
+    resetFirstRunStore(); // recomputes status from computeInitialStatus
+    // Assert SYNCHRONOUSLY — no resolveFirstRunState call — to prove it is the initial seed value
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+});
