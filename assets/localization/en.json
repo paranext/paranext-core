@@ -45,6 +45,7 @@
   "%firstRun_error_body%": "We couldn't reach the registration service. Check your connection and try again.",
   "%firstRun_error_title%": "Couldn't verify your registration",
   "%firstRun_loading%": "Starting setup…",
+  "%firstRun_loading_detail%": "Checking your registration information. This may take a moment.",
   "%firstRun_step_identify_placeholder%": "Identify: name + registration code (coming soon)",
   "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
   "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",

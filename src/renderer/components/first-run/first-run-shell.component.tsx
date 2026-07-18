@@ -4,7 +4,7 @@ import { FirstRunStep } from '@renderer/services/first-run.model';
 import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FirstRunStepProps } from './first-run.model';
+import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
 import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
@@ -52,8 +52,7 @@ export function FirstRunShell({
   const index = STEP_ORDER.indexOf(step);
   const isLastStep = index === STEP_ORDER.length - 1;
 
-  // Reset per-step chrome whenever the step actually changes (skip initial mount so child steps
-  // can call setCanProceed(false) in their own effects without being overridden by this reset).
+  // Relies on child step effects running before this parent effect, so a step's setCanProceed(false) on mount isn't overridden. Steps must use useEffect (not useLayoutEffect) for that call.
   const prevStepRef = useRef<FirstRunStep | undefined>(undefined);
   useEffect(() => {
     if (prevStepRef.current === undefined) {

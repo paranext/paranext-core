@@ -15,6 +15,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_title%': 'Set up Platform.Bible',
       '%firstRun_description%': 'Complete the initial setup to start using Platform.Bible.',
       '%firstRun_loading%': 'Starting setup…',
+      '%firstRun_loading_detail%':
+        'Checking your registration information. This may take a moment.',
       '%firstRun_error_title%': "Couldn't verify your registration",
       '%firstRun_error_body%': 'Check your connection and try again.',
       '%firstRun_button_retry%': 'Retry',

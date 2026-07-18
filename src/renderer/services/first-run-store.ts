@@ -14,7 +14,7 @@ export type FirstRunStatus =
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
-const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped';
+const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped'; // written when the user skips sync consent; read by a later ticket to offer sync from the home screen
 
 // Mirror of the cache written by use-interface-mode.hook.ts so a transient settings-read
 // failure on cold startup doesn't route a power-mode user into the wizard.
@@ -53,9 +53,9 @@ function computeInitialStatus(): FirstRunStatus {
 }
 
 let status: FirstRunStatus = computeInitialStatus();
-// Dedupes duplicate resolve calls (e.g. React StrictMode double-invoking the startup effect).
+// resolvePromise dedupes startup calls (React StrictMode double-invoke); resolving guards
+// retryFirstRunResolution from starting a second run while one is already in flight.
 let resolvePromise: Promise<void> | undefined;
-// In-flight guard: true while a resolveInternal() run is in progress, preventing concurrent runs.
 let resolving = false;
 
 const listeners = new Set<() => void>();
@@ -69,6 +69,11 @@ function setStatus(next: FirstRunStatus): void {
   notifyListeners();
 }
 
+/**
+ * Returns the current first-run gating status. Safe to call before `resolveFirstRunState` settles:
+ * returns `{ kind: 'loading' }` (or `{ kind: 'app' }` seeded from cache for already-onboarded
+ * users) until resolution completes.
+ */
 export function getFirstRunStatus(): FirstRunStatus {
   return status;
 }
@@ -119,6 +124,7 @@ async function resolveInternal(): Promise<void> {
       logger.warn(`Could not read platform.firstRunComplete; using cache: ${getErrorMessage(e)}`);
       firstRunComplete = readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY);
     }
+    // Only cache on a successful read — never let a failed read overwrite a valid cached value.
     if (readSucceeded) writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, firstRunComplete);
     if (firstRunComplete) {
       setStatus({ kind: 'app' });
@@ -146,7 +152,8 @@ async function resolveInternal(): Promise<void> {
         setStatus({ kind: 'wizard', step: decision.step });
         break;
       default:
-        // 'showApp' can't occur here: firstRunComplete is pre-checked above and returns early.
+        // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
+        // checked and returned early). Defensive fallback.
         setStatus({ kind: 'app' });
         break;
     }
@@ -156,7 +163,7 @@ async function resolveInternal(): Promise<void> {
   }
 }
 
-/** Tracks the in-flight resolution and clears the guard when it settles. */
+// Clears the `resolving` guard even if resolveInternal throws.
 async function runResolution(): Promise<void> {
   resolving = true;
   try {
@@ -184,7 +191,6 @@ export async function completeFirstRun(options?: { syncSkipped?: boolean }): Pro
 
 /** Re-run resolution after an error (e.g. the Retry button on the "couldn't verify" screen). */
 export async function retryFirstRunResolution(): Promise<void> {
-  // If a resolution is already in flight (e.g. two rapid Retry clicks), don't start another.
   if (resolving) return resolvePromise ?? Promise.resolve();
   setStatus({ kind: 'loading' });
   resolvePromise = runResolution();

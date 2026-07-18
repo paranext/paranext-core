@@ -39,10 +39,8 @@ async function performStartupTasksInternal(): Promise<void> {
   logger.debug(`performStartupTasks: interfaceMode=${interfaceMode}`);
   if (interfaceMode !== undefined && interfaceMode !== 'simple') return;
 
-  // First-run gate: don't auto-sync until the simple-mode setup wizard has completed, so a fresh
-  // user never syncs before consenting. If the flag can't be read, default to NOT syncing to stay
-  // on the safe side of consent. (Existing users get this flag backfilled by the renderer on first
-  // launch of this build; from the next launch on, auto-sync resumes normally.)
+  // First-run gate: skip auto-sync until the simple-mode wizard completes, so a fresh user never
+  // syncs before consenting. On an unreadable flag, default to NOT syncing (consent-safe).
   let firstRunComplete = false;
   try {
     firstRunComplete = (await settingsService.get('platform.firstRunComplete')) === true;

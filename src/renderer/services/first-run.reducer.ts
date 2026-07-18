@@ -2,7 +2,8 @@ import { FirstRunDecision, FirstRunFacts } from './first-run.model';
 
 /**
  * Pure startup decision. Runs once at startup (simple mode only) to pick the wizard entry point;
- * the shell then handles in-wizard navigation. See the design spec for the full truth table.
+ * the shell then handles in-wizard navigation. The full truth table is exercised in
+ * first-run.reducer.test.ts.
  */
 export function decideFirstRun({
   firstRunComplete,

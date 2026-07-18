@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
-import { FirstRunStepProps } from './first-run.model';
+import { FirstRunStepProps } from './first-run-step-props.model';
 import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.component';
 
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));

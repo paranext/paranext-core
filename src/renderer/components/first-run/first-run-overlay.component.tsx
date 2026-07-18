@@ -23,6 +23,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_title%',
   '%firstRun_description%',
   '%firstRun_loading%',
+  '%firstRun_loading_detail%',
   '%firstRun_error_title%',
   '%firstRun_error_body%',
   '%firstRun_button_retry%',
@@ -64,11 +65,17 @@ function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kind: 'app
           >
             <Spinner />
             <p className="tw:text-sm tw:font-medium">{strings['%firstRun_loading%']}</p>
+            <p className="tw:text-xs tw:text-muted-foreground">
+              {strings['%firstRun_loading_detail%']}
+            </p>
           </div>
         )}
 
         {status.kind === 'error' && (
-          <div className="tw:mx-auto tw:flex tw:max-w-md tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+          <div
+            role="alert"
+            className="tw:mx-auto tw:flex tw:max-w-md tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center"
+          >
             <h1 className="tw:text-lg tw:font-medium">{strings['%firstRun_error_title%']}</h1>
             <p className="tw:text-sm tw:text-muted-foreground">
               {strings['%firstRun_error_body%']}
@@ -87,11 +94,8 @@ function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kind: 'app
 
 /**
  * Non-dismissable, app-gating overlay for the first-run wizard. Renders nothing once first run is
- * complete. Uses a Radix Dialog for the focus trap; Escape / outside-click are blocked and there is
- * no close button, so the app cannot be reached until the wizard finishes.
- *
- * Delegates to {@link FirstRunGate} so the localization subscription only runs while gating is
- * active — already-onboarded users don't hold a live subscription for the app's lifetime.
+ * complete. Delegates to {@link FirstRunGate} so the localization subscription only runs while
+ * gating is active.
  */
 export function FirstRunOverlay() {
   const [status, setStatus] = useState(getFirstRunStatus);
