@@ -13,7 +13,7 @@ export function decideFirstRun({
   if (firstRunComplete) return { action: 'showApp' };
   if (registrationValidity === 'unknown') return { action: 'waitForRegistration' };
   if (registrationValidity === 'valid') {
-    // W distinguishes "just registered via the wizard (resume)" from "pre-existing install".
+    // wizardActive distinguishes "just registered via the wizard (resume)" from "pre-existing install".
     return wizardActive
       ? { action: 'startWizard', step: 'syncConsent' }
       : { action: 'completeThenShowApp' };

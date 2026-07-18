@@ -60,7 +60,7 @@ describe('resolveFirstRunState', () => {
 
   it('silently completes for a pre-existing registered user (no wizard)', async () => {
     stubSettings({ firstRunComplete: false });
-    mockResolveReg.mockResolvedValue('valid'); // W is false (localStorage cleared)
+    mockResolveReg.mockResolvedValue('valid'); // wizardActive is false (localStorage cleared)
     await resolveFirstRunState();
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
@@ -74,7 +74,7 @@ describe('resolveFirstRunState', () => {
     expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBe('true');
   });
 
-  it('resumes at sync consent after the registration relaunch (W persisted)', async () => {
+  it('resumes at sync consent after the registration relaunch (wizardActive persisted)', async () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('valid');

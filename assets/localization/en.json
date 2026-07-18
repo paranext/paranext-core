@@ -27,7 +27,7 @@
   "%firstRun_button_finish%": "Finish",
   "%firstRun_button_next%": "Next",
   "%firstRun_button_retry%": "Retry",
-  "%firstRun_button_skip%": "Skip",
+  "%firstRun_button_skip%": "Skip setup",
   "%firstRun_description%": "Complete the initial setup to start using Platform.Bible.",
   "%firstRun_error_body%": "We couldn't reach the registration service. Check your connection and try again.",
   "%firstRun_error_title%": "Couldn't verify your registration",
