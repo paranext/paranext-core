@@ -112,6 +112,14 @@ describe('resolveFirstRunState', () => {
 });
 
 describe('completeFirstRun', () => {
+  it('still shows app and caches flags when settings.set throws', async () => {
+    mockSet.mockRejectedValue(new Error('write failed'));
+    await completeFirstRun();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true');
+    expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBe('false');
+  });
+
   it('persists completion, clears the wizard marker, and shows the app', async () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
     await completeFirstRun();
@@ -144,6 +152,17 @@ describe('retryFirstRunResolution', () => {
     await Promise.all([first, second]);
 
     expect(mockResolveReg).toHaveBeenCalledTimes(1);
+  });
+
+  it('reaches wizard status on a successful retry after an initial error', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+
+    mockResolveReg.mockResolvedValue('invalid');
+    await retryFirstRunResolution();
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
 });
 

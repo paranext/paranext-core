@@ -38,7 +38,7 @@ const FULL_SCREEN_CONTENT =
  * Inner gate component. Only mounts when the wizard is active, so the localization subscription
  * only runs while the gate is actually showing (not for the app's lifetime after onboarding).
  */
-function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kind: 'app' }> }) {
+export function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kind: 'app' }> }) {
   const [strings] = useLocalizedStrings(KEYS);
 
   return (

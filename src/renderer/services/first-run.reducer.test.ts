@@ -61,4 +61,14 @@ describe('decideFirstRun', () => {
       }),
     ).toEqual({ action: 'startWizard', step: 'language' });
   });
+
+  it('shows app when first run is complete even if wizard was active', () => {
+    expect(
+      decideFirstRun({
+        firstRunComplete: true,
+        wizardActive: true,
+        registrationValidity: 'valid',
+      }),
+    ).toEqual({ action: 'showApp' });
+  });
 });

@@ -11,5 +11,6 @@ export default meta;
 type Story = StoryObj<typeof FirstRunShell>;
 
 export const Language: Story = { args: { entryStep: 'language' } };
+export const Identify: Story = { args: { entryStep: 'identify' } };
 export const SyncConsent: Story = { args: { entryStep: 'syncConsent' } };
 export const SyncProgress: Story = { args: { entryStep: 'syncProgress' } };

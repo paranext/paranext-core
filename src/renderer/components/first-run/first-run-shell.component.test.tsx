@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
@@ -75,5 +75,12 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="syncProgress" />);
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
+  });
+
+  it('disables Finish while completeFirstRun is in flight (busy state)', async () => {
+    mockComplete.mockReturnValue(new Promise(() => {})); // never-settling
+    render(<FirstRunShell entryStep="syncProgress" />);
+    await userEvent.click(screen.getByRole('button', { name: /finish/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
   });
 });

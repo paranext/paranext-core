@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import * as store from '@renderer/services/first-run-store';
@@ -62,5 +62,28 @@ describe('FirstRunOverlay', () => {
     render(<FirstRunOverlay />);
     await userEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(store.retryFirstRunResolution).toHaveBeenCalledOnce();
+  });
+
+  it('renders a loading status element when status is loading', () => {
+    mockGetStatus.mockReturnValue({ kind: 'loading' });
+    render(<FirstRunOverlay />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('re-renders when the store emits a new status (subscription live-update)', () => {
+    let captured: (() => void) | undefined;
+    vi.spyOn(store, 'subscribeToFirstRun').mockImplementation((listener) => {
+      captured = listener;
+      return () => {};
+    });
+    mockGetStatus.mockReturnValue({ kind: 'loading' });
+    render(<FirstRunOverlay />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    act(() => {
+      captured?.();
+    });
+    expect(screen.getByText(/language picker/i)).toBeInTheDocument();
   });
 });

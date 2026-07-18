@@ -53,6 +53,7 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
+  // Also covers the upgrade-launch case: the flag defaults to false before the renderer backfills it.
   it('does NOT fire sync in simple mode when first run is not complete', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: false });
     await performStartupTasks();
