@@ -44,13 +44,31 @@ support simple-mode variants, so the feature has an existing mode to target.
 > **Version caveat for all P9 references:** the P9 line refs and behaviors in this doc
 > were researched against the Paratext repo at the commit pinned above, which builds
 > **9.6.x** (`MaxSupportedParatextDataVersion = 9.6.1.1`). paranext-core currently links the
-> **ParatextData/ParatextChecks 9.5.0.22** NuGet packages; nuget.org also has **9.5.0.24**
-> (stable) and **9.6.0.1-beta**. Some mechanisms cited below (notably the
-> `AdditionalCheck` forward-compat convention, §2.4/§5.3) exist only in 9.6.x. There is
-> no known blocker to upgrading the packages (the 9.5 bump was itself done to gain new
-> capability), so an upgrade to a 9.6.x package is the assumed path for the write-side
-> work — but confirm the chosen package version actually contains the forward-compat
-> commits before relying on them.
+> **ParatextData/ParatextChecks 9.5.0.22** NuGet packages. Some mechanisms cited below
+> (notably the `AdditionalCheck` forward-compat convention, §2.4/§5.3) exist only in
+> 9.6.x. **Per the P9 team (2026-07-20): use `9.6.0.2-beta`** — it was created to
+> include the changes this task needs (`9.6.0.1-beta` does not include them). Do not
+> wait for a non-beta package: the `-beta` suffix remains until the corresponding P9
+> 9.6 release ships and is not a stability signal. There is no known blocker to
+> upgrading (the 9.5 bump was itself done to gain new capability).
+
+**What is and isn't gated on the P9 9.6 _release_** (to head off a natural misreading —
+the package prerequisite above is not a release prerequisite):
+
+- **Not gated — the v1 feature.** Manual task ticks and stage advancement write only
+  long-standing schema (`<Status>` entries, `ChapRevId`s) that every 9.x P9 reads and
+  merges, and standard plans contain only check types every current P9 recognizes. P10
+  wants the 9.6.0.2-beta package so _its own evaluator_ handles `AdditionalCheck`
+  entries correctly and gets the helpers added for this task — not because P10's writes
+  need 9.6 readers. Development and v1 shipping can proceed now.
+- **Gated on 9.6 release + team adoption — P10 adding its own check types to plans.**
+  That future phase rides the `AdditionalCheck` convention and must stamp the project
+  via `UpdateMinimumParatextDataVersion(9.6)` (§5.3), locking out every pre-9.6 P9
+  user — which, before 9.6 ships, is everyone on P9. Out of v1 scope (plan editing is
+  excluded) anyway.
+- **Independent of P10:** teammates on pre-9.6 P9 will wipe progress at stages
+  containing `AdditionalCheck` entries (put there by a newer P9) regardless of what P10
+  does — P9's own version-skew issue.
 
 ## TL;DR
 
@@ -83,7 +101,7 @@ TaskAndCheckProgress.cs`), _not_ in ParatextData — P10 must re-implement it, r
   advancement caps at roughly stage 2 unless more check types are ported (§5.3) —
   manual task tracking works at every stage regardless; (2) the safety convention for
   steps P10 can't evaluate (`AdditionalCheck`) only exists in ParatextData 9.6.x, so a
-  package upgrade from 9.5.0.22 is effectively a prerequisite for the write side.
+  package upgrade from 9.5.0.22 to `9.6.0.2-beta` is a prerequisite for the write side.
 
 ---
 
@@ -260,9 +278,19 @@ re-runs) — there is no explicit "advance" gesture. Per stage/chapter:
    `progressHelper.UpdateLock()` via `SetChapterRevision(stage, book, chapter, hgRevId)`
    (`:765-793`). The Hg commit is of the **book text**; the progress file is saved
    separately and S/R-merged.
-3. **Regress** (complete but no longer may complete — e.g. a check now fails or a task
-   was unchecked): `SetChapterRevision(..., "")` clears the `ChapRevId` (`:796-800`), and
-   monotonicity cascades the clear to later stages. Regression is real and expected.
+3. **Regress** (complete but no longer may complete): `SetChapterRevision(..., "")`
+   clears the `ChapRevId` (`:796-800`), and monotonicity cascades the clear to later
+   stages. **What actually triggers it (corrected per P9 architect review):** a failing
+   _check_ does **not** clear recorded completion. Check results with issues at a stage
+   the book is already complete at are relocated forward to the first active stage
+   (`CacheResults`, `TaskAndCheckProgress.cs:1373-1381`) and displayed there as a
+   "regressed" check for users to review — so they never lower
+   `chapterToFirstFailingStage` below a completed stage and the clear branch never
+   fires from them. The clear fires in two cases: a **manual task is unmarked**
+   (manual results are never relocated — a deliberate user action), and
+   **unrecognized non-`AdditionalCheck` steps**, which fail all chapters at their own
+   stage (`MarkAllChaptersToFailAtStage`, `:94-112`) and therefore DO wipe — that is
+   the version-skew hazard in §2.4, not everyday check behavior.
 
 ### 2.6 Manual task marking (req 4)
 
@@ -279,8 +307,8 @@ assignment are disabled (`ChapterCompletionHelper.cs:65-97`).
 ### 3.1 ParatextData is already referenced; ProjectProgress is unused
 
 `c-sharp/ParanextDataProvider.csproj` references `ParatextData 9.5.0.22` and
-`ParatextChecks 9.5.0.22` (nuget.org now has 9.5.0.24 stable and 9.6.0.1-beta; upgrading
-is the assumed path — see the version caveat at the top). The
+`ParatextChecks 9.5.0.22` (upgrade to **9.6.0.2-beta** per the P9 team — see the version
+caveat at the top). The
 `Paratext.Data.ProjectProgress` namespace (incl. `ProjectProgressInfo`,
 `ReadOnlyProjectProgressInfo`, `Stage`, `Task`, `Check`, `ProjectProgressUtils`) is
 present in the DLL and **no paranext-core code uses it**. All the members the write-side
@@ -494,10 +522,20 @@ Plans routinely contain check types P10 can't run yet (spelling, biblical terms,
 translation, interlinear, passage checks — §3.3). Adopt P9's `AdditionalCheck`
 semantics (`TaskAndCheckProgress.cs:100-113,751`): show the step as "evaluated in
 Paratext 9 / not evaluable here", **never** auto-complete it, and **skip advancement for
-stages containing it** so P10 neither falsely advances nor wipes progress recorded by
-P9. This also protects shared projects: P9's regression logic (§2.5) means a wrong
-evaluation in P10 would propagate cleared progress to the whole team via S/R. (Reminder:
-the `AdditionalCheck` convention itself is 9.6.x-only — §2.4.)
+stages containing it**. Critically, P10 must also never treat a step it merely _can't
+evaluate_ as failing — that is the unrecognized-step path
+(`MarkAllChaptersToFailAtStage`) that clears recorded `ChapRevId`s and propagates the
+wipe to the whole team via S/R (§2.5). (Reminder: the `AdditionalCheck` convention
+itself is 9.6.x-only — §2.4.)
+
+**Minimum-data-version obligation (per P9 architect):** if P10 ever _adds_ a check to a
+plan that relies on the `AdditionalCheck` convention (e.g. a P10-registered check type),
+it must call `ScrText.Settings.UpdateMinimumParatextDataVersion(...)` to stamp the
+project with a 9.6 minimum — pre-9.6 clients do not handle the value correctly and
+would corrupt progress data. Pair this with UI that warns the user _before_ adding the
+check that doing so shuts pre-9.6 Paratext users out of the project. (v1 of this
+feature does not add checks to plans — plan editing is out of scope — so this binds the
+later phase that registers new check types.)
 
 **How hard the ceiling bites — measured against the real standard plans.** Tallying the
 shipped base plans (`_StandardPlans\*.xml`), the SIL Base Plan (Rev 1.34) per stage:
@@ -538,18 +576,23 @@ the section noted:
 
 1. **Version skew (critical, → header caveat, §2.4, §5.3):** the P9 mechanics cited were
    researched on 9.6.x source; the `AdditionalCheck` forward-compat convention this
-   doc's safety story relies on is not in the linked 9.5.0.22 package. Resolution:
-   upgrade ParatextData/ParatextChecks (9.6.0.1-beta exists on nuget.org; no known
-   blocker) and confirm the chosen version contains the forward-compat commits. Older
-   P9 clients on the same shared project remain a wipe hazard regardless of what P10
-   does.
+   doc's safety story relies on is not in the linked 9.5.0.22 package. Resolution
+   (confirmed by P9 team): upgrade ParatextData/ParatextChecks to **9.6.0.2-beta**,
+   created to include the needed changes (9.6.0.1-beta does not); don't wait for a
+   non-beta package. Older P9 clients on the same shared project remain a wipe hazard
+   regardless of what P10 does; `UpdateMinimumParatextDataVersion` (§5.3) is the fence
+   when P10-only constructs enter a project.
 2. **Advancement ceiling (critical, → §5.3):** measured against the shipped standard
    plans, the skip-unevaluated-stages rule caps advancement at stage 2. Requirement 6
    needs a product-scope decision.
 3. **Check divergence + severity gap (major, → §2.4, §3.3):** P9's pass/fail filtering
    is UI-assembly code P10 must re-implement, and `CheckRunResult` currently discards
-   the warning/error distinction P9's filtering depends on. Any divergence regresses
-   chapters team-wide via S/R (the progress merger prefers deletes over changes, §1.1).
+   the warning/error distinction P9's filtering depends on. Blast radius (narrowed by
+   the P9 architect's correction to §2.5): a divergent check result wrongly blocks or
+   grants _advancement_ and mislabels "regressed" checks, but does **not** clear
+   already-recorded stage completion — recorded `ChapRevId`s are only cleared when a
+   manual task is unmarked or a step is treated as unrecognized, which §5.3 forbids P10
+   to do for steps it merely can't evaluate.
 4. **Send/Receive write gate omitted (major, → §5.1, §5.2):** all new mutation paths
    must take `SendReceiveWriteLock.EnterWrite`, scopes tight; the coverage scanner does
    not recognize `UpdateLock()`/`Commit()` so gating discipline is manual here.
@@ -572,6 +615,18 @@ synchronously reusable in-process (after a `PapiClient` decoupling refactor); an
 Simple mode exists as `platform.interfaceMode` (an earlier review draft wrongly claimed
 it didn't — corrected in the header).
 
+**Update (2026-07-20, P9 architect review):** three corrections folded in above —
+(1) plan checks relying on `AdditionalCheck` must stamp the project via
+`ScrText.Settings.UpdateMinimumParatextDataVersion` with a warn-first UI, since this
+shuts pre-9.6 users out of the project (§5.3); (2) adopt the `9.6.0.2-beta` package —
+9.6.0.1-beta lacks the needed changes, and the `-beta` suffix persists until P9 9.6
+releases (header caveat, §3.1); (3) this doc originally claimed a failing check clears
+recorded stage completion — wrong: failing checks are relocated to the active stage and
+shown as "regressed" for review; recorded `ChapRevId`s are cleared only when a manual
+task is un-marked (or via the unrecognized-step path). §2.5 corrected and verified against
+`CacheResults` (`TaskAndCheckProgress.cs:1373-1381`); finding 3's blast radius narrowed
+accordingly.
+
 ## 8. Open questions
 
 1. **Where does the UI live?** Simple-mode web view in a core extension
@@ -584,9 +639,12 @@ it didn't — corrected in the header).
    `VersioningManager.Get(scrText)` under Studio. A runtime capability guard is still
    required (hg executable may be missing; partially-initialized `ScrText`s can have a
    null `VersioningManager`). See §3.4.
-3. **Regression UX:** P9 silently regresses chapters when a check starts failing. Is
-   that acceptable for Saroj, or does Simple mode need messaging when a chapter drops a
-   stage?
+3. **Regression UX (premise corrected):** P9 does _not_ silently drop a chapter's
+   recorded stage when a check starts failing — the failing check is shown as a
+   "regressed" check at the active stage for review (§2.5). Remaining Simple-mode
+   questions: how should Saroj see a regressed check (P9 surfaces it in the task
+   list), and is the case where a manual task is un-checked (which _does_ clear
+   recorded completion, by deliberate user action) acceptable without extra messaging?
 4. ~~**Permission story**~~ — **Answered (mostly):** open paranext-core already uses the
    Paratext registration identity — `RegistrationInfo.DefaultUser` in
    `c-sharp/Projects/LocalParatextProjects.cs:171,234`,
@@ -603,9 +661,10 @@ it didn't — corrected in the header).
 7. **Advancement scope (product):** given the stage-2 ceiling on typical plans (§5.3),
    is "manual task tracking at every stage + automatic advancement through the early
    stages" an acceptable v1, with unsupported check types displayed but deferred to P9?
-8. **ParatextData upgrade:** adopt 9.6.x packages (9.6.0.1-beta available) and verify
-   they contain the `AdditionalCheck` forward-compat commits before building the write
-   side.
+8. ~~**ParatextData upgrade**~~ — **Answered by the P9 team:** adopt **`9.6.0.2-beta`**
+   (created for this task; 9.6.0.1-beta does not include the needed changes). Do not
+   wait for a non-beta package — the `-beta` suffix remains until P9 9.6 releases and
+   is not a stability signal.
 9. **No-assignments policy:** P9 hides tasks not assigned to the current user. What
    should Saroj see on a project with a plan but no assignments — all steps
    (read-only?), or an empty state prompting assignment setup?
