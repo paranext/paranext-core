@@ -96,12 +96,14 @@ TaskAndCheckProgress.cs`), _not_ in ParatextData — P10 must re-implement it, r
 - Recommended access pattern: new `projectInterface` + data types on the existing C#
   `ParatextProjectDataProvider` (the Comments/`CommentManager` precedent), consumed via
   `useProjectData` in the web view.
-- **Two findings from adversarial review bound the scope (§7):** (1) typical standard
-  plans put check types P10 cannot evaluate in stage 3 onward, so automatic stage
-  advancement caps at roughly stage 2 unless more check types are ported (§5.3) —
-  manual task tracking works at every stage regardless; (2) the safety convention for
-  steps P10 can't evaluate (`AdditionalCheck`) only exists in ParatextData 9.6.x, so a
-  package upgrade from 9.5.0.22 to `9.6.0.2-beta` is a prerequisite for the write side.
+- **Two findings from adversarial review bound the scope (§7):** (1) standard plans
+  place check types P10 cannot evaluate (spelling, biblical terms, passages) in early
+  stages, so the automatic-advancement ceiling is plan-dependent — through stage 2 for
+  the SIL Base Plan, stage 1 for UBS, none for SIL Compact (§5.3) — while manual task
+  tracking and basic-check steps work at every stage regardless; (2) the safety
+  convention for steps P10 can't evaluate (`AdditionalCheck`) only exists in
+  ParatextData 9.6.x, so a package upgrade from 9.5.0.22 to `9.6.0.2-beta` is a
+  prerequisite for the write side.
 
 ---
 
@@ -387,7 +389,7 @@ ParatextProjectSendReceiveService.cs` has `CommitChanges`, `CommitDaily`,
   `SyncProjects`, `CancelSync` all throwing `PlatformUnimplementedException` ("Must be
   running Paratext 10 Studio…"). There is no commit-on-save; book edits go straight to
   disk via `ScrText.PutText`.
-- **PT10 Studio patches these in.** `paratext-10-studio/repo-patches/paranext-core.patch`
+- **P10 Studio patches these in.** `paratext-10-studio/repo-patches/paranext-core.patch`
   replaces the stubs with real implementations using ParatextData's
   `VersioningManager.Get(scrText)` / `versionedText.Commit(comment, forceCommit)` and
   exposes them as PAPI commands (`paratextBibleSendReceive.commitChanges`, etc.).
@@ -537,36 +539,65 @@ check that doing so shuts pre-9.6 Paratext users out of the project. (v1 of this
 feature does not add checks to plans — plan editing is out of scope — so this binds the
 later phase that registers new check types.)
 
-**How hard the ceiling bites — measured against the real standard plans.** Tallying the
-shipped base plans (`_StandardPlans\*.xml`), the SIL Base Plan (Rev 1.34) per stage:
+**How hard the ceiling bites — measured against the real standard plans** _(corrected
+2026-07-20 after PO review: per-stage placement varies across plans much more than the
+first draft of this table claimed, and the earlier statement that the UBS plan "has the
+same profile" as the SIL Base Plan was wrong)_.
 
-| Stage           | Step types                                                                                                         | Evaluable in P10 today?                           |
-| --------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
-| 1 (Draft)       | manual ×10, `BasicCheck` ×2, `NotesAssignedToMeCheck`                                                              | Yes, if note checks are built on `CommentManager` |
-| 2               | manual ×11, `BasicCheck` ×4, `NoteCheck` ×2                                                                        | Yes, same condition                               |
-| 3               | manual ×11, `BasicCheck` ×5, `SpellCheck*` ×2, `SpellingNoteCheck`, `RenderingNoteCheck`, `BiblicalTermRenderings` | **No** — five check types not evaluable           |
-| 4–5             | manual only                                                                                                        | Blocked behind stage 3                            |
-| 6 (Publication) | manual ×24, `PassageCheck`                                                                                         | **No**                                            |
+What P10 can plausibly evaluate: the `BasicCheck` family (§3.3), and the **entire
+note-check family** (`NoteCheck`, `NotesAssignedToMeCheck`, `SpellingNoteCheck`,
+`RenderingNoteCheck`, `DerivedProjectNoteCheck`) since each reduces to "unresolved
+comment threads" (`CheckX.cs:437+`) answerable from `CommentManager`.
 
-The UBS Standard Translation plan has the same profile. **Under the skip rule, no
-chapter can advance past stage 2 in P10**, and stages 1–2 only advance if note-check
-evaluation is implemented. Requirement 6 is therefore achievable only for the early
-stages of typical plans — a product-level scope decision, not an implementation detail.
-(Manual task ticking — requirements 3–4 — works at every stage regardless, since
-displaying steps and recording `TaskStatus` doesn't require evaluating checks.)
+`SpellCheckUnknown/Incorrect` is **not implemented in P10 but directly implementable**
+(verified 2026-07-20): P9's plan spelling check is a pure data read — it takes
+`WordOccurrencesCache.Get(scrText).GetOccurrences(bookNum)` and
+`SpellingStatuses.Get(scrText)` (both public ParatextData classes;
+`ParatextData\Words\WordOccurrencesCache.cs`,
+`ParatextData\Checking\Spelling\SpellingStatus.cs:41`) and flags each occurrence of a
+word whose recorded `SpellingStatus.State` is Unknown/Incorrect
+(`CheckX.cs:217-242`). No spelling engine is involved — statuses are the ones users
+recorded in the word list. The P9-UI `DefaultWordListSource` is only a thin wrapper
+over these same two classes.
+
+Not evaluable today and not yet scoped: `BiblicalTermRenderings`, `PassageCheck`,
+`BackTranslation*`, `InterlinearGlosses`, `DerivedStatus` — each depends on a subsystem
+(biblical terms lists, parallel passages, back translations, interlinear) whose P10
+status has not been investigated.
+
+Per-stage placement in the shipped base plans (`_StandardPlans\*.xml`), assuming note
+checks are implemented:
+
+| Plan                        | Where the not-evaluable checks sit                                                             | Auto-advancement ceiling |
+| --------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------ |
+| SIL Base Plan Rev 1.34      | `SpellCheck*` ×2 + `BiblicalTermRenderings` in stage 3; `PassageCheck` in stage 6              | Through stage 2          |
+| UBS Standard Translation    | All 11 `BasicCheck`s in stage 1 (fine — evaluable); spelling/terms/passages/notes in stage 2   | Stage 1 only             |
+| SIL Compact Base Plan Rev 2 | `SpellCheckIncorrect` already in **stage 1**; terms + spelling in stage 2; passages in stage 6 | **None**                 |
+
+Early _basic_ checks are not a problem — P10 runs them, so those steps are fully
+functional (display failures, fix-or-deny, gate advancement). The binding constraint is
+early **spelling / biblical-terms / passage** checks, and the ceiling is
+plan-dependent: from "through stage 2" (SIL Base) down to "no automatic advancement at
+all" (SIL Compact). Mitigations to weigh: (a) graceful display — "all steps P10 can
+check are passing; N steps need Paratext 9" without writing completion; (b) implement
+spelling-status evaluation (a direct ParatextData read — see above), which alone
+would unblock SIL Compact stage 1. Requirement 6 is therefore a product-level scope
+decision per plan, not an implementation detail. (Manual task ticking — requirements
+3–4 — works at every stage regardless, since displaying steps and recording
+`TaskStatus` doesn't require evaluating checks.)
 
 ---
 
 ## 6. Requirements → mechanism map
 
-| Req                                     | Mechanism                                                                                                                                                                                                          |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Current stage of active chapter      | Derive lowest incomplete stage per chapter via `IsCompleteAtStage`; expose as part of a `ChapterPlanStatus` data type; UI already knows the active BCV.                                                            |
-| 2. Fallback when no plan                | `Stages.Count == 0` / missing `ProjectProgress.xml` ⇒ `hasPlan: false` in the DTO; web view renders fallback state.                                                                                                |
-| 3. Remaining steps for chapter          | Re-implemented evaluator: stage's `TasksAndChecks`, availability gating, assignment filter (current user), postponement; return ordered steps with status.                                                         |
-| 4. Checkbox steps                       | Manual `Task` types; `setChapterTaskCompletion` (option M1) with P9-equivalent permission/assignment rules.                                                                                                        |
-| 5. Check steps — actions to earn a pass | Chapter-scoped `CheckRunner` job for the plan check's type; list undenied `CheckRunResult`s ("fix or deny each"); unsupported types per §5.3; severity gap must be fixed first (§3.3).                             |
-| 6. Chapter advanced indication          | Automatic re-evaluation after each mutation/check change; persist `ChapRevId` via A1 in Studio; PDP update event → subscribed web view re-renders new stage. **Ceiling: stages 1–2 of typical plans only (§5.3).** |
+| Req                                     | Mechanism                                                                                                                                                                                                                                                      |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Current stage of active chapter      | Derive lowest incomplete stage per chapter via `IsCompleteAtStage`; expose as part of a `ChapterPlanStatus` data type; UI already knows the active BCV.                                                                                                        |
+| 2. Fallback when no plan                | `Stages.Count == 0` / missing `ProjectProgress.xml` ⇒ `hasPlan: false` in the DTO; web view renders fallback state.                                                                                                                                            |
+| 3. Remaining steps for chapter          | Re-implemented evaluator: stage's `TasksAndChecks`, availability gating, assignment filter (current user), postponement; return ordered steps with status.                                                                                                     |
+| 4. Checkbox steps                       | Manual `Task` types; `setChapterTaskCompletion` (option M1) with P9-equivalent permission/assignment rules.                                                                                                                                                    |
+| 5. Check steps — actions to earn a pass | Chapter-scoped `CheckRunner` job for the plan check's type; list undenied `CheckRunResult`s ("fix or deny each"); unsupported types per §5.3; severity gap must be fixed first (§3.3).                                                                         |
+| 6. Chapter advanced indication          | Automatic re-evaluation after each mutation/check change; persist `ChapRevId` via A1 in Studio; PDP update event → subscribed web view re-renders new stage. **Ceiling is plan-dependent — stage 2 / stage 1 / none for SIL Base / UBS / SIL Compact (§5.3).** |
 
 ## 7. Adversarial review findings (2026-07-17)
 
@@ -639,12 +670,10 @@ accordingly.
    `VersioningManager.Get(scrText)` under Studio. A runtime capability guard is still
    required (hg executable may be missing; partially-initialized `ScrText`s can have a
    null `VersioningManager`). See §3.4.
-3. **Regression UX (premise corrected):** P9 does _not_ silently drop a chapter's
-   recorded stage when a check starts failing — the failing check is shown as a
-   "regressed" check at the active stage for review (§2.5). Remaining Simple-mode
-   questions: how should Saroj see a regressed check (P9 surfaces it in the task
-   list), and is the case where a manual task is un-checked (which _does_ clear
-   recorded completion, by deliberate user action) acceptable without extra messaging?
+3. ~~**Regression UX**~~ — **Closed by PO (2026-07-20):** not a concern. Manual tasks
+   that were done stay done; for checks, P9's model (a check required at stage N keeps
+   running in all later stages and is surfaced as "regressed" for review, without
+   clearing recorded completion — §2.5) is the expected behavior for P10 to mirror.
 4. ~~**Permission story**~~ — **Answered (mostly):** open paranext-core already uses the
    Paratext registration identity — `RegistrationInfo.DefaultUser` in
    `c-sharp/Projects/LocalParatextProjects.cs:171,234`,
@@ -657,17 +686,23 @@ accordingly.
 5. **Scope of evaluation:** P9 evaluates a whole book per evaluator instance. For the
    "active chapter" UI we can evaluate book-at-a-time (checks run per book anyway in
    `CheckCache`) — confirm performance is acceptable on large books.
-6. **Plan editing is out of scope** (create/modify plans, base-plan selection) — confirm.
-7. **Advancement scope (product):** given the stage-2 ceiling on typical plans (§5.3),
-   is "manual task tracking at every stage + automatic advancement through the early
-   stages" an acceptable v1, with unsupported check types displayed but deferred to P9?
+6. ~~**Plan editing is out of scope**~~ — **Confirmed by PO (2026-07-20):** all plan
+   creation and editing stays in P9, which also guarantees compatibility.
+7. **Advancement scope (product) — PO direction received (2026-07-20), details open:**
+   show the automated checks P10 can run, and **disclose** the ones it can't yet
+   ("some checks aren't available in P10") rather than hiding them — the PO favors
+   disclosure over silence. Still to settle after the corrected per-plan ceilings
+   (§5.3): whether the plan-dependent advancement ceiling (stage 2 / 1 / none for SIL
+   Base / UBS / SIL Compact) is acceptable for v1, and whether porting
+   spelling-status evaluation is worth prioritizing to raise it.
 8. ~~**ParatextData upgrade**~~ — **Answered by the P9 team:** adopt **`9.6.0.2-beta`**
    (created for this task; 9.6.0.1-beta does not include the needed changes). Do not
    wait for a non-beta package — the `-beta` suffix remains until P9 9.6 releases and
    is not a stability signal.
-9. **No-assignments policy:** P9 hides tasks not assigned to the current user. What
-   should Saroj see on a project with a plan but no assignments — all steps
-   (read-only?), or an empty state prompting assignment setup?
+9. ~~**No-assignments policy**~~ — **Answered by PO (2026-07-20):** the plan UI should
+   tell Saroj there are no assignments and suggest contacting their administrator. A
+   "Claim this book" action (creating a comment/notification to the admin) was floated
+   as a possible future feature — explicitly _not_ part of this one.
 
 ## 9. Key file reference
 
@@ -696,7 +731,7 @@ accordingly.
   `extensions/src/platform-scripture/src/types/platform-scripture.d.ts:2308+`
 - React hook: `src/renderer/hooks/papi-hooks/use-project-data.hook.ts`
 
-**PT10 Studio (`C:\Users\Ira\src\paratext-10-studio`)**
+**P10 Studio (`C:\Users\Ira\src\paratext-10-studio`)**
 
 - Overlay: `repo-patches/paranext-core.patch` — real `CommitChanges` via
   `VersioningManager.Get(scrText)` + `versionedText.Commit(...)`
