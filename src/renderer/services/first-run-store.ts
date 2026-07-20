@@ -16,6 +16,12 @@ export type FirstRunStatus =
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
 const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped'; // written when the user skips sync consent; read by a later ticket to offer sync from the home screen
+// Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
+// the real registration backend or triggering a relaunch, and completion is NOT persisted so the
+// click-through re-runs on every launch. Toggle from devtools:
+//   localStorage.setItem('platform-bible.firstRunDemoMode', 'true')
+// Never set in shipped builds; remove/gate before release along with the rest of PT-4219.
+const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 
 // INTERFACE_MODE_CACHE_KEY is imported from use-interface-mode.hook.ts (the canonical writer) so
 // the two files share one string literal — a silent mismatch can never cause a startup routing bug.
@@ -46,7 +52,15 @@ function writeBooleanFlag(key: string, value: boolean): void {
   }
 }
 
+/** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
+function isDemoMode(): boolean {
+  return readBooleanFlag(DEMO_MODE_KEY);
+}
+
 function computeInitialStatus(): FirstRunStatus {
+  // Demo mode always resolves into the wizard, so don't seed 'app' from a stale completion cache
+  // (which would flash the app before resolveInternal routes back to the wizard).
+  if (isDemoMode()) return { kind: 'loading' };
   // Power mode is never gated, and already-onboarded simple users are done — seed 'app' for both so
   // neither flashes the gate before the async settings read resolves. Fresh/unknown → loading gate.
   if (readCachedInterfaceMode() === 'power') return { kind: 'app' };
@@ -99,6 +113,16 @@ async function markFirstRunComplete(): Promise<void> {
 
 async function resolveInternal(): Promise<void> {
   try {
+    // Demo/UX mode (PT-4219): bypass the real registration backend + relaunch entirely and drop the
+    // user straight into the wizard from the top. Enablement only — never on in shipped builds.
+    // Deliberately writes NO persisted flags: demo always restarts at `language` and never reads
+    // WIZARD_ACTIVE_KEY, so leaving it unset keeps a later real first-run on the same profile from
+    // wrongly resuming at the sync-consent step.
+    if (isDemoMode()) {
+      setStatus({ kind: 'wizard', step: 'language' });
+      return;
+    }
+
     let interfaceMode: string | undefined;
     try {
       interfaceMode = await settingsService.get('platform.interfaceMode');
@@ -185,6 +209,11 @@ export async function resolveFirstRunState(): Promise<void> {
 
 /** Finish the wizard: persist completion, clear the active marker, reveal the app. */
 export async function completeFirstRun(options?: { syncSkipped?: boolean }): Promise<void> {
+  // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
+  if (isDemoMode()) {
+    setStatus({ kind: 'app' });
+    return;
+  }
   if (options?.syncSkipped) writeBooleanFlag(SYNC_SKIPPED_KEY, true);
   await markFirstRunComplete();
   setStatus({ kind: 'app' });

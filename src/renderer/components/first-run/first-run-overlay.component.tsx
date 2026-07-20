@@ -15,9 +15,11 @@ import {
   Z_INDEX_FIRST_RUN,
 } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useEffect, useState } from 'react';
+import { ComponentType, useCallback, useEffect, useState } from 'react';
 import { VisuallyHidden } from 'radix-ui';
+import { FirstRunStep } from '@renderer/services/first-run.model';
 import { FirstRunShell } from './first-run-shell.component';
+import { FirstRunStepProps } from './first-run-step-props.model';
 
 const KEYS: LocalizeKey[] = [
   '%firstRun_title%',
@@ -38,7 +40,14 @@ const FULL_SCREEN_CONTENT =
  * Inner gate component. Only mounts when the wizard is active, so the localization subscription
  * only runs while the gate is actually showing (not for the app's lifetime after onboarding).
  */
-export function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kind: 'app' }> }) {
+export function FirstRunGate({
+  status,
+  stepComponents,
+}: {
+  status: Exclude<FirstRunStatus, { kind: 'app' }>;
+  /** Optional step-body overrides forwarded to the shell (e.g. PT-4219 demo screens). */
+  stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
+}) {
   const [strings] = useLocalizedStrings(KEYS);
 
   return (
@@ -86,7 +95,9 @@ export function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kin
           </div>
         )}
 
-        {status.kind === 'wizard' && <FirstRunShell entryStep={status.step} />}
+        {status.kind === 'wizard' && (
+          <FirstRunShell entryStep={status.step} stepComponents={stepComponents} />
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -97,7 +108,12 @@ export function FirstRunGate({ status }: { status: Exclude<FirstRunStatus, { kin
  * complete. Delegates to {@link FirstRunGate} so the localization subscription only runs while
  * gating is active.
  */
-export function FirstRunOverlay() {
+export function FirstRunOverlay({
+  stepComponents,
+}: {
+  /** Optional step-body overrides forwarded to the shell (e.g. PT-4219 demo screens). */
+  stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
+} = {}) {
   const [status, setStatus] = useState(getFirstRunStatus);
   const syncState = useCallback(() => setStatus(getFirstRunStatus()), []);
 
@@ -108,7 +124,7 @@ export function FirstRunOverlay() {
 
   if (status.kind === 'app') return undefined;
 
-  return <FirstRunGate status={status} />;
+  return <FirstRunGate status={status} stepComponents={stepComponents} />;
 }
 
 export default FirstRunOverlay;

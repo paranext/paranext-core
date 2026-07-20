@@ -111,6 +111,48 @@ describe('resolveFirstRunState', () => {
   });
 });
 
+describe('demo mode (PT-4219)', () => {
+  const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
+
+  it('launches the wizard at language and bypasses the registration backend', async () => {
+    localStorage.setItem(DEMO_MODE_KEY, 'true');
+    resetFirstRunStore();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    // Demo must NOT dirty the wizard-active flag: leaving it set would misroute a later real
+    // first-run on the same profile to the sync-consent resume step (code-review finding).
+    expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBeNull();
+    expect(mockResolveReg).not.toHaveBeenCalled(); // never touches the real backend
+    expect(mockGet).not.toHaveBeenCalled(); // no settings reads either
+  });
+
+  it('launches the wizard even when interface mode is power and first run is complete', async () => {
+    localStorage.setItem(DEMO_MODE_KEY, 'true');
+    localStorage.setItem('platform-bible.interfaceMode', 'power');
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    resetFirstRunStore();
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  it('seeds loading synchronously (never flashes the app from a stale completion cache)', () => {
+    localStorage.setItem(DEMO_MODE_KEY, 'true');
+    localStorage.setItem('platform-bible.firstRunComplete', 'true');
+    resetFirstRunStore();
+    expect(getFirstRunStatus()).toEqual({ kind: 'loading' });
+  });
+
+  it('completion reveals the app but persists nothing, so the demo re-runs next launch', async () => {
+    localStorage.setItem(DEMO_MODE_KEY, 'true');
+    resetFirstRunStore();
+    await completeFirstRun({ syncSkipped: true });
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
+    expect(localStorage.getItem('platform-bible.firstRunSyncSkipped')).toBeNull();
+  });
+});
+
 describe('completeFirstRun', () => {
   it('still shows app and caches flags when settings.set throws', async () => {
     mockSet.mockRejectedValue(new Error('write failed'));
@@ -141,8 +183,8 @@ describe('retryFirstRunResolution', () => {
     stubSettings({ firstRunComplete: false });
     let resolveSlowCall!: () => void;
     mockResolveReg.mockReturnValue(
-      new Promise<'invalid'>((res) => {
-        resolveSlowCall = () => res('invalid');
+      new Promise<'invalid'>((resolve) => {
+        resolveSlowCall = () => resolve('invalid');
       }),
     );
 
