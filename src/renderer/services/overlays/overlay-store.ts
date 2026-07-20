@@ -137,23 +137,29 @@ export function updateOverlayContent(id: string, content: PopoverContent): boole
  *
  * @param id The overlay id to update
  * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
- *   string is normalized to undefined so the entry never stores `''`); `selectedIndexDelta` moves
- *   the current `selectedIndex` by this many items before clamping; `itemCount` is the length of
- *   the filtered item list used to clamp `selectedIndex`
+ *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
+ *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
+ *   it knows the resulting index, not a delta) and wins over `selectedIndexDelta`, which moves the
+ *   current index by this many items; both clamp; `itemCount` is the length of the filtered item
+ *   list used to clamp `selectedIndex`
  * @returns True if the overlay was found and updated, false otherwise
  */
 export function updateCommandPaletteState(
   id: string,
-  patch: { filterText?: string; selectedIndexDelta?: number; itemCount: number },
+  patch: {
+    filterText?: string;
+    selectedIndex?: number;
+    selectedIndexDelta?: number;
+    itemCount: number;
+  },
 ): boolean {
   const entry = overlays.get(id);
   if (!entry || entry.type !== 'commandPalette') return false;
 
   const maxIndex = Math.max(0, patch.itemCount - 1);
-  const rawIndex =
-    patch.selectedIndexDelta !== undefined
-      ? entry.selectedIndex + patch.selectedIndexDelta
-      : entry.selectedIndex;
+  let rawIndex = entry.selectedIndex;
+  if (patch.selectedIndex !== undefined) rawIndex = patch.selectedIndex;
+  else if (patch.selectedIndexDelta !== undefined) rawIndex += patch.selectedIndexDelta;
   const selectedIndex = Math.min(Math.max(rawIndex, 0), maxIndex);
 
   overlays.set(id, {
