@@ -43,17 +43,26 @@ mark {
 // #endregion
 
 // Simple mode: match the Scripture Editor's TabToolbar height (56px via tw:h-14, from the shared
-// TabToolbarContainer component) to Column 3's dock tab-header and the Model Text header (both
-// 36px) — see docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md,
-// Section 3. `!important` is required for the same reason noted in the original (now-removed)
-// renderer-side attempt: this overrides a Tailwind utility class (`tw:h-14`) applied directly via
-// `className` on the same element, where plain specificity cannot reliably win the tie.
+// TabToolbarContainer component) to Column 3's dock tab-header row — see
+// docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md, Section 3.
+// `!important` is required for the same reason noted in the original (now-removed) renderer-side
+// attempt: this overrides a Tailwind utility class (`tw:h-14`) applied directly via `className` on
+// the same element, where plain specificity cannot reliably win the tie.
 //
-// padding-block must shrink too: TabToolbarContainer's own tw:py-2 (8px top+bottom = 16px) plus
-// tw:box-border means the 36px height leaves only 20px of content area — every toolbar button
-// here is tw:h-8 (32px), so without this the container's tw:overflow-clip was cutting the buttons
-// off entirely (found via visual verification after Task 8's first pass shipped height-only).
+// The target is 42px, not 36px: Column 3's tab bar (`dock-layout-wrapper.component.scss`) is a
+// 42px-tall `.dock-bar` with a 6px empty gap above the 36px-tall active tab (`--tab-header-to-
+// content-gap`), so the tab's BOTTOM edge — not its own 36px height — is what visually aligns
+// across columns. Mirror that shape here (6px empty gap on top, 36px of content below) so this
+// toolbar's bottom edge lands at the same Y as Column 3's tab bottom, instead of 6px higher (found
+// via visual verification after the first pass matched the wrong dimension). The 6px is hardcoded,
+// not `var(--tab-header-to-content-gap)`, because this stylesheet compiles into the web view's own
+// iframe document, which never sees the renderer's CSS custom properties — keep it in sync with
+// that variable's value (defined in `dock-layout-wrapper.component.scss`) if it ever changes.
+//
+// padding-block also needed shrinking from TabToolbarContainer's own tw:py-2 (16px total): with
+// tw:box-border and tw:overflow-clip, the original 36px-height attempt left only 20px of content
+// area, and every toolbar button here is tw:h-8 (32px) — so it was clipping the buttons entirely.
 .scripture-editor-tab-nav-simple {
-  height: 36px !important;
-  padding-block: 0 !important;
+  height: 42px !important;
+  padding-block: 6px 0 !important;
 }

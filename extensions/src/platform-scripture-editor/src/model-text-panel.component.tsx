@@ -367,7 +367,12 @@ export function ModelTextPanel({
       {modelTextLabel && (
         <div
           data-testid="model-text-header"
-          className="tw:flex tw:h-9 tw:shrink-0 tw:items-center tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
+          // 42px total with a 6px top gap (tw:pt-1.5) before 36px of content, matching Column 3's
+          // dock tab-bar shape (a 6px --tab-header-to-content-gap above the 36px active tab) and
+          // the Scripture Editor's Simple-mode toolbar override — all three need their BOTTOM edge
+          // to land at the same Y, not just an equal own height. See platform-scripture-editor.web-
+          // view.scss's .scripture-editor-tab-nav-simple comment for the full explanation.
+          className="tw:flex tw:h-[42px] tw:shrink-0 tw:items-center tw:border-b tw:border-border tw:px-3 tw:pt-1.5 tw:text-sm tw:font-semibold"
         >
           {modelTextLabel}
         </div>
