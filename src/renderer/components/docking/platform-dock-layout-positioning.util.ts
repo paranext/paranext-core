@@ -1,4 +1,5 @@
 import { createElement } from 'react';
+import type { CSSProperties } from 'react';
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
   FloatLayout,
@@ -84,6 +85,19 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
     [HEADLESS_GROUP]: simpleConfig,
     [TAB_GROUP_RESOURCES]: simpleConfig,
   };
+}
+
+/**
+ * Outer inset around the whole dock layout, relative to its positioned parent. Power mode keeps the
+ * original 8px gap on every side below the main toolbar; Simple mode removes that gap on the
+ * left/right/bottom (only the 48px top clearance for the main toolbar is preserved) — see
+ * `docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md`, Section 7.
+ */
+export function getDockLayoutOuterInset(isPowerMode: boolean): CSSProperties {
+  if (isPowerMode) {
+    return { position: 'absolute', top: 48, bottom: 8, left: 8, right: 8 };
+  }
+  return { position: 'absolute', top: 48, bottom: 0, left: 0, right: 0 };
 }
 
 /** Initial sizes for each tab in CSS `px` units if created as floating tabs */

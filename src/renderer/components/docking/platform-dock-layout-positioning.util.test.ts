@@ -4,6 +4,7 @@ import { FloatLayout } from '@shared/models/docking-framework.model';
 import {
   getFloatPosition,
   getGroups,
+  getDockLayoutOuterInset,
   HEADLESS_GROUP,
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
@@ -42,6 +43,28 @@ describe('Dock Layout Component', () => {
         expect(groups[groupKey].panelExtra).toBeUndefined();
         expect(groups[groupKey].maximizable).toBe(false);
         expect(groups[groupKey].floatable).toBe(false);
+      });
+    });
+  });
+
+  describe('getDockLayoutOuterInset()', () => {
+    it('power mode: keeps the original 8px inset on every side (except top)', () => {
+      expect(getDockLayoutOuterInset(true)).toEqual({
+        position: 'absolute',
+        top: 48,
+        bottom: 8,
+        left: 8,
+        right: 8,
+      });
+    });
+
+    it('simple mode: removes the inset except for the top toolbar clearance', () => {
+      expect(getDockLayoutOuterInset(false)).toEqual({
+        position: 'absolute',
+        top: 48,
+        bottom: 0,
+        left: 0,
+        right: 0,
       });
     });
   });

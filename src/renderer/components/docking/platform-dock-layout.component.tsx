@@ -48,6 +48,7 @@ import {
   RCDockTabInfo,
 } from '@renderer/components/docking/docking-framework-internal.model';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -167,13 +168,7 @@ export function PlatformDockLayout() {
       saveTab={saveTab}
       /* Put a visual space around all tab-groups.
        * I tried using CSS padding and margin for this, but both causes overflows. */
-      style={{
-        position: 'absolute',
-        top: 48,
-        bottom: 8,
-        left: 8,
-        right: 8,
-      }}
+      style={getDockLayoutOuterInset(isPowerMode)}
       onLayoutChange={(layout, currentTabId, direction) => {
         let webViewDefinition: WebViewDefinition | undefined;
         const didCloseWebView = direction === 'remove';
