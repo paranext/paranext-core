@@ -1900,6 +1900,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         SendDataUpdateEvent(ProjectDataType.SETTING, "project setting data update event");
 
+        // If the write changed a setting that backs the project-picker / Home metadata (name,
+        // fullName, language, languageTag, isEditable), tell those list consumers the metadata is
+        // stale so they refetch it, rather than showing the old value until an unrelated refresh.
+        if (ProjectSettingsNames.IsProjectMetadataDisplaySetting(paratextSettingName))
+            _paratextProjects.NotifyProjectsChanged();
+
         // When the versification setting changes, the platformScripture.Versification
         // projectInterface's derived values change too — notify subscribers on those data types so
         // they refetch.

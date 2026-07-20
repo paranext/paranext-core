@@ -235,4 +235,31 @@ public sealed class ProjectSettingsNames
                 return false;
         }
     }
+
+    /// <summary>
+    /// Raw Paratext settings that back <c>ProjectMetadata</c>'s display fields (see
+    /// <c>ScrTextExtensions.GetProjectDetails</c>): name, fullName, language, languageTag, isEditable.
+    /// A write to one of these changes what the project picker / Home lists show, so the project
+    /// setting setter emits <c>LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE</c> when one of them
+    /// changes. (isPublished has no writable backing setting - it is computed from
+    /// <c>IsResourceProject</c> - so it is not listed.)
+    /// </summary>
+    private static readonly HashSet<string> s_projectMetadataDisplaySettings =
+    [
+        PT_NAME,
+        PT_FULL_NAME,
+        PT_LANGUAGE,
+        PT_LANGUAGE_ISO_CODE,
+        PT_IS_EDITABLE,
+    ];
+
+    /// <summary>
+    /// Whether writing <paramref name="ptSettingName"/> changes a project's display metadata (see
+    /// <see cref="s_projectMetadataDisplaySettings"/>), i.e. whether the project-list caches should
+    /// be invalidated after the write.
+    /// </summary>
+    public static bool IsProjectMetadataDisplaySetting(string ptSettingName)
+    {
+        return s_projectMetadataDisplaySettings.Contains(ptSettingName);
+    }
 }

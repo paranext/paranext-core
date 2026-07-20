@@ -274,15 +274,15 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 
 ### Startup performance timing
 
-Platform.Bible can emit startup timing marks across all four processes (main, renderer, extension host, and the .NET data provider) so you can profile where cold-start time goes. Marks are **off by default** — when disabled, each mark call is a single boolean check, so calls are safe to leave in the code.
+Platform.Bible can emit startup timing marks across all four processes (main, renderer, extension host, and the .NET data provider) so you can profile where cold-start time goes. Marks are **off by default** - when disabled, each mark call is a single boolean check, so calls are safe to leave in the code.
 
 To capture a run, set the `PT_STARTUP_MARKS=true` environment variable when launching. The main process forwards it to the renderer automatically, and the .NET provider reads the same variable:
 
 ```bash
-# Dev (quick, but see the caveat below — dotnet watch distorts the .NET timings)
+# Dev (quick, but see the caveat below - dotnet watch distorts the .NET timings)
 PT_STARTUP_MARKS=true npm start
 
-# Packaged build (representative numbers — what the perf specs were measured on)
+# Packaged build (representative numbers - what the perf specs were measured on)
 PT_STARTUP_MARKS=true ./release/build/linux-unpacked/platform-bible \
   --no-sandbox --remote-debugging-port=9223
 ```

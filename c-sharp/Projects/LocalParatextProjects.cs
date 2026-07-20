@@ -8,7 +8,7 @@ namespace Paranext.DataProvider.Projects;
 /// <summary>
 /// Direct access methods to the file system for Paratext project directories
 /// </summary>
-internal class LocalParatextProjects
+internal class LocalParatextProjects : IDisposable
 {
     #region Constructors, consts, and fields
 
@@ -22,6 +22,32 @@ internal class LocalParatextProjects
 
     private bool _isInitialized = false;
     private readonly object _initializationLock = new();
+
+    /// <summary>
+    /// PAPI client used to emit <see cref="PROJECTS_CHANGED_EVENT_TYPE"/>. Null in tests/tooling that
+    /// construct this without one; <see cref="NotifyProjectsChanged"/> is then a no-op.
+    /// </summary>
+    private readonly PapiClient? _papiClient;
+
+    /// <summary>
+    /// Network event fired when the set of available projects changes (a project is added or
+    /// removed) or when a project's display metadata (name/fullName/language/languageTag/isEditable)
+    /// changes. Consumers (the project picker, Home, New Tab) refetch cheap project metadata when it
+    /// fires. Keep identical to the `platform.onDidChangeProjects` string the TS consumers subscribe
+    /// to via `getNetworkEvent` (renderer `use-project-picker-data.hook.ts` and the get-resources
+    /// `use-local-projects.hook.ts`).
+    /// </summary>
+    public const string PROJECTS_CHANGED_EVENT_TYPE = "platform.onDidChangeProjects";
+
+    /// <summary>
+    /// Debounce window for coalescing a burst of project-directory changes (e.g. a clone or install
+    /// writing several files) into a single refresh + notify.
+    /// </summary>
+    private static readonly TimeSpan s_projectChangeDebounce = TimeSpan.FromMilliseconds(500);
+
+    private FileSystemWatcher? _projectDirectoryWatcher;
+    private Timer? _projectChangeDebounceTimer;
+    private readonly object _projectChangeLock = new();
 
     private readonly List<string> _requiredProjectRootFiles =
     [
@@ -60,8 +86,12 @@ internal class LocalParatextProjects
         ProjectInterfaces.LEGACY_COMMENT,
     ];
 
-    public LocalParatextProjects()
+    public LocalParatextProjects(PapiClient? papiClient = null)
     {
+        // Optional so tests/tooling can construct this without a PAPI client (NotifyProjectsChanged
+        // is then a no-op). Production passes the real client from Program.cs.
+        _papiClient = papiClient;
+
         // E2E tests (and other tooling) can point the app at an isolated projects folder so runs
         // don't touch the user's real projects; Initialize() installs the bundled sample WEB
         // project into an empty root. See e2e-tests/fixtures/helpers.ts (isolatedProjectRoot).
@@ -127,7 +157,109 @@ internal class LocalParatextProjects
 
             _isInitialized = true;
             Services.StartupTiming.Mark("project-scan-end");
+
+            // Start watching for projects added/removed on disk out-of-band (e.g. a Send/Receive
+            // clone or an install done out-of-process). Done here, not in the ctor, so the root
+            // folder exists (SetUpProjectRootFolder above) and setup happens once under the lock.
+            StartWatchingProjectDirectory();
         }
+    }
+
+    /// <summary>
+    /// Emit <see cref="PROJECTS_CHANGED_EVENT_TYPE"/> so project-list consumers refetch their cheap
+    /// metadata. Call after a project is added/removed or after one of its display-backing settings
+    /// changes. Fire-and-forget: a failure to notify only means a stale list until the next refresh,
+    /// and must never fail the mutation that triggered it. No-op when constructed without a
+    /// <see cref="PapiClient"/> (tests/tooling).
+    /// </summary>
+    public void NotifyProjectsChanged()
+    {
+        if (_papiClient == null)
+            return;
+        ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+            _papiClient.SendEventAsync(PROJECTS_CHANGED_EVENT_TYPE, null),
+            $"Emitting {PROJECTS_CHANGED_EVENT_TYPE}"
+        );
+    }
+
+    /// <summary>
+    /// Best-effort watch of the project root for projects added or removed on disk by ANY source - a
+    /// Send/Receive clone, an out-of-process install, or a manual copy - so the project-list
+    /// consumers refresh even when the change did not go through a code path we notify inline (DBL
+    /// install/uninstall and setting writes already call <see cref="NotifyProjectsChanged"/>
+    /// directly).
+    ///
+    /// Watches only <see cref="PROJECT_SETTINGS_FILE"/> create/delete/rename (a project IS its
+    /// Settings.xml), via <see cref="NotifyFilters.FileName"/> - never content writes and never other
+    /// files - so the constant churn of normal editing (scripture text, comments, notes) never
+    /// triggers a refresh. Events are debounced because a clone/install writes in a burst.
+    ///
+    /// A no-op without a <see cref="PapiClient"/> (nothing to notify; also keeps tests/tooling from
+    /// spinning up a real watcher). FileSystemWatcher is unreliable on some platforms (WSL mounts,
+    /// network drives), so this is a safety net layered on the inline notifications, never the sole
+    /// mechanism.
+    /// </summary>
+    protected void StartWatchingProjectDirectory()
+    {
+        if (_papiClient == null)
+            return;
+        try
+        {
+            var watcher = new FileSystemWatcher(ProjectRootFolder, PROJECT_SETTINGS_FILE)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName,
+            };
+            watcher.Created += OnProjectSettingsFileChanged;
+            watcher.Deleted += OnProjectSettingsFileChanged;
+            watcher.Renamed += OnProjectSettingsFileChanged;
+            watcher.EnableRaisingEvents = true;
+            _projectDirectoryWatcher = watcher;
+        }
+        catch (Exception ex)
+        {
+            // A watcher failure just means we fall back to the inline notifications; never fatal.
+            Console.Error.WriteLine($"Could not watch project directory for changes: {ex}");
+        }
+    }
+
+    private void OnProjectSettingsFileChanged(object sender, FileSystemEventArgs e)
+    {
+        // Debounce: a clone/install fires a burst of events; collapse them into one refresh+notify.
+        lock (_projectChangeLock)
+        {
+            _projectChangeDebounceTimer ??= new Timer(_ => OnProjectDirectoriesChanged());
+            _projectChangeDebounceTimer.Change(s_projectChangeDebounce, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    /// <summary>
+    /// Run (debounced, on a timer thread) when a project was added/removed on disk. Refreshes
+    /// ParatextData's collection so the change is reflected, then notifies consumers. Best-effort: a
+    /// refresh failure must not suppress the notify (a stale collection is better than a permanently
+    /// stale list). Virtual so tests can observe firings without mutating the global
+    /// <c>ScrTextCollection</c>.
+    /// </summary>
+    protected virtual void OnProjectDirectoriesChanged()
+    {
+        try
+        {
+            ScrTextCollection.RefreshScrTexts();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"RefreshScrTexts failed after a project directory change: {ex}"
+            );
+        }
+        NotifyProjectsChanged();
+    }
+
+    public void Dispose()
+    {
+        _projectDirectoryWatcher?.Dispose();
+        _projectChangeDebounceTimer?.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>

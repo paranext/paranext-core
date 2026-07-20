@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
+import { STARTUP_MARK_MAIN_PROCESS_TAG } from '@shared/data/platform.data';
 import { logger } from '@shared/services/logger.service';
 import {
   markStartup,
@@ -68,5 +69,18 @@ describe('markStartupOnce', () => {
     globalThis.startupMarks = false;
     markStartupOnce('once-disabled');
     expect(logger.info).not.toHaveBeenCalled();
+  });
+});
+
+describe('STARTUP_MARK_MAIN_PROCESS_TAG', () => {
+  it('equals ProcessType.Main so the startup-waterfall parser detects the run boundary', () => {
+    // The startup-waterfall CLI parser (.erb/scripts/startup-waterfall.util.ts `selectLatestRun`)
+    // keys the multi-launch run boundary on the bare literal STARTUP_MARK_MAIN_PROCESS_TAG, while
+    // the main process actually emits marks tagged with globalThis.processType (= ProcessType.Main).
+    // These are kept identical only by a comment because the CLI module cannot import ProcessType
+    // (that would pull in global-this.model, React, and aliases the CLI can't resolve). If they ever
+    // diverge, selectLatestRun silently stops finding boundaries and merges launches into one bogus
+    // Total span. This pins the cross-module contract that the comment only asks for.
+    expect(STARTUP_MARK_MAIN_PROCESS_TAG).toBe(ProcessType.Main);
   });
 });

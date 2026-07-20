@@ -72,7 +72,7 @@ public static class Program
             );
             ParatextInfo.ParatextVersion = appVersion;
 
-            var paratextProjects = new LocalParatextProjects();
+            var paratextProjects = new LocalParatextProjects(papi);
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
@@ -94,7 +94,7 @@ public static class Program
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
-            var dblResources = new DblResourcesDataProvider(papi);
+            var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
@@ -114,21 +114,23 @@ public static class Program
             // of the single startup WhenAll) without gating "ready". Starting them after the
             // barrier would shrink the head start TS consumers with bounded one-shot acquisition
             // (e.g. the checklist and manage-books web views) rely on.
-            // Wrap the work in Task.Run FIRST so a synchronous throw (e.g. from the non-async
-            // ManageBooksService.RegisterNetworkObjectAsync before its first await) is captured
-            // into the observed task, rather than escaping unobserved. Log faults to stderr so
-            // they surface at error level in the main process log - a fault here means these
-            // features are missing for the whole session.
+            // Wrap EACH registration in its own Task.Run so a synchronous throw (e.g. from the
+            // non-async ManageBooksService.RegisterNetworkObjectAsync before its first await) is
+            // captured into that service's task rather than escaping unobserved AND without
+            // orphaning the siblings: Task.WhenAll evaluates its arguments left-to-right, so a bare
+            // Task.Run(() => Task.WhenAll(a(), b(), ...)) that threw synchronously partway through
+            // would leave the already-started tasks unobserved and never start the later ones. Each
+            // Task.Run returns an already-scheduled task, so all five always start and every fault
+            // (sync or async) flows into the WhenAll. Log faults to stderr so they surface at error
+            // level in the main process log - a fault here means these features are missing for the
+            // whole session.
             ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
-                Task.Run(
-                    () =>
-                        Task.WhenAll(
-                            inventoryDataProvider.RegisterDataProviderAsync(),
-                            checkRunner.RegisterDataProviderAsync(),
-                            checklistNetworkObject.InitializeAsync(),
-                            manageBooksService.RegisterNetworkObjectAsync(),
-                            enhancedResourceFactory.InitializeAsync()
-                        )
+                Task.WhenAll(
+                    Task.Run(() => inventoryDataProvider.RegisterDataProviderAsync()),
+                    Task.Run(() => checkRunner.RegisterDataProviderAsync()),
+                    Task.Run(() => checklistNetworkObject.InitializeAsync()),
+                    Task.Run(() => manageBooksService.RegisterNetworkObjectAsync()),
+                    Task.Run(() => enhancedResourceFactory.InitializeAsync())
                 ),
                 "Background service registration"
             );

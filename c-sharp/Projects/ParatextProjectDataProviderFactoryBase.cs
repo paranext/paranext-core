@@ -117,15 +117,20 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
                         details,
                         _paratextProjects
                     );
-                    // Register in the background; the name is already known so callers don't
-                    // wait on the ~40-53 network round-trips (previously blocked under the
-                    // global lock). A registration fault leaves this PDP unusable (TS callers
-                    // exhaust their MethodNotFound retry budget and never see the fault), so
-                    // surface it at error level (stderr reaches the main process log as
-                    // logger.error) with the project id.
-                    ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                    // Wait for registration to finish before returning this PDP, so the name we
+                    // hand back is immediately usable - never a window where a caller has the name
+                    // but the PDP's methods aren't registered yet (which would burn their bounded
+                    // MethodNotFound retry budget and spuriously fail a valid project). RunTask
+                    // blocks up to DefaultTimeout and rethrows a registration fault, so a failed
+                    // registration propagates out of this Lazy factory and is evicted by the catch
+                    // below (self-healing on the next call) instead of caching a permanently-
+                    // unusable PDP. This does NOT re-serialize distinct projects: each project has
+                    // its own per-project Lazy, so concurrent creations for different projects still
+                    // register concurrently - only same-project callers share (and await) this one.
+                    ThreadingUtils.RunTask(
                         pdp.RegisterDataProviderAsync(),
-                        $"{GetRegistrationTaskDescription(pdp, details)} for project {id}"
+                        $"{GetRegistrationTaskDescription(pdp, details)} for project {id}",
+                        ThreadingUtils.DefaultTimeout
                     );
                     return pdp;
                 },
@@ -139,10 +144,12 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
         catch
         {
             // A faulted Lazy caches its exception forever. Evict it so a later call retries
-            // (e.g. a resource requested before Paratext registration completes, or a project
-            // requested mid-clone) instead of staying broken until process restart. The old
-            // (pre-Lazy) code cached nothing on failure, so failed lookups self-healed; preserve
-            // that. Compare-and-remove by the exact Lazy so we never clobber a different,
+            // (e.g. a resource requested before Paratext registration completes, a project
+            // requested mid-clone, or a PDP whose RegisterDataProviderAsync faulted - now surfaced
+            // here because registration is awaited above rather than fire-and-forget) instead of
+            // staying broken until process restart. The old (pre-Lazy) code cached nothing on
+            // failure, so failed lookups self-healed; preserve that. Compare-and-remove by the
+            // exact Lazy so we never clobber a different,
             // successful entry created for this project in the meantime. Eviction runs only on
             // throw, so the success path still creates exactly one PDP per project.
             //

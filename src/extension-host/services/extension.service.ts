@@ -1408,10 +1408,14 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
       // Extensions must be activated in dependency order, so sequential awaiting is intentional.
       // eslint-disable-next-line no-await-in-loop
       const extension = await activateExtension(extensionWithCheck.extension);
-      if (shouldEmitStartupMarks) markStartup(`activate-end ${extensionMarkName}`);
       extensionsActive.push(extension);
     } catch (e) {
       logger.error(`Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`);
+    } finally {
+      // Emit activate-end in `finally` so a failed activation still terminates its waterfall span.
+      // If it only fired on success, a throwing extension would leave a dangling activate-start and
+      // its failed-activation time would be silently folded into the next extension's span.
+      if (shouldEmitStartupMarks) markStartup(`activate-end ${extensionMarkName}`);
     }
   }
   if (shouldEmitStartupMarks) markStartup('all-extensions-activated');

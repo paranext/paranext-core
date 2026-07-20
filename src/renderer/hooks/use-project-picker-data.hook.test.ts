@@ -469,5 +469,35 @@ describe('useProjectPickerData', () => {
 
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
   });
+
+  it('re-fetches metadata when platform.onDidChangeProjects fires (project added/removed/renamed)', async () => {
+    // The C# provider emits platform.onDidChangeProjects when a project is added (S/R, DBL),
+    // removed, or has a display setting changed. The picker must invalidate its metadata cache on
+    // it so a project cloned/downloaded mid-session shows up without an unrelated refresh.
+    const { getNetworkEvent, projectLookupService } = await importMocks();
+    let projectsChangedCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === 'platform.onDidChangeProjects') projectsChangedCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+
+    expect(projectsChangedCallback).toBeDefined();
+    act(() => projectsChangedCallback!());
+    await settle(result);
+
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+  });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */

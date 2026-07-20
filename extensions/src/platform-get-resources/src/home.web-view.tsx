@@ -12,12 +12,8 @@ import {
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Home,
-  HOME_STRING_KEYS,
-  LocalProjectInfo,
-  metadataToLocalProjectInfo,
-} from './home.component';
+import { Home, HOME_STRING_KEYS } from './home.component';
+import { useLocalProjects } from './use-local-projects.hook';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
@@ -212,9 +208,6 @@ globalThis.webViewComponent = function HomeWebView() {
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
 
-  const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
-  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
-
   const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
     defaultExcludePdpFactoryIds,
@@ -231,42 +224,14 @@ globalThis.webViewComponent = function HomeWebView() {
     return excludePdpFactoryIdsInHomePossiblyError;
   }, [excludePdpFactoryIdsInHomePossiblyError]);
 
-  useEffect(() => {
-    let promiseIsCurrent = true;
-    const getLocalProjects = async () => {
-      try {
-        const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-          includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-          excludePdpFactoryIds,
-        });
-        const projectInfo = projectMetadata.map(metadataToLocalProjectInfo);
-
-        if (promiseIsCurrent && isMounted.current) {
-          setIsLoadingLocalProjects(false);
-          setLocalProjectsInfo(projectInfo);
-        }
-      } catch (e) {
-        // A metadata fetch rejection must still clear the loading flag, or Home spins forever.
-        logger.warn(`Home web view failed to load local projects: ${getErrorMessage(e)}`);
-        if (promiseIsCurrent && isMounted.current) setIsLoadingLocalProjects(false);
-      }
-    };
-
-    if (isSendReceiveInProgress) {
-      return;
-    }
-    getLocalProjects();
-
-    return () => {
-      // Mark this promise as old and not to be used
-      promiseIsCurrent = false;
-    };
-  }, [
-    isSendReceiveInProgress,
-    excludePdpFactoryIds,
-    resourcesList,
-    syncsCompletedCount, // triggers a re-fetch each time a sync completes
-  ]);
+  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects(excludePdpFactoryIds, {
+    logLabel: 'Home',
+    // Pause fetching while a Send/Receive runs (matches the prior effect's early return) and resume
+    // when it finishes.
+    enabled: !isSendReceiveInProgress,
+    // Re-fetch when the cached resource list changes or a sync completes, as the prior effect did.
+    refetchTriggers: [resourcesList, syncsCompletedCount],
+  });
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 

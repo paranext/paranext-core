@@ -76,10 +76,6 @@ function main(): void {
     process.exit(1);
   }
   const logPath = logPathArg ?? defaultLogPath();
-  if (!logPath) {
-    console.error('Could not determine a log path. Pass --log <path>.');
-    process.exit(1);
-  }
   if (!fs.existsSync(logPath)) {
     console.error(`Log file not found: ${logPath}\nPass --log <path> or run the app first.`);
     process.exit(1);

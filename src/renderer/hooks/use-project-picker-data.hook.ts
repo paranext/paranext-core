@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
+import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
 import { type ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 import {
@@ -33,23 +34,19 @@ const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
 const EMPTY_RECENT_IDS: string[] = [];
 
 /**
- * Canonical comparison key for a project id. Project ids are case-insensitive (C# canonicalizes to
- * uppercase hex); normalize to a single form before comparing ids or using them as Map/Set keys so
- * a case mismatch never drops a project. A pairwise comparator can't key Maps/Sets, so a normalizer
- * is needed regardless.
- */
-const toProjectIdKey = (id: string): string => id.toUpperCase();
-
-/**
  * Resolves a project's language for display: the localized display name of the BCP-47 language tag
  * when it can be resolved, otherwise the raw language setting value for both fields. Returns
- * undefined when the project has neither a language nor a language tag.
+ * undefined when the project has no `language` setting, leaving the language column blank -
+ * matching the pre-metadata behavior (the old per-project path returned the
+ * `%project_language_missing%` default and suppressed it). The guard is on `language`, NOT
+ * `languageTag`: C# always populates a `languageTag` (coercing an unset writing system to 'en'), so
+ * guarding on the tag would mislabel every language-less project as 'English'.
  */
 function resolveLanguage(
   language: string,
   languageTag: string,
 ): { tag: string; displayName: string } | undefined {
-  if (!language && !languageTag) return undefined;
+  if (!language) return undefined;
   try {
     const displayName = new Intl.DisplayNames([navigator.language ?? 'en'], {
       type: 'language',
@@ -116,6 +113,12 @@ export function useProjectPickerData(): ProjectPickerData {
     [],
   );
   useEvent(onDidReloadExtensions, refreshMetadata);
+  // C#-emitted (LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE) when the project SET changes
+  // (added/removed via S/R, DBL, etc.) or a project's display metadata changes. This is the precise
+  // signal that onDidReloadExtensions only approximated; invalidate the metadata cache on it so all
+  // three sections refetch.
+  const onDidChangeProjects = useMemo(() => getNetworkEvent('platform.onDidChangeProjects'), []);
+  useEvent(onDidChangeProjects, refreshMetadata);
 
   // Recent project IDs from the service — reactive, updates when user opens projects
   const [rawRecentIds, , isRecentIdsLoading] = useData(
@@ -172,8 +175,8 @@ export function useProjectPickerData(): ProjectPickerData {
       }
       try {
         const metadata = await getAllMetadata();
-        const key = toProjectIdKey(currentProjectId);
-        const m = metadata.find((md) => toProjectIdKey(md.id) === key);
+        const key = normalizeProjectId(currentProjectId);
+        const m = metadata.find((md) => normalizeProjectId(md.id) === key);
         if (m) {
           missRefreshedProjectIdRef.current = undefined;
           setCurrentProjectError(undefined);
@@ -212,7 +215,7 @@ export function useProjectPickerData(): ProjectPickerData {
       try {
         const metadata = await getAllMetadata();
         const metadataById = new Map<string, ProjectMetadata>(
-          metadata.map((m) => [toProjectIdKey(m.id), m]),
+          metadata.map((m) => [normalizeProjectId(m.id), m]),
         );
         // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
         // and non-editable projects, matching the previous per-id fetch-and-skip behavior.
@@ -220,7 +223,7 @@ export function useProjectPickerData(): ProjectPickerData {
         // editable to match the registered default (true) that `getSetting('platform.isEditable')`
         // would have resolved.
         return safeRecentIds
-          .map((id: string) => metadataById.get(toProjectIdKey(id)))
+          .map((id: string) => metadataById.get(normalizeProjectId(id)))
           .filter(
             (m: ProjectMetadata | undefined): m is ProjectMetadata => !!m && m.isEditable !== false,
           )
@@ -256,13 +259,13 @@ export function useProjectPickerData(): ProjectPickerData {
   );
 
   const recentIdSet = useMemo(
-    () => new Set(safeRecentIds.map((id: string) => toProjectIdKey(id))),
+    () => new Set(safeRecentIds.map((id: string) => normalizeProjectId(id))),
     [safeRecentIds],
   );
   const allProjects = useMemo(
     () =>
       allProjectsWithRecent
-        .filter((p) => !recentIdSet.has(toProjectIdKey(p.id)))
+        .filter((p) => !recentIdSet.has(normalizeProjectId(p.id)))
         .sort((a, b) => a.fullName.localeCompare(b.fullName)),
     [allProjectsWithRecent, recentIdSet],
   );

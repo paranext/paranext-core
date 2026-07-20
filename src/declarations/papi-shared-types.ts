@@ -893,6 +893,14 @@ declare module 'papi-shared-types' {
   export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the .NET data provider when the set of available projects changes (a project is
+     * added or removed) or when a project's display metadata
+     * (name/fullName/language/languageTag/isEditable) changes. Consumers refetch cheap project
+     * metadata; there is no payload. Keep the name in sync with
+     * `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     */
+    'platform.onDidChangeProjects': undefined;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
     /**

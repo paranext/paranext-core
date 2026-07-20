@@ -464,7 +464,7 @@ async function internalGetMetadata(
           // so two factories reporting the same project with different casing must merge into one
           // entry rather than produce two un-merged ones. Only the key is normalized; the displayed
           // `md.id` keeps the casing of whichever factory reported it first.
-          const projectIdKey = md.id.toUpperCase();
+          const projectIdKey = normalizeProjectId(md.id);
 
           // Type assert to add the factory info to the object
           // Note: `enrichedMd` is seeded from whichever factory reports this project id FIRST
@@ -635,6 +635,18 @@ function ensurePopulatedMetadataFilter(options: ProjectMetadataFilterOptions) {
     includePdpFactoryIds: includePdpFactoryIdsRegExps,
     excludePdpFactoryIds: excludePdpFactoryIdsRegExps,
   };
+}
+
+/**
+ * Canonical comparison key for a project id. Project ids are case-insensitive (the contract treats
+ * them so, and C# canonicalizes to uppercase hex); normalize to a single form before using an id as
+ * a Map/Set key so a case mismatch never drops or double-counts a project. A pairwise comparator
+ * (see {@link areProjectIdsEqual}) can't key a Map/Set, so this normalizer is needed regardless.
+ * Exported so consumers that key projects locally (e.g. `useProjectPickerData`) normalize the same
+ * way this service aggregates them rather than re-implementing `toUpperCase`.
+ */
+export function normalizeProjectId(projectId: string): string {
+  return projectId.toUpperCase();
 }
 
 function areProjectIdsEqual(projectIdA: string, projectIdB: string): boolean {
