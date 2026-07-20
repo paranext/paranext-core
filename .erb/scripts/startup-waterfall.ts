@@ -52,7 +52,24 @@ function parseLogPathArg(argv: string[]): { logPath?: string; error?: string } {
   return {};
 }
 
+const USAGE = `Render Platform.Bible startup timing marks from a log as an ordered waterfall.
+
+Usage:
+  npm run startup-waterfall [-- <options>]
+
+Options:
+  --log <path>, --log=<path>   Log file to read. Defaults to this platform's dev
+                               Electron main.log.
+  --help, -h                   Show this help.
+
+Capture marks first by launching with PT_STARTUP_MARKS=true (see the "Startup
+performance timing" section of README.md).`;
+
 function main(): void {
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log(USAGE);
+    return;
+  }
   const { logPath: logPathArg, error: argError } = parseLogPathArg(process.argv);
   if (argError) {
     console.error(argError);

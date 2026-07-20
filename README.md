@@ -272,6 +272,35 @@ Platform.Bible core extensions are found in the `extensions` folder. Please foll
 
 Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core. Once you have packaged an extension, it can be distributed for Platform.Bible users to install. See [Running your extension in an app](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app) for installation information.
 
+### Startup performance timing
+
+Platform.Bible can emit startup timing marks across all four processes (main, renderer, extension host, and the .NET data provider) so you can profile where cold-start time goes. Marks are **off by default** — when disabled, each mark call is a single boolean check, so calls are safe to leave in the code.
+
+To capture a run, set the `PT_STARTUP_MARKS=true` environment variable when launching. The main process forwards it to the renderer automatically, and the .NET provider reads the same variable:
+
+```bash
+# Dev (quick, but see the caveat below — dotnet watch distorts the .NET timings)
+PT_STARTUP_MARKS=true npm start
+
+# Packaged build (representative numbers — what the perf specs were measured on)
+PT_STARTUP_MARKS=true ./release/build/linux-unpacked/platform-bible \
+  --no-sandbox --remote-debugging-port=9223
+```
+
+Every process writes its marks to the Electron `main.log`. Render them as an ordered waterfall from the repo root:
+
+```bash
+npm run startup-waterfall                              # reads the default main.log for your platform
+npm run startup-waterfall -- --log=/path/to/main.log   # or point at a specific capture
+npm run startup-waterfall -- --help                    # usage
+```
+
+Notes:
+
+- **Use a packaged build for numbers you intend to compare.** In dev, the .NET provider runs under `dotnet watch`, which inflates the C# portion of the timeline and is not representative.
+- `main.log` accumulates across launches; the tool shows only the latest run and warns when it drops older ones. For a clean capture, delete (or copy aside) the log between runs.
+- For the design rationale and recorded baseline/after measurements, see the startup-performance specs under `docs/superpowers/specs/` (e.g. `2026-07-10-startup-baseline.md`, `2026-07-11-startup-phase3-after.md`).
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
