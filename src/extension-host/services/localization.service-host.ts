@@ -18,6 +18,9 @@ import {
   StringsMetadata,
   LocalizeKey,
   getCurrentLocale,
+  getErrorMessage,
+  isPlatformError,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
@@ -280,6 +283,49 @@ class LocalizationDataProviderEngine
   extends DataProviderEngine<LocalizationDataDataTypes>
   implements IDataProviderEngine<LocalizationDataDataTypes>
 {
+  #lastInterfaceLanguageSerialized: string | undefined;
+
+  // Needed for future disposal of the subscription; choosing to ignore instead of removing code
+  // that will be used later
+  // @ts-expect-error ts(6133) - needed for future disposal, not yet read
+  #unsubscribeInterfaceLanguage: UnsubscriberAsync | undefined;
+
+  constructor() {
+    super();
+    // Live re-render bridge: when the interface language changes, re-emit the localized-string data
+    // types so every mounted `useLocalizedStrings` refetches and the UI re-renders in the new
+    // language without a restart. `settingsService.subscribe` fires on ANY settings write (all
+    // settings share one data type), so guard on an actual `interfaceLanguage` change to avoid
+    // redundant refetch storms.
+    (async () => {
+      try {
+        this.#unsubscribeInterfaceLanguage = await settingsService.subscribe(
+          'platform.interfaceLanguage',
+          (newValue) => {
+            if (isPlatformError(newValue)) {
+              logger.warn(
+                `Localization service failed to read platform.interfaceLanguage: ${getErrorMessage(newValue)}`,
+              );
+              return;
+            }
+            const serialized = JSON.stringify(newValue);
+            if (serialized === this.#lastInterfaceLanguageSerialized) return;
+            const isSeed = this.#lastInterfaceLanguageSerialized === undefined;
+            this.#lastInterfaceLanguageSerialized = serialized;
+            // Seed the baseline on the first emit; nothing is mounted to re-render at startup.
+            if (isSeed) return;
+            this.notifyUpdate(['LocalizedString', 'LocalizedStrings']);
+          },
+          { retrieveDataImmediately: true },
+        );
+      } catch (e) {
+        logger.warn(
+          `Localization service failed to subscribe to platform.interfaceLanguage: ${getErrorMessage(e)}`,
+        );
+      }
+    })();
+  }
+
   // getLocalizedString doesn't use instance state but cannot be static because it implements the
   // IDataProviderEngine<LocalizationDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this

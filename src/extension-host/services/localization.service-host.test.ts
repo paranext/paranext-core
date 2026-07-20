@@ -4,6 +4,16 @@ import { logger } from '@shared/services/logger.service';
 import { SettingNames } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 
+const { getInterfaceLanguageCallback, setInterfaceLanguageCallback } = vi.hoisted(() => {
+  let cb: ((v: unknown) => void) | undefined;
+  return {
+    getInterfaceLanguageCallback: () => cb,
+    setInterfaceLanguageCallback: (c: (v: unknown) => void) => {
+      cb = c;
+    },
+  };
+});
+
 const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
@@ -34,6 +44,10 @@ vi.mock('@shared/services/settings.service', () => ({
     get<SettingName extends SettingNames>(key: SettingName) {
       if (key === 'platform.interfaceLanguage') return ['en'];
       return undefined;
+    },
+    subscribe(key: string, cb: (v: unknown) => void) {
+      if (key === 'platform.interfaceLanguage') setInterfaceLanguageCallback(cb);
+      return Promise.resolve(async () => true);
     },
   },
 }));
@@ -240,4 +254,23 @@ test('firstRun key falls back to English when the requested locale lacks it', as
     locales: ['es'], // es.json has no firstRun keys in MOCK_FILES
   });
   expect(response).toEqual('Set up');
+});
+
+test('re-emits localized strings when the interface language changes', async () => {
+  // The engine subscribes in its constructor via an async IIFE; let that microtask run.
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  const callback = getInterfaceLanguageCallback();
+  if (!callback) throw new Error('Expected interface language callback to be defined');
+
+  const notifySpy = vi.spyOn(localizationDataProviderEngine, 'notifyUpdate');
+  callback(['en']); // first emit seeds the baseline — no notify
+  expect(notifySpy).not.toHaveBeenCalled();
+
+  callback(['fr']); // real change → notify localized-string data types
+  expect(notifySpy).toHaveBeenCalledWith(['LocalizedString', 'LocalizedStrings']);
+
+  callback(['fr']); // unchanged (e.g. an unrelated settings write) → no extra notify
+  expect(notifySpy).toHaveBeenCalledTimes(1);
 });
