@@ -13,11 +13,15 @@ const localeTags = readdirSync(localizationDir)
   .map((f) => f.replace(/\.json$/, ''));
 
 describe('languageDetails covers every shipped locale', () => {
-  test.each(localeTags)('locale "%s" has a curated autonym (not its raw code)', (tag) => {
+  test.each(localeTags)('locale "%s" has a defined, non-code autonym', (tag) => {
     const info = languageDetails[tag];
-    expect(info, `Add a languageDetails entry for "${tag}"`).toBeDefined();
-    expect(info.autonym, `"${tag}" autonym must not be the raw code`).not.toBe(tag);
-    // Non-English locales need an English name so users who can't read the script can still search.
-    if (tag !== 'en') expect(info.uiNames?.en, `Add uiNames.en for "${tag}"`).toBeTruthy();
+    expect(info).toBeDefined();
+    expect(info?.autonym).not.toBe(tag);
+  });
+
+  // Non-English locales need an English name so users who can't read the script can still search.
+  const nonEnglishTags = localeTags.filter((tag) => tag !== 'en');
+  test.each(nonEnglishTags)('non-English locale "%s" has an English name for search', (tag) => {
+    expect(languageDetails[tag]?.uiNames?.en).toBeTruthy();
   });
 });
