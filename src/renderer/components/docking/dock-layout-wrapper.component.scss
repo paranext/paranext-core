@@ -680,15 +680,3 @@ $tab-bottom-rounding: vars.$space--sm;
   }
 }
 // #endregion SIMPLE-MODE CHROME //////////////////////////////////////
-
-// #region SIMPLE-MODE HEIGHT ALIGNMENT ///////////////////////////////
-// The Scripture Editor's TabToolbar (`.scripture-editor-tab-nav`, set in
-// platform-scripture-editor.web-view.tsx) renders at a shared, fixed 56px (`tw:h-14`) in both
-// modes. In Simple mode it must match Column 3's dock tab-header and the Model Text header, both
-// 36px. `!important` is required here (the only justified use in this file): this overrides a
-// Tailwind utility class (`tw:h-14`) applied directly via `className` on the same element, and a
-// plain same-specificity class selector cannot be relied on to win that tie by cascade order alone.
-[data-interface-mode='simple'] .scripture-editor-tab-nav {
-  height: 36px !important;
-}
-// #endregion SIMPLE-MODE HEIGHT ALIGNMENT ////////////////////////////

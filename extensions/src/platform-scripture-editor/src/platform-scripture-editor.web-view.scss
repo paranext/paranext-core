@@ -41,3 +41,13 @@ mark {
 }
 
 // #endregion
+
+// Simple mode: match the Scripture Editor's TabToolbar height (56px via tw:h-14, from the shared
+// TabToolbarContainer component) to Column 3's dock tab-header and the Model Text header (both
+// 36px) — see docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md,
+// Section 3. `!important` is required for the same reason noted in the original (now-removed)
+// renderer-side attempt: this overrides a Tailwind utility class (`tw:h-14`) applied directly via
+// `className` on the same element, where plain specificity cannot reliably win the tie.
+.scripture-editor-tab-nav-simple {
+  height: 36px !important;
+}
