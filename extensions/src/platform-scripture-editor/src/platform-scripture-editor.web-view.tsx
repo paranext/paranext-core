@@ -3792,7 +3792,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               )
             }
           >
-            <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+            <ParagraphMarkerTooltipOverlay enabled={!isPowerMode}>
+              {editorTree}
+            </ParagraphMarkerTooltipOverlay>
           </CharacterMarkerBarOverlay>
         </div>
       </>
