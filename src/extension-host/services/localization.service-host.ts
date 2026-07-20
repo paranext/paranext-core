@@ -29,6 +29,7 @@ import {
 } from '@extension-host/services/contribution.service';
 import { LanguageInfo } from 'platform-bible-react';
 import { Canon } from '@sillsdev/scripture';
+import { languageDetails } from '@extension-host/data/language-details.data';
 
 /**
  * The base language to get localized strings for if they are not present in other languages
@@ -43,19 +44,6 @@ const LANGUAGE_CODE_REGEX =
 
 const loadedLocales: Record<string, LanguageInfo> = {};
 
-const languageDetails: Record<string, LanguageInfo> = {
-  en: {
-    autonym: 'English',
-    uiNames: { es: 'inglés', de: 'Englisch', fr: 'Anglais', km: 'ភាសាអង់គ្លេស' },
-  },
-  es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
-  fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
-  de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
-  km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer', es: 'jemer', de: 'Khmer', fr: 'Khmer' } },
-  zh: { autonym: '中文', uiNames: { en: 'Chinese', es: 'chino' } },
-  hi: { autonym: 'हिन्दी', uiNames: { en: 'Hindi', es: 'hindi' } },
-  ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
-};
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
   return file.name;
