@@ -843,6 +843,37 @@ export default function FootnoteEditor({
     isDomCaretInsideNote,
   ]);
 
+  // Snaps the DOM caret back into the note whenever a selection lands in the popover's wrapper-para
+  // "dead space" (the wrapper paragraph's own text/margins, outside `span.note`). The open-time
+  // placement/re-assert effect above and the Enter/`\` keydown guards in the effect above only
+  // intercept SPECIFIC keys; a click into the dead space followed by ORDINARY letters needs no
+  // keydown interception at all — those letters just land wherever the DOM caret already is, on the
+  // wrapper paragraph outside the note. `pointerup` catches mouse-driven dead-space clicks;
+  // `selectionchange` catches every other way the selection can move there (keyboard navigation,
+  // drag-select, etc.) — mirroring the `document`-level scoping of the keydown listeners above.
+  // Guarded against loops by only acting when the caret is actually OUTSIDE the note: a caret
+  // already inside it (the overwhelmingly common case, since users normally click their own note
+  // text) is left completely alone, so calling `selectNote(0)` here can never re-trigger itself.
+  useEffect(() => {
+    const editorInput =
+      editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
+
+    const snapStrayCaretIntoNote = () => {
+      if (!editorInput || document.activeElement !== editorInput) return;
+      if (isDomCaretInsideNote()) return;
+      editorRef.current?.selectNote(0);
+      editorRef.current?.focus();
+    };
+
+    document.addEventListener('pointerup', snapStrayCaretIntoNote);
+    document.addEventListener('selectionchange', snapStrayCaretIntoNote);
+
+    return () => {
+      document.removeEventListener('pointerup', snapStrayCaretIntoNote);
+      document.removeEventListener('selectionchange', snapStrayCaretIntoNote);
+    };
+  }, [isDomCaretInsideNote]);
+
   const copyButtonTooltip = localizedStrings['%footnoteEditor_copyButton_tooltip%'];
 
   return (

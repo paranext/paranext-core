@@ -134,6 +134,31 @@ function placeDomCaretInsideNote(editorInput: HTMLElement): void {
   selection.addRange(range);
 }
 
+/**
+ * Places the DOM caret in the popover's wrapper-para "dead space" — a sibling text node outside
+ * `span.note` — the state a click on the wrapper paragraph / margins produces. Mirrors
+ * `placeDomCaretInsideNote` above, but deliberately selects OUTSIDE the note so
+ * `isDomCaretInsideNote()` reports false, the precondition the stray-caret snap guard checks.
+ */
+function placeDomCaretOutsideNote(editorInput: HTMLElement): void {
+  const doc = editorInput.ownerDocument;
+  let deadSpace = editorInput.querySelector('[data-dead-space]');
+  if (!deadSpace) {
+    deadSpace = doc.createElement('span');
+    deadSpace.setAttribute('data-dead-space', 'true');
+    deadSpace.textContent = 'wrapper para dead space';
+    editorInput.insertBefore(deadSpace, editorInput.firstChild);
+  }
+  const selection = doc.getSelection();
+  const range = doc.createRange();
+  if (!deadSpace.firstChild || !selection)
+    throw new Error('mock dead-space text/selection missing');
+  range.setStart(deadSpace.firstChild, 0);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
@@ -560,6 +585,42 @@ describe('FootnoteEditor marker palette wiring', () => {
 
       expect(markerPalette.show).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('stray caret snap (wrapper-para dead-space normalization)', () => {
+  // Enter and `\` (above) only reroute a stray caret when the user happens to press one of those
+  // specific keys. A click on the wrapper paragraph / margins followed by ORDINARY letters needs no
+  // keydown interception at all — the letters just land wherever the DOM caret already is. This
+  // guard normalizes the selection itself (pointerup / selectionchange) so plain typing after a
+  // dead-space click still lands in the note.
+  it('snaps a selection landing outside the note (dead space) back into the note on pointerup', () => {
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretOutsideNote(editorInput);
+
+    editorInput.ownerDocument.dispatchEvent(new Event('pointerup', { bubbles: true }));
+
+    expect(editorRef.selectNote).toHaveBeenCalledWith(0);
+    expect(editorRef.focus).toHaveBeenCalled();
+  });
+
+  it('leaves a selection already inside the note untouched on selectionchange (no loop, no override)', () => {
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretInsideNote(editorInput);
+    // The mount-time "return focus to the editor" effect already called `focus()` once before this
+    // point (unrelated to this guard) — clear it so the assertion below isolates this guard's own
+    // behavior rather than that pre-existing call.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (editorRef.focus as ReturnType<typeof vi.fn>).mockClear();
+
+    editorInput.ownerDocument.dispatchEvent(new Event('selectionchange'));
+
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(editorRef.focus).not.toHaveBeenCalled();
   });
 });
 
