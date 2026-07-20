@@ -11,6 +11,7 @@ import {
   isInsertEmbedOpOfType,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
+  StructureProtectionMode,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -122,6 +123,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
+import { VerseDeleteTooltipOverlay } from './verse-delete-tooltip/verse-delete-tooltip-overlay.component';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -499,9 +501,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
-  // paragraph/verse markers in the editor (passed to EditorOptions.isStructureProtected below). The
+  // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
-  const { isStructureProtected } = useStructureProtectionState(projectId);
+  const { isStructureProtected, isProtectionActive } = useStructureProtectionState(projectId);
+
+  // Locked (by admin, personal preference, or both) always yields "protected" (hard block); Power
+  // mode leaves the feature fully inactive regardless of lock state ("off"); otherwise (Simple mode,
+  // not locked) the editor still guards structural deletes with a two-step confirm ("guarded").
+  const structureProtectionMode = useMemo<StructureProtectionMode>(() => {
+    if (!isProtectionActive) return 'off';
+    return isStructureProtected ? 'protected' : 'guarded';
+  }, [isProtectionActive, isStructureProtected]);
 
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
@@ -765,7 +775,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
-      isStructureProtected,
+      structureProtectionMode,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -783,7 +793,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }),
     [
       isReadOnlyEffective,
-      isStructureProtected,
+      structureProtectionMode,
       canUserCreateComments,
       isSyncBlocked,
       textDirectionEffective,
@@ -1808,23 +1818,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <>
         {workaround}
         <ParagraphMarkerTooltipOverlay>
-          <EditorKeyboardShortcuts editorRef={editorRef}>
-            <Editorial
-              ref={editorRef}
-              scrRef={scrRef}
-              onScrRefChange={setScrRefNoScroll}
-              options={options}
-              logger={logger}
-              onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-              onSelectionChange={handleSelectionChange}
-              onStateChange={(state) => {
-                setCanUndo(state.canUndo);
-                setCanRedo(state.canRedo);
-                setBlockMarker(state.blockMarker);
-                setContextMarker(state.contextMarker);
-              }}
-            />
-          </EditorKeyboardShortcuts>
+          <VerseDeleteTooltipOverlay>
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                ref={editorRef}
+                scrRef={scrRef}
+                onScrRefChange={setScrRefNoScroll}
+                options={options}
+                logger={logger}
+                onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+                onSelectionChange={handleSelectionChange}
+                onStateChange={(state) => {
+                  setCanUndo(state.canUndo);
+                  setCanRedo(state.canRedo);
+                  setBlockMarker(state.blockMarker);
+                  setContextMarker(state.contextMarker);
+                }}
+              />
+            </EditorKeyboardShortcuts>
+          </VerseDeleteTooltipOverlay>
         </ParagraphMarkerTooltipOverlay>
       </>
     );
