@@ -17,6 +17,7 @@ import type {
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import { scrollToVerse } from './editor-dom.util';
+import { getRefLabel } from './resource-reference.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -132,6 +133,9 @@ export function ModelTextPanel({
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
   const resourceProjectId = match?.installed ? match.projectId : undefined;
+  const modelTextLabel = effectiveModelText
+    ? getRefLabel(effectiveModelText, dblResources)
+    : undefined;
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -359,14 +363,24 @@ export function ModelTextPanel({
 
   // Active: read-only editor showing the model text.
   return (
-    <div className="tw:h-screen tw:overflow-auto" dir={options.textDirection}>
-      <Editorial
-        ref={editorRef}
-        scrRef={scrRef}
-        onScrRefChange={handleScrRefChange}
-        options={options}
-        logger={logger}
-      />
+    <div className="tw:flex tw:h-screen tw:flex-col">
+      {modelTextLabel && (
+        <div
+          data-testid="model-text-header"
+          className="tw:flex tw:h-9 tw:shrink-0 tw:items-center tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
+        >
+          {modelTextLabel}
+        </div>
+      )}
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={handleScrRefChange}
+          options={options}
+          logger={logger}
+        />
+      </div>
     </div>
   );
 }
