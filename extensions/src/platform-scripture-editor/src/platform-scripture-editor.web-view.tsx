@@ -1804,28 +1804,34 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
 
+    const editorTree = (
+      <EditorKeyboardShortcuts editorRef={editorRef}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRefNoScroll}
+          options={options}
+          logger={logger}
+          onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+          onSelectionChange={handleSelectionChange}
+          onStateChange={(state) => {
+            setCanUndo(state.canUndo);
+            setCanRedo(state.canRedo);
+            setBlockMarker(state.blockMarker);
+            setContextMarker(state.contextMarker);
+          }}
+        />
+      </EditorKeyboardShortcuts>
+    );
+
     return (
       <>
         {workaround}
-        <ParagraphMarkerTooltipOverlay>
-          <EditorKeyboardShortcuts editorRef={editorRef}>
-            <Editorial
-              ref={editorRef}
-              scrRef={scrRef}
-              onScrRefChange={setScrRefNoScroll}
-              options={options}
-              logger={logger}
-              onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-              onSelectionChange={handleSelectionChange}
-              onStateChange={(state) => {
-                setCanUndo(state.canUndo);
-                setCanRedo(state.canRedo);
-                setBlockMarker(state.blockMarker);
-                setContextMarker(state.contextMarker);
-              }}
-            />
-          </EditorKeyboardShortcuts>
-        </ParagraphMarkerTooltipOverlay>
+        {isPowerMode ? (
+          editorTree
+        ) : (
+          <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+        )}
       </>
     );
   }
