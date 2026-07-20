@@ -607,10 +607,9 @@ $tab-bottom-rounding: vars.$space--sm;
 
 // #region SIMPLE-MODE CHROME (padding/gap/radius/divider) ///////////////
 // Ports the Storybook prototype's NO_PADDING_STYLE (src/stories/platform/ten-layout-shared.tsx)
-// into production. Scoped to body[data-interface-mode="simple"] (set by app.component.tsx's Main)
+// into production. Scoped to [data-interface-mode="simple"] (set by app.component.tsx's Main)
 // so Power mode keeps its existing padded, rounded, gapped chrome untouched.
-/* stylelint-disable selector-no-qualifying-type */
-body[data-interface-mode='simple'] {
+[data-interface-mode='simple'] {
   .dock-layout {
     gap: 0;
   }
@@ -632,11 +631,28 @@ body[data-interface-mode='simple'] {
     cursor: ns-resize;
   }
 
+  // Remove padding from all chrome elements.
   .dock-panel,
   .dock-tabpane,
   .platform-panel,
   .web-view {
     padding: 0;
+  }
+
+  // Remove border radius from most elements. The .dock-panel rule below handles
+  // .dock-panel separately with higher specificity to override the competing
+  // rule at line 176-180 (.dock-layout .dock-panel.dock-style-platform-bible).
+  .dock-tabpane,
+  .platform-panel,
+  .web-view {
+    border-radius: 0;
+  }
+
+  // .dock-panel border-radius removal must target .dock-style-platform-bible to match
+  // the specificity of the existing rule at line 176-180, which uses
+  // .dock-layout .dock-panel.dock-style-platform-bible (specificity 0,3,0).
+  // Our rule .dock-panel.dock-style-platform-bible has (0,3,0), so source order wins.
+  .dock-panel.dock-style-platform-bible {
     border-radius: 0;
   }
 
@@ -654,5 +670,4 @@ body[data-interface-mode='simple'] {
     height: 0;
   }
 }
-/* stylelint-enable selector-no-qualifying-type */
 // #endregion SIMPLE-MODE CHROME //////////////////////////////////////
