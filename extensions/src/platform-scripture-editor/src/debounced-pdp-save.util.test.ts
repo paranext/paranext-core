@@ -180,4 +180,45 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
     });
     expect(latestSave).toHaveBeenCalledWith(usj);
   });
+
+  // A chapter switch can flush a pending trailing save WHILE a passive palette session is still
+  // open on the chapter being left (e.g. the chapter-switch flush races the palette's own
+  // apply/blur flush). That flush takes the cross-chapter branch (capturedSave), which must strip
+  // the un-settled literal exactly like the same-chapter palette-open branch does — otherwise the
+  // captured content still carries the raw `\f` trigger into the PDP.
+  it('strips the un-settled literal from a cross-chapter flush that races an open palette session', () => {
+    const capturedSave = vi.fn();
+    performDebouncedPdpSave({
+      usj: usjWith('Den God tell\\f, more text'),
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|2',
+      capturedSave,
+      latestSave: vi.fn(),
+      isPaletteSessionOpen: true,
+      paletteLiteralRun: '\\f',
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+
+    expect(capturedSave).toHaveBeenCalledWith(usjWith('Den God tell, more text'));
+  });
+
+  // Cross-chapter flush with no palette literal in flight: behaves exactly as before this fix — the
+  // captured content is saved unchanged via the captured save fn.
+  it('leaves the captured content unchanged on a cross-chapter flush when no literal run is provided', () => {
+    const capturedSave = vi.fn();
+    const usj = usjWith('content typed for the scheduled chapter');
+    performDebouncedPdpSave({
+      usj,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|2',
+      capturedSave,
+      latestSave: vi.fn(),
+      isPaletteSessionOpen: true,
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+
+    expect(capturedSave).toHaveBeenCalledWith(usj);
+  });
 });

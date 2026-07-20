@@ -101,7 +101,7 @@ export function performDebouncedPdpSave({
   getEditorUsj,
 }: DebouncedPdpSaveParams): void {
   if (scheduledChapterKey !== currentChapterKey) {
-    capturedSave(usj);
+    capturedSave(paletteLiteralRun ? stripLastLiteralRun(usj, paletteLiteralRun) : usj);
     return;
   }
   if (isPaletteSessionOpen) {
