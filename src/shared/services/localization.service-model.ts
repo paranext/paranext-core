@@ -34,6 +34,7 @@ export type LocalizationDataDataTypes = {
   LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
   LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
   AvailableInterfaceLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
+  SetupDialogLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -77,6 +78,14 @@ export type ILocalizationService = {
    */
   retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
   /**
+   * Get the interface languages that have setup-dialog localizations (used by the first-run
+   * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+   * (`%firstRun_*%`) keys.
+   *
+   * @returns Qualifying user-interface languages, keyed by raw locale tag
+   */
+  getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
+  /**
    * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
    * provide localized strings in contributions
    */
@@ -93,6 +102,11 @@ export type ILocalizationService = {
   setAvailableInterfaceLanguages(): Promise<
     DataProviderUpdateInstructions<LocalizationDataDataTypes>
   >;
+  /**
+   * This data cannot be changed. Trying to use this setter will always throw. It is derived from
+   * the loaded localization data.
+   */
+  setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
 } & OnDidDispose &
   typeof localizationServiceObjectToProxy & {
     /**
