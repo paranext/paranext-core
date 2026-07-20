@@ -109,6 +109,8 @@ type DecoratorConfig = {
   canWriteProjectSettings?: boolean;
   /** Disable install so the Installing state is observable (otherwise it auto-completes). */
   disableInstall?: boolean;
+  /** Make install reject so the recoverable install-failed state is observable. */
+  failInstall?: boolean;
 };
 
 /**
@@ -175,6 +177,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         scrRef={scrRef}
         onScrRefChange={setScrRef}
         installResource={async (uid) => {
+          if (config.failInstall) throw new Error('Simulated install failure');
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
@@ -242,6 +245,14 @@ export const NoModelText: Story = {
 /** A configured resource that is still installing (install disabled so the state is observable). */
 export const Installing: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], disableInstall: true })],
+};
+
+/**
+ * A configured resource whose install fails — shows the recoverable state (message + "Pick model
+ * text" retry button) instead of an endless spinner.
+ */
+export const InstallFailed: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], failInstall: true })],
 };
 
 /** The configured model text id isn't present in the DBL list. */

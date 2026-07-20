@@ -132,9 +132,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   const installResource = useCallback(
     async (dblEntryUid: string) => {
-      // Provider not resolved yet: do nothing (don't report a no-op as success by refetching, and
-      // don't throw a terminal failure). This callback's identity changes once the provider
-      // resolves, which re-fires the panel's auto-install effect to do the real install.
+      // Provider not resolved yet: do nothing — don't report a no-op as success (would trigger a
+      // spurious refetch) or as a terminal failure. This callback's identity changes when the
+      // provider resolves, which re-fires the panel's auto-install effect to do the real install.
       if (!dblResourcesProvider) return;
       try {
         await dblResourcesProvider.installDblResource(dblEntryUid);

@@ -16,6 +16,7 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
+import { isDblResourceReference } from './resource-reference.utils';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -126,35 +127,24 @@ export function ModelTextPanel({
 
   const effectiveModelText = effectiveModelTexts?.items[0];
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
-  if (effectiveModelText?.type === 'dblResource') {
-    // EffectiveResourceReference union check doesn't satisfy TS discriminated-union refinement
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    dblRef = effectiveModelText as EffectiveResourceReference & DblResourceReference;
-  }
+  if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
   const resourceProjectId = match?.installed ? match.projectId : undefined;
 
   const [isSelecting, setIsSelecting] = useState(false);
-  // The uid of a configured model-text resource whose auto-install we saw fail, so we can offer a
-  // recovery path (see the install-failed render state) instead of spinning forever, and so the
-  // effect below doesn't retry the same failing uid in a loop. Cleared when the user explicitly
-  // re-picks (handleResourceSelect), which grants a fresh attempt.
+  // uid of a configured resource whose auto-install failed, so we can show a recovery state rather
+  // than spin forever and avoid retrying the same failing uid. Cleared on an explicit re-pick.
   const [failedInstallUid, setFailedInstallUid] = useState<string | undefined>(undefined);
 
-  // Auto-install a configured model text whose DBL resource exists in the catalog but isn't
-  // installed locally yet (e.g. an admin model text synced in from another machine). Without this,
-  // the panel resolves to a matched-but-uninstalled resource: `resourceProjectId` stays `undefined`
-  // and the panel is stuck on an infinite spinner with the "Pick Model Text" state unreachable
-  // (PT-4221). Install is fire-and-forget; the webview re-resolves the resource list once it
-  // completes, at which point `match.installed` flips true and the resource renders.
+  // Auto-install a configured model text that matches a catalog resource not installed locally yet
+  // (e.g. an admin choice synced from another machine). Without this the panel spins forever on a
+  // matched-but-uninstalled resource with the picker unreachable (PT-4221). Fire-and-forget: the
+  // webview re-resolves the list once installed, `match.installed` flips true, and it renders.
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
   useEffect(() => {
     if (dblEntryUidToInstall === undefined) return;
-    // Don't retry a uid whose install we already saw fail — that would spin/retry forever. A user
-    // re-pick clears `failedInstallUid` to allow a fresh attempt.
+    // Skip a uid we already saw fail (prevents a retry loop); a re-pick clears failedInstallUid.
     if (dblEntryUidToInstall === failedInstallUid) return;
-    // Record failure so we can drop out of the spinner into the recoverable install-failed state.
-    // (The webview also surfaces the error to the user via a notification.)
     installResource(dblEntryUidToInstall).catch(() => setFailedInstallUid(dblEntryUidToInstall));
   }, [dblEntryUidToInstall, installResource, failedInstallUid]);
 
@@ -364,10 +354,9 @@ export function ModelTextPanel({
     );
   }
 
-  // Install failed: the configured resource is in the catalog but couldn't be installed. Offer a
-  // recovery path (pick again — which retries the install) rather than spinning forever (PT-4221).
-  // `dblEntryUidToInstall` is undefined once installed, so a later successful install clears this
-  // state automatically.
+  // Install failed: the resource is in the catalog but couldn't be installed. Offer a retry via the
+  // picker rather than spinning forever. `dblEntryUidToInstall` clears once installed, so a later
+  // success drops out of this state automatically.
   if (dblEntryUidToInstall !== undefined && dblEntryUidToInstall === failedInstallUid) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
