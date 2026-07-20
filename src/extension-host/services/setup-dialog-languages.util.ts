@@ -32,7 +32,9 @@ function countPresentKeys(data: LanguageStrings, keys: string[]): number {
  * Computes the interface languages that qualify for the setup dialog: those with at least
  * {@link SETUP_DIALOG_LOCALIZATION_THRESHOLD} of the English setup-dialog baseline keys localized.
  * English always qualifies (it is the ultimate fallback). Keys of the returned map are the raw
- * locale tags from `loadedLocales`.
+ * locale tags from `loadedLocales` (e.g. `zh-hans`, not the canonical `zh-Hans`); this is
+ * intentional — the picker round-trips them into `platform.interfaceLanguage`, and every downstream
+ * localization read canonicalizes the tag itself, so the raw form resolves correctly.
  *
  * Note: params are typed `LanguageStrings` (the combiner's return type), NOT
  * `Record<string,string>` — `LanguageStrings` is keyed by the `%${string}%` `LocalizeKey`, which is
