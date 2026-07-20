@@ -69,7 +69,6 @@ process.stdin.on("end", () => {
   let saved = {};
   try { saved = JSON.parse(fs.readFileSync(SHARED, "utf8")) || {}; } catch { saved = {}; }
 
-  const expired = (e) => e && typeof e.resets_at === "number" && nowSec >= e.resets_at;
   const mergeWin = (obs, sv) => {
     let cur;
     if (obs && typeof obs.used_percentage === "number") {
@@ -78,8 +77,9 @@ process.stdin.on("end", () => {
         resets_at: typeof obs.resets_at === "number" ? obs.resets_at : undefined,
       };
     }
-    if (expired(sv)) sv = undefined;
-    if (expired(cur)) cur = undefined;
+    // Expired entries are intentionally kept (not dropped) so a passed
+    // resets_at can display as "0*" until a fresh reading of the new window
+    // arrives; the later-resets_at rule below still supersedes it then.
     if (!cur && !sv) return undefined;
     if (cur && !sv) return { ...cur, ts: nowSec };
     if (!cur && sv) return sv;
@@ -108,25 +108,27 @@ process.stdin.on("end", () => {
     catch { fs.writeFileSync(SHARED, JSON.stringify(merged)); try { fs.unlinkSync(tmp); } catch (e) {} }
   } catch (e) {}
 
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const hhmm = (epoch) => {
-    const d = new Date(epoch * 1000);
-    return String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0");
+  // Live countdowns to reset. 5h shows hours+minutes ("1h24m"); 7d shows whole
+  // days while more than a day out, then hours ("7d", "2d", "24h", "15h"). A
+  // resets_at that has already passed shows "0*".
+  const cd5h = (secs) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return `${h}h${String(m).padStart(2, "0")}m`;
   };
-  const dayMonHHMM = (epoch) => {
-    const d = new Date(epoch * 1000);
-    return `${d.getDate()} ${MONTHS[d.getMonth()]} ${hhmm(epoch)}`;
-  };
-  const fmtWin = (e, label, fmt) => {
+  const cd7d = (secs) => (secs <= 86400 ? `${Math.ceil(secs / 3600)}h` : `${Math.ceil(secs / 86400)}d`);
+  const fmtWin = (e, label, cd) => {
     if (!e || typeof e.used_percentage !== "number") return undefined;
+    const pct = Math.round(e.used_percentage);
+    const rem = typeof e.resets_at === "number" ? e.resets_at - nowSec : undefined;
+    if (rem !== undefined && rem <= 0) return `${label} ${pct}% (0*)`;
     const stale = typeof e.ts === "number" && nowSec - e.ts > STALE_SECS;
-    let s = `${label} ${Math.round(e.used_percentage)}%${stale ? "*" : ""}`;
-    if (typeof e.resets_at === "number") s += ` (${fmt(e.resets_at)})`;
-    return s;
+    const pctStr = `${pct}%${stale ? "*" : ""}`;
+    return rem !== undefined ? `${label} ${pctStr} (${cd(rem)})` : `${label} ${pctStr}`;
   };
   const rate = [
-    fmtWin(merged.five_hour, "5h", hhmm),
-    fmtWin(merged.seven_day, "7d", dayMonHHMM),
+    fmtWin(merged.five_hour, "5h", cd5h),
+    fmtWin(merged.seven_day, "7d", cd7d),
   ].filter(Boolean).join(" | ");
 
   console.log(model);
