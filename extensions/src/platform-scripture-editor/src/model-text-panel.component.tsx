@@ -135,6 +135,20 @@ export function ModelTextPanel({
 
   const [isSelecting, setIsSelecting] = useState(false);
 
+  // Auto-install a configured model text whose DBL resource exists in the catalog but isn't
+  // installed locally yet (e.g. an admin model text synced in from another machine). Without this,
+  // the panel resolves to a matched-but-uninstalled resource: `resourceProjectId` stays `undefined`
+  // and the panel is stuck on an infinite spinner with the "Pick Model Text" state unreachable
+  // (PT-4221). Install is fire-and-forget; the webview re-resolves the resource list once it
+  // completes, at which point `match.installed` flips true and the resource renders.
+  const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
+  useEffect(() => {
+    if (dblEntryUidToInstall === undefined) return;
+    // Install failures surface to the user via the caller (the webview sends a notification); catch
+    // here so this fire-and-forget effect doesn't raise an unhandled rejection.
+    installResource(dblEntryUidToInstall).catch(() => {});
+  }, [dblEntryUidToInstall, installResource]);
+
   // Tracks the latest scrRef this panel's editor just published so we can suppress the echo that
   // comes back through scroll group 0 (forced in simple mode) and avoid scroll-jumping the user's
   // own click target to the top of the viewport.
@@ -338,8 +352,9 @@ export function ModelTextPanel({
     );
   }
 
-  // Installing: resource found but not yet installed.
-  if (isSelecting) {
+  // Installing: resource found but not yet installed — either auto-detected from the configured
+  // model text (dblEntryUidToInstall) or just chosen via the picker (isSelecting).
+  if (isSelecting || dblEntryUidToInstall !== undefined) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
