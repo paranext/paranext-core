@@ -158,16 +158,19 @@ already passed to `TabToolbar` (`platform-scripture-editor.web-view.tsx:1859`) o
 power mode, and add the matching height rule to the extension's own stylesheet
 (`platform-scripture-editor.web-view.scss`), which IS loaded inside that iframe.
 
-**Shape correction (found during visual verification against author feedback):** matching own
-height alone (36px) was not enough — Column 3's dock tab-bar is a **42px**-tall `.dock-bar` with a
-6px empty gap above the 36px active tab (`--tab-header-to-content-gap`), so the tab's BOTTOM edge,
-not its own 36px height, is what visually lines up across columns. The toolbar and the Model Text
-header (Section 5) both need the same shape — 42px total, with a 6px empty gap on top before 36px
-of content — so all three rows' bottom edges land at the same Y (verified via CDP against the
-running app). The toolbar's rule became `height: 42px !important; padding-block: 6px 0 !important;`
-(plus zeroing `TabToolbarContainer`'s own `tw:py-2` this way, since its buttons are `tw:h-8`/32px
-and would otherwise get clipped by `tw:overflow-clip`); the Model Text header became
-`tw:h-[42px] ... tw:pt-1.5` (6px) in place of the original `tw:h-9` (36px, no gap).
+**Height correction (found during visual verification against author feedback):** matching own
+height alone (36px) was not enough — Column 3's dock tab-bar is a **42px**-tall `.dock-bar` (the
+visible 36px active tab plus a 6px `--tab-header-to-content-gap` above it), so matching the OUTER
+row height (42px), not just the tab's own 36px, is what makes all three rows' bottom edges land at
+the same Y (they all start at the same column-top Y, so equal total height is sufficient — verified
+via CDP against the running app). The toolbar's rule became
+`height: 42px !important; padding-block: 0 !important;` (zeroing `TabToolbarContainer`'s own
+`tw:py-2`, since its buttons are `tw:h-8`/32px and would otherwise get clipped by
+`tw:overflow-clip`); the Model Text header became `tw:h-[42px]` in place of the original `tw:h-9`
+(36px). Padding stays uniform/zero in both — an intermediate attempt at asymmetric top-only padding
+(mirroring Column 3's own internal 6-gap-then-36-content shape) made the toolbar's icons look
+off-center within their own row for no alignment benefit; `items-center` (already correct per
+Task 6) centers content symmetrically within the full 42px box on its own.
 
 ---
 
