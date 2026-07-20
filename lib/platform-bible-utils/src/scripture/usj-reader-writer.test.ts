@@ -1875,6 +1875,51 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
   });
+
+  // Pins closing-marker suppression for implicitly closed char markers. ParatextData emits
+  // `closed="false"` on char markers whose closing marker is absent in the source USFM (common for
+  // footnote/cross-reference content like \fr and \ft), and editors that skip rendering those
+  // closing glyphs record the same attribute. Emitting explicit closing markers for such spans
+  // would fabricate closers the original text never had. The `closed` attribute itself must not
+  // leak into the USFM output either. The contrast span without `closed` proves the suppression
+  // comes from `closed="false"` (this markers map sets `shouldOptionalClosingMarkersBePresent`, so
+  // optional closing markers are otherwise emitted).
+  test('omits explicit closing markers for closed="false" char markers but keeps them otherwise', () => {
+    const usjWithImplicitlyClosedChars: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'char', marker: 'bd', closed: 'false', content: ['implicitly closed'] },
+            ' then ',
+            { type: 'char', marker: 'bd', content: ['explicitly closed'] },
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [
+                { type: 'char', marker: 'fr', closed: 'false', content: ['1.1 '] },
+                { type: 'char', marker: 'ft', closed: 'false', content: ['note text'] },
+              ],
+            },
+            ' after.',
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(
+      usjWithImplicitlyClosedChars,
+      usjReaderWriterOptionsParatext3_0,
+    );
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(
+      '\\p \\bd implicitly closed then \\bd explicitly closed\\bd*\\f + \\fr 1.1 \\ft note text\\f* after.\n',
+    );
+  });
 });
 
 describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
