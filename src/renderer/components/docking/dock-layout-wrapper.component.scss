@@ -664,6 +664,15 @@ $tab-bottom-rounding: vars.$space--sm;
     border-radius: 0;
   }
 
+  // .dock-tab-btn (the clickable icon/title inside each tab) must also have border-radius removed.
+  // The competing rule is .dock-layout .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn (0,5,0).
+  // Our rule drops .dock-layout (redundant; .dock-panel is always inside it):
+  // [data-interface-mode='simple'] .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn (0,5,0).
+  // This ties the competing rule; source order (new rule comes after) wins.
+  .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn {
+    border-radius: 0;
+  }
+
   .dock-tab::before,
   .dock-tab::after {
     width: 0;
