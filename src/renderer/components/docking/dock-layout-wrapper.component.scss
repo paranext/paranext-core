@@ -605,6 +605,15 @@ $tab-bottom-rounding: vars.$space--sm;
 }
 // #endregion CONTROLS ///////////////////////////////////////////////
 
+// #region SIMPLE-MODE FOCUS RING //////////////////////////////////////
+// Clicking inside a WebView's content triggers the browser's default focus outline on the iframe.
+// Reset it in Simple mode, matching the outline-reset pattern already used elsewhere in this file
+// (e.g. the .dock-tab-btn:focus-visible reset in the TAB HEADER region above).
+[data-interface-mode='simple'] .web-view:focus {
+  outline: none;
+}
+// #endregion SIMPLE-MODE FOCUS RING ///////////////////////////////////
+
 // #region SIMPLE-MODE CHROME (padding/gap/radius/divider) ///////////////
 // Ports the Storybook prototype's NO_PADDING_STYLE (src/stories/platform/ten-layout-shared.tsx)
 // into production. Scoped to [data-interface-mode="simple"] (set by app.component.tsx's Main)
