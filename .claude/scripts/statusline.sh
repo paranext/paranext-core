@@ -108,27 +108,34 @@ process.stdin.on("end", () => {
     catch { fs.writeFileSync(SHARED, JSON.stringify(merged)); try { fs.unlinkSync(tmp); } catch (e) {} }
   } catch (e) {}
 
-  // Live countdowns to reset. 5h shows hours+minutes ("1h24m"); 7d shows whole
-  // days while more than a day out, then hours ("7d", "2d", "24h", "15h"). A
-  // resets_at that has already passed shows "0*".
+  // Each window reads "<countdown> <pct>%": the live countdown to reset is the
+  // leading label. 5h counts down in hours+minutes ("2h13m") and also shows its
+  // reset clock in local 24h ("(1900)"); 7d counts down in whole days until
+  // under a day, then hours ("5d", "15h"), with no clock. A resets_at that has
+  // already passed shows "0*".
+  const hhmm = (epoch) => {
+    const d = new Date(epoch * 1000);
+    return String(d.getHours()).padStart(2, "0") + String(d.getMinutes()).padStart(2, "0");
+  };
   const cd5h = (secs) => {
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
     return `${h}h${String(m).padStart(2, "0")}m`;
   };
   const cd7d = (secs) => (secs <= 86400 ? `${Math.ceil(secs / 3600)}h` : `${Math.ceil(secs / 86400)}d`);
-  const fmtWin = (e, label, cd) => {
+  const fmtWin = (e, cd, paren) => {
     if (!e || typeof e.used_percentage !== "number") return undefined;
     const pct = Math.round(e.used_percentage);
-    const rem = typeof e.resets_at === "number" ? e.resets_at - nowSec : undefined;
-    if (rem !== undefined && rem <= 0) return `${label} ${pct}% (0*)`;
     const stale = typeof e.ts === "number" && nowSec - e.ts > STALE_SECS;
-    const pctStr = `${pct}%${stale ? "*" : ""}`;
-    return rem !== undefined ? `${label} ${pctStr} (${cd(rem)})` : `${label} ${pctStr}`;
+    if (typeof e.resets_at !== "number") return `${pct}%${stale ? "*" : ""}`;
+    const rem = e.resets_at - nowSec;
+    if (rem <= 0) return `0* ${pct}%`;
+    const tail = paren ? ` (${paren(e.resets_at)})` : "";
+    return `${cd(rem)} ${pct}%${stale ? "*" : ""}${tail}`;
   };
   const rate = [
-    fmtWin(merged.five_hour, "5h", cd5h),
-    fmtWin(merged.seven_day, "7d", cd7d),
+    fmtWin(merged.five_hour, cd5h, hhmm),
+    fmtWin(merged.seven_day, cd7d, undefined),
   ].filter(Boolean).join(" | ");
 
   console.log(model);
