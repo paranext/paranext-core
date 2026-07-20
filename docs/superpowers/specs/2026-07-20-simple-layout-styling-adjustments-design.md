@@ -143,13 +143,22 @@ Three things must render at the same height, **in Simple mode only**:
 2. The Scripture Editor's `TabToolbar` (Column 2) — currently a fixed `tw:h-14` (56px) via `TabToolbarContainer` (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar-container.component.tsx:59`).
 3. The new Model Text header (Section 5), Column 1.
 
-Target: **36px** (the dock tab-header's current height), applied as a
-`body[data-interface-mode="simple"]`-scoped override so `TabToolbarContainer`'s shared 56px
+Target: **36px** (the dock tab-header's current height), so `TabToolbarContainer`'s shared 56px
 default is untouched everywhere else (Checks panel, Enhanced Resources toolbar, and Power-mode
-Scripture Editor all keep 56px). Concretely: add a rule that overrides `tw:h-14` to `36px` (e.g.
-targeting `.scripture-editor-tab-nav` — the `className` already passed to `TabToolbar` in
-`platform-scripture-editor.web-view.tsx:1859` — under `body[data-interface-mode="simple"]`), and
-give the new Model Text header (Section 5) the same fixed height.
+Scripture Editor all keep 56px).
+
+**Architecture correction (found during implementation):** the Scripture Editor's `TabToolbar`
+renders inside that extension's own web view iframe — a separate document that never loads the
+renderer's `dock-layout-wrapper.component.scss` and never sees the renderer's
+`data-interface-mode` attribute (that only exists on the outer renderer's `document.body`). So the
+override cannot live in the renderer at all. Instead: the extension already computes its own local
+`isPowerMode` (`platform-scripture-editor.web-view.tsx`, via `useSetting('platform.interfaceMode',
+...)`); use it to conditionally append a `scripture-editor-tab-nav-simple` class to the `className`
+already passed to `TabToolbar` (`platform-scripture-editor.web-view.tsx:1859`) only when not in
+power mode, and add the matching `height: 36px !important` rule to the extension's own stylesheet
+(`platform-scripture-editor.web-view.scss`), which IS loaded inside that iframe. Give the new Model
+Text header (Section 5) the same fixed height (it needs no such indirection, since it's a
+Simple-mode-only component with no iframe boundary to cross).
 
 ---
 
