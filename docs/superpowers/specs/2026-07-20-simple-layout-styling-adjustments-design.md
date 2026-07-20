@@ -39,46 +39,48 @@ only appear in Simple mode already (Power mode's `TAB_GROUP` never produces them
 (`.dock-panel`, `.dock-divider`, `.dock-layout`, `.web-view`) currently match panels in both
 modes, because the shared `'platform-bible'` group token is present in every group in both modes.
 
-**Change:** in `src/renderer/components/docking/dock-layout-wrapper.component.tsx`, wrap
-`<DockLayout>` in a new `<div>` carrying a `dock-layout-simple` class only when `!isPowerMode`
-(this component already calls `useIsPowerMode()`):
+**Mechanism (team decision, superseding an earlier wrapper-`<div>` draft of this section):** stamp
+a `data-interface-mode="simple" | "power"` attribute on `document.body`, and scope every
+Simple-only rule below under `body[data-interface-mode="simple"]`. This intentionally does not
+copy the theme mechanism's exact primitive — theming actually applies a _class_ on `document.body`
+(`lib/platform-bible-utils/src/extension-contributions/theme.util.ts:141`,
+`document.body.classList.add(theme.id)`; there is no `data-theme` attribute anywhere in this
+codebase, and no existing `data-*` CSS-selector hook of any kind) — but it reuses the same
+_shape_: a single global marker on `document.body`, applied imperatively, with no new wrapper
+element anywhere in the render tree. An attribute reads more clearly as a mode flag than a bare
+class name here, and this repo has no existing convention either way for a boolean UI-mode hook.
+
+**Change:** in `src/renderer/app.component.tsx`'s `Main` component (already the single component
+wrapping both `PlatformBibleToolbar` and `PlatformDockLayout`, and already has one `useEffect` for
+`initWorkspaceUpdatingService`), add:
 
 ```tsx
 const isPowerMode = useIsPowerMode();
-return (
-  <div className={isPowerMode ? undefined : 'dock-layout-simple'} style={style}>
-    <DockLayout
-      ref={ref}
-      groups={getGroups(isPowerMode)}
-      defaultLayout={...}
-      style={FILL_STYLE} // { position: 'absolute', inset: 0 } — fills the new wrapper exactly
-      ...
-    />
-  </div>
-);
+useEffect(() => {
+  document.body.setAttribute('data-interface-mode', isPowerMode ? 'power' : 'simple');
+}, [isPowerMode]);
 ```
 
-The inline inset style currently passed as `style` (from `platform-dock-layout.component.tsx`,
-see Section 7) moves from `<DockLayout>` onto this new wrapper `<div>`; `<DockLayout>` itself gets
-a static fill style (`position: absolute; inset: 0`) so its rendered box is pixel-identical to
-today in both modes — only one extra non-visual wrapper `<div>` is introduced. Verify this doesn't
-change Power mode's rendered layout (visual check) and doesn't break
-`dock-layout-wrapper.component.test.tsx` (which mocks rc-dock's default export and only asserts on
-props — unaffected by the extra wrapper).
+`useIsPowerMode()` is already anti-flicker-cached from `localStorage`
+(`use-interface-mode.hook.ts:17-27`), so its value is correct on the very first render — no flash
+of wrong-mode styling while the effect catches up.
 
-Every Simple-only rule in Sections 2, 3, 6, and 7 is scoped under `.dock-layout-simple` in
-`dock-layout-wrapper.component.scss`.
+Every Simple-only rule in Sections 2, 3, and 6 below is scoped under
+`body[data-interface-mode="simple"]` in `dock-layout-wrapper.component.scss`. This is a pure
+CSS-attribute hook on an existing DOM node — **no new wrapper `<div>` is introduced anywhere**,
+which also simplifies Section 7 below (no style needs to move between elements, and
+`dock-layout-wrapper.component.tsx`/`dock-layout-wrapper.component.test.tsx` are untouched).
 
 ---
 
 ## Section 2 — Column chrome: padding, gap, radius, divider, min-width (items #1, #2, #3, #9, #10)
 
 Port the prototype's `NO_PADDING_STYLE` (`src/stories/platform/ten-layout-shared.tsx`) into
-`dock-layout-wrapper.component.scss`, scoped under `.dock-layout-simple`, extended per the
-decisions below:
+`dock-layout-wrapper.component.scss`, scoped under `body[data-interface-mode="simple"]`, extended
+per the decisions below:
 
 ```scss
-.dock-layout-simple {
+body[data-interface-mode='simple'] {
   .dock-layout {
     gap: 0;
   }
@@ -141,13 +143,13 @@ Three things must render at the same height, **in Simple mode only**:
 2. The Scripture Editor's `TabToolbar` (Column 2) — currently a fixed `tw:h-14` (56px) via `TabToolbarContainer` (`lib/platform-bible-react/src/components/advanced/tab-toolbar/tab-toolbar-container.component.tsx:59`).
 3. The new Model Text header (Section 5), Column 1.
 
-Target: **36px** (the dock tab-header's current height), applied as a `.dock-layout-simple`-scoped
-override so `TabToolbarContainer`'s shared 56px default is untouched everywhere else (Checks
-panel, Enhanced Resources toolbar, and Power-mode Scripture Editor all keep 56px). Concretely:
-add a Simple-mode-scoped rule that overrides `tw:h-14` to `36px` (e.g. targeting
-`.scripture-editor-tab-nav` — the `className` already passed to `TabToolbar` in
-`platform-scripture-editor.web-view.tsx:1859` — under a `.dock-layout-simple` (or equivalent
-Simple-mode) ancestor), and give the new Model Text header (Section 5) the same fixed height.
+Target: **36px** (the dock tab-header's current height), applied as a
+`body[data-interface-mode="simple"]`-scoped override so `TabToolbarContainer`'s shared 56px
+default is untouched everywhere else (Checks panel, Enhanced Resources toolbar, and Power-mode
+Scripture Editor all keep 56px). Concretely: add a rule that overrides `tw:h-14` to `36px` (e.g.
+targeting `.scripture-editor-tab-nav` — the `className` already passed to `TabToolbar` in
+`platform-scripture-editor.web-view.tsx:1859` — under `body[data-interface-mode="simple"]`), and
+give the new Model Text header (Section 5) the same fixed height.
 
 ---
 
@@ -207,10 +209,10 @@ resource selected yet).
 ## Section 6 — Black selection ring (item #4) — Simple-only
 
 Clicking inside a WebView's content triggers the browser's default focus outline on the iframe.
-Add, under the `.dock-layout-simple` scope from Section 1:
+Add, under the `body[data-interface-mode="simple"]` scope from Section 1:
 
 ```scss
-.dock-layout-simple .web-view:focus {
+body[data-interface-mode='simple'] .web-view:focus {
   outline: none;
 }
 ```
@@ -231,16 +233,19 @@ to `DockLayoutWrapper` for both modes:
 style={{ position: 'absolute', top: 48, bottom: 8, left: 8, right: 8 }}
 ```
 
-**Change:** branch this on `isPowerMode` (already available or easily obtained in this component):
-Power mode keeps `{ top: 48, bottom: 8, left: 8, right: 8 }` exactly as today; Simple mode becomes
+**Change:** branch this on `isPowerMode`, which this component already computes at line 70
+(`const isPowerMode = useIsPowerMode();`) — no new plumbing needed. Power mode keeps
+`{ top: 48, bottom: 8, left: 8, right: 8 }` exactly as today; Simple mode becomes
 `{ top: 48, bottom: 0, left: 0, right: 0 }` (only `top: 48` — clearance for the main toolbar — is
-preserved; the surrounding gap is removed). This style is what Section 1 moves onto the new
-`.dock-layout-simple`-or-not wrapper `<div>`.
+preserved; the surrounding gap is removed). This is a direct conditional on the existing `style`
+prop passed to `DockLayoutWrapper` — no wrapper element or structural change involved.
 
 ---
 
 ## Definition of Done
 
+- `document.body` carries `data-interface-mode="simple"` or `"power"`, kept in sync with
+  `useIsPowerMode()` via the effect in `Main`, with no flash of the wrong value on startup.
 - Power mode is visually and behaviorally unchanged in every respect except Section 4 (verify via
   manual visual comparison — no automated visual-regression suite exists for this layout).
 - Columns in Simple mode have zero padding, zero border-radius (including tab fillets and
