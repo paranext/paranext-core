@@ -14,7 +14,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_language_selected%',
 ];
 
-const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
+const DEFAULT_SETUP_LANGUAGES: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
 
 /**
  * First-run wizard step: choose the interface language. Offers the languages that have setup-dialog
@@ -35,13 +35,13 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
 
   const [setupLanguagesPossiblyError, , isLoading] = useData(
     localizationService.dataProviderName,
-  ).SetupDialogLanguages(undefined, DEFAULT_AVAILABLE_LANGUAGES);
+  ).SetupDialogLanguages(undefined, DEFAULT_SETUP_LANGUAGES);
   const setupLanguages: Record<string, LanguageInfo> = isPlatformError(setupLanguagesPossiblyError)
-    ? DEFAULT_AVAILABLE_LANGUAGES
+    ? DEFAULT_SETUP_LANGUAGES
     : setupLanguagesPossiblyError;
 
   // Always keep the current selection in the list so it shows as selected even if it doesn't meet
-  // the setup-dialog threshold (mirrors setting.component.tsx). Falls back to the raw tag as autonym.
+  // the setup-dialog threshold; fall back to the raw tag as its autonym when it's unknown.
   const languages: Record<string, LanguageInfo> = { ...setupLanguages };
   if (!languages[primaryLanguage]) languages[primaryLanguage] = { autonym: primaryLanguage };
 
@@ -52,11 +52,12 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
 
   const handleChange = (tag: string) => {
     if (tag === primaryLanguage) return;
-    try {
-      setInterfaceLanguage([tag, ...safeInterfaceLanguage.filter((l) => l !== tag)]);
-    } catch (e: unknown) {
-      logger.warn(`LanguageStep: failed to set interface language: ${getErrorMessage(e)}`);
-    }
+    // setInterfaceLanguage is async; catch the rejection so a failed write is logged, not swallowed.
+    setInterfaceLanguage([tag, ...safeInterfaceLanguage.filter((l) => l !== tag)]).catch(
+      (e: unknown) => {
+        logger.warn(`LanguageStep: failed to set interface language: ${getErrorMessage(e)}`);
+      },
+    );
   };
 
   return (
