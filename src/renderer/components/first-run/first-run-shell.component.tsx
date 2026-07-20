@@ -5,7 +5,7 @@ import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { ComponentType, useCallback, useMemo, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
-import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
+import { LanguageStep } from './steps/language.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
 import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
 import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
@@ -15,7 +15,7 @@ export const STEP_ORDER: FirstRunStep[] = ['language', 'identify', 'syncConsent'
 
 /** Default step bodies. Sibling tickets replace individual entries with their real step. */
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
-  language: LanguagePlaceholderStep,
+  language: LanguageStep,
   identify: IdentifyPlaceholderStep,
   syncConsent: SyncConsentPlaceholderStep,
   syncProgress: SyncProgressPlaceholderStep,
