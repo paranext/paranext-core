@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
@@ -19,6 +19,8 @@ const STRINGS = {
   '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
+  '%webView_modelTextPanel_installFailed%':
+    "The model text couldn't be installed. Pick one to try again.",
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
 };
 
@@ -83,6 +85,47 @@ describe('ModelTextPanel', () => {
     // The regression (PT-4221): a configured-but-uninstalled model text is never installed and the
     // panel sits on an infinite spinner. It must instead kick off the install so it can resolve.
     await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-web'));
+  });
+
+  it('shows the installing state while auto-install is in flight', async () => {
+    // A never-resolving install keeps the panel in the installing state so it is observable.
+    const installResource = vi.fn(() => new Promise<void>(() => {}));
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+    });
+
+    // Guards the widened render gate: the auto-install case must show the labeled (finite-looking)
+    // installing state, not fall through to a bare spinner.
+    expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+  });
+
+  it('surfaces a recoverable state (message + pick button) when auto-install fails', async () => {
+    const installResource = vi.fn(async () => {
+      throw new Error('install failed');
+    });
+    const showResourcePicker = vi.fn(async () => undefined);
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+      showResourcePicker,
+    });
+
+    // Instead of spinning forever (the PT-4221 symptom, on the error path), the panel surfaces the
+    // failure and offers the picker again.
+    const pickButton = await screen.findByRole('button', { name: 'Pick model text…' });
+    expect(
+      screen.getByText("The model text couldn't be installed. Pick one to try again."),
+    ).toBeInTheDocument();
+
+    // The failing install is attempted exactly once — no retry storm.
+    expect(installResource).toHaveBeenCalledTimes(1);
+
+    // The button is a real recovery path: it reopens the resource picker.
+    fireEvent.click(pickButton);
+    await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
   });
 
   it('does not auto-install a model text whose resource is already installed', async () => {
