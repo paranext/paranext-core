@@ -37,6 +37,10 @@ describe('resolveRegistrationValidity', () => {
   });
 
   it('returns "unknown" when the command resolves with a non-boolean (e.g. null) (FIX 2)', async () => {
+    // Deliberately a literal `null`: the C# provider can send null over the websocket, and this
+    // proves the resolver treats that wire value as "unknown". `undefined` wouldn't exercise the
+    // same boundary, so the no-null rule is disabled here rather than weakening the test.
+    // eslint-disable-next-line no-null/no-null
     mockSendCommand.mockResolvedValue(null);
     await expect(resolveRegistrationValidity(1000)).resolves.toBe('unknown');
   });
