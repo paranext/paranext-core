@@ -20,7 +20,6 @@ import {
   getCurrentLocale,
   getErrorMessage,
   isPlatformError,
-  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
@@ -285,11 +284,6 @@ class LocalizationDataProviderEngine
 {
   #lastInterfaceLanguageSerialized: string | undefined;
 
-  // Needed for future disposal of the subscription; choosing to ignore instead of removing code
-  // that will be used later
-  // @ts-expect-error ts(6133) - needed for future disposal, not yet read
-  #unsubscribeInterfaceLanguage: UnsubscriberAsync | undefined;
-
   constructor() {
     super();
     // Live re-render bridge: when the interface language changes, re-emit the localized-string data
@@ -299,7 +293,7 @@ class LocalizationDataProviderEngine
     // redundant refetch storms.
     (async () => {
       try {
-        this.#unsubscribeInterfaceLanguage = await settingsService.subscribe(
+        await settingsService.subscribe(
           'platform.interfaceLanguage',
           (newValue) => {
             if (isPlatformError(newValue)) {
