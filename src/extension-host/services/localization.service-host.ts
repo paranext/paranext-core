@@ -30,6 +30,7 @@ import {
 import { LanguageInfo } from 'platform-bible-react';
 import { Canon } from '@sillsdev/scripture';
 import { languageDetails } from '@extension-host/data/language-details.data';
+import { computeSetupDialogLanguages } from '@extension-host/services/setup-dialog-languages.util';
 
 /**
  * The base language to get localized strings for if they are not present in other languages
@@ -378,6 +379,28 @@ class LocalizationDataProviderEngine
     DataProviderUpdateInstructions<LocalizationDataDataTypes>
   > {
     throw new Error('setAvailableInterfaceLanguages disabled');
+  }
+
+  // getSetupDialogLanguages doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<LocalizationDataDataTypes> interface
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getSetupDialogLanguages() {
+    await waitForResyncContributions();
+    const englishData = localizedStringsDocumentCombiner.getLocalizedStringData(BACKUP_LANGUAGE);
+    return computeSetupDialogLanguages(
+      englishData,
+      (tag) => localizedStringsDocumentCombiner.getLocalizedStringData(tag),
+      loadedLocales,
+    );
+  }
+
+  // setSetupDialogLanguages doesn't use instance state but cannot be static because it implements
+  // the IDataProviderEngine<LocalizationDataDataTypes> interface
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setSetupDialogLanguages(): Promise<
+    DataProviderUpdateInstructions<LocalizationDataDataTypes>
+  > {
+    throw new Error('setSetupDialogLanguages disabled');
   }
 }
 

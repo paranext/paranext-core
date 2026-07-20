@@ -7,11 +7,15 @@ import { LocalizeKey } from 'platform-bible-utils';
 const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
-    "%general_button_submit%": "Submit"
+    "%general_button_submit%": "Submit",
+    "%firstRun_title%": "Set up",
+    "%firstRun_button_next%": "Next"
   }`,
   'resources://assets/localization/fr.json': `{
     "%some_localization_key%": "Ceci est le texte en français pour %some_localization_key%.",
-    "%general_button_submit%": "Soumettre"
+    "%general_button_submit%": "Soumettre",
+    "%firstRun_title%": "Configurer",
+    "%firstRun_button_next%": "Suivant"
   }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
@@ -214,4 +218,26 @@ test('Good keys and missing but valid language code return default English', asy
     '%some_localization_key%': 'This is the English text for %some_localization_key%.',
     '%general_button_submit%': 'Submit',
   });
+});
+
+test('getSetupDialogLanguages includes English and fully-translated locales', async () => {
+  const result = await localizationDataProviderEngine.getSetupDialogLanguages();
+  expect(result.en).toBeDefined();
+  expect(result.fr).toBeDefined();
+});
+
+test('setSetupDialogLanguages always throws', async () => {
+  await expect(localizationDataProviderEngine.setSetupDialogLanguages()).rejects.toThrow(
+    'setSetupDialogLanguages disabled',
+  );
+});
+
+test('firstRun key falls back to English when the requested locale lacks it', async () => {
+  // %firstRun_button_next% exists in en (and fr here); request a firstRun key only in en via a
+  // locale that has no firstRun data → resolves to English (chosen → base → English → raw key).
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%firstRun_title%',
+    locales: ['es'], // es.json has no firstRun keys in MOCK_FILES
+  });
+  expect(response).toEqual('Set up');
 });
