@@ -248,8 +248,8 @@ export const Installing: Story = {
 };
 
 /**
- * A configured resource whose install fails — shows the recoverable state (message + "Pick model
- * text" retry button) instead of an endless spinner.
+ * A configured resource whose install fails — shows the recoverable state (message + "Retry"
+ * button) instead of an endless spinner. Retry re-attempts the same resource.
  */
 export const InstallFailed: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], failInstall: true })],

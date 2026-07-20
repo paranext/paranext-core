@@ -19,8 +19,8 @@ const STRINGS = {
   '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
-  '%webView_modelTextPanel_installFailed%':
-    "The model text couldn't be installed. Pick one to try again.",
+  '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
+  '%webView_modelTextPanel_retry%': 'Retry',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
 };
 
@@ -101,31 +101,28 @@ describe('ModelTextPanel', () => {
     expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
   });
 
-  it('surfaces a recoverable state (message + pick button) when auto-install fails', async () => {
+  it('surfaces a recoverable retry state when auto-install fails, and retries the same resource', async () => {
     const installResource = vi.fn(async () => {
       throw new Error('install failed');
     });
-    const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
       effectiveModelTexts: configuredModelText('uid-web'),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
-      showResourcePicker,
     });
 
     // Instead of spinning forever (the PT-4221 symptom, on the error path), the panel surfaces the
-    // failure and offers the picker again.
-    const pickButton = await screen.findByRole('button', { name: 'Pick model text…' });
-    expect(
-      screen.getByText("The model text couldn't be installed. Pick one to try again."),
-    ).toBeInTheDocument();
+    // failure and offers a retry.
+    const retryButton = await screen.findByRole('button', { name: 'Retry' });
+    expect(screen.getByText("The model text couldn't be installed.")).toBeInTheDocument();
 
     // The failing install is attempted exactly once — no retry storm.
     expect(installResource).toHaveBeenCalledTimes(1);
 
-    // The button is a real recovery path: it reopens the resource picker.
-    fireEvent.click(pickButton);
-    await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+    // Retry re-attempts installing the same configured resource, so an admin (or user) choice is
+    // recoverable without opening the picker.
+    fireEvent.click(retryButton);
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
   });
 
   it('does not auto-install a model text whose resource is already installed', async () => {

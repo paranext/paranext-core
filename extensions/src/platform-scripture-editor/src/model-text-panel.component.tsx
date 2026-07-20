@@ -43,6 +43,7 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_installFailed%',
+  '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
 ] as const);
 
@@ -354,15 +355,16 @@ export function ModelTextPanel({
     );
   }
 
-  // Install failed: the resource is in the catalog but couldn't be installed. Offer a retry via the
-  // picker rather than spinning forever. `dblEntryUidToInstall` clears once installed, so a later
-  // success drops out of this state automatically.
+  // Install failed: the resource is in the catalog but couldn't be installed. Offer a retry rather
+  // than spinning forever. Clearing `failedInstallUid` re-fires the auto-install effect on the same
+  // (admin or user) configured resource — so an admin choice is recoverable too. A success then
+  // drops out of this state on its own (`dblEntryUidToInstall` clears once installed).
   if (dblEntryUidToInstall !== undefined && dblEntryUidToInstall === failedInstallUid) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
         <p>{localizedStrings['%webView_modelTextPanel_installFailed%']}</p>
-        <Button onClick={() => handlePickModelText()}>
-          {localizedStrings['%webView_modelTextPanel_pickModelText%']}
+        <Button onClick={() => setFailedInstallUid(undefined)}>
+          {localizedStrings['%webView_modelTextPanel_retry%']}
         </Button>
       </div>
     );
