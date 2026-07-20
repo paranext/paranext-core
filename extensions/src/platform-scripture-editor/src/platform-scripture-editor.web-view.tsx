@@ -401,7 +401,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
 
   const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) return false;
+    if (isPlatformError(interfaceModePossiblyError)) {
+      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
+      return false;
+    }
     return interfaceModePossiblyError === 'power';
   }, [interfaceModePossiblyError]);
 
