@@ -4,14 +4,22 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import type { LanguageInfo } from 'platform-bible-react';
+import { newPlatformError, type PlatformError } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 
-const mockSetInterfaceLanguage = vi.fn();
-const hookState = {
+// setInterfaceLanguage is async; resolve by default so the component's `.catch(...)` has a promise.
+const mockSetInterfaceLanguage = vi.fn(() => Promise.resolve());
+const GOOD_SETUP_LANGUAGES: Record<string, LanguageInfo> = {
+  en: { autonym: 'English' },
+  es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
+};
+const hookState: {
+  interfaceLanguage: string[];
+  setupLanguages: Record<string, LanguageInfo> | PlatformError;
+  isLoading: boolean;
+} = {
   interfaceLanguage: ['en'],
-  setupLanguages: {
-    en: { autonym: 'English' },
-    es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
-  } satisfies Record<string, LanguageInfo>,
+  setupLanguages: GOOD_SETUP_LANGUAGES,
   isLoading: false,
 };
 
@@ -40,11 +48,7 @@ vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn() } })
 // instantiates a ResizeObserver on mount. No-op stubs are sufficient since the tests don't assert
 // layout or scroll behavior.
 class NoopResizeObserver implements ResizeObserver {
-  // Touch `this` via a private field so the no-op methods don't trip
-  // @typescript-eslint/class-methods-use-this. We keep `targets` as an internal record of
-  // attached elements so the polyfill behaves like a (very dumb) real ResizeObserver —
-  // observe/unobserve mutate the set, disconnect clears it. None of the tests inspect this
-  // state; it just satisfies the lint rule without an eslint-disable.
+  // `targets` gives the no-op methods a `this` use (satisfies class-methods-use-this); unused by tests.
   private readonly targets = new Set<Element>();
 
   observe(target: Element) {
@@ -78,6 +82,7 @@ describe('LanguageStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hookState.interfaceLanguage = ['en'];
+    hookState.setupLanguages = GOOD_SETUP_LANGUAGES;
     hookState.isLoading = false;
   });
 
@@ -106,6 +111,25 @@ describe('LanguageStep', () => {
     const setCanProceed = vi.fn();
     render(<LanguageStep onNext={vi.fn()} setCanProceed={setCanProceed} />);
     expect(setCanProceed).toHaveBeenCalledWith(false);
-    hookState.isLoading = false;
+  });
+
+  test('does not write when the already-selected language is chosen again', async () => {
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    await userEvent.click(screen.getByText('English')); // already the current selection (value = 'en')
+    expect(mockSetInterfaceLanguage).not.toHaveBeenCalled();
+  });
+
+  test('logs a warning instead of crashing when the setting write rejects', async () => {
+    mockSetInterfaceLanguage.mockRejectedValueOnce(new Error('write failed'));
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    await userEvent.click(screen.getByText('Español'));
+    await vi.waitFor(() => expect(logger.warn).toHaveBeenCalled());
+  });
+
+  test('falls back to English only when the language data is a platform error', () => {
+    hookState.setupLanguages = newPlatformError('boom');
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(screen.getByText('English')).toBeInTheDocument();
+    expect(screen.queryByText('Español')).not.toBeInTheDocument();
   });
 });
