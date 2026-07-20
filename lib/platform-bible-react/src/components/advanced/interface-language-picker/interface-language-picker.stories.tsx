@@ -1,0 +1,60 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
+import { InterfaceLanguagePicker } from './interface-language-picker.component';
+
+const STRINGS = {
+  '%firstRun_language_search_placeholder%': 'Search languages',
+  '%firstRun_language_noResults%': 'No matching languages',
+  '%firstRun_language_selected%': 'Selected',
+};
+
+const meta: Meta<typeof InterfaceLanguagePicker> = {
+  title: 'Advanced/InterfaceLanguagePicker',
+  component: InterfaceLanguagePicker,
+  tags: ['autodocs', 'test'],
+};
+export default meta;
+type Story = StoryObj<typeof InterfaceLanguagePicker>;
+
+function Demo({
+  languages,
+}: {
+  languages: Record<string, { autonym: string; uiNames?: Record<string, string> }>;
+}) {
+  const [value, setValue] = useState('en');
+  return (
+    <InterfaceLanguagePicker
+      languages={languages}
+      value={value}
+      onChange={setValue}
+      localizedStrings={STRINGS}
+    />
+  );
+}
+
+export const FewLanguages: Story = {
+  render: () => (
+    <Demo
+      languages={{
+        en: { autonym: 'English' },
+        es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
+        'zh-hans': { autonym: '中文（简体）', uiNames: { en: 'Chinese (Simplified)' } },
+      }}
+    />
+  ),
+};
+
+export const OneLanguage: Story = {
+  render: () => <Demo languages={{ en: { autonym: 'English' } }} />,
+};
+
+export const ManyLanguages: Story = {
+  render: () => {
+    const many: Record<string, { autonym: string; uiNames?: Record<string, string> }> = {
+      en: { autonym: 'English' },
+    };
+    for (let i = 0; i < 120; i++)
+      many[`x${i}`] = { autonym: `Language ${i}`, uiNames: { en: `Language ${i}` } };
+    return <Demo languages={many} />;
+  },
+};
