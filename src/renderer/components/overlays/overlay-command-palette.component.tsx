@@ -10,7 +10,10 @@
 
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { resolveAndRemoveOverlay } from '@renderer/services/overlays/overlay-store';
+import {
+  resolveAndRemoveOverlay,
+  updateCommandPaletteState,
+} from '@renderer/services/overlays/overlay-store';
 import {
   CommandPaletteItem,
   filterPaletteItems,
@@ -79,6 +82,18 @@ export type OverlayCommandPalettePresentationalProps = {
   onSelect: (itemId: string) => void;
   /** Called when the palette is dismissed (Escape, click outside) */
   onDismiss: () => void;
+  /**
+   * Reports filter text the user types into the ACTIVE palette's input, so the store-connected
+   * owner can mirror it into the overlay store — keeping a forwarded
+   * `commitCommandPaletteSelection` (which resolves from the STORE's filterText/selectedIndex) in
+   * agreement with what is displayed. Active mode only; passive mode renders no input.
+   */
+  onFilterTextChange?: (filterText: string) => void;
+  /**
+   * Reports arrow-key highlight moves in the ACTIVE palette as an absolute index into the filtered
+   * list (same store-mirroring rationale as {@link onFilterTextChange}).
+   */
+  onSelectedIndexChange?: (selectedIndex: number) => void;
 };
 
 // ── Constants ──
@@ -139,12 +154,12 @@ function PaletteItem({
   item: CommandPaletteItem;
   onSelect: (id: string) => void;
 }) {
-  // Build a searchable value from label + description + badge for cmdk filtering
-  const searchValue = [item.label, item.description, item.badge].filter(Boolean).join(' ');
-
   return (
     <CommandItem
-      value={searchValue}
+      // Identity value, not search text: filtering is done OUTSIDE cmdk (shouldFilter=false on the
+      // root) with the same filterPaletteItems the host commit uses, so cmdk only needs a unique
+      // value per item to drive its highlight/selection.
+      value={item.id}
       disabled={item.disabled}
       onSelect={() => onSelect(item.id)}
       className="tw:flex tw:items-center tw:gap-2"
@@ -265,6 +280,8 @@ export function OverlayCommandPalettePresentational({
   selectedIndex = 0,
   onSelect,
   onDismiss,
+  onFilterTextChange,
+  onSelectedIndexChange,
 }: OverlayCommandPalettePresentationalProps) {
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -298,15 +315,31 @@ export function OverlayCommandPalettePresentational({
     };
   }, [passive]);
 
-  // Active-mode search text: locally typed AND externally driven. The `filterText` prop only
-  // filtered passive mode; the focused (active) palette relied on the user typing into the cmdk
-  // input directly — but when the cross-frame focus fight loses (the editor iframe re-grabs focus
-  // on every Lexical commit), the extension forwards keystrokes via updateCommandPalette instead,
-  // and those must narrow the ACTIVE list too. Controlled value, external updates win.
+  // Active-mode search text: locally typed AND externally driven. When the cross-frame focus
+  // fight loses (the editor iframe re-grabs focus on every Lexical commit), the extension
+  // forwards keystrokes via updateCommandPalette instead, and those must narrow the ACTIVE list
+  // too. Controlled value; external updates win; local typing mirrors back out via
+  // onFilterTextChange so the store stays the single source of truth for commits.
   const [inputValue, setInputValue] = useState(filterText ?? '');
   useEffect(() => {
     setInputValue(filterText ?? '');
   }, [filterText]);
+
+  // Active-mode highlight: local mirror of the externally-driven selectedIndex, moved by cmdk's
+  // own arrow-key handling (reported back out via onSelectedIndexChange) and overridden whenever
+  // the external value changes (a forwarded moveSelection).
+  const [activeSelectedIndex, setActiveSelectedIndex] = useState(selectedIndex);
+  useEffect(() => {
+    setActiveSelectedIndex(selectedIndex);
+  }, [selectedIndex]);
+
+  const handleInputValueChange = useCallback(
+    (value: string) => {
+      setInputValue(value);
+      onFilterTextChange?.(value);
+    },
+    [onFilterTextChange],
+  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -318,14 +351,35 @@ export function OverlayCommandPalettePresentational({
     [onDismiss],
   );
 
-  // Passive mode bypasses cmdk's own input-driven filtering, so the filtered list is computed
-  // with the same filterPaletteItems function the host uses to resolve a commit — keeping what's
-  // on screen and what the host would select in agreement.
-  const passiveFilteredItems = useMemo(
-    () => (passive ? filterPaletteItems(items, filterText) : items),
-    [passive, items, filterText],
+  // BOTH modes bypass cmdk's own fuzzy filtering: the filtered list is computed with the same
+  // filterPaletteItems function the host uses to resolve a commit — keeping what's on screen and
+  // what the host would select in agreement. Passive filters by the externally-driven filterText;
+  // active by the input mirror (which external filterText updates overwrite).
+  const filteredItems = useMemo(
+    () => filterPaletteItems(items, passive ? filterText : inputValue),
+    [items, passive, filterText, inputValue],
   );
-  const highlightedItem: CommandPaletteItem | undefined = passiveFilteredItems[selectedIndex];
+  const highlightedItem: CommandPaletteItem | undefined = filteredItems[selectedIndex];
+
+  // Active-mode highlight resolution: clamp the mirrored index to the (possibly just-narrowed)
+  // filtered list, exactly as the store clamps on every update.
+  const effectiveActiveIndex = Math.min(activeSelectedIndex, Math.max(0, filteredItems.length - 1));
+  const activeHighlightedId = filteredItems[effectiveActiveIndex]?.id;
+
+  // cmdk reports arrow-key highlight moves via the root's onValueChange (values are item ids —
+  // see PaletteItem). Mirror into local state and out to the store owner. cmdk normalizes value
+  // casing internally, so match ids case-insensitively.
+  const handleCmdkValueChange = useCallback(
+    (value: string) => {
+      const index = filteredItems.findIndex(
+        (item) => item.id.toLowerCase() === value.toLowerCase(),
+      );
+      if (index < 0 || index === activeSelectedIndex) return;
+      setActiveSelectedIndex(index);
+      onSelectedIndexChange?.(index);
+    },
+    [filteredItems, activeSelectedIndex, onSelectedIndexChange],
+  );
 
   // Stable DOM ids for passive options so the listbox's aria-activedescendant can reference the
   // highlighted item (focus never enters the palette, so this is the accessible-selection signal).
@@ -357,13 +411,13 @@ export function OverlayCommandPalettePresentational({
         // -44 input reservation applies only to the active branch below).
         style={{ maxHeight }}
       >
-        {passiveFilteredItems.length === 0 ? (
+        {filteredItems.length === 0 ? (
           <div data-slot="command-empty" className="tw:py-6 tw:text-center tw:text-sm">
             {noResultsText}
           </div>
         ) : (
           <GroupedItems
-            items={passiveFilteredItems}
+            items={filteredItems}
             renderItem={(item) => (
               <PassivePaletteItem
                 key={item.id}
@@ -382,17 +436,23 @@ export function OverlayCommandPalettePresentational({
       data-overlay-command-palette
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
+      // Filtering happens OUTSIDE cmdk (filteredItems above) so display and host commit share one
+      // algorithm; cmdk only drives the highlight, two-way-synced with the store via the
+      // controlled value below.
+      shouldFilter={false}
+      value={activeHighlightedId ?? ''}
+      onValueChange={handleCmdkValueChange}
     >
       <CommandInput
         ref={inputRef}
         placeholder={placeholder}
         value={inputValue}
-        onValueChange={setInputValue}
+        onValueChange={handleInputValueChange}
       />
       <CommandList style={{ maxHeight: maxHeight - 44 }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems
-          items={items}
+          items={filteredItems}
           renderItem={(item) => <PaletteItem key={item.id} item={item} onSelect={onSelect} />}
         />
       </CommandList>
@@ -579,6 +639,30 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
     resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
   }, [overlay]);
 
+  // Mirror the ACTIVE palette's local input/highlight into the overlay store, so a forwarded
+  // commitCommandPaletteSelection (which resolves from the STORE's filterText/selectedIndex)
+  // always picks exactly what the palette displays — the store is the single source of truth
+  // for selection, regardless of where the keystrokes landed.
+  const handleFilterTextChange = useCallback(
+    (filterText: string) => {
+      updateCommandPaletteState(overlay.id, {
+        filterText,
+        itemCount: filterPaletteItems(overlay.items, filterText).length,
+      });
+    },
+    [overlay.id, overlay.items],
+  );
+
+  const handleSelectedIndexChange = useCallback(
+    (selectedIndex: number) => {
+      updateCommandPaletteState(overlay.id, {
+        selectedIndex,
+        itemCount: filterPaletteItems(overlay.items, overlay.filterText).length,
+      });
+    },
+    [overlay.id, overlay.items, overlay.filterText],
+  );
+
   return (
     <OverlayCommandPalettePresentational
       items={localizedItems}
@@ -597,6 +681,8 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       selectedIndex={overlay.selectedIndex}
       onSelect={handleSelect}
       onDismiss={handleDismiss}
+      onFilterTextChange={handleFilterTextChange}
+      onSelectedIndexChange={handleSelectedIndexChange}
     />
   );
 }

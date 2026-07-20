@@ -274,6 +274,28 @@ describe('overlay-store', () => {
       expect(paletteOverlay.selectedIndex).toBe(0);
     });
 
+    it('should set an absolute selectedIndex and clamp to bounds', () => {
+      // The active palette mirrors cmdk's arrow-key highlight back to the store as an ABSOLUTE
+      // index (it knows the index, not a delta) so a forwarded commit picks what is displayed.
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        selectedIndex: 0,
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { selectedIndex: 2, itemCount: 3 });
+      let overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+
+      // Out-of-range absolute indexes clamp like deltas do
+      updateCommandPaletteState('palette-1', { selectedIndex: 99, itemCount: 3 });
+      overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+    });
+
     it('should move selectedIndex by selectedIndexDelta and clamp to bounds', () => {
       const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
         selectedIndex: 1,

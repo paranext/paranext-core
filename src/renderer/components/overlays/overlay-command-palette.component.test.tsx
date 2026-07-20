@@ -231,6 +231,87 @@ describe('OverlayCommandPalettePresentational', () => {
     });
   });
 
+  describe('active mode — store-driven selection and filter parity (single source of truth)', () => {
+    // The host's commitCommandPaletteSelection resolves filterPaletteItems(items, store.filterText)
+    // [store.selectedIndex]. These tests pin that the ACTIVE palette displays exactly that state:
+    // forwarded updates move the visible selection, local input mirrors back out via callbacks,
+    // and the visible list uses the same startsWith filter — so commit and display always agree.
+
+    it('highlights the item at selectedIndex (a forwarded moveSelection moves the visible selection)', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          selectedIndex={1}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // Enter with no local navigation must select the externally-highlighted item, not item 0.
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+
+      expect(onSelect).toHaveBeenCalledWith('save');
+    });
+
+    it('filters with the same startsWith-on-label algorithm the host commit uses (no fuzzy drift)', () => {
+      const items: CommandPaletteItem[] = [
+        { id: 'f', label: 'f' },
+        { id: 'xf', label: 'xf' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'f' } });
+
+      // startsWith keeps only 'f'; cmdk's fuzzy contains-match would also keep 'xf' — and then the
+      // display would disagree with what a forwarded commit picks from the store-filtered list.
+      expect(screen.getByText('f')).toBeInTheDocument();
+      expect(screen.queryByText('xf')).not.toBeInTheDocument();
+    });
+
+    it('reports typed filter text via onFilterTextChange so the store can mirror it', () => {
+      const onFilterTextChange = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onFilterTextChange={onFilterTextChange}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Sa' } });
+
+      expect(onFilterTextChange).toHaveBeenCalledWith('Sa');
+    });
+
+    it('reports arrow-key highlight moves via onSelectedIndexChange so the store can mirror them', () => {
+      const onSelectedIndexChange = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelectedIndexChange={onSelectedIndexChange}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+
+      expect(onSelectedIndexChange).toHaveBeenCalledWith(1);
+    });
+  });
+
   describe('grouped items', () => {
     it('should render group headings when items have group keys', () => {
       const groupedItems: CommandPaletteItem[] = [
