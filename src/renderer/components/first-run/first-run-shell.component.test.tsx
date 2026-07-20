@@ -7,6 +7,11 @@ import * as store from '@renderer/services/first-run-store';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.component';
 
+const STUB_STEPS = {
+  ...DEFAULT_STEP_COMPONENTS,
+  language: () => <p>language step</p>,
+};
+
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -40,18 +45,18 @@ beforeEach(() => {
 
 describe('FirstRunShell', () => {
   it('advances through steps with the shell Next button', async () => {
-    render(<FirstRunShell entryStep="language" />);
-    expect(screen.getByText(/language picker/i)).toBeInTheDocument();
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    expect(screen.getByText(/language step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText(/identify/i)).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(<FirstRunShell entryStep="language" />);
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
     expect(screen.getByText(/identify/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.getByText(/language picker/i)).toBeInTheDocument();
+    expect(screen.getByText(/language step/i)).toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
@@ -111,7 +116,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: BlockingStep }}
+        stepComponents={{ ...STUB_STEPS, identify: BlockingStep }}
       />,
     );
     // Start on language (Next should be enabled)
