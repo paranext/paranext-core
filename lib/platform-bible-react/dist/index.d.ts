@@ -2028,6 +2028,36 @@ export type UiLanguageSelectorProps = {
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
+ * feed the result to the `localizedStrings` prop.
+ */
+export declare const INTERFACE_LANGUAGE_PICKER_STRING_KEYS: readonly [
+	"%firstRun_language_search_placeholder%",
+	"%firstRun_language_noResults%",
+	"%firstRun_language_selected%"
+];
+export type InterfaceLanguagePickerLocalizedStrings = {
+	[K in (typeof INTERFACE_LANGUAGE_PICKER_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type InterfaceLanguagePickerProps = {
+	/** Languages to offer, keyed by BCP-47 tag. Displayed by autonym (native script). */
+	languages: Record<string, LanguageInfo>;
+	/** Currently selected BCP-47 tag. */
+	value: string;
+	/** Called with the chosen BCP-47 tag. */
+	onChange: (tag: string) => void;
+	/** Localized strings (search placeholder, no-results, selected label). */
+	localizedStrings: InterfaceLanguagePickerLocalizedStrings;
+	className?: string;
+	id?: string;
+};
+/**
+ * Searchable, scrollable list for choosing the interface language. Each option is shown by its
+ * autonym (native script); search matches the autonym, names in other UI languages, and other known
+ * names (the latter for matching only — never displayed). Scales to hundreds of languages.
+ */
+export declare function InterfaceLanguagePicker({ languages, value, onChange, localizedStrings, className, id, }: InterfaceLanguagePickerProps): import("react/jsx-runtime").JSX.Element;
+/**
  * @deprecated 2026-06-08 Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the
  *   existing export for backward compatibility and will be removed in a future release.
  */
