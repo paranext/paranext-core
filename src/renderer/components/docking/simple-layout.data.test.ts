@@ -91,11 +91,15 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('legacyCommentManager.commentListPanel');
     });
 
-    it('each column has a minWidth of 300 so it cannot be resized to nothing', () => {
+    it('each column panel has panelLock.minWidth of 300 so it cannot be resized to nothing', () => {
       columns.forEach((col) => {
-        // Narrowing BoxData|PanelData to BoxData to read its minWidth.
+        // Narrowing column to BoxData and its first child to PanelData to read panelLock.
+        // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
+        // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
+        // This test verifies the constraint is set on panelLock, the field that survives fixup.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        expect((col as BoxData).minWidth).toBe(300);
+        const panel = (col as BoxData).children[0] as PanelData;
+        expect(panel.panelLock?.minWidth).toBe(300);
       });
     });
   });

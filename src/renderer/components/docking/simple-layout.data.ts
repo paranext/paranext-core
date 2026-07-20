@@ -13,10 +13,10 @@ export const simpleLayout: LayoutBase = {
         // Column 1: Model Text
         mode: 'vertical',
         size: 1,
-        minWidth: 300,
         children: [
           {
             group: HEADLESS_GROUP,
+            panelLock: { minWidth: 300 },
             tabs: [
               {
                 id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
@@ -36,10 +36,10 @@ export const simpleLayout: LayoutBase = {
         // Column 2: Scripture Editor
         mode: 'vertical',
         size: 2,
-        minWidth: 300,
         children: [
           {
             group: HEADLESS_GROUP,
+            panelLock: { minWidth: 300 },
             tabs: [
               {
                 id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
@@ -59,10 +59,10 @@ export const simpleLayout: LayoutBase = {
         // Column 3: Resources & Tools
         mode: 'vertical',
         size: 1,
-        minWidth: 300,
         children: [
           {
             group: TAB_GROUP_RESOURCES,
+            panelLock: { minWidth: 300 },
             tabs: [
               {
                 id: '27616073-bf60-4f2b-9518-922d1a7d3601',
