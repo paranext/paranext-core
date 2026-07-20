@@ -90,5 +90,13 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScriptureEditor.commentaries');
       expect(allWebViewTypes).toContain('legacyCommentManager.commentListPanel');
     });
+
+    it('each column has a minWidth of 300 so it cannot be resized to nothing', () => {
+      columns.forEach((col) => {
+        // Narrowing BoxData|PanelData to BoxData to read its minWidth.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        expect((col as BoxData).minWidth).toBe(300);
+      });
+    });
   });
 });

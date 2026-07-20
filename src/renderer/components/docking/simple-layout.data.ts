@@ -13,6 +13,7 @@ export const simpleLayout: LayoutBase = {
         // Column 1: Model Text
         mode: 'vertical',
         size: 1,
+        minWidth: 300,
         children: [
           {
             group: HEADLESS_GROUP,
@@ -35,6 +36,7 @@ export const simpleLayout: LayoutBase = {
         // Column 2: Scripture Editor
         mode: 'vertical',
         size: 2,
+        minWidth: 300,
         children: [
           {
             group: HEADLESS_GROUP,
@@ -57,6 +59,7 @@ export const simpleLayout: LayoutBase = {
         // Column 3: Resources & Tools
         mode: 'vertical',
         size: 1,
+        minWidth: 300,
         children: [
           {
             group: TAB_GROUP_RESOURCES,
