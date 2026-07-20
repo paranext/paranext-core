@@ -1,4 +1,9 @@
-import type { DblResourceReference, ProjectReference } from 'platform-scripture';
+import type {
+  DblResourceReference,
+  ProjectReference,
+  EffectiveResourceReference,
+} from 'platform-scripture';
+import type { DblResourceData } from 'platform-bible-utils';
 
 /**
  * Checks if a {@link ResourceReference} is a {@link DblResourceReference}.
@@ -32,4 +37,24 @@ export function isProjectReference(item: unknown): item is ProjectReference {
     'id' in item &&
     'name' in item
   );
+}
+
+/**
+ * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
+ * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
+ * Returns `ref.name` for project references.
+ */
+export function getRefLabel(
+  ref: EffectiveResourceReference,
+  dblResourcesList: DblResourceData[],
+): string {
+  if (isDblResourceReference(ref)) {
+    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
+    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
+    return ref.name;
+  }
+  if (isProjectReference(ref)) {
+    return ref.name;
+  }
+  return '';
 }

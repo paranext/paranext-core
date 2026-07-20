@@ -39,7 +39,11 @@ import type {
 } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import {
+  isDblResourceReference,
+  isProjectReference,
+  getRefLabel,
+} from './resource-reference.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -64,23 +68,6 @@ function getRefId(ref: EffectiveResourceReference): string | undefined {
     return ref.id;
   }
   return undefined;
-}
-
-/**
- * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
- * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
- * Returns `ref.name` for project references.
- */
-function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResourceData[]): string {
-  if (isDblResourceReference(ref)) {
-    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
-    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
-    return ref.name;
-  }
-  if (isProjectReference(ref)) {
-    return ref.name;
-  }
-  return '';
 }
 
 type ResourceSelectorDropdownProps = {
