@@ -144,7 +144,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// presenting the resources and their installation status on the front-end
     /// </returns>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private List<DblResourceData> GetDblResources(JsonElement _ignore)
+    private async Task<List<DblResourceData>> GetDblResources(JsonElement _ignore)
     {
         // The text of this exception message is searched for by our Node.js services, so if you
         // change it, you may need to change the TypeScript code as well.
@@ -154,34 +154,44 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
-        Trace.Listeners.Add(traceListener);
-        try
+        // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
+        // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the full
+        // catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers inline on
+        // its message-reading loop, so doing this work synchronously stalls every other request in
+        // this process until it finishes — provider-existence checks fail ("No data provider found"),
+        // getCachedResources times out, and the fetch never appears to settle. Awaiting Task.Run
+        // yields the reading loop back immediately so the process stays responsive. See PT-4222.
+        return await Task.Run(() =>
         {
-            FetchAvailableDBLResources();
-        }
-        finally
-        {
-            Trace.Listeners.Remove(traceListener);
-        }
-        if (traceListener.FoundText)
-            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+            TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+            Trace.Listeners.Add(traceListener);
+            try
+            {
+                FetchAvailableDBLResources();
+            }
+            finally
+            {
+                Trace.Listeners.Remove(traceListener);
+            }
+            if (traceListener.FoundText)
+                throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-        return _resources
-            .Select(resource => new DblResourceData(
-                resource.DBLEntryUid.Id,
-                resource.DisplayName,
-                resource.FullName,
-                resource.BestLanguageName,
-                resource.Type,
-                resource.Size,
-                resource.Installed,
-                resource.IsNewerThanCurrentlyInstalled(),
-                resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
-                    ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
-                    ?? ""
-            ))
-            .ToList();
+            return _resources
+                .Select(resource => new DblResourceData(
+                    resource.DBLEntryUid.Id,
+                    resource.DisplayName,
+                    resource.FullName,
+                    resource.BestLanguageName,
+                    resource.Type,
+                    resource.Size,
+                    resource.Installed,
+                    resource.IsNewerThanCurrentlyInstalled(),
+                    resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
+                        ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
+                        ?? ""
+                ))
+                .ToList();
+        });
     }
 
     private void FindResource(
