@@ -123,5 +123,22 @@
   "%Book.3MQ%": "3 Meqabyan",
   "%Book.REP%": "Reproches (Proverbes 25-31)",
   "%Book.4BA%": "4 Baruch (reste de Baruch)",
-  "%Book.LAO%": "Laodicéens"
+  "%Book.LAO%": "Laodicéens",
+  "%firstRun_button_back%": "Retour",
+  "%firstRun_button_finish%": "Terminer",
+  "%firstRun_button_next%": "Suivant",
+  "%firstRun_button_retry%": "Réessayer",
+  "%firstRun_button_skip%": "Ignorer la configuration",
+  "%firstRun_description%": "Terminez la configuration initiale pour commencer à utiliser Platform.Bible.",
+  "%firstRun_error_body%": "Nous n'avons pas pu joindre le service d'enregistrement. Vérifiez votre connexion et réessayez.",
+  "%firstRun_error_title%": "Impossible de vérifier votre enregistrement",
+  "%firstRun_language_instruction%": "Ceci définit la langue de la configuration et de l'application. Vous pourrez la modifier plus tard.",
+  "%firstRun_language_noResults%": "Aucune langue correspondante",
+  "%firstRun_language_search_placeholder%": "Rechercher des langues…",
+  "%firstRun_language_selected%": "Sélectionné",
+  "%firstRun_language_title%": "Choisissez votre langue",
+  "%firstRun_loading%": "Démarrage de la configuration…",
+  "%firstRun_loading_detail%": "Vérification de vos informations d'enregistrement. Cela peut prendre un moment.",
+  "%firstRun_stepIndicator%": "Étape {stepNumber} sur {stepCount}",
+  "%firstRun_title%": "Configurer Platform.Bible"
 }

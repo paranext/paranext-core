@@ -121,5 +121,22 @@
   "%Book.3MQ%": "馬加比三書（埃塞俄比亞）",
   "%Book.REP%": "Reproof（箴言 25-31）",
   "%Book.4BA%": "巴錄四書（巴錄書其餘的部分）",
-  "%Book.LAO%": "老底嘉書"
+  "%Book.LAO%": "老底嘉書",
+  "%firstRun_button_back%": "返回",
+  "%firstRun_button_finish%": "完成",
+  "%firstRun_button_next%": "下一步",
+  "%firstRun_button_retry%": "重試",
+  "%firstRun_button_skip%": "略過設定",
+  "%firstRun_description%": "完成初始設定以開始使用 Platform.Bible。",
+  "%firstRun_error_body%": "無法連線到註冊服務。請檢查您的網路連線並重試。",
+  "%firstRun_error_title%": "無法驗證您的註冊資訊",
+  "%firstRun_language_instruction%": "這將設定安裝精靈與應用程式的語言。您稍後可以變更。",
+  "%firstRun_language_noResults%": "沒有符合的語言",
+  "%firstRun_language_search_placeholder%": "搜尋語言…",
+  "%firstRun_language_selected%": "已選擇",
+  "%firstRun_language_title%": "選擇您的語言",
+  "%firstRun_loading%": "正在啟動設定…",
+  "%firstRun_loading_detail%": "正在檢查您的註冊資訊。這可能需要一點時間。",
+  "%firstRun_stepIndicator%": "第 {stepNumber} 步，共 {stepCount} 步",
+  "%firstRun_title%": "設定 Platform.Bible"
 }
