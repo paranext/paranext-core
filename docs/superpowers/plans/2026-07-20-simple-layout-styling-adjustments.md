@@ -14,6 +14,7 @@
 - Power mode must render pixel-identically to its current behavior after every other task. There is no automated visual-regression suite for this layout — verify manually (Task 10).
 - Do not run `npm run typecheck` as a completion gate for this plan — lint and the relevant test suites are sufficient (established project convention for this kind of work).
 - Follow existing code conventions exactly: this repo has zero `!important` usage in `dock-layout-wrapper.component.scss` today except where a rule must win a same-element specificity tie against a Tailwind utility class already applied via `className` — that single justified case is called out explicitly in Task 8.
+- **Amendment found during Task 7's review:** use the bare attribute selector `[data-interface-mode='simple']` (no `body` type qualifier) in every Simple-mode SCSS rule, not `body[data-interface-mode='simple']`. The qualified form trips stylelint's `selector-no-qualifying-type` rule, and since `document.body` is the only element that ever receives this attribute, the qualifier is redundant — dropping it is functionally identical and avoids needing any suppression. Also watch for CSS specificity ties against pre-existing rules in this file when adding a new Simple-mode override on a generic rc-dock class (`.dock-panel`, `.dock-tabpane`, etc.) — Task 7 hit one against `.dock-panel.dock-style-platform-bible` (3 classes) and had to match or exceed that specificity rather than relying on source order.
 
 ---
 
@@ -954,7 +955,7 @@ Append a new region to `src/renderer/components/docking/dock-layout-wrapper.comp
 // 36px. `!important` is required here (the only justified use in this file): this overrides a
 // Tailwind utility class (`tw:h-14`) applied directly via `className` on the same element, and a
 // plain same-specificity class selector cannot be relied on to win that tie by cascade order alone.
-body[data-interface-mode='simple'] .scripture-editor-tab-nav {
+[data-interface-mode='simple'] .scripture-editor-tab-nav {
   height: 36px !important;
 }
 // #endregion SIMPLE-MODE HEIGHT ALIGNMENT ////////////////////////////
@@ -995,7 +996,7 @@ Append a new region to `src/renderer/components/docking/dock-layout-wrapper.comp
 // Clicking inside a WebView's content triggers the browser's default focus outline on the iframe.
 // Reset it in Simple mode, matching the outline-reset pattern already used elsewhere in this file
 // (e.g. the .dock-tab-btn:focus-visible reset in the TAB HEADER region above).
-body[data-interface-mode='simple'] .web-view:focus {
+[data-interface-mode='simple'] .web-view:focus {
   outline: none;
 }
 // #endregion SIMPLE-MODE FOCUS RING ///////////////////////////////////
