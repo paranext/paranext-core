@@ -661,31 +661,13 @@ $tab-bottom-rounding: vars.$space--sm;
   // the specificity of the existing rule at line 176-180, which uses
   // .dock-layout .dock-panel.dock-style-platform-bible (specificity 0,3,0).
   // Our rule .dock-panel.dock-style-platform-bible has (0,3,0), so source order wins.
+  //
+  // Deliberately NOT comprehensive: only the outer column/panel/tabpane/web-view containers are
+  // squared off. Tab headers (.dock-tab, .dock-tab-btn) and their fillets keep their native rounded
+  // corners — reverted per author feedback after seeing the fully-flattened look in the running app
+  // (square tab headers read as visually wrong; square outer columns/panes read as intended).
   .dock-panel.dock-style-platform-bible {
     border-radius: 0;
-  }
-
-  // Border radius removal is comprehensive: also flatten the tab-header fillets (the decorative
-  // curved corners connecting an active tab to its content pane, in the FILLETS region above) and
-  // the active-tab's own corner rounding — not just the outer containers.
-  .dock-tab,
-  .dock-tab.dock-tab-active {
-    border-radius: 0;
-  }
-
-  // .dock-tab-btn (the clickable icon/title inside each tab) must also have border-radius removed.
-  // The competing rule is .dock-layout .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn (0,5,0).
-  // Our rule drops .dock-layout (redundant; .dock-panel is always inside it):
-  // [data-interface-mode='simple'] .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn (0,5,0).
-  // This ties the competing rule; source order (new rule comes after) wins.
-  .dock-panel.dock-style-platform-bible .dock-tab .dock-tab-btn {
-    border-radius: 0;
-  }
-
-  .dock-tab::before,
-  .dock-tab::after {
-    width: 0;
-    height: 0;
   }
 }
 // #endregion SIMPLE-MODE CHROME //////////////////////////////////////
