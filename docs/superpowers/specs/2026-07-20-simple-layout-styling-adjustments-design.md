@@ -155,10 +155,19 @@ override cannot live in the renderer at all. Instead: the extension already comp
 `isPowerMode` (`platform-scripture-editor.web-view.tsx`, via `useSetting('platform.interfaceMode',
 ...)`); use it to conditionally append a `scripture-editor-tab-nav-simple` class to the `className`
 already passed to `TabToolbar` (`platform-scripture-editor.web-view.tsx:1859`) only when not in
-power mode, and add the matching `height: 36px !important` rule to the extension's own stylesheet
-(`platform-scripture-editor.web-view.scss`), which IS loaded inside that iframe. Give the new Model
-Text header (Section 5) the same fixed height (it needs no such indirection, since it's a
-Simple-mode-only component with no iframe boundary to cross).
+power mode, and add the matching height rule to the extension's own stylesheet
+(`platform-scripture-editor.web-view.scss`), which IS loaded inside that iframe.
+
+**Shape correction (found during visual verification against author feedback):** matching own
+height alone (36px) was not enough — Column 3's dock tab-bar is a **42px**-tall `.dock-bar` with a
+6px empty gap above the 36px active tab (`--tab-header-to-content-gap`), so the tab's BOTTOM edge,
+not its own 36px height, is what visually lines up across columns. The toolbar and the Model Text
+header (Section 5) both need the same shape — 42px total, with a 6px empty gap on top before 36px
+of content — so all three rows' bottom edges land at the same Y (verified via CDP against the
+running app). The toolbar's rule became `height: 42px !important; padding-block: 6px 0 !important;`
+(plus zeroing `TabToolbarContainer`'s own `tw:py-2` this way, since its buttons are `tw:h-8`/32px
+and would otherwise get clipped by `tw:overflow-clip`); the Model Text header became
+`tw:h-[42px] ... tw:pt-1.5` (6px) in place of the original `tw:h-9` (36px, no gap).
 
 ---
 
