@@ -28,7 +28,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useSetting: vi.fn(() => [hookState.interfaceLanguage, mockSetInterfaceLanguage, vi.fn()]),
   useData: vi.fn(() => ({
-    SetupDialogLanguages: () => [hookState.setupLanguages, undefined, hookState.isLoading],
+    SetupDialogLanguages: () => [hookState.setupLanguages, () => {}, hookState.isLoading],
   })),
 }));
 vi.mock('@shared/services/localization.service', () => ({
@@ -99,7 +99,6 @@ describe('LanguageStep', () => {
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     // km falls back to its raw tag as autonym and is still present + selected
     expect(screen.getByRole('option', { name: /km/ })).toHaveAttribute('aria-current', 'true');
-    hookState.interfaceLanguage = ['en']; // reset for other tests
   });
 
   test('gates Next off while languages are loading', () => {
