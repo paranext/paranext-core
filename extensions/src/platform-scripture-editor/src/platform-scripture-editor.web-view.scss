@@ -50,19 +50,19 @@ mark {
 // the same element, where plain specificity cannot reliably win the tie.
 //
 // The target is 42px, not 36px: Column 3's tab bar (`dock-layout-wrapper.component.scss`) is a
-// 42px-tall `.dock-bar` with a 6px empty gap above the 36px-tall active tab (`--tab-header-to-
-// content-gap`), so the tab's BOTTOM edge — not its own 36px height — is what visually aligns
-// across columns. Mirror that shape here (6px empty gap on top, 36px of content below) so this
-// toolbar's bottom edge lands at the same Y as Column 3's tab bottom, instead of 6px higher (found
-// via visual verification after the first pass matched the wrong dimension). The 6px is hardcoded,
-// not `var(--tab-header-to-content-gap)`, because this stylesheet compiles into the web view's own
-// iframe document, which never sees the renderer's CSS custom properties — keep it in sync with
-// that variable's value (defined in `dock-layout-wrapper.component.scss`) if it ever changes.
+// 42px-tall `.dock-bar` — the visible 36px active tab plus a 6px `--tab-header-to-content-gap`
+// above it — so matching the OUTER row height (42px), not just the tab's own 36px, is what makes
+// both rows' bottom edges land at the same Y (found via visual verification: matching only 36px
+// left this toolbar's bottom edge 6px higher than Column 3's). Padding stays uniform/zero here —
+// TabToolbarContainer's own `tw:items-center` (already correct per Task 6) centers the buttons
+// symmetrically within the full 42px box; an earlier attempt at asymmetric top-only padding, to
+// mirror Column 3's own 6-gap-then-36-content internal shape, made the icons look off-center
+// within their own row for no alignment benefit — only the row's total height needs to match.
 //
 // padding-block also needed shrinking from TabToolbarContainer's own tw:py-2 (16px total): with
 // tw:box-border and tw:overflow-clip, the original 36px-height attempt left only 20px of content
 // area, and every toolbar button here is tw:h-8 (32px) — so it was clipping the buttons entirely.
 .scripture-editor-tab-nav-simple {
   height: 42px !important;
-  padding-block: 6px 0 !important;
+  padding-block: 0 !important;
 }
