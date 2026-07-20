@@ -604,3 +604,55 @@ $tab-bottom-rounding: vars.$space--sm;
   visibility: visible;
 }
 // #endregion CONTROLS ///////////////////////////////////////////////
+
+// #region SIMPLE-MODE CHROME (padding/gap/radius/divider) ///////////////
+// Ports the Storybook prototype's NO_PADDING_STYLE (src/stories/platform/ten-layout-shared.tsx)
+// into production. Scoped to body[data-interface-mode="simple"] (set by app.component.tsx's Main)
+// so Power mode keeps its existing padded, rounded, gapped chrome untouched.
+/* stylelint-disable selector-no-qualifying-type */
+body[data-interface-mode='simple'] {
+  .dock-layout {
+    gap: 0;
+  }
+
+  // Collapse the divider to a near-invisible 1px, but keep a wide, easy-to-grab resize hit area via
+  // rc-dock's own transform-based hit-area expansion (matches the prototype's approach).
+  .dock-divider {
+    flex: 0 0 1px;
+    background: transparent;
+  }
+
+  .dock-hbox > .dock-divider {
+    transform: scaleX(8);
+    cursor: ew-resize;
+  }
+
+  .dock-vbox > .dock-divider {
+    transform: scaleY(8);
+    cursor: ns-resize;
+  }
+
+  .dock-panel,
+  .dock-tabpane,
+  .platform-panel,
+  .web-view {
+    padding: 0;
+    border-radius: 0;
+  }
+
+  // Border radius removal is comprehensive: also flatten the tab-header fillets (the decorative
+  // curved corners connecting an active tab to its content pane, in the FILLETS region above) and
+  // the active-tab's own corner rounding — not just the outer containers.
+  .dock-tab,
+  .dock-tab.dock-tab-active {
+    border-radius: 0;
+  }
+
+  .dock-tab::before,
+  .dock-tab::after {
+    width: 0;
+    height: 0;
+  }
+}
+/* stylelint-enable selector-no-qualifying-type */
+// #endregion SIMPLE-MODE CHROME //////////////////////////////////////
