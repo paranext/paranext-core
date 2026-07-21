@@ -3,6 +3,7 @@
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import { ModelTextPanel, type ModelTextPanelProps } from './model-text-panel.component';
@@ -38,6 +39,8 @@ const INSTALLED_RESOURCE: DblResourceData = {
 
 const UNINSTALLED_RESOURCE: DblResourceData = { ...INSTALLED_RESOURCE, installed: false };
 
+const SAMPLE_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
+
 /** An effective list with a single configured dblResource model text pointing at `dblEntryUid`. */
 function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceList {
   return {
@@ -46,8 +49,8 @@ function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceLis
   };
 }
 
-function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
-  const props: ModelTextPanelProps = {
+function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanelProps {
+  return {
     localizedStrings: STRINGS,
     hasProject: true,
     effectiveModelTexts: { dataVersion: '1.0.0', items: [] },
@@ -61,6 +64,10 @@ function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
     getResourceChapter: vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' })),
     ...overrides,
   };
+}
+
+function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
+  const props = makeProps(overrides);
   return { props, ...render(<ModelTextPanel {...props} />) };
 }
 
@@ -85,6 +92,85 @@ describe('ModelTextPanel', () => {
     // The regression (PT-4221): a configured-but-uninstalled model text is never installed and the
     // panel sits on an infinite spinner. It must instead kick off the install so it can resolve.
     await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-web'));
+  });
+
+  it('renders the editor once the configured resource finishes installing', async () => {
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    const { rerender } = renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [UNINSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+    expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+
+    // Simulate the webview re-resolving the catalog after install: the resource is now installed.
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [INSTALLED_RESOURCE],
+          getResourceChapter,
+        })}
+      />,
+    );
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+  });
+
+  it('does not re-attempt a failed install across re-renders (no retry storm)', async () => {
+    const installResource = vi.fn(async () => {
+      throw new Error('install failed');
+    });
+    const { rerender } = renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+    });
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(installResource).toHaveBeenCalledTimes(1);
+
+    // The webview re-resolves the list (new array identity) with the same still-uninstalled
+    // resource; the failed-uid guard must suppress a fresh install attempt.
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [{ ...UNINSTALLED_RESOURCE }],
+          installResource,
+        })}
+      />,
+    );
+    await screen.findByRole('button', { name: 'Retry' });
+    expect(installResource).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers to the editor when a retried install succeeds', async () => {
+    // Default impl resolves; only the first attempt rejects — so the retried install succeeds.
+    const installResource = vi.fn(async () => {});
+    installResource.mockRejectedValueOnce(new Error('install failed'));
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    const { rerender } = renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+      getResourceChapter,
+    });
+
+    // First attempt fails → recovery state.
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
+
+    // The retry's install succeeds; the webview re-resolves with the resource installed.
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [INSTALLED_RESOURCE],
+          installResource,
+          getResourceChapter,
+        })}
+      />,
+    );
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
   });
 
   it('shows the installing state while auto-install is in flight', async () => {
@@ -139,5 +225,18 @@ describe('ModelTextPanel', () => {
     // that read also lets the panel's async state updates settle inside `act`.
     await waitFor(() => expect(getResourceChapter).toHaveBeenCalled());
     expect(installResource).not.toHaveBeenCalled();
+  });
+
+  it('shows the not-found message for a configured reference that cannot be resolved', () => {
+    // A configured model text that is not a resolvable DBL resource (here a project reference)
+    // must not spin forever — it reaches a terminal not-found state (PT-4221).
+    renderPanel({
+      effectiveModelTexts: {
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'p1', name: 'Some Project', source: 'admin' }],
+      },
+      dblResources: [],
+    });
+    expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();
   });
 });

@@ -17,6 +17,7 @@ import type {
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import { isDblResourceReference } from './resource-reference.utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -129,7 +130,7 @@ export function ModelTextPanel({
   const effectiveModelText = effectiveModelTexts?.items[0];
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
-  const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
+  const match = dblRef ? findCachedDblResource(dblRef, dblResources) : undefined;
   const resourceProjectId = match?.installed ? match.projectId : undefined;
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -138,16 +139,19 @@ export function ModelTextPanel({
   const [failedInstallUid, setFailedInstallUid] = useState<string | undefined>(undefined);
 
   // Auto-install a configured model text that matches a catalog resource not installed locally yet
-  // (e.g. an admin choice synced from another machine). Without this the panel spins forever on a
-  // matched-but-uninstalled resource with the picker unreachable (PT-4221). Fire-and-forget: the
+  // (e.g. an admin choice synced from another machine — the setting syncs, the resource file does
+  // not, so install can only happen here at display time). Without this the panel spins forever on
+  // a matched-but-uninstalled resource with the picker unreachable (PT-4221). Fire-and-forget: the
   // webview re-resolves the list once installed, `match.installed` flips true, and it renders.
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
   useEffect(() => {
     if (dblEntryUidToInstall === undefined) return;
+    // A manual pick already installs via `handleResourceSelect`; don't fire a duplicate install.
+    if (isSelecting) return;
     // Skip a uid we already saw fail (prevents a retry loop); a re-pick clears failedInstallUid.
     if (dblEntryUidToInstall === failedInstallUid) return;
     installResource(dblEntryUidToInstall).catch(() => setFailedInstallUid(dblEntryUidToInstall));
-  }, [dblEntryUidToInstall, installResource, failedInstallUid]);
+  }, [dblEntryUidToInstall, installResource, failedInstallUid, isSelecting]);
 
   // Tracks the latest scrRef this panel's editor just published so we can suppress the echo that
   // comes back through scroll group 0 (forced in simple mode) and avoid scroll-jumping the user's
@@ -381,8 +385,20 @@ export function ModelTextPanel({
     );
   }
 
+  // Unresolvable: a model text is configured but doesn't resolve to a displayable installed
+  // resource (e.g. a non-DBL reference, or a DBL entry missing its id). Show the not-found message
+  // rather than an endless spinner (PT-4221). By here resources have loaded and any
+  // matched-but-uninstalled resource was handled above, so this is a terminal state.
+  if (!resourceProjectId) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+        <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
+      </div>
+    );
+  }
+
   // Loading: USJ not yet fetched for the resolved resource.
-  if (!resourceProjectId || (usj === undefined && isUsjLoading)) {
+  if (usj === undefined && isUsjLoading) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
