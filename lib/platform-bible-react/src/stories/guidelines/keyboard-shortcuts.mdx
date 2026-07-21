@@ -1,4 +1,6 @@
 import { Meta } from '@storybook/addon-docs/blocks';
+import { Kbd, KbdGroup } from '@/components/shadcn-ui/kbd';
+import { ExampleBlock, ExampleBlockGroup } from '@/storybook/example-block.component';
 
 <Meta title="Guidelines/Keyboard shortcuts" />
 
@@ -8,37 +10,43 @@ When displaying a keyboard shortcut in the UI, write it the way the user's opera
 
 For the catalog of which shortcuts the application actually uses (and where in code), see **Reference → Keyboard shortcuts** in the main Platform.Bible Storybook.
 
+For background on keyboard shortcuts as *accelerators* — what they are for, when they help, and the vocabulary around them — see [Nielsen Norman Group: UI Accelerators](https://www.nngroup.com/articles/ui-accelerators/).
+
 The conventions to know:
 
 - **macOS** uses **symbols** for modifier and special keys, written together with no separator (e.g. `⇧⌘Z`). Modifier order is Control, Option, Shift, Command ([Apple HIG](https://developer.apple.com/design/human-interface-guidelines/keyboards)).
 - **Windows** uses **words** joined with `+` (e.g. `Ctrl+Shift+Z`). Modifier order is Ctrl, Shift, Alt ([Microsoft](https://support.microsoft.com/en-us/windows/keyboard-shortcuts-in-windows-dcc61a57-8ff0-cffe-9796-cb9706c75eec)).
 - **Linux** uses **words** joined with `+`. Modifier order varies by desktop environment; on GNOME and Ubuntu, the typical order is Ctrl, Alt, Shift ([Ubuntu](https://help.ubuntu.com/stable/ubuntu-help/shell-keyboard-shortcuts.html.en) / [GNOME HIG](https://developer.gnome.org/hig/guidelines/keyboard.html)).
 
-For rendering shortcuts in the UI (the `<kbd>` element, the `Kbd` component, parentheses vs. no parentheses), see [Design Principles → Keyboard shortcuts in tooltips](./design-principles.mdx).
+For rendering shortcuts in the UI (the `Kbd` component, parentheses vs. no parentheses), see [Tooltips → Keyboard shortcuts in tooltips](./tooltips.mdx).
+
+> **Heads up:** Throughout this codebase and its docs, a lowercase `<kbd>` written in prose or pseudocode is often just shorthand for the `Kbd` React component, not the raw HTML `<kbd>` element. `Kbd` renders an HTML `<kbd>` under the hood, so the two are easy to conflate — unless the context is specifically about raw HTML, read `<kbd>` as the `Kbd` component.
 
 ---
 
 ## Preferred representations by OS
 
-| Key             | macOS              | Windows           | Linux             |
-| --------------- | ------------------ | ----------------- | ----------------- |
-| Command         | `⌘`                | — (no equivalent) | — (no equivalent) |
-| Windows / Super | — (no equivalent)  | `Win` or `⊞`      | `Super`           |
-| Option / Alt    | `⌥`                | `Alt`             | `Alt`             |
-| Control         | `⌃`                | `Ctrl`            | `Ctrl`            |
-| Shift           | `⇧`                | `Shift`           | `Shift`           |
-| Caps Lock       | `⇪`                | `Caps Lock`       | `Caps Lock`       |
-| Tab             | `⇥`                | `Tab`             | `Tab`             |
-| Return / Enter  | `⏎` (or `Return`)  | `Enter`           | `Enter`           |
-| Backspace       | `⌫` (or `Delete`)  | `Backspace`       | `Backspace`       |
-| Forward Delete  | `⌦`                | `Delete`          | `Delete`          |
-| Escape          | `⎋` (or `Esc`)     | `Esc`             | `Esc`             |
-| Space           | `Space` (or `␣`)   | `Space`           | `Space`           |
-| Arrow keys      | `↑` `↓` `←` `→`    | `↑` `↓` `←` `→`   | `↑` `↓` `←` `→`   |
-| Page Up / Down  | `⇞` / `⇟`          | `Page Up` / `Page Down` | `Page Up` / `Page Down` |
-| Home / End      | `↖` / `↘`          | `Home` / `End`    | `Home` / `End`    |
+| Key             | macOS             | Windows                 | Linux                   |
+| --------------- | ----------------- | ----------------------- | ----------------------- |
+| Command         | `⌘`               | — (no equivalent)       | — (no equivalent)       |
+| Windows / Super | — (no equivalent) | `Win` or `⊞`            | `Super`                 |
+| Option / Alt    | `⌥`               | `Alt`                   | `Alt`                   |
+| Control         | `⌃`               | `Ctrl`                  | `Ctrl`                  |
+| Shift           | `⇧`               | `Shift`                 | `Shift`                 |
+| Caps Lock       | `⇪`               | `Caps Lock`             | `Caps Lock`             |
+| Tab             | `⇥`               | `Tab`                   | `Tab`                   |
+| Return / Enter  | `⏎` (or `Return`) | `Enter`                 | `Enter`                 |
+| Backspace       | `⌫` (or `Delete`) | `Backspace`             | `Backspace`             |
+| Forward Delete  | `⌦`               | `Delete`                | `Delete`                |
+| Escape          | `⎋` (or `Esc`)    | `Esc`                   | `Esc`                   |
+| Space           | `Space` (or `␣`)  | `Space`                 | `Space`                 |
+| Arrow keys      | `↑` `↓` `←` `→`   | `↑` `↓` `←` `→`         | `↑` `↓` `←` `→`         |
+| Page Up / Down  | `⇞` / `⇟`         | `Page Up` / `Page Down` | `Page Up` / `Page Down` |
+| Home / End      | `↖` / `↘`         | `Home` / `End`          | `Home` / `End`          |
 
 ## Combining keys
+
+These rules describe the **plain-text string** form of a combination — what you write in a menu accelerator, a plain-text hint, or the `src/stories/keyboard-shortcuts.data.ts` catalog. When you render a shortcut in React UI, do **not** emit this joined string into a single `Kbd`; put each key in its own `Kbd` inside a `KbdGroup` (see [Detecting the platform](#detecting-the-platform) below). The per-OS symbol/word choice and modifier order still apply to each key either way.
 
 - **macOS:** concatenate the symbols with no separator and no spaces. Order: Control, Option, Shift, Command, then the key. Example: `⌃⌥⇧⌘T`.
 - **Windows:** join with `+` and no spaces. Order: Ctrl, Shift, Alt, then the key. Example: `Ctrl+Shift+T`.
@@ -46,13 +54,46 @@ For rendering shortcuts in the UI (the `<kbd>` element, the `Kbd` component, par
 
 ## Detecting the platform
 
-For shortcuts rendered at runtime, branch on the user's OS rather than hardcoding one convention:
+For shortcuts rendered at runtime, branch on the user's OS rather than hardcoding one convention. Render **one `Kbd` per key inside a `KbdGroup`** — never a single `Kbd` wrapping the whole combination — matching [Keyboard shortcuts in tooltips](./tooltips.mdx).
 
-```tsx
-import { Kbd } from 'platform-bible-react';
+The `KbdGroup` is only needed when a shortcut combines **more than one key**. A single-key shortcut — for example, `\` to open the marker menu — is just a naked `Kbd` with no group.
 
-<Kbd>{isMac ? '⌘Z' : 'Ctrl+Z'}</Kbd>
-```
+The per-OS separator carries over from the string conventions above: **macOS** places its symbols adjacent with no separator, while **Windows** and **Linux** put a literal `+` between keys, rendered as a plain `<span>` between the `Kbd` boxes (per the [shadcn Kbd docs](https://ui.shadcn.com/docs/components/base/kbd)).
+
+<ExampleBlockGroup>
+  <ExampleBlock variant="avoid" preview={<Kbd>Ctrl+Z</Kbd>} code={`<Kbd>{isMac ? '⌘Z' : 'Ctrl+Z'}</Kbd>`}>
+    The whole combination is stuffed into one <code>Kbd</code>, so it renders as a single keycap
+    with the separator baked into text. Individual keys can't be spaced or styled as keycaps.
+  </ExampleBlock>
+
+  <ExampleBlock
+    variant="prefer"
+    preview={
+<KbdGroup>
+<Kbd>Ctrl</Kbd>
+<span>+</span>
+<Kbd>Z</Kbd>
+</KbdGroup>
+}
+    code={`<KbdGroup>
+{isMac ? (
+<>
+  <Kbd>⌘</Kbd>
+  <Kbd>Z</Kbd>
+</>
+) : (
+<>
+  <Kbd>Ctrl</Kbd>
+  <span>+</span>
+  <Kbd>Z</Kbd>
+</>
+)}
+</KbdGroup>`}
+  >
+    One <code>Kbd</code> per key inside a <code>KbdGroup</code>: macOS symbols sit adjacent,
+    Windows/Linux get a <code>+</code> separator as a plain <code>span</code>.
+  </ExampleBlock>
+</ExampleBlockGroup>
 
 ## Why this matters
 
