@@ -8597,6 +8597,14 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
+     * Get the interface languages that have setup-dialog localizations (used by the first-run
+     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+     * (`%firstRun_*%`) keys.
+     *
+     * @returns Qualifying user-interface languages, keyed by raw locale tag
+     */
+    getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
      * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
      * provide localized strings in contributions
      */
@@ -8614,16 +8622,8 @@ declare module 'shared/services/localization.service-model' {
       DataProviderUpdateInstructions<LocalizationDataDataTypes>
     >;
     /**
-     * Get the interface languages that have setup-dialog localizations (used by the first-run
-     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
-     * (`%firstRun_*%`) keys.
-     *
-     * @returns Qualifying user-interface languages, keyed by raw locale tag
-     */
-    getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
-    /**
-     * This data cannot be changed. Trying to use this setter will always throw. It is derived from the
-     * loaded localization data.
+     * This data cannot be changed. Trying to use this setter will always throw. It is derived from
+     * the loaded localization data.
      */
     setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
   } & OnDidDispose &
