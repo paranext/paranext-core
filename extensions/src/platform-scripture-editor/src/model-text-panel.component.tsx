@@ -362,8 +362,11 @@ export function ModelTextPanel({
   }
 
   // Active: read-only editor showing the model text.
+  // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
+  // rounded top corners — see _editor-overrides.scss) is applied unconditionally, unlike the
+  // Scripture Editor's conditional use of the same class.
   return (
-    <div className="tw:flex tw:h-screen tw:flex-col">
+    <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       {modelTextLabel && (
         <div
           data-testid="model-text-header"

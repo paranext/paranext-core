@@ -614,6 +614,29 @@ $tab-bottom-rounding: vars.$space--sm;
 }
 // #endregion SIMPLE-MODE FOCUS RING ///////////////////////////////////
 
+// #region SIMPLE-MODE TAB SELECTION LOOK //////////////////////////////
+// Author feedback: the Resources column's selected/focused tab must always look the same
+// (light background, normal text) — never the dark "window focus" tint. Competing rule is
+// `.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.platform-dock-tab-window-focus`
+// (0,5,0) in the TAB HEADER region above; match that specificity and rely on source order
+// (this region comes later in the file) to win.
+[data-interface-mode='simple'] .dock-panel.dock-style-platform-bible .dock-tab.platform-dock-tab-window-focus {
+  --tab-background: var(--tab-front-blur);
+  color: currentColor;
+}
+
+// Author feedback: remove the vertical divider between tabs entirely so tabs sit flush against
+// each other. Competing rule is `.dock-layout .dock-panel.dock-style-platform-bible
+// .dock-tab:not(.dock-tab-active)::before` (0,5,1) in the TAB SEPARATOR region above; match that
+// specificity (source order wins, since this region comes later).
+[data-interface-mode='simple']
+  .dock-panel.dock-style-platform-bible
+  .dock-tab:not(.dock-tab-active)::before {
+  content: none;
+}
+// #endregion SIMPLE-MODE TAB SELECTION LOOK ////////////////////////////
+// #endregion SIMPLE-MODE FOCUS RING ///////////////////////////////////
+
 // #region SIMPLE-MODE CHROME (padding/gap/radius/divider) ///////////////
 // Ports the Storybook prototype's NO_PADDING_STYLE (src/stories/platform/ten-layout-shared.tsx)
 // into production. Scoped to [data-interface-mode="simple"] (set by app.component.tsx's Main)
