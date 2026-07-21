@@ -14,7 +14,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_language_selected%',
 ];
 
-const DEFAULT_SETUP_LANGUAGES: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
+const ENGLISH_FALLBACK_LANGUAGES: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
 
 /**
  * First-run wizard step: choose the interface language. Offers the languages that have setup-dialog
@@ -35,18 +35,18 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
 
   const [setupLanguagesPossiblyError, , isLoading] = useData(
     localizationService.dataProviderName,
-  ).SetupDialogLanguages(undefined, DEFAULT_SETUP_LANGUAGES);
+  ).SetupDialogLanguages(undefined, ENGLISH_FALLBACK_LANGUAGES);
   const setupLanguages: Record<string, LanguageInfo> = isPlatformError(setupLanguagesPossiblyError)
-    ? DEFAULT_SETUP_LANGUAGES
+    ? ENGLISH_FALLBACK_LANGUAGES
     : setupLanguagesPossiblyError;
 
   // All known interface languages (with real in-script autonyms) — used only to render the current
   // selection with its proper autonym when it doesn't meet the setup-dialog threshold.
   const [availableLanguagesPossiblyError] = useData(
     localizationService.dataProviderName,
-  ).AvailableInterfaceLanguages(undefined, DEFAULT_SETUP_LANGUAGES);
+  ).AvailableInterfaceLanguages(undefined, ENGLISH_FALLBACK_LANGUAGES);
   const availableLanguages = isPlatformError(availableLanguagesPossiblyError)
-    ? DEFAULT_SETUP_LANGUAGES
+    ? ENGLISH_FALLBACK_LANGUAGES
     : availableLanguagesPossiblyError;
 
   // Always keep the current selection in the list so it shows as selected even if it doesn't meet

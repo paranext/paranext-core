@@ -1,7 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import type { LanguageInfo } from '../ui-language-selector.component';
 import { InterfaceLanguagePicker } from './interface-language-picker.component';
-import { SAMPLE_LOCALIZED_STRINGS as STRINGS } from './interface-language-picker.data';
+import {
+  SAMPLE_LANGUAGES,
+  SAMPLE_LOCALIZED_STRINGS as STRINGS,
+} from './interface-language-picker.data';
 
 const meta: Meta<typeof InterfaceLanguagePicker> = {
   title: 'Advanced/InterfaceLanguagePicker',
@@ -15,7 +19,7 @@ function Demo({
   languages,
   initialValue = 'en',
 }: {
-  languages: Record<string, { autonym: string; uiNames?: Record<string, string> }>;
+  languages: Record<string, LanguageInfo>;
   initialValue?: string;
 }) {
   const [value, setValue] = useState(initialValue);
@@ -30,15 +34,7 @@ function Demo({
 }
 
 export const FewLanguages: Story = {
-  render: () => (
-    <Demo
-      languages={{
-        en: { autonym: 'English' },
-        es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
-        'zh-hans': { autonym: '中文（简体）', uiNames: { en: 'Chinese (Simplified)' } },
-      }}
-    />
-  ),
+  render: () => <Demo languages={SAMPLE_LANGUAGES} />,
 };
 
 export const OneLanguage: Story = {
@@ -47,7 +43,7 @@ export const OneLanguage: Story = {
 
 export const ManyLanguages: Story = {
   render: () => {
-    const many: Record<string, { autonym: string; uiNames?: Record<string, string> }> = {
+    const many: Record<string, LanguageInfo> = {
       en: { autonym: 'English' },
     };
     for (let i = 0; i < 120; i++)
