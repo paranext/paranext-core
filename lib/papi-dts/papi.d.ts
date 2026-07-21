@@ -2199,6 +2199,13 @@ declare module 'shared/services/network.service' {
    * requests where immediate failure is preferable to waiting, such as commands sent during app
    * shutdown.
    *
+   * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
+   * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
+   * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
+   * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
+   * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
+   * it rejects.
+   *
    * @param requestType The type of request
    * @param args Arguments to send in the request (put in request.contents)
    * @returns Promise that resolves with the response message
@@ -8383,12 +8390,23 @@ declare module 'shared/data/platform.data' {
   export const MIN_ZOOM_FACTOR = 0.5;
   export const MAX_ZOOM_FACTOR = 3;
   /**
-   * Upper bound (10 minutes) for how long an automatic Send/Receive is allowed to run before we stop
-   * waiting on it. Used as the shutdown-sync timeout in the main process and as the auto-sync
-   * edit-block safety leash in the renderer. A scheduled sync of a large repo can run for minutes, so
-   * this is deliberately long.
+   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
+   * deliberately long.
+   *
+   * Two different consumers share this value and must never diverge:
+   *
+   * - The main process (`shutdown-tasks.ts`) bounds how long app shutdown waits on its final sync.
+   * - The renderer (`auto-sync-blocking-store.ts`) bounds each edit-block safety leash — how long a
+   *   single blocker may block editing if its clearing event never arrives.
+   *
+   * If they diverged, a shutdown sync could outlive the renderer's opinion of it (or vice versa);
+   * tune this value knowing it retimes both.
+   *
+   * @experimental
    */
-  export const SHUTDOWN_SYNC_TIME_OUT_MS: number;
+  export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -8945,9 +8963,15 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
+  import { PROJECT_INTERFACE_PLATFORM_BASE } from 'shared/models/project-data-provider.model';
   import {
     IBaseProjectDataProvider,
+    ProjectInterfaceDataTypes,
     ProjectSettingNames,
     ProjectSettingTypes,
   } from 'papi-shared-types';
@@ -8981,11 +9005,14 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    *       {@link PlatformError} if the Project Data Provider throws an error. You can call
    *       {@link isPlatformError} on this value to check if it is an error.
    *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
-   *       setting with the specified key. Returns `true` if successful. Note that this function does
-   *       not update the data. The Project Data Provider sends out an update to this subscription if
-   *       it successfully updates data.
+   *       setting with the specified key. Returns a promise that resolves to the update instructions
+   *       once the write completes, and rejects if the write is rejected (e.g. by the Send/Receive
+   *       write-gate) — await it (or attach a `.catch`) to observe write failures. Note that this
+   *       function does not update the data. The Project Data Provider sends out an update to this
+   *       subscription if it successfully updates data.
    *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
-   *       setting
+   *       setting. Returns a promise that resolves to `true` if successfully reset, and rejects if
+   *       the reset is rejected.
    *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
    *
    * @throws When subscription callback function is called with an update that has an unexpected
@@ -8998,8 +9025,18 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
-    setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
-    resetSetting: (() => void) | undefined,
+    setSetting:
+      | ((
+          newSetting: ProjectSettingTypes[ProjectSettingName],
+        ) => Promise<
+          DataProviderUpdateInstructions<
+            ExtractDataProviderDataTypes<
+              ProjectInterfaceDataTypes[typeof PROJECT_INTERFACE_PLATFORM_BASE]
+            >
+          >
+        >)
+      | undefined,
+    resetSetting: (() => Promise<boolean>) | undefined,
     isLoading: boolean,
   ];
   export default useProjectSetting;

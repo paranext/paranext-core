@@ -1,4 +1,4 @@
-import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
+import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -29,7 +29,7 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`).
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
- * - `timed-out`: neither settled within {@link SHUTDOWN_SYNC_TIME_OUT_MS} (also already warned there).
+ * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
  */
 type ShutdownSyncOutcome = 'synced' | 'failed' | 'skipped' | 'unreachable' | 'timed-out';
 
@@ -163,7 +163,7 @@ async function performSimpleModeShutdownSync(): Promise<void> {
  * retrying would only fight the window hang below, since the window is already held open waiting on
  * this one sync.
  *
- * {@link SHUTDOWN_SYNC_TIME_OUT_MS} is the ONLY real bound on this call: the S/R extension registers
+ * {@link AUTO_SYNC_MAX_DURATION_MS} is the ONLY real bound on this call: the S/R extension registers
  * `runScheduledSessionSync` with its per-request timeout disabled (a scheduled sync can
  * legitimately run long), so `requestNoRetry` has no client-side timeout of its own here. If the
  * extension ever stopped disabling that timeout, this would silently become a ~30 s truncation that
@@ -212,7 +212,7 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
 
 /**
  * Runs `performSync` in the background and waits for it to settle, bounded by
- * {@link SHUTDOWN_SYNC_TIME_OUT_MS} so a genuinely hung sync can never wedge shutdown open forever.
+ * {@link AUTO_SYNC_MAX_DURATION_MS} so a genuinely hung sync can never wedge shutdown open forever.
  * The timeout is load-bearing for a _hung_ sync specifically: an unregistered command does NOT hang
  * — it rejects fast with MethodNotFound, which surfaces as a `failed` settlement (this is exactly
  * what startup's retry loop is built on). What the bound actually guards against is that the S/R
@@ -231,7 +231,7 @@ async function runBoundedShutdownSync<T>(
 ): Promise<BoundedSyncSettlement<T>> {
   const syncComplete = new AsyncVariable<BoundedSyncSettlement<T>>(
     variableName,
-    SHUTDOWN_SYNC_TIME_OUT_MS,
+    AUTO_SYNC_MAX_DURATION_MS,
   );
   (async () => {
     let settlement: BoundedSyncSettlement<T>;
@@ -253,7 +253,7 @@ async function runBoundedShutdownSync<T>(
     // mislabelled as a 10-minute timeout.
     if (syncComplete.hasTimedOut) {
       logger.warn(
-        `${variableName} timed out after ${SHUTDOWN_SYNC_TIME_OUT_MS} ms; continuing shutdown`,
+        `${variableName} timed out after ${AUTO_SYNC_MAX_DURATION_MS} ms; continuing shutdown`,
       );
       return { status: 'timedOut' };
     }
