@@ -39,6 +39,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useSetting: vi.fn(() => [['en'], () => {}, () => {}]),
   useData: vi.fn(() => ({
     SetupDialogLanguages: () => [{ en: { autonym: 'English' } }, () => {}, false],
+    AvailableInterfaceLanguages: () => [{ en: { autonym: 'English' } }, () => {}, false],
   })),
 }));
 vi.mock('@shared/services/localization.service', () => ({
