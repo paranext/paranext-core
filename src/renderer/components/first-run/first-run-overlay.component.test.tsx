@@ -25,7 +25,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
@@ -52,11 +51,7 @@ const mockGetStatus = vi.mocked(store.getFirstRunStatus);
 // InterfaceLanguagePicker) instantiates a ResizeObserver on mount. No-op stubs are sufficient
 // since these tests don't assert layout or scroll behavior.
 class NoopResizeObserver implements ResizeObserver {
-  // Touch `this` via a private field so the no-op methods don't trip
-  // @typescript-eslint/class-methods-use-this. We keep `targets` as an internal record of
-  // attached elements so the polyfill behaves like a (very dumb) real ResizeObserver —
-  // observe/unobserve mutate the set, disconnect clears it. None of the tests inspect this
-  // state; it just satisfies the lint rule without an eslint-disable.
+  // `targets` gives the no-op methods a `this` use (satisfies class-methods-use-this); unused by tests.
   private readonly targets = new Set<Element>();
 
   observe(target: Element) {
