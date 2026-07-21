@@ -1,12 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { InterfaceLanguagePicker } from './interface-language-picker.component';
-
-const STRINGS = {
-  '%firstRun_language_search_placeholder%': 'Search languages',
-  '%firstRun_language_noResults%': 'No matching languages',
-  '%firstRun_language_selected%': 'Selected',
-};
+import { SAMPLE_LOCALIZED_STRINGS as STRINGS } from './interface-language-picker.data';
 
 const meta: Meta<typeof InterfaceLanguagePicker> = {
   title: 'Advanced/InterfaceLanguagePicker',

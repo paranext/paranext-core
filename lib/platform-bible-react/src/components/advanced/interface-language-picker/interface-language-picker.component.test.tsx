@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { LanguageInfo } from '../ui-language-selector.component';
 import { InterfaceLanguagePicker } from './interface-language-picker.component';
+import { SAMPLE_LOCALIZED_STRINGS as STRINGS } from './interface-language-picker.data';
 
 // cmdk needs a ResizeObserver and Element.scrollTo, which jsdom lacks.
 beforeAll(() => {
@@ -33,12 +34,6 @@ const LANGUAGES: Record<string, LanguageInfo> = {
   'zh-hans': { autonym: '中文（简体）', uiNames: { en: 'Chinese (Simplified)' } },
   tpi: { autonym: 'Tok Pisin', otherNames: ['Pidgin'] },
 };
-const STRINGS = {
-  '%firstRun_language_search_placeholder%': 'Search languages',
-  '%firstRun_language_noResults%': 'No matching languages',
-  '%firstRun_language_selected%': 'Selected',
-};
-
 describe('InterfaceLanguagePicker', () => {
   test('renders each language by its autonym (in-script), English first', () => {
     render(
