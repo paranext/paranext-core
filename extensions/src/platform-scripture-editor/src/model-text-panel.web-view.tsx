@@ -18,6 +18,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
+import { installDblResourceWithNotification } from './install-dbl-resource.util';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -132,21 +133,16 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   const installResource = useCallback(
     async (dblEntryUid: string) => {
-      // Provider not resolved yet: do nothing — don't report a no-op as success (would trigger a
-      // spurious refetch) or as a terminal failure. This callback's identity changes when the
-      // provider resolves, which re-fires the panel's auto-install effect to do the real install.
-      if (!dblResourcesProvider) return;
-      try {
-        await dblResourcesProvider.installDblResource(dblEntryUid);
+      // Returns false (a no-op) until the provider resolves; this callback's identity then changes,
+      // which re-fires the panel's auto-install effect to do the real install.
+      if (
+        await installDblResourceWithNotification(
+          dblResourcesProvider,
+          dblEntryUid,
+          'model text panel',
+        )
+      )
         setFetchResources(true);
-      } catch (e: unknown) {
-        papi.notifications.send({
-          message: '%webView_selectDblResource_installFailed%',
-          severity: 'error',
-        });
-        logger.warn(`Error installing dbl resource for model text panel: ${getErrorMessage(e)}`);
-        throw e;
-      }
     },
     [dblResourcesProvider],
   );
