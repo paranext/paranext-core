@@ -67,7 +67,11 @@ export function InterfaceLanguagePicker({
 
   return (
     <Command id={id} className={cn('pr-twp', className)}>
-      {showSearch && <CommandInput placeholder={searchPlaceholder} />}
+      {/* aria-label mirrors the placeholder so the combobox keeps an accessible name after typing
+          (cmdk's CommandInput has no name of its own). */}
+      {showSearch && (
+        <CommandInput placeholder={searchPlaceholder} aria-label={searchPlaceholder} />
+      )}
       <CommandList>
         <CommandEmpty>{noResults}</CommandEmpty>
         {entries.map(([tag, info]) => {
