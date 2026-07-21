@@ -21,6 +21,8 @@ const STRINGS = {
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
   '%webView_modelTextPanel_unknownResource%': 'The selected model text could not be found.',
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
+  '%webView_modelTextPanel_installFailedOffline%':
+    "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Retry',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
 };
@@ -72,7 +74,8 @@ function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
 }
 
 afterEach(() => {
-  vi.clearAllMocks();
+  // restoreAllMocks (not just clearAllMocks) so a navigator.onLine getter spy can't leak between tests.
+  vi.restoreAllMocks();
 });
 
 describe('ModelTextPanel', () => {
@@ -227,16 +230,39 @@ describe('ModelTextPanel', () => {
     expect(installResource).not.toHaveBeenCalled();
   });
 
-  it('shows the not-found message for a configured reference that cannot be resolved', () => {
-    // A configured model text that is not a resolvable DBL resource (here a project reference)
-    // must not spin forever — it reaches a terminal not-found state (PT-4221).
+  it('offers the picker (not a dead end) when a configured reference cannot be resolved', async () => {
+    // A configured model text that is not a resolvable DBL resource (here a project reference) must
+    // not spin forever, and must not be a dead end — it shows a not-found state with a way to
+    // recover by picking another (PT-4221).
+    const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
       effectiveModelTexts: {
         dataVersion: '1.0.0',
         items: [{ type: 'project', id: 'p1', name: 'Some Project', source: 'admin' }],
       },
       dblResources: [],
+      showResourcePicker,
     });
     expect(screen.getByText('The selected model text could not be found.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
+    await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+  });
+
+  it('hints at the connection in the install-failed state when offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const installResource = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [UNINSTALLED_RESOURCE],
+      installResource,
+    });
+    expect(
+      await screen.findByText(
+        "The model text couldn't be installed. Check your connection and try again.",
+      ),
+    ).toBeInTheDocument();
   });
 });

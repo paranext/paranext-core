@@ -40,8 +40,10 @@ import type {
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
+import { useIsOnline } from './use-is-online.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { installDblResourceWithNotification } from './install-dbl-resource.util';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -50,6 +52,7 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_selecting%',
   '%webView_resourcePanel_installFailed%',
+  '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
@@ -207,21 +210,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const installResource = useCallback(
     async (dblEntryUid: string) => {
-      // Provider not resolved yet: do nothing — don't report a no-op as success (would trigger a
-      // spurious refetch) or as a terminal failure. This callback's identity changes when the
-      // provider resolves, which re-fires the auto-install effect to do the real install.
-      if (!dblResourcesProvider) return;
-      try {
-        await dblResourcesProvider.installDblResource(dblEntryUid);
+      // Returns false (a no-op) until the provider resolves; this callback's identity then changes,
+      // which re-fires the auto-install effect to do the real install.
+      if (
+        await installDblResourceWithNotification(
+          dblResourcesProvider,
+          dblEntryUid,
+          'resource text panel',
+        )
+      )
         setFetchResources(true);
-      } catch (e: unknown) {
-        papi.notifications.send({
-          message: '%webView_selectDblResource_installFailed%',
-          severity: 'error',
-        });
-        logger.warn(`Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`);
-        throw e;
-      }
     },
     [dblResourcesProvider],
   );
@@ -295,6 +293,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
     installResource,
     isSelecting,
   );
+
+  // Only used to add a "check your connection" hint to the install-failed message when offline.
+  const isOnline = useIsOnline();
 
   // Load PT9-derived marker styles when the displayed resource is a supported commentary.
   // Keyed on the resource's project id (not the user's projectId prop) since the resource is what
@@ -504,10 +505,19 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Install failed: the selected resource is in the catalog but couldn't be installed. Offer a
   // retry rather than spinning forever (PT-4221); a success drops out of this state on its own.
+  // When offline (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_resourcePanel_installFailed%']}</p>
+        <p>
+          {
+            localizedStrings[
+              isOnline
+                ? '%webView_resourcePanel_installFailed%'
+                : '%webView_resourcePanel_installFailedOffline%'
+            ]
+          }
+        </p>
         <Button onClick={() => retryInstall()}>
           {localizedStrings['%webView_resourcePanel_retry%']}
         </Button>

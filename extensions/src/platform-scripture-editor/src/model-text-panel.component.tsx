@@ -19,6 +19,7 @@ import { selectTextConnection } from './select-dbl-resource';
 import { isDblResourceReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
+import { useIsOnline } from './use-is-online.hook';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -45,6 +46,7 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_pickModelText%',
   '%webView_modelTextPanel_unknownResource%',
   '%webView_modelTextPanel_installFailed%',
+  '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
 ] as const);
@@ -145,6 +147,10 @@ export function ModelTextPanel({
     installResource,
     isSelecting,
   );
+
+  // Only used to add a "check your connection" hint to the install-failed message when the machine
+  // is definitely offline (the common cause of a failed download on first run).
+  const isOnline = useIsOnline();
 
   // Tracks the latest scrRef this panel's editor just published so we can suppress the echo that
   // comes back through scroll group 0 (forced in simple mode) and avoid scroll-jumping the user's
@@ -313,6 +319,18 @@ export function ModelTextPanel({
 
   // --- Render the resolved state ---
 
+  // Not-found: a configured model text can't be resolved to a displayable resource (not in the DBL
+  // catalog, a non-DBL reference, or an entry missing its id). Offer the picker so the user can
+  // recover rather than being stranded (PT-4221).
+  const notFoundState = (
+    <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+      <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
+      <Button onClick={() => handlePickModelText()}>
+        {localizedStrings['%webView_modelTextPanel_pickModelText%']}
+      </Button>
+    </div>
+  );
+
   // No project: opened without a project id (expected to be brief).
   if (!hasProject) {
     return (
@@ -345,20 +363,25 @@ export function ModelTextPanel({
 
   // Error state: the configured uid isn't in the DBL list at all.
   if (dblRef && match === undefined) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
-      </div>
-    );
+    return notFoundState;
   }
 
   // Install failed: the resource is in the catalog but couldn't be installed. Offer a retry rather
   // than spinning forever. Retry re-attempts the same (admin or user) configured resource, so an
-  // admin choice is recoverable too; a success drops out of this state on its own.
+  // admin choice is recoverable too; a success drops out of this state on its own. When offline
+  // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_installFailed%']}</p>
+        <p>
+          {
+            localizedStrings[
+              isOnline
+                ? '%webView_modelTextPanel_installFailed%'
+                : '%webView_modelTextPanel_installFailedOffline%'
+            ]
+          }
+        </p>
         <Button onClick={() => retryInstall()}>
           {localizedStrings['%webView_modelTextPanel_retry%']}
         </Button>
@@ -378,15 +401,11 @@ export function ModelTextPanel({
   }
 
   // Unresolvable: a model text is configured but doesn't resolve to a displayable installed
-  // resource (e.g. a non-DBL reference, or a DBL entry missing its id). Show the not-found message
+  // resource (e.g. a non-DBL reference, or a DBL entry missing its id). Show the not-found state
   // rather than an endless spinner (PT-4221). By here resources have loaded and any
   // matched-but-uninstalled resource was handled above, so this is a terminal state.
   if (!resourceProjectId) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
-      </div>
-    );
+    return notFoundState;
   }
 
   // Loading: USJ not yet fetched for the resolved resource.
