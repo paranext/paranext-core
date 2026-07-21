@@ -22,7 +22,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
@@ -106,7 +105,7 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
   });
 
-  it('disables Next after navigating into a step that calls setCanProceed(false) on mount (PT-4175 FIX 2)', async () => {
+  it('disables Next when navigating into a step that calls setCanProceed(false) on mount (PT-4175)', async () => {
     // BlockingStep calls setCanProceed(false) in a mount effect — simulates a step that gates
     // on data loading or validation before the user may proceed.
     function BlockingStep({ setCanProceed: setCP }: FirstRunStepProps) {
