@@ -268,3 +268,20 @@ button {
     background-color: currentColor;
   }
 }
+
+// Translator Comment annotations (PT-4804): editor-typed-mark-external-translator-comment
+// comes from ANNOTATION_TYPE_TRANSLATOR_COMMENT in platform-scripture-editor.web-view.tsx.
+// _editor.scss (upstream mirror) has no rule for it, so inserted comments rendered with
+// no visible marking. Styled as a dashed underline (matching Paratext 9) rather than a
+// persistent background highlight so it stays legible against the .verse-selected highlight.
+// On hover, a background tint and solid border give a clearer, transient affordance that
+// it's clickable, without competing with the current-verse highlight the rest of the time.
+.editor-typed-mark-external-translator-comment {
+  border-bottom: 1px dashed var(--muted-foreground);
+  cursor: pointer;
+}
+
+.editor-typed-mark-external-translator-comment:hover {
+  background-color: var(--accent);
+  border-bottom: 2px solid var(--foreground);
+}
