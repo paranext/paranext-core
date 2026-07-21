@@ -282,17 +282,23 @@ re-runs) — there is no explicit "advance" gesture. Per stage/chapter:
    separately and S/R-merged.
 3. **Regress** (complete but no longer may complete): `SetChapterRevision(..., "")`
    clears the `ChapRevId` (`:796-800`), and monotonicity cascades the clear to later
-   stages. **What actually triggers it (corrected per P9 architect review):** a failing
-   _check_ does **not** clear recorded completion. Check results with issues at a stage
-   the book is already complete at are relocated forward to the first active stage
-   (`CacheResults`, `TaskAndCheckProgress.cs:1373-1381`) and displayed there as a
-   "regressed" check for users to review — so they never lower
-   `chapterToFirstFailingStage` below a completed stage and the clear branch never
-   fires from them. The clear fires in two cases: a **manual task is unmarked**
-   (manual results are never relocated — a deliberate user action), and
-   **unrecognized non-`AdditionalCheck` steps**, which fail all chapters at their own
-   stage (`MarkAllChaptersToFailAtStage`, `:94-112`) and therefore DO wipe — that is
-   the version-skew hazard in §2.4, not everyday check behavior.
+   stages. **What actually triggers it (per P9 architect review, refined 2026-07-21 —
+   two cases, split on whether the _book_ is complete at the check's stage):**
+   - **Book already complete at the stage:** a failing check does _not_ clear recorded
+     completion. Its results are relocated forward to the first active stage
+     (`CacheResults`, `TaskAndCheckProgress.cs:1373-1381` — note the book-level
+     condition `IsCompleteAtStage(stageId, bookNum)`) and displayed there as a
+     "regressed" check for users to review.
+   - **Book not yet complete at the stage (work in progress):** a failing check's
+     issues register at the check's own stage, and the clear branch **does** clear the
+     `ChapRevId` of any chapters that were individually complete there. This is normal
+     P9 behavior, not an edge case — per-chapter completion within an incomplete stage
+     is provisional until the whole book passes.
+   - A **manual task being unmarked** clears in either case (manual results are never
+     relocated — a deliberate user action), and **unrecognized
+     non-`AdditionalCheck` steps** fail all chapters at their own stage
+     (`MarkAllChaptersToFailAtStage`, `:94-112`) and therefore wipe — the version-skew
+     hazard in §2.4.
 
 ### 2.6 Manual task marking (req 4)
 
@@ -618,12 +624,14 @@ the section noted:
    needs a product-scope decision.
 3. **Check divergence + severity gap (major, → §2.4, §3.3):** P9's pass/fail filtering
    is UI-assembly code P10 must re-implement, and `CheckRunResult` currently discards
-   the warning/error distinction P9's filtering depends on. Blast radius (narrowed by
-   the P9 architect's correction to §2.5): a divergent check result wrongly blocks or
-   grants _advancement_ and mislabels "regressed" checks, but does **not** clear
-   already-recorded stage completion — recorded `ChapRevId`s are only cleared when a
-   manual task is unmarked or a step is treated as unrecognized, which §5.3 forbids P10
-   to do for steps it merely can't evaluate.
+   the warning/error distinction P9's filtering depends on. Blast radius (per the
+   refined §2.5 model): once a **book** is complete at a stage, a divergent check
+   result cannot clear that stage's recorded completion (it shows as a "regressed"
+   check instead) — but while a book is still **in progress** at a stage, a false
+   failure from P10 _does_ clear the individually-completed chapters' `ChapRevId`s at
+   that stage, and the clear propagates via S/R. So divergence is a real data hazard
+   for in-progress books, not just an advancement-gating annoyance; the severity fix
+   and filter parity are prerequisites for enabling P10 check evaluation at all.
 4. **Send/Receive write gate omitted (major, → §5.1, §5.2):** all new mutation paths
    must take `SendReceiveWriteLock.EnterWrite`, scopes tight; the coverage scanner does
    not recognize `UpdateLock()`/`Commit()` so gating discipline is manual here.
@@ -651,12 +659,14 @@ it didn't — corrected in the header).
 `ScrText.Settings.UpdateMinimumParatextDataVersion` with a warn-first UI, since this
 shuts pre-9.6 users out of the project (§5.3); (2) adopt the `9.6.0.2-beta` package —
 9.6.0.1-beta lacks the needed changes, and the `-beta` suffix persists until P9 9.6
-releases (header caveat, §3.1); (3) this doc originally claimed a failing check clears
-recorded stage completion — wrong: failing checks are relocated to the active stage and
-shown as "regressed" for review; recorded `ChapRevId`s are cleared only when a manual
-task is un-marked (or via the unrecognized-step path). §2.5 corrected and verified against
-`CacheResults` (`TaskAndCheckProgress.cs:1373-1381`); finding 3's blast radius narrowed
-accordingly.
+releases (header caveat, §3.1); (3) regression semantics, settled over two rounds
+(final 2026-07-21, confirmed in code both times): the split is on whether the **book**
+is complete at the check's stage — complete → failing check relocates forward and shows
+as "regressed" without clearing (`CacheResults`,
+`TaskAndCheckProgress.cs:1373-1381`); not yet complete → a failing check **does** clear
+individually-completed chapters' `ChapRevId`s at that stage (normal P9 behavior).
+Un-marking a manual task clears in either case. §2.5 and finding 3's blast radius
+updated accordingly.
 
 ## 8. Open questions
 
@@ -671,9 +681,10 @@ accordingly.
    required (hg executable may be missing; partially-initialized `ScrText`s can have a
    null `VersioningManager`). See §3.4.
 3. ~~**Regression UX**~~ — **Closed by PO (2026-07-20):** not a concern. Manual tasks
-   that were done stay done; for checks, P9's model (a check required at stage N keeps
-   running in all later stages and is surfaced as "regressed" for review, without
-   clearing recorded completion — §2.5) is the expected behavior for P10 to mirror.
+   that were done stay done; for checks, P9's model is the expected behavior for P10 to
+   mirror — see §2.5 for the precise semantics (a failing check clears provisional
+   per-chapter completion while the book is still in progress at that stage; once the
+   book completes the stage, it shows as a "regressed" check without clearing).
 4. ~~**Permission story**~~ — **Answered (mostly):** open paranext-core already uses the
    Paratext registration identity — `RegistrationInfo.DefaultUser` in
    `c-sharp/Projects/LocalParatextProjects.cs:171,234`,
