@@ -130,6 +130,24 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void RenamingProjectFolder_FiresChange()
+        {
+            var projectDir = Path.Combine(_tempRoot, "OrigName");
+            var countAfterAdd = CreateDirectoryAndAwaitFire(
+                projectDir,
+                "precondition: adding the project folder fires"
+            );
+
+            Directory.Move(projectDir, Path.Combine(_tempRoot, "RenamedName"));
+
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(countAfterAdd).After(FireTimeoutMs, PollIntervalMs),
+                "Renaming a project folder should fire a projects-changed refresh"
+            );
+        }
+
+        [Test]
         public void ProjectFolderUnderProjectsById_FiresChange()
         {
             // _projectsById is an optional by-GUID projects container. Creating it triggers the

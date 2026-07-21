@@ -331,9 +331,10 @@ internal class LocalParatextProjects : IDisposable
     {
         if (!Directory.Exists(directory) || !TryReserveContainer(directory))
             return;
+        FileSystemWatcher? watcher = null;
         try
         {
-            var watcher = new FileSystemWatcher(directory)
+            watcher = new FileSystemWatcher(directory)
             {
                 IncludeSubdirectories = false,
                 NotifyFilter = notifyFilter,
@@ -366,10 +367,20 @@ internal class LocalParatextProjects : IDisposable
         {
             // Roll back the reservation so a later retry (e.g. a subsequent root event) can attach.
             ReleaseContainer(directory);
+            // Dispose the partially-constructed watcher: it never reached Register(), so nothing
+            // else owns its native handle, and leaving it for GC finalization keeps the underlying
+            // inotify instance held longer than necessary (the exact pressure this attach failure
+            // may itself be caused by).
+            watcher?.Dispose();
             Console.Error.WriteLine($"Could not watch project container '{directory}': {ex}");
         }
     }
 
+    // A reserved container path is deliberately never released on container deletion: an external
+    // process deleting AND recreating one of these well-known containers at runtime is rare, and the
+    // always-on root watcher still fires a full RefreshScrTexts on both the delete and the recreate,
+    // which catches the common case. Only changes landing well after a recreate's debounce window are
+    // missed - an accepted best-effort-safety-net gap (see the design's accepted gaps).
     private bool TryReserveContainer(string directory)
     {
         lock (_watchersLock)
