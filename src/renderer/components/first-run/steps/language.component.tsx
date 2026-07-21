@@ -3,7 +3,7 @@ import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import { InterfaceLanguagePicker, type LanguageInfo } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
 const KEYS: LocalizeKey[] = [
@@ -40,10 +40,24 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
     ? DEFAULT_SETUP_LANGUAGES
     : setupLanguagesPossiblyError;
 
+  // All known interface languages (with real in-script autonyms) — used only to render the current
+  // selection with its proper autonym when it doesn't meet the setup-dialog threshold.
+  const [availableLanguagesPossiblyError] = useData(
+    localizationService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, DEFAULT_SETUP_LANGUAGES);
+  const availableLanguages = isPlatformError(availableLanguagesPossiblyError)
+    ? DEFAULT_SETUP_LANGUAGES
+    : availableLanguagesPossiblyError;
+
   // Always keep the current selection in the list so it shows as selected even if it doesn't meet
-  // the setup-dialog threshold; fall back to the raw tag as its autonym when it's unknown.
-  const languages: Record<string, LanguageInfo> = { ...setupLanguages };
-  if (!languages[primaryLanguage]) languages[primaryLanguage] = { autonym: primaryLanguage };
+  // the setup-dialog threshold; prefer its real autonym, falling back to the raw tag if unknown.
+  // Memoized so the picker's own sort memo (keyed on this object) isn't defeated each render.
+  const languages = useMemo<Record<string, LanguageInfo>>(() => {
+    const merged = { ...setupLanguages };
+    if (!merged[primaryLanguage])
+      merged[primaryLanguage] = availableLanguages[primaryLanguage] ?? { autonym: primaryLanguage };
+    return merged;
+  }, [setupLanguages, availableLanguages, primaryLanguage]);
 
   // Don't let the user advance before languages load (avoids advancing on a premature default).
   useEffect(() => {
@@ -72,12 +86,8 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
         languages={languages}
         value={primaryLanguage}
         onChange={handleChange}
-        localizedStrings={{
-          '%firstRun_language_search_placeholder%':
-            strings['%firstRun_language_search_placeholder%'],
-          '%firstRun_language_noResults%': strings['%firstRun_language_noResults%'],
-          '%firstRun_language_selected%': strings['%firstRun_language_selected%'],
-        }}
+        // `strings` is a superset of the picker's keys; it reads only the ones it needs.
+        localizedStrings={strings}
       />
     </div>
   );
