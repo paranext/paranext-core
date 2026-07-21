@@ -28,6 +28,8 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_back%',
   '%firstRun_button_skip%',
   '%firstRun_button_finish%',
+  // Referenced via {%product_name%} in the title; formatReplacementString expands it.
+  '%product_name%',
 ];
 
 /**
@@ -51,6 +53,11 @@ export function FirstRunShell({
 
   const index = STEP_ORDER.indexOf(step);
   const isLastStep = index === STEP_ORDER.length - 1;
+  // Back floor is the resume entry step, not index 0: the startup reducer resumes a post-relaunch
+  // user at `syncConsent`, and the already-completed identify/language steps behind it must not be
+  // reachable (PT-4177's real Identify saves registration + calls platform.restart, so backing into
+  // it risks re-triggering the relaunch/resume loop).
+  const entryIndex = STEP_ORDER.indexOf(entryStep);
 
   const runAction = useCallback(async (action: () => void | Promise<void>) => {
     setError('');
@@ -82,8 +89,8 @@ export function FirstRunShell({
   }, [index, runAction, goToStep]);
 
   const onBack = useMemo(
-    () => (index > 0 ? () => goToStep(STEP_ORDER[index - 1]) : undefined),
-    [index, goToStep],
+    () => (index > entryIndex ? () => goToStep(STEP_ORDER[index - 1]) : undefined),
+    [index, entryIndex, goToStep],
   );
 
   const onSkip = useMemo(
@@ -106,8 +113,14 @@ export function FirstRunShell({
   return (
     <div className="tw:mx-auto tw:flex tw:w-full tw:max-w-md tw:flex-col tw:gap-6 tw:p-8">
       <div className="tw:flex tw:flex-col tw:gap-1">
-        <h1 className="tw:text-lg tw:font-medium">{strings['%firstRun_title%']}</h1>
-        <p className="tw:text-xs tw:text-muted-foreground">{indicator}</p>
+        <h1 className="tw:text-lg tw:font-medium">
+          {formatReplacementString(strings['%firstRun_title%'], strings)}
+        </h1>
+        {/* aria-live so screen readers announce the step change on Next/Back — focus stays on the
+            persistent Next button, so without this the navigation is silent. */}
+        <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
+          {indicator}
+        </p>
       </div>
 
       <StepComponent

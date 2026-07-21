@@ -175,6 +175,11 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
+  // TODO(PT-4178): once first run IS complete, this syncs all shared projects every launch — even
+  // for a user who chose "Skip setup" on the sync-consent step. The wizard records that choice in a
+  // renderer localStorage flag (SYNC_SKIPPED_KEY) that this main-process code cannot read; PT-4178
+  // (Sync consent) owns persisting the skip as a platform setting and honoring it here.
+
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
   // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
   // startup; `sendCommand` will wait (with retry on missing handler) until it's available or

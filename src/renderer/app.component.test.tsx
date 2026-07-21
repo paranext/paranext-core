@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import * as firstRunStore from '@renderer/services/first-run-store';
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
@@ -17,7 +18,7 @@ vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
   WorkspaceUpdatingOverlay: () => undefined,
 }));
 vi.mock('./components/first-run/first-run-overlay.component', () => ({
-  FirstRunOverlay: () => undefined,
+  FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
 }));
 vi.mock('./services/workspace-updating-service', () => ({
   initWorkspaceUpdatingService: () => () => {},
@@ -31,5 +32,12 @@ describe('App first-run wiring', () => {
   it('kicks off first-run resolution on mount', () => {
     render(<App />);
     expect(firstRunStore.resolveFirstRunState).toHaveBeenCalled();
+  });
+
+  it('renders the first-run overlay so fresh users are gated', () => {
+    // Guards the actual wiring: resolveFirstRunState runs in its own effect, so asserting it was
+    // called does not prove <FirstRunOverlay /> is in Main's JSX. Removing the overlay must fail.
+    render(<App />);
+    expect(screen.getByTestId('first-run-overlay')).toBeInTheDocument();
   });
 });

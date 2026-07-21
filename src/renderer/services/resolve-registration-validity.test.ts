@@ -16,6 +16,12 @@ describe('resolveRegistrationValidity', () => {
   it('returns "valid" when the command reports a valid registration', async () => {
     mockSendCommand.mockResolvedValue(true);
     await expect(resolveRegistrationValidity(1000)).resolves.toBe('valid');
+    // Guard the cross-language contract: a typo or a rename of the C# command would make production
+    // sendCommand reject (MethodNotFound) and strand the user on the error screen, yet without this
+    // assertion the mocked test would still pass.
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextRegistration.doesUserHaveValidRegistration',
+    );
   });
 
   it('returns "invalid" when the command reports no valid registration', async () => {

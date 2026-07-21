@@ -28,7 +28,15 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // clearAllMocks clears call history but NOT implementations, and no global mockReset is
+  // configured. Later tests set mockRejectedValue / a never-settling mockReturnValue on
+  // completeFirstRun; without this reset those implementations leak into subsequent tests and the
+  // suite passes only by accident of ordering. Reset just this stub (a blanket resetAllMocks would
+  // also wipe the useLocalizedStrings implementation set in the mock factory above).
+  mockComplete.mockReset();
+});
 
 describe('FirstRunShell', () => {
   it('advances through steps with the shell Next button', async () => {
@@ -38,10 +46,19 @@ describe('FirstRunShell', () => {
     expect(screen.getByText(/identify/i)).toBeInTheDocument();
   });
 
-  it('goes back to the previous step', async () => {
-    render(<FirstRunShell entryStep="identify" />);
+  it('goes back to a step visited earlier this session', async () => {
+    render(<FirstRunShell entryStep="language" />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
+    expect(screen.getByText(/identify/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
+  });
+
+  it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
+    // A post-relaunch user resumes at syncConsent; the already-completed identify/language steps
+    // behind it must be unreachable (backing into PT-4177's Identify would re-trigger the relaunch).
+    render(<FirstRunShell entryStep="syncConsent" />);
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {

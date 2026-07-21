@@ -1,7 +1,7 @@
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
-import { INTERFACE_MODE_CACHE_KEY } from '@renderer/hooks/use-interface-mode.hook';
+import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import { resolveRegistrationValidity } from './resolve-registration-validity';
@@ -15,25 +15,18 @@ export type FirstRunStatus =
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
-const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped'; // written when the user skips sync consent; read by a later ticket to offer sync from the home screen
+// Written when the user skips sync consent. TODO(PT-4178): no production reader yet, so skipping
+// currently only suppresses the in-wizard sync — the next-launch auto-sync in startup-tasks.ts
+// still fires. PT-4178 (Sync consent) owns making "skip" durably suppress future auto-sync; note
+// that reader lives in the MAIN process, which cannot read this renderer localStorage flag, so the
+// durable signal must be a platform setting (e.g. platform.firstRunSyncSkipped), not this cache.
+const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped';
 // Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
 // the real registration backend or triggering a relaunch, and completion is NOT persisted so the
 // click-through re-runs on every launch. Toggle from devtools:
 //   localStorage.setItem('platform-bible.firstRunDemoMode', 'true')
 // Never set in shipped builds; remove/gate before release along with the rest of PT-4219.
 const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
-
-// INTERFACE_MODE_CACHE_KEY is imported from use-interface-mode.hook.ts (the canonical writer) so
-// the two files share one string literal — a silent mismatch can never cause a startup routing bug.
-function readCachedInterfaceMode(): 'simple' | 'power' | undefined {
-  try {
-    const raw = localStorage.getItem(INTERFACE_MODE_CACHE_KEY);
-    if (raw === 'power' || raw === 'simple') return raw;
-  } catch {
-    // localStorage unavailable
-  }
-  return undefined;
-}
 
 function readBooleanFlag(key: string): boolean {
   try {
@@ -149,8 +142,20 @@ async function resolveInternal(): Promise<void> {
       logger.warn(`Could not read platform.firstRunComplete; using cache: ${getErrorMessage(e)}`);
       firstRunComplete = readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY);
     }
-    // Only cache on a successful read — never let a failed read overwrite a valid cached value.
-    if (readSucceeded) writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, firstRunComplete);
+    if (readSucceeded) {
+      // A completed user whose `settingsService.set` failed to persist leaves the setting `false` on
+      // disk but the cache `true` (see markFirstRunComplete). A later *successful* read returns that
+      // `false`; blindly caching it would clobber the protective `true` and replay the whole wizard
+      // every launch until a write happens to succeed. So when the setting reads `false` but the
+      // cache says complete, trust the cache and re-attempt the persist (self-heal) rather than
+      // overwriting it. Otherwise cache the freshly-read value (never a failed read — see catch).
+      if (!firstRunComplete && readBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY)) {
+        firstRunComplete = true;
+        await markFirstRunComplete();
+      } else {
+        writeBooleanFlag(FIRST_RUN_COMPLETE_CACHE_KEY, firstRunComplete);
+      }
+    }
     if (firstRunComplete) {
       setStatus({ kind: 'app' });
       return;
@@ -216,6 +221,16 @@ export async function completeFirstRun(options?: { syncSkipped?: boolean }): Pro
   }
   if (options?.syncSkipped) writeBooleanFlag(SYNC_SKIPPED_KEY, true);
   await markFirstRunComplete();
+  setStatus({ kind: 'app' });
+}
+
+/**
+ * Enter the app without completing onboarding — e.g. the registration backend is unreachable and
+ * the user chooses to proceed anyway from the error screen. Persists nothing (no completion flag),
+ * so the first-run wizard shows again on the next launch, when the backend may be reachable. Until
+ * then the user is in simple mode with no project and cannot open projects/resources.
+ */
+export function continueWithoutRegistration(): void {
   setStatus({ kind: 'app' });
 }
 

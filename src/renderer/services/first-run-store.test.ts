@@ -3,6 +3,7 @@ import { settingsService } from '@shared/services/settings.service';
 import * as resolver from './resolve-registration-validity';
 import {
   completeFirstRun,
+  continueWithoutRegistration,
   getFirstRunStatus,
   resetFirstRunStore,
   resolveFirstRunState,
@@ -34,6 +35,10 @@ function stubSettings({ mode = 'simple', firstRunComplete = false } = {}) {
   });
 }
 
+// This suite deliberately uses the real (jsdom) localStorage rather than a mock: the cache
+// read/write behavior IS the unit under test here (seed-from-cache, no-clobber-on-read-failure,
+// self-heal), so mocking it would only re-assert the mock. jsdom's localStorage is a synchronous
+// in-memory map, so these stay effectively as fast as a mock — no real I/O.
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -108,6 +113,21 @@ describe('resolveFirstRunState', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true'); // not clobbered
     expect(mockResolveReg).not.toHaveBeenCalled();
+  });
+
+  it('does not re-onboard a completed user when a prior completion write failed to persist', async () => {
+    // Reproduces the failed-write loop: completion set the cache to `true` but settingsService.set
+    // threw, so the setting on disk is still `false`. A later *successful* read returns that `false`.
+    // The gate must trust the protective cached `true`, keep the user in the app, and re-attempt the
+    // persist — not clobber the cache to `false` and replay the wizard.
+    localStorage.setItem('platform-bible.firstRunComplete', 'true'); // cache from a completion whose set() failed
+    resetFirstRunStore();
+    stubSettings({ firstRunComplete: false }); // setting on disk still false; read succeeds
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true'); // not clobbered
+    expect(mockResolveReg).not.toHaveBeenCalled(); // never routed back into the wizard
+    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
   });
 });
 
@@ -205,6 +225,22 @@ describe('retryFirstRunResolution', () => {
     mockResolveReg.mockResolvedValue('invalid');
     await retryFirstRunResolution();
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+});
+
+describe('continueWithoutRegistration', () => {
+  it('reveals the app without persisting completion, so the wizard returns next launch', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown'); // backend down → error screen
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+
+    continueWithoutRegistration();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockSet).not.toHaveBeenCalled(); // completion NOT persisted
+    // The cache may read 'false' (resolveFirstRunState cached the real setting), but must never be
+    // 'true' — that is what would suppress the wizard next launch.
+    expect(localStorage.getItem('platform-bible.firstRunComplete')).not.toBe('true');
   });
 });
 
