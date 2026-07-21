@@ -59,7 +59,16 @@ export function InterfaceLanguagePicker({
   className,
   id,
 }: InterfaceLanguagePickerProps) {
-  const entries = useMemo(() => sortLanguages(Object.entries(languages)), [languages]);
+  // Precompute the search keywords per language here so they aren't rebuilt on every render.
+  const entries = useMemo(
+    () =>
+      sortLanguages(Object.entries(languages)).map(([tag, info]) => ({
+        tag,
+        info,
+        keywords: [info.autonym, ...Object.values(info.uiNames ?? {}), ...(info.otherNames ?? [])],
+      })),
+    [languages],
+  );
   const showSearch = entries.length > 1;
   const searchPlaceholder = localizedStrings['%firstRun_language_search_placeholder%'] ?? '';
   const noResults = localizedStrings['%firstRun_language_noResults%'] ?? '';
@@ -74,17 +83,13 @@ export function InterfaceLanguagePicker({
       )}
       <CommandList>
         <CommandEmpty>{noResults}</CommandEmpty>
-        {entries.map(([tag, info]) => {
+        {entries.map(({ tag, info, keywords }) => {
           const isSelected = tag === value;
           return (
             <CommandItem
               key={tag}
               value={tag}
-              keywords={[
-                info.autonym,
-                ...Object.values(info.uiNames ?? {}),
-                ...(info.otherNames ?? []),
-              ]}
+              keywords={keywords}
               // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
               // `data-checked` drives the check mark the vendored CommandItem ALREADY renders
               // (command.tsx appends an IconCheck gated on `group-data-[checked=true]`), so we don't
