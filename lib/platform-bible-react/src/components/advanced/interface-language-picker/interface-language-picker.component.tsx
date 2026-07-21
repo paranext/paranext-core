@@ -99,7 +99,9 @@ export function InterfaceLanguagePicker({
               data-checked={isSelected ? 'true' : undefined}
               onSelect={() => onChange(tag)}
             >
-              <span>{info.autonym}</span>
+              {/* dir="auto" so each autonym lays out per its own script (e.g. RTL Arabic, or the
+                  parentheses in 中文（简体）) regardless of the wizard's ambient direction. */}
+              <span dir="auto">{info.autonym}</span>
               {isSelected && <span className="tw:sr-only">{selectedLabel}</span>}
             </CommandItem>
           );

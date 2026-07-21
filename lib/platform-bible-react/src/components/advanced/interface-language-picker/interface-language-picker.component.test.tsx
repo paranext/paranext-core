@@ -3,9 +3,11 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
-import { LanguageInfo } from '../ui-language-selector.component';
 import { InterfaceLanguagePicker } from './interface-language-picker.component';
-import { SAMPLE_LOCALIZED_STRINGS as STRINGS } from './interface-language-picker.data';
+import {
+  SAMPLE_LANGUAGES as LANGUAGES,
+  SAMPLE_LOCALIZED_STRINGS as STRINGS,
+} from './interface-language-picker.data';
 
 // cmdk needs a ResizeObserver and Element.scrollTo, which jsdom lacks.
 beforeAll(() => {
@@ -28,12 +30,6 @@ beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
 });
 
-const LANGUAGES: Record<string, LanguageInfo> = {
-  en: { autonym: 'English' },
-  es: { autonym: 'Español', uiNames: { en: 'Spanish' } },
-  'zh-hans': { autonym: '中文（简体）', uiNames: { en: 'Chinese (Simplified)' } },
-  tpi: { autonym: 'Tok Pisin', otherNames: ['Pidgin'] },
-};
 describe('InterfaceLanguagePicker', () => {
   test('renders each language by its autonym (in-script), English first', () => {
     render(
