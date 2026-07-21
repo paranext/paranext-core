@@ -284,13 +284,16 @@ class LocalizationDataProviderEngine
 {
   #lastInterfaceLanguageSerialized: string | undefined;
 
-  constructor() {
-    super();
-    // Live re-render bridge: when the interface language changes, re-emit the localized-string data
-    // types so every mounted `useLocalizedStrings` refetches and the UI re-renders in the new
-    // language without a restart. `settingsService.subscribe` fires on ANY settings write (all
-    // settings share one data type), so guard on an actual `interfaceLanguage` change to avoid
-    // redundant refetch storms.
+  /**
+   * Live re-render bridge: re-emit the localized-string data types whenever the interface language
+   * changes, so every mounted `useLocalizedStrings` refetches and the UI re-renders in the new
+   * language without a restart. Call this AFTER the engine is registered so `notifyUpdate` is the
+   * real papi-layered method rather than the base-class no-op (registration replaces `notifyUpdate`
+   * asynchronously, so subscribing in the constructor could drop an in-window change).
+   * `settingsService.subscribe` fires on ANY settings write (all settings share one data type), so
+   * guard on an actual `interfaceLanguage` change to avoid redundant refetch storms.
+   */
+  subscribeToInterfaceLanguageChanges() {
     (async () => {
       try {
         await settingsService.subscribe(
@@ -453,10 +456,13 @@ export async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           await loadAllLocalizationData();
+          const engine = new LocalizationDataProviderEngine();
           dataProvider = await dataProviderService.registerEngine(
             localizationServiceProviderName,
-            new LocalizationDataProviderEngine(),
+            engine,
           );
+          // Subscribe only after registration so `notifyUpdate` is the real papi-layered method.
+          engine.subscribeToInterfaceLanguageChanges();
           resolve();
         } catch (error) {
           reject(error);
@@ -472,7 +478,9 @@ export async function initialize(): Promise<void> {
 export const testingLocalizationService = {
   implementLocalizationDataProviderEngine: async () => {
     await loadAllLocalizationData();
-    return new LocalizationDataProviderEngine();
+    const engine = new LocalizationDataProviderEngine();
+    engine.subscribeToInterfaceLanguageChanges();
+    return engine;
   },
 };
 
