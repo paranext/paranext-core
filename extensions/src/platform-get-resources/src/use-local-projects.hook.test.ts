@@ -45,7 +45,8 @@ const mockUseSetting = vi.mocked(useSetting);
  * type.
  */
 function settingReturn(value: string[] | PlatformError): ReturnType<typeof useSetting> {
-  // eslint-disable-next-line no-type-assertion/no-type-assertion -- partial tuple; hook reads only index 0
+  // Partial tuple stands in for the full useSetting return; the hook reads only index 0.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return [value] as unknown as ReturnType<typeof useSetting>;
 }
 

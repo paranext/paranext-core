@@ -65,9 +65,12 @@ internal static class ScrTextExtensions
             : fallback;
 
     /// <summary>
-    /// The BCP 47 language tag for the project's writing system - the value the platform.languageTag
-    /// getter reads via <c>scrText.Language.LanguageId.Id</c>, computed here without the getter's
-    /// side effects.
+    /// The BCP 47 language tag for the project's writing system. The platform.languageTag getter
+    /// reads <c>scrText.Language.LanguageId.Id</c> - the tag resolved from the project's LDML writing
+    /// system - whereas this derives it from the stored <c>LanguageIsoCode</c> setting, avoiding the
+    /// getter's side effects. The two agree when the LDML writing system matches the stored code, but
+    /// diverge whenever the LDML tag is more specific or normalized than the raw stored code (see
+    /// divergence 3).
     ///
     /// Do NOT read <c>scrText.Language</c>: forcing it constructs <c>ScrLanguage</c>, whose
     /// constructor opens and XML-parses the project's LDML file (zip-decompressed for resources),
@@ -83,14 +86,22 @@ internal static class ScrTextExtensions
     /// cheap string read; only legacy projects still incur the <c>FromCommonLanguageName</c> lookup
     /// - accepted here to keep the value correct (matching the getter) rather than diverge for speed.
     ///
-    /// Divergences from the getter's final value, both preferable during enumeration:
+    /// Divergences from the getter's final value:
     /// <list type="number">
     ///   <item>No LDML is loaded, so an unloadable/corrupt LDML file does not trigger
     ///     <c>ScrText.CreateLayoutEngine</c>'s catch, which would coerce a project with an otherwise
     ///     valid LanguageID to English (and, if writable, save an English LDML). Enumeration reports
-    ///     the stored/resolved tag; the PDP's <c>platform.languageTag</c> would report "en".</item>
+    ///     the stored/resolved tag; the PDP's <c>platform.languageTag</c> would report "en".
+    ///     (Preferable during enumeration.)</item>
     ///   <item>A null/empty resolved id is coerced to "en" here (matching
-    ///     <c>CreateLayoutEngine</c>'s null/empty-code coercion) without persisting the change.</item>
+    ///     <c>CreateLayoutEngine</c>'s null/empty-code coercion) without persisting the change.
+    ///     (Preferable during enumeration.)</item>
+    ///   <item>Because the getter reads the LDML writing system while this reads the stored
+    ///     <c>LanguageIsoCode</c>, the two can differ for a perfectly valid project whenever the LDML
+    ///     tag is more specific or normalized than the stored code (e.g. LDML "en-US" vs. stored
+    ///     "en"): the picker/Home would then show a different language than <c>pdp.getSetting</c>.
+    ///     This is the general form of the "Settings.xml/LDML inconsistent" edge case; it is accepted
+    ///     as the cost of not loading LDML per project during enumeration.</item>
     /// </list>
     /// </summary>
     private static string GetLanguageTag(ScrText scrText)

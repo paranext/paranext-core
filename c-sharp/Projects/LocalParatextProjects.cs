@@ -49,6 +49,17 @@ internal class LocalParatextProjects : IDisposable
     private Timer? _projectChangeDebounceTimer;
     private readonly object _projectChangeLock = new();
 
+    /// <summary>
+    /// Debounce window for coalescing a burst of <see cref="NotifyProjectsChanged"/> calls into a
+    /// single emitted event. Every consumer does a full metadata refetch per event, so collapsing a
+    /// burst (e.g. the inline setting-write notify plus the watcher catching that same on-disk write,
+    /// or several display-setting writes in a row) avoids redundant refetch storms.
+    /// </summary>
+    private static readonly TimeSpan s_notifyDebounce = TimeSpan.FromMilliseconds(500);
+
+    private Timer? _notifyDebounceTimer;
+    private readonly object _notifyLock = new();
+
     private readonly List<string> _requiredProjectRootFiles =
     [
         "usfm.sty",
@@ -166,13 +177,26 @@ internal class LocalParatextProjects : IDisposable
     }
 
     /// <summary>
-    /// Emit <see cref="PROJECTS_CHANGED_EVENT_TYPE"/> so project-list consumers refetch their cheap
-    /// metadata. Call after a project is added/removed or after one of its display-backing settings
-    /// changes. Fire-and-forget: a failure to notify only means a stale list until the next refresh,
-    /// and must never fail the mutation that triggered it. No-op when constructed without a
-    /// <see cref="PapiClient"/> (tests/tooling).
+    /// Ask project-list consumers to refetch their cheap metadata by emitting
+    /// <see cref="PROJECTS_CHANGED_EVENT_TYPE"/>. Call after a project is added/removed or after one
+    /// of its display-backing settings changes. Debounced (see <see cref="s_notifyDebounce"/>) so a
+    /// burst - notably the inline notify plus the watcher catching that same on-disk write - coalesces
+    /// into a single event instead of a refetch storm. Fire-and-forget: a failure to notify only means
+    /// a stale list until the next refresh, and must never fail the mutation that triggered it. No-op
+    /// when constructed without a <see cref="PapiClient"/> (tests/tooling).
     /// </summary>
     public void NotifyProjectsChanged()
+    {
+        if (_papiClient == null)
+            return;
+        lock (_notifyLock)
+        {
+            _notifyDebounceTimer ??= new Timer(_ => EmitProjectsChanged());
+            _notifyDebounceTimer.Change(s_notifyDebounce, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void EmitProjectsChanged()
     {
         if (_papiClient == null)
             return;
@@ -189,10 +213,11 @@ internal class LocalParatextProjects : IDisposable
     /// install/uninstall and setting writes already call <see cref="NotifyProjectsChanged"/>
     /// directly).
     ///
-    /// Watches only <see cref="PROJECT_SETTINGS_FILE"/> create/delete/rename (a project IS its
-    /// Settings.xml), via <see cref="NotifyFilters.FileName"/> - never content writes and never other
-    /// files - so the constant churn of normal editing (scripture text, comments, notes) never
-    /// triggers a refresh. Events are debounced because a clone/install writes in a burst.
+    /// Watches only <see cref="PROJECT_SETTINGS_FILE"/> - a project IS its Settings.xml - and only its
+    /// create/delete/rename (project add/remove) plus in-place content rewrites (an out-of-band edit
+    /// of an existing project's display settings, e.g. via Send/Receive). Never other files, so the
+    /// constant churn of normal editing (scripture text, comments, notes) never triggers a refresh.
+    /// Events are debounced because a clone/install writes in a burst.
     ///
     /// A no-op without a <see cref="PapiClient"/> (nothing to notify; also keeps tests/tooling from
     /// spinning up a real watcher). FileSystemWatcher is unreliable on some platforms (WSL mounts,
@@ -208,11 +233,21 @@ internal class LocalParatextProjects : IDisposable
             var watcher = new FileSystemWatcher(ProjectRootFolder, PROJECT_SETTINGS_FILE)
             {
                 IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName,
+                // FileName catches a project's Settings.xml being added/removed/renamed (project
+                // add/remove). LastWrite catches an in-place content rewrite of an existing project's
+                // Settings.xml (e.g. a Send/Receive receive pulling an upstream name/language/editable
+                // change) - a Changed event, not a create/delete/rename - which would otherwise leave
+                // the picker/Home/New Tab showing stale display metadata.
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
             };
             watcher.Created += OnProjectSettingsFileChanged;
             watcher.Deleted += OnProjectSettingsFileChanged;
             watcher.Renamed += OnProjectSettingsFileChanged;
+            watcher.Changed += OnProjectSettingsFileChanged;
+            // The watcher's internal buffer can overflow during a large burst (dropping events
+            // silently under the recursive watch), so recover by scheduling the same refresh + notify
+            // rather than going stale.
+            watcher.Error += OnProjectDirectoryWatcherError;
             watcher.EnableRaisingEvents = true;
             _projectDirectoryWatcher = watcher;
         }
@@ -223,7 +258,23 @@ internal class LocalParatextProjects : IDisposable
         }
     }
 
-    private void OnProjectSettingsFileChanged(object sender, FileSystemEventArgs e)
+    private void OnProjectSettingsFileChanged(object sender, FileSystemEventArgs e) =>
+        ScheduleProjectDirectoriesChanged();
+
+    /// <summary>
+    /// The watcher's internal buffer overflowed (or it otherwise faulted), so events were dropped and
+    /// a project add/remove/edit may have been missed. Log it and schedule the same refresh + notify
+    /// so the lists resync rather than silently going stale.
+    /// </summary>
+    private void OnProjectDirectoryWatcherError(object sender, ErrorEventArgs e)
+    {
+        Console.Error.WriteLine(
+            $"Project directory watcher error (events may have been dropped); forcing a refresh: {e.GetException()}"
+        );
+        ScheduleProjectDirectoriesChanged();
+    }
+
+    private void ScheduleProjectDirectoriesChanged()
     {
         // Debounce: a clone/install fires a burst of events; collapse them into one refresh+notify.
         lock (_projectChangeLock)
@@ -259,6 +310,7 @@ internal class LocalParatextProjects : IDisposable
     {
         _projectDirectoryWatcher?.Dispose();
         _projectChangeDebounceTimer?.Dispose();
+        _notifyDebounceTimer?.Dispose();
         GC.SuppressFinalize(this);
     }
 
@@ -358,7 +410,13 @@ internal class LocalParatextProjects : IDisposable
 
     private static IEnumerable<ScrText> GetScrTexts()
     {
-        return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly);
+        // Snapshot under the ScrTextArbitrator lock - the same lock ScrTextCollection's own mutators
+        // (RefreshScrTexts/Add/DeleteProject) take - and materialize before returning, so enumerating
+        // the project list (e.g. during a metadata fetch on an RPC thread) can't race the background
+        // watcher's RefreshScrTexts and throw "collection was modified". ScrTextCollection.ScrTexts is
+        // lazy and takes no lock of its own.
+        using (ScrTextArbitrator.GetLock())
+            return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly).ToList();
     }
 
     private static void AddProjectToScrTextCollection(ProjectDetails projectDetails)

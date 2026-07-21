@@ -5147,6 +5147,14 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     */
+    'platform.onDidChangeProjects': undefined;
   };
   /**
    * Mapping of network event names to their payload types. Extensions augment this to declare their
@@ -5169,14 +5177,6 @@ declare module 'papi-shared-types' {
   interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
-    /**
-     * Emitted by the .NET data provider when the set of available projects changes (a project is
-     * added or removed) or when a project's display metadata
-     * (name/fullName/language/languageTag/isEditable) changes. Consumers refetch cheap project
-     * metadata; there is no payload. Keep the name in sync with
-     * `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
-     */
-    'platform.onDidChangeProjects': undefined;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
     /**
@@ -5974,6 +5974,7 @@ declare module 'shared/models/project-lookup.service-model' {
   } from 'shared/models/project-metadata.model';
   import { ProjectInterfaces } from 'papi-shared-types';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { normalizeProjectId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
   /**
    * Transform the well-known pdp factory id into an id for its network object to use
@@ -6129,15 +6130,7 @@ declare module 'shared/models/project-lookup.service-model' {
     includeProjectInterfaces: string | undefined;
     includePdpFactoryIds: string | undefined;
   };
-  /**
-   * Canonical comparison key for a project id. Project ids are case-insensitive (the contract treats
-   * them so, and C# canonicalizes to uppercase hex); normalize to a single form before using an id as
-   * a Map/Set key so a case mismatch never drops or double-counts a project. A pairwise comparator
-   * (see {@link areProjectIdsEqual}) can't key a Map/Set, so this normalizer is needed regardless.
-   * Exported so consumers that key projects locally (e.g. `useProjectPickerData`) normalize the same
-   * way this service aggregates them rather than re-implementing `toUpperCase`.
-   */
-  export function normalizeProjectId(projectId: string): string;
+  export { normalizeProjectId };
   /**
    * Determines whether the given project interfaces are included based on specified inclusion and
    * exclusion rules.

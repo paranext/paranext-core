@@ -18,6 +18,7 @@ import {
   ensureArray,
   escapeStringRegexp,
   getErrorMessage,
+  normalizeProjectId,
   slice,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
@@ -637,17 +638,11 @@ function ensurePopulatedMetadataFilter(options: ProjectMetadataFilterOptions) {
   };
 }
 
-/**
- * Canonical comparison key for a project id. Project ids are case-insensitive (the contract treats
- * them so, and C# canonicalizes to uppercase hex); normalize to a single form before using an id as
- * a Map/Set key so a case mismatch never drops or double-counts a project. A pairwise comparator
- * (see {@link areProjectIdsEqual}) can't key a Map/Set, so this normalizer is needed regardless.
- * Exported so consumers that key projects locally (e.g. `useProjectPickerData`) normalize the same
- * way this service aggregates them rather than re-implementing `toUpperCase`.
- */
-export function normalizeProjectId(projectId: string): string {
-  return projectId.toUpperCase();
-}
+// Re-exported from `platform-bible-utils` (the single source) so existing consumers that import the
+// normalizer from this service module keep working. This service keys its aggregation Map/Set with
+// it; a pairwise comparator (see {@link areProjectIdsEqual}) can't key a Map/Set, so the normalizer
+// is needed regardless.
+export { normalizeProjectId };
 
 function areProjectIdsEqual(projectIdA: string, projectIdB: string): boolean {
   return projectIdA.localeCompare(projectIdB, undefined, { sensitivity: 'accent' }) === 0;

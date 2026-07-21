@@ -168,6 +168,10 @@ export function useProjectPickerData(): ProjectPickerData {
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       const currentProjectId = editorDef?.projectId;
       if (!currentProjectId) {
+        // No active editor, so clear the miss-once guard: a project that was absent (and left the
+        // guard armed for its id) must be free to attempt a fresh refresh when it is next opened,
+        // rather than staying wedged on the error card.
+        missRefreshedProjectIdRef.current = undefined;
         setCurrentProjectError(undefined);
         return undefined;
       }

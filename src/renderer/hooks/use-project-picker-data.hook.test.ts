@@ -410,6 +410,61 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentProject?.fullName).toBe('Updated Project');
   });
 
+  it('recovers the current project after a stuck error once the editor closes and reopens', async () => {
+    // Regression: the miss-once-then-refresh guard (missRefreshedProjectIdRef) must clear when there
+    // is no current editor, so a project that was absent (error card shown) can resolve on a later
+    // open instead of staying wedged on 'Unable to load current project details'.
+    const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
+    let webViewCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+
+    // Editor state the test flips between phases.
+    let openDefs: unknown[] = [
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-stuck' },
+    ];
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockImplementation(
+      async () => openDefs as never,
+    );
+
+    // Metadata lacks proj-stuck for the first two fetches (initial + the one courtesy refresh),
+    // then includes it once it finally registers.
+    vi.mocked(projectLookupService.getMetadataForAllProjects)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValue(
+        metadataList([
+          { id: 'proj-stuck', fullName: 'Recovered Project', name: 'Recovered' },
+        ]) as never,
+      );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    // Phase 1: absent project → one courtesy refresh → still absent → error card.
+    expect(result.current.currentProjectError).toBe('Unable to load current project details');
+
+    // Phase 2: editor closes → current project clears (and the miss guard must reset).
+    openDefs = [];
+    act(() => webViewCallback!());
+    await settle(result);
+    expect(result.current.currentProject).toBeUndefined();
+    expect(result.current.currentProjectError).toBeUndefined();
+
+    // Phase 3: the same project reopens, now present in metadata → it resolves instead of staying
+    // stuck on the error card (which is what happened before the guard reset).
+    openDefs = [{ id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-stuck' }];
+    act(() => webViewCallback!());
+    await settle(result);
+    expect(result.current.currentProject?.id).toBe('proj-stuck');
+    expect(result.current.currentProject?.fullName).toBe('Recovered Project');
+    expect(result.current.currentProjectError).toBeUndefined();
+  });
+
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {
     // Restoring N tabs at startup fires a burst of web view events; each must re-derive only the
     // active editor from the cached metadata, not launch a fresh full PDPF fan-out.

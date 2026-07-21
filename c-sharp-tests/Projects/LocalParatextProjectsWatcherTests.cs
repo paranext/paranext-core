@@ -128,6 +128,31 @@ namespace TestParanextDataProvider.Projects
         }
 
         [Test]
+        public void ModifyingExistingProjectSettingsFileContent_FiresChange()
+        {
+            // An in-place content rewrite of an existing project's Settings.xml (e.g. a Send/Receive
+            // receive pulling an upstream FullName/Language/Editable change) is a Changed event, not
+            // a create/delete/rename; it must still fire a projects-changed refresh so the picker /
+            // Home / New Tab don't show stale display metadata.
+            var settingsPath = AddProjectSettingsFile("EditedSettingsProject");
+            // Wait for the create to fire so the in-place edit is a distinct (post-debounce) event.
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(0).After(FireTimeoutMs, PollIntervalMs)
+            );
+            var countAfterAdd = _projects.ChangeCount;
+
+            // Rewrite the SAME file's content in place (no rename/delete).
+            File.WriteAllText(settingsPath, "<ScriptureText FullName=\"Upstream Rename\"/>");
+
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(countAfterAdd).After(FireTimeoutMs, PollIntervalMs),
+                "An in-place content rewrite of Settings.xml should fire a projects-changed refresh"
+            );
+        }
+
+        [Test]
         public void ChangingNonSettingsFile_DoesNotFireChange()
         {
             // Normal editing churn - scripture text, comments, notes - must not trigger a refresh.
