@@ -309,14 +309,50 @@ async function open(
 
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
+      // Uses the async factory (the sync createNetworkEventEmitter is deprecated) so the events can
+      // carry `x-experimental` in the generated OpenRPC document — these are recently-added switch-
+      // pairing events whose contract isn't settled (see their @experimental TSDoc in the d.ts). The
+      // payload type is inferred from the NetworkEvents augmentation, so no explicit generic here.
+      // Awaited before emit: the enclosing handler is async, so this only adds first-use latency and
+      // the will-start event still fires before the switch below.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<{
-          switchId: string;
-        }>(PROJECT_SWITCH_WILL_START_EVENT);
+        projectSwitchWillStartEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_WILL_START_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary:
+                'Emitted just before a scripture editor web view is opened or replaced with a new project.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       if (!projectSwitchDidFinishEmitter)
-        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<{
-          switchId: string;
-        }>(PROJECT_SWITCH_DID_FINISH_EVENT);
+        projectSwitchDidFinishEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_DID_FINISH_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary: 'Emitted after the scripture editor web view open/replace call resolves.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary:
+                    'The switchId of the onWillSwitchProject event that started this switch.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
