@@ -27,7 +27,7 @@ import {
   SavedWebViewDefinition,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from '@shared/models/web-view.model';
-import { getErrorMessage } from 'platform-bible-utils';
+import { deepEqual, getErrorMessage } from 'platform-bible-utils';
 import {
   getBlockedProjectIds,
   subscribeToAutoSyncBlocking,
@@ -42,19 +42,17 @@ import {
 /** Web view state key the Scripture editor reads to know it is edit-blocked by an automatic sync. */
 const IS_SYNC_BLOCKED_STATE_KEY = 'isSyncBlocked';
 
-/** Content equality for two id sets (both come from the store, which replaces sets wholesale). */
-function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a === b) return true;
-  if (a.size !== b.size) return false;
-  return [...a].every((id) => b.has(id));
-}
-
 /** True when a Scripture editor definition's project is in the blocked set. No project → never. */
 function isEditorBlocked(
   definition: SavedWebViewDefinition,
   blockedProjectIds: ReadonlySet<string>,
 ): boolean {
-  return definition.projectId !== undefined && blockedProjectIds.has(definition.projectId);
+  // Upper-case to match the store's canonical form (setBlockedProjects canonicalizes to upper at
+  // ingestion; canonical project ids are upper — ProjectMetadata.Id = id.ToUpperInvariant()), so a
+  // casing skew between the editor's projectId and the blocked set can never miss a real block.
+  return (
+    definition.projectId !== undefined && blockedProjectIds.has(definition.projectId.toUpperCase())
+  );
 }
 
 /**
@@ -83,8 +81,13 @@ function setEditorSyncBlocked(definition: SavedWebViewDefinition, isBlocked: boo
  * Applies the blocked set to every currently open Scripture editor: each editor whose project is in
  * the set is flagged, every other editor is unflagged. The per-editor equality guard turns this
  * into a diff — unchanged editors get no write (and thus emit no update event).
+ *
+ * Returns `true` when the enumeration succeeded and the set was applied, `false` when
+ * `getAllOpenWebViewDefinitionsSync` threw and nothing was applied. The caller uses this to avoid
+ * recording a set it did not actually apply (see `syncState`): an open-but-unenumerable editor must
+ * not be treated as flagged, or the equality guard would short-circuit and leave it unflagged.
  */
-function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): void {
+function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): boolean {
   let definitions: SavedWebViewDefinition[];
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
@@ -94,12 +97,13 @@ function applyBlockedSetToAllEditors(blockedProjectIds: ReadonlySet<string>): vo
     logger.debug(
       `auto-sync edit-block driver could not enumerate web views: ${getErrorMessage(e)}`,
     );
-    return;
+    return false;
   }
   definitions.forEach((definition) => {
     if (definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE)
       setEditorSyncBlocked(definition, isEditorBlocked(definition, blockedProjectIds));
   });
+  return true;
 }
 
 /**
@@ -162,7 +166,7 @@ export function initAutoSyncEditBlockDriver(): () => void {
     const next = getBlockedProjectIds();
     // No content change → nothing to do. This keeps overlapping identical notifications from
     // needlessly rewriting editors or re-subscribing the handlers.
-    if (areSetsEqual(next, appliedBlockedProjectIds)) return;
+    if (deepEqual(appliedBlockedProjectIds, next)) return;
 
     // THE ORDERING FIX. Tear the mid-block handlers down BEFORE applying the diff below. Applying the
     // diff issues unflag writes (isSyncBlocked: false) for no-longer-blocked projects, and
@@ -177,9 +181,14 @@ export function initAutoSyncEditBlockDriver(): () => void {
     // protect A. Found live in E2E, 2026-07-16.
     teardownHandlers();
 
-    applyBlockedSetToAllEditors(next);
-    // Snapshot a copy so a later store reassignment can never alias what we think we applied.
-    appliedBlockedProjectIds = new Set(next);
+    // Only advance the applied-set snapshot when the apply actually succeeded. If enumeration threw
+    // (open-but-unenumerable editors), applyBlockedSetToAllEditors returns false having applied
+    // nothing; recording `next` anyway would let the equality guard above short-circuit the next
+    // notification and leave those editors unflagged for the rest of this block. Leaving the snapshot
+    // unchanged lets the next real transition (or the open/update handlers) re-apply.
+    if (applyBlockedSetToAllEditors(next))
+      // Snapshot a copy so a later store reassignment can never alias what we think we applied.
+      appliedBlockedProjectIds = new Set(next);
 
     // Re-arm the mid-block handlers over the new set, unless nothing is blocked anymore.
     if (next.size > 0) setupHandlers(next);

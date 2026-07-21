@@ -78,9 +78,16 @@ describe('initAutoSyncEditBlockDriver', () => {
   let updateHandler: ((event: { webView: SavedWebViewDefinition }) => void) | undefined;
   let updateUnsub: ReturnType<typeof vi.fn>;
 
-  /** Points `getBlockedProjectIds` at a fresh set of the given project ids. */
+  /**
+   * Points `getBlockedProjectIds` at a fresh set of the given project ids. Ids are upper-cased to
+   * model the real store, which canonicalizes to upper at ingestion (`setBlockedProjects`); the
+   * driver's `isEditorBlocked` upper-cases each editor's `projectId` before matching against this
+   * set, so the two sides meet in canonical case.
+   */
   function setBlockedProjects(...projectIds: string[]): void {
-    vi.mocked(getBlockedProjectIds).mockReturnValue(new Set(projectIds));
+    vi.mocked(getBlockedProjectIds).mockReturnValue(
+      new Set(projectIds.map((id) => id.toUpperCase())),
+    );
   }
 
   /**
@@ -501,5 +508,26 @@ describe('initAutoSyncEditBlockDriver', () => {
     setBlockedProjects('projA'); // force enumeration (which throws) on init
     expect(() => initAutoSyncEditBlockDriver()).not.toThrow();
     expect(updateWebViewDefinitionSync).not.toHaveBeenCalled();
+  });
+
+  it('does not record a set it failed to apply, so an identical later notification retries', () => {
+    // Enumeration throws on the first apply, so nothing is flagged and the applied-set snapshot must
+    // NOT advance to the blocked set — otherwise the top-of-syncState equality guard would
+    // short-circuit the identical next notification and leave the editor unflagged for the block.
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementationOnce(() => {
+      throw new Error('dock layout not registered');
+    });
+    setBlockedProjects('projA');
+    initAutoSyncEditBlockDriver();
+    if (!storeListener) throw new Error('store listener not registered');
+    expect(updateWebViewDefinitionSync).not.toHaveBeenCalled();
+
+    // Enumeration now succeeds and the SAME blocked set is re-notified. Because the failed apply
+    // left the snapshot unadvanced, the guard does not short-circuit and the editor is flagged.
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([editor('e1', 'projA')]);
+    storeListener();
+    expect(updateWebViewDefinitionSync).toHaveBeenCalledWith('e1', {
+      state: { isSyncBlocked: true },
+    });
   });
 });
