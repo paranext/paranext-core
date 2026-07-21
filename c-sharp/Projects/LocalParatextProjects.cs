@@ -66,6 +66,11 @@ internal class LocalParatextProjects : IDisposable
     // (projectsByIdDirName); mirror it here and keep in sync.
     private const string PROJECTS_BY_ID_DIR_NAME = "_projectsById";
 
+    // By-GUID sibling resource container that ParatextData also enumerates
+    // (ScrTextCollection.GetResourceProjectNames). The name is a private const in ParatextData
+    // (resourcesByIdDirName); mirror it here and keep in sync.
+    private const string RESOURCES_BY_ID_DIR_NAME = "_resourcesById";
+
     /// <summary>
     /// Debounce window for coalescing a burst of <see cref="NotifyProjectsChanged"/> calls into a
     /// single emitted event. Every consumer does a full metadata refetch per event, so collapsing a
@@ -286,7 +291,20 @@ internal class LocalParatextProjects : IDisposable
             resourceExtensionFilters: false,
             handler: OnContainerEvent
         );
-        // Resource containers are added in Task 2.
+        // Resource containers: watch resource files (.p8z/.xml1z) add/remove/rename plus an
+        // in-place overwrite with a newer version.
+        AttachContainerWatcher(
+            Path.Combine(ProjectRootFolder, ScrTextCollection.resourcesDirName),
+            NotifyFilters.FileName | NotifyFilters.LastWrite,
+            resourceExtensionFilters: true,
+            handler: OnContainerEvent
+        );
+        AttachContainerWatcher(
+            Path.Combine(ProjectRootFolder, RESOURCES_BY_ID_DIR_NAME),
+            NotifyFilters.FileName | NotifyFilters.LastWrite,
+            resourceExtensionFilters: true,
+            handler: OnContainerEvent
+        );
     }
 
     /// <summary>

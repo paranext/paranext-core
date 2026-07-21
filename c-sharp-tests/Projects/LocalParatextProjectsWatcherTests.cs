@@ -219,5 +219,90 @@ namespace TestParanextDataProvider.Projects
                 "Writes inside a project's .hg store must not fire the watcher"
             );
         }
+
+        /// <summary>
+        /// Creates a resource container directory (waiting for its creation to fire + be lazily
+        /// attached), then returns the change count after that fire so a follow-up file write can
+        /// be asserted as a distinct increment.
+        /// </summary>
+        private int CreateResourceContainerAndAwaitFire(string containerName)
+        {
+            return CreateDirectoryAndAwaitFire(
+                Path.Combine(_tempRoot, containerName),
+                $"precondition: creating {containerName} fires (root watcher) and attaches its watcher"
+            );
+        }
+
+        [Test]
+        public void ResourceFileAddedToResources_FiresChange()
+        {
+            var countAfterContainer = CreateResourceContainerAndAwaitFire("_Resources");
+
+            File.WriteAllText(Path.Combine(_tempRoot, "_Resources", "NASB.p8z"), "resource");
+
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(countAfterContainer).After(FireTimeoutMs, PollIntervalMs),
+                "Adding a .p8z resource to _Resources should fire a projects-changed refresh"
+            );
+        }
+
+        [Test]
+        public void XmlResourceFileAddedToResourcesById_FiresChange()
+        {
+            var countAfterContainer = CreateResourceContainerAndAwaitFire("_resourcesById");
+
+            File.WriteAllText(
+                Path.Combine(_tempRoot, "_resourcesById", "SOMEGUID.xml1z"),
+                "resource"
+            );
+
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(countAfterContainer).After(FireTimeoutMs, PollIntervalMs),
+                "Adding a .xml1z resource to _resourcesById should fire a projects-changed refresh"
+            );
+        }
+
+        [Test]
+        public void ResourceFileUpdatedInPlace_FiresChange()
+        {
+            var countAfterContainer = CreateResourceContainerAndAwaitFire("_Resources");
+            var resourcePath = Path.Combine(_tempRoot, "_Resources", "VUL07.p8z");
+            File.WriteAllText(resourcePath, "v1");
+            // Wait for the CREATE to fire (distinct from the container-creation fire) so the in-place
+            // update is a genuinely separate, post-debounce event.
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(countAfterContainer).After(FireTimeoutMs, PollIntervalMs)
+            );
+            var countAfterCreate = _projects.ChangeCount;
+
+            File.WriteAllText(resourcePath, "v2-newer-version");
+
+            Assert.That(
+                () => _projects.ChangeCount,
+                Is.GreaterThan(countAfterCreate).After(FireTimeoutMs, PollIntervalMs),
+                "An in-place overwrite of an existing resource should fire a projects-changed refresh"
+            );
+        }
+
+        [Test]
+        public void NonResourceFileInResources_DoesNotFireChange()
+        {
+            var countAfterContainer = CreateResourceContainerAndAwaitFire("_Resources");
+
+            // Extensions ParatextData does not enumerate as resources (present on disk but not part
+            // of the known-projects cache) must not fire.
+            File.WriteAllText(Path.Combine(_tempRoot, "_Resources", "BHS.mbv1z"), "not-enumerated");
+            File.WriteAllText(Path.Combine(_tempRoot, "_Resources", "notes.txt"), "unrelated");
+            Thread.Sleep(QuiesceMs);
+
+            Assert.That(
+                _projects.ChangeCount,
+                Is.EqualTo(countAfterContainer),
+                "Non-.p8z/.xml1z files in _Resources must not fire the watcher"
+            );
+        }
     }
 }
