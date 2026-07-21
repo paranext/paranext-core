@@ -61,35 +61,12 @@ The `KbdGroup` is only needed when a shortcut combines **more than one key**. A 
 The per-OS separator carries over from the string conventions above: **macOS** places its symbols adjacent with no separator, while **Windows** and **Linux** put a literal `+` between keys, rendered as a plain `<span>` between the `Kbd` boxes (per the [shadcn Kbd docs](https://ui.shadcn.com/docs/components/base/kbd)).
 
 <ExampleBlockGroup>
-  <ExampleBlock variant="avoid" preview={<Kbd>Ctrl+Z</Kbd>} code={`<Kbd>{isMac ? '⌘Z' : 'Ctrl+Z'}</Kbd>`}>
+  <ExampleBlock variant="avoid" preview={<Kbd>Ctrl+Z</Kbd>} code="<Kbd>Ctrl+Z</Kbd>">
     The whole combination is stuffed into one <code>Kbd</code>, so it renders as a single keycap
-    with the separator baked into text. Individual keys can't be spaced or styled as keycaps.
+    with the separator baked into the text. Individual keys can't be spaced or styled as keycaps.
   </ExampleBlock>
 
-  <ExampleBlock
-    variant="prefer"
-    preview={
-<KbdGroup>
-<Kbd>Ctrl</Kbd>
-<span>+</span>
-<Kbd>Z</Kbd>
-</KbdGroup>
-}
-    code={`<KbdGroup>
-{isMac ? (
-<>
-  <Kbd>⌘</Kbd>
-  <Kbd>Z</Kbd>
-</>
-) : (
-<>
-  <Kbd>Ctrl</Kbd>
-  <span>+</span>
-  <Kbd>Z</Kbd>
-</>
-)}
-</KbdGroup>`}
-  >
+  <ExampleBlock variant="prefer" preview={<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>} code="<KbdGroup><Kbd>Ctrl</Kbd><span>+</span><Kbd>Z</Kbd></KbdGroup>">
     One <code>Kbd</code> per key inside a <code>KbdGroup</code>: macOS symbols sit adjacent,
     Windows/Linux get a <code>+</code> separator as a plain <code>span</code>.
   </ExampleBlock>
