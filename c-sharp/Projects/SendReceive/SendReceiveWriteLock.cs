@@ -257,6 +257,12 @@ internal static class SendReceiveWriteLock
     // never mutated. Case-insensitive because project ID casing varies across call sites.
     private static volatile IImmutableSet<string> _blockedProjectIds = EmptyProjectIds;
 
+    // The single not-blocking snapshot, shared across every disarm/idle site (Clear(), Clear(long),
+    // and GetBlockState's not-blocking branch) so the empty shape is defined exactly once. Safe to
+    // share as a static readonly value: SendReceiveBlockState is an immutable record struct and its
+    // empty id collection is never mutated.
+    private static readonly SendReceiveBlockState NotBlocking = new(false, []);
+
     // How long SetSyncing waits for in-flight writes to drain before giving up. BOUNDED on purpose:
     // a sync start must never be able to deadlock behind a write scope that (through a bug, a stuck
     // ParatextData call, or an editor that forgot to dispose) never completes. On timeout we log
@@ -311,12 +317,13 @@ internal static class SendReceiveWriteLock
     public static SendReceiveBlockState GetBlockState()
     {
         bool isBlocking = (Volatile.Read(ref _state) & ArmedFlag) != 0;
-        // When disarmed, report an empty set regardless of the pure-data field (Clear() empties the
-        // set data-then-flag, so it can briefly still hold ids while already disarmed).
-        return new SendReceiveBlockState(
-            isBlocking,
-            isBlocking ? _blockedProjectIds.ToArray() : []
-        );
+        // When disarmed, report the shared not-blocking snapshot regardless of the pure-data field
+        // (Clear() empties the set data-then-flag, so it can briefly still hold ids while already
+        // disarmed). When blocking, hand out _blockedProjectIds directly — it is already an immutable
+        // set (safe to share by reference), and its type satisfies SendReceiveBlockState.ProjectIds,
+        // so there is no need to copy it. This also matches the runtime shape the arm-side raise
+        // publishes (it passes the ImmutableHashSet straight in).
+        return isBlocking ? new SendReceiveBlockState(true, _blockedProjectIds) : NotBlocking;
     }
 
     // Invokes BlockStateChanged, isolating the gate from any subscriber fault. There is no logger in
@@ -504,7 +511,7 @@ internal static class SendReceiveWriteLock
         // nothing was armed is a no-op and must not fire a spurious "changed" signal (consistent
         // with the stale-token Clear(long) no-op below).
         if ((previous & ArmedFlag) != 0)
-            RaiseBlockStateChanged(new SendReceiveBlockState(false, []));
+            RaiseBlockStateChanged(NotBlocking);
     }
 
     /// <summary>
@@ -535,7 +542,7 @@ internal static class SendReceiveWriteLock
                 _blockedProjectIds = EmptyProjectIds;
                 // A real disarm happened (this bracket owned the slot) — announce it. The
                 // stale-token and idempotent-no-op paths above return without raising.
-                RaiseBlockStateChanged(new SendReceiveBlockState(false, []));
+                RaiseBlockStateChanged(NotBlocking);
                 return;
             }
         }
@@ -647,25 +654,3 @@ internal static class SendReceiveWriteLock
         }
     }
 }
-
-/// <summary>
-/// An immutable snapshot of <see cref="SendReceiveWriteLock"/>'s block state, carried by
-/// <see cref="SendReceiveWriteLock.BlockStateChanged"/> and returned by
-/// <see cref="SendReceiveWriteLock.GetBlockState"/>.
-/// </summary>
-/// <param name="IsBlocking">Whether an automatic Send/Receive is currently armed (rejecting writes
-/// to the listed projects). <c>false</c> whenever the gate is idle — always so in public core.</param>
-/// <param name="ProjectIds">The project ids whose writes are being rejected while
-/// <paramref name="IsBlocking"/> is <c>true</c>; empty when not blocking. Serialized to the PAPI as
-/// a JSON array under the camelCase key <c>projectIds</c> (see below).</param>
-/// <remarks>
-/// Serializes to the exact wire shape the renderer consumes — <c>{ isBlocking, projectIds }</c> —
-/// via the shared PAPI JSON options (<c>PropertyNamingPolicy = CamelCase</c>, configured on the
-/// JSON-RPC formatter in <c>SerializationOptions</c>), so no per-property attributes are needed. The
-/// notifier (<c>SendReceiveBlockNotifierService</c>) sends this record straight over the wire as both
-/// the <c>onSyncWriteLockChanged</c> event payload and the <c>getAutoSyncBlocking</c> command return.
-/// </remarks>
-public readonly record struct SendReceiveBlockState(
-    bool IsBlocking,
-    IReadOnlyCollection<string> ProjectIds
-);

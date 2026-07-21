@@ -18,6 +18,8 @@
  * an in-flight batch) are reflected immediately, with no fresh grace.
  */
 
+import { deepEqual } from 'platform-bible-utils';
+
 /**
  * How long blocking must persist before it becomes visible; a sync finishing inside this window
  * shows nothing (PT9 parity).
@@ -41,16 +43,9 @@ function notifyListeners(): void {
   listeners.forEach((listener) => listener());
 }
 
-/** Content equality for two id sets (the store always replaces sets wholesale, never mutates). */
-function areSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
-  if (a === b) return true;
-  if (a.size !== b.size) return false;
-  return [...a].every((id) => b.has(id));
-}
-
 /** Publishes a new visible set, notifying listeners only when its contents actually change. */
 function setVisible(next: ReadonlySet<string>): void {
-  if (areSetsEqual(visibleBlockedProjectIds, next)) return;
+  if (deepEqual(visibleBlockedProjectIds, next)) return;
   visibleBlockedProjectIds = next;
   notifyListeners();
 }
@@ -61,8 +56,11 @@ function setVisible(next: ReadonlySet<string>): void {
  * it here verbatim (an empty array clears blocking entirely).
  */
 export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
-  const next: ReadonlySet<string> = new Set(projectIds);
-  rawBlockedProjectIds = next;
+  // Canonicalize to upper once at ingestion: the backend gate matches ids OrdinalIgnoreCase and the
+  // canonical project id is upper (ProjectMetadata.Id = id.ToUpperInvariant()), but every consumer
+  // here (setVisible's equality, isProjectBlocked's Set.has, the driver's isEditorBlocked) is
+  // case-sensitive. Upper-casing at the single ingestion point keeps the whole store canonical.
+  const next: ReadonlySet<string> = new Set(projectIds.map((id) => id.toUpperCase()));
 
   if (next.size === 0) {
     // Fully cleared: cancel a pending grace (cleared inside the window → nothing ever showed) and
@@ -80,8 +78,13 @@ export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
     return;
   }
 
-  // Empty → non-empty. Arm the show-grace if one is not already pending; visibility only turns on
-  // if blocking survives the grace.
+  // Empty → non-empty. Record the latest raw snapshot for the grace-timer callback to read, then arm
+  // the show-grace if one is not already pending; visibility only turns on if blocking survives the
+  // grace. The assignment lives here (above the pending-grace check) — not at the top of the function
+  // — because only the grace callback ever reads rawBlockedProjectIds, so it was a dead store on the
+  // cleared and already-visible branches. Keeping it above the check means a second empty → non-empty
+  // snapshot arriving while a grace is still pending still refreshes what that pending timer will read.
+  rawBlockedProjectIds = next;
   if (graceTimer === undefined) {
     graceTimer = setTimeout(() => {
       graceTimer = undefined;
@@ -105,7 +108,10 @@ export function getBlockedProjectIds(): ReadonlySet<string> {
  */
 export function isProjectBlocked(projectId: string | undefined): boolean {
   if (projectId === undefined) return false;
-  return visibleBlockedProjectIds.has(projectId);
+  // Upper-case to match the store's canonical form (setBlockedProjects canonicalizes to upper at
+  // ingestion), so a caller passing a non-canonical id can't miss a real block — mirrors the
+  // driver's isEditorBlocked.
+  return visibleBlockedProjectIds.has(projectId.toUpperCase());
 }
 
 /** Subscribe to state changes. Returns an unsubscribe function. */

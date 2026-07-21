@@ -24,7 +24,7 @@ describe('auto-sync-blocking-store', () => {
   describe('initial state', () => {
     it('reports nothing blocked', () => {
       expect(getBlockedProjectIds().size).toBe(0);
-      expect(isProjectBlocked('p1')).toBe(false);
+      expect(isProjectBlocked('P1')).toBe(false);
     });
 
     it('treats an undefined project id as never blocked', () => {
@@ -34,33 +34,33 @@ describe('auto-sync-blocking-store', () => {
 
   describe('show grace', () => {
     it('is not visible immediately when blocking starts', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       expect(getBlockedProjectIds().size).toBe(0);
-      expect(isProjectBlocked('p1')).toBe(false);
+      expect(isProjectBlocked('P1')).toBe(false);
     });
 
     it('becomes visible once the 200 ms grace elapses', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(isProjectBlocked('p1')).toBe(true);
-      expect([...getBlockedProjectIds()]).toEqual(['p1']);
+      expect(isProjectBlocked('P1')).toBe(true);
+      expect([...getBlockedProjectIds()]).toEqual(['P1']);
     });
 
     it('never becomes visible when blocking clears within the grace (sync finished fast)', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(150); // still inside the grace window
       setBlockedProjects([]);
       vi.advanceTimersByTime(SHOW_GRACE_MS); // well past when the grace would have fired
-      expect(isProjectBlocked('p1')).toBe(false);
+      expect(isProjectBlocked('P1')).toBe(false);
       expect(listener).not.toHaveBeenCalled(); // nothing ever showed, so nothing ever notified
     });
 
     it('does not notify listeners during the grace period', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS - 1);
       expect(listener).not.toHaveBeenCalled();
       vi.advanceTimersByTime(1);
@@ -68,82 +68,104 @@ describe('auto-sync-blocking-store', () => {
     });
 
     it('shows whatever is blocked when the grace fires, even if the set grew during the grace', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(100); // inside the grace
-      setBlockedProjects(['p1', 'p2']); // a second project joins the in-flight batch
+      setBlockedProjects(['P1', 'P2']); // a second project joins the in-flight batch
       expect(getBlockedProjectIds().size).toBe(0); // still inside the grace
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect([...getBlockedProjectIds()].sort()).toEqual(['p1', 'p2']);
+      expect([...getBlockedProjectIds()].sort()).toEqual(['P1', 'P2']);
     });
 
     it('does not re-arm a fresh grace when a project joins an already-visible batch', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect(isProjectBlocked('P1')).toBe(true);
+      setBlockedProjects(['P1', 'P2']); // already visible → reflected immediately, no new grace
+      expect(isProjectBlocked('P2')).toBe(true);
+    });
+  });
+
+  describe('case canonicalization (ingestion, PT-4214 Stage U)', () => {
+    it('canonicalizes ingested project ids to upper case', () => {
+      // The backend gate matches ids OrdinalIgnoreCase and the canonical project id is upper; the
+      // store canonicalizes at ingestion so a mixed/lower-case snapshot still matches a canonical
+      // (upper) query — no casing skew can leave a project silently unblocked in the UI.
+      setBlockedProjects(['proj_a', 'Proj_B']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect([...getBlockedProjectIds()].sort()).toEqual(['PROJ_A', 'PROJ_B']);
+      expect(isProjectBlocked('PROJ_A')).toBe(true);
+      expect(isProjectBlocked('PROJ_B')).toBe(true);
+    });
+
+    it('isProjectBlocked matches a non-canonical (mixed/lower-case) query', () => {
+      // The reader canonicalizes its own argument too, so a caller passing a non-canonical id can't
+      // miss a real block (mirrors the driver's isEditorBlocked).
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(isProjectBlocked('p1')).toBe(true);
-      setBlockedProjects(['p1', 'p2']); // already visible → reflected immediately, no new grace
-      expect(isProjectBlocked('p2')).toBe(true);
+      expect(isProjectBlocked('P1')).toBe(true);
     });
   });
 
   describe('snapshot replace semantics', () => {
     it('replaces the blocked set wholesale', () => {
-      setBlockedProjects(['p1', 'p2']);
+      setBlockedProjects(['P1', 'P2']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect([...getBlockedProjectIds()].sort()).toEqual(['p1', 'p2']);
+      expect([...getBlockedProjectIds()].sort()).toEqual(['P1', 'P2']);
 
-      setBlockedProjects(['p2', 'p3']); // wholesale replace, not a merge
-      expect(isProjectBlocked('p1')).toBe(false);
-      expect(isProjectBlocked('p2')).toBe(true);
-      expect(isProjectBlocked('p3')).toBe(true);
+      setBlockedProjects(['P2', 'P3']); // wholesale replace, not a merge
+      expect(isProjectBlocked('P1')).toBe(false);
+      expect(isProjectBlocked('P2')).toBe(true);
+      expect(isProjectBlocked('P3')).toBe(true);
     });
 
     it('clears blocking when replaced with an empty set', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(isProjectBlocked('p1')).toBe(true);
+      expect(isProjectBlocked('P1')).toBe(true);
       setBlockedProjects([]);
       expect(getBlockedProjectIds().size).toBe(0);
     });
 
     it('notifies once when the visible set content changes', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      setBlockedProjects(['p1', 'p2']); // content changed → one notify
+      setBlockedProjects(['P1', 'P2']); // content changed → one notify
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
     it('does not notify when the replacement set has identical content', () => {
-      setBlockedProjects(['p1', 'p2']);
+      setBlockedProjects(['P1', 'P2']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      setBlockedProjects(['p2', 'p1']); // same content, different order/array → no change
+      setBlockedProjects(['P2', 'P1']); // same content, different order/array → no change
       expect(listener).not.toHaveBeenCalled();
     });
   });
 
   describe('no timer-driven expiry (safety leash deleted, PT-4214 Stage U)', () => {
     it('leaves no pending timer once blocking is visible', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       expect(vi.getTimerCount()).toBe(1); // the grace timer
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(vi.getTimerCount()).toBe(0); // grace fired; NO safety leash left running
     });
 
     it('never auto-clears a long-running block (no safety timeout)', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(isProjectBlocked('p1')).toBe(true);
+      expect(isProjectBlocked('P1')).toBe(true);
       // Far beyond the old 10-minute leash — the block persists until the backend clears it.
       vi.advanceTimersByTime(60 * 60 * 1000);
-      expect(isProjectBlocked('p1')).toBe(true);
+      expect(isProjectBlocked('P1')).toBe(true);
       expect(vi.getTimerCount()).toBe(0);
     });
 
     it('leaves no pending timer after blocking clears inside the grace', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       setBlockedProjects([]); // cleared inside the grace
       expect(vi.getTimerCount()).toBe(0); // grace timer cancelled, nothing else armed
     });
@@ -151,7 +173,7 @@ describe('auto-sync-blocking-store', () => {
 
   describe('subscribeToAutoSyncBlocking', () => {
     it('notifies listeners when visibility flips to false', () => {
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
@@ -163,7 +185,7 @@ describe('auto-sync-blocking-store', () => {
       const listener = vi.fn();
       const unsubscribe = subscribeToAutoSyncBlocking(listener);
       unsubscribe();
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(listener).not.toHaveBeenCalled();
     });
@@ -173,7 +195,7 @@ describe('auto-sync-blocking-store', () => {
       const listener2 = vi.fn();
       subscribeToAutoSyncBlocking(listener1);
       subscribeToAutoSyncBlocking(listener2);
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(listener1).toHaveBeenCalledTimes(1);
       expect(listener2).toHaveBeenCalledTimes(1);
@@ -184,7 +206,7 @@ describe('auto-sync-blocking-store', () => {
     it('clears state and the pending grace timer', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      setBlockedProjects(['p1']);
+      setBlockedProjects(['P1']);
       resetAutoSyncBlocking();
       vi.advanceTimersByTime(SHOW_GRACE_MS); // the grace should not fire
       expect(getBlockedProjectIds().size).toBe(0);

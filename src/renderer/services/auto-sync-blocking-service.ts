@@ -2,7 +2,7 @@ import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent, requestNoRetry } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, isString } from 'platform-bible-utils';
 import { setBlockedProjects } from './auto-sync-blocking-store';
 
 /**
@@ -64,7 +64,7 @@ export function initAutoSyncBlockingService(): () => void {
     ) {
       const { isBlocking, projectIds } = payload;
       if (typeof isBlocking === 'boolean' && Array.isArray(projectIds)) {
-        const stringIds = projectIds.filter((id): id is string => typeof id === 'string');
+        const stringIds = projectIds.filter(isString);
         if (stringIds.length === projectIds.length) return isBlocking ? stringIds : [];
       }
     }
@@ -84,6 +84,13 @@ export function initAutoSyncBlockingService(): () => void {
     setBlockedProjects(readBlockedProjectIds(event));
   });
 
+  // NOTE: this init consult is the ONLY backend re-seed today — there is no re-query on websocket
+  // reconnect, C# data-provider restart, or editor mount. So if a disarm is ever lost (a faulted
+  // fire-and-forget SendEventAsync, an off-contract raise reorder, or a provider that restarts
+  // disarmed without re-emitting), the visible blocked set stays stale until the next real
+  // transition or a full renderer reload. Closing that gap depends on the PT-4214 editor-mount
+  // re-query, which is out-of-scope Stage-U work tracked on PT-4214; this one-shot seed is all the
+  // recovery there is until it lands.
   (async () => {
     try {
       const snapshot = await requestNoRetry<[], unknown>(

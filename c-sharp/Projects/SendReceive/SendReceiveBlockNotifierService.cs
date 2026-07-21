@@ -33,13 +33,16 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// platform-wide migration, this event IS formally registered with main's central event registry:
 /// <see cref="InitializeAsync"/> sends a <c>network:registerEvent</c> request — the same
 /// main-process JSON-RPC method TypeScript's <c>createNetworkEventEmitterAsync</c> registration
-/// path calls — before subscribing to the gate, making this connection the event's single
-/// registered source. <see cref="PapiClient"/> has no dedicated wrapper for that method, so the
-/// request goes out generically via <see cref="PapiClient.SendRequestAsync{T}"/>, mirroring how
+/// path calls — making this connection the event's single registered source.
+/// <see cref="PapiClient"/> has no dedicated wrapper for that method, so the request goes out
+/// generically via <see cref="PapiClient.SendRequestAsync{T}"/>, mirroring how
 /// <see cref="PapiClient.RegisterRequestHandlerAsync"/> calls <c>network:registerMethod</c>.
-/// Registration is best-effort: on rejection or failure we log and still emit, because announcing
-/// unregistered remains functional (main just logs the deprecation warning) and a registry hiccup
-/// must never break backend startup.
+/// We subscribe to the gate BEFORE issuing that registration request, not after, so a transition
+/// arriving during the registration round-trip cannot be dropped unsubscribed; the accepted cost is
+/// that such an early transition announces unregistered (main logs its once-per-name deprecation
+/// warning) until the registration completes. Registration is best-effort either way: on rejection
+/// or failure we log and still emit, because announcing unregistered remains functional (main just
+/// logs the deprecation warning) and a registry hiccup must never break backend startup.
 /// </para>
 /// </summary>
 internal class SendReceiveBlockNotifierService(PapiClient papiClient)
@@ -66,9 +69,19 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
 
     public async Task InitializeAsync()
     {
-        // Register the event with main's central event registry FIRST, so no announcement can
-        // precede the registration (see the class doc: best-effort — on rejection or failure, log
-        // and continue; emitting unregistered still works, and startup must never break over this).
+        // Subscribe to the gate FIRST, before the registration round-trip below, so no transition
+        // can slip through unsubscribed while the network:registerEvent request is in flight. A
+        // transition that beats registration just announces unregistered (main logs its once-per-name
+        // deprecation warning), which is the right trade for the single block-state signal — a missed
+        // transition would be worse than an early warning. The subscription lives for the process
+        // lifetime (this service is a startup singleton, like the other PAPI services), so there is
+        // no unsubscribe — mirrors SharedStore's process-lifetime change-event handler.
+        SendReceiveWriteLock.BlockStateChanged += OnBlockStateChanged;
+
+        // Register the event with main's central event registry (best-effort — on rejection or
+        // failure, log and continue; emitting unregistered still works, and startup must never break
+        // over this). We accept that a transition arriving during this await may announce before the
+        // registration completes; see the subscribe-first rationale above.
         try
         {
             bool accepted = await PapiClient.SendRequestAsync<bool>(
@@ -88,11 +101,6 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
                     + $"registry; announcements will warn as unregistered. {ex}"
             );
         }
-
-        // Forward every gate transition to the renderer. The subscription lives for the process
-        // lifetime (this service is a startup singleton, like the other PAPI services), so there is
-        // no unsubscribe — mirrors SharedStore's process-lifetime change-event handler.
-        SendReceiveWriteLock.BlockStateChanged += OnBlockStateChanged;
 
         // Register the pull command so a renderer can read the current snapshot on demand instead of
         // waiting for the next transition. GetBlockState returns the snapshot the handler serializes
