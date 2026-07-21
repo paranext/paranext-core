@@ -75,6 +75,14 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     private List<InstallableResource> _resources = [];
 
+    // Serializes catalog fetches. GetDblResources runs off the JSON-RPC dispatch thread (see there),
+    // so it can no longer rely on the single-threaded reading loop to serialize it — and the provider
+    // must not assume it will (csharp-patterns.md: "Assume registered PAPI methods are called
+    // concurrently. If a method isn't thread-safe, lock it."). Guards the process-global
+    // Trace.Listeners bracket and the _resources write against overlapping fetches. Async wait, so
+    // contending callers yield instead of blocking the reading loop.
+    private readonly SemaphoreSlim _fetchLock = new(1, 1);
+
     #endregion
 
     #region DataProvider methods
@@ -154,44 +162,56 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         if (!RegistrationInfo.DefaultUser.IsValid)
             throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-        // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
-        // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the full
-        // catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers inline on
-        // its message-reading loop, so doing this work synchronously stalls every other request in
-        // this process until it finishes — provider-existence checks fail ("No data provider found"),
-        // getCachedResources times out, and the fetch never appears to settle. Awaiting Task.Run
-        // yields the reading loop back immediately so the process stays responsive. See PT-4222.
-        return await Task.Run(() =>
+        // Serialize fetches so overlapping calls don't attach two 401-detection listeners to the
+        // process-global Trace.Listeners at once or reassign _resources concurrently. WaitAsync
+        // yields rather than blocking the reading loop, preserving the PT-4222 responsiveness fix.
+        await _fetchLock.WaitAsync();
+        try
         {
-            TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
-            Trace.Listeners.Add(traceListener);
-            try
+            // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
+            // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the
+            // full catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers
+            // inline on its message-reading loop, so doing this work synchronously stalls every
+            // other request in this process until it finishes — provider-existence checks fail
+            // ("No data provider found"), getCachedResources times out, and the fetch never appears
+            // to settle. Awaiting Task.Run yields the reading loop back immediately so the process
+            // stays responsive. See PT-4222.
+            return await Task.Run(() =>
             {
-                FetchAvailableDBLResources();
-            }
-            finally
-            {
-                Trace.Listeners.Remove(traceListener);
-            }
-            if (traceListener.FoundText)
-                throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+                TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+                Trace.Listeners.Add(traceListener);
+                try
+                {
+                    FetchAvailableDBLResources();
+                }
+                finally
+                {
+                    Trace.Listeners.Remove(traceListener);
+                }
+                if (traceListener.FoundText)
+                    throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
-            return _resources
-                .Select(resource => new DblResourceData(
-                    resource.DBLEntryUid.Id,
-                    resource.DisplayName,
-                    resource.FullName,
-                    resource.BestLanguageName,
-                    resource.Type,
-                    resource.Size,
-                    resource.Installed,
-                    resource.IsNewerThanCurrentlyInstalled(),
-                    resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
-                        ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
-                        ?? ""
-                ))
-                .ToList();
-        });
+                return _resources
+                    .Select(resource => new DblResourceData(
+                        resource.DBLEntryUid.Id,
+                        resource.DisplayName,
+                        resource.FullName,
+                        resource.BestLanguageName,
+                        resource.Type,
+                        resource.Size,
+                        resource.Installed,
+                        resource.IsNewerThanCurrentlyInstalled(),
+                        resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
+                            ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
+                            ?? ""
+                    ))
+                    .ToList();
+            });
+        }
+        finally
+        {
+            _fetchLock.Release();
+        }
     }
 
     private void FindResource(
