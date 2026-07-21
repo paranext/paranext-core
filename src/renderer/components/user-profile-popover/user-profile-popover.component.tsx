@@ -54,6 +54,8 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_appearance_light%',
   '%userProfile_appearance_dark%',
   '%userProfile_appearance_system%',
+  '%userProfile_privacyMode_namePlaceholder%',
+  '%userProfile_privacyMode_emailPlaceholder%',
 ];
 
 const DEFAULT_AVAILABLE_LANGUAGES: Record<string, LanguageInfo> = {
@@ -214,20 +216,37 @@ export function UserProfilePopover() {
     };
   }, [isOpen]);
 
+  const [privacyModePossiblyError] = useSetting('platform.privacyMode', false);
+  const isPrivacyModeOn =
+    !isPlatformError(privacyModePossiblyError) && privacyModePossiblyError === true;
+
   // "Not registered" is a state of the whole header — show it only when neither the name nor the
   // email are populated. When the user has a name but no email, the email line is omitted entirely
   // so we don't imply the user is unregistered just because the email field happens to be blank.
   const registeredName = registrationData?.name ?? '';
   const registeredEmail = registrationData?.email ?? '';
   const isRegistered = registeredName.length > 0 || registeredEmail.length > 0;
-  const nameText =
-    registeredName.length > 0
-      ? registeredName
-      : localizedStrings['%userProfile_header_defaultName%'];
+  // In privacy mode, replace the user's actual name/email with placeholders so the popover doesn't
+  // surface personal information (e.g., during screen sharing). The underlying registration data is
+  // unchanged — only what we render here is masked.
+  let nameText: string;
+  if (isPrivacyModeOn && registeredName.length > 0) {
+    nameText = localizedStrings['%userProfile_privacyMode_namePlaceholder%'];
+  } else if (registeredName.length > 0) {
+    nameText = registeredName;
+  } else {
+    nameText = localizedStrings['%userProfile_header_defaultName%'];
+  }
   let emailText: string | undefined;
-  if (registeredEmail.length > 0) emailText = registeredEmail;
-  else if (!isRegistered) emailText = localizedStrings['%userProfile_header_notRegistered%'];
-  else emailText = undefined;
+  if (isPrivacyModeOn && registeredEmail.length > 0) {
+    emailText = localizedStrings['%userProfile_privacyMode_emailPlaceholder%'];
+  } else if (registeredEmail.length > 0) {
+    emailText = registeredEmail;
+  } else if (!isRegistered) {
+    emailText = localizedStrings['%userProfile_header_notRegistered%'];
+  } else {
+    emailText = undefined;
+  }
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>

@@ -1,11 +1,12 @@
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
 import { appService } from '@shared/services/app.service';
 import { AppInfo } from '@shared/services/app.service-model';
 import { usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
   formatReplacementStringToArray,
+  isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
 import { Fragment, useCallback } from 'react';
@@ -56,14 +57,26 @@ function AboutDialog() {
   );
   if (appInfo.version) packageInfo.version = appInfo.version;
 
+  const [privacyModePossiblyError] = useSetting('platform.privacyMode', false);
+  const isPrivacyModeOn =
+    !isPlatformError(privacyModePossiblyError) && privacyModePossiblyError === true;
+  // The build metadata embedded in `version` (e.g. `0.3.0+<user>-dev.<timestamp>.<sha>`) contains
+  // the dev machine's username, so the whole version string is masked when privacy mode is on
+  // rather than trying to parse it apart.
+  const displayedPackageInfo = isPrivacyModeOn ? { ...packageInfo, version: '***' } : packageInfo;
+
   return (
     <div className="about-scroll-container">
       <div className="about-content">
         <InlineLogoAndName className="about-logo" />
         <h1 className="about-title">{productName}</h1>
         <p className="about-description">{packageInfo.description}</p>
-        <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
-        <p className="about-license">{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
+        <p className="about-version">
+          {formatReplacementString(versionLabelFormat, displayedPackageInfo)}
+        </p>
+        <p className="about-license">
+          {formatReplacementString(licenseLabelFormat, displayedPackageInfo)}
+        </p>
         <p className="about-attribution">
           Copyright ©2017-2025 SIL Global and United Bible Societies
         </p>

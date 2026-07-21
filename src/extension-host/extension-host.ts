@@ -1,11 +1,14 @@
 import '@extension-host/global-this.model';
 import '@node/utils/log-archiver.util';
+import os from 'os';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import * as extensionService from '@extension-host/services/extension.service';
 import { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import { logger } from '@shared/services/logger.service';
+import { setLoggerHomeDir, setLoggerPrivacyMode } from '@shared/utils/logger.utils';
+import { readBootSettingBoolean } from '@node/utils/util';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { extensionAssetService } from '@shared/services/extension-asset.service';
@@ -21,6 +24,13 @@ import { gracefulShutdownMessage } from '@node/models/interprocess-messages.mode
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
+
+// Seed the logger's home-directory cache so `platform.privacyMode` can strip it from log lines.
+// Done here (not in shared logger.service) because the renderer bundle can't resolve `os`.
+setLoggerHomeDir(os.homedir());
+// Pre-load the privacy flag synchronously from settings.json so startup log lines emitted before
+// the settings service subscribes (and dispatches the value) are still anonymized.
+setLoggerPrivacyMode(readBootSettingBoolean('platform.privacyMode', false));
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,

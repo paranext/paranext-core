@@ -73,6 +73,7 @@ export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_section_internetSettings%',
   '%paratextRegistration_section_internetSettings_tooltip%',
   '%paratextRegistration_section_proxySettings%',
+  '%paratextRegistration_section_proxySettings_privacyHint%',
 ];
 
 export type InternetSettingsFormProps = {
@@ -211,6 +212,9 @@ export function InternetSettingsForm({
                 }
               />
             </Grid>
+            <div className="tw:mt-2 tw:text-xs tw:text-muted-foreground">
+              {localizedStrings['%paratextRegistration_section_proxySettings_privacyHint%']}
+            </div>
           </CardContent>
         </Card>
       )}

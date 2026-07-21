@@ -2,6 +2,7 @@
 import { URL } from 'url';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { Uri } from '@shared/data/file-system.model';
 import memoizeOne from 'memoize-one';
 import { includes, split } from 'platform-bible-utils';
@@ -158,3 +159,26 @@ export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
  */
 export const isNoisyDevModeEnvVariableSet = (): boolean =>
   !!process.env.DEV_NOISY && process.env.DEV_NOISY === 'true';
+
+/**
+ * Synchronously read a top-level boolean value from the persisted settings file.
+ *
+ * Used at process boot to pre-seed the logger's privacy flag _before_ the settings service has had
+ * a chance to load asynchronously and dispatch the value. Without this, the first few log lines
+ * emitted at startup (notably the `Starting <app> version <ver+build-metadata>` line, which embeds
+ * the dev machine's username) leak personal information even when the user has privacy mode
+ * enabled. Best-effort: returns `defaultValue` if the file is missing, malformed, or the key is
+ * absent.
+ */
+export function readBootSettingBoolean(settingKey: string, defaultValue: boolean): boolean {
+  try {
+    const settingsPath = path.join(getAppDir(), DATA_DIR_NAME, 'settings.json');
+    if (!fs.existsSync(settingsPath)) return defaultValue;
+    const raw = fs.readFileSync(settingsPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const value = parsed?.[settingKey];
+    return typeof value === 'boolean' ? value : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+}
