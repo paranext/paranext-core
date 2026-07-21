@@ -1,6 +1,7 @@
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
+using Paratext.Data.ProjectFileAccess;
 using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.Projects;
@@ -11,9 +12,6 @@ namespace Paranext.DataProvider.Projects;
 internal class LocalParatextProjects : IDisposable
 {
     #region Constructors, consts, and fields
-
-    // Inside each project's "home" directory, these are the subdirectories and files
-    protected const string PROJECT_SETTINGS_FILE = "Settings.xml";
 
     /// <summary>
     /// Directory inside a project's root directory where Platform.Bible's extension data is stored
@@ -45,9 +43,28 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     private static readonly TimeSpan s_projectChangeDebounce = TimeSpan.FromMilliseconds(500);
 
-    private FileSystemWatcher? _projectDirectoryWatcher;
+    // Live watchers over the fixed set of ParatextData containers (root, _projectsById,
+    // _Resources, _resourcesById). All non-recursive; count is bounded by that fixed set, never
+    // by project count or .hg depth.
+    private readonly List<FileSystemWatcher> _watchers = [];
+
+    // Container directories currently watched, so lazy-attach is idempotent. Guarded, together
+    // with _watchers, by _watchersLock (watcher events arrive on background threads).
+    private readonly HashSet<string> _watchedContainerPaths = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _watchersLock = new();
+
+    // Set first in Dispose (before the watcher/timer teardown it guards), so an in-flight
+    // AttachContainerWatcher/event-handler thread racing the Dispose sees it and backs off instead
+    // of registering a watcher into (or touching a timer of) an already-disposed instance.
+    private volatile bool _disposed;
+
     private Timer? _projectChangeDebounceTimer;
     private readonly object _projectChangeLock = new();
+
+    // By-GUID sibling of the project root that ParatextData also enumerates for projects
+    // (ScrTextCollection.GetProjectFolders). The name is a private const in ParatextData
+    // (projectsByIdDirName); mirror it here and keep in sync.
+    private const string PROJECTS_BY_ID_DIR_NAME = "_projectsById";
 
     /// <summary>
     /// Debounce window for coalescing a burst of <see cref="NotifyProjectsChanged"/> calls into a
@@ -189,6 +206,10 @@ internal class LocalParatextProjects : IDisposable
     {
         if (_papiClient == null)
             return;
+        // Symmetric with ScheduleProjectDirectoriesChanged: a racing post-Dispose call must not
+        // touch a debounce timer that may already be disposed.
+        if (_disposed)
+            return;
         lock (_notifyLock)
         {
             _notifyDebounceTimer ??= new Timer(_ => EmitProjectsChanged());
@@ -207,59 +228,172 @@ internal class LocalParatextProjects : IDisposable
     }
 
     /// <summary>
-    /// Best-effort watch of the project root for projects added or removed on disk by ANY source - a
-    /// Send/Receive clone, an out-of-process install, or a manual copy - so the project-list
-    /// consumers refresh even when the change did not go through a code path we notify inline (DBL
-    /// install/uninstall and setting writes already call <see cref="NotifyProjectsChanged"/>
-    /// directly).
+    /// Best-effort watch of the ParatextData container directories for projects or resources
+    /// added/removed/updated on disk by ANY source - a Send/Receive clone, an out-of-process
+    /// install, or a manual copy - so the project-list consumers refresh even when the change did
+    /// not go through a code path we notify inline (DBL install/uninstall and metadata setting
+    /// writes already call <see cref="NotifyProjectsChanged"/> directly).
     ///
-    /// Watches only <see cref="PROJECT_SETTINGS_FILE"/> - a project IS its Settings.xml - and only its
-    /// create/delete/rename (project add/remove) plus in-place content rewrites (an out-of-band edit
-    /// of an existing project's display settings, e.g. via Send/Receive). Never other files, so the
-    /// constant churn of normal editing (scripture text, comments, notes) never triggers a refresh.
-    /// Events are debounced because a clone/install writes in a burst.
+    /// One non-recursive watcher per container in the fixed set ParatextData enumerates
+    /// (<c>ScrTextCollection.GetProjectFolders</c>/<c>GetResourceProjectNames</c>): the root and
+    /// <see cref="PROJECTS_BY_ID_DIR_NAME"/> for project folders being added/removed/renamed, and
+    /// <c>_Resources</c>/<c>_resourcesById</c> for resource files. Because none are recursive, a
+    /// project's <c>.hg</c> Mercurial churn and scripture/comment writes (all grandchildren of a
+    /// container) are never watched. An in-place <c>Settings.xml</c> rewrite is likewise invisible
+    /// and is instead notified inline by its writer.
     ///
-    /// A no-op without a <see cref="PapiClient"/> (nothing to notify; also keeps tests/tooling from
-    /// spinning up a real watcher). FileSystemWatcher is unreliable on some platforms (WSL mounts,
-    /// network drives), so this is a safety net layered on the inline notifications, never the sole
-    /// mechanism.
+    /// Optional containers are created on demand, so the always-on root watcher lazily attaches
+    /// them when it sees them appear (see <see cref="OnRootContainerEvent"/>). A no-op without a
+    /// <see cref="PapiClient"/> (nothing to notify; also keeps tests/tooling from spinning up real
+    /// watchers). FileSystemWatcher is unreliable on some platforms (WSL mounts, network drives),
+    /// so this is a safety net layered on the inline notifications, never the sole mechanism.
     /// </summary>
     protected void StartWatchingProjectDirectory()
     {
         if (_papiClient == null)
             return;
+
+        // The root always exists (SetUpProjectRootFolder). Its watcher also lazily attaches the
+        // optional containers as they appear.
+        AttachRootWatcher();
+        // Attach any optional containers that already exist at startup.
+        EnsureOptionalContainerWatchers();
+    }
+
+    /// <summary>
+    /// Watch the project root non-recursively for a project FOLDER being added/removed/renamed.
+    /// Uses <see cref="OnRootContainerEvent"/> so it also lazily attaches optional containers.
+    /// </summary>
+    private void AttachRootWatcher() =>
+        AttachContainerWatcher(
+            ProjectRootFolder,
+            NotifyFilters.DirectoryName,
+            resourceExtensionFilters: false,
+            handler: OnRootContainerEvent
+        );
+
+    /// <summary>
+    /// Attach the optional ParatextData containers that currently exist. Idempotent (each attach
+    /// is a no-op if the directory is missing or already watched), so it is safe to call at
+    /// startup and again whenever the root watcher sees a new top-level directory.
+    /// </summary>
+    private void EnsureOptionalContainerWatchers()
+    {
+        // Project container (by GUID): watch folder add/remove/rename, like the root.
+        AttachContainerWatcher(
+            Path.Combine(ProjectRootFolder, PROJECTS_BY_ID_DIR_NAME),
+            NotifyFilters.DirectoryName,
+            resourceExtensionFilters: false,
+            handler: OnContainerEvent
+        );
+        // Resource containers are added in Task 2.
+    }
+
+    /// <summary>
+    /// Attach one non-recursive watcher for a container directory, if it exists and is not already
+    /// watched. Best-effort: any failure logs and is swallowed (the inline notifications remain).
+    /// </summary>
+    /// <param name="directory">Container directory to watch.</param>
+    /// <param name="notifyFilter">
+    /// <see cref="NotifyFilters.DirectoryName"/> for project containers (folder add/remove/rename)
+    /// or <see cref="NotifyFilters.FileName"/> | <see cref="NotifyFilters.LastWrite"/> for resource
+    /// containers (file add/remove/rename/in-place-update).
+    /// </param>
+    /// <param name="resourceExtensionFilters">
+    /// When true, restrict to the two resource extensions ParatextData enumerates; when false
+    /// (project containers), no name filter.
+    /// </param>
+    /// <param name="handler">Change handler (<see cref="OnRootContainerEvent"/> for the root).</param>
+    private void AttachContainerWatcher(
+        string directory,
+        NotifyFilters notifyFilter,
+        bool resourceExtensionFilters,
+        FileSystemEventHandler handler
+    )
+    {
+        if (!Directory.Exists(directory) || !TryReserveContainer(directory))
+            return;
         try
         {
-            var watcher = new FileSystemWatcher(ProjectRootFolder, PROJECT_SETTINGS_FILE)
+            var watcher = new FileSystemWatcher(directory)
             {
-                IncludeSubdirectories = true,
-                // FileName catches a project's Settings.xml being added/removed/renamed (project
-                // add/remove). LastWrite catches an in-place content rewrite of an existing project's
-                // Settings.xml (e.g. a Send/Receive receive pulling an upstream name/language/editable
-                // change) - a Changed event, not a create/delete/rename - which would otherwise leave
-                // the picker/Home/New Tab showing stale display metadata.
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite,
+                IncludeSubdirectories = false,
+                NotifyFilter = notifyFilter,
             };
-            watcher.Created += OnProjectSettingsFileChanged;
-            watcher.Deleted += OnProjectSettingsFileChanged;
-            watcher.Renamed += OnProjectSettingsFileChanged;
-            watcher.Changed += OnProjectSettingsFileChanged;
+            if (resourceExtensionFilters)
+            {
+                // Only the two extensions ParatextData enumerates as resources
+                // (ScrTextCollection.GetResourceProjectNames).
+                watcher.Filters.Add("*" + ProjectFileManager.resourceFileExtension); // *.p8z
+                watcher.Filters.Add("*" + ProjectFileManager.xmlResourceFileExtension); // *.xml1z
+            }
+            watcher.Created += handler;
+            watcher.Deleted += handler;
+            // Renamed is a RenamedEventHandler, not a FileSystemEventHandler, so a
+            // FileSystemEventHandler variable cannot be added directly (delegate-type conversion,
+            // unlike method-group conversion, is not contravariant). Adapt via a lambda;
+            // RenamedEventArgs derives from FileSystemEventArgs, so passing it through is safe.
+            watcher.Renamed += (s, e) => handler(s, e);
+            // Content updates matter only for resource files (an in-place overwrite with a newer
+            // version); project-container folders have no meaningful Changed signal we act on.
+            if (resourceExtensionFilters)
+                watcher.Changed += handler;
             // The watcher's internal buffer can overflow during a large burst (dropping events
-            // silently under the recursive watch), so recover by scheduling the same refresh + notify
-            // rather than going stale.
+            // silently), so recover by scheduling the same refresh + notify rather than going stale.
             watcher.Error += OnProjectDirectoryWatcherError;
             watcher.EnableRaisingEvents = true;
-            _projectDirectoryWatcher = watcher;
+            Register(watcher);
         }
         catch (Exception ex)
         {
-            // A watcher failure just means we fall back to the inline notifications; never fatal.
-            Console.Error.WriteLine($"Could not watch project directory for changes: {ex}");
+            // Roll back the reservation so a later retry (e.g. a subsequent root event) can attach.
+            ReleaseContainer(directory);
+            Console.Error.WriteLine($"Could not watch project container '{directory}': {ex}");
         }
     }
 
-    private void OnProjectSettingsFileChanged(object sender, FileSystemEventArgs e) =>
+    private bool TryReserveContainer(string directory)
+    {
+        lock (_watchersLock)
+            return _watchedContainerPaths.Add(directory);
+    }
+
+    private void ReleaseContainer(string directory)
+    {
+        lock (_watchersLock)
+            _watchedContainerPaths.Remove(directory);
+    }
+
+    private void Register(FileSystemWatcher watcher)
+    {
+        lock (_watchersLock)
+        {
+            // Dispose ran while this watcher was being constructed/wired (it is live -
+            // EnableRaisingEvents was already set before this call): don't hand it to a
+            // post-Dispose _watchers, dispose it directly so it doesn't leak.
+            if (_disposed)
+            {
+                watcher.Dispose();
+                return;
+            }
+            _watchers.Add(watcher);
+        }
+    }
+
+    private void OnContainerEvent(object sender, FileSystemEventArgs e) =>
         ScheduleProjectDirectoriesChanged();
+
+    /// <summary>
+    /// Root-container change handler. A new top-level directory may be one of the optional
+    /// ParatextData containers (<see cref="PROJECTS_BY_ID_DIR_NAME"/>, <c>_Resources</c>,
+    /// <c>_resourcesById</c>) being created for the first time; attach its watcher now (idempotent)
+    /// so subsequent changes inside it are seen, then schedule the refresh.
+    /// </summary>
+    private void OnRootContainerEvent(object sender, FileSystemEventArgs e)
+    {
+        EnsureOptionalContainerWatchers();
+        ScheduleProjectDirectoriesChanged();
+    }
 
     /// <summary>
     /// The watcher's internal buffer overflowed (or it otherwise faulted), so events were dropped and
@@ -276,6 +410,10 @@ internal class LocalParatextProjects : IDisposable
 
     private void ScheduleProjectDirectoriesChanged()
     {
+        // A watcher event/error can race Dispose (see Dispose's comment); back off rather than
+        // touching a debounce timer that may already be disposed.
+        if (_disposed)
+            return;
         // Debounce: a clone/install fires a burst of events; collapse them into one refresh+notify.
         lock (_projectChangeLock)
         {
@@ -308,7 +446,18 @@ internal class LocalParatextProjects : IDisposable
 
     public virtual void Dispose()
     {
-        _projectDirectoryWatcher?.Dispose();
+        // Set first (before any teardown below) so a racing AttachContainerWatcher/Register or a
+        // racing watcher-event handler sees it and backs off (Register disposes rather than
+        // re-adding; ScheduleProjectDirectoriesChanged/NotifyProjectsChanged return early) instead
+        // of touching an already-disposed timer.
+        _disposed = true;
+        lock (_watchersLock)
+        {
+            foreach (var watcher in _watchers)
+                watcher.Dispose();
+            _watchers.Clear();
+            _watchedContainerPaths.Clear();
+        }
         _projectChangeDebounceTimer?.Dispose();
         _notifyDebounceTimer?.Dispose();
         GC.SuppressFinalize(this);
