@@ -103,11 +103,11 @@ internal class ScrTextExtensionsTests
     public void GetProjectDetails_MalformedEditableSetting_IsEditableFalse()
     {
         // A present-but-malformed raw Editable value makes pdp.getSetting('platform.isEditable')
-        // throw, and the old per-project picker fetch excluded such projects from the editable
-        // lists via its per-project catch. Metadata enumeration cannot throw per-field, so it must
-        // report false - preserving that exclusion and matching ParatextData's own IsEditableText
-        // (GetSetting == "T"). It must NOT report true (the absent-setting default), which would
-        // newly show the project as editable and error downstream on open.
+        // throw. Metadata enumeration cannot throw per-field, so it must report false - matching
+        // ParatextData's own IsEditableText (GetSetting == "T"), which treats any non-"T" value as
+        // non-editable, so a malformed value excludes the project from the editable lists. It must
+        // NOT report true (the absent-setting default), which would wrongly show the project as
+        // editable and error downstream on open.
         using var scrText = new DummyScrText();
         scrText.Settings.SetSetting("Editable", "yes");
 

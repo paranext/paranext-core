@@ -1,8 +1,13 @@
 import papi, { logger } from '@papi/frontend';
+import { useSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { DependencyList, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LocalProjectInfo, metadataToLocalProjectInfo } from './home.component';
+
+// Stable reference so the fetch effect (which lists the resolved value in its dependency array)
+// does not re-run every render. A fresh `[]` literal per render would cause an infinite refetch.
+const DEFAULT_EXCLUDE_PDP_FACTORY_IDS: string[] = [];
 
 /**
  * Fetches the local scripture-editor projects (filtered service-side to
@@ -12,7 +17,9 @@ import { LocalProjectInfo, metadataToLocalProjectInfo } from './home.component';
  * surfaces (they already share {@link metadataToLocalProjectInfo}; this extends that to the whole
  * effect).
  *
- * @param excludePdpFactoryIds PDP factory ids to exclude from the metadata fetch.
+ * Reads the `platformGetResources.excludePdpFactoryIdsInHome` setting internally (both surfaces
+ * share this Home-named setting) and excludes those factory ids from the metadata fetch.
+ *
  * @param options.logLabel Human-readable surface name used in the failure warning (e.g. `'Home'`).
  * @param options.enabled When false, the fetch is skipped and loading state is left untouched (Home
  *   pauses while a Send/Receive is in progress). Defaults to true.
@@ -20,16 +27,32 @@ import { LocalProjectInfo, metadataToLocalProjectInfo } from './home.component';
  *   re-fetches when its cached resource list or completed-sync count changes). Defaults to none.
  * @returns The mapped local projects and whether they are still loading.
  */
-export function useLocalProjects(
-  excludePdpFactoryIds: string[],
-  {
-    logLabel,
-    enabled = true,
-    refetchTriggers = [],
-  }: { logLabel: string; enabled?: boolean; refetchTriggers?: DependencyList },
-): { localProjectsInfo: LocalProjectInfo[]; isLoadingLocalProjects: boolean } {
+export function useLocalProjects({
+  logLabel,
+  enabled = true,
+  refetchTriggers = [],
+}: {
+  logLabel: string;
+  enabled?: boolean;
+  refetchTriggers?: DependencyList;
+}): { localProjectsInfo: LocalProjectInfo[]; isLoadingLocalProjects: boolean } {
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
+
+  const [excludePdpFactoryIdsPossiblyError] = useSetting(
+    'platformGetResources.excludePdpFactoryIdsInHome',
+    DEFAULT_EXCLUDE_PDP_FACTORY_IDS,
+  );
+  const excludePdpFactoryIds = useMemo(() => {
+    if (isPlatformError(excludePdpFactoryIdsPossiblyError)) {
+      logger.warn(
+        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+        excludePdpFactoryIdsPossiblyError,
+      );
+      return DEFAULT_EXCLUDE_PDP_FACTORY_IDS;
+    }
+    return excludePdpFactoryIdsPossiblyError;
+  }, [excludePdpFactoryIdsPossiblyError]);
 
   const isMounted = useRef(false);
   useEffect(() => {

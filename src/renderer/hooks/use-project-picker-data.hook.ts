@@ -36,9 +36,8 @@ const EMPTY_RECENT_IDS: string[] = [];
 /**
  * Resolves a project's language for display: the localized display name of the BCP-47 language tag
  * when it can be resolved, otherwise the raw language setting value for both fields. Returns
- * undefined when the project has no `language` setting, leaving the language column blank -
- * matching the pre-metadata behavior (the old per-project path returned the
- * `%project_language_missing%` default and suppressed it). The guard is on `language`, NOT
+ * undefined when the project has no `language` setting, leaving the language column blank rather
+ * than surfacing a `%project_language_missing%` placeholder. The guard is on `language`, NOT
  * `languageTag`: C# always populates a `languageTag` (coercing an unset writing system to 'en'), so
  * guarding on the tag would mislabel every language-less project as 'English'.
  */
@@ -63,8 +62,7 @@ function resolveLanguage(
  * for display, without opening a project data provider. `fullName`/`name` are optional on
  * `ProjectMetadata`, so both fall back to the project id to guarantee defined display strings (and
  * a safe sort key for callers that sort by `fullName`). A present-but-empty value passes through
- * as-is - empty FullName is a real, deliberately-supported Paratext case, and the old
- * `getSetting`-based path returned it unchanged too.
+ * as-is - empty FullName is a real, deliberately-supported Paratext case.
  */
 function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
   const resolved = resolveLanguage(m.language ?? '', m.languageTag ?? '');
@@ -218,10 +216,9 @@ export function useProjectPickerData(): ProjectPickerData {
           metadata.map((m) => [normalizeProjectId(m.id), m]),
         );
         // Preserve safeRecentIds' recency order; drop ids with no metadata (not found / errored)
-        // and non-editable projects, matching the previous per-id fetch-and-skip behavior.
+        // and non-editable projects.
         // `isEditable` is optional on ProjectMetadata; a factory that omits it must be treated as
-        // editable to match the registered default (true) that `getSetting('platform.isEditable')`
-        // would have resolved.
+        // editable to match the registered contribution default (true) for `platform.isEditable`.
         return safeRecentIds
           .map((id: string) => metadataById.get(normalizeProjectId(id)))
           .filter(

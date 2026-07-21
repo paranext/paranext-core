@@ -255,7 +255,7 @@ internal class LocalParatextProjects : IDisposable
         NotifyProjectsChanged();
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         _projectDirectoryWatcher?.Dispose();
         _projectChangeDebounceTimer?.Dispose();

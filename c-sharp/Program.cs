@@ -110,10 +110,9 @@ public static class Program
             var versificationConversionService = new VersificationConversionService(papi);
 
             // Non-critical: register in the background - started BEFORE the critical barrier is
-            // awaited so these services run concurrently with it (as they did when they were part
-            // of the single startup WhenAll) without gating "ready". Starting them after the
-            // barrier would shrink the head start TS consumers with bounded one-shot acquisition
-            // (e.g. the checklist and manage-books web views) rely on.
+            // awaited so these services run concurrently with it without gating "ready". Starting
+            // them after the barrier would shrink the head start TS consumers with bounded one-shot
+            // acquisition (e.g. the checklist and manage-books web views) rely on.
             // Wrap EACH registration in its own Task.Run so a synchronous throw (e.g. from the
             // non-async ManageBooksService.RegisterNetworkObjectAsync before its first await) is
             // captured into that service's task rather than escaping unobserved AND without

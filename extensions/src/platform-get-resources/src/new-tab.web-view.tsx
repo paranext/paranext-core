@@ -1,14 +1,11 @@
 import { WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import papi from '@papi/frontend';
+import { useLocalizedStrings } from '@papi/frontend/react';
 import { Plus } from 'lucide-react';
 import { CardTitle, Label } from 'platform-bible-react';
-import { isPlatformError } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
 import { useLocalProjects } from './use-local-projects.hook';
-
-const defaultExcludePdpFactoryIds: string[] = [];
 
 globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
   const localizedStringsWithLoadingState = useLocalizedStrings(
@@ -32,23 +29,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
     );
   };
 
-  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
-    'platformGetResources.excludePdpFactoryIdsInHome',
-    defaultExcludePdpFactoryIds,
-  );
-
-  const excludePdpFactoryIds = useMemo(() => {
-    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
-      logger.warn(
-        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-        excludePdpFactoryIdsInHomePossiblyError,
-      );
-      return defaultExcludePdpFactoryIds;
-    }
-    return excludePdpFactoryIdsInHomePossiblyError;
-  }, [excludePdpFactoryIdsInHomePossiblyError]);
-
-  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects(excludePdpFactoryIds, {
+  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
     logLabel: 'New Tab',
   });
 

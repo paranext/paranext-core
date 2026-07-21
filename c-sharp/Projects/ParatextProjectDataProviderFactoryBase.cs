@@ -147,8 +147,8 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
             // (e.g. a resource requested before Paratext registration completes, a project
             // requested mid-clone, or a PDP whose RegisterDataProviderAsync faulted - now surfaced
             // here because registration is awaited above rather than fire-and-forget) instead of
-            // staying broken until process restart. The old (pre-Lazy) code cached nothing on
-            // failure, so failed lookups self-healed; preserve that. Compare-and-remove by the
+            // staying broken until process restart. Caching nothing on failure keeps failed
+            // lookups self-healing. Compare-and-remove by the
             // exact Lazy so we never clobber a different,
             // successful entry created for this project in the meantime. Eviction runs only on
             // throw, so the success path still creates exactly one PDP per project.

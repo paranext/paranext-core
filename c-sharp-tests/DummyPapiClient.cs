@@ -9,15 +9,15 @@ namespace TestParanextDataProvider
     internal class DummyPapiClient : PapiClient
     {
         // ConcurrentQueue (not Queue): PDP registration ends in SendEventAsync, and per-project
-        // PDP creation now registers PDPs concurrently (same motivation as
+        // PDP creation registers PDPs concurrently (same motivation as
         // _documentationByRequestType below), so concurrent tests can enqueue from multiple
         // threads at once.
         private readonly ConcurrentQueue<(string eventType, object? eventParameters)> _sentEvents =
             new();
 
         // ConcurrentDictionary (not Dictionary): RegisterRequestHandlerAsync writes this on every
-        // PDP registration, and per-project PDP creation now registers PDPs concurrently (fire-
-        // and-forget, no longer serialized behind a single creation lock - see
+        // PDP registration, and per-project PDP creation registers PDPs concurrently (fire-
+        // and-forget, not serialized behind a single creation lock - see
         // ParatextProjectDataProviderFactoryBase.GetProjectDataProviderID), so concurrent tests can
         // legitimately hit this from multiple threads at once.
         private readonly ConcurrentDictionary<

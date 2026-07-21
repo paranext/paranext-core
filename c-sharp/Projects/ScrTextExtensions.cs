@@ -25,7 +25,8 @@ internal static class ScrTextExtensions
                 languageTag: GetLanguageTag(scrText),
                 isEditable: GetIsEditable(scrText),
                 // platform.isPublished has no Settings.xml key; it's computed directly from
-                // IsResourceProject (ParatextProjectDataProvider.cs ~1608-1612).
+                // IsResourceProject, matching the platform.isPublished getter in
+                // ParatextProjectDataProvider.
                 isPublished: scrText.IsResourceProject
             ),
             scrText.Directory
@@ -35,9 +36,9 @@ internal static class ScrTextExtensions
     /// <summary>
     /// Reads a raw Paratext project setting value straight from the settings parameter dictionary -
     /// exactly the source (and behavior) <c>ParatextProjectDataProvider.GetProjectSetting</c> uses
-    /// for non-special-cased settings (e.g. FullName/Language fall through to that generic branch;
-    /// see ParatextProjectDataProvider.cs ~1686-1707), so a present value (even empty) matches what
-    /// the corresponding <c>pdp.getSetting</c> call returns today. Read the dictionary directly
+    /// for non-special-cased settings (e.g. FullName/Language fall through to that generic branch),
+    /// so a present value (even empty) matches what the corresponding <c>pdp.getSetting</c> call
+    /// returns today. Read the dictionary directly
     /// (NOT <c>ProjectSettings.GetSetting</c>, which adds base-text delegation the PDP path does
     /// not do, and NOT typed accessors, which can construct expensive per-project objects) so this
     /// stays a cheap, exception-free, parity-faithful lookup.
@@ -65,8 +66,8 @@ internal static class ScrTextExtensions
 
     /// <summary>
     /// The BCP 47 language tag for the project's writing system - the value the platform.languageTag
-    /// getter (ParatextProjectDataProvider.cs ~1591-1594) reads via
-    /// <c>scrText.Language.LanguageId.Id</c>, computed here without the getter's side effects.
+    /// getter reads via <c>scrText.Language.LanguageId.Id</c>, computed here without the getter's
+    /// side effects.
     ///
     /// Do NOT read <c>scrText.Language</c>: forcing it constructs <c>ScrLanguage</c>, whose
     /// constructor opens and XML-parses the project's LDML file (zip-decompressed for resources),
@@ -108,8 +109,7 @@ internal static class ScrTextExtensions
     }
 
     /// <summary>
-    /// Follows the platform.isEditable getter's logic
-    /// (ParatextProjectDataProvider.cs ~1603-1606 and ~1686-1707): resource projects are always
+    /// Follows the platform.isEditable getter's logic: resource projects are always
     /// non-editable regardless of their stored Editable setting; otherwise the raw Editable
     /// Paratext setting is parsed as T/F, falling back to that setting's registered contribution
     /// default (true - a static boolean, not a localized string, so unlike FullName/Language this
@@ -120,8 +120,9 @@ internal static class ScrTextExtensions
     /// The one deliberate divergence: a present-but-malformed Editable value makes the getter
     /// throw, which enumeration must not do (it would drop the project from the whole result).
     /// Report false instead - matching ParatextData's own <c>IsEditableText</c>
-    /// (<c>GetSetting == "T"</c>) and the old picker behavior, whose per-project catch excluded
-    /// such projects from the editable lists when the getter threw.
+    /// (<c>GetSetting == "T"</c>), which treats any value that is not exactly "T" as non-editable,
+    /// so a malformed Editable setting excludes the project from the editable lists rather than
+    /// dropping it entirely.
     /// </summary>
     private static bool GetIsEditable(ScrText scrText)
     {

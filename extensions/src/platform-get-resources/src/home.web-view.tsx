@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home, HOME_STRING_KEYS } from './home.component';
 import { useLocalProjects } from './use-local-projects.hook';
 
-const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
 
 globalThis.webViewComponent = function HomeWebView() {
@@ -208,28 +207,11 @@ globalThis.webViewComponent = function HomeWebView() {
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
 
-  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
-    'platformGetResources.excludePdpFactoryIdsInHome',
-    defaultExcludePdpFactoryIds,
-  );
-
-  const excludePdpFactoryIds = useMemo(() => {
-    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
-      logger.warn(
-        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-        excludePdpFactoryIdsInHomePossiblyError,
-      );
-      return defaultExcludePdpFactoryIds;
-    }
-    return excludePdpFactoryIdsInHomePossiblyError;
-  }, [excludePdpFactoryIdsInHomePossiblyError]);
-
-  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects(excludePdpFactoryIds, {
+  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
     logLabel: 'Home',
-    // Pause fetching while a Send/Receive runs (matches the prior effect's early return) and resume
-    // when it finishes.
+    // Pause fetching while a Send/Receive runs and resume when it finishes.
     enabled: !isSendReceiveInProgress,
-    // Re-fetch when the cached resource list changes or a sync completes, as the prior effect did.
+    // Re-fetch when the cached resource list changes or a sync completes.
     refetchTriggers: [resourcesList, syncsCompletedCount],
   });
 
