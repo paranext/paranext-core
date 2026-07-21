@@ -39,7 +39,9 @@ import type {
 } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
+import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -47,6 +49,8 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_selecting%',
+  '%webView_resourcePanel_installFailed%',
+  '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -201,6 +205,27 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [textConnectionsProvider],
   );
 
+  const installResource = useCallback(
+    async (dblEntryUid: string) => {
+      // Provider not resolved yet: do nothing — don't report a no-op as success (would trigger a
+      // spurious refetch) or as a terminal failure. This callback's identity changes when the
+      // provider resolves, which re-fires the auto-install effect to do the real install.
+      if (!dblResourcesProvider) return;
+      try {
+        await dblResourcesProvider.installDblResource(dblEntryUid);
+        setFetchResources(true);
+      } catch (e: unknown) {
+        papi.notifications.send({
+          message: '%webView_selectDblResource_installFailed%',
+          severity: 'error',
+        });
+        logger.warn(`Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`);
+        throw e;
+      }
+    },
+    [dblResourcesProvider],
+  );
+
   // #endregion
 
   // #region Filter list based on resourceType
@@ -255,11 +280,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const [isSelecting, setIsSelecting] = useState(false);
 
   if (isDblResourceReference(selectedRef)) {
-    dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
+    dblMatch = findCachedDblResource(selectedRef, dblResources);
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
   } else if (isProjectReference(selectedRef)) {
     resourceProjectId = selectedRef.id;
   }
+
+  // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
+  // (shared with the model-text panel); without it the panel spins forever (PT-4221). Skipped
+  // while a manual pick is in flight (it installs the resource itself).
+  const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
+  const { isInstalling, installFailed, retryInstall } = useDblResourceAutoInstall(
+    dblEntryUidToInstall,
+    installResource,
+    isSelecting,
+  );
 
   // Load PT9-derived marker styles when the displayed resource is a supported commentary.
   // Keyed on the resource's project id (not the user's projectId prop) since the resource is what
@@ -363,35 +398,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       setIsSelecting(true);
+      // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
+      retryInstall();
       try {
         await selectTextConnection(
           resource,
           getUserResourceTexts,
           setUserResourceTexts,
-          dblResourcesProvider
-            ? async (dblEntryUid) => {
-                try {
-                  await dblResourcesProvider.installDblResource(dblEntryUid);
-                  setFetchResources(true);
-                } catch (e: unknown) {
-                  papi.notifications.send({
-                    message: '%webView_selectDblResource_installFailed%',
-                    severity: 'error',
-                  });
-                  logger.warn(
-                    `Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`,
-                  );
-                  throw e;
-                }
-              }
-            : undefined,
+          installResource,
           (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
         );
       } finally {
         setIsSelecting(false);
       }
     },
-    [dblResourcesProvider, getUserResourceTexts, setUserResourceTexts],
+    [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall],
   );
 
   const showResourcePicker = useDialogCallback(
@@ -481,8 +502,22 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Installing state: selected DblResource found but not yet installed
-  if (isSelecting) {
+  // Install failed: the selected resource is in the catalog but couldn't be installed. Offer a
+  // retry rather than spinning forever (PT-4221); a success drops out of this state on its own.
+  if (installFailed) {
+    return (
+      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+        <p>{localizedStrings['%webView_resourcePanel_installFailed%']}</p>
+        <Button onClick={() => retryInstall()}>
+          {localizedStrings['%webView_resourcePanel_retry%']}
+        </Button>
+      </div>
+    );
+  }
+
+  // Installing state: selected DblResource found but not yet installed — auto-detected from the
+  // configured resource (isInstalling) or just chosen via the picker (isSelecting).
+  if (isSelecting || isInstalling) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />

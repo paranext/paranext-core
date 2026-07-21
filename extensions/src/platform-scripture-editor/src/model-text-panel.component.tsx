@@ -18,6 +18,7 @@ import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } fro
 import { selectTextConnection } from './select-dbl-resource';
 import { isDblResourceReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -134,24 +135,16 @@ export function ModelTextPanel({
   const resourceProjectId = match?.installed ? match.projectId : undefined;
 
   const [isSelecting, setIsSelecting] = useState(false);
-  // uid of a configured resource whose auto-install failed, so we can show a recovery state rather
-  // than spin forever and avoid retrying the same failing uid. Cleared on an explicit re-pick.
-  const [failedInstallUid, setFailedInstallUid] = useState<string | undefined>(undefined);
 
-  // Auto-install a configured model text that matches a catalog resource not installed locally yet
-  // (e.g. an admin choice synced from another machine — the setting syncs, the resource file does
-  // not, so install can only happen here at display time). Without this the panel spins forever on
-  // a matched-but-uninstalled resource with the picker unreachable (PT-4221). Fire-and-forget: the
-  // webview re-resolves the list once installed, `match.installed` flips true, and it renders.
+  // Auto-install a matched-but-uninstalled configured model text (shared with the resource panel);
+  // without it the panel spins forever with the picker unreachable (PT-4221). Skipped while a manual
+  // pick is in flight (it installs the resource itself).
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
-  useEffect(() => {
-    if (dblEntryUidToInstall === undefined) return;
-    // A manual pick already installs via `handleResourceSelect`; don't fire a duplicate install.
-    if (isSelecting) return;
-    // Skip a uid we already saw fail (prevents a retry loop); a re-pick clears failedInstallUid.
-    if (dblEntryUidToInstall === failedInstallUid) return;
-    installResource(dblEntryUidToInstall).catch(() => setFailedInstallUid(dblEntryUidToInstall));
-  }, [dblEntryUidToInstall, installResource, failedInstallUid, isSelecting]);
+  const { isInstalling, installFailed, retryInstall } = useDblResourceAutoInstall(
+    dblEntryUidToInstall,
+    installResource,
+    isSelecting,
+  );
 
   // Tracks the latest scrRef this panel's editor just published so we can suppress the echo that
   // comes back through scroll group 0 (forced in simple mode) and avoid scroll-jumping the user's
@@ -292,8 +285,8 @@ export function ModelTextPanel({
     async (resource: DblResourceData) => {
       setIsSelecting(true);
       // A user-initiated pick is a fresh attempt: clear any prior auto-install failure so the
-      // install-failed state doesn't stick and the effect can retry if needed.
-      setFailedInstallUid(undefined);
+      // install-failed state doesn't stick.
+      retryInstall();
       try {
         await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () =>
           installResource(resource.dblEntryUid),
@@ -302,7 +295,7 @@ export function ModelTextPanel({
         setIsSelecting(false);
       }
     },
-    [getUserModelTexts, setUserModelTexts, installResource],
+    [getUserModelTexts, setUserModelTexts, installResource, retryInstall],
   );
 
   const handlePickModelText = useCallback(async () => {
@@ -360,14 +353,13 @@ export function ModelTextPanel({
   }
 
   // Install failed: the resource is in the catalog but couldn't be installed. Offer a retry rather
-  // than spinning forever. Clearing `failedInstallUid` re-fires the auto-install effect on the same
-  // (admin or user) configured resource — so an admin choice is recoverable too. A success then
-  // drops out of this state on its own (`dblEntryUidToInstall` clears once installed).
-  if (dblEntryUidToInstall !== undefined && dblEntryUidToInstall === failedInstallUid) {
+  // than spinning forever. Retry re-attempts the same (admin or user) configured resource, so an
+  // admin choice is recoverable too; a success drops out of this state on its own.
+  if (installFailed) {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
         <p>{localizedStrings['%webView_modelTextPanel_installFailed%']}</p>
-        <Button onClick={() => setFailedInstallUid(undefined)}>
+        <Button onClick={() => retryInstall()}>
           {localizedStrings['%webView_modelTextPanel_retry%']}
         </Button>
       </div>
@@ -375,8 +367,8 @@ export function ModelTextPanel({
   }
 
   // Installing: resource found but not yet installed — either auto-detected from the configured
-  // model text (dblEntryUidToInstall) or just chosen via the picker (isSelecting).
-  if (isSelecting || dblEntryUidToInstall !== undefined) {
+  // model text (isInstalling) or just chosen via the picker (isSelecting).
+  if (isSelecting || isInstalling) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
         <Spinner />
