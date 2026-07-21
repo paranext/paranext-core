@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { LanguageInfo } from 'platform-bible-react';
+import { LanguageStrings } from 'platform-bible-utils';
 import { computeSetupDialogLanguages } from './setup-dialog-languages.util';
 
 const loadedLocales: Record<string, LanguageInfo> = {
@@ -7,33 +8,43 @@ const loadedLocales: Record<string, LanguageInfo> = {
   fr: { autonym: 'Français' },
   es: { autonym: 'Español' },
   de: { autonym: 'Deutsch' },
+  it: { autonym: 'Italiano' },
 };
 
-// English baseline: 10 real firstRun keys + 1 placeholder (must be excluded from the denominator).
-const englishData: Record<string, string> = {
-  '%firstRun_title%': 'a',
-  '%firstRun_description%': 'b',
-  '%firstRun_button_next%': 'c',
-  '%firstRun_button_back%': 'd',
-  '%firstRun_button_skip%': 'e',
-  '%firstRun_button_finish%': 'f',
-  '%firstRun_button_retry%': 'g',
-  '%firstRun_stepIndicator%': 'h',
-  '%firstRun_loading%': 'i',
-  '%firstRun_error_title%': 'j',
+// The 10 real (non-placeholder) firstRun baseline keys as explicit literals — deliberately NOT
+// derived from the implementation's own filter, so a broken placeholder-exclusion rule can't
+// silently shift the expected counts along with it.
+const REAL_KEYS = [
+  '%firstRun_title%',
+  '%firstRun_description%',
+  '%firstRun_button_next%',
+  '%firstRun_button_back%',
+  '%firstRun_button_skip%',
+  '%firstRun_button_finish%',
+  '%firstRun_button_retry%',
+  '%firstRun_stepIndicator%',
+  '%firstRun_loading%',
+  '%firstRun_error_title%',
+];
+
+function withValues(keys: string[]): LanguageStrings {
+  return Object.fromEntries(keys.map((key) => [key, 'x']));
+}
+
+// English baseline: the 10 real keys + 1 placeholder (must be excluded from the denominator) + 1
+// non-firstRun key (must be ignored).
+const englishData: LanguageStrings = {
+  ...withValues(REAL_KEYS),
   '%firstRun_step_language_placeholder%': 'PLACEHOLDER',
   '%general_button_submit%': 'not-a-firstRun-key',
 };
-const firstRunKeys = Object.keys(englishData).filter(
-  (k) => k.startsWith('%firstRun_') && !k.includes('_placeholder%'),
-); // the 10 real keys
 
-const langData: Record<string, Record<string, string>> = {
+const langData: Record<string, LanguageStrings> = {
   en: englishData,
-  fr: Object.fromEntries(firstRunKeys.slice(0, 9).map((k) => [k, 'x'])), // 9/10 = 90% → qualifies
-  es: Object.fromEntries(firstRunKeys.slice(0, 5).map((k) => [k, 'x'])), // 5/10 = 50% → excluded
-  // de: all 10 real keys but NO placeholder → 100% (proves the placeholder isn't in the denominator)
-  de: Object.fromEntries(firstRunKeys.map((k) => [k, 'x'])),
+  fr: withValues(REAL_KEYS.slice(0, 9)), // 9/10 = 90% → qualifies (exact-tie boundary for >=)
+  it: withValues(REAL_KEYS.slice(0, 8)), // 8/10 = 80% → excluded (just below the boundary)
+  es: withValues(REAL_KEYS.slice(0, 5)), // 5/10 = 50% → excluded
+  de: withValues(REAL_KEYS), // 10/10 = 100%, no placeholder → proves the placeholder isn't counted
 };
 
 describe('computeSetupDialogLanguages', () => {
@@ -42,13 +53,14 @@ describe('computeSetupDialogLanguages', () => {
   test('includes languages at or above 90% of non-placeholder firstRun keys', () => {
     expect(Object.keys(result).sort()).toEqual(['de', 'en', 'fr']);
   });
-  test('excludes languages below the threshold', () => {
+  test('excludes languages below the threshold (80% and 50%)', () => {
+    expect(result.it).toBeUndefined();
     expect(result.es).toBeUndefined();
   });
   test('always includes English even if its own data is sparse', () => {
     const sparse = computeSetupDialogLanguages(
       englishData,
-      (t) => (t === 'en' ? {} : langData[t]),
+      (tag) => (tag === 'en' ? {} : langData[tag]),
       loadedLocales,
     );
     expect(sparse.en).toBeDefined();
@@ -56,7 +68,7 @@ describe('computeSetupDialogLanguages', () => {
   test('returns the LanguageInfo from loadedLocales (raw-tag keyed)', () => {
     expect(result.fr).toEqual({ autonym: 'Français' });
   });
-  test('returns empty when there are no baseline keys', () => {
+  test('returns only English when there are no baseline keys', () => {
     expect(computeSetupDialogLanguages({}, () => ({}), loadedLocales)).toEqual({
       en: { autonym: 'English' },
     });

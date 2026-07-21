@@ -27,6 +27,11 @@ const MOCK_FILES: { [uri: string]: string } = {
     "%firstRun_title%": "Configurer",
     "%firstRun_button_next%": "Suivant"
   }`,
+  // de has only 1 of the 2 baseline firstRun keys (50%) → below the 90% setup-dialog threshold.
+  'resources://assets/localization/de.json': `{
+    "%general_button_submit%": "Senden",
+    "%firstRun_title%": "Einrichten"
+  }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
       "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
@@ -234,10 +239,11 @@ test('Good keys and missing but valid language code return default English', asy
   });
 });
 
-test('getSetupDialogLanguages includes English and fully-translated locales', async () => {
+test('getSetupDialogLanguages includes fully-translated locales and excludes under-translated ones', async () => {
   const result = await localizationDataProviderEngine.getSetupDialogLanguages();
-  expect(result.en).toBeDefined();
-  expect(result.fr).toBeDefined();
+  expect(result.en).toBeDefined(); // always qualifies
+  expect(result.fr).toBeDefined(); // 2/2 firstRun keys = 100%
+  expect(result.de).toBeUndefined(); // 1/2 firstRun keys = 50% → excluded by the 90% threshold
 });
 
 test('setSetupDialogLanguages always throws', async () => {
