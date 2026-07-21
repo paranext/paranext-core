@@ -318,7 +318,13 @@ export async function registerRequestHandler(
     setTimeoutMsForRequestType(requestType, requestHandlerOptions.timeoutMilliseconds);
   return async () => {
     if (!jsonRpc) {
-      logger.warn(`Could not unregister request handler for "${requestType}": jsonRpc is not set`);
+      // Expected on graceful shutdown: shutdown() clears jsonRpc before disposing emitters so their
+      // disposers skip this now-pointless unregister, so this fires on every normal quit — debug,
+      // not warn, to avoid spurious teardown noise (mirrors disposeNetworkEventEmitter's quiet
+      // !jsonRpc return). The genuine failure to warn about is the unregistered === false case below.
+      logger.debug(
+        `Skipping unregister of request handler for "${requestType}": jsonRpc is not set`,
+      );
       return false;
     }
     removeTimeoutMsForRequestType(requestType);
