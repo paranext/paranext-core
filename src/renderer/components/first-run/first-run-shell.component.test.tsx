@@ -10,6 +10,7 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 const STUB_STEPS = {
   ...DEFAULT_STEP_COMPONENTS,
   language: () => <p>language step</p>,
+  identify: () => <p>identify step</p>,
 };
 
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
@@ -22,7 +23,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
@@ -47,13 +47,13 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     expect(screen.getByText(/language step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.getByText(/language step/i)).toBeInTheDocument();
   });
