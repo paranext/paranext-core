@@ -489,7 +489,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Active state: resource is installed and USJ is available
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
-  // (flattens .editor-container's rounded top corners — see _editor-overrides.scss) is applied
+  // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
   // unconditionally, unlike the Scripture Editor's conditional use of the same class.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">

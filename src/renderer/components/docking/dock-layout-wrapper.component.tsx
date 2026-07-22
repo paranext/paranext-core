@@ -1,5 +1,9 @@
 import 'rc-dock/dist/rc-dock.css';
 import './dock-layout-wrapper.component.scss';
+// Simple-mode-ONLY overrides. Must be imported AFTER the stylesheet above so its rules land later
+// in the compiled CSS's cascade order — see the comment at the bottom of
+// dock-layout-wrapper.component.scss for why this can't just be a Sass `@use`.
+import './dock-layout-wrapper.simple-mode.scss';
 
 import { CSSProperties, ForwardedRef, PropsWithChildren, forwardRef } from 'react';
 import DockLayout, { LayoutProps, LayoutData, LayoutBase } from 'rc-dock';

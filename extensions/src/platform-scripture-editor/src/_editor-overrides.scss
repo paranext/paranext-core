@@ -3,6 +3,8 @@
 // this is required for many overwrites
 /* stylelint-disable selector-class-pattern */
 
+@use './simple-mode';
+
 // Platform.Bible modifications
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
@@ -27,20 +29,6 @@
     background-color: var(--background);
     color: var(--color);
   }
-}
-
-// Simple mode: flatten .editor-container's own rounded top corners (10px, set in the vendored
-// ./_editor.scss) to match the flattened column chrome. This stylesheet is bundled into each of
-// this extension's own web view iframes independently — each iframe never sees the renderer's
-// `data-interface-mode` attribute (that only exists on the renderer's own `document.body`, a
-// different document — see dock-layout-wrapper.component.scss's SIMPLE-MODE HEIGHT ALIGNMENT
-// region history for the same lesson). So this is scoped via a plain marker class
-// (`.editor-container-simple`) applied directly to each web view's own root element instead:
-// unconditionally in model-text-panel.component.tsx and resource-text-panel.web-view.tsx (both
-// Simple-mode-only web views), and conditionally on `!isPowerMode` in
-// platform-scripture-editor.web-view.tsx (used in both modes).
-.editor-container-simple .editor-container {
-  border-radius: 0;
 }
 
 // text selection

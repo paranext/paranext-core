@@ -371,7 +371,7 @@ export function ModelTextPanel({
 
   // Active: read-only editor showing the model text.
   // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
-  // rounded top corners — see _editor-overrides.scss) is applied unconditionally, unlike the
+  // rounded top corners — see _simple-mode.scss) is applied unconditionally, unlike the
   // Scripture Editor's conditional use of the same class.
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
@@ -386,8 +386,8 @@ export function ModelTextPanel({
                 // toolbar override — all three rows' bottom edges need to land at the same Y, which
                 // matching total row height achieves on its own. tw:items-center centers the text
                 // symmetrically within the full 42px box (no extra top-only padding needed — see
-                // platform-scripture-editor.web-view.scss's .scripture-editor-tab-nav-simple comment
-                // for why that was tried and reverted).
+                // _simple-mode.scss's .scripture-editor-tab-nav-simple comment for why that was
+                // tried and reverted).
                 //
                 // tw:truncate + Tooltip: the column has a 300px minWidth (simple-layout.data.ts), and
                 // "{fullName} ({displayName})" can exceed that at 300px — truncate to keep the fixed
