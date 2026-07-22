@@ -1,5 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import { settingsService } from '@shared/services/settings.service';
+import { getCurrentLocale } from 'platform-bible-utils';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import * as resolver from './resolve-registration-validity';
 import {
   completeFirstRun,
@@ -20,10 +23,20 @@ vi.mock('./resolve-registration-validity', () => ({
   REGISTRATION_RESOLVE_TIMEOUT_MS: 15000,
   resolveRegistrationValidity: vi.fn(),
 }));
+vi.mock('@shared/services/localization.service', () => ({
+  localizationService: { getSetupDialogLanguages: vi.fn() },
+}));
+vi.mock('platform-bible-utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('platform-bible-utils')>()),
+  getCurrentLocale: vi.fn(() => 'en-US'),
+}));
 
 const mockGet = vi.mocked(settingsService.get);
 const mockSet = vi.mocked(settingsService.set);
 const mockResolveReg = vi.mocked(resolver.resolveRegistrationValidity);
+const mockGetCurrentLocale = vi.mocked(getCurrentLocale);
+const mockGetSetupDialogLanguages = vi.mocked(localizationService.getSetupDialogLanguages);
+const mockLogger = vi.mocked(logger);
 
 /** SettingsService.get is keyed; return the right value per setting. */
 function stubSettings({ mode = 'simple', firstRunComplete = false } = {}) {
@@ -41,6 +54,8 @@ function stubSettings({ mode = 'simple', firstRunComplete = false } = {}) {
 // in-memory map, so these stay effectively as fast as a mock — no real I/O.
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetCurrentLocale.mockReturnValue('en-US');
+  mockGetSetupDialogLanguages.mockResolvedValue({ en: { autonym: 'English' } });
   localStorage.clear();
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
@@ -261,5 +276,77 @@ describe('computeInitialStatus — power mode startup gate flash (PT-4175 FIX 1)
     resetFirstRunStore(); // recomputes status from computeInitialStatus
     // Assert SYNCHRONOUSLY — no resolveFirstRunState call — to prove it is the initial seed value
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+  });
+});
+
+describe('OS-language default on fresh first-run', () => {
+  test('defaults the interface language to the OS language when it qualifies', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      km: { autonym: 'ខ្មែរ' },
+    });
+    await resolveFirstRunState();
+    expect(mockSet).toHaveBeenCalledWith('platform.interfaceLanguage', ['km']);
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  test('stays in English when the OS language does not qualify', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    mockGetCurrentLocale.mockReturnValue('ja-JP');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      km: { autonym: 'ខ្មែរ' },
+    });
+    await resolveFirstRunState();
+    // Positive control: the seed path DID run (lookup happened) but correctly declined to write —
+    // distinguishes "matcher rejected ja" from "seed never ran".
+    expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  test('stays in English when only English qualifies (early-startup / minimal set)', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    // The qualifying set can be just { en } if the seed runs before extra locales load; the km OS
+    // locale then has nothing to match and we stay English without crashing.
+    mockGetSetupDialogLanguages.mockResolvedValue({ en: { autonym: 'English' } });
+    await resolveFirstRunState();
+    expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  test('does not re-seed when reopening mid-wizard (wizard already active)', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+      km: { autonym: 'ខ្មែរ' },
+    });
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    await resolveFirstRunState();
+    // Positive control: reopening skips the seed entirely — the lookup must NOT have run, proving the
+    // `!wizardActive` guard (not merely a non-matching locale) is what suppressed the write.
+    expect(mockGetSetupDialogLanguages).not.toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+  });
+
+  test('still starts the wizard if the OS-default lookup throws', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    mockGetCurrentLocale.mockReturnValue('km-KH');
+    mockGetSetupDialogLanguages.mockRejectedValue(new Error('boom'));
+    await resolveFirstRunState();
+    // Best-effort swallow: warn logged, no language write, wizard still starts.
+    expect(mockLogger.warn).toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
 });

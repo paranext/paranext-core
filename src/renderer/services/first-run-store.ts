@@ -1,10 +1,12 @@
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { localizationService } from '@shared/services/localization.service';
+import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import { resolveRegistrationValidity } from './resolve-registration-validity';
+import { pickBestSetupLanguage } from './pick-best-setup-language';
 
 /** What the app should currently render for first-run gating. */
 export type FirstRunStatus =
@@ -104,6 +106,28 @@ async function markFirstRunComplete(): Promise<void> {
   writeBooleanFlag(WIZARD_ACTIVE_KEY, false);
 }
 
+/**
+ * On a fresh wizard start, default the interface language to the OS language when it has enough
+ * setup-dialog localization (i.e. it qualifies for the picker). Best-effort: any failure leaves the
+ * wizard in English. The caller guarantees this only runs on the fresh-start path, so it never
+ * overrides a language the user has already chosen. Skips the write when the OS match already
+ * equals the current primary language (e.g. an English OS), to avoid a redundant set + re-render.
+ */
+async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
+  try {
+    const qualifying = await localizationService.getSetupDialogLanguages();
+    const best = pickBestSetupLanguage(getCurrentLocale(), Object.keys(qualifying));
+    if (!best) return;
+    const current = await settingsService.get('platform.interfaceLanguage');
+    const currentPrimary =
+      !isPlatformError(current) && Array.isArray(current) && current.length > 0 ? current[0] : 'en';
+    if (best === currentPrimary) return;
+    await settingsService.set('platform.interfaceLanguage', [best]);
+  } catch (e) {
+    logger.warn(`Could not default interface language to the OS locale: ${getErrorMessage(e)}`);
+  }
+}
+
 async function resolveInternal(): Promise<void> {
   try {
     // Demo/UX mode (PT-4219): bypass the real registration backend + relaunch entirely and drop the
@@ -178,6 +202,17 @@ async function resolveInternal(): Promise<void> {
         setStatus({ kind: 'error' });
         break;
       case 'startWizard':
+        // Fresh start at the language step: default to the OS language if it has enough setup-dialog
+        // localization. `wizardActive` here is the pre-transition value, so this runs once and never
+        // overrides a choice a returning user already made. Seeding the setting *before* setStatus
+        // means the wizard's localized strings resolve straight to the OS language — the live-render
+        // bridge never has to fire a change. (The very first synchronous render still shows the
+        // English defaults that useLocalizedStrings/useSetting return before their async fetch
+        // resolves; that brief default-then-resolve is the same for the English case, so seeding
+        // introduces no new flash.)
+        if (!wizardActive && decision.step === 'language') {
+          await seedInterfaceLanguageFromOsLocale();
+        }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
         setStatus({ kind: 'wizard', step: decision.step });
         break;
