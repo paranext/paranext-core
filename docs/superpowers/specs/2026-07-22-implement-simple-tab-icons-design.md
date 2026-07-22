@@ -169,26 +169,37 @@ library's internals.
 ## Section 4 — Title/tooltip accessibility on icon-only
 
 `PlatformTabTitle` (`platform-tab-title.component.tsx`) already renders a custom Radix `Tooltip`,
-but only when the explicit `tooltip` prop (from `tabInfo.tabTooltip`) is set — and `aria-label` is
-always just the generic localized word "Tab", never the actual title.
+but only when the explicit `tooltip` prop (from `tabInfo.tabTooltip`) is set. Text Collection
+already relies on this: it is unconditionally icon-only and sets `tooltip: localizedStrings[TITLE_KEY]`
+itself (`scripture-text-grid.web-view.tsx`).
 
-Change, scoped to Simple mode only (consistent with this spec's scope decision):
+**Decision (revised from an earlier no-`PlatformTabTitle`-change design):** rather than adding a
+native-`title`-attribute fallback to `PlatformTabTitle` itself, set an explicit `tooltip` on each of
+the three tabs directly — matching Text Collection's own convention exactly, and requiring no
+change to `PlatformTabTitle` at all:
 
-- Set the native `title` HTML attribute on the tab's container `div` to the resolved title text,
-  but only when `tooltip` is not already set (`title={tooltip ? undefined : title}`) — avoids a
-  double tooltip (native + custom Radix) when a tab already has an explicit custom tooltip.
-- This works regardless of the CSS-driven full/icon-only state (no JS awareness of the container
-  query breakpoint needed) — harmless when the title is already visible, essential once it's
-  hidden.
-- Leave `aria-label` and Power mode untouched; the "Tab"-only aria-label gap is a pre-existing,
-  out-of-scope issue there.
+- **Bible Texts / Commentaries** (`resource-text-panel.web-view.tsx`): the existing title-resolution
+  effect already computes the current display title (`baseTitle` or the resource-qualified
+  `titleWithResourceKey` string) and calls `updateWebViewDefinition({ title })`. Extend that same
+  call to also pass `tooltip` set to the identical resolved string, so the tooltip always mirrors
+  whatever the tab's title currently is.
+- **Comments** (`comment-list-panel-web-view.factory.ts`): the panel's `title` is resolved once at
+  open/reload time and doesn't change afterward; set `tooltip: title` alongside `title` in the same
+  returned `WebViewDefinition`.
+- The tooltip is unconditional — it shows on hover regardless of density state, including when the
+  tab is at full width with its title already visible. This is a deliberate simplification (accepted
+  tradeoff: a redundant tooltip on an already-readable tab, not a defect) in exchange for reusing an
+  existing, already-proven mechanism instead of adding a new code path to `PlatformTabTitle`.
+- `aria-label` remains the generic localized word "Tab", untouched, in every mode — this is a
+  pre-existing, out-of-scope gap not addressed by this change either way (the tooltip content is
+  not wired into the accessible name computation any more than it is today for Text Collection).
 
 ---
 
 ## Testing
 
-- Extend `platform-tab-title.component.test.tsx`: assert `title` attribute is set to the resolved
-  title when `tooltip` is absent, and is `undefined` when `tooltip` is present (Simple mode).
+- No `platform-tab-title.component.tsx` changes in this spec — its existing tooltip tests are
+  unaffected.
 - Extend `resource-text-panel.web-view.test.tsx` / equivalent for Comments: assert the icon URL
   reflects theme + selection state via the new shared hook.
 - **CSS container-query behavior (Section 3) cannot be meaningfully unit-tested in jsdom** — no
@@ -210,6 +221,6 @@ Change, scoped to Simple mode only (consistent with this spec's scope decision):
   spacing), reusing existing design tokens.
 - Tabs show icon+title when roomy and shrink to icon-only as the column narrows, verified visually;
   rc-dock's existing overflow dropdown remains the floor for tabs that don't fit even icon-only.
-- Every tab exposes its title via native `title` (and existing custom tooltip take priority when
-  set) once its visible text is hidden, in Simple mode.
+- Bible Texts, Commentaries, and Comments each have an explicit `tooltip` mirroring their current
+  title, matching Text Collection's existing convention — no `PlatformTabTitle` change needed.
 - Power mode is behaviorally and visually unchanged throughout.
