@@ -68,6 +68,12 @@ Extension Host Process              Main Process
 └─────────────────────┘            └─────────────────────┘
 ```
 
+> For the **authoring shape** of a service — stateless function-exports vs stateful module-state
+> with `initialize()`/`shutdown()` vs a process-specific factory — see
+> [`shared-patterns.md`](../../.claude/rules/architecture/shared-patterns.md) § "TypeScript Service
+> Authoring". This section covers the cross-process host/proxy axis; that one covers how to structure
+> the implementation.
+
 ### Main Process Services (`src/main/services/`)
 
 | Service | Purpose |

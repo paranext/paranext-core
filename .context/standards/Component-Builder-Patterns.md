@@ -1,10 +1,10 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.4.1
+version: 1.5.0
 status: active
 created: 2026-03-04
-last_updated: 2026-05-11
+last_updated: 2026-06-18
 toc: true
 ---
 
@@ -18,19 +18,21 @@ This is a reference document containing patterns and examples for building Platf
 <!-- | 36 | File Naming Conventions | -->
 <!-- | 52 | TypeScript & Build Configuration | -->
 <!-- | 88 | Web View Provider Patterns | -->
-<!-- | 180 | PAPI Integration Patterns | -->
-<!-- | 246 | Styling Patterns | -->
-<!-- | 287 | Localization Patterns | -->
-<!-- | 413 | EXPLANATION Comments for Complex Logic | -->
-<!-- | 483 | Common Component Patterns | -->
-<!-- | 511 | Debounce Usage Guidelines | -->
-<!-- | 542 | Controlled Radix Popover with Custom Outside-Pointer Handler | -->
-<!-- | 587 | Disabled Button with Tooltip Pattern | -->
-<!-- | 609 | Test File Patterns | -->
-<!-- | 654 | Reference Extensions | -->
-<!-- | 667 | Design Reference Resources | -->
-<!-- | 674 | Visual Review | -->
-<!-- | 678 | Version Log | -->
+<!-- | 167 | PAPI Integration Patterns | -->
+<!-- | 233 | Styling Patterns | -->
+<!-- | 274 | Localization Patterns | -->
+<!-- | 400 | EXPLANATION Comments for Complex Logic | -->
+<!-- | 422 | Common Component Patterns | -->
+<!-- | 452 | Debounce Usage Guidelines | -->
+<!-- | 483 | Wire UI to Real PAPI — No Stubbing | -->
+<!-- | 491 | Presentational Components and Their Stories | -->
+<!-- | 521 | Controlled Radix Popover with Custom Outside-Pointer Handler | -->
+<!-- | 566 | Disabled Button with Tooltip Pattern | -->
+<!-- | 588 | Test File Patterns | -->
+<!-- | 633 | Reference Extensions | -->
+<!-- | 646 | Design Reference Resources | -->
+<!-- | 653 | Visual Review | -->
+<!-- | 657 | Version Log | -->
 <!-- TOC:END -->
 
 ## File Naming Conventions
@@ -136,6 +138,12 @@ export class FeatureWebViewProvider implements IWebViewProvider {
 ```
 
 **Note:** Use `?inline` imports for content and styles in providers.
+
+### Web View UI-State Persistence Caveat (`useWebViewState`)
+
+`useWebViewState<T>(key, default)` is scoped **per `webViewId`**, not per project or per user. Each `openWebView` call without a reuse strategy mints a **new** web view id, so closing and reopening a tool creates a fresh instance with empty state — slots persisted via `useWebViewState` do **not** survive close/reopen.
+
+To make state survive close/reopen, the tool must reuse the same web view id. The idiom is `existingId: '?'` with `createNewIfNotFound: false` on `openWebView`, which reattaches to an already-open instance instead of creating a new one — see `openFind` in `extensions/src/platform-scripture/src/main.ts` (the Find tool does this). If state needs to persist across sessions (not just close/reopen within a session), use user-scoped `papi.settings` instead of `useWebViewState`.
 
 ### Custom Web View Options
 
@@ -482,6 +490,36 @@ If the backend functionality a handler needs is genuinely out of scope, leave th
 
 ---
 
+## Presentational Components and Their Stories
+
+A presentational `*.component.tsx` takes all of its data through props and is decoupled from PAPI (no `@papi`/`useData`/`useSetting`/`globalThis.webViewComponent` — see the purity rule in [Extension-Development-Guide.md](Extension-Development-Guide.md)). The same component code must run unchanged in production and in Storybook. Keep these three discipline rules when building such a component and its stories.
+
+### Keep demo/mock scaffolding out of the component
+
+The component file must be production-clean. Demo data, mock toggles, "load sample data" controls, and environment-gated branches (`process.env.NODE_ENV` / `process.env.STORYBOOK`, `demoMode`/`isDemo`/`sampleData`/`mockData`) belong in the **story decorator**, never in the component. If the component branches on whether it is running in Storybook, it is no longer the thing that ships.
+
+### Cover every wireframe state variant with a story
+
+Each distinct state a wireframe describes — typically `Default`, `Loading`, `Empty`, `Error`, and any populated/selected variants — gets its own named story export so a reviewer can see each state in isolation. A component with a loading and an error state but only a `Default` story is under-covered; add `Loading` and `Error` stories (e.g. `export const Loading: Story = { args: { isLoading: true } }`).
+
+### The `Default` story wires every callback to real `useState`
+
+Stories are interactive sessions, not static snapshots. In the `Default` story, every `on*` callback prop must be wired to a state-mutating handler whose state lives in a `useState` hook in the story's decorator (or render function) — not a `() => {}` stub. The decorator owns the sample data via `useState`, so a reviewer opening the story can click through the full flow and watch the component react to real-shape data.
+
+```tsx
+// Default story: decorator owns sample state; callbacks mutate it.
+export const Default: Story = {
+  render: () => {
+    const [name, setName] = useState('My Project');
+    return <ProjectSettingsForm projectName={name} onSave={setName} onCancel={() => setName('My Project')} />;
+  },
+};
+```
+
+Stub callbacks (`() => {}`) ARE fine in the non-`Default` stories whose whole point is a frozen state — `Loading`, `Empty`, `Error` — since those are not meant to be exercised. The "wire every callback to `useState`" rule applies only to `Default`.
+
+---
+
 ## Controlled Radix Popover with Custom Outside-Pointer Handler
 
 ### When this pattern applies
@@ -629,3 +667,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.3.0   | 2026-05-01 | Add TypeScript & Build Configuration section (typeRoots, typecheck script, build-doesn't-typecheck). Add Custom Web View Options pattern (extend `OpenWebViewOptions`). Add `ComboBox` option shape callout (NOT `{label,value}[]`). Add return-type gotcha to useLocalizedStrings (`LocalizationData`/`LanguageStrings`, `LocalizeKey` indices). |
 | 1.4.0   | 2026-05-11 | Move `EXPLANATION:` blocks into the function body rather than TSDoc. |
 | 1.4.1   | 2026-05-11 | Code-review fix: align `EXPLANATION:` placement wording with the Code-Style-Guide v1.2.1 relaxation — also accommodate class-level constants (e.g. regex pattern fields) when the constant *is* the algorithm. |
+| 1.5.0   | 2026-06-18 | Add "Presentational Components and Their Stories" section (keep demo/mock scaffolding out of the component, cover every wireframe state variant, `Default` story wires callbacks to `useState`). Add "Web View UI-State Persistence Caveat" (`useWebViewState` is per-`webViewId`; reuse the id via `existingId`/`createNewIfNotFound: false` — as the Find tool does — or use `papi.settings` for cross-session state). |

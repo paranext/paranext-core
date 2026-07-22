@@ -19,6 +19,12 @@ TDD is required for logic/behavior changes; pure-UI work may use a component-fir
 2. **GREEN**: Write MINIMUM code to pass
 3. **REFACTOR**: Clean up while tests stay green
 
+### C# RED phase
+
+A C# RED commit cannot be test-only. C# tests won't compile without the types they reference, and the pre-commit hook runs `dotnet build c-sharp/ParanextDataProvider.sln` (which includes the test project) — so a commit of failing-but-uncompilable tests is blocked.
+
+Commit minimal skeleton type stubs alongside the failing tests so the build passes while the tests still fail at runtime. Keep the skeletons shape-only (no constructors, attributes, validation, or constant values) so the implementer fills in exactly the behavior the RED tests exercise. Do NOT use `--no-verify` to bypass the hook — fix the underlying compile issue with stubs instead.
+
 ## The Revert Test
 
 Every test must be capable of failing. Verify by:

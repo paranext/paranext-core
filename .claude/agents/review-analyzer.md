@@ -1,7 +1,7 @@
 ---
 name: review-analyzer
 description: "Read-only code review analysis agent for /review-paratext. Analyzes branch changes against a prioritized checklist. Invoked in parallel with focus=api, style, compliance, or ux."
-allowed-tools: Bash, Read, Grep, Glob
+tools: Bash, Read, Grep, Glob
 ---
 
 # Review Analyzer

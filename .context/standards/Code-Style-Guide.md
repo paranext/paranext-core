@@ -57,6 +57,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **`throw new Error()`**, not `throw Error()`.
 - **Bundled deps belong in `devDependencies`**: Webpack bundles non-`external` imports into the final output, so those packages are `devDependencies`. See [this discussion](https://reviewable.io/reviews/paranext/paranext-core/380#-NcPBady7ifJq0YLZtwN).
 - **Prefer TSDoc over JSDoc** in TypeScript. TSDoc does not duplicate types in the comment — TypeScript already has them.
+- **Namespace-prefix shared-library exported types**: Types exported from `lib/platform-bible-react` (or any other shared library) should carry a feature/namespace prefix so they stay collision-proof across the whole monorepo — e.g. `ManageBooksAlertEntry`, not bare `AlertEntry`. Consumers re-import them under a short alias at the module boundary for component-local readability: `import { ManageBooksAlertEntry as AlertEntry } from 'platform-bible-react'`. This keeps library exports unambiguous without forcing consumers to read long names everywhere.
 
 ---
 
