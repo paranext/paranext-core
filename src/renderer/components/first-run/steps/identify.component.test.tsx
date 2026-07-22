@@ -196,7 +196,7 @@ describe('IdentifyStep', () => {
     await user.click(screen.getByRole('button', { name: /save and restart/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/error/i)).toBeInTheDocument();
+      expect(screen.getByText('Error')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled();
     });
   });
