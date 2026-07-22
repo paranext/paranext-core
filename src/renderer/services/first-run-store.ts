@@ -219,7 +219,15 @@ export async function completeFirstRun(options?: { syncSkipped?: boolean }): Pro
     setStatus({ kind: 'app' });
     return;
   }
-  if (options?.syncSkipped) writeBooleanFlag(SYNC_SKIPPED_KEY, true);
+  if (options?.syncSkipped) {
+    writeBooleanFlag(SYNC_SKIPPED_KEY, true);
+    // Persist durably as a platform setting so the main-process startup-tasks can read it.
+    try {
+      await settingsService.set('platform.firstRunSyncSkipped', true);
+    } catch (e) {
+      logger.warn(`Failed to persist platform.firstRunSyncSkipped: ${getErrorMessage(e)}`);
+    }
+  }
   await markFirstRunComplete();
   setStatus({ kind: 'app' });
 }
