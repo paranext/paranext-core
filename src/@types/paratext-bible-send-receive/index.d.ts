@@ -205,7 +205,10 @@ declare module 'paratext-bible-send-receive' {
     conflictsInfo: ConflictInfo[];
     /** Additional information provided in some cases when a S/R fails */
     failureMessage?: string;
-    /** Granular {@link ResultChangeStatus} statuses (multiple can apply, e.g., sent AND received) */
+    /**
+     * Granular change-tracking statuses ({@link ResultChangeStatus}); multiple can apply, e.g., sent
+     * AND received
+     */
     resultStatuses?: ResultChangeStatus[];
     /** Total conflict count computed by C# */
     conflictCount?: number;
