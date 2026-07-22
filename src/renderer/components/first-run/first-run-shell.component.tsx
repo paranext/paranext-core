@@ -8,7 +8,7 @@ import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguageStep } from './steps/language.component';
 import { InternetPlaceholderStep } from './steps/internet.placeholder.component';
 import { IdentifyStep } from './steps/identify-step.component';
-import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
+import { SyncConsentStep } from './steps/sync-consent-step.component';
 import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
 
 /** Runtime order of the wizard steps. */
@@ -25,7 +25,7 @@ export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRu
   language: LanguageStep,
   internet: InternetPlaceholderStep,
   identify: IdentifyStep,
-  syncConsent: SyncConsentPlaceholderStep,
+  syncConsent: SyncConsentStep,
   syncProgress: SyncProgressPlaceholderStep,
 };
 
