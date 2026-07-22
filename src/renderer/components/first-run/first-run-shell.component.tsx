@@ -6,7 +6,7 @@ import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-
 import { ComponentType, useCallback, useMemo, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
-import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
+import { IdentifyStep } from './steps/identify.component';
 import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
 import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
 
@@ -16,7 +16,7 @@ export const STEP_ORDER: FirstRunStep[] = ['language', 'identify', 'syncConsent'
 /** Default step bodies. Sibling tickets replace individual entries with their real step. */
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
   language: LanguagePlaceholderStep,
-  identify: IdentifyPlaceholderStep,
+  identify: IdentifyStep,
   syncConsent: SyncConsentPlaceholderStep,
   syncProgress: SyncProgressPlaceholderStep,
 };

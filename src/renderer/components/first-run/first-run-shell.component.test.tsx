@@ -18,7 +18,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
-      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
@@ -40,16 +39,26 @@ beforeEach(() => {
 
 describe('FirstRunShell', () => {
   it('advances through steps with the shell Next button', async () => {
-    render(<FirstRunShell entryStep="language" />);
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: () => <p>identify step</p> }}
+      />,
+    );
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(<FirstRunShell entryStep="language" />);
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: () => <p>identify step</p> }}
+      />,
+    );
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
   });
