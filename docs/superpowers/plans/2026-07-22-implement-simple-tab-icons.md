@@ -651,26 +651,52 @@ globalThis.webViewComponent = function ResourceTextPanel({
 }: WebViewProps) {
 ```
 
-- [ ] **Step 5: Typecheck and lint**
+- [ ] **Step 5: Set an explicit tooltip mirroring the title (no `PlatformTabTitle` change needed)**
+
+In `resource-text-panel.web-view.tsx`, find the existing title-resolution effect (the one that
+calls `updateWebViewDefinition({ title: ... })` based on `baseTitle`/`resourceShortName`) and
+extend it to also set `tooltip` to the identical resolved string, so the hover tooltip always
+mirrors whatever the tab's title currently is — this is the mechanism that makes the tab's name
+discoverable on hover once Task 5 shrinks it to icon-only, matching Text Collection's existing
+`tooltip: localizedStrings[TITLE_KEY]` convention instead of adding any new code path to
+`PlatformTabTitle`:
+
+```ts
+useEffect(() => {
+  const baseTitle = localizedStrings[titleKey];
+  if (!baseTitle) return;
+  if (resourceShortName) {
+    const resolvedTitle = formatReplacementString(localizedStrings[titleWithResourceKey], {
+      textName: resourceShortName,
+    });
+    updateWebViewDefinition({ title: resolvedTitle, tooltip: resolvedTitle });
+  } else {
+    updateWebViewDefinition({ title: baseTitle, tooltip: baseTitle });
+  }
+}, [resourceShortName, localizedStrings, titleKey, titleWithResourceKey, updateWebViewDefinition]);
+```
+
+- [ ] **Step 6: Typecheck and lint**
 
 Run: `npm run lint -- extensions/src/platform-scripture-editor/src/main.ts extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx`
 Expected: no errors
 
-- [ ] **Step 6: Manually verify**
+- [ ] **Step 7: Manually verify**
 
 Start the app in Simple mode: Bible Texts shows a `book-open` icon, Commentaries shows a
 `file-text` icon, both swap correctly with theme and selection, exactly like Text Collection.
-Switch to Power mode (or trigger these panels there if reachable) and confirm no icon appears —
-text-only, as before this change.
+Hover each tab (at both full width and, after Task 5, icon-only width) and confirm the tooltip
+shows the current title text. Switch to Power mode (or trigger these panels there if reachable) and
+confirm no icon or tooltip appears — text-only, as before this change.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add extensions/src/platform-scripture-editor/assets/book-open*.svg \
         extensions/src/platform-scripture-editor/assets/file-text*.svg \
         extensions/src/platform-scripture-editor/src/main.ts \
         extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx
-git commit -m "feat: add Bible Texts (book-open) and Commentaries (file-text) tab icons, Simple mode only"
+git commit -m "feat: add Bible Texts (book-open) and Commentaries (file-text) tab icons + tooltip, Simple mode only"
 ```
 
 ---
@@ -722,16 +748,22 @@ git commit -m "feat: add Bible Texts (book-open) and Commentaries (file-text) ta
 </svg>
 ```
 
-- [ ] **Step 2: Gate the initial `iconUrl` in `CommentListPanelWebViewFactory` on Simple mode**
+- [ ] **Step 2: Gate the initial `iconUrl` in `CommentListPanelWebViewFactory` on Simple mode, and set an explicit `tooltip`**
 
 In `extensions/src/legacy-comment-manager/src/comment-list-panel-web-view.factory.ts`, in
 `getWebViewDefinition` (the method that already reads `interfaceMode` for `scrollGroupScrRef`),
-add `iconUrl`:
+add `iconUrl` and `tooltip`. Unlike Bible Texts/Commentaries, this panel's `title` never changes
+after open, so `tooltip: title` set once here (no separate live-updating effect needed) mirrors
+Text Collection's convention just as directly:
 
 ```ts
 return {
   ...savedWebView,
   title,
+  // Mirrors the title so the tab's name is discoverable on hover once Task 5 shrinks it to
+  // icon-only — matches Text Collection's existing tooltip convention; no PlatformTabTitle
+  // change needed.
+  tooltip: title,
   projectId,
   content: commentListWebView,
   styles: tailwindStyles,
@@ -873,8 +905,9 @@ Expected: no errors
 - [ ] **Step 5: Manually verify**
 
 Start the app in Simple mode: Comments tab shows a `message-square` icon, swaps with theme/
-selection. Confirm Power mode's comment-list web view (if reachable) and any non-panel usage of
-`CommentListWebView` show no icon.
+selection, and hovering the tab (at both full width and, after Task 5, icon-only width) shows a
+tooltip with the panel's title. Confirm Power mode's comment-list web view (if reachable) and any
+non-panel usage of `CommentListWebView` show no icon and no tooltip.
 
 - [ ] **Step 6: Commit**
 
@@ -882,103 +915,12 @@ selection. Confirm Power mode's comment-list web view (if reachable) and any non
 git add extensions/src/legacy-comment-manager/assets/message-square*.svg \
         extensions/src/legacy-comment-manager/src/comment-list-panel-web-view.factory.ts \
         extensions/src/legacy-comment-manager/src/comment-list.web-view.tsx
-git commit -m "feat: add Comments tab icon (message-square), Simple mode only"
+git commit -m "feat: add Comments tab icon (message-square) + tooltip, Simple mode only"
 ```
 
 ---
 
-### Task 5: Title/tooltip accessibility fallback on `PlatformTabTitle`
-
-**Files:**
-
-- Modify: `src/renderer/components/docking/platform-tab-title.component.tsx`
-- Modify: `src/renderer/components/docking/platform-tab-title.component.test.tsx`
-
-**Interfaces:**
-
-- Consumes: existing `PlatformTabTitleProps` (`iconUrl`, `text`, `tooltip`, `id`, `webViewId`), existing `isPowerMode` from `useIsPowerMode()` (already computed in this component).
-- Produces: `title` HTML attribute on the rendered tab container div, present only in Simple mode and only when the `tooltip` prop is absent.
-
-- [ ] **Step 1: Write the failing tests**
-
-Add to `platform-tab-title.component.test.tsx` (find the existing `describe`/`it` blocks and add a
-new `describe('title attribute fallback', ...)` block; this file already mocks `useIsPowerMode`
-per-test via `vi.mocked(useIsPowerMode).mockReturnValue(...)` — follow that existing pattern):
-
-```tsx
-describe('title attribute fallback', () => {
-  it('sets the native title attribute to the resolved text in Simple mode when no explicit tooltip is given', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
-    render(<PlatformTabTitle id="tab-1" text="Bible texts" />);
-    const container = screen.getByText('Bible texts').closest('.platform-tab-title');
-    expect(container).toHaveAttribute('title', 'Bible texts');
-  });
-
-  it('does not set the native title attribute when an explicit tooltip is given, to avoid a double tooltip', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(false);
-    render(<PlatformTabTitle id="tab-1" text="Bible texts" tooltip="Custom hover text" />);
-    const container = screen.getByText('Bible texts').closest('.platform-tab-title');
-    expect(container).not.toHaveAttribute('title');
-  });
-
-  it('does not set the native title attribute in Power mode', () => {
-    vi.mocked(useIsPowerMode).mockReturnValue(true);
-    render(<PlatformTabTitle id="tab-1" text="Bible texts" />);
-    const container = screen.getByText('Bible texts').closest('.platform-tab-title');
-    expect(container).not.toHaveAttribute('title');
-  });
-});
-```
-
-(Check this test file's existing top for whether `useIsPowerMode` is imported as a named import
-usable with `vi.mocked(...)` — it is, per the file's `import { useIsPowerMode } from
-'@renderer/hooks/use-is-power-mode.hook';` and its `vi.mock('@renderer/hooks/use-is-power-mode.hook', ...)`
-block already shown near the top of the file.)
-
-- [ ] **Step 2: Run tests to verify they fail**
-
-Run: `npm test -- src/renderer/components/docking/platform-tab-title.component.test.tsx --watch=false`
-Expected: FAIL — 2 of the 3 new tests fail (no `title` attribute is ever set today)
-
-- [ ] **Step 3: Implement the fallback**
-
-In `platform-tab-title.component.tsx`, find the rendered container div (the one with
-`className="platform-tab-title"` / `aria-label={tabLabel}` / `data-web-view-id={webViewId}`) and
-add a `title` attribute, gated on `!isPowerMode && !tooltip`:
-
-```tsx
-          <div
-            ref={containerRef}
-            className="platform-tab-title"
-            aria-label={tabLabel}
-            title={!isPowerMode && !tooltip ? title : undefined}
-            data-web-view-id={webViewId}
-          >
-```
-
-(If the branch already has the pt-3958 `drag-ignore`-aware version of this JSX — i.e. `className={`platform-tab-title${dragIgnoreClass}`}` — add the `title` attribute to that same div, unchanged otherwise.)
-
-- [ ] **Step 4: Run tests to verify they pass**
-
-Run: `npm test -- src/renderer/components/docking/platform-tab-title.component.test.tsx --watch=false`
-Expected: PASS (all tests, including the 3 new ones)
-
-- [ ] **Step 5: Lint**
-
-Run: `npm run lint -- src/renderer/components/docking/platform-tab-title.component.tsx`
-Expected: no errors
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add src/renderer/components/docking/platform-tab-title.component.tsx \
-        src/renderer/components/docking/platform-tab-title.component.test.tsx
-git commit -m "feat: expose tab title via native title attribute in Simple mode when no explicit tooltip is set"
-```
-
----
-
-### Task 6: Responsive density — icon+title shrinks to icon-only per tab
+### Task 5: Responsive density — icon+title shrinks to icon-only per tab
 
 **Files:**
 
@@ -1115,7 +1057,7 @@ git commit -m "feat: shrink Simple-mode tabs from icon+title to icon-only via pe
 
 ---
 
-### Task 7: Visual styling pass to match the reference screenshot
+### Task 6: Visual styling pass to match the reference screenshot
 
 **Files:**
 
