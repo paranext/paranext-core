@@ -19,16 +19,28 @@ export type ProjectMetadataWithoutFactoryInfo = {
   /**
    * Short display name of the project. Absent when the producing Project Data Provider Factory does
    * not supply it; consumers should fall back to {@link id}.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
    */
   name?: string;
   /**
    * Full display name of the project. Absent when not supplied; consumers should fall back to
    * {@link name}, then {@link id}.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
    */
   fullName?: string;
-  /** Language of the project (raw setting value). Absent when not supplied (no language to show). */
+  /**
+   * Language of the project (raw setting value). Absent when not supplied (no language to show).
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
   language?: string;
-  /** BCP-47 language tag of the project. Absent when not supplied (no language to show). */
+  /**
+   * BCP-47 language tag of the project. Absent when not supplied (no language to show).
+   *
+   * @experimental Recently added; may change as we learn how it is used.
+   */
   languageTag?: string;
   /**
    * Whether the project's primary content (e.g. Scripture text) is editable.
@@ -38,11 +50,15 @@ export type ProjectMetadataWithoutFactoryInfo = {
    * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
    * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
    * false`.
+   *
+   * @experimental Recently added; may change as we learn how it is used.
    */
   isEditable?: boolean;
   /**
    * Whether the project is a published (read-only) resource. An absent value means the registered
    * default of `platform.isPublished`, which is `false` (not a published resource).
+   *
+   * @experimental Recently added; may change as we learn how it is used.
    */
   isPublished?: boolean;
 };

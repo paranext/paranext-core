@@ -282,7 +282,7 @@ To capture a run, set the `PT_STARTUP_MARKS=true` environment variable when laun
 # Dev (quick, but see the caveat below - dotnet watch distorts the .NET timings)
 PT_STARTUP_MARKS=true npm start
 
-# Packaged build (representative numbers - what the perf specs were measured on)
+# Packaged build (representative numbers - use these for comparisons)
 PT_STARTUP_MARKS=true ./release/build/linux-unpacked/platform-bible \
   --no-sandbox --remote-debugging-port=9223
 ```
@@ -299,7 +299,6 @@ Notes:
 
 - **Use a packaged build for numbers you intend to compare.** In dev, the .NET provider runs under `dotnet watch`, which inflates the C# portion of the timeline and is not representative.
 - `main.log` accumulates across launches; the tool shows only the latest run and warns when it drops older ones. For a clean capture, delete (or copy aside) the log between runs.
-- For the design rationale and recorded baseline/after measurements, see the startup-performance specs under `docs/superpowers/specs/` (e.g. `2026-07-10-startup-baseline.md`, `2026-07-11-startup-phase3-after.md`).
 
 ## GitHub Pages
 
