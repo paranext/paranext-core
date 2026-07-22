@@ -46,7 +46,7 @@ function writeBooleanFlag(key: string, value: boolean): void {
 }
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
-function isDemoMode(): boolean {
+export function isDemoMode(): boolean {
   return readBooleanFlag(DEMO_MODE_KEY);
 }
 
