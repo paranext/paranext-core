@@ -2,14 +2,13 @@
  * Store tracking which projects an automatic (scheduled or session) Send/Receive is currently
  * blocking edits on.
  *
- * BACKEND-AUTHORITATIVE SNAPSHOT model (PT-4214 Stage U): the backend write gate is the single
- * source of truth. It emits a full snapshot of the blocked project ids on every arm/disarm, and the
- * producer applies it wholesale via {@link setBlockedProjects} — an empty set means nothing is
- * blocked. There is no local ref-counting and no timer-driven opinion about blocking: resilience
- * against a lost event is re-query of the backend authority (the service's init consult), not a
- * local safety leash. The renderer's old per-blocker `SAFETY_TIMEOUT_MS` leash is deleted, not
- * retained — a second, timer-driven opinion about blocking is precisely the drift the design's
- * findings 7/8/16 indict.
+ * Backend-authoritative snapshot model: the backend write gate is the single source of truth. It
+ * emits a full snapshot of the blocked project ids on every arm/disarm, and the producer applies it
+ * wholesale via {@link setBlockedProjects} — an empty set means nothing is blocked. There is
+ * deliberately no local ref-counting and no timer-driven opinion about blocking (a second,
+ * timer-driven opinion is exactly the kind of drift that lets the UI disagree with the backend):
+ * resilience against a lost event is re-query of the backend authority (the service's init
+ * consult), not a local safety leash.
  *
  * Visibility keeps a 200 ms show-grace matching PT9's automatic-sync surface: on the first project
  * becoming blocked (empty → non-empty) a grace timer is armed, and consumers only ever see a
@@ -80,10 +79,11 @@ export function setBlockedProjects(projectIds: ReadonlyArray<string>): void {
 
   // Empty → non-empty. Record the latest raw snapshot for the grace-timer callback to read, then arm
   // the show-grace if one is not already pending; visibility only turns on if blocking survives the
-  // grace. The assignment lives here (above the pending-grace check) — not at the top of the function
-  // — because only the grace callback ever reads rawBlockedProjectIds, so it was a dead store on the
-  // cleared and already-visible branches. Keeping it above the check means a second empty → non-empty
-  // snapshot arriving while a grace is still pending still refreshes what that pending timer will read.
+  // grace. This assignment belongs here (below the cleared and already-visible branches) rather than
+  // at the top of the function: only the grace callback reads rawBlockedProjectIds, so at the top it
+  // would be a dead store on those earlier branches. Keeping it above the pending-grace check means a
+  // second empty → non-empty snapshot arriving while a grace is still pending still refreshes what
+  // that pending timer will read.
   rawBlockedProjectIds = next;
   if (graceTimer === undefined) {
     graceTimer = setTimeout(() => {
@@ -103,8 +103,8 @@ export function getBlockedProjectIds(): ReadonlySet<string> {
 /**
  * True when a specific project is (visibly) blocked. An undefined project id is never blocked.
  *
- * No consumer in this diff — the project-settings UI (a stacked follow-up PR) is about to consume
- * it to disable per-project actions while that project's automatic sync is blocking edits.
+ * Currently unused within core; the project-settings UI (a follow-up) consumes it to disable
+ * per-project actions while that project's automatic sync is blocking edits.
  */
 export function isProjectBlocked(projectId: string | undefined): boolean {
   if (projectId === undefined) return false;

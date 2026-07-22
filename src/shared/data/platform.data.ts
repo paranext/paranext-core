@@ -26,11 +26,11 @@ export const MAX_ZOOM_FACTOR = 3.0;
  * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
  * deliberately long.
  *
- * As of PT-4214 Stage U the renderer auto-sync-blocking store no longer consumes this: the backend
- * write gate is the single authority for blocking, so the store's own `SAFETY_TIMEOUT_MS` leash was
- * deleted (renderer-side resilience is re-query of the authority, not a local timer). The constant
- * now survives in two rightful homes — the shutdown-sync bound in main (`shutdown-tasks.ts`) and,
- * conceptually, the C# stall watchdog — both of which bound "one automatic Send/Receive".
+ * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
+ * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
+ * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
+ * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
+ * when the backend says so rather than on a renderer-side timer.
  *
  * @experimental
  */

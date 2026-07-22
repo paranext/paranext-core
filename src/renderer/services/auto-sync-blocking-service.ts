@@ -13,22 +13,17 @@ import { setBlockedProjects } from './auto-sync-blocking-store';
 type SyncWriteLockSnapshot = { isBlocking: boolean; projectIds: string[] };
 
 // Backend-authoritative network event: the C# write gate emits a full snapshot on every arm/disarm,
-// for ALL sync types (manual + scheduled + session). It is the SINGLE signal source for blocking
-// (PT-4214 finding 16). Only fires in Paratext 10 Studio builds where the patch arms the gate; plain
-// Platform.Bible never emits it.
+// for ALL sync types (manual + scheduled + session). This is the single signal source for blocking
+// — the store never combines it with any other opinion. Only fires in Paratext 10 Studio builds
+// where the patch arms the gate; plain Platform.Bible never emits it.
 const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
-
-// REPLACED (PT-4214 Stage U): the extension-emitted, renderer-side boolean raise/clear event
-// `paratextBibleSendReceive.onAutoSyncBlockingChanged`. It is no longer subscribed — a second signal
-// source alongside the backend gate is exactly the drift finding 16 indicts, so the backend gate is
-// now the single authority for blocking.
 
 /**
  * Command served by the C# backend (the emitter of {@link SYNC_WRITE_LOCK_CHANGED_EVENT}) returning
  * the current {@link SyncWriteLockSnapshot}, so this service can seed the store on init instead of
  * assuming unblocked. Requested untyped (the same pattern as `paratextBibleSendReceive.cancelSync`
  * in shutdown-tasks) because the copied `paratext-bible-send-receive.d.ts` command contract does
- * not declare it. Served now on Paratext 10 Studio (returns not-blocking on plain Platform.Bible);
+ * not declare it. Served on Paratext 10 Studio (returns not-blocking on plain Platform.Bible);
  * older cores lack it entirely and the request rejects, leaving the assume-unblocked default.
  */
 const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
@@ -84,13 +79,12 @@ export function initAutoSyncBlockingService(): () => void {
     setBlockedProjects(readBlockedProjectIds(event));
   });
 
-  // NOTE: this init consult is the ONLY backend re-seed today — there is no re-query on websocket
+  // LIMITATION: this init consult is the only backend re-seed — there is no re-query on websocket
   // reconnect, C# data-provider restart, or editor mount. So if a disarm is ever lost (a faulted
   // fire-and-forget SendEventAsync, an off-contract raise reorder, or a provider that restarts
   // disarmed without re-emitting), the visible blocked set stays stale until the next real
-  // transition or a full renderer reload. Closing that gap depends on the PT-4214 editor-mount
-  // re-query, which is out-of-scope Stage-U work tracked on PT-4214; this one-shot seed is all the
-  // recovery there is until it lands.
+  // transition or a full renderer reload. Closing that gap needs an editor-mount re-query, tracked
+  // on PT-4214; until that lands, this one-shot seed is the only recovery.
   (async () => {
     try {
       const snapshot = await requestNoRetry<[], unknown>(

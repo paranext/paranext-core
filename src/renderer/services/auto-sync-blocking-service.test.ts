@@ -18,7 +18,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
-const OLD_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlockingChanged';
+const LEGACY_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlockingChanged';
 
 /** Flushes the service's fire-and-forget seeding chain (await + then-callbacks). */
 async function flushSeeding(): Promise<void> {
@@ -66,9 +66,9 @@ describe('initAutoSyncBlockingService', () => {
       expect(subscribedEventNames).toContain(SYNC_WRITE_LOCK_CHANGED_EVENT);
     });
 
-    it('does NOT subscribe to the replaced onAutoSyncBlockingChanged event', () => {
+    it('does NOT subscribe to the legacy onAutoSyncBlockingChanged event', () => {
       initAutoSyncBlockingService();
-      expect(subscribedEventNames).not.toContain(OLD_BLOCKING_CHANGED_EVENT);
+      expect(subscribedEventNames).not.toContain(LEGACY_BLOCKING_CHANGED_EVENT);
     });
 
     it('returns a cleanup function that unsubscribes the event', () => {
