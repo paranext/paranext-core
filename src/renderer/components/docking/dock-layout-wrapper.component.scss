@@ -620,7 +620,9 @@ $tab-bottom-rounding: vars.$space--sm;
 // `.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.platform-dock-tab-window-focus`
 // (0,5,0) in the TAB HEADER region above; match that specificity and rely on source order
 // (this region comes later in the file) to win.
-[data-interface-mode='simple'] .dock-panel.dock-style-platform-bible .dock-tab.platform-dock-tab-window-focus {
+[data-interface-mode='simple']
+  .dock-panel.dock-style-platform-bible
+  .dock-tab.platform-dock-tab-window-focus {
   --tab-background: var(--tab-front-blur);
   color: currentColor;
 }
@@ -635,7 +637,6 @@ $tab-bottom-rounding: vars.$space--sm;
   content: none;
 }
 // #endregion SIMPLE-MODE TAB SELECTION LOOK ////////////////////////////
-// #endregion SIMPLE-MODE FOCUS RING ///////////////////////////////////
 
 // #region SIMPLE-MODE CHROME (padding/gap/radius/divider) ///////////////
 // Ports the Storybook prototype's NO_PADDING_STYLE (src/stories/platform/ten-layout-shared.tsx)

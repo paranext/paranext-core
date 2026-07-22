@@ -6,7 +6,15 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Button, Spinner, useExtraValidMarkers } from 'platform-bible-react';
+import {
+  Button,
+  Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  useExtraValidMarkers,
+} from 'platform-bible-react';
 import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
 import type {
   DblResourceReference,
@@ -368,18 +376,31 @@ export function ModelTextPanel({
   return (
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       {modelTextLabel && (
-        <div
-          data-testid="model-text-header"
-          // 42px total, matching Column 3's dock tab-bar OUTER height (the 36px active tab plus its
-          // 6px --tab-header-to-content-gap) and the Scripture Editor's Simple-mode toolbar override
-          // — all three rows' bottom edges need to land at the same Y, which matching total row
-          // height achieves on its own. tw:items-center centers the text symmetrically within the
-          // full 42px box (no extra top-only padding needed — see platform-scripture-editor.web-
-          // view.scss's .scripture-editor-tab-nav-simple comment for why that was tried and reverted).
-          className="tw:flex tw:h-[42px] tw:shrink-0 tw:items-center tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
-        >
-          {modelTextLabel}
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                data-testid="model-text-header"
+                // 42px total, matching Column 3's dock tab-bar OUTER height (the 36px active tab
+                // plus its 6px --tab-header-to-content-gap) and the Scripture Editor's Simple-mode
+                // toolbar override — all three rows' bottom edges need to land at the same Y, which
+                // matching total row height achieves on its own. tw:items-center centers the text
+                // symmetrically within the full 42px box (no extra top-only padding needed — see
+                // platform-scripture-editor.web-view.scss's .scripture-editor-tab-nav-simple comment
+                // for why that was tried and reverted).
+                //
+                // tw:truncate + Tooltip: the column has a 300px minWidth (simple-layout.data.ts), and
+                // "{fullName} ({displayName})" can exceed that at 300px — truncate to keep the fixed
+                // 42px row height intact, with the full label available on hover/focus per the
+                // Responsiveness guideline.
+                className="tw:flex tw:h-[42px] tw:shrink-0 tw:items-center tw:truncate tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
+              >
+                {modelTextLabel}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{modelTextLabel}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
       <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
         <Editorial
