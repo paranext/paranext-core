@@ -35,10 +35,6 @@ declare module 'paratext-bible-send-receive' {
    *   administrator must upgrade it
    * - `projectVersionUpgraded` = S/R sort-of failed. The project was upgraded to a higher version of
    *   Paratext. You must update Paratext to open the project
-   * - `sentChanges` = S/R sent ≥1 non-merge revision
-   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
-   * - `noChangesToSend` = S/R sent no non-merge revisions
-   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
    */
   export type ResultStatus =
     | 'succeeded'
@@ -46,7 +42,18 @@ declare module 'paratext-bible-send-receive' {
     | 'initialReceive'
     | 'failed'
     | 'notUpgraded'
-    | 'projectVersionUpgraded'
+    | 'projectVersionUpgraded';
+
+  /**
+   * Granular change-tracking status for a single S/R result. Multiple values can apply
+   * simultaneously (e.g., both `sentChanges` and `receivedChanges`).
+   *
+   * - `sentChanges` = S/R sent ≥1 non-merge revision
+   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
+   * - `noChangesToSend` = S/R sent no non-merge revisions
+   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
+   */
+  export type ResultChangeStatus =
     | 'sentChanges'
     | 'receivedChanges'
     | 'noChangesToSend'
@@ -189,7 +196,7 @@ declare module 'paratext-bible-send-receive' {
     /** Additional information provided in some cases when a S/R fails */
     failureMessage?: string;
     /** Granular statuses that apply to this result (multiple can apply, e.g., sent AND received) */
-    resultStatuses?: ResultStatus[];
+    resultStatuses?: ResultChangeStatus[];
     /** Total conflict count computed by C# */
     conflictCount?: number;
   };
