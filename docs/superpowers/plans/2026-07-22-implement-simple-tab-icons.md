@@ -756,7 +756,9 @@ In `extensions/src/legacy-comment-manager/src/comment-list-panel-web-view.factor
 `getWebViewDefinition` (the method that already reads `interfaceMode` for `scrollGroupScrRef`),
 add `iconUrl` and `tooltip`. Unlike Bible Texts/Commentaries, this panel's `title` never changes
 after open, so `tooltip: title` set once here (no separate live-updating effect needed) mirrors
-Text Collection's convention just as directly:
+Text Collection's convention just as directly. **Comments is reachable in Power mode too** (same
+as Bible Texts/Commentaries), so `tooltip` must be gated the same way as `iconUrl` — Power mode
+gets neither:
 
 ```ts
 return {
@@ -764,8 +766,9 @@ return {
   title,
   // Mirrors the title so the tab's name is discoverable on hover once Task 5 shrinks it to
   // icon-only — matches Text Collection's existing tooltip convention; no PlatformTabTitle
-  // change needed.
-  tooltip: title,
+  // change needed. Gated on Simple mode: Power mode never had a tooltip here and must not
+  // gain one now (this panel is reachable in Power mode too).
+  tooltip: interfaceMode === 'simple' ? title : savedWebView.tooltip,
   projectId,
   content: commentListWebView,
   styles: tailwindStyles,
