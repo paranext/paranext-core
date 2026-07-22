@@ -1001,6 +1001,7 @@ function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  defaultIconUrl: string,
 ): IWebViewProvider {
   return {
     async getWebView(
@@ -1018,17 +1019,21 @@ function createResourceTextPanelProvider(
         ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       currentResourceTextPanelProjectIds.delete(webViewType);
+      // Re-read every call so mode changes are picked up at open/replace/restore time.
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
       // commentaries are read-only reference panels that navigate independently; they are
       // not scroll-synced with the scripture editor in simple mode.
-      // Re-read every call so mode changes are picked up at open/replace/restore time.
-      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       return {
         ...savedWebView,
         title,
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
+        // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
+        // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
+        // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
+        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
         state: {
           ...savedWebView.state,
           resourceType,
@@ -1045,12 +1050,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
+  'papi-extension://platformScriptureEditor/assets/book-open.svg',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
+  'papi-extension://platformScriptureEditor/assets/file-text.svg',
 );
 
 async function openResourceText(

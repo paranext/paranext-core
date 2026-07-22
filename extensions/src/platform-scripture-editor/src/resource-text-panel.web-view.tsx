@@ -9,6 +9,7 @@ import {
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useSetting,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -21,6 +22,8 @@ import {
   Spinner,
   usePromise,
   useExtraValidMarkers,
+  useTabIconSelection,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -61,6 +64,20 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_commentaries_title%',
   '%webView_resourcePanel_commentaries_title_withResource%',
 ];
+
+const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/book-open-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/book-open-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/book-open-unselected.svg',
+};
+
+const COMMENTARIES_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/file-text.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/file-text-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
+};
 
 /** Returns the `id` field for reference types that have one, or `undefined` for others. */
 function getRefId(ref: EffectiveResourceReference): string | undefined {
@@ -144,6 +161,49 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'selectedResourceId',
     undefined,
   );
+
+  // #endregion
+
+  // #region Tab icon (Simple mode only — Power mode keeps this tab text-only, as today)
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) {
+      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
+      return false;
+    }
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
+
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const tabIconUrls =
+    resourceType === 'ScriptureResource' ? BIBLE_TEXTS_ICON_URLS : COMMENTARIES_ICON_URLS;
+  const tabIconUrl = useTabIconSelection(isDarkTheme, tabIconUrls);
+  useEffect(() => {
+    // Power mode: no tab icon, exactly as today — do not call updateWebViewDefinition at all so an
+    // already-set iconUrl (there shouldn't be one) is never touched.
+    if (isPowerMode) return;
+    updateWebViewDefinition({ iconUrl: tabIconUrl });
+  }, [isPowerMode, tabIconUrl, updateWebViewDefinition]);
 
   // #endregion
 
@@ -277,13 +337,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
     const baseTitle = localizedStrings[titleKey];
     if (!baseTitle) return;
     if (resourceShortName) {
-      updateWebViewDefinition({
-        title: formatReplacementString(localizedStrings[titleWithResourceKey], {
-          textName: resourceShortName,
-        }),
+      const resolvedTitle = formatReplacementString(localizedStrings[titleWithResourceKey], {
+        textName: resourceShortName,
       });
+      updateWebViewDefinition({ title: resolvedTitle, tooltip: resolvedTitle });
     } else {
-      updateWebViewDefinition({ title: baseTitle });
+      updateWebViewDefinition({ title: baseTitle, tooltip: baseTitle });
     }
   }, [
     resourceShortName,
