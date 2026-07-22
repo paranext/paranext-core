@@ -7,7 +7,7 @@ import { ComponentType, useCallback, useMemo, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
-import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
+import { SyncConsentStep } from './steps/sync-consent-step.component';
 import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
 
 /** Runtime order of the wizard steps. */
@@ -17,7 +17,7 @@ export const STEP_ORDER: FirstRunStep[] = ['language', 'identify', 'syncConsent'
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
   language: LanguagePlaceholderStep,
   identify: IdentifyPlaceholderStep,
-  syncConsent: SyncConsentPlaceholderStep,
+  syncConsent: SyncConsentStep,
   syncProgress: SyncProgressPlaceholderStep,
 };
 
