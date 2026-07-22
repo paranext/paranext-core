@@ -77,7 +77,7 @@ describe('FirstRunShell', () => {
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // Skip is shown after SyncConsentPlaceholderStep's mount effect calls setCanSkip(true).
+    // Skip is shown after SyncConsentStep's mount effect calls setCanSkip(true).
     await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
     expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
   });
