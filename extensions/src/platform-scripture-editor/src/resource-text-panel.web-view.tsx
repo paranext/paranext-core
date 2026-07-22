@@ -370,9 +370,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
       const resolvedTitle = formatReplacementString(localizedStrings[titleWithResourceKey], {
         textName: resourceShortName,
       });
-      updateWebViewDefinition({ title: resolvedTitle, tooltip: resolvedTitle });
+      updateWebViewDefinition({
+        title: resolvedTitle,
+        tooltip: isPowerMode ? undefined : resolvedTitle,
+      });
     } else {
-      updateWebViewDefinition({ title: baseTitle, tooltip: baseTitle });
+      updateWebViewDefinition({ title: baseTitle, tooltip: isPowerMode ? undefined : baseTitle });
     }
   }, [
     resourceShortName,
@@ -380,6 +383,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     titleKey,
     titleWithResourceKey,
     updateWebViewDefinition,
+    isPowerMode,
   ]);
 
   // #endregion
