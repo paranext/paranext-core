@@ -50,7 +50,7 @@ export function FirstRunGate({
   stepComponents,
 }: {
   status: Exclude<FirstRunStatus, { kind: 'app' }>;
-  /** Optional step-body overrides forwarded to the shell (e.g. PT-4219 demo screens). */
+  /** Optional step-body overrides forwarded to the shell (e.g. demo/testing screens). */
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
 }) {
   const [strings] = useLocalizedStrings(KEYS);
@@ -136,7 +136,7 @@ export function FirstRunGate({
 export function FirstRunOverlay({
   stepComponents,
 }: {
-  /** Optional step-body overrides forwarded to the shell (e.g. PT-4219 demo screens). */
+  /** Optional step-body overrides forwarded to the shell (e.g. demo/testing screens). */
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
 } = {}) {
   // useSyncExternalStore re-reads on subscribe, so a status change emitted between the initial

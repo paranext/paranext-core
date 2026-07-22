@@ -60,7 +60,7 @@ describe('FirstRunShell', () => {
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
     // A post-relaunch user resumes at syncConsent; the already-completed identify/language steps
-    // behind it must be unreachable (backing into PT-4177's Identify would re-trigger the relaunch).
+    // behind it must be unreachable (backing into Identify would re-trigger the relaunch).
     render(<FirstRunShell entryStep="syncConsent" />);
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
@@ -105,7 +105,7 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
   });
 
-  it('disables Next when navigating into a step that calls setCanProceed(false) on mount (PT-4175)', async () => {
+  it('disables Next when navigating into a step that calls setCanProceed(false) on mount', async () => {
     // BlockingStep calls setCanProceed(false) in a mount effect — simulates a step that gates
     // on data loading or validation before the user may proceed.
     function BlockingStep({ setCanProceed: setCP }: FirstRunStepProps) {

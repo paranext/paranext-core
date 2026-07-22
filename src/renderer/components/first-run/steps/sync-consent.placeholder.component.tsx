@@ -3,7 +3,7 @@ import { LocalizeKey } from 'platform-bible-utils';
 
 const KEYS: LocalizeKey[] = ['%firstRun_step_syncConsent_placeholder%'];
 
-/** Placeholder for the Sync consent step. Replaced by PT-4178. */
+/** Placeholder for the Sync consent step. To be replaced by a sibling ticket. */
 export function SyncConsentPlaceholderStep() {
   const [strings] = useLocalizedStrings(KEYS);
   return <p className="tw:text-sm">{strings['%firstRun_step_syncConsent_placeholder%']}</p>;
