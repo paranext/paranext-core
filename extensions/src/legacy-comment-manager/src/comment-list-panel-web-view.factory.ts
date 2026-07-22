@@ -72,9 +72,21 @@ export class CommentListPanelWebViewFactory extends WebViewFactory<
     return {
       ...savedWebView,
       title,
+      // Mirrors the title so the tab's name is discoverable on hover once Task 5 shrinks it to
+      // icon-only — matches Text Collection's existing tooltip convention; no PlatformTabTitle
+      // change needed. Gated on Simple mode: Power mode never had a tooltip here and must not
+      // gain one now (this panel is reachable in Power mode too).
+      tooltip: interfaceMode === 'simple' ? title : savedWebView.tooltip,
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
+      // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
+      // exactly as today (see comment-list.web-view.tsx for the live theme/selection-adaptive
+      // swap, likewise gated on Power mode).
+      iconUrl:
+        interfaceMode === 'simple'
+          ? 'papi-extension://legacyCommentManager/assets/message-square.svg'
+          : savedWebView.iconUrl,
       // In simple mode, force the comments panel to scroll group 0 so it stays verse-synced with
       // the Scripture editor (which is also forced to 0 in simple mode). Power mode preserves the
       // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power
