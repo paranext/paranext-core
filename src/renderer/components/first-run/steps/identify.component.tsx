@@ -76,7 +76,7 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
     return () => clearTimeout(t);
   }, [registrationCode]);
 
-  const validationTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const validateRegistration = (code: string, nm: string) => {
     if (validationTimeout.current) clearTimeout(validationTimeout.current);
