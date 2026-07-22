@@ -291,6 +291,11 @@ export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
 export {
+  pickTabIconUrl,
+  useTabIconSelection,
+  type TabIconUrls,
+} from './hooks/use-tab-icon-selection.hook';
+export {
   useTruncationTooltip,
   type UseTruncationTooltipResult,
 } from './hooks/use-truncation-tooltip.hook';
