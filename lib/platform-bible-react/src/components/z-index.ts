@@ -16,3 +16,9 @@ export const Z_INDEX_MODAL = 500;
  * elements inside a modal (e.g. help icons in form fields).
  */
 export const Z_INDEX_TOOLTIP = 550;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
+ * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
+ * startup and nothing behind it remains clickable or focusable.
+ */
+export const Z_INDEX_FIRST_RUN = 700;

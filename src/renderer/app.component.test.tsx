@@ -1,58 +1,43 @@
-import { App } from '@renderer/app.component';
-import { ProcessType } from '@shared/global-this.model';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { render } from '@testing-library/react';
-import { vi } from 'vitest';
+import * as firstRunStore from '@renderer/services/first-run-store';
 
-// #region globalThis setup
-
-globalThis.processType = ProcessType.Renderer;
-globalThis.isPackaged = false;
-globalThis.resourcesPath = 'resources://';
-
-// #endregion
-
-// vi.mock factories are hoisted above imports by vitest, so top-level imports aren't available
-// inside them. Use dynamic import() within the factory to access PlatformEventEmitter.
-vi.mock('@shared/services/network.service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/services/network.service')>();
-  const { PlatformEventEmitter } = await import('platform-bible-utils');
-  return {
-    ...actual,
-    createRequestFunction:
-      (requestType: string) =>
-      async (...args: unknown[]) =>
-        `Mocked ${requestType} request with args ${args.join(', ')}`,
-    createNetworkEventEmitter: () => {
-      return new PlatformEventEmitter();
-    },
-    createNetworkEventEmitterAsync: async () => {
-      return new PlatformEventEmitter();
-    },
-    papiNetworkService: {
-      createNetworkEventEmitter: () => {
-        return new PlatformEventEmitter();
-      },
-      createNetworkEventEmitterAsync: async () => {
-        return new PlatformEventEmitter();
-      },
-      onDidClientConnect: new PlatformEventEmitter().event,
-    },
-  };
+vi.mock('@renderer/services/first-run-store', async (importActual) => {
+  const actual = await importActual<typeof firstRunStore>();
+  return { ...actual, resolveFirstRunState: vi.fn().mockResolvedValue(undefined) };
 });
+// Stub heavy children so the test isolates the first-run wiring.
 vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
-  __esModule: true,
-  default: /** PlatformDockLayout Mock */ () => undefined,
-  PlatformDockLayout: /** PlatformDockLayout Named Export Mock */ () => <div />,
+  PlatformDockLayout: () => undefined,
 }));
-vi.mock('@renderer/components/platform-bible-toolbar', () => ({
-  __esModule: true,
-  default: /** PlatformBibleToolbar Mock */ () => <div />,
-  PlatformBibleToolbar: /** PlatformBibleToolbar Named Export Mock */ () => <div />,
+vi.mock('./components/platform-bible-toolbar', () => ({ PlatformBibleToolbar: () => undefined }));
+vi.mock('./components/notification-display', () => ({ NotificationDisplay: () => undefined }));
+vi.mock('./components/overlay-host.component', () => ({ OverlayHost: () => undefined }));
+vi.mock('./components/overlays/overlay-workspace-updating.component', () => ({
+  WorkspaceUpdatingOverlay: () => undefined,
+}));
+vi.mock('./components/first-run/first-run-overlay.component', () => ({
+  FirstRunOverlay: () => <div data-testid="first-run-overlay" />,
+}));
+vi.mock('./services/workspace-updating-service', () => ({
+  initWorkspaceUpdatingService: () => () => {},
 }));
 
-describe('App', () => {
-  it('should render', async () => {
-    expect(render(<App />)).toBeTruthy();
+// Import App after mocks are set up so vi.mock hoisting works correctly
+// eslint-disable-next-line import/first
+import { App } from './app.component';
+
+describe('App first-run wiring', () => {
+  it('kicks off first-run resolution on mount', () => {
+    render(<App />);
+    expect(firstRunStore.resolveFirstRunState).toHaveBeenCalled();
+  });
+
+  it('renders the first-run overlay so fresh users are gated', () => {
+    // Guards the actual wiring: resolveFirstRunState runs in its own effect, so asserting it was
+    // called does not prove <FirstRunOverlay /> is in Main's JSX. Removing the overlay must fail.
+    render(<App />);
+    expect(screen.getByTestId('first-run-overlay')).toBeInTheDocument();
   });
 });

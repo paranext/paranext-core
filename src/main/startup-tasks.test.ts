@@ -54,6 +54,14 @@ function requestTimedOutError() {
   );
 }
 
+function stubSettings({ mode = 'simple', firstRunComplete = true } = {}) {
+  mockSettingsGet.mockImplementation(async (key: string) => {
+    if (key === 'platform.interfaceMode') return mode;
+    if (key === 'platform.firstRunComplete') return firstRunComplete;
+    throw new Error(`Unexpected settings key in test stub: ${key}`);
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockSendCommand.mockResolvedValue(undefined);
@@ -72,7 +80,7 @@ describe('performStartupTasks', () => {
   });
 
   it('fires syncProjects with no project IDs when interface mode is simple', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple', firstRunComplete: true });
     await performStartupTasks();
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
@@ -94,14 +102,30 @@ describe('performStartupTasks', () => {
     );
   });
 
+  // Also covers the upgrade-launch case: the flag defaults to false before the renderer backfills it.
+  it('does NOT fire sync in simple mode when first run is not complete', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: false });
+    await performStartupTasks();
+    expect(mockSendCommand).not.toHaveBeenCalled();
+  });
+
+  it('fires sync in simple mode once first run is complete', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true });
+    await performStartupTasks();
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextBibleSendReceive.syncProjects',
+      undefined,
+    );
+  });
+
   it('swallows sync failures without throwing', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple', firstRunComplete: true });
     mockSendCommand.mockRejectedValue(new Error('sync command not registered'));
     await expect(performStartupTasks()).resolves.toBeUndefined();
   });
 
   it('swallows unexpected errors and does not throw', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple', firstRunComplete: true });
     mockSendCommand.mockImplementation(() => {
       throw new Error('unexpected non-async throw');
     });

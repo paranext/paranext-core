@@ -160,6 +160,26 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // checked branch. A future third mode would be a compile error here (interfaceMode is typed from
   // the setting), not a silent no-sync.
 
+  // First-run gate: skip auto-sync until the simple-mode wizard completes, so a fresh user never
+  // syncs before consenting. On an unreadable flag, default to NOT syncing (consent-safe).
+  let firstRunComplete = false;
+  try {
+    firstRunComplete = (await settingsService.get('platform.firstRunComplete')) === true;
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.firstRunComplete; skipping startup sync: ${getErrorMessage(e)}`,
+    );
+  }
+  if (!firstRunComplete) {
+    logger.debug('Startup sync skipped: first run not complete');
+    return;
+  }
+
+  // TODO(PT-4178): once first run IS complete, this syncs all shared projects every launch — even
+  // for a user who chose "Skip setup" on the sync-consent step. The wizard records that choice in a
+  // renderer localStorage flag (SYNC_SKIPPED_KEY) that this main-process code cannot read; PT-4178
+  // (Sync consent) owns persisting the skip as a platform setting and honoring it here.
+
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
   // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
   // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
