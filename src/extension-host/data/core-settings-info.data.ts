@@ -45,6 +45,11 @@ export const platformSettings: SettingsContribution = [
         default: false,
         isHidden: true,
       },
+      'platform.firstRunSyncSkipped': {
+        label: '%settings_platform_firstRunSyncSkipped_label%',
+        default: false,
+        isHidden: true,
+      },
     },
   },
 ];
@@ -72,7 +77,7 @@ const serializableStringDictionarySettingValidator: SettingValidator<
 };
 
 const booleanValidator: SettingValidator<
-  'platform.commentsEnabled' | 'platform.firstRunComplete'
+  'platform.commentsEnabled' | 'platform.firstRunComplete' | 'platform.firstRunSyncSkipped'
 > = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
@@ -127,4 +132,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.zoomFactor': zoomFactorValidator,
   'platform.interfaceMode': interfaceModeValidator,
   'platform.firstRunComplete': booleanValidator,
+  'platform.firstRunSyncSkipped': booleanValidator,
 };
