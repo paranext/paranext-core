@@ -71,12 +71,13 @@ configure({
       //
       // @sinonjs/fake-timers marks the fake `setTimeout` with a `.clock` property when installed.
       if (Object.prototype.hasOwnProperty.call(setTimeout, 'clock')) {
-        // eslint-disable-next-line no-await-in-loop -- act() here is a single flush, not a loop
+        // @testing-library/react's built-in asyncWrapper calls jest.advanceTimersByTime(0),
+        // which silently no-ops in Vitest (jest is undefined in node_modules). Override it
+        // to use vi.advanceTimersByTime(0) so waitFor's polling ticks fire when fake timers
+        // are active.
         await act(async () => {
           await Promise.resolve(); // drain JS microtask queue (Promise continuations)
-          // Advance by 50ms — fires any 0-ms fake timers AND the waitFor polling interval
-          // (setInterval at 50ms), allowing waitFor to re-check the DOM after async work.
-          vi.advanceTimersByTime(50);
+          vi.advanceTimersByTime(0);
         });
       } else {
         await Promise.resolve(); // real timers: a microtask flush is sufficient
