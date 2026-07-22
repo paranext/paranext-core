@@ -692,5 +692,14 @@ $tab-bottom-rounding: vars.$space--sm;
   .dock-panel.dock-style-platform-bible {
     border-radius: 0;
   }
+
+  // .dock.dock-top is the other half of the original grouped selector at line 176-180
+  // (`.dock.dock-top, .dock-layout .dock-panel.dock-style-platform-bible { border-radius: var(--radius); }`)
+  // — the outermost dock box, not a per-column panel. It was missed by the override above, which
+  // only re-targeted the `.dock-panel.dock-style-platform-bible` half. Our selector here (0,3,0)
+  // beats the original `.dock.dock-top` (0,2,0) outright, no source-order tie-break needed.
+  .dock.dock-top {
+    border-radius: 0;
+  }
 }
 // #endregion SIMPLE-MODE CHROME //////////////////////////////////////
