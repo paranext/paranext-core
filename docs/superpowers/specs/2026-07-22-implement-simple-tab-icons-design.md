@@ -71,15 +71,27 @@ Served via `papi-extension://<extensionName>/assets/<file>.svg`, same as the exi
 
 ```ts
 // platform-bible-react — new hook, exported for extension use
-useThemeAdaptiveTabIcon(tabIconUrls: TabIconUrls): string
+useTabIconSelection(isDarkTheme: boolean, tabIconUrls: TabIconUrls): string
 ```
 
-It encapsulates the theme subscription, the `offsetParent` polling `useEffect`, and the variant
-pick; callers just call `updateWebViewDefinition({ iconUrl: useThemeAdaptiveTabIcon(MY_ICON_URLS) })`
-inside their own effect, same call shape as today's grid code. `platform-scripture-editor`
-(migrates `scripture-text-grid.web-view.tsx` to it, adds it to `resource-text-panel.web-view.tsx`
-parameterized by `resourceType`) and `legacy-comment-manager` (`comment-list.web-view.tsx`) both
-import it from `platform-bible-react`, which both already depend on.
+**Correction — scope of the shared hook.** `platform-bible-react` has no dependency on
+`@papi/frontend` today (confirmed: not in its `package.json`, not imported anywhere in its `src/`),
+and adding one would make a shared UI library depend on the extension-facing PAPI surface — a real
+architectural change, not something to introduce silently. So only the mode-agnostic, DOM-only part
+of the pattern moves into the shared hook: the `offsetParent`-based selected-state polling and the
+`pickTabIconUrl` variant selection. The `papi.themes.subscribeCurrentTheme` subscription itself
+(genuinely papi-specific) stays in each of the 3-4 call sites — each keeps its own small
+theme-subscribe `useEffect` (as the grid already has) and passes the resulting `isDarkTheme` boolean
+into the shared hook. This still removes the fiddlier, more bug-prone half of the duplication (the
+interval-based polling with its cleanup/equality-check dance) while keeping the hook free of new
+package dependencies.
+
+Callers call `updateWebViewDefinition({ iconUrl: useTabIconSelection(isDarkTheme, MY_ICON_URLS) })`
+inside their own effect, same call shape as today's grid code minus the theme part.
+`platform-scripture-editor` (migrates `scripture-text-grid.web-view.tsx` to it, adds it to
+`resource-text-panel.web-view.tsx` parameterized by `resourceType`) and `legacy-comment-manager`
+(`comment-list.web-view.tsx`) both import it from `platform-bible-react`, which both already
+depend on.
 
 **Power-mode gating (correction — these tabs are NOT Simple-mode-exclusive):** Bible Texts,
 Commentaries, and Comments are reachable in Power mode too — `platformScriptureEditor.openResourceText`
