@@ -3352,6 +3352,41 @@ export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
  * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
  */
 export declare const useViewVisibility: () => boolean;
+/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+export type TabIconUrls = {
+	/** Dark theme (any selection). */
+	dark: string;
+	/** Light theme, tab selected (white). */
+	lightSelected: string;
+	/** Light theme, tab not selected (near-black). */
+	lightUnselected: string;
+	/** Light theme, selection unknown (mid-slate fallback). */
+	lightDefault: string;
+};
+/**
+ * Picks the tab icon URL. In dark theme the icon is always the light variant. In light theme it
+ * matches the tab text: near-black when unselected, white when selected, and a mid-slate fallback
+ * when the selected state is unknown (`undefined`).
+ */
+export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
+/**
+ * Resolves which tab-icon variant a web view tab should show, given the current theme and this
+ * tab's live selected state.
+ *
+ * The tab icon is painted by the platform as a static CSS `background-image`, so a `currentColor`
+ * SVG can't follow the theme or selection state — callers must swap the actual icon URL. This hook
+ * detects selection by polling whether this web view's iframe has an `offsetParent` (rc-dock hides
+ * an inactive tab's pane with `display: none`, which clears `offsetParent`); rc-dock fires no event
+ * reachable from inside the iframe on tab switches, so polling is the only option.
+ *
+ * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
+ * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
+ *
+ * @param isDarkTheme Whether the current theme is dark.
+ * @param tabIconUrls The four icon variant URLs for this tab.
+ * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.
+ */
+export declare function useTabIconSelection(isDarkTheme: boolean, tabIconUrls: TabIconUrls): string;
 /** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
 export type UseTruncationTooltipResult<T extends HTMLElement> = {
 	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
