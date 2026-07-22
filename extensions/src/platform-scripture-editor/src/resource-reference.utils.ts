@@ -43,6 +43,11 @@ export function isProjectReference(item: unknown): item is ProjectReference {
  * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
  * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
  * Returns `ref.name` for project references.
+ *
+ * @param ref The resource reference to label
+ * @param dblResourcesList The list of known DBL resources to look up `ref` in when it's a
+ *   {@link DblResourceReference}
+ * @returns The display label for `ref`
  */
 export function getRefLabel(
   ref: EffectiveResourceReference,

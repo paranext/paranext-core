@@ -47,4 +47,16 @@ describe('getRefLabel', () => {
     };
     expect(getRefLabel(ref, dblResources)).toBe('My Project');
   });
+
+  it('returns an empty string for a reference type it does not recognize', () => {
+    // `useEffectiveResourceReferenceList` currently filters these out before `getRefLabel` sees
+    // them, but the type signature still accepts every `ResourceReference` variant — document the
+    // intended fallback behavior directly so it can't silently change to something else.
+    const ref: EffectiveResourceReference = {
+      type: 'enhancedResource',
+      name: 'Some Enhanced Resource',
+      source: 'admin',
+    };
+    expect(getRefLabel(ref, dblResources)).toBe('');
+  });
 });

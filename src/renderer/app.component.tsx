@@ -24,6 +24,10 @@ function Main() {
   const isPowerMode = useIsPowerMode();
   useEffect(() => {
     document.body.setAttribute('data-interface-mode', isPowerMode ? 'power' : 'simple');
+    // Main never unmounts during the app's actual lifetime, so this cleanup is inert in
+    // production; it exists so the attribute doesn't leak past test teardown/StrictMode
+    // double-invoke, matching the general rule of pairing a DOM side effect with its cleanup.
+    return () => document.body.removeAttribute('data-interface-mode');
   }, [isPowerMode]);
 
   return (
