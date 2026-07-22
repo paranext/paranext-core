@@ -81,6 +81,20 @@ inside their own effect, same call shape as today's grid code. `platform-scriptu
 parameterized by `resourceType`) and `legacy-comment-manager` (`comment-list.web-view.tsx`) both
 import it from `platform-bible-react`, which both already depend on.
 
+**Power-mode gating (correction — these tabs are NOT Simple-mode-exclusive):** Bible Texts,
+Commentaries, and Comments are reachable in Power mode too — `platformScriptureEditor.openResourceText`
+and `legacyCommentManager`'s comment-list-panel open commands are registered unconditionally, not
+gated to Simple mode. Today none of the three has any icon in either mode, so adding one
+unconditionally would change Power mode's tabs from text-only to icon+text — a real behavior
+change, not just a Simple-mode restyle. Gate the new `iconUrl` on `interfaceMode === 'simple'`,
+mirroring the existing conditional already present in these same provider functions
+(`scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef` in both
+`scriptureTextGridWebViewProvider`/`createResourceTextPanelProvider` and the Comment List panel
+factory): Power mode keeps showing these three tabs with no icon, exactly as today; only Simple
+mode gets the new `book-open`/`file-text`/`message-square` icons. Text Collection's existing
+`library` icon is unaffected by this gating (it is unconditional today and stays that way — not
+new behavior introduced by this spec).
+
 ---
 
 ## Section 2 — Visual styling (match reference screenshot)
@@ -175,8 +189,9 @@ Change, scoped to Simple mode only (consistent with this spec's scope decision):
 ## Definition of Done
 
 - Bible Texts, Commentaries, and Comments each show a themed, selection-adaptive tab icon
-  (`book-open`, `file-text`, `message-square` respectively), matching the existing Text Collection
-  icon's asset/variant/wiring convention.
+  (`book-open`, `file-text`, `message-square` respectively) in Simple mode, matching the existing
+  Text Collection icon's asset/variant/wiring convention. In Power mode these three tabs show no
+  icon, exactly as today (gated on `interfaceMode`, not a new unconditional icon).
 - The theme/selection-adaptive icon-picking logic is a single shared hook in
   `platform-bible-react`, used by all 4 tabs — no duplicated copies.
 - Column 3's tab strip visually matches the reference screenshot (padding, active-tab highlight,
