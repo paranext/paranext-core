@@ -15,11 +15,10 @@ export type FirstRunStatus =
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
-// Written when the user skips sync consent. TODO(PT-4178): no production reader yet, so skipping
-// currently only suppresses the in-wizard sync — the next-launch auto-sync in startup-tasks.ts
-// still fires. PT-4178 (Sync consent) owns making "skip" durably suppress future auto-sync; note
-// that reader lives in the MAIN process, which cannot read this renderer localStorage flag, so the
-// durable signal must be a platform setting (e.g. platform.firstRunSyncSkipped), not this cache.
+// Written when the user skips sync consent. The durable auto-sync gate lives in startup-tasks.ts
+// (main process) and reads platform.firstRunSyncSkipped — see completeFirstRun below. This
+// localStorage cache is renderer-only and not the gating signal; it is kept as a lightweight hint
+// for any future in-wizard logic that needs to know the skip choice without a settings round-trip.
 const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped';
 // Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
 // the real registration backend or triggering a relaunch, and completion is NOT persisted so the
