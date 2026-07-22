@@ -44,6 +44,7 @@ function stubSettings({ mode = 'simple', firstRunComplete = false } = {}) {
   mockGet.mockImplementation(async (key: string) => {
     if (key === 'platform.interfaceMode') return mode;
     if (key === 'platform.firstRunComplete') return firstRunComplete;
+    // Intentionally leave platform.interfaceLanguage undefined to exercise the 'en' fallback in currentPrimary derivation.
     return undefined;
   });
 }
@@ -336,6 +337,7 @@ describe('OS-language default on fresh first-run', () => {
     // `!wizardActive` guard (not merely a non-matching locale) is what suppressed the write.
     expect(mockGetSetupDialogLanguages).not.toHaveBeenCalled();
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
 
   test('still starts the wizard if the OS-default lookup throws', async () => {
@@ -346,6 +348,29 @@ describe('OS-language default on fresh first-run', () => {
     await resolveFirstRunState();
     // Best-effort swallow: warn logged, no language write, wizard still starts.
     expect(mockLogger.warn).toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+
+  test('skips the write when the OS match equals the current primary language (read as ["en"])', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    mockGetCurrentLocale.mockReturnValue('en-US');
+    mockGetSetupDialogLanguages.mockResolvedValue({
+      en: { autonym: 'English' },
+    });
+    // Override the stubSettings mock to return ['en'] for platform.interfaceLanguage.
+    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+    mockGet.mockImplementation(async (key: string) => {
+      if (key === 'platform.interfaceMode') return 'simple';
+      if (key === 'platform.firstRunComplete') return false;
+      if (key === 'platform.interfaceLanguage') return ['en'];
+      return undefined;
+    });
+    await resolveFirstRunState();
+    // Prove the seed ran (lookup happened)
+    expect(mockGetSetupDialogLanguages).toHaveBeenCalled();
+    // but the skip fired because best 'en' === currentPrimary 'en' read from the real array
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
   });
