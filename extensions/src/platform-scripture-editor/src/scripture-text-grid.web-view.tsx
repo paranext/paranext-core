@@ -12,6 +12,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
   usePromise,
+  useTabIconSelection,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import { Settings2 } from 'lucide-react';
 import {
@@ -58,7 +60,6 @@ import {
   ZOOM_OPTIONS_KEY,
   type ZoomMenuLabels,
 } from './scripture-text-grid/resource-cell-view.component';
-import { pickTabIconUrl, type TabIconUrls } from './scripture-text-grid/tab-icon.util';
 
 // The tab is icon-only; this is the hover tooltip / accessible name for it.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
@@ -293,8 +294,8 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   // Pick the tab icon variant to match the current theme and selected state. The tab icon is
   // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
-  // theme — we swap the `iconUrl` ourselves based on both the theme type from `papi.themes` and the
-  // tab's selected state (detected via offsetParent on the iframe element).
+  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
+  // detection and variant picking.
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
     let disposed = false;
@@ -315,34 +316,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     };
   }, []);
 
-  // Detect the tab's selected state by polling whether the iframe has an offsetParent. rc-dock
-  // hides an inactive tab's pane (display:none), so an unselected tab's iframe has no offsetParent.
-  // This is best-effort — any failure yields `undefined`, which falls back to the mid-slate icon.
-  const [isTabSelected, setIsTabSelected] = useState<boolean | undefined>(undefined);
+  const gridIconUrl = useTabIconSelection(isDarkTheme, TAB_ICON_URLS);
   useEffect(() => {
-    const read = (): boolean | undefined => {
-      try {
-        const { frameElement } = window;
-        if (!(frameElement instanceof HTMLElement)) return undefined;
-        return !!frameElement.offsetParent;
-      } catch {
-        return undefined;
-      }
-    };
-    const update = () =>
-      setIsTabSelected((prev) => {
-        const next = read();
-        return prev === next ? prev : next;
-      });
-    update();
-    // rc-dock fires no event we can hook from inside the iframe on tab switches, so poll cheaply.
-    const id = window.setInterval(update, 500);
-    return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    updateWebViewDefinition({ iconUrl: pickTabIconUrl(isDarkTheme, isTabSelected, TAB_ICON_URLS) });
-  }, [isDarkTheme, isTabSelected, updateWebViewDefinition]);
+    updateWebViewDefinition({ iconUrl: gridIconUrl });
+  }, [gridIconUrl, updateWebViewDefinition]);
 
   const handleCheckedChange = useCallback(
     (resourceId: string, checked: boolean) => {
