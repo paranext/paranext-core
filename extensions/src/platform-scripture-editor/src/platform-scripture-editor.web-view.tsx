@@ -11,6 +11,7 @@ import {
   isInsertEmbedOpOfType,
   PARAGRAPH_STRUCTURE_VIEW_MODE,
   SelectionRange,
+  StructureProtectionMode,
   TypedMarkOnClick,
   TypedMarkOnRemove,
   TypedMarkRemovalCause,
@@ -120,8 +121,10 @@ import {
   generateParagraphMenuListItems,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
+import { VerseDeleteTooltipOverlay } from './verse-delete-tooltip/verse-delete-tooltip-overlay.component';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -401,7 +404,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
 
   const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) return false;
+    if (isPlatformError(interfaceModePossiblyError)) {
+      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
+      return false;
+    }
     return interfaceModePossiblyError === 'power';
   }, [interfaceModePossiblyError]);
 
@@ -499,9 +505,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
-  // paragraph/verse markers in the editor (passed to EditorOptions.isStructureProtected below). The
+  // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
   // toolbar StructureProtectionButton subscribes to the same state independently.
-  const { isStructureProtected } = useStructureProtectionState(projectId);
+  const { isStructureProtected, isProtectionActive } = useStructureProtectionState(projectId);
+
+  // Locked (by admin, personal preference, or both) always yields "protected" (hard block); Power
+  // mode leaves the feature fully inactive regardless of lock state ("off"); otherwise (Simple mode,
+  // not locked) the editor still guards structural deletes with a two-step confirm ("guarded").
+  const structureProtectionMode = useMemo<StructureProtectionMode>(() => {
+    if (!isProtectionActive) return 'off';
+    return isStructureProtected ? 'protected' : 'guarded';
+  }, [isProtectionActive, isStructureProtected]);
 
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
@@ -765,7 +779,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
-      isStructureProtected,
+      structureProtectionMode,
       hasSpellCheck: false,
       nodes: nodeOptions,
       textDirection: textDirectionEffective,
@@ -783,7 +797,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }),
     [
       isReadOnlyEffective,
-      isStructureProtected,
+      structureProtectionMode,
       canUserCreateComments,
       isSyncBlocked,
       textDirectionEffective,
@@ -1662,8 +1676,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             createCommentAnnotationClickHandler(newThreadId),
           );
 
-          // Open the comment list and select the new thread
-          await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
+          // Power mode: open/focus the editor-anchored comment list and select the new thread.
+          // Simple mode: the new comment already lands in the fixed Column 3 Comments tab via its
+          // own PDP subscription (opening the editor-anchored panel here would just pop a second
+          // "Comments" tab and steal focus — PT-4204), but select the new thread in it so
+          // Simple-mode users get the same "yes, that worked" confirmation Power-mode users
+          // already get. bringToFront is deliberately false here: forcing the Comments tab to the
+          // front on every insert would interrupt a user who is actively working in a different
+          // Column 3 tab (UX feedback on PT-4204) — the selection still applies silently and is
+          // visible whenever the user next switches to the Comments tab themselves.
+          if (isPowerMode) {
+            await openCommentListAndSelectThreadSafe(papi, webViewId, newThreadId);
+          } else {
+            await selectCommentThreadInPanelSafe(papi, newThreadId, false);
+          }
         }
 
         pendingCommentAnnotationRange.current = undefined;
@@ -1689,6 +1715,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       scrRef,
       createCommentAnnotationClickHandler,
       webViewId,
+      isPowerMode,
       isSyncBlocked,
       notifySyncEditBlocked,
       onCommentEditorCancel,
@@ -1808,23 +1835,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <>
         {workaround}
         <ParagraphMarkerTooltipOverlay>
-          <EditorKeyboardShortcuts editorRef={editorRef}>
-            <Editorial
-              ref={editorRef}
-              scrRef={scrRef}
-              onScrRefChange={setScrRefNoScroll}
-              options={options}
-              logger={logger}
-              onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-              onSelectionChange={handleSelectionChange}
-              onStateChange={(state) => {
-                setCanUndo(state.canUndo);
-                setCanRedo(state.canRedo);
-                setBlockMarker(state.blockMarker);
-                setContextMarker(state.contextMarker);
-              }}
-            />
-          </EditorKeyboardShortcuts>
+          <VerseDeleteTooltipOverlay>
+            <EditorKeyboardShortcuts editorRef={editorRef}>
+              <Editorial
+                ref={editorRef}
+                scrRef={scrRef}
+                onScrRefChange={setScrRefNoScroll}
+                options={options}
+                logger={logger}
+                onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+                onSelectionChange={handleSelectionChange}
+                onStateChange={(state) => {
+                  setCanUndo(state.canUndo);
+                  setCanRedo(state.canRedo);
+                  setBlockMarker(state.blockMarker);
+                  setContextMarker(state.contextMarker);
+                }}
+              />
+            </EditorKeyboardShortcuts>
+          </VerseDeleteTooltipOverlay>
         </ParagraphMarkerTooltipOverlay>
       </>
     );

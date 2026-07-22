@@ -3426,6 +3426,12 @@ export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
+ * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
+ * startup and nothing behind it remains clickable or focusable.
+ */
+export declare const Z_INDEX_FIRST_RUN = 700;
+/**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
  * object syntax, and uses [`tailwind-merge`](https://www.npmjs.com/package/tailwind-merge) to make

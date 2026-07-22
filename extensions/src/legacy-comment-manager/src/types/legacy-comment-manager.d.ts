@@ -590,9 +590,26 @@ declare module 'papi-shared-types' {
     'legacyCommentManager.openCommentListPanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /**
+     * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel, without
+     * reloading it. Optionally also brings the panel's tab to the front.
+     *
+     * @param threadId The ID of the thread to select and scroll to in the panel
+     * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
+     *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
+     *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+     * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
+     * @throws If the panel's WebView Controller cannot be obtained to apply the selection
+     */
+    'legacyCommentManager.selectCommentThreadInPanel': (
+      threadId: string,
+      bringToFront: boolean,
+    ) => Promise<string | undefined>;
   }
 
   export interface WebViewControllers {
     'legacyCommentManager.commentList': CommentListWebViewController;
+    'legacyCommentManager.commentListPanel': CommentListWebViewController;
   }
 }

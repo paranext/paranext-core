@@ -1,3 +1,4 @@
+import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
@@ -16,9 +17,10 @@ export const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
 /**
  * Localization key for the shared "editing is paused during Send/Receive" warning shown when one of
  * this extension's mutations is rejected by the write-gate. Contributed in this extension's
- * `contributions/localizedStrings.json`.
+ * `contributions/localizedStrings.json`. Deliberately not exported: every caller goes through
+ * {@link notifySyncEditBlocked} so the severity/message pair cannot drift across call sites.
  */
-export const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_syncEditBlocked%';
+const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_syncEditBlocked%';
 
 /**
  * Whether `error` was thrown by the write-gate because an automatic Send/Receive is in progress
@@ -31,4 +33,23 @@ export const SYNC_EDIT_BLOCKED_MESSAGE_KEY = '%webView_platformScripture_error_s
  */
 export function isSyncEditBlockedError(error: unknown): boolean {
   return SYNC_EDIT_BLOCKED_REGEX.test(getErrorMessage(error));
+}
+
+/**
+ * Shows the shared "editing is paused during Send/Receive" warning notification (the write-gate
+ * rejection detected by {@link isSyncEditBlockedError} surfaced to the user). Extracted so the
+ * severity/message cannot drift across the several call sites that report it, and self-catching so
+ * fire-and-forget callers (the ones that cannot `await`) never surface an unhandled promise
+ * rejection from the notification service. The platform-scripture twin of the scripture editor's
+ * own `notifySyncEditBlocked`.
+ */
+export async function notifySyncEditBlocked(): Promise<void> {
+  try {
+    await papi.notifications.send({
+      message: SYNC_EDIT_BLOCKED_MESSAGE_KEY,
+      severity: 'warning',
+    });
+  } catch (e) {
+    logger.warn(`Failed to send the sync-edit-blocked notification: ${getErrorMessage(e)}`);
+  }
 }

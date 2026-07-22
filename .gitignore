@@ -59,11 +59,13 @@ e2e-tests/playwright-report/
 e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 
-
+# Brainstorming session artifacts (visual companion)
 docs/superpowers/
 docs/adr/
 .superpowers/
 .review
+
+.claude/worktrees
 
 # cursor
 .cursor/
@@ -80,9 +82,6 @@ secrets/
 *.p12
 credentials.json
 service-account.json
-
-# Brainstorming session artifacts (visual companion)
-.superpowers/
 
 # Phase 3 UI evidence proofs (canonical location is ai-prompts/.context/features/{feature}/proofs/)
 /proofs/

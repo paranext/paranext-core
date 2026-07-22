@@ -9,7 +9,9 @@ import {
   EventHandler,
   fixupResponse,
   GET_METHODS,
+  getJsonRpcRequestErrorMessagePrefix,
   InternalRequestHandler,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
 } from '@shared/data/rpc.model';
 import {
   AsyncVariable,
@@ -86,11 +88,23 @@ const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) =>
 
 const connectionMutex = new Mutex();
 let jsonRpc: IRpcMethodRegistrar | undefined;
+// Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
+// connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
+// both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
+let hasShutDown = false;
 
 export async function initialize(): Promise<void> {
   if (jsonRpc) return;
+  // Once shutdown has begun (app quit), never re-open the connection. Without this a request still
+  // in flight at quit — e.g. the Power-mode startup boot-race retry loop — would reach
+  // `doRequest` -> `initialize()` after `shutdown()` set `jsonRpc = undefined`, and the `if (jsonRpc)`
+  // guards below would be false, so it would call `createRpcHandler()`/`connect()` again and
+  // resurrect the connection mid-quit.
+  if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
   await connectionMutex.runExclusive(async () => {
     if (jsonRpc) return;
+    // Re-check inside the mutex in case shutdown ran while we awaited it.
+    if (hasShutDown) throw new Error('Network service has shut down; not reconnecting');
 
     try {
       jsonRpc = await createRpcHandler();
@@ -105,6 +119,9 @@ export async function initialize(): Promise<void> {
 
 /** Closes the network services gracefully */
 export const shutdown = async () => {
+  // Mark shutdown as begun before anything else so a concurrent {@link initialize} can't race in and
+  // re-open the connection we're about to tear down.
+  hasShutDown = true;
   if (!jsonRpc) return;
   await connectionMutex.runExclusive(async () => {
     if (!jsonRpc) return;
@@ -255,13 +272,13 @@ async function doRequest<TParam extends Array<unknown>, TReturn>(
   if (isJsonRpcResponse(response)) {
     if (!response.error) return response.result;
     platformErrorCode = response.error.data?.data?.platformErrorCode;
-    response = `JSON-RPC Request error (${response.error.code}): ${response.error.message}`;
+    response = `${getJsonRpcRequestErrorMessagePrefix(response.error.code)}: ${response.error.message}`;
   } else if (isPlatformError(response)) {
     logger.debug(response.message);
     throw response;
   } else {
     response = responseAsyncVariable.hasTimedOut
-      ? `JSON-RPC Request timed out: ${requestType} ${JSON.stringify(args)}`
+      ? `${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} ${requestType} ${JSON.stringify(args)}`
       : `Invalid JSON-RPC Response: ${response}`;
   }
   logger.debug(response);
@@ -284,6 +301,13 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  * Send a request on the network without retrying if the handler is not yet registered. Use for
  * requests where immediate failure is preferable to waiting, such as commands sent during app
  * shutdown.
+ *
+ * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
+ * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
+ * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
+ * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
+ * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
+ * it rejects.
  *
  * @param requestType The type of request
  * @param args Arguments to send in the request (put in request.contents)
@@ -317,9 +341,20 @@ export async function registerRequestHandler(
   if (requestHandlerOptions?.timeoutMilliseconds !== undefined)
     setTimeoutMsForRequestType(requestType, requestHandlerOptions.timeoutMilliseconds);
   return async () => {
-    if (!jsonRpc) return false;
+    if (!jsonRpc) {
+      // Expected on graceful shutdown: shutdown() clears jsonRpc before disposing emitters so their
+      // disposers skip this now-pointless unregister, so this fires on every normal quit — debug,
+      // not warn, to avoid spurious teardown noise (mirrors disposeNetworkEventEmitter's quiet
+      // !jsonRpc return). The genuine failure to warn about is the unregistered === false case below.
+      logger.debug(
+        `Skipping unregister of request handler for "${requestType}": jsonRpc is not set`,
+      );
+      return false;
+    }
     removeTimeoutMsForRequestType(requestType);
-    return jsonRpc.unregisterMethod(requestType);
+    const unregistered = await jsonRpc.unregisterMethod(requestType);
+    if (!unregistered) logger.warn(`Failed to unregister request handler for "${requestType}"`);
+    return unregistered;
   };
 }
 

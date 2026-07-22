@@ -136,6 +136,36 @@ export async function openCommentListAndSelectThreadSafe(
   }
 }
 
+/**
+ * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel, without opening a
+ * second, editor-anchored Comments panel. Logs and swallows any failure (e.g. the panel isn't in
+ * the current layout) rather than throwing, since this is used for best-effort navigation feedback
+ * after an action has already succeeded (e.g. a comment was already created).
+ *
+ * @param threadId The ID of the thread to select and scroll to in the panel
+ * @param bringToFront Whether to also bring the panel's tab to the front. Pass `false` for
+ *   background confirmation (e.g. after inserting a comment, so the user's current Column 3 tab
+ *   isn't interrupted) or `true` for an explicit "show me this comment" navigation.
+ */
+export async function selectCommentThreadInPanelSafe(
+  papi: typeof PapiBackend | typeof PapiFrontend,
+  threadId: string,
+  bringToFront: boolean,
+): Promise<void> {
+  try {
+    const panelWebViewId = await papi.commands.sendCommand(
+      'legacyCommentManager.selectCommentThreadInPanel',
+      threadId,
+      bringToFront,
+    );
+    if (!panelWebViewId) throw new Error('No WebView ID returned');
+  } catch (e) {
+    papi.logger.warn(
+      `Failed to select thread ${threadId} in the Comment List panel: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
 // #region USJ location conversion helper functions
 
 /**

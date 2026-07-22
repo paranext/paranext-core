@@ -25,7 +25,7 @@ import {
 import { ResourceCellState } from './resource-cell.utils';
 
 /**
- * Localization keys for the ResourceCell offline states. Import to resolve them via
+ * Localization keys for the ResourceCell's status and action labels. Import to resolve them via
  * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
  */
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
@@ -177,9 +177,9 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
 
 /**
  * Presentational ResourceCell: renders the resource name (inline label or header band), per-cell
- * text direction, and either the editor (`ready`) or the offline placeholder
+ * text direction, and either the editor (`ready`) or the unavailable placeholder
  * (`downloading`/`failed`/`unavailable`). Data-free so Storybook can drive every state;
- * `ResourceCell` wraps it with the PAPI fetch/direction/offline wiring.
+ * `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
@@ -287,11 +287,11 @@ export function ResourceCellView({
       {nameDisplay === 'inline' ? (
         // Verse-row cell: hang the name at the inline-start beside the verse text. `dir` on the row
         // makes flex place the name on the resource's own inline-start (right in RTL). The name is a
-        // shrink-0, width-capped column; the verse text flows and scrolls in the remaining min-w-0
-        // column, so the hanging name stays pinned even when the verse overflows. Only the verse
-        // text scales with zoom; the hanging name keeps a fixed size (as in header mode).
+        // width-capped column (max-w-24) that can shrink (min-w-0, not shrink-0) so its truncation
+        // "…" stays at the visible edge in a narrow pane; the verse text flows and scrolls in the
+        // remaining min-w-0 column. Only the verse text scales with zoom; the hanging name is fixed.
         <div className="tw:flex tw:flex-1 tw:flex-row tw:gap-2 tw:p-2" dir={textDirection}>
-          <ResourceNameLabel label={label} className="tw:max-w-24 tw:shrink-0 tw:text-sm" />
+          <ResourceNameLabel label={label} className="tw:max-w-24 tw:min-w-0 tw:text-sm" />
           <div className="tw:min-w-0 tw:flex-1 tw:overflow-auto" style={contentStyle}>
             {stateContent}
           </div>

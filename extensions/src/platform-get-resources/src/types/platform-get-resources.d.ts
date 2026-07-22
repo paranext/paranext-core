@@ -75,62 +75,12 @@ declare module 'papi-shared-types' {
      */
     'platformGetResources.getCachedResources': () => Promise<DblResourceData[] | undefined>;
 
-    /**
-     * Commits changes in the specified project to the version history. Unless `forceCommit` is
-     * `true`, will only commit if there are changes/revisions detected.
-     *
-     * @param projectId Id of the project
-     * @param comment Specified comment describing the change/revisions
-     * @param forceCommit Whether to force a commit even if there are no changes
-     * @returns Whether or not changes were committed
-     */
-    'paratextBibleSendReceive.commitChanges': (
-      projectId: string,
-      comment: string,
-      forceCommit?: boolean,
-    ) => Promise<boolean>;
-
-    /**
-     * Commits changes only if it's been a day since the last commit.
-     *
-     * @param projectId Id of the project
-     */
-    'paratextBibleSendReceive.commitDaily': (projectId: string) => Promise<void>;
-
-    /**
-     * Syncs projects: sends/receives each project, then reads each project's connected resources
-     * and projects (one level deep — connections of connections are not included) and
-     * sends/receives connected translation projects or DBL-updates connected resources as needed.
-     * Unknown project IDs are skipped. Deduplication is handled internally.
-     *
-     * @param projectIds IDs of the projects to sync. If omitted, all shared projects that are
-     *   already present locally (i.e., not new) are synced. If provided, only projects already
-     *   present locally are synced; new projects (not yet received) and unknown IDs are skipped.
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.syncProjects': (projectIds?: string[]) => Promise<void>;
-
-    /**
-     * Gets all open webview project IDs and calls `paratextBibleSendReceive.syncProjects` with
-     * them.
-     *
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.syncOpenProjects': () => Promise<void>;
-
-    /**
-     * Cancels an in-progress sync operation if one is running. The process will finish dealing with
-     * the current project/resource and then it will abort. It will not undo what has been done.
-     *
-     * @param notificationId ID of the notification that triggered this cancel, if any.
-     *   Implementations may use this to validate that the cancel is for the expected sync
-     *   operation.
-     * @throws `PlatformUnimplementedException` if not running in an application that implements
-     *   this command (e.g., Paratext 10 Studio)
-     */
-    'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
+    // `paratextBibleSendReceive.*` commands are deliberately NOT declared here. This file is
+    // auto-included (via `typeRoots`) into the TypeScript programs of extension repos developed
+    // against core — including the closed-source Send/Receive extension itself, where duplicate or
+    // drifted declarations collide with the authoritative ones. Core's copy of the Send/Receive
+    // seam lives in `src/@types/paratext-bible-send-receive/`, which external extension programs
+    // do not include.
   }
 
   export interface SettingTypes {

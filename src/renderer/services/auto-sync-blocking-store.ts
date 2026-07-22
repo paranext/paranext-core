@@ -1,18 +1,22 @@
 /**
  * Store tracking whether an automatic (scheduled) Send/Receive is currently blocking the workspace.
  *
- * Uses a reference counter so overlapping blockers don't prematurely hide the overlay: the visible
- * state (isBlocking) only flips to false once every in-flight blocker has cleared.
+ * Tracks one entry per in-flight blocker so overlapping blockers don't prematurely hide the
+ * overlay: the visible state (isBlocking) only flips to false once every in-flight blocker has been
+ * released.
+ *
+ * Each block is identified by the token {@link raiseAutoSyncBlock} returns, and is released exactly
+ * once — by its own clear (calling the token) or by its own one-shot 10-minute safety leash if it
+ * never clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted).
+ * Identity pairing means a clear can never release a different block and a stale leash can never
+ * wipe newer in-flight blockers.
  *
  * Visibility has a 200 ms show-grace matching PT9's automatic-sync surface: on the first raise a
  * grace timer is armed, and listeners only ever see `true` if blocking is still in flight when it
  * fires. A sync that finishes within the grace never shows anything.
- *
- * A 10-minute safety timer re-arms on every raise and auto-clears the state if a blocker never
- * clears (e.g. the extension deactivates mid-sync and the clearing event is never emitted).
  */
 
-import { SHUTDOWN_SYNC_TIME_OUT_MS } from '@shared/data/platform.data';
+import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 
 /**
  * How long blocking must persist before it becomes visible; a sync finishing inside this window
@@ -22,16 +26,26 @@ const SHOW_GRACE_MS = 200;
 
 /**
  * Heuristic upper bound; if a blocker never clears (e.g. extension deactivates mid-sync),
- * auto-clear after this long. Tracks SHUTDOWN_SYNC_TIME_OUT_MS (the shutdown-sync timeout) because
- * both bound the same operation — a single automatic Send/Receive — so they should never diverge; a
- * scheduled sync of a large repo can run minutes, so the leash is deliberately long.
+ * auto-clear after this long. Each blocker leash bounds a single automatic Send/Receive — exactly
+ * what {@link AUTO_SYNC_MAX_DURATION_MS} is.
  */
-const SAFETY_TIMEOUT_MS = SHUTDOWN_SYNC_TIME_OUT_MS;
+const SAFETY_TIMEOUT_MS = AUTO_SYNC_MAX_DURATION_MS;
 
-let blockCount = 0;
+/** One in-flight blocker: its own safety leash. */
+type InFlightBlock = {
+  leash: ReturnType<typeof setTimeout>;
+};
+
+/**
+ * Every in-flight (not yet released) blocker. The raw blocking state is exactly "this set is
+ * non-empty", so there is no separate counter to keep in lockstep. (Same pattern as
+ * workspace-updating-store; extracting a shared abstraction is deliberately deferred — PT-4214
+ * Stage U.)
+ */
+const inFlightBlocks = new Set<InFlightBlock>();
+
 let isBlockingVisible = false;
 let graceTimer: ReturnType<typeof setTimeout> | undefined;
-let safetyTimer: ReturnType<typeof setTimeout> | undefined;
 
 const listeners = new Set<() => void>();
 
@@ -46,36 +60,38 @@ function setBlockingVisible(value: boolean): void {
   notifyListeners();
 }
 
-export function setAutoSyncBlocking(value: boolean): void {
-  if (value) {
-    blockCount += 1;
-    // Re-arm the safety timer on each raise, giving 10 min from the latest start.
-    clearTimeout(safetyTimer);
-    safetyTimer = setTimeout(() => {
-      blockCount = 0;
-      safetyTimer = undefined;
-      clearTimeout(graceTimer);
-      graceTimer = undefined;
-      setBlockingVisible(false);
-    }, SAFETY_TIMEOUT_MS);
-    // On 0→1, arm the show grace; visibility only turns on if blocking survives the grace.
-    if (blockCount === 1) {
-      graceTimer = setTimeout(() => {
-        graceTimer = undefined;
-        if (blockCount > 0) setBlockingVisible(true);
-      }, SHOW_GRACE_MS);
-    }
-  } else {
-    blockCount = Math.max(0, blockCount - 1);
-    if (blockCount === 0) {
-      // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
-      clearTimeout(graceTimer);
-      graceTimer = undefined;
-      clearTimeout(safetyTimer);
-      safetyTimer = undefined;
-      setBlockingVisible(false);
-    }
+/** Releases one block. A no-op if it was already released (identity — released exactly once). */
+function releaseBlock(block: InFlightBlock): void {
+  if (!inFlightBlocks.has(block)) return;
+  inFlightBlocks.delete(block);
+  clearTimeout(block.leash);
+  if (inFlightBlocks.size === 0) {
+    // Cancel a pending grace timer — blocking cleared inside the grace, so nothing ever shows.
+    clearTimeout(graceTimer);
+    graceTimer = undefined;
+    setBlockingVisible(false);
   }
+}
+
+/**
+ * Registers one in-flight blocker and returns its clear function. Call the returned function when
+ * the blocker's sync finishes; it is idempotent and releases only this block. If the block never
+ * clears, its own safety leash releases it after {@link SAFETY_TIMEOUT_MS} — a stale leash can never
+ * release a newer in-flight blocker.
+ */
+export function raiseAutoSyncBlock(): () => void {
+  const block: InFlightBlock = {
+    leash: setTimeout(() => releaseBlock(block), SAFETY_TIMEOUT_MS),
+  };
+  inFlightBlocks.add(block);
+  // On the first raise, arm the show grace; visibility only turns on if blocking survives it.
+  if (inFlightBlocks.size === 1) {
+    graceTimer = setTimeout(() => {
+      graceTimer = undefined;
+      if (inFlightBlocks.size > 0) setBlockingVisible(true);
+    }, SHOW_GRACE_MS);
+  }
+  return () => releaseBlock(block);
 }
 
 export function getAutoSyncBlocking(): boolean {
@@ -96,11 +112,10 @@ export function subscribeToAutoSyncBlocking(listener: () => void): () => void {
  * WARNING: Test-only. @internal
  */
 export function resetAutoSyncBlocking(): void {
-  blockCount = 0;
+  inFlightBlocks.forEach((block) => clearTimeout(block.leash));
+  inFlightBlocks.clear();
   isBlockingVisible = false;
   clearTimeout(graceTimer);
   graceTimer = undefined;
-  clearTimeout(safetyTimer);
-  safetyTimer = undefined;
   listeners.clear();
 }

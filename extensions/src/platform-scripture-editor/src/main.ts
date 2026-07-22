@@ -10,6 +10,7 @@ import {
   AsyncVariable,
   deepEqual,
   getErrorMessage,
+  newGuid,
   PlatformEventEmitter,
   ResourceType,
   serialize,
@@ -89,13 +90,18 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
- * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
- * network initialization races during extension activation.
+ * Event emitter fired before a project switch. Payload carries the switch's unique `switchId`, so
+ * the renderer's workspace-updating service can pair each finish with exactly the switch that
+ * started it. Created lazily on the first call to open() to avoid network initialization races
+ * during extension activation.
  */
-let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+let projectSwitchWillStartEmitter: PlatformEventEmitter<{ switchId: string }> | undefined;
 
-/** Event emitter fired after a project switch completes. Created lazily on the first call to open(). */
-let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+/**
+ * Event emitter fired after a project switch completes, with the `switchId` of the will-start event
+ * that began it. Created lazily on the first call to open().
+ */
+let projectSwitchDidFinishEmitter: PlatformEventEmitter<{ switchId: string }> | undefined;
 
 // #endregion Project Switch Events
 
@@ -297,18 +303,21 @@ async function open(
     // The transition overlay and project-switch sync only apply in simple mode when the tab
     // content is actually being replaced (not on new-tab opens or focus-existing navigations).
     const needsOverlay = interfaceMode === 'simple' && dispatch.kind === 'replace-tab';
+    // Pairs this switch's will-start and did-finish events, so the renderer releases exactly this
+    // switch when it finishes — never an unrelated concurrent one.
+    const switchId = newGuid();
 
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<
-          Record<string, never>
-        >(PROJECT_SWITCH_WILL_START_EVENT);
+        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<{
+          switchId: string;
+        }>(PROJECT_SWITCH_WILL_START_EVENT);
       if (!projectSwitchDidFinishEmitter)
-        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<
-          Record<string, never>
-        >(PROJECT_SWITCH_DID_FINISH_EVENT);
-      projectSwitchWillStartEmitter.emit({});
+        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<{
+          switchId: string;
+        }>(PROJECT_SWITCH_DID_FINISH_EVENT);
+      projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
       // Skip outgoing S/R for read-only viewers — no local changes are possible.
@@ -321,7 +330,7 @@ async function open(
 
     const emitDidFinish = () => {
       if (!needsOverlay) return;
-      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({ switchId });
       else
         logger.warn(
           'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',

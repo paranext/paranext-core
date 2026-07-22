@@ -370,13 +370,10 @@ export function PlatformBibleToolbar() {
                       aria-hidden={isSendReceiveAvailable === undefined || undefined}
                       tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
                       onClick={() => {
-                        // This command comes from an extension and is not typed in CommandHandlers.
-                        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                        (sendCommand as any)('paratextBibleSendReceive.openSyncStatus').catch(
-                          (e: unknown) =>
-                            logger.warn(
-                              `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-                            ),
+                        sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
+                          logger.warn(
+                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
+                          ),
                         );
                       }}
                     >

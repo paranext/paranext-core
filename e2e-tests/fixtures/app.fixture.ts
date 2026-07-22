@@ -8,6 +8,7 @@ import {
 import {
   launchElectronApp,
   teardownElectronApp,
+  preConfigureSettings,
   ElectronAppContext,
   PROCESS_READY_TIMEOUT,
 } from './helpers';
@@ -34,12 +35,21 @@ export const test = base.extend<TestAppFixtures, WorkerAppFixtures>({
     // Playwright fixtures require destructured parameter even when no dependencies are needed
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
+      // Seed platform.firstRunComplete before launch so the first-run wizard overlay (PT-4175) does
+      // not gate the app on a fresh CI profile. The wizard is a full-screen modal Dialog that
+      // aria-hides the rest of the app (breaking getByRole menu queries) and intercepts pointer
+      // events (breaking clicks); smoke tests drive the menubar/toolbar/profile popover and are not
+      // about first-run, so they must start past it. Restored after the app closes in teardown.
+      const restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': true });
       const ctx: ElectronAppContext = await launchElectronApp();
 
       await use(ctx.electronApp);
 
       console.log('[teardown] Worker-scoped app teardown starting...');
       await teardownElectronApp(ctx);
+      // Restore only after the app has fully closed so its shutdown writes cannot clobber the
+      // restored contents.
+      restoreSettings();
       console.log('[teardown] Worker-scoped app teardown complete — worker will exit now');
     },
     { scope: 'worker' },
