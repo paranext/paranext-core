@@ -1,5 +1,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { LocalizeKey } from 'platform-bible-utils';
+import { FirstRunStepProps } from '../first-run-step-props.model';
 
 const KEYS: LocalizeKey[] = [
   '%firstRun_step_syncConsent_heading%',
@@ -7,7 +8,7 @@ const KEYS: LocalizeKey[] = [
 ];
 
 /** Sync consent wizard step — body content only; the shell owns footer buttons (Next/Skip). */
-export function SyncConsentStep() {
+export function SyncConsentStep(_props: FirstRunStepProps) {
   const [strings] = useLocalizedStrings(KEYS);
   return (
     <div className="tw:flex tw:flex-col tw:gap-3">
