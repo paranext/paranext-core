@@ -14,6 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   useExtraValidMarkers,
+  useTruncationTooltip,
 } from 'platform-bible-react';
 import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
 import type {
@@ -144,6 +145,15 @@ export function ModelTextPanel({
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
+
+  // Only show the tooltip when the header's tw:truncate actually clips modelTextLabel — an
+  // unconditional Tooltip would fire on every hover, even when the full label already fits.
+  const {
+    ref: modelTextLabelRef,
+    open: isModelTextLabelTruncatedHovered,
+    onPointerEnter: onModelTextLabelPointerEnter,
+    onPointerLeave: onModelTextLabelPointerLeave,
+  } = useTruncationTooltip<HTMLDivElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -377,9 +387,12 @@ export function ModelTextPanel({
     <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       {modelTextLabel && (
         <TooltipProvider>
-          <Tooltip>
+          <Tooltip open={isModelTextLabelTruncatedHovered}>
             <TooltipTrigger asChild>
               <div
+                ref={modelTextLabelRef}
+                onPointerEnter={onModelTextLabelPointerEnter}
+                onPointerLeave={onModelTextLabelPointerLeave}
                 data-testid="model-text-header"
                 // 42px total, matching Column 3's dock tab-bar OUTER height (the 36px active tab
                 // plus its 6px --tab-header-to-content-gap) and the Scripture Editor's Simple-mode
@@ -392,7 +405,8 @@ export function ModelTextPanel({
                 // tw:truncate + Tooltip: the column has a 300px minWidth (simple-layout.data.ts), and
                 // "{fullName} ({displayName})" can exceed that at 300px — truncate to keep the fixed
                 // 42px row height intact, with the full label available on hover/focus per the
-                // Responsiveness guideline.
+                // Responsiveness guideline. useTruncationTooltip keeps the tooltip from firing when
+                // the label already fits and tw:truncate has nothing to clip.
                 className="tw:flex tw:h-[42px] tw:shrink-0 tw:items-center tw:truncate tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
               >
                 {modelTextLabel}
