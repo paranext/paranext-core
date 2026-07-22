@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronsUpDown,
   ChevronUp,
+  Scroll,
   ScrollText,
 } from 'lucide-react';
 import {
@@ -26,12 +27,20 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from 'platform-bible-react';
 import type { LocalizedStringValue } from 'platform-bible-utils';
-import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
+import { formatReplacementString, formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { ReactNode, useMemo, useState } from 'react';
 import { HomeItemDropdownMenu } from './home-item-menu';
+import ProjectResourceFilter, {
+  FilterOption,
+  ProjectResourceFilterValue,
+} from './project-resource-filter.component';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -41,7 +50,9 @@ import { HomeItemDropdownMenu } from './home-item-menu';
 export const HOME_STRING_KEYS = Object.freeze([
   '%resources_action%',
   '%resources_activity%',
+  '%resources_clearFilters%',
   '%resources_clearSearch%',
+  '%resources_filter_all%',
   '%resources_filterInput%',
   '%resources_shortNameText%',
   '%resources_fullName%',
@@ -50,14 +61,23 @@ export const HOME_STRING_KEYS = Object.freeze([
   '%resources_getStartedDescription%',
   '%resources_getResources%',
   '%resources_items%',
+  '%resources_itemsFiltered%',
   '%resources_language%',
+  '%resources_lastSynchronized%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
+  '%resources_noItemsFound%',
   '%resources_open%',
   '%resources_searchedFor%',
   '%resources_syncFailed_title%',
   '%resources_sync%',
+  '%resources_paratextProjects_label%',
+  '%resources_paratextProject_tooltip%',
+  '%resources_resource_tooltip%',
+  '%resources_editable%',
+  '%resources_readOnly%',
+  '%resources_resources_label%',
 ] as const);
 
 type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
@@ -65,14 +85,10 @@ type HomeLocalizedStrings = {
   [localizedHomeKey in HomeLocalizedStringKey]?: LocalizedStringValue;
 };
 
-export type SortConfig = {
-  key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
-  direction: 'ascending' | 'descending';
-};
-
 export type LocalProjectInfo = {
   projectId: string;
   isPublished: boolean;
+  isEditable: boolean;
   fullName: string;
   name: string;
   language: string;
@@ -84,10 +100,16 @@ export type MergedProjectInfo = {
   fullName: string;
   language: string;
   isPublished: boolean;
+  isEditable: boolean;
   isSendReceivable: boolean;
   isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
   lastSendReceiveDate?: string;
+};
+
+export type SortConfig = {
+  key: 'shortName' | 'fullName' | 'language' | 'activity' | 'action';
+  direction: 'ascending' | 'descending';
 };
 
 export type HomeProps = {
@@ -175,7 +197,7 @@ export function Home({
   onOpenProject = () => {},
   onSendReceiveProject = () => {},
   onGetStarted = () => {},
-  showGetResourcesButton = true,
+  showGetResourcesButton = false,
   isSendReceiveInProgress = false,
   isLoadingLocalProjects = false,
   isLoadingRemoteProjects = false,
@@ -190,7 +212,9 @@ export function Home({
   const isLocalizedStringsLoading = localizedStringsWithLoadingState[1];
   const actionText: string = getLocalizedString('%resources_action%');
   const activityText: string = getLocalizedString('%resources_activity%');
+  const clearFiltersText: string = getLocalizedString('%resources_clearFilters%');
   const clearSearchText: string = getLocalizedString('%resources_clearSearch%');
+  const filterAllText: string = getLocalizedString('%resources_filter_all%');
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
   const shortNameText: string = getLocalizedString('%resources_shortNameText%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
@@ -201,16 +225,27 @@ export function Home({
   const itemsText: string = isLocalizedStringsLoading
     ? ''
     : getLocalizedString('%resources_items%');
+  const itemsFilteredText: string = getLocalizedString('%resources_itemsFiltered%');
   const languageText: string = getLocalizedString('%resources_language%');
+  const lastSynchronizedText: string = getLocalizedString('%resources_lastSynchronized%');
   const noProjectsText: string = getLocalizedString('%resources_noProjects%');
   const noProjectsInstructionText: string = getLocalizedString('%resources_noProjectsInstruction%');
   const noSearchResultsText: string = getLocalizedString('%resources_noSearchResults%');
+  const noItemsFoundText: string = getLocalizedString('%resources_noItemsFound%');
   const openText: string = getLocalizedString('%resources_open%');
   const searchedForText: string = getLocalizedString('%resources_searchedFor%');
   const syncText: string = getLocalizedString('%resources_sync%');
   // Specific title for failed sync/get attempts — the alert is only shown for that flow, so a
   // contextual title ("Sync failed") communicates what failed better than the generic "Error".
   const syncFailedTitleText: string = getLocalizedString('%resources_syncFailed_title%');
+  const paratextProjectsText: string = getLocalizedString('%resources_paratextProjects_label%');
+  const paratextProjectTooltipText: string = getLocalizedString(
+    '%resources_paratextProject_tooltip%',
+  );
+  const resourceTooltipText: string = getLocalizedString('%resources_resource_tooltip%');
+  const editableText: string = getLocalizedString('%resources_editable%');
+  const readOnlyText: string = getLocalizedString('%resources_readOnly%');
+  const resourcesText: string = getLocalizedString('%resources_resources_label%');
 
   // Surfaces a business error (e.g. a project locked by another user) when an async action
   // callback rejects, so failures are visible in the UI rather than only logged by the webview.
@@ -236,6 +271,8 @@ export function Home({
           language: sharedProject.language,
           // Shared (send/receive) projects are not published resources.
           isPublished: false,
+          // Shared (send/receive) projects are always Paratext projects with editable Scripture.
+          isEditable: true,
           isSendReceivable: true,
           isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
@@ -253,6 +290,7 @@ export function Home({
           fullName: project.fullName,
           language: project.language,
           isPublished: project.isPublished,
+          isEditable: project.isEditable,
           isSendReceivable: false,
           isLocallyAvailable: true,
         });
@@ -269,14 +307,30 @@ export function Home({
     direction: 'ascending',
   });
 
+  const [projectResourceFilter, setProjectResourceFilter] =
+    useState<ProjectResourceFilterValue>('all');
+
+  const filterOptions: FilterOption[] = useMemo(
+    () => [
+      { key: 'paratextProject', label: paratextProjectsText, icon: ScrollText },
+      { key: 'resource', label: resourcesText, icon: BookOpen },
+    ],
+    [paratextProjectsText, resourcesText],
+  );
+
   const filteredAndSortedProjects = useMemo(() => {
     if (!mergedProjectInfo) return [];
     const textFilteredProjects = mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
+      const showInFilter =
+        projectResourceFilter === 'all' ||
+        (projectResourceFilter === 'resource') === project.isPublished;
+
       return (
-        project.fullName.toLowerCase().includes(filter) ||
-        project.name.toLowerCase().includes(filter) ||
-        project.language.toLowerCase().includes(filter)
+        showInFilter &&
+        (project.fullName.toLowerCase().includes(filter) ||
+          project.name.toLowerCase().includes(filter) ||
+          project.language.toLowerCase().includes(filter))
       );
     });
 
@@ -324,7 +378,7 @@ export function Home({
           return 0;
       }
     });
-  }, [mergedProjectInfo, textFilter, sortConfig]);
+  }, [mergedProjectInfo, textFilter, sortConfig, projectResourceFilter]);
 
   const handleSort = (key: SortConfig['key']) => {
     const newSortConfig: SortConfig = { key, direction: 'ascending' };
@@ -351,6 +405,10 @@ export function Home({
 
   const relativeTimeFormatter = useMemo(() => {
     return new Intl.RelativeTimeFormat(uiLocales, { style: 'long', numeric: 'auto' });
+  }, [uiLocales]);
+
+  const exactDateTimeFormatter = useMemo(() => {
+    return new Intl.DateTimeFormat(uiLocales, { dateStyle: 'long', timeStyle: 'short' });
   }, [uiLocales]);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
@@ -392,27 +450,57 @@ export function Home({
     );
   };
 
+  const getResourcesButton = (
+    <Button onClick={onOpenGetResources} className="tw:bg-muted" variant="ghost">
+      {`+ ${getResourcesText}`}
+    </Button>
+  );
+
   return (
     <Card className="tw:flex tw:h-screen tw:flex-col tw:rounded-none tw:border-0">
       <CardHeader
-        className={cn(
-          'tw:shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:[@media(max-height:28rem)]:!pt-4 tw:max-[300px]:!pb-0',
-          { 'tw:max-[300px]:!pb-2': showGetResourcesButton },
-        )}
+        className={cn('tw:shrink-0 tw:[@media(max-height:28rem)]:!pb-2 tw:max-[300px]:!pb-0', {
+          'tw:max-[300px]:!pb-2': showGetResourcesButton,
+        })}
       >
-        <div className="tw:flex tw:flex-wrap tw:justify-between tw:gap-4">
-          <div className="tw:flex tw:flex-col tw:gap-4 tw:max-w-72 tw:w-full">
-            <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-[300px]:!hidden">
+        <div className="tw:flex tw:flex-col tw:sm:flex-row tw:sm:justify-between tw:gap-4">
+          <div className="tw:flex tw:flex-col tw:gap-4 tw:w-full tw:sm:max-w-sm">
+            <div className="tw:flex tw:gap-4 tw:items-center tw:[@media(max-height:28rem)]:!hidden tw:max-sm:!hidden">
               {headerContent}
             </div>
-            <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
+            <div
+              className={cn(
+                'tw:flex tw:gap-2',
+                showGetResourcesButton
+                  ? 'tw:flex-col tw:items-start tw:sm:flex-row tw:sm:items-center'
+                  : 'tw:items-center',
+              )}
+            >
+              <div
+                className={cn(
+                  'tw:min-w-0',
+                  showGetResourcesButton ? 'tw:w-full tw:sm:flex-1' : 'tw:flex-1',
+                )}
+              >
+                <SearchBar
+                  value={textFilter}
+                  onSearch={setTextFilter}
+                  placeholder={filterInputText}
+                />
+              </div>
+              <div className="tw:flex tw:gap-2 tw:items-center">
+                <ProjectResourceFilter
+                  value={projectResourceFilter}
+                  onChange={setProjectResourceFilter}
+                  options={filterOptions}
+                  localizedAllText={filterAllText}
+                />
+                {showGetResourcesButton && <div className="tw:sm:hidden">{getResourcesButton}</div>}
+              </div>
+            </div>
           </div>
           {showGetResourcesButton && (
-            <div className="tw:self-end">
-              <Button onClick={onOpenGetResources} className="tw:bg-muted" variant="ghost">
-                {`+ ${getResourcesText}`}
-              </Button>
-            </div>
+            <div className="tw:max-sm:hidden tw:sm:self-end">{getResourcesButton}</div>
           )}
         </div>
       </CardHeader>
@@ -450,18 +538,35 @@ export function Home({
               <div className="tw:flex-grow tw:h-full">
                 {filteredAndSortedProjects.length === 0 ? (
                   <div className="tw:flex-grow tw:h-full tw:border tw:border-muted tw:rounded-lg tw:p-6 tw:text-center tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-1">
-                    <Label className="tw:text-muted-foreground">{noSearchResultsText}</Label>
-                    <Label className="tw:text-muted-foreground tw:font-normal">
-                      {`${searchedForText} "${textFilter}".`}
+                    <Label className="tw:text-muted-foreground">
+                      {(() => {
+                        if (textFilter) return noSearchResultsText;
+                        if (projectResourceFilter !== 'all') {
+                          const filterLabel =
+                            filterOptions
+                              .find((opt) => opt.key === projectResourceFilter)
+                              ?.label.toLowerCase() || '';
+                          return formatReplacementString(noItemsFoundText, {
+                            filter: filterLabel,
+                          });
+                        }
+                        return noSearchResultsText;
+                      })()}
                     </Label>
-                    <div className="tw:flex tw:gap-1  tw:mt-4">
+                    {textFilter && (
+                      <Label className="tw:text-muted-foreground tw:font-normal">
+                        {`${searchedForText} "${textFilter}".`}
+                      </Label>
+                    )}
+                    <div className="tw:flex tw:gap-1 tw:mt-4">
                       <Button
                         variant="ghost"
                         onClick={() => {
                           setTextFilter('');
+                          setProjectResourceFilter('all');
                         }}
                       >
-                        {clearSearchText}
+                        {projectResourceFilter !== 'all' ? clearFiltersText : clearSearchText}
                       </Button>
                       {showGetResourcesButton && (
                         <Button
@@ -513,20 +618,46 @@ export function Home({
                                 { 'tw:ps-0': project.editedStatus === 'edited' },
                               )}
                             >
-                              <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
-                                {project.editedStatus === 'edited' && (
-                                  <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
-                                )}
-                                {project.isPublished ? (
-                                  <BookOpen className="tw:pr-0" size={18} />
-                                ) : (
-                                  <ScrollText className="tw:pr-0" size={18} />
-                                )}
-                              </div>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="tw:flex tw:flex-row tw:items-center tw:gap-4">
+                                      <div className="tw:flex tw:flex-row tw:items-center tw:gap-2">
+                                        {project.editedStatus === 'edited' && (
+                                          <div className="tw:rounded-full tw:bg-primary tw:h-2 tw:w-2 tw:ms-[-8px]" />
+                                        )}
+                                        {(() => {
+                                          let Icon = ScrollText;
+                                          if (project.isPublished) Icon = BookOpen;
+                                          else if (!project.isEditable) Icon = Scroll;
+                                          return <Icon className="tw:pr-0" size={18} />;
+                                        })()}
+                                      </div>
 
-                              <div className="tw:whitespace-nowrap tw:cursor-default">
-                                {project.name}
-                              </div>
+                                      <div className="tw:whitespace-nowrap tw:cursor-default">
+                                        {project.name}
+                                      </div>
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="right">
+                                    <div className="tw:flex tw:flex-col tw:gap-0.5">
+                                      <div className="tw:wrap-anywhere tw:font-bold">
+                                        {project.fullName}
+                                      </div>
+                                      <div className="tw:text-xs">{project.language}</div>
+                                      <div className="tw:text-muted-foreground tw:text-xs">
+                                        {project.isPublished
+                                          ? resourceTooltipText
+                                          : formatReplacementString(paratextProjectTooltipText, {
+                                              editability: project.isEditable
+                                                ? editableText
+                                                : readOnlyText,
+                                            })}
+                                      </div>
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
 
                               <div className="tw:grow tw:hidden tw:max-[300px]:!flex">
                                 <div className="tw:grow" />
@@ -554,11 +685,32 @@ export function Home({
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
                             <TableCell className="tw:hidden tw:sm:!table-cell tw:cursor-default">
-                              {project.lastSendReceiveDate &&
-                                formatTimeSpan(
-                                  relativeTimeFormatter,
-                                  new Date(project.lastSendReceiveDate),
-                                )}
+                              {project.lastSendReceiveDate && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span>
+                                        {formatTimeSpan(
+                                          relativeTimeFormatter,
+                                          new Date(project.lastSendReceiveDate),
+                                        )}
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left">
+                                      <div className="tw:flex tw:flex-col tw:gap-0.5">
+                                        <div className="tw:text-muted-foreground tw:text-xs">
+                                          {lastSynchronizedText}
+                                        </div>
+                                        <div>
+                                          {exactDateTimeFormatter.format(
+                                            new Date(project.lastSendReceiveDate),
+                                          )}
+                                        </div>
+                                      </div>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
                             </TableCell>
                           )}
                           <TableCell className="tw:max-[300px]:hidden">
@@ -596,8 +748,15 @@ export function Home({
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:32rem)]:!hidden">
-        <Label>{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
+      <CardFooter className="tw:shrink-0 tw:flex-col tw:justify-center tw:p-4 tw:border-t tw:gap-2 tw:[@media(max-height:28rem)]:!hidden">
+        <Label>
+          {filteredAndSortedProjects.length !== mergedProjectInfo.length
+            ? formatReplacementString(itemsFilteredText, {
+                shown: filteredAndSortedProjects.length,
+                total: mergedProjectInfo.length,
+              })
+            : `${filteredAndSortedProjects.length} ${itemsText}`}
+        </Label>
       </CardFooter>
     </Card>
   );

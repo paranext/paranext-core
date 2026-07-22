@@ -21,6 +21,7 @@ const staticLocalProjects: LocalProjectInfo[] = [
   {
     projectId: '1',
     isPublished: false,
+    isEditable: true,
     fullName: 'Project 1 - editable',
     name: 'Pr1',
     language: 'English',
@@ -28,6 +29,7 @@ const staticLocalProjects: LocalProjectInfo[] = [
   {
     projectId: '2',
     isPublished: true,
+    isEditable: false,
     fullName: 'Resource 2 - read-only',
     name: 'Res2',
     language: 'French',

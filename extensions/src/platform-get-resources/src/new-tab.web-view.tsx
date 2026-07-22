@@ -5,15 +5,7 @@ import { Plus } from 'lucide-react';
 import { CardTitle, Label } from 'platform-bible-react';
 import { isPlatformError } from 'platform-bible-utils';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS } from './home.component';
-
-type LocalProjectInfo = {
-  projectId: string;
-  isPublished: boolean;
-  fullName: string;
-  name: string;
-  language: string;
-};
+import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 
@@ -79,6 +71,7 @@ globalThis.webViewComponent = function NewTab({ id: webViewId }: WebViewProps) {
           return {
             projectId: data.id,
             isPublished: await pdp.getSetting('platform.isPublished'),
+            isEditable: await pdp.getSetting('platform.isEditable'),
             fullName: await pdp.getSetting('platform.fullName'),
             name: await pdp.getSetting('platform.name'),
             language: await pdp.getSetting('platform.language'),

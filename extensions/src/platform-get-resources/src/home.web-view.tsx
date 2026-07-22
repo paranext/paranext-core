@@ -236,9 +236,11 @@ globalThis.webViewComponent = function HomeWebView() {
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
           const pdp = await papi.projectDataProviders.get('platform.base', data.id);
+
           return {
             projectId: data.id,
             isPublished: await pdp.getSetting('platform.isPublished'),
+            isEditable: await pdp.getSetting('platform.isEditable'),
             fullName: await pdp.getSetting('platform.fullName'),
             name: await pdp.getSetting('platform.name'),
             language: await pdp.getSetting('platform.language'),
