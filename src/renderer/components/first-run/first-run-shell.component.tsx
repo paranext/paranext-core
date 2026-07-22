@@ -55,7 +55,7 @@ export function FirstRunShell({
   const isLastStep = index === STEP_ORDER.length - 1;
   // Back floor is the resume entry step, not index 0: the startup reducer resumes a post-relaunch
   // user at `syncConsent`, and the already-completed identify/language steps behind it must not be
-  // reachable (PT-4177's real Identify saves registration + calls platform.restart, so backing into
+  // reachable (the real Identify step saves registration + calls platform.restart, so backing into
   // it risks re-triggering the relaunch/resume loop).
   const entryIndex = STEP_ORDER.indexOf(entryStep);
 
