@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
@@ -81,6 +81,38 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     TooltipContent: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   };
 });
+
+// jsdom has no ResizeObserver; stub it capturing the callback so tests can simulate column
+// resizes (same pattern as use-view-visibility.hook.test.ts).
+type MinimalResizeCallback = (entries: { contentRect: { width: number } }[]) => void;
+
+let resizeCallback: MinimalResizeCallback | undefined;
+const mockResizeObserve = vi.fn();
+const mockResizeDisconnect = vi.fn();
+
+beforeEach(() => {
+  resizeCallback = undefined;
+  mockResizeObserve.mockClear();
+  mockResizeDisconnect.mockClear();
+  vi.stubGlobal(
+    'ResizeObserver',
+    vi.fn((callback: MinimalResizeCallback) => {
+      resizeCallback = callback;
+      return { observe: mockResizeObserve, disconnect: mockResizeDisconnect };
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** Simulates the enclosing `.dock-panel` column reporting a new width */
+function simulateColumnResize(width: number) {
+  act(() => {
+    resizeCallback?.([{ contentRect: { width } }]);
+  });
+}
 
 // #endregion
 
@@ -279,5 +311,37 @@ describe('PlatformTabTitle context-menu gating', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     render(<PlatformTabTitle text="Tab" id="tab-1" />);
     expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
+  });
+});
+
+describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+  });
+
+  it('hides the title text once the enclosing column narrows below the icon-only threshold', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1');
+
+    simulateColumnResize(300);
+
+    expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
+  });
+
+  it('keeps the title text visible when the enclosing column is wide enough', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1');
+
+    simulateColumnResize(600);
+
+    expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+  });
+
+  it('never observes for resize in Power mode', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    renderTabTitle('web-view-1');
+
+    expect(mockResizeObserve).not.toHaveBeenCalled();
   });
 });

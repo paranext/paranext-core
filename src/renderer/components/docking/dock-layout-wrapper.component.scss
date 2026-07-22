@@ -370,6 +370,16 @@ can currently reach. */
   gap: vars.$space--sm;
 }
 
+// Simple mode's icon-only Column 3 tab strip (resources column) needs more generous
+// per-tab padding than the icon+title Power-mode default above, to match the reference
+// mockup's evenly-spaced, roomier icon-only tabs. Values tuned and visually verified via
+// CDP screenshots against the reference description (see PT-4208 task 6 report).
+[data-interface-mode='simple'] .dock-panel.dock-style-resources .dock-tab .drag-initiator {
+  padding-inline: vars.$space--md;
+  padding-block: vars.$space--sm;
+  gap: vars.$space--sm;
+}
+
 // #endregion TAB HEADER ////////////////////////////////////////////////
 
 // #region TAB SEPARATOR (DIVIDER) //////////////////////////////////////
