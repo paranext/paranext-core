@@ -6,6 +6,30 @@
   gap: 0.25rem; // tw:gap-1
 }
 
+[data-interface-mode='simple'] .platform-tab-title-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+// Simple mode only: hides the title text once the tab narrows below a width threshold, applied by
+// platform-tab-title.component.tsx via a ResizeObserver measuring this element's own rendered
+// width — not a CSS `@container` query. `container-type: inline-size` was tried first, but it
+// gives the queried element size containment, making that element's OWN intrinsic size ~0
+// regardless of content, specifically to break the query's circular dependency on its own size.
+// rc-dock's tab bar is entirely content-driven (`flex-basis: auto`/`max-content`) sizing all the
+// way up its ancestor chain, so that containment corrupted every ancestor relying on this tab's
+// real content width — tabs collapsed to their minimum floor unconditionally, regardless of how
+// much room was actually available (confirmed empirically via CDP: tabs stayed at the 40-48px
+// floor even in a 769px-wide column; removing `container-type` alone made them jump back to their
+// real content-driven width). Measuring the already-laid-out width via ResizeObserver and toggling
+// this plain class instead has no such circularity, since it reacts to the resolved layout rather
+// than participating in computing it.
+[data-interface-mode='simple'] .platform-tab-title.icon-only .platform-tab-title-text {
+  display: none;
+}
+
 .tab-menu-icon {
   margin: 0;
   margin-top: -1px;
@@ -22,4 +46,12 @@
 .platform-tab-tooltip {
   white-space: pre-wrap;
   z-index: vars.$z-index--above-dock;
+  // Tooltips are informational, never interactive — without this, the popup (positioned by Radix,
+  // which can flip/overlap its trigger when there's no room on the preferred side) can intercept
+  // pointerdown events meant for the tab underneath. This was a latent, pre-existing gap (this
+  // class predates PT-4208), but only became reliably reproducible once every Simple-mode Column 3
+  // tab had an explicit tooltip (Tasks 3/4) — small, closely-packed icon-only tabs make the overlap
+  // far more likely. Confirmed via a real CDP-driven pointerdown capture: the event target was
+  // inside this tooltip's content/arrow, not the tab, which silently re-enabled tab drag-and-drop.
+  pointer-events: none;
 }
