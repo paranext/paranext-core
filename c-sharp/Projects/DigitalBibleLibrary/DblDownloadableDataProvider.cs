@@ -73,15 +73,26 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     public const string DBL_RESOURCES = "DblResources";
 
+    // Node.js services match this exact text (platform-bible-utils `isErrorMessageAboutRegistryAuthFailure`
+    // in util.ts). Changing it requires a matching change in that TypeScript.
+    private const string INVALID_USER_REGISTRATION_MESSAGE =
+        "User registration is not valid. Cannot retrieve resources from DBL.";
+
     private List<InstallableResource> _resources = [];
 
-    // Serializes catalog fetches. GetDblResources runs off the JSON-RPC dispatch thread (see there),
-    // so it can no longer rely on the single-threaded reading loop to serialize it — and the provider
-    // must not assume it will (csharp-patterns.md: "Assume registered PAPI methods are called
-    // concurrently. If a method isn't thread-safe, lock it."). Guards the process-global
-    // Trace.Listeners bracket and the _resources write against overlapping fetches. Async wait, so
-    // contending callers yield instead of blocking the reading loop.
-    private readonly SemaphoreSlim _fetchLock = new(1, 1);
+    // Set once the catalog has loaded at least once so a mutation (install/uninstall) that races the
+    // initial fetch doesn't operate on an empty _resources list. Read and written only while holding
+    // _providerGate.
+    private bool _hasFetchedResources;
+
+    // Guards every access to shared state so only one DBL operation touches it at a time:
+    //   • _resources — reassigned by FetchResourcesCore, read by FindResource
+    //   • the Paratext ScrTextCollection — mutated by install/uninstall, read by the fetch's projection
+    //   • the process-global Trace.Listeners 401-detection bracket in FetchResourcesCore
+    // GetDblResources/InstallDblResource/UninstallDblResource do their blocking work inside Task.Run
+    // and take this lock there — never on the JSON-RPC reading thread — so the reading loop stays
+    // responsive while an operation runs. See PT-4222.
+    private readonly object _providerGate = new();
 
     #endregion
 
@@ -144,6 +155,44 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     }
 
     /// <summary>
+    /// Loads the DBL catalog into <see cref="_resources"/>, surfacing Paratext's trace-only 401 as
+    /// <see cref="INVALID_USER_REGISTRATION_MESSAGE"/>. Call only while holding
+    /// <see cref="_providerGate"/> (it touches the global Trace.Listeners bracket) and from a
+    /// background thread (the network call blocks and has no timeout).
+    /// </summary>
+    private void FetchResourcesCore()
+    {
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+
+        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+        Trace.Listeners.Add(traceListener);
+        try
+        {
+            FetchAvailableDBLResources();
+        }
+        finally
+        {
+            Trace.Listeners.Remove(traceListener);
+        }
+        if (traceListener.FoundText)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+
+        _hasFetchedResources = true;
+    }
+
+    /// <summary>
+    /// Loads the catalog once if it has never loaded, so a mutation that runs before any fetch
+    /// completes operates on a populated <see cref="_resources"/> instead of an empty one.
+    /// No-op after any successful load. Same calling contract as <see cref="FetchResourcesCore"/>.
+    /// </summary>
+    private void EnsureResourcesLoadedCore()
+    {
+        if (!_hasFetchedResources)
+            FetchResourcesCore();
+    }
+
+    /// <summary>
     /// Check user registration and, if registration is valid, return a list of information about
     /// available DBL resources
     /// </summary>
@@ -152,45 +201,20 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// presenting the resources and their installation status on the front-end
     /// </returns>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private async Task<List<DblResourceData>> GetDblResources(JsonElement _ignore)
-    {
-        // The text of this exception message is searched for by our Node.js services, so if you
-        // change it, you may need to change the TypeScript code as well.
-        const string INVALID_USER_REGISTRATION_MESSAGE =
-            "User registration is not valid. Cannot retrieve resources from DBL.";
-
-        if (!RegistrationInfo.DefaultUser.IsValid)
-            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
-
-        // Serialize fetches so overlapping calls don't attach two 401-detection listeners to the
-        // process-global Trace.Listeners at once or reassign _resources concurrently. WaitAsync
-        // yields rather than blocking the reading loop, preserving the PT-4222 responsiveness fix.
-        await _fetchLock.WaitAsync();
-        try
+    private Task<List<DblResourceData>> GetDblResources(JsonElement _ignore) =>
+        // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
+        // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the
+        // full catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers
+        // inline on its message-reading loop, so doing this work synchronously stalls every
+        // other request in this process until it finishes — provider-existence checks fail
+        // ("No data provider found"), getCachedResources times out, and the fetch never appears
+        // to settle. Returning Task.Run yields the reading loop back immediately so the process
+        // stays responsive. See PT-4222.
+        Task.Run(() =>
         {
-            // Offload the DBL catalog fetch to a background thread. This is a blocking, unbounded
-            // (NetworkTimeout = 0) network call, and on a cold cache (first run) it downloads the
-            // full catalog, which can take a long time. StreamJsonRpc invokes synchronous handlers
-            // inline on its message-reading loop, so doing this work synchronously stalls every
-            // other request in this process until it finishes — provider-existence checks fail
-            // ("No data provider found"), getCachedResources times out, and the fetch never appears
-            // to settle. Awaiting Task.Run yields the reading loop back immediately so the process
-            // stays responsive. See PT-4222.
-            return await Task.Run(() =>
+            lock (_providerGate)
             {
-                TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
-                Trace.Listeners.Add(traceListener);
-                try
-                {
-                    FetchAvailableDBLResources();
-                }
-                finally
-                {
-                    Trace.Listeners.Remove(traceListener);
-                }
-                if (traceListener.FoundText)
-                    throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
-
+                FetchResourcesCore();
                 return _resources
                     .Select(resource => new DblResourceData(
                         resource.DBLEntryUid.Id,
@@ -206,13 +230,8 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
                             ?? ""
                     ))
                     .ToList();
-            });
-        }
-        finally
-        {
-            _fetchLock.Release();
-        }
-    }
+            }
+        });
 
     private void FindResource(
         string dblEntryUid,
@@ -229,7 +248,19 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// Try to install DBL resource with specified DBL id
     /// </summary>
     [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
-    private void InstallDblResource(string DBLEntryUid)
+    private Task InstallDblResource(string DBLEntryUid) =>
+        // Run the blocking Install()/RefreshScrTexts() on a background thread so the reading loop
+        // stays responsive; the lock keeps it from overlapping a fetch or an uninstall.
+        Task.Run(() =>
+        {
+            lock (_providerGate)
+            {
+                EnsureResourcesLoadedCore();
+                InstallDblResourceCore(DBLEntryUid);
+            }
+        });
+
+    private void InstallDblResourceCore(string DBLEntryUid)
     {
         FindResource(
             DBLEntryUid,
@@ -270,7 +301,21 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// <summary>
     /// Try to uninstall DBL resource with specified DBL id
     /// </summary>
-    private void UninstallDblResource(string DBLEntryUid)
+    // Catalog may load on-demand here, so allow the caller to wait without timing out.
+    [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
+    private Task UninstallDblResource(string DBLEntryUid) =>
+        // Run the blocking Delete()/RefreshScrTexts() on a background thread so the reading loop
+        // stays responsive; the lock keeps it from overlapping a fetch or an install.
+        Task.Run(() =>
+        {
+            lock (_providerGate)
+            {
+                EnsureResourcesLoadedCore();
+                UninstallDblResourceCore(DBLEntryUid);
+            }
+        });
+
+    private void UninstallDblResourceCore(string DBLEntryUid)
     {
         FindResource(
             DBLEntryUid,
