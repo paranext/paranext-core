@@ -175,10 +175,21 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
-  // TODO(PT-4178): once first run IS complete, this syncs all shared projects every launch — even
-  // for a user who chose "Skip setup" on the sync-consent step. The wizard records that choice in a
-  // renderer localStorage flag (SYNC_SKIPPED_KEY) that this main-process code cannot read; PT-4178
-  // (Sync consent) owns persisting the skip as a platform setting and honoring it here.
+  // Sync-consent gate: if the user chose "Skip for now" on the sync-consent step, honor that
+  // permanently. On an unreadable flag, default to syncing (consent-safe: the user likely never
+  // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
+  let syncSkipped = false;
+  try {
+    syncSkipped = (await settingsService.get('platform.firstRunSyncSkipped')) === true;
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.firstRunSyncSkipped; proceeding with sync: ${getErrorMessage(e)}`,
+    );
+  }
+  if (syncSkipped) {
+    logger.debug('Startup sync skipped: platform.firstRunSyncSkipped is true');
+    return;
+  }
 
   // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
   // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
