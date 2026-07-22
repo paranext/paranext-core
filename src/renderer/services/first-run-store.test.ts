@@ -195,6 +195,37 @@ describe('completeFirstRun', () => {
     await completeFirstRun({ syncSkipped: true });
     expect(localStorage.getItem('platform-bible.firstRunSyncSkipped')).toBe('true');
   });
+
+  it('persists platform.firstRunSyncSkipped when sync is skipped', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await completeFirstRun({ syncSkipped: true });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstRunSyncSkipped', true);
+  });
+
+  it('does not write platform.firstRunSyncSkipped when sync is not skipped', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await completeFirstRun();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
+  });
+
+  it('still completes first run even when persisting syncSkipped throws', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    // Make the syncSkipped write fail, but the firstRunComplete write succeed
+    // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
+    mockSet.mockImplementation(async (key: string) => {
+      if (key === 'platform.firstRunSyncSkipped') throw new Error('write failed');
+      return undefined;
+    });
+    await completeFirstRun({ syncSkipped: true });
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
+  });
 });
 
 describe('retryFirstRunResolution', () => {
