@@ -35,8 +35,6 @@ const SCROLL_MAX_WAIT_MS = 2000;
  * prop.
  */
 export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
-  /** @deprecated Use `%webView_modelTextPanel_selecting%` instead. */
-  '%webView_modelTextPanel_installing%',
   '%webView_modelTextPanel_selecting%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
