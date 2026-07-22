@@ -54,8 +54,8 @@ configure({
     // Temporarily clear the React act environment flag so that `waitFor` polling intervals don't
     // produce "not wrapped in act" warnings (mirrors the intent of @testing-library/react's original
     // asyncWrapper, which set IS_REACT_ACT_ENVIRONMENT = false before calling cb()).
-    const prevActEnv = (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT;
-    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = false;
+    const prevActEnv = Reflect.get(globalThis, 'IS_REACT_ACT_ENVIRONMENT');
+    Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', false);
     try {
       const result = await cb();
       // Drain pending work after cb() completes:
@@ -84,7 +84,7 @@ configure({
       }
       return result;
     } finally {
-      (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = prevActEnv;
+      Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', prevActEnv);
     }
   },
 });

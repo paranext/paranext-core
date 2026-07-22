@@ -1,4 +1,5 @@
 module.exports = {
+  root: true,
   extends: [
     // https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
     'airbnb',
