@@ -122,10 +122,19 @@ export function VerseDeleteTooltipOverlay({ children }: Props) {
               height: armed?.height ?? 0,
             }}
           />
-          <TooltipContent side="bottom" align="start" showArrow={false}>
+          <TooltipContent
+            side="bottom"
+            align="start"
+            showArrow={false}
+            className="tw:text-destructive tw:border tw:border-destructive"
+          >
             {armed
               ? formatReplacementStringToArray(message, {
-                  key: <kbd>{confirmingKey(armed.intent)}</kbd>,
+                  key: (
+                    <kbd className="tw:rounded-sm tw:border tw:border-destructive tw:px-1">
+                      {confirmingKey(armed.intent)}
+                    </kbd>
+                  ),
                 }).map((part, index) => (
                   // The array is static per render (one fixed localized string + one kbd), so index
                   // is a stable, safe key — mirrors the about-dialog.component.tsx precedent.
