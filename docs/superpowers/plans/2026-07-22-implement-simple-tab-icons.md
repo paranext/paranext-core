@@ -4,18 +4,20 @@
 
 **Goal:** Give Simple mode's Resources & Tools column (Bible Texts, Commentaries, Comments) tab
 icons matching Text Collection's existing convention, restyle the tab strip to match a reference
-screenshot, make tabs shrink from icon+title to icon-only as the column narrows, and keep every
-tab's title available on hover/to screen readers once its text is hidden — all Simple-mode only,
-Power mode unchanged.
+screenshot, make tabs shrink from icon+title to icon-only as the column narrows, and give each of
+those three tabs an explicit hover tooltip so its name stays discoverable once its title is
+hidden — all Simple-mode only, Power mode unchanged.
 
 **Architecture:** A new shared `platform-bible-react` hook (`useTabIconSelection`) absorbs the
 selection-detection + variant-picking logic already used by the Text Collection tab so three more
 call sites (Bible Texts, Commentaries, Comments — two different extensions) don't duplicate it. New
 Lucide SVG icon assets (4 theme/selection variants each) go in each owning extension's `assets/`
-folder. `platform-tab-title.component.tsx`/`.scss` get the responsive CSS (container queries) and
-the title/tooltip accessibility fallback. `dock-layout-wrapper.component.scss` gets the shrink
-override and screenshot-matching style pass, all scoped under the existing
-`[data-interface-mode='simple']` convention.
+folder. Each of those three tabs also gets an explicit `tooltip` mirroring its title, matching Text
+Collection's existing convention (no `PlatformTabTitle` changes needed).
+`platform-tab-title.component.scss`/`.tsx` get the responsive CSS (container queries) for the
+icon+title → icon-only shrink. `dock-layout-wrapper.component.scss` gets the shrink override and
+screenshot-matching style pass, all scoped under the existing `[data-interface-mode='simple']`
+convention.
 
 **Tech Stack:** React, TypeScript, SCSS (CSS container queries), Vitest + React Testing Library,
 PAPI (`@papi/frontend`), rc-dock.
