@@ -16,9 +16,17 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
+
+// Below this measured *column* width (px), every tab in that column hides its title text and
+// shows only its icon. Measured against the column, not the tab's own width — see the effect
+// below for why. Tuned against Simple mode's default Resources column width (~480px, which
+// comfortably fits all 4 tabs' full icon+title content — verified via CDP) so the default layout
+// stays in the roomy state; lower this further only if a real narrower case still shows clipped
+// text instead of collapsing.
+const ICON_ONLY_COLUMN_THRESHOLD_PX = 460;
 
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
@@ -281,9 +289,67 @@ export function PlatformTabTitle({
     };
   }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId, isPowerMode]);
 
+  // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
+  // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
+  // library's own supported way to make part of a draggable tab non-draggable. Simple mode's
+  // Resources column keeps a visible, clickable tab bar (unlike the headless Home/Editor columns),
+  // so its tabs need this to block same-column drag-to-reorder. `tabLocked` (set on the tab group)
+  // only blocks drag-to-create-new-panel, not drag-to-reorder within a group — see the group
+  // config comment in platform-dock-layout-positioning.util.ts. Applied to the icon/title spans,
+  // the icon's own inner div, and the wrapping div, because rc-dock checks only the exact
+  // pointerdown target, not its ancestors, so any inner element the pointer might land on also
+  // needs the marker — including `.tab-menu-icon` itself, which fills its wrapping span and is the
+  // deepest element under the pointer when a tab shows an icon (verified via manual CDP-driven
+  // drag reproduction: without this, dragging a tab by its icon graphic was not blocked even
+  // though the wrapping span carried the class).
+  const dragIgnoreClass = isPowerMode ? '' : ' drag-ignore';
+
+  // Simple mode only: hide the title text once the enclosing COLUMN narrows below
+  // ICON_ONLY_COLUMN_THRESHOLD_PX. This measures the column (`.dock-panel`), not this tab's own
+  // rendered width — two things were tried first and both failed:
+  //
+  // 1. A CSS `@container` query on this tab's own width: `container-type: inline-size` gives the
+  //    queried element size containment, making its OWN intrinsic size ~0 to break the query's
+  //    circular dependency on its own size. rc-dock's tab bar is entirely content-driven
+  //    (`flex-basis: auto`/`max-content`) all the way up its ancestor chain, so that containment
+  //    corrupted every ancestor relying on this tab's real content width — tabs collapsed to their
+  //    minimum floor unconditionally, regardless of how much room was actually available.
+  // 2. A ResizeObserver on this tab's own rendered width (no container-type): rc-dock's tab bar
+  //    turned out not to be a simple "shrink tabs to fit" flex layout at all — `.dock-nav-list`
+  //    (the tabs' direct flex container) never gets width-constrained by its wrapper; it just
+  //    renders every tab at full natural size and either lets the wrapper clip/scroll the overflow
+  //    or moves excess tabs into rc-dock's own "more" dropdown, based on its own JS measurement of
+  //    each tab's full (never-shrunk) width. So a tab's OWN rendered width never actually drops
+  //    below any shrink threshold — confirmed via CDP: tabs sat at their full content width no
+  //    matter how narrow the column got, right up until rc-dock moved some of them into the
+  //    dropdown instead.
+  //
+  // Measuring the COLUMN's width directly sidesteps both problems: it reflects the divider
+  // position exactly (no dependency on the tab bar's internal clip/scroll/dropdown mechanics), and
+  // toggling icon-only BEFORE rc-dock measures the tabs means rc-dock's own dropdown only has to
+  // engage once even icon-only tabs don't fit — matching the original "rc-dock's overflow dropdown
+  // remains the floor" design intent.
+  const [isIconOnly, setIsIconOnly] = useState(false);
+  useEffect(() => {
+    if (isPowerMode) return undefined;
+    const element = containerRef.current;
+    if (!element) return undefined;
+    const panel = element.closest('.dock-panel');
+    if (!panel) return undefined;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setIsIconOnly(entry.contentRect.width < ICON_ONLY_COLUMN_THRESHOLD_PX);
+    });
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, [isPowerMode]);
+
+  const iconOnlyClass = isIconOnly ? ' icon-only' : '';
+
   const icon = (
     <div
-      className="tab-menu-icon"
+      className={`tab-menu-icon${dragIgnoreClass}`}
       style={
         iconUrl
           ? {
@@ -294,29 +360,20 @@ export function PlatformTabTitle({
     />
   );
 
-  // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
-  // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
-  // library's own supported way to make part of a draggable tab non-draggable. Simple mode's
-  // Resources column keeps a visible, clickable tab bar (unlike the headless Home/Editor columns),
-  // so its tabs need this to block same-column drag-to-reorder. `tabLocked` (set on the tab group)
-  // only blocks drag-to-create-new-panel, not drag-to-reorder within a group — see the group
-  // config comment in platform-dock-layout-positioning.util.ts. Applied to both the icon/title
-  // spans and the wrapping div because rc-dock checks only the exact pointerdown target, not its
-  // ancestors, so any inner element the pointer might land on also needs the marker.
-  const dragIgnoreClass = isPowerMode ? '' : ' drag-ignore';
-
   const titleWithTooltip = (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <div
             ref={containerRef}
-            className={`platform-tab-title${dragIgnoreClass}`}
+            className={`platform-tab-title${dragIgnoreClass}${iconOnlyClass}`}
             aria-label={tabLabel}
             data-web-view-id={webViewId}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
-            <span className={dragIgnoreClass.trim()}>{title}</span>
+            <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>
+              {title}
+            </span>
           </div>
         </TooltipTrigger>
         {tooltip &&

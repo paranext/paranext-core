@@ -164,5 +164,26 @@ body > .dragging-layer.dock-style-resources {
   .dock.dock-top {
     border-radius: 0;
   }
+
+  // Allow tabs to shrink toward an icon-only floor as the column narrows, instead of the
+  // Power-mode default (`.dock-tab { flex: 1 0 auto; max-width: max-content; }` in
+  // dock-layout-wrapper.component.scss's TAB HEADER region), which never shrinks and relies
+  // entirely on rc-dock's overflow dropdown.
+  //
+  // max-width stays capped at max-content, same as Power mode — only flex-shrink and min-width are
+  // new. This is safe again (two earlier attempts here — a fixed flex-basis, and dropping the cap
+  // entirely — both got tangled up with `container-type: inline-size` on a descendant; see
+  // platform-tab-title.component.scss/.tsx, which now measures the icon-only threshold via
+  // ResizeObserver instead of a CSS `@container` query). With no descendant establishing size
+  // containment, max-content correctly reflects this tab's real icon+title content again, exactly
+  // like Power mode: tabs size to content when there's room and shrink toward the floor when tight.
+  .dock-panel.dock-style-platform-bible .dock-tab {
+    flex: 1 1 auto;
+    // 48px = 16px icon (vars.$space--md) + 32px total inline padding on `.drag-initiator`
+    // (vars.$space--md each side, see the TAB HEADER region's drag-initiator padding, tuned in
+    // the Column-3 style pass) — the true minimum for an icon-only tab with no clipping.
+    min-width: 48px;
+    max-width: max-content;
+  }
 }
 // #endregion SIMPLE-MODE CHROME //////////////////////////////////////
