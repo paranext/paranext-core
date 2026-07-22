@@ -85,7 +85,7 @@ describe('auto-sync-blocking-store', () => {
     });
   });
 
-  describe('case canonicalization (ingestion, PT-4214 Stage U)', () => {
+  describe('case canonicalization (ingestion)', () => {
     it('canonicalizes ingested project ids to upper case', () => {
       // The backend gate matches ids OrdinalIgnoreCase and the canonical project id is upper; the
       // store canonicalizes at ingestion so a mixed/lower-case snapshot still matches a canonical
@@ -146,7 +146,7 @@ describe('auto-sync-blocking-store', () => {
     });
   });
 
-  describe('no timer-driven expiry (safety leash deleted, PT-4214 Stage U)', () => {
+  describe('no timer-driven expiry', () => {
     it('leaves no pending timer once blocking is visible', () => {
       setBlockedProjects(['P1']);
       expect(vi.getTimerCount()).toBe(1); // the grace timer
@@ -158,7 +158,7 @@ describe('auto-sync-blocking-store', () => {
       setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(isProjectBlocked('P1')).toBe(true);
-      // Far beyond the old 10-minute leash — the block persists until the backend clears it.
+      // Well beyond any plausible sync duration — the block persists until the backend clears it.
       vi.advanceTimersByTime(60 * 60 * 1000);
       expect(isProjectBlocked('P1')).toBe(true);
       expect(vi.getTimerCount()).toBe(0);

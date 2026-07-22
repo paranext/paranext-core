@@ -164,8 +164,8 @@ namespace TestParanextDataProvider.Projects
         {
             // The write gate is PER-PROJECT: while projectA is syncing, a write to projectB (which
             // is NOT in the armed set) must proceed normally — editing an unrelated project stays
-            // possible while another syncs (PT9 parity). This is a deliberate reversal of the old
-            // global gate. IsBlocked agrees: projectB is not in the armed set.
+            // possible while another syncs (PT9 parity). IsBlocked agrees: projectB is not in the
+            // armed set.
             SendReceiveWriteLock.SetSyncing(["projectA"]);
 
             Assert.That(
@@ -389,9 +389,7 @@ namespace TestParanextDataProvider.Projects
             // Pins the ACTUAL per-project behavior of an all-invalid batch: it still arms (and the
             // drain still runs, and the token is still valid — none of that machinery cares whether
             // the blocked set is empty), but the per-project filter (armed && set.Contains(id)) can
-            // never match an empty set, so this arm rejects NOTHING for ANY project. This is the
-            // opposite of the old global-gate behavior, where an armed-with-empty-set gate rejected
-            // every write.
+            // never match an empty set, so this arm rejects NOTHING for ANY project.
             long token = 0;
             Assert.DoesNotThrow(
                 () => token = SendReceiveWriteLock.SetSyncing([null!, ""]),

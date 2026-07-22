@@ -57,7 +57,7 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// and there is deliberately no "is the lock held" bookkeeping to fall out of step with reality.
 /// <c>_blockedProjectIds</c> is pure data that
 /// layers a per-project FILTER on top of that invariant: it selects WHICH projects an armed gate
-/// rejects (both <see cref="EnterWrite"/> and <see cref="IsBlocked"/> now consult it), but it never
+/// rejects (both <see cref="EnterWrite"/> and <see cref="IsBlocked"/> consult it), but it never
 /// weakens the invariant — narrowing rejection can only let MORE writes through, and the
 /// count++/arm ordering still bars any write to a synced project from racing that project's file
 /// replacement. The set is published data-then-flag (see <see cref="SetSyncing"/>), so a reader
@@ -125,10 +125,9 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <b>Per-project rejection; one sync slot; overlap semantics.</b> Rejection is PER-PROJECT: while a
 /// set of projects is syncing, only writes to THOSE projects are rejected — a write to any other
 /// project proceeds normally. This is a DELIBERATE product requirement (PT9 parity — a sync locks
-/// only the project it is syncing, so a user can keep editing project B while project A syncs). It
-/// is a reversal of this gate's original "one global sync slot rejects ALL writes" behavior; both
-/// <see cref="EnterWrite"/> and <see cref="IsBlocked"/> now consult <c>_blockedProjectIds</c>, and
-/// the safety invariant is unaffected (narrowing rejection can only allow more writes; the
+/// only the project it is syncing, so a user can keep editing project B while project A syncs).
+/// Both <see cref="EnterWrite"/> and <see cref="IsBlocked"/> consult <c>_blockedProjectIds</c>, and
+/// the safety invariant holds (narrowing rejection can only allow more writes; the
 /// count++/arm ordering still bars any write to a synced project). There is still ONE arm slot (one
 /// armed flag + generation): a repeat <see cref="SetSyncing"/> while armed takes over the slot — it
 /// replaces the armed project-id set and returns a NEW token, invalidating every earlier one (call
@@ -552,7 +551,7 @@ internal static class SendReceiveWriteLock
     /// Whether writes to <paramref name="projectId"/> are currently blocked by an in-progress
     /// automatic Send/Receive. Always <c>false</c> in public core (see the class remarks). Kept for
     /// read-only consumers (e.g. status queries); write paths must use <see cref="EnterWrite"/> so
-    /// their mutation is what the sync's drain waits for. This answer is per-project and now agrees
+    /// their mutation is what the sync's drain waits for. This answer is per-project and agrees
     /// with <see cref="EnterWrite"/>'s rejection decision (both consult the same blocked set), apart
     /// from the two benign flag/set-skew windows noted in the class remarks — this pure-data query
     /// ignores the armed flag, so during those windows it can momentarily disagree with the gate.

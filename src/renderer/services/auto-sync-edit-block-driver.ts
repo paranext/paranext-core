@@ -168,17 +168,17 @@ export function initAutoSyncEditBlockDriver(): () => void {
     // needlessly rewriting editors or re-subscribing the handlers.
     if (deepEqual(appliedBlockedProjectIds, next)) return;
 
-    // THE ORDERING FIX. Tear the mid-block handlers down BEFORE applying the diff below. Applying the
-    // diff issues unflag writes (isSyncBlocked: false) for no-longer-blocked projects, and
-    // `updateWebViewDefinitionSync` fires `onDidUpdateWebView` SYNCHRONOUSLY (the buffered emitter and
-    // this subscription resolve to the same underlying PapiNetworkEventEmitter, so a local emit
-    // dispatches inline, not on a later tick). A still-live re-flag handler would observe its own
-    // unflag write, pass its "came back unblocked" guard, and set the editor straight back to
-    // `true` — permanently blocking it. Tearing down first also drops handlers that closed over the
-    // STALE set, so the rebuild below re-subscribes over the new one. This is correct for PARTIAL
-    // transitions too: on {A,B} → {A}, B's editors unflag with no live handler to bounce them, A's
-    // editors keep their flag (the equality guard skips them), and the rebuilt {A} handlers still
-    // protect A. Found live in E2E, 2026-07-16.
+    // ORDERING IS LOAD-BEARING: tear the mid-block handlers down BEFORE applying the diff below.
+    // Applying the diff issues unflag writes (isSyncBlocked: false) for projects no longer in the
+    // blocked set, and `updateWebViewDefinitionSync` fires `onDidUpdateWebView` SYNCHRONOUSLY (the
+    // buffered emitter and this subscription resolve to the same underlying PapiNetworkEventEmitter,
+    // so a local emit dispatches inline, not on a later tick). A still-live re-flag handler would
+    // observe its own unflag write, pass its "came back unblocked" guard, and set the editor straight
+    // back to `true` — permanently blocking it. Tearing down first also drops handlers that closed
+    // over the STALE set, so the rebuild below re-subscribes over the new one. This is correct for
+    // PARTIAL transitions too: on {A,B} → {A}, B's editors unflag with no live handler to bounce
+    // them, A's editors keep their flag (the equality guard skips them), and the rebuilt {A} handlers
+    // still protect A.
     teardownHandlers();
 
     // Only advance the applied-set snapshot when the apply actually succeeded. If enumeration threw

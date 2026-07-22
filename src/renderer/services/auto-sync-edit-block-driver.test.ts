@@ -176,7 +176,7 @@ describe('initAutoSyncEditBlockDriver', () => {
 
   it(
     'flags only the editor whose project is syncing, leaving other projects editable ' +
-      '(regression: E2E defect 3 — one project syncing must not block edits in another)',
+      '(one project syncing must not block edits in another)',
     () => {
       vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
         editor('e1', 'projA', { viewType: 'formatted' }), // the syncing project
