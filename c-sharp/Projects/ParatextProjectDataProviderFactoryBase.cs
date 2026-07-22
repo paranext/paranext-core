@@ -120,18 +120,31 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
                     // Wait for registration to finish before returning this PDP, so the name we
                     // hand back is immediately usable - never a window where a caller has the name
                     // but the PDP's methods aren't registered yet (which would burn their bounded
-                    // MethodNotFound retry budget and spuriously fail a valid project). RunTask
-                    // blocks up to DefaultTimeout and rethrows a registration fault, so a failed
-                    // registration propagates out of this Lazy factory and is evicted by the catch
-                    // below (self-healing on the next call) instead of caching a permanently-
-                    // unusable PDP. This does NOT re-serialize distinct projects: each project has
+                    // MethodNotFound retry budget and spuriously fail a valid project). Treat BOTH a
+                    // timeout and a registration fault as a failed registration and throw, so the
+                    // catch below evicts the Lazy (self-healing on the next call) instead of caching
+                    // a permanently-unusable PDP. RunTask only propagates a fault that occurs while
+                    // it is still waiting and returns false (does not throw) on timeout, so inspect
+                    // its result and the task's faulted state explicitly rather than relying on it to
+                    // throw. A registration that timed out here may still be in flight: it will
+                    // finish registering under this now-discarded name while the retry registers a
+                    // fresh PDP under a new name - an accepted cost of not blocking the caller
+                    // indefinitely. This does NOT re-serialize distinct projects: each project has
                     // its own per-project Lazy, so concurrent creations for different projects still
                     // register concurrently - only same-project callers share (and await) this one.
-                    ThreadingUtils.RunTask(
-                        pdp.RegisterDataProviderAsync(),
+                    var registrationTask = pdp.RegisterDataProviderAsync();
+                    var registrationCompleted = ThreadingUtils.RunTask(
+                        registrationTask,
                         $"{GetRegistrationTaskDescription(pdp, details)} for project {id}",
                         ThreadingUtils.DefaultTimeout
                     );
+                    if (!registrationCompleted)
+                        throw new TimeoutException(
+                            $"Registration for project {id} did not complete within "
+                                + $"{ThreadingUtils.DefaultTimeout}."
+                        );
+                    if (registrationTask.IsFaulted)
+                        throw registrationTask.Exception!;
                     return pdp;
                 },
                 LazyThreadSafetyMode.ExecutionAndPublication
@@ -145,8 +158,9 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
         {
             // A faulted Lazy caches its exception forever. Evict it so a later call retries
             // (e.g. a resource requested before Paratext registration completes, a project
-            // requested mid-clone, or a PDP whose RegisterDataProviderAsync faulted - now surfaced
-            // here because registration is awaited above rather than fire-and-forget) instead of
+            // requested mid-clone, or a PDP whose RegisterDataProviderAsync faulted or timed out -
+            // now surfaced here because registration is awaited and checked above rather than
+            // fire-and-forget) instead of
             // staying broken until process restart. Caching nothing on failure keeps failed
             // lookups self-healing. Compare-and-remove by the
             // exact Lazy so we never clobber a different,

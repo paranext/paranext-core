@@ -89,8 +89,7 @@ export function useProjectPickerData(): ProjectPickerData {
   // Two independent refresh generations, so cheap "which project is active?" updates don't drag in
   // the expensive project-metadata fan-out:
   // - metadataRefreshCounter invalidates the shared metadata fetch. Bumped only by events that can
-  //   change the SET of available projects (extensions reloading), plus a targeted bump when the
-  //   active editor references a project our cached snapshot doesn't yet include (see below).
+  //   change the SET of available projects (extensions reloading, C# project-list changes).
   // - webViewRefreshCounter re-derives the current project from the open web views. Bumped by web
   //   view open/update/close - frequent during startup tab restoration - which re-runs only the
   //   cheap getAllOpenWebViewDefinitions query and reuses the cached metadata.
@@ -154,10 +153,6 @@ export function useProjectPickerData(): ProjectPickerData {
     return entry.promise;
   }, [metadataRefreshCounter]);
 
-  // The active editor's project id from the last miss-triggered metadata refresh. Guards against
-  // refreshing metadata forever when the id is genuinely absent (vs. merely not-yet-fetched).
-  const missRefreshedProjectIdRef = useRef<string | undefined>(undefined);
-
   const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
       // Referenced so this callback re-runs on web view events (open/update/close) to pick up the
@@ -168,34 +163,28 @@ export function useProjectPickerData(): ProjectPickerData {
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       const currentProjectId = editorDef?.projectId;
       if (!currentProjectId) {
-        // No active editor, so clear the miss-once guard: a project that was absent (and left the
-        // guard armed for its id) must be free to attempt a fresh refresh when it is next opened,
-        // rather than staying wedged on the error card.
-        missRefreshedProjectIdRef.current = undefined;
         setCurrentProjectError(undefined);
         return undefined;
       }
       try {
+        // Fast path: the active editor's project is already in the picker's (USJ-filtered)
+        // snapshot, so reuse it - no extra fetch.
         const metadata = await getAllMetadata();
         const key = normalizeProjectId(currentProjectId);
         const m = metadata.find((md) => normalizeProjectId(md.id) === key);
         if (m) {
-          missRefreshedProjectIdRef.current = undefined;
           setCurrentProjectError(undefined);
           return metadataToProjectItem(m);
         }
-        if (missRefreshedProjectIdRef.current !== key) {
-          // The active editor references a project our cached metadata doesn't include - usually one
-          // registered after the last fetch (web view events don't invalidate the metadata cache on
-          // their own). Refresh metadata once for this id; the re-run resolves it. Stay neutral
-          // meanwhile rather than flashing the error card.
-          missRefreshedProjectIdRef.current = key;
-          setCurrentProjectError(undefined);
-          refreshMetadata();
-          return undefined;
-        }
-        // Still absent after a targeted refresh: treat as a genuine lookup failure.
-        throw new Error(`No project metadata found for ${currentProjectId}`);
+        // Miss: the active editor references a project not in the USJ-filtered snapshot yet - e.g.
+        // its USJ-providing layering PDPF has not registered. Resolve it directly by id
+        // (unfiltered), which merges every registered PDPF's metadata for this id and waits for a
+        // factory, so the current project still resolves during the startup window instead of
+        // wedging on an error card. Display fields are identical either way - the interface filter
+        // only decides list inclusion, not which fields a project carries.
+        const single = await projectLookupService.getMetadataForProject(currentProjectId);
+        setCurrentProjectError(undefined);
+        return metadataToProjectItem(single);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
@@ -207,7 +196,7 @@ export function useProjectPickerData(): ProjectPickerData {
           shortName: '???',
         };
       }
-    }, [getAllMetadata, refreshMetadata, webViewRefreshCounter]),
+    }, [getAllMetadata, webViewRefreshCounter]),
     undefined,
   );
 

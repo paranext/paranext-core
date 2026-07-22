@@ -37,7 +37,6 @@ const emittedOnceMarkNames = new Set<string>();
  * Like {@link markStartup}, but emits the named mark at most once per process. Use for "first time X
  * happens" marks reached from code that can run many times (e.g. the first web view rendered, the
  * first chapter served) so re-runs don't inject duplicate or dangling marks into the waterfall.
- * Replaces hand-rolled per-site `boolean` guards.
  *
  * @param name See {@link markStartup}.
  */

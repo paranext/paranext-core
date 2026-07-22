@@ -36,6 +36,9 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
 vi.mock('@shared/services/project-lookup.service', () => ({
   projectLookupService: {
     getMetadataForAllProjects: vi.fn(async () => []),
+    // Single-project fallback the hook uses to resolve the current project when it is absent from
+    // the (USJ-filtered) list snapshot (e.g. its layering PDPF has not registered yet).
+    getMetadataForProject: vi.fn(),
   },
 }));
 
@@ -147,6 +150,11 @@ describe('useProjectPickerData', () => {
     vi.mocked(getNetworkEvent).mockImplementation(() => vi.fn(() => vi.fn()));
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
+    // Default the single-project fallback to "not found" (it throws in production when no PDPF
+    // provides the id); tests that exercise the fallback's success path override this.
+    vi.mocked(projectLookupService.getMetadataForProject).mockRejectedValue(
+      new Error('No project found'),
+    );
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([DEFAULT_RECENT_IDS, vi.fn(), false]),
     }));
@@ -410,10 +418,34 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentProject?.fullName).toBe('Updated Project');
   });
 
-  it('recovers the current project after a stuck error once the editor closes and reopens', async () => {
-    // Regression: the miss-once-then-refresh guard (missRefreshedProjectIdRef) must clear when there
-    // is no current editor, so a project that was absent (error card shown) can resolve on a later
-    // open instead of staying wedged on 'Unable to load current project details'.
+  it('resolves the current project by direct lookup when it is absent from the filtered list snapshot', async () => {
+    // The active editor's project may not be in the picker's USJ-filtered snapshot yet - e.g. its
+    // USJ-providing layering PDPF has not registered. The hook must still resolve it via a direct,
+    // unfiltered single-project lookup rather than showing an error card during that startup window.
+    const { webViews, projectLookupService } = await importMocks();
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-late' },
+    ] as never);
+    // Filtered snapshot lacks proj-late...
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+    // ...but the direct lookup resolves it (merging metadata from whichever PDPF has registered).
+    vi.mocked(projectLookupService.getMetadataForProject).mockResolvedValue(
+      metadata({ id: 'proj-late', fullName: 'Late Project', name: 'Late' }) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    expect(result.current.currentProject?.id).toBe('proj-late');
+    expect(result.current.currentProject?.fullName).toBe('Late Project');
+    expect(result.current.currentProjectError).toBeUndefined();
+    expect(vi.mocked(projectLookupService.getMetadataForProject)).toHaveBeenCalledWith('proj-late');
+  });
+
+  it('recovers the current project after a failed lookup once the editor closes and reopens', async () => {
+    // When even the direct lookup fails (nothing provides the id yet), the hook shows the error
+    // card. That state must clear when there is no current editor, so the project can resolve on a
+    // later open instead of staying wedged on 'Unable to load current project details'.
     const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
     let webViewCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
@@ -432,31 +464,29 @@ describe('useProjectPickerData', () => {
       async () => openDefs as never,
     );
 
-    // Metadata lacks proj-stuck for the first two fetches (initial + the one courtesy refresh),
-    // then includes it once it finally registers.
-    vi.mocked(projectLookupService.getMetadataForAllProjects)
-      .mockResolvedValueOnce([] as never)
-      .mockResolvedValueOnce([] as never)
+    // proj-stuck is absent from the filtered snapshot throughout.
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+    // The direct lookup fails while proj-stuck is unregistered, then succeeds once it registers.
+    vi.mocked(projectLookupService.getMetadataForProject)
+      .mockRejectedValueOnce(new Error('No project found'))
       .mockResolvedValue(
-        metadataList([
-          { id: 'proj-stuck', fullName: 'Recovered Project', name: 'Recovered' },
-        ]) as never,
+        metadata({ id: 'proj-stuck', fullName: 'Recovered Project', name: 'Recovered' }) as never,
       );
 
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
-    // Phase 1: absent project → one courtesy refresh → still absent → error card.
+    // Phase 1: absent from snapshot and direct lookup fails → error card.
     expect(result.current.currentProjectError).toBe('Unable to load current project details');
 
-    // Phase 2: editor closes → current project clears (and the miss guard must reset).
+    // Phase 2: editor closes → current project clears (and the error resets).
     openDefs = [];
     act(() => webViewCallback!());
     await settle(result);
     expect(result.current.currentProject).toBeUndefined();
     expect(result.current.currentProjectError).toBeUndefined();
 
-    // Phase 3: the same project reopens, now present in metadata → it resolves instead of staying
-    // stuck on the error card (which is what happened before the guard reset).
+    // Phase 3: the same project reopens, now resolvable by the direct lookup → it resolves instead
+    // of staying stuck on the error card.
     openDefs = [{ id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-stuck' }];
     act(() => webViewCallback!());
     await settle(result);

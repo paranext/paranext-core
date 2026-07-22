@@ -215,12 +215,13 @@ public sealed class ProjectSettingsNames
     /// its own malformed-value policy on a false return (e.g. the project setting getter throws,
     /// the setter refuses to write, metadata enumeration falls back to a default).
     /// </summary>
-    /// <param name="rawValue">Raw setting value to parse</param>
+    /// <param name="rawValue">Raw setting value to parse; null is treated as a malformed
+    /// (non-boolean) value.</param>
     /// <param name="value">The parsed boolean; false when parsing failed</param>
     /// <returns>True if <paramref name="rawValue"/> was a well-formed boolean value</returns>
-    public static bool TryParseParatextBoolean(string rawValue, out bool value)
+    public static bool TryParseParatextBoolean(string? rawValue, out bool value)
     {
-        switch (rawValue.ToUpperInvariant())
+        switch (rawValue?.ToUpperInvariant())
         {
             case "T"
             or "TRUE":

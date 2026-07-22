@@ -513,7 +513,8 @@ internal class LocalParatextProjects : IDisposable
         // resource-backed project shapes); everything else is unpublished.
         return GetVisibleScrTexts()
             .Where(scrText => !scrText.IsResourceProject)
-            .Select(scrText => scrText.GetProjectDetails());
+            .Select(TryGetProjectDetails)
+            .OfType<ProjectDetails>();
     }
 
     /// <summary>
@@ -526,7 +527,8 @@ internal class LocalParatextProjects : IDisposable
         // resource-backed project shapes).
         return GetVisibleScrTexts()
             .Where(scrText => scrText.IsResourceProject)
-            .Select(scrText => scrText.GetProjectDetails());
+            .Select(TryGetProjectDetails)
+            .OfType<ProjectDetails>();
     }
 
     /// <summary>
@@ -595,6 +597,28 @@ internal class LocalParatextProjects : IDisposable
         // lazy and takes no lock of its own.
         using (ScrTextArbitrator.GetLock())
             return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly).ToList();
+    }
+
+    /// <summary>
+    /// Projects a <see cref="ScrText"/> to its <see cref="ProjectDetails"/>, isolating a per-project
+    /// failure so one unreadable project (e.g. a corrupt Settings.xml, or a language-lookup failure
+    /// while enumerating) is skipped with a logged warning rather than throwing out of the whole
+    /// enumeration and blanking the entire project list. Returns null for a project whose details
+    /// could not be read; callers filter the nulls out.
+    /// </summary>
+    private static ProjectDetails? TryGetProjectDetails(ScrText scrText)
+    {
+        try
+        {
+            return scrText.GetProjectDetails();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"Skipping project '{scrText.Name}' during enumeration; could not read its details: {ex}"
+            );
+            return null;
+        }
     }
 
     private static void AddProjectToScrTextCollection(ProjectDetails projectDetails)
