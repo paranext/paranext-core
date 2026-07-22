@@ -2,7 +2,7 @@ import * as commandService from '@shared/services/command.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { isDemoMode } from '@renderer/services/first-run-store';
 import { Alert, AlertDescription, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
@@ -157,9 +157,10 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
       // No wait() delay — the button label makes the restart explicit. The process terminates
       // here; setIsRestarting(true) above keeps the button in "Restarting…" until the app exits.
       await commandService.sendCommand('platform.restart');
-    } catch {
+    } catch (err) {
       if (!isMounted.current) return;
       setError(strings['%general_error_title%']);
+      setErrorDescription(getErrorMessage(err));
       setIsRestarting(false);
     }
   };
