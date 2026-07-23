@@ -129,12 +129,4 @@ declare module 'papi-shared-types' {
       registrationData: RegistrationData,
     ) => Promise<boolean>;
   }
-
-  export interface SettingTypes {
-    /**
-     * Whether to show the form to enter Paratext Registration information when the application
-     * starts if it has not been entered previously
-     */
-    'paratextRegistration.shouldShowOnStartup': boolean;
-  }
 }

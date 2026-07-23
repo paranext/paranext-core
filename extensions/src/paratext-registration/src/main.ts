@@ -25,47 +25,12 @@ async function showInternetSettings(): Promise<string | undefined> {
   );
 }
 
-/**
- * Shows the registration info pane if there isn't any registration info yet. Used to help people
- * get signed in at startup
- *
- * Handles its own errors. No need to await
- */
-async function showParatextRegistrationIfNoRegistrationData(): Promise<string | undefined> {
-  try {
-    if (!(await papi.settings.get('paratextRegistration.shouldShowOnStartup'))) return undefined;
-
-    const registrationData = await papi.commands.sendCommand(
-      'paratextRegistration.getParatextRegistrationData',
-    );
-
-    if (
-      registrationData.name ||
-      registrationData.code ||
-      registrationData.email ||
-      registrationData.supporterName
-    )
-      return undefined;
-
-    return await showParatextRegistration();
-  } catch (e) {
-    logger.warn(
-      `Error while trying to determine if we need to pull up the Paratext registration info web view on startup: ${e}`,
-    );
-  }
-  return undefined;
-}
-
+// Startup registration is handled by the renderer-side first-run overlay (PT-4175) — opening WebViews here races WebViewService.
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('Paratext Registration is activating!');
 
   const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
   const internetSettingsWebViewProvider = new InternetSettingsWebViewProvider();
-
-  const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
-    'paratextRegistration.shouldShowOnStartup',
-    async (newValue) => typeof newValue === 'boolean',
-  );
 
   const showParatextRegistrationPromise = papi.commands.registerCommand(
     'paratextRegistration.showParatextRegistration',
@@ -86,11 +51,7 @@ export async function activate(context: ExecutionActivationContext) {
     internetSettingsWebViewProvider,
   );
 
-  // No need to wait for this; it will do its thing and handle its own errors
-  showParatextRegistrationIfNoRegistrationData();
-
   context.registrations.add(
-    await shouldShowOnStartupValidatorPromise,
     await showParatextRegistrationPromise,
     await showParatextRegistrationWebViewProviderPromise,
     await showInternetSettingsPromise,

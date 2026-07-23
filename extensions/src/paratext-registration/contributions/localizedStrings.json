@@ -62,14 +62,38 @@
         "message": "Changed the value of this locale to just be \"Paratext Registration\". The new key is %paratextRegistration_webView_title_2%.",
         "date": "2025-09-15"
       }
+    },
+    "%settings_paratextRegistration_registration_internet_group_description%": {
+      "deprecationInfo": {
+        "message": "Removed in PT-4224 when the paratextRegistration.shouldShowOnStartup setting was removed. The startup registration prompt this settings group described is now handled by the first-run gating overlay (PT-4175).",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_registration_internet_group_label%": {
+      "deprecationInfo": {
+        "message": "Removed in PT-4224 when the paratextRegistration.shouldShowOnStartup setting was removed. The startup registration prompt this settings group labeled is now handled by the first-run gating overlay (PT-4175).",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_shouldShowOnStartup_description%": {
+      "deprecationInfo": {
+        "message": "Removed in PT-4224. The paratextRegistration.shouldShowOnStartup setting was removed because the startup registration prompt it controlled is now handled by the first-run gating overlay (PT-4175).",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_shouldShowOnStartup_label%": {
+      "deprecationInfo": {
+        "message": "Removed in PT-4224. The paratextRegistration.shouldShowOnStartup setting was removed because the startup registration prompt it controlled is now handled by the first-run gating overlay (PT-4175).",
+        "date": "2026-07-22"
+      }
     }
   },
   "localizedStrings": {
     "en": {
       "%internetSettings_webView_title%": "Internet Settings",
       "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
-      "%mainMenu_openInternetSettings%": "Internet Settings...",
-      "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
+      "%mainMenu_openInternetSettings%": "Internet Settings…",
+      "%mainMenu_openParatextRegistration%": "Paratext Registration Information…",
       "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
@@ -120,17 +144,13 @@
       "%paratextRegistration_webView_title_2%": "Paratext Registration",
       "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",
       "%paratextRegistrationProfile_webView_title%": "Account",
-      "%paratextRegistrationProfile_webView_tooltip%": "Adjust your Paratext Registration Account Information here.",
-      "%settings_paratextRegistration_registration_internet_group_description%": "Settings related to the user's Paratext Registry connection and some Internet access controls",
-      "%settings_paratextRegistration_registration_internet_group_label%": "Registration and Internet",
-      "%settings_paratextRegistration_shouldShowOnStartup_description%": "Whether to show the form to enter Paratext Registration information when the application starts if it has not been entered previously",
-      "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show “Paratext Registration Information” on startup"
+      "%paratextRegistrationProfile_webView_tooltip%": "Adjust your Paratext Registration Account Information here."
     },
     "es": {
       "%internetSettings_webView_title%": "Configuración de Internet",
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
-      "%mainMenu_openInternetSettings%": "Configuración de Internet...",
-      "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
+      "%mainMenu_openInternetSettings%": "Configuración de Internet…",
+      "%mainMenu_openParatextRegistration%": "Información de Registro Paratext…",
       "%paratextRegistration_alert_invalidRegistration%": "Información de registro no encontrada",
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
       "%paratextRegistration_alert_unchangedRegistration%": "Información de registro sin cambios",
@@ -177,11 +197,7 @@
       "%paratextRegistration_webView_title_2%": "Registro de Paratext",
       "%paratextRegistration_webView_tooltip%": "Ingrese su información de Registro de Paratext en este formulario.",
       "%paratextRegistrationProfile_webView_title%": "Cuenta",
-      "%paratextRegistrationProfile_webView_tooltip%": "Ajuste aquí la información de su cuenta de Registro de Paratext.",
-      "%settings_paratextRegistration_registration_internet_group_description%": "Configuraciones relacionadas con la conexión del Registro de Paratext del usuario y algunos controles de acceso a Internet",
-      "%settings_paratextRegistration_registration_internet_group_label%": "Registro de Paratext y Configuración de Internet",
-      "%settings_paratextRegistration_shouldShowOnStartup_description%": "Mostrar el formulario de Registro de Paratext al iniciar si aún no ha ingresado sus credenciales",
-      "%settings_paratextRegistration_shouldShowOnStartup_label%": "Mostrar “Información de Registro de Paratext” al iniciar"
+      "%paratextRegistrationProfile_webView_tooltip%": "Ajuste aquí la información de su cuenta de Registro de Paratext."
     }
   }
 }
