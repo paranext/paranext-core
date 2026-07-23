@@ -432,7 +432,10 @@ export function PlatformTabTitle({
           <div
             ref={containerRef}
             className={`platform-tab-title${dragIgnoreClass}${iconOnlyClass}`}
-            aria-label={tabLabel}
+            // Icon-only tabs hide the only visible differentiator between tabs (the title text), so
+            // fall back to the resolved title itself rather than the generic "Tab" label — otherwise
+            // a screen reader announces every icon-only tab in this column identically.
+            aria-label={isIconOnly ? title : tabLabel}
             data-web-view-id={webViewId}
           >
             <span className={dragIgnoreClass.trim()}>{icon}</span>
@@ -456,7 +459,13 @@ export function PlatformTabTitle({
             )}
           </div>
         </TooltipTrigger>
+        {/* Suppress a tooltip that would only repeat the already-visible title — several callers
+            (e.g. Column 3 resource tabs) pass a tooltip that mirrors `text` unconditionally, which
+            is only non-redundant once the tab is collapsed to icon-only and the title text is
+            hidden. A tooltip that differs from the title (conveying something extra) still shows
+            regardless of collapse state. */}
         {tooltip &&
+          (isIconOnly || tooltip !== title) &&
           createPortal(
             <TooltipContent className="platform-tab-tooltip" side="bottom">
               <p>{tooltip}</p>

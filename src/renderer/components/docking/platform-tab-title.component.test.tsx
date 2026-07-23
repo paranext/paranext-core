@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
@@ -139,13 +139,13 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
  * tab content pane (mirroring the last-selected-tint effect's walk: header → `.dock-panel` →
  * `.dock-tabpane-active`).
  */
-function renderTabTitle(id: string) {
+function renderTabTitle(id: string, tooltip?: string) {
   return render(
     <div className="dock-panel">
       <div className="dock-nav-wrap">
         <div className="dock-nav-list">
           <div className="dock-tab-active">
-            <PlatformTabTitle id={id} text="Tab title" />
+            <PlatformTabTitle id={id} text="Tab title" tooltip={tooltip} />
           </div>
         </div>
       </div>
@@ -407,5 +407,91 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     renderTabTitle('web-view-1');
 
     expect(mockResizeObserve).not.toHaveBeenCalled();
+  });
+
+  it('recomputes icon-only state when tab content mutates without a panel resize (e.g. a sibling tab’s title resolving from a loading placeholder), via the MutationObserver fallback', async () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1');
+    setPanelWidth(container, 300);
+    setMeasureCloneWidth(container, 200);
+    simulateColumnResize();
+    expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+
+    // Widen the mocked measurement (as if the real title text had just resolved) and mutate the
+    // clone's DOM content directly — jsdom's native MutationObserver (unlike ResizeObserver above,
+    // this isn't stubbed) should pick this up with no explicit resize/`simulateColumnResize()` call.
+    setMeasureCloneWidth(container, 500);
+    const clone = container.querySelector('.platform-tab-title-measure');
+    const titleSpan = clone?.querySelector('span:last-child');
+    act(() => {
+      if (titleSpan) titleSpan.textContent = 'A much longer resolved title';
+    });
+
+    await waitFor(() =>
+      expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only'),
+    );
+  });
+
+  it('reflects the resolved title into aria-label once collapsed to icon-only, so a screen reader can distinguish tabs whose visible title text is hidden', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1');
+    setPanelWidth(container, 300);
+    setMeasureCloneWidth(container, 500);
+
+    simulateColumnResize();
+
+    expect(container.querySelector('.platform-tab-title')).toHaveAttribute(
+      'aria-label',
+      'Tab title',
+    );
+  });
+
+  it('keeps the generic aria-label while the title text is still visible (not icon-only)', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1');
+    setPanelWidth(container, 900);
+    setMeasureCloneWidth(container, 500);
+
+    simulateColumnResize();
+
+    expect(container.querySelector('.platform-tab-title')).toHaveAttribute('aria-label', 'tab');
+  });
+
+  it('suppresses a tooltip that only repeats the already-visible title once there is room to show the title text', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1', 'Tab title');
+    setPanelWidth(container, 900);
+    setMeasureCloneWidth(container, 500);
+
+    simulateColumnResize();
+
+    expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+    expect(screen.queryByText('Tab title', { selector: 'p' })).not.toBeInTheDocument();
+  });
+
+  it('still shows a tooltip that mirrors the title once collapsed to icon-only, since the title text is hidden there', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1', 'Tab title');
+    setPanelWidth(container, 300);
+    setMeasureCloneWidth(container, 500);
+
+    simulateColumnResize();
+
+    expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
+    expect(screen.queryByText('Tab title', { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('shows a tooltip that conveys more than the title even while the title text is already visible', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1', 'Extra detail beyond the title');
+    setPanelWidth(container, 900);
+    setMeasureCloneWidth(container, 500);
+
+    simulateColumnResize();
+
+    expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+    expect(
+      screen.queryByText('Extra detail beyond the title', { selector: 'p' }),
+    ).toBeInTheDocument();
   });
 });
