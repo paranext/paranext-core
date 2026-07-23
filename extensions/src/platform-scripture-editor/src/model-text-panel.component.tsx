@@ -336,7 +336,7 @@ export function ModelTextPanel({
     );
   }
 
-  // Installing: resource found but not yet installed.
+  // Selecting: resource found but not yet installed.
   if (isSelecting) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
