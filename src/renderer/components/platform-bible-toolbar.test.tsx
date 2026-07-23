@@ -711,9 +711,9 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      // 150px measured overlay width + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      // OS controls area width 150px + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
       expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
-        paddingInlineEnd: '154px',
+        paddingRight: '154px',
       });
     });
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-[calc(138px+1rem)]');

@@ -13,10 +13,12 @@ interface WindowControlsOverlay {
   addEventListener(
     type: 'geometrychange',
     listener: (event: WindowControlsOverlayGeometryChangeEvent) => void,
+    options?: boolean | AddEventListenerOptions,
   ): void;
   removeEventListener(
     type: 'geometrychange',
     listener: (event: WindowControlsOverlayGeometryChangeEvent) => void,
+    options?: boolean | EventListenerOptions,
   ): void;
 }
 

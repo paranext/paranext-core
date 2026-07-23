@@ -6,12 +6,12 @@ type NavigatorWithWindowControlsOverlay = Navigator & {
   windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect };
 };
 
-// titleBarOverlay (main.ts) — and navigator.windowControlsOverlay with it — is Windows-only.
-test.beforeAll(async () => {
-  test.skip(process.platform !== 'win32', 'titleBarOverlay only applies on win32 (see main.ts)');
-});
-
 test.describe('Title bar reserved space', () => {
+  // titleBarOverlay (main.ts) — and navigator.windowControlsOverlay with it — is Windows-only.
+  // Skip must be called at describe/test scope; the equivalent call inside beforeAll is a silent
+  // Playwright no-op, so both tests would otherwise run (and fail) on macOS/Linux.
+  test.skip(process.platform !== 'win32', 'titleBarOverlay only applies on win32 (see main.ts)');
+
   test('profile button stays clear of the OS-reserved title bar area', async ({ mainPage }) => {
     await waitForAppReady(mainPage);
 

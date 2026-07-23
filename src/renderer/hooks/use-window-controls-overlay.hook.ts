@@ -17,10 +17,7 @@ export function useWindowControlsOverlay(): DOMRect | undefined {
   );
 
   useEffect(() => {
-    if (!windowControlsOverlay) {
-      setTitlebarAreaRect(undefined);
-      return undefined;
-    }
+    if (!windowControlsOverlay) return;
 
     const updateRect = () =>
       setTitlebarAreaRect(
@@ -34,5 +31,3 @@ export function useWindowControlsOverlay(): DOMRect | undefined {
 
   return titlebarAreaRect;
 }
-
-export default useWindowControlsOverlay;
