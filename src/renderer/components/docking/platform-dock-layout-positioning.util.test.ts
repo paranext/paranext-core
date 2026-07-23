@@ -1,14 +1,29 @@
 import { FloatPosition } from 'rc-dock';
 import { vi } from 'vitest';
-import { FloatLayout } from '@shared/models/docking-framework.model';
+import { FloatLayout, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import {
   getFloatPosition,
   getGroups,
+  getTabGroup,
   getDockLayoutOuterInset,
   HEADLESS_GROUP,
   TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
+
+/** Minimal WebView {@link TabInfo} fixture for `getTabGroup` tests. */
+function makeWebViewTabInfo(webViewType: string, isClosable?: boolean): TabInfo {
+  const data: Partial<WebViewDefinition> = { id: 'test-id', webViewType };
+  return {
+    id: 'test-id',
+    tabType: TAB_TYPE_WEBVIEW,
+    tabTitle: 'Test',
+    content: undefined,
+    isClosable,
+    data,
+  };
+}
 
 vi.mock('../../../shared/services/logger.service');
 vi.mock('@renderer/services/theme.service-host', () => ({
@@ -44,6 +59,65 @@ describe('Dock Layout Component', () => {
         expect(groups[groupKey].maximizable).toBe(false);
         expect(groups[groupKey].floatable).toBe(false);
       });
+    });
+  });
+
+  describe('getTabGroup()', () => {
+    it('gives the fixed Column 3 resources webviews TAB_GROUP_RESOURCES when pinned (isClosable: false)', () => {
+      [
+        'platformScriptureEditor.bibleTexts',
+        'platformScriptureEditor.commentaries',
+        'legacyCommentManager.commentListPanel',
+        'platformScriptureEditor.scriptureTextGrid',
+      ].forEach((webViewType) => {
+        expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(TAB_GROUP_RESOURCES);
+      });
+    });
+
+    it('gives the fixed Column 1/2 headless webviews HEADLESS_GROUP when pinned (isClosable: false)', () => {
+      ['platformScriptureEditor.modelText', SCRIPTURE_EDITOR_WEBVIEW_TYPE].forEach(
+        (webViewType) => {
+          expect(getTabGroup(makeWebViewTabInfo(webViewType, false))).toBe(HEADLESS_GROUP);
+        },
+      );
+    });
+
+    it('falls back to TAB_GROUP for a fixed-column webViewType when isClosable is not false (e.g. Power mode)', () => {
+      expect(getTabGroup(makeWebViewTabInfo('platformScriptureEditor.bibleTexts', true))).toBe(
+        TAB_GROUP,
+      );
+      expect(getTabGroup(makeWebViewTabInfo('platformScriptureEditor.bibleTexts', undefined))).toBe(
+        TAB_GROUP,
+      );
+    });
+
+    it('falls back to TAB_GROUP for a floating/unrelated webViewType even when isClosable is false', () => {
+      expect(getTabGroup(makeWebViewTabInfo('someExtension.someFloatingDialog', false))).toBe(
+        TAB_GROUP,
+      );
+    });
+
+    it('falls back to TAB_GROUP for non-webview tabs regardless of isClosable', () => {
+      const tabInfo: TabInfo = {
+        id: 'test-id',
+        tabType: 'settingsTab',
+        tabTitle: 'Test',
+        content: undefined,
+        isClosable: false,
+      };
+      expect(getTabGroup(tabInfo)).toBe(TAB_GROUP);
+    });
+
+    it('falls back to TAB_GROUP (does not throw) for a webview tab with isClosable: false but no data', () => {
+      const tabInfo: TabInfo = {
+        id: 'test-id',
+        tabType: TAB_TYPE_WEBVIEW,
+        tabTitle: 'Test',
+        content: undefined,
+        isClosable: false,
+      };
+      expect(() => getTabGroup(tabInfo)).not.toThrow();
+      expect(getTabGroup(tabInfo)).toBe(TAB_GROUP);
     });
   });
 

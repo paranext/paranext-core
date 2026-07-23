@@ -6,7 +6,10 @@ import {
   Layout,
   PanelDirection,
   SavedTabInfo,
+  TabInfo,
+  TAB_TYPE_WEBVIEW,
 } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import cloneDeep from 'lodash/cloneDeep';
 import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
@@ -77,14 +80,54 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
   // Simple mode: lock tabs (no drag-to-reorder, no drag-to-split) and hide the "+" new-tab button.
   // Register `HEADLESS_GROUP` (home + editor columns) and `TAB_GROUP_RESOURCES` (resources column)
-  // so tabs can't be dragged across columns. `TAB_GROUP` itself is kept for any tabs that end up
-  // using the default group (e.g. createRCDockTabFromTabInfo's fallback).
+  // so tabs can't be dragged across columns. `TAB_GROUP` itself is kept as the default group for
+  // floating tabs and any tab not pinned to a fixed column — see `getTabGroup`.
   const simpleConfig: TabGroup = { ...baseConfig, tabLocked: true };
   return {
     [TAB_GROUP]: simpleConfig,
     [HEADLESS_GROUP]: simpleConfig,
     [TAB_GROUP_RESOURCES]: simpleConfig,
   };
+}
+
+/**
+ * WebViewTypes that make up Simple mode's fixed 3-column layout, mapped to the rc-dock group each
+ * is confined to while pinned there. Kept in sync with the webViewTypes hardcoded in
+ * `simple-layout.data.ts` (Columns 1/2) — Column 3 also includes `scriptureTextGrid` (Text
+ * Collection), which isn't part of that static default layout but joins Column 3 at runtime once
+ * enabled.
+ */
+const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
+  'platformScriptureEditor.modelText': HEADLESS_GROUP,
+  [SCRIPTURE_EDITOR_WEBVIEW_TYPE]: HEADLESS_GROUP,
+  'platformScriptureEditor.bibleTexts': TAB_GROUP_RESOURCES,
+  'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
+  'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
+  'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
+};
+
+/**
+ * Determines the rc-dock `group` a tab should use.
+ *
+ * Tabs pinned to Simple mode's fixed 3-column layout (`isClosable === false`, and one of
+ * {@link FIXED_LAYOUT_WEBVIEW_GROUPS}' webViewTypes) get their column's dedicated group, so
+ * rc-dock's own "different groups can't share a panel" drag validation (`onDragOver` in
+ * `rc-dock/es/DockTabs.js`, which rejects a drop when the dragged tab's `group` doesn't match the
+ * target tab's `group`) keeps them from accepting drops from other columns or from floating tabs —
+ * which always use the plain `TAB_GROUP` below.
+ *
+ * Everything else — floating tabs/dialogs, and these same webViewTypes when `isClosable` is `true`
+ * (e.g. opened freely in Power mode, where they aren't confined to a fixed column) — gets the
+ * default `TAB_GROUP`, matching pre-existing behavior.
+ */
+export function getTabGroup(tabInfo: TabInfo): string {
+  if (tabInfo.isClosable !== false || tabInfo.tabType !== TAB_TYPE_WEBVIEW || !tabInfo.data)
+    return TAB_GROUP;
+  // Type assert the webview data in the web view tab (same pattern as
+  // platform-dock-layout-storage.util.ts's getWebViewDefinitionFromTab).
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const { webViewType } = tabInfo.data as WebViewDefinition;
+  return FIXED_LAYOUT_WEBVIEW_GROUPS[webViewType] ?? TAB_GROUP;
 }
 
 /**
