@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useEvent, Spinner } from 'platform-bible-react';
+import { useEvent, Spinner, Progress } from 'platform-bible-react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getNetworkEvent } from '@shared/services/network.service';
 import type { SyncProgressDetail, SyncProgressEvent } from 'paratext-bible-send-receive';
@@ -70,8 +70,9 @@ export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
   useEvent(onSyncProgressEvent, handleSyncProgress);
 
   if (syncComplete) {
+    // role="status" announces the completion transition to screen readers when this block mounts.
     return (
-      <div className="tw:flex tw:flex-col tw:gap-2">
+      <div role="status" className="tw:flex tw:flex-col tw:gap-2">
         <h2 className="tw:text-base tw:font-medium">
           {strings['%firstRun_step_syncProgress_complete_heading%']}
         </h2>
@@ -94,27 +95,36 @@ export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
         <div className="tw:mt-2 tw:flex tw:flex-col tw:gap-1">
           {progressValue !== undefined ? (
             // Determinate: progressText is the current item name (e.g. "GreekNT")
+            <Progress
+              value={Math.round(progressValue * 100)}
+              aria-label={strings['%firstRun_step_syncProgress_heading%']}
+            />
+          ) : (
+            // Indeterminate: no aria-valuenow signals indeterminate per ARIA spec; Spinner is visual.
             <div
               role="progressbar"
               aria-label={strings['%firstRun_step_syncProgress_heading%']}
-              aria-valuenow={Math.round(progressValue * 100)}
               aria-valuemin={0}
               aria-valuemax={100}
-              className="tw:h-2 tw:w-full tw:overflow-hidden tw:rounded-full tw:bg-secondary"
             >
-              <div
-                className="tw:h-full tw:bg-primary tw:transition-all"
-                style={{ width: `${Math.round(progressValue * 100)}%` }}
-              />
+              <Spinner />
             </div>
-          ) : (
-            // Indeterminate: progressText is a complete localized message, show as-is with a spinner
-            <Spinner />
           )}
           <p className="tw:text-xs tw:text-muted-foreground">{progressText}</p>
         </div>
       )}
-      {!progressText && <Spinner />}
+      {!progressText && (
+        // No progress text yet; aria-live="polite" on the outer div isn't wired here by default.
+        // Use the same indeterminate progressbar pattern for consistency.
+        <div
+          role="progressbar"
+          aria-label={strings['%firstRun_step_syncProgress_heading%']}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <Spinner />
+        </div>
+      )}
     </div>
   );
 }
