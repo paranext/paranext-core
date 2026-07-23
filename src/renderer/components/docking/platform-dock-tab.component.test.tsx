@@ -72,22 +72,7 @@ describe('createRCDockTabFromTabInfo closable gating', () => {
     expect(createRCDockTabFromTabInfo(createTabInfo(undefined)).closable).toBe(true);
   });
 
-  it('power mode: closable is true', () => {
-    const result = createRCDockTabFromTabInfo(makeTabInfo(), { isPowerMode: true });
-    expect(result.closable).toBe(true);
-  });
-
-  it('simple mode: closable is false', () => {
-    const result = createRCDockTabFromTabInfo(makeTabInfo(), { isPowerMode: false });
-    expect(result.closable).toBe(false);
-  });
-
-  it('simple mode overrides isClosable: true', () => {
-    const result = createRCDockTabFromTabInfo(createTabInfo(true), { isPowerMode: false });
-    expect(result.closable).toBe(false);
-  });
-
-  it('default (no options): closable is true (power-mode-compatible default)', () => {
+  it('default (no options): closable is true', () => {
     const result = createRCDockTabFromTabInfo(makeTabInfo());
     expect(result.closable).toBe(true);
   });

@@ -14,12 +14,6 @@ import { RCDockTabInfo } from './docking-framework-internal.model';
 export type CreateRCDockTabOptions = {
   /** If true, the returned tab will start flashing when next rendered. Defaults to `false`. */
   shouldFlash?: boolean;
-  /**
-   * Whether the app is in `'power'` interface mode. When `false` (simple mode), tabs are not
-   * closable. Defaults to `true` so callers that don't yet plumb the mode get power-mode-compatible
-   * behavior.
-   */
-  isPowerMode?: boolean;
 };
 
 /**
@@ -33,7 +27,7 @@ export function createRCDockTabFromTabInfo(
   tabInfo: TabInfo,
   options: CreateRCDockTabOptions = {},
 ): RCDockTabInfo {
-  const { shouldFlash = false, isPowerMode = true } = options;
+  const { shouldFlash = false } = options;
   // Update the flash trigger time if we are supposed to bring the tab to the front
   const flashTriggerTime = shouldFlash ? Date.now() : tabInfo.flashTriggerTime;
 
@@ -54,11 +48,11 @@ export function createRCDockTabFromTabInfo(
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,
     group: TAB_GROUP,
-    // In power mode, tabs are closable by default; a WebView can opt out by setting
-    // `isClosable: false` (e.g. views that are part of the default layout and must always remain
-    // open). In simple mode, tabs are never closable (hides the X button and disables rc-dock's
-    // close shortcut).
-    closable: isPowerMode && (tabInfo.isClosable ?? true),
+    // Tabs are closable by default; a WebView can opt out by setting `isClosable: false` (e.g. the
+    // fixed 3-column simple-mode layout's own webviews, which force this per interface mode so
+    // floating dialogs like About/Settings stay closable in simple mode while the fixed columns
+    // don't — see each webview provider's own `isClosable` computation).
+    closable: tabInfo.isClosable ?? true,
   };
 }
 
