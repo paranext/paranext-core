@@ -5,6 +5,14 @@ import { describe, expect, it } from 'vitest';
 const PANEL_TITLE_KEY = '%webView_legacyCommentManager_commentListPanel_title%';
 const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
 
+// The strings backing the Send/Receive edit-block surfaces in the comments panel: the slim
+// "editing paused" notice and the "your change was not saved" error toast. Both must stay defined in
+// every shipped language so a future edit that drops one language fails here.
+const SYNC_BLOCKED_KEYS = [
+  '%webView_legacyCommentManager_syncEditBlocked_notice%',
+  '%webView_legacyCommentManager_error_syncEditBlocked%',
+];
+
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
 };
@@ -54,5 +62,20 @@ describe('legacyCommentManager comment list panel tab title', () => {
     const es = localizedStrings.es[PANEL_TITLE_KEY];
     expect(es.charAt(0)).toMatch(/[A-ZÁÉÍÓÚÜÑ]/);
     expect(es.slice(1)).toBe(es.slice(1).toLowerCase());
+  });
+});
+
+describe('legacyCommentManager sync-blocked strings', () => {
+  // Enforce en/es parity for the two Send/Receive edit-block strings: both languages must define
+  // both keys, so dropping (or renaming) one in a single language fails here rather than silently
+  // shipping a missing or untranslated string.
+  SYNC_BLOCKED_KEYS.forEach((key) => {
+    it(`has an English label for ${key}`, () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it(`has a Spanish label for ${key}`, () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
   });
 });
