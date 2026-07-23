@@ -103,6 +103,14 @@ describe('FirstRunShell', () => {
     expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
+  it('advances to syncProgress without completing when Next is clicked on sync consent', async () => {
+    render(<FirstRunShell entryStep="syncConsent" />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(screen.getByText(/sync progress/i)).toBeInTheDocument();
+  });
+
+
   it('completes when Finish is clicked on the last step', async () => {
     render(<FirstRunShell entryStep="syncProgress" />);
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
