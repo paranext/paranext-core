@@ -206,6 +206,25 @@ describe('completeFirstRun', () => {
     expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
   });
 
+  it('writes firstRunComplete before firstRunSyncSkipped (crash-safe ordering)', async () => {
+    // A crash between the two writes must leave the wizard closed and sync enabled.
+    // If the order were swapped, an aborted session would permanently suppress sync.
+    const callOrder: string[] = [];
+    // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
+    mockSet.mockImplementation(async (key: string) => {
+      callOrder.push(key);
+      return undefined;
+    });
+
+    await completeFirstRun({ syncSkipped: true });
+
+    const completeIdx = callOrder.indexOf('platform.firstRunComplete');
+    const skippedIdx = callOrder.indexOf('platform.firstRunSyncSkipped');
+    expect(completeIdx).toBeGreaterThanOrEqual(0);
+    expect(skippedIdx).toBeGreaterThanOrEqual(0);
+    expect(completeIdx).toBeLessThan(skippedIdx);
+  });
+
   it('still completes first run even when persisting syncSkipped throws', async () => {
     // Make the syncSkipped write fail, but the firstRunComplete write succeed
     // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...

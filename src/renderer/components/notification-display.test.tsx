@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+||||||| parent of 703815c9168 (test(PT-4178): fix flaky notification test and add write-order coverage)
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+=======
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+>>>>>>> 703815c9168 (test(PT-4178): fix flaky notification test and add write-order coverage)
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import '@testing-library/jest-dom';
@@ -85,6 +91,10 @@ function stubMatchMedia() {
 
 describe('NotificationDisplay with real Sonner', () => {
   beforeEach(async () => {
+    // Use fake timers so Sonner's auto-dismiss setTimeout is registered as a fake timer
+    // and can be drained in afterEach before jsdom tears down. shouldAdvanceTime keeps
+    // real wall-clock time advancing so findByRole polling and Promise chains still work.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     vi.resetModules();
     mockCurrentThemeType = 'light';
@@ -104,6 +114,7 @@ describe('NotificationDisplay with real Sonner', () => {
       toast.dismiss();
     });
   });
+
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
     render(<NotificationDisplay />);
