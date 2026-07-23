@@ -106,23 +106,54 @@ body > .dragging-layer.dock-style-resources {
 [data-interface-mode='simple'] {
   .dock-layout {
     gap: 0;
+    // Author feedback: the 3-column layout needs a visible top edge separating it from the main
+    // toolbar above (`getDockLayoutOuterInset` positions this element's own top edge right below
+    // that toolbar), matching the visible column divider and toolbar bottom border below.
+    border-top: 1px solid var(--border);
   }
 
-  // Collapse the divider to a near-invisible 1px, but keep a wide, easy-to-grab resize hit area via
-  // rc-dock's own transform-based hit-area expansion (matches the prototype's approach).
+  // Author feedback: the divider between columns must be a visible, clearly-thicker line than the
+  // 1px `tw:border-b` on each column's TabToolbar (see tab-toolbar.component.tsx) — 2px so it reads
+  // as heavier at a glance.
+  //
+  // The hit area still needs to be much wider than 2px for easy grabbing, but a `transform: scale`
+  // on the divider itself (the previous, invisible-divider approach) would stretch a *visible*
+  // background proportionally too — an 8x scale would render a 16px bar, not a crisp 2px line. So
+  // instead of scaling the whole element, size the hit area directly via flex-basis (actual layout
+  // width, not a visual transform) and paint the thin visible line as a centered `::after` that
+  // doesn't grow with it.
   .dock-divider {
-    flex: 0 0 1px;
+    flex: 0 0 8px;
     background: transparent;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      background: var(--border);
+    }
   }
 
   .dock-hbox > .dock-divider {
-    transform: scaleX(8);
     cursor: ew-resize;
+
+    &::after {
+      inset-block: 0;
+      left: 50%;
+      width: 2px;
+      transform: translateX(-50%);
+    }
   }
 
   .dock-vbox > .dock-divider {
-    transform: scaleY(8);
     cursor: ns-resize;
+
+    &::after {
+      inset-inline: 0;
+      top: 50%;
+      height: 2px;
+      transform: translateY(-50%);
+    }
   }
 
   // Remove padding from all chrome elements.
