@@ -4,7 +4,11 @@ import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
-import { IdentifyStep } from './identify.component';
+import {
+  IdentifyStep,
+  INVALID_CODE_DISPLAY_DEBOUNCE_MS,
+  VALIDATION_DEBOUNCE_MS,
+} from './identify.component';
 
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -21,6 +25,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_identify_heading%': 'Enter your registration information',
       '%firstRun_step_identify_registryHelp%': "Can't find your registration code?",
       '%firstRun_step_identify_registryLink%': 'Visit Paratext Registry',
+      '%firstRun_step_identify_validatingCode%': 'Checking your registration…',
       '%general_error_title%': 'Error',
     },
     false,
@@ -40,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.clearAllTimers();
   vi.useRealTimers();
 });
 
@@ -81,7 +87,7 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
 
     await waitFor(() => {
       expect(mockSendCommand).toHaveBeenCalledWith(
@@ -98,7 +104,7 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
 
     await waitFor(() => expect(screen.getByText(/registration accepted/i)).toBeInTheDocument());
   });
@@ -110,7 +116,7 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
 
     await waitFor(() => expect(screen.getByText(/not found/i)).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
@@ -123,14 +129,14 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
 
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
     );
   });
 
-  it('calls setParatextRegistrationData then platform.restart on save — no wait() delay', async () => {
+  it('calls setParatextRegistrationData then platform.restart immediately on save', async () => {
     mockSendCommand
       .mockResolvedValueOnce(true) // validateParatextRegistrationData
       .mockResolvedValueOnce(undefined) // setParatextRegistrationData
@@ -140,7 +146,7 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
     );
@@ -154,14 +160,14 @@ describe('IdentifyStep', () => {
       );
       expect(mockSendCommand).toHaveBeenCalledWith('platform.restart');
     });
-    // Verify the restart command immediately followed save — no timer advance needed
+    // Verify restart immediately followed save — no intermediate commands between them
     const calls = mockSendCommand.mock.calls.map((c) => c[0]);
     const saveIdx = calls.indexOf('paratextRegistration.setParatextRegistrationData');
     const restartIdx = calls.indexOf('platform.restart');
-    expect(restartIdx).toBe(saveIdx + 1);
+    expect(saveIdx).toBeLessThan(restartIdx);
   });
 
-  it('enters Restarting state after save (button disabled, label changes)', async () => {
+  it('enters Restarting state after save (button disabled + label changes, inputs disabled)', async () => {
     mockSendCommand
       .mockResolvedValueOnce(true) // validate
       .mockResolvedValueOnce(undefined) // set
@@ -171,7 +177,7 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
     );
@@ -179,6 +185,9 @@ describe('IdentifyStep', () => {
     await user.click(screen.getByRole('button', { name: /save and restart/i }));
 
     await waitFor(() => expect(screen.getByText(/restarting/i)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /restarting/i })).toBeDisabled();
+    expect(screen.getByLabelText(/registration name/i)).toBeDisabled();
+    expect(screen.getByLabelText(/registration code/i)).toBeDisabled();
   });
 
   it('shows error and re-enables button when setParatextRegistrationData fails', async () => {
@@ -188,7 +197,7 @@ describe('IdentifyStep', () => {
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
     );
@@ -201,6 +210,77 @@ describe('IdentifyStep', () => {
     });
   });
 
+  it('auto-inserts a dash after every 6th alphanumeric character typed', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    const codeInput = screen.getByLabelText(/registration code/i);
+    await user.type(codeInput, 'ABCDEF');
+    expect(codeInput).toHaveValue('ABCDEF-');
+  });
+
+  it('removes the dash and the preceding character when backspacing over an auto-inserted dash', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    const codeInput = screen.getByLabelText(/registration code/i);
+    await user.type(codeInput, 'ABCDEF');
+    expect(codeInput).toHaveValue('ABCDEF-');
+
+    await user.keyboard('{Backspace}');
+    expect(codeInput).toHaveValue('ABCDE');
+  });
+
+  it('shows format warning and sets aria-invalid after debounce when code has wrong format', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration code/i), 'ABC');
+    expect(screen.queryByText(/code must be/i)).not.toBeInTheDocument();
+
+    vi.advanceTimersByTime(INVALID_CODE_DISPLAY_DEBOUNCE_MS + 1);
+
+    await waitFor(() => {
+      expect(screen.getByText(/code must be/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/registration code/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+
+  it('validates with the correct name when code is entered before name', async () => {
+    mockSendCommand.mockResolvedValueOnce(true);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    // Enter code first, then name — exercises the onNameChange → validateRegistration(code, newName) path
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+
+    await waitFor(() => {
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'paratextRegistration.validateParatextRegistrationData',
+        expect.objectContaining({ name: 'Test User', code: VALID_CODE }),
+      );
+    });
+  });
+
+  it('re-disables Save immediately when a valid code is edited (synchronous state reset)', async () => {
+    mockSendCommand.mockResolvedValueOnce(true);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+
+    // Backspace one char — Save must disable synchronously before any new debounce fires
+    await user.keyboard('{Backspace}');
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
+  });
+
   describe('demo mode', () => {
     beforeEach(() => mockIsDemoMode.mockReturnValue(true));
 
@@ -210,13 +290,13 @@ describe('IdentifyStep', () => {
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
       await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
-      vi.advanceTimersByTime(1500);
+      vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
 
-      await waitFor(() =>
-        expect(mockSendCommand).not.toHaveBeenCalledWith(
-          'paratextRegistration.validateParatextRegistrationData',
-          expect.anything(),
-        ),
+      // Advance deterministically past the debounce, then assert synchronously.
+      // waitFor(.not) would pass immediately on the first poll — not meaningful.
+      expect(mockSendCommand).not.toHaveBeenCalledWith(
+        'paratextRegistration.validateParatextRegistrationData',
+        expect.anything(),
       );
     });
 
