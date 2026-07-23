@@ -83,7 +83,7 @@
       "%paratextRegistration_app_startup_description%": "Welcome to {%product_name%}! To get started, login with your registration information.",
       "%paratextRegistration_button_change%": "Change",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
-      "%paratextRegistration_button_restarting%": "Restarting...",
+      "%paratextRegistration_button_restarting%": "Restarting…",
       "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
       "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
