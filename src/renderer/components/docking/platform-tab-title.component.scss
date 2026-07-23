@@ -4,7 +4,7 @@
   position: relative; // containing block for .platform-tab-title-measure below
   display: flex;
   align-items: center;
-  gap: 0.25rem; // tw:gap-1
+  gap: 0.375rem; // tw:gap-1.5
 }
 
 // Always-rendered, invisible clone of this tab's icon+title at full (non-collapsed) size, used to
@@ -22,7 +22,7 @@
   pointer-events: none;
   display: flex;
   align-items: center;
-  gap: 0.25rem; // tw:gap-1, matching .platform-tab-title above
+  gap: 0.375rem; // tw:gap-1.5, matching .platform-tab-title above
   white-space: nowrap;
 }
 
