@@ -15,38 +15,17 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 
 describe('SyncConsentStep', () => {
   it('renders the sync consent heading localization key', () => {
-    render(
-      <SyncConsentStep
-        onNext={vi.fn()}
-        onBack={vi.fn()}
-        onSkip={vi.fn()}
-        setCanProceed={vi.fn()}
-      />,
-    );
+    render(<SyncConsentStep />);
     expect(screen.getByRole('heading')).toHaveTextContent('%firstRun_step_syncConsent_heading%');
   });
 
   it('renders the sync consent body localization key', () => {
-    render(
-      <SyncConsentStep
-        onNext={vi.fn()}
-        onBack={vi.fn()}
-        onSkip={vi.fn()}
-        setCanProceed={vi.fn()}
-      />,
-    );
+    render(<SyncConsentStep />);
     expect(screen.getByText('%firstRun_step_syncConsent_body%')).toBeInTheDocument();
   });
 
   it('does not render any buttons (shell owns the footer)', () => {
-    render(
-      <SyncConsentStep
-        onNext={vi.fn()}
-        onBack={vi.fn()}
-        onSkip={vi.fn()}
-        setCanProceed={vi.fn()}
-      />,
-    );
+    render(<SyncConsentStep />);
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });
