@@ -724,9 +724,13 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     // measurement stacks on top of the 16px, over-reserving space.
     expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:border-0');
     expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-0');
-    // The wrapper carries the full border itself, so the outline encloses the full toolbar-plus-
-    // reserved-space region on every side instead of stopping short at Toolbar's narrower edge.
-    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveClass('tw:border');
+    // The wrapper carries an equivalent border itself (as a layout-neutral box-shadow, not an
+    // actual border — see the toolbarReservedSpaceStyle comment in the component), so the outline
+    // encloses the full toolbar-plus-reserved-space region on every side instead of stopping short
+    // at Toolbar's narrower edge.
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+      boxShadow: 'inset 0 0 0 1px var(--border)',
+    });
   });
 
   it('applies no inline override while the overlay geometry is not yet known, falling back to the static class', async () => {
@@ -741,7 +745,6 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-[calc(138px+1rem)]');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
-    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveClass('tw:border');
   });
 
   it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
@@ -757,6 +760,5 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:ps-[85px]');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
-    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveClass('tw:border');
   });
 });

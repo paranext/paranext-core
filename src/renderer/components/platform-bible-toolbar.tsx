@@ -236,6 +236,11 @@ export function PlatformBibleToolbar() {
           // drag area (shouldUseAsAppDragArea) doesn't extend into this wrapper, so this strip
           // needs its own drag region or the window can no longer be dragged from here.
           WebkitAppRegion: 'drag',
+          // An inset box-shadow, not a border: this div has no explicit height, so a real border
+          // would add to its layout height, throwing off WorkspaceUpdatingOverlay's hardcoded `top`
+          // whenever this branch is active. A box-shadow paints in the same place without occupying
+          // any layout space. var(--border) matches the color Toolbar's own tw:border resolves to.
+          boxShadow: 'inset 0 0 0 1px var(--border)',
         }
       : undefined;
 
@@ -321,18 +326,7 @@ export function PlatformBibleToolbar() {
   useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
   return (
-    <div
-      data-testid="toolbar-reserved-space-wrapper"
-      // Takes over Toolbar's own border entirely when the wrapper is reserving the trailing space
-      // (see the className comment below) so the outline encloses the full toolbar-plus-reserved-
-      // space region on every side, matching how it looked when the padding lived inside Toolbar's
-      // own bordered box. Suppressing only the end side left the top/bottom border stopping short
-      // at Toolbar's narrower edge instead of continuing across the reserved strip. Plain tw:border
-      // (no color suffix) resolves through the same default border-color mechanism as Toolbar's own
-      // tw:border, so the two render identically.
-      className={cn(toolbarReservedSpaceStyle && 'tw:border')}
-      style={toolbarReservedSpaceStyle}
-    >
+    <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
         menuData={menuData}
         onOpenChange={(isOpen: boolean) => {
@@ -345,11 +339,10 @@ export function PlatformBibleToolbar() {
           // Only reserve the static guess when there's no live measurement to reserve it above instead.
           !toolbarReservedSpaceStyle &&
             getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
-          // Toolbar's own outer container has an unconditional border and tw:px-4 (16px inline
-          // padding both sides). When the wrapper above reserves the trailing space instead, drop
-          // Toolbar's own border entirely (the wrapper carries it — see its className above) and
-          // Toolbar's own end-side padding, which would otherwise stack on top of the wrapper's live
-          // measurement, over-reserving space by that same 16px.
+          // Toolbar's own outer container has an unconditional border and inline padding on both sides.
+          // When the wrapper above reserves the trailing space instead, drop Toolbar's own border entirely
+          // (the wrapper carries an equivalent box-shadow — see its style above) and Toolbar's own end-side
+          // padding, which would otherwise stack with the wrapper's live measurement and over-reserve space.
           toolbarReservedSpaceStyle && 'tw:border-0 tw:pe-0',
         )}
         menubarVariant="muted"
