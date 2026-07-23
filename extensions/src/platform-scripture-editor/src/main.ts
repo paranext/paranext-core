@@ -55,6 +55,8 @@ const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+/** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
+const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
 // #region Editor Selection Tracking
 
@@ -958,12 +960,20 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
+    // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
+    // LocalizeKey passed as `title`, so that half needs no resolution — but `tooltip` is a plain
+    // string, never auto-resolved, so it must already be localized text by the time it's set. Doing
+    // both here means the tab shows "Text Collection" and a working tooltip from its very first
+    // render, instead of depending on this tab's own (possibly backgrounded, and therefore
+    // unreliably-timed) web view to push the resolved strings back out via updateWebViewDefinition
+    // after mount.
+    const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+      localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    });
     return {
       ...savedWebView,
-      // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps
-      // this in sync). The initial empty title avoids flashing a label before the web view runs.
-      title: '',
-      tooltip: '%webView_scriptureTextGrid_title_multiple%',
+      title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+      tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
       // Part of the default Simple-mode layout and must always remain open, so the tab is
       // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
       // so this covers both close paths.
