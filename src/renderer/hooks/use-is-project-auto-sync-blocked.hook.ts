@@ -4,11 +4,6 @@ import {
 } from '@renderer/services/auto-sync-blocking-store';
 import { useCallback, useSyncExternalStore } from 'react';
 
-/** Subscribe function for {@link useSyncExternalStore} — module-level so its identity is stable. */
-function subscribe(onStoreChange: () => void): () => void {
-  return subscribeToAutoSyncBlocking(onStoreChange);
-}
-
 /**
  * Returns whether the given project's edits are currently blocked by an automatic (scheduled or
  * session) Send/Receive (PT-4214 Stage U), updating reactively as the auto-sync-blocking store's
@@ -21,7 +16,9 @@ function subscribe(onStoreChange: () => void): () => void {
  */
 export function useIsProjectAutoSyncBlocked(projectId: string | undefined): boolean {
   const getSnapshot = useCallback(() => isProjectBlocked(projectId), [projectId]);
-  return useSyncExternalStore(subscribe, getSnapshot);
+  // `subscribeToAutoSyncBlocking` already matches the `useSyncExternalStore` subscribe signature and
+  // is a stable module-level reference, so it can be passed directly (no wrapper needed).
+  return useSyncExternalStore(subscribeToAutoSyncBlocking, getSnapshot);
 }
 
 export default useIsProjectAutoSyncBlocked;

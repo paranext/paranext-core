@@ -209,12 +209,13 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
                   groupLabel={settingsGroup.label}
                   groupDescription={settingsGroup.description}
                   className="project-or-settings-list"
+                  disabled={isProjectSyncBlocked}
                 />
               ))
             : [],
       );
     },
-    [filteredAndMatchedProjectSettingsContributions, localizedStrings],
+    [filteredAndMatchedProjectSettingsContributions, localizedStrings, isProjectSyncBlocked],
   );
 
   const showZeroResultsState = useMemo(() => {
@@ -242,16 +243,21 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     selectedSidebarItem,
   ]);
 
+  // Single blocked notice for the tab's current project, reused in both render branches below so the
+  // two copies can't drift (PT-4214). Falsy (renders nothing) when the project isn't blocked or for
+  // general/user settings.
+  const syncBlockedNotice = isProjectSyncBlocked && (
+    <div role="status" className="sync-blocked-notice">
+      {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
+    </div>
+  );
+
   if (projectIdToLimitSettings) {
     return (
       <div className="project-settings-tab">
         {filteredProjectSettingsContributions ? (
           <>
-            {isProjectSyncBlocked && (
-              <div role="status" className="sync-blocked-notice">
-                {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
-              </div>
-            )}
+            {syncBlockedNotice}
             {renderProjectSettingsList(projectIdToLimitSettings)}
           </>
         ) : (
@@ -302,11 +308,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId ? (
               <>
-                {isProjectSyncBlocked && (
-                  <div role="status" className="sync-blocked-notice">
-                    {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
-                  </div>
-                )}
+                {syncBlockedNotice}
                 {renderProjectSettingsList(selectedSidebarItem.projectId)}
               </>
             ) : (

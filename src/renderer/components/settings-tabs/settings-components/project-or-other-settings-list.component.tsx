@@ -1,7 +1,6 @@
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
 import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
-import { useIsProjectAutoSyncBlocked } from '@renderer/hooks/use-is-project-auto-sync-blocked.hook';
 import { OtherSetting } from './other-setting.component';
 import './project-or-other-settings-list.component.scss';
 import { ProjectSetting } from './project-setting.component';
@@ -19,6 +18,13 @@ type ProjectOrOtherSettingsListProps = {
   groupDescription?: string;
   /** Additional css classes to help with unique styling of the ProjectOrOtherSettingsList */
   className?: string;
+  /**
+   * When true, each project setting's editor is rendered read-only. Only meaningful for project
+   * settings (projectId defined). Computed once by the parent SettingsTab and passed down, so a
+   * project's several setting groups don't each subscribe to the auto-sync-blocking store
+   * (PT-4214).
+   */
+  disabled?: boolean;
 };
 
 /**
@@ -31,14 +37,12 @@ export function ProjectOrOtherSettingsList({
   groupLabel,
   groupDescription,
   className,
+  disabled = false,
 }: ProjectOrOtherSettingsListProps) {
-  // Only project settings (projectId defined) can be edit-blocked; user/general settings never are
-  // (the hook treats an undefined project id as never blocked). The blocked NOTICE itself is no
-  // longer rendered here — a project can have several of these lists (one per settings group), which
-  // used to stack one identical banner per group. It now renders once at the settings-tab level
-  // (SettingsTab, using the same hook with the tab's projectId), above all of a project's groups
-  // (PT-4214). This component keeps only the per-editor `disabled` wiring below.
-  const isSyncBlocked = useIsProjectAutoSyncBlocked(projectId);
+  // Only project settings (projectId defined) can be edit-blocked. `disabled` is computed ONCE by
+  // the parent SettingsTab (which also renders the single blocked notice above all of a project's
+  // groups) and passed down, so a project's several setting groups don't each subscribe to the
+  // auto-sync-blocking store (PT-4214). This component just forwards it to each project setting.
 
   if (Object.entries(settingProperties).length === 0) return undefined;
 
@@ -65,7 +69,7 @@ export function ProjectOrOtherSettingsList({
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 defaultSetting={property.default as ProjectSettingValues}
                 className="card-content"
-                disabled={isSyncBlocked}
+                disabled={disabled}
               />
             ) : (
               <OtherSetting

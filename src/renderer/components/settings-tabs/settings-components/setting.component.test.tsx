@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Setting } from './setting.component';
 
 // Setting pulls in useData (only for the UI-language-selector fallback, unused by the string/
@@ -13,15 +13,29 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [{}]),
 }));
 
+// Props shared by every case below; only settingKey/setting/label (and `disabled`) differ per test,
+// so each spreads this and passes just those (same idea as the renderPanel helper in
+// comment-list.component.test.tsx). Kept as a shared spread rather than a wrapper fn because
+// Setting's project/user union props make a single-typed render helper awkward, and spreading at
+// each call site keeps the inline settingKey/setting that discriminates the union. Mocks are cleared
+// between tests so the shared no-op fns can't leak call state.
+const baseProps = {
+  setSetting: vi.fn(),
+  isLoading: false,
+  validateProjectSetting: vi.fn(),
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe('Setting disabled forwarding (PT-4214)', () => {
   it('forwards disabled to the rendered Input for a string setting', () => {
     render(
       <Setting
+        {...baseProps}
         settingKey="platform.language"
         setting="English"
-        setSetting={vi.fn()}
-        isLoading={false}
-        validateProjectSetting={vi.fn()}
         label="Language"
         disabled
       />,
@@ -31,29 +45,14 @@ describe('Setting disabled forwarding (PT-4214)', () => {
 
   it('leaves the Input enabled when disabled is not passed for a string setting', () => {
     render(
-      <Setting
-        settingKey="platform.language"
-        setting="English"
-        setSetting={vi.fn()}
-        isLoading={false}
-        validateProjectSetting={vi.fn()}
-        label="Language"
-      />,
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
     );
     expect(screen.getByRole('textbox')).not.toBeDisabled();
   });
 
   it('forwards disabled to the rendered Switch for a boolean setting', () => {
     render(
-      <Setting
-        settingKey="platform.isEditable"
-        setting
-        setSetting={vi.fn()}
-        isLoading={false}
-        validateProjectSetting={vi.fn()}
-        label="Editable"
-        disabled
-      />,
+      <Setting {...baseProps} settingKey="platform.isEditable" setting label="Editable" disabled />,
     );
     expect(screen.getByRole('switch')).toBeDisabled();
   });
@@ -61,11 +60,9 @@ describe('Setting disabled forwarding (PT-4214)', () => {
   it('leaves the Switch enabled when disabled is false for a boolean setting', () => {
     render(
       <Setting
+        {...baseProps}
         settingKey="platform.isEditable"
         setting
-        setSetting={vi.fn()}
-        isLoading={false}
-        validateProjectSetting={vi.fn()}
         label="Editable"
         disabled={false}
       />,
@@ -83,11 +80,9 @@ describe('Setting disabled forwarding (PT-4214)', () => {
   it('forwards disabled to the JSON-editor Input for an object setting', () => {
     render(
       <Setting
+        {...baseProps}
         settingKey="platformScripture.modelTexts"
         setting={modelTextsValue}
-        setSetting={vi.fn()}
-        isLoading={false}
-        validateProjectSetting={vi.fn()}
         label="Model texts"
         disabled
       />,
@@ -98,11 +93,9 @@ describe('Setting disabled forwarding (PT-4214)', () => {
   it('leaves the JSON-editor Input enabled when disabled is not passed for an object setting', () => {
     render(
       <Setting
+        {...baseProps}
         settingKey="platformScripture.modelTexts"
         setting={modelTextsValue}
-        setSetting={vi.fn()}
-        isLoading={false}
-        validateProjectSetting={vi.fn()}
         label="Model texts"
       />,
     );

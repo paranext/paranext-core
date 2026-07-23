@@ -80,8 +80,15 @@ type ProjectSettingsControls = {
 /** Values of SettingTypes */
 export type OtherSettingValues = SettingTypes[keyof SettingTypes];
 
-/** Props for the UserSetting component */
-export type OtherSettingProps = BaseSettingProps<SettingNames, OtherSettingValues>;
+/**
+ * Props for the UserSetting component. `disabled` is omitted from `BaseSettingProps`: only project
+ * settings go read-only during an automatic Send/Receive (PT-4214), and `OtherSetting` does not
+ * forward `disabled` — so the type must not advertise a capability the component silently drops.
+ */
+export type OtherSettingProps = Omit<
+  BaseSettingProps<SettingNames, OtherSettingValues>,
+  'disabled'
+>;
 
 /** Values from the useSetting hook to manage the setting */
 type OtherSettingsControls = {
@@ -108,7 +115,10 @@ type CombinedSettingProps =
       never
     >
   | SettingProps<
-      Omit<OtherSettingProps, 'defaultSetting'>,
+      // `disabled` is re-added here (it is omitted from the public `OtherSettingProps` so the
+      // OtherSetting wrapper doesn't advertise a prop it drops) because the shared `Setting`
+      // renderer reads `disabled` uniformly for both variants; only ProjectSetting ever passes it.
+      Omit<OtherSettingProps, 'defaultSetting'> & { disabled?: boolean },
       OtherSettingsControls,
       never,
       // Necessary for flexibility in handleChangeSetting, couldn't use unknown

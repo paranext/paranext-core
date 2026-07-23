@@ -542,8 +542,13 @@ global.webViewComponent = function CommentListWebView({
   // disable every comment write affordance by forcing its capability gate to `false`.
   // platform-bible-react's CommentList exposes no `disabled`/`readOnly` prop; these per-capability
   // callbacks ARE its existing mechanism for hiding/disabling the reply box, assign, edit/delete, and
-  // conflict-resolve, so gating them here is the real disable path (not a cosmetic no-op). The write
-  // handlers above additionally catch the backend write-gate rejection as defense-in-depth. The
+  // thread-resolve, so gating them here is the real disable path (not a cosmetic no-op). NOTE: the
+  // verse-text conflict-resolution card (the `conflictResolution` prop / `useConflictResolution`,
+  // whose Accept/Reject/Merge controls derive from an ungated `getOptions` read, not
+  // `canUserResolveThreadCallback`) is NOT gated by these callbacks — during a block those controls
+  // stay live and rely on the backend `(SR_EDIT_BLOCKED)` rejection surfaced as the shared "editing
+  // paused" notice (click-then-paused, no data harm). The write handlers above additionally catch
+  // that rejection as defense-in-depth. The
   // deny-while-blocked / pass-through-when-not decision itself lives in
   // gateCommentWriteCapabilities (unit tested in comment-list-capability-gating.util.test.ts); this
   // component only memoizes the result so unrelated re-renders don't churn the props CommentList

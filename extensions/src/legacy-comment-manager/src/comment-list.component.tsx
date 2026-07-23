@@ -255,65 +255,71 @@ export function CommentListPanel({
 
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
-      {/* Slim, non-covering notice shown while this project's automatic Send/Receive is blocking
-          edits. Stays above the sticky toolbar so filtering/reading comments remains fully usable;
-          only the write affordances are disabled (by the web view's gated capability callbacks). */}
-      {isSyncBlocked && (
-        <div
-          role="status"
-          className="tw:shrink-0 tw:border-b tw:border-border tw:bg-muted tw:px-4 tw:py-1.5 tw:text-sm tw:font-medium"
-        >
-          {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
+      {/* Sticky header: the editing-paused notice (when blocking) and the filter toolbar both stay
+          pinned to the top of whichever ancestor scrolls (PT-4070), so neither scrolls out of view
+          as the comments list scrolls. Previously only the toolbar was sticky, so the notice
+          scrolled away once the list was scrolled down — unlike the Scripture editor's fixed
+          banner. Keeping them in one sticky container pins both together. */}
+      <div className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0">
+        {/* Slim, non-covering notice shown while this project's automatic Send/Receive is blocking
+            edits. Only the write affordances are disabled (by the web view's gated capability
+            callbacks); filtering/reading comments stays fully usable. */}
+        {isSyncBlocked && (
+          <div
+            role="status"
+            className="tw:border-b tw:border-border tw:bg-muted tw:px-4 tw:py-1.5 tw:text-sm tw:font-medium"
+          >
+            {localizedStrings[SYNC_BLOCKED_NOTICE_KEY]}
+          </div>
+        )}
+        {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Rendered regardless
+            of the loading state: it must stay mounted across filter changes (each of which briefly
+            flips `isLoading` true while the query resubscribes), or the control the user is
+            interacting with would unmount from under them — the strobe PT-4070 exists to prevent. */}
+        <div className="tw:border-b tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
+          <FilterDropdown
+            value={filters.resolved}
+            labelKeys={resolvedFilterToLabelKey}
+            isValue={isResolvedFilter}
+            onChange={(resolved) => onFiltersChange({ ...filters, resolved })}
+            localizedStrings={localizedStrings}
+            ariaLabel={localizedStrings['%comment_filter_aria_resolved%']}
+          />
+          <FilterDropdown
+            value={filters.read}
+            labelKeys={readFilterToLabelKey}
+            isValue={isReadFilter}
+            onChange={(read) => onFiltersChange({ ...filters, read })}
+            localizedStrings={localizedStrings}
+            ariaLabel={localizedStrings['%comment_filter_aria_read%']}
+          />
+          <FilterDropdown
+            value={filters.type}
+            labelKeys={typeFilterToLabelKey}
+            isValue={isTypeFilter}
+            onChange={(type) => onFiltersChange({ ...filters, type })}
+            localizedStrings={localizedStrings}
+            ariaLabel={localizedStrings['%comment_filter_aria_type%']}
+          />
+          <FilterDropdown
+            value={filters.assignment}
+            labelKeys={assignmentFilterToLabelKey}
+            isValue={isAssignmentFilter}
+            onChange={(assignment) => onFiltersChange({ ...filters, assignment })}
+            localizedStrings={localizedStrings}
+            ariaLabel={localizedStrings['%comment_filter_aria_assignment%']}
+          />
+          <FilterDropdown
+            value={scopeFilter}
+            labelKeys={scopeFilterToLabelKey}
+            isValue={isScopeFilter}
+            onChange={onScopeFilterChange}
+            localizedStrings={localizedStrings}
+            ariaLabel={localizedStrings['%comment_filter_aria_scope%']}
+            hiddenValues={canScopeToCurrentChapter ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
+            testId="comment-scope-filter"
+          />
         </div>
-      )}
-      {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Sticky so it stays
-          pinned to the top of whichever ancestor scrolls (PT-4070). Rendered regardless of the
-          loading state: it must stay mounted across filter changes (each of which briefly flips
-          `isLoading` true while the query resubscribes), or the control the user is interacting with
-          would unmount from under them — the exact strobe PT-4070 exists to prevent. */}
-      <div className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0 tw:border-b tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
-        <FilterDropdown
-          value={filters.resolved}
-          labelKeys={resolvedFilterToLabelKey}
-          isValue={isResolvedFilter}
-          onChange={(resolved) => onFiltersChange({ ...filters, resolved })}
-          localizedStrings={localizedStrings}
-          ariaLabel={localizedStrings['%comment_filter_aria_resolved%']}
-        />
-        <FilterDropdown
-          value={filters.read}
-          labelKeys={readFilterToLabelKey}
-          isValue={isReadFilter}
-          onChange={(read) => onFiltersChange({ ...filters, read })}
-          localizedStrings={localizedStrings}
-          ariaLabel={localizedStrings['%comment_filter_aria_read%']}
-        />
-        <FilterDropdown
-          value={filters.type}
-          labelKeys={typeFilterToLabelKey}
-          isValue={isTypeFilter}
-          onChange={(type) => onFiltersChange({ ...filters, type })}
-          localizedStrings={localizedStrings}
-          ariaLabel={localizedStrings['%comment_filter_aria_type%']}
-        />
-        <FilterDropdown
-          value={filters.assignment}
-          labelKeys={assignmentFilterToLabelKey}
-          isValue={isAssignmentFilter}
-          onChange={(assignment) => onFiltersChange({ ...filters, assignment })}
-          localizedStrings={localizedStrings}
-          ariaLabel={localizedStrings['%comment_filter_aria_assignment%']}
-        />
-        <FilterDropdown
-          value={scopeFilter}
-          labelKeys={scopeFilterToLabelKey}
-          isValue={isScopeFilter}
-          onChange={onScopeFilterChange}
-          localizedStrings={localizedStrings}
-          ariaLabel={localizedStrings['%comment_filter_aria_scope%']}
-          hiddenValues={canScopeToCurrentChapter ? undefined : [SCOPE_FILTER_CURRENT_CHAPTER]}
-          testId="comment-scope-filter"
-        />
       </div>
 
       {/* Comments list (or skeletons while loading / empty state). Only this region swaps on load,
