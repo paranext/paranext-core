@@ -8,6 +8,7 @@ const KEYS: LocalizeKey[] = [
 ];
 
 /** Sync consent wizard step — body content only; the shell owns footer buttons (Next/Skip). */
+// Shell owns all navigation — this step renders static body content only.
 export function SyncConsentStep(_props: FirstRunStepProps) {
   const [strings] = useLocalizedStrings(KEYS);
   return (
