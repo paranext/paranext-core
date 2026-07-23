@@ -276,7 +276,7 @@
     "url-loader": "^4.1.1",
     "vite": "^6.4.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.2.4",
+    "vitest": "^3.2.7",
     "webpack": "^5.105.2",
     "webpack-bundle-analyzer": "^4.10.2",
     "webpack-cli": "^5.1.4",
@@ -296,6 +296,12 @@
     "@vitest/expect": "^3.2.4",
     "eslint-config-airbnb": {
       "eslint-plugin-react-hooks": "$eslint-plugin-react-hooks"
+    },
+    "@modelcontextprotocol/sdk": {
+      "@hono/node-server": "^2.0.5"
+    },
+    "sockjs": {
+      "uuid": "^11.1.1"
     }
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
