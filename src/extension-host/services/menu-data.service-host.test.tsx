@@ -1,5 +1,13 @@
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
 import { PlatformMenus, ReferencedItem, WebViewMenus } from 'platform-bible-utils';
+import { vi } from 'vitest';
+
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: {
+    get: vi.fn(async () => 'power'),
+    subscribe: vi.fn(async () => async () => true),
+  },
+}));
 
 const EXTENSION_NAME: ReferencedItem = 'videoExtension.playEditWebView';
 const MOCK_MENU_DATA: PlatformMenus = {
@@ -214,4 +222,147 @@ test('Setting unlocalized main menu data throws', async () => {
   await expect(menuDataProviderEngine.setUnlocalizedMainMenu()).rejects.toThrow(
     'setUnlocalizedMainMenu disabled',
   );
+});
+
+describe('Simple-mode menu item filtering', () => {
+  const MOCK_MENU_DATA_WITH_HIDDEN_ITEM: PlatformMenus = {
+    ...MOCK_MENU_DATA,
+    mainMenu: {
+      ...MOCK_MENU_DATA.mainMenu,
+      items: [
+        ...MOCK_MENU_DATA.mainMenu.items,
+        {
+          label: '%test_hiddenMainMenuItem%',
+          localizeNotes: 'Test item hidden in simple mode',
+          group: 'paratext.sendReceive',
+          order: 99,
+          command: 'test.hiddenMainMenuCommand',
+          isHiddenInSimple: true,
+        },
+      ],
+    },
+    webViewMenus: (() => {
+      // Indexing MOCK_MENU_DATA.webViewMenus directly with EXTENSION_NAME doesn't type-check
+      // (same TS quirk noted in the file's existing 'Get web view menu data' test above) — go
+      // through a WebViewMenus-typed local first.
+      const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
+      return {
+        [EXTENSION_NAME]: {
+          ...webViewMenus[EXTENSION_NAME],
+          topMenu: {
+            ...webViewMenus[EXTENSION_NAME].topMenu,
+            items: [
+              ...(webViewMenus[EXTENSION_NAME].topMenu?.items ?? []),
+              {
+                label: '%test_hiddenWebViewMenuItem%',
+                localizeNotes: 'Test item hidden in simple mode',
+                group: 'videoExtension.videoTop',
+                order: 99,
+                command: 'test.hiddenWebViewMenuCommand',
+                isHiddenInSimple: true,
+              },
+            ],
+          },
+        },
+      };
+    })(),
+  };
+
+  test('getMainMenu excludes isHiddenInSimple items when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+    // Unflagged items are unaffected
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'paratext.sendReceiveProjects',
+      ),
+    ).toBe(true);
+  });
+
+  test('getMainMenu includes isHiddenInSimple items when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(true);
+  });
+
+  test('getWebViewMenu excludes isHiddenInSimple items from topMenu when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewMenuCommand',
+      ),
+    ).toBe(false);
+    expect(
+      result.topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'videoExtension.playVideo',
+      ),
+    ).toBe(true);
+  });
+
+  test('menu data updates live when platform.interfaceMode changes after subscribe resolves', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    let subscribedCallback: ((newMode: string) => void) | undefined;
+    vi.mocked(settingsService.subscribe).mockImplementation(async (_key, callback) => {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      subscribedCallback = callback as (newMode: string) => void;
+      return async () => true;
+    });
+
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const beforeChange = await engine.getMainMenu();
+    expect(
+      beforeChange.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(true);
+
+    expect(subscribedCallback).toBeDefined();
+    if (!subscribedCallback) throw new Error('subscribedCallback was not set by mock');
+    subscribedCallback('simple');
+
+    const afterChange = await engine.getMainMenu();
+    expect(
+      afterChange.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+  });
 });
