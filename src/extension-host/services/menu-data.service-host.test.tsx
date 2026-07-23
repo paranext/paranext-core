@@ -245,6 +245,7 @@ describe('Simple-mode menu item filtering', () => {
       // Indexing MOCK_MENU_DATA.webViewMenus directly with EXTENSION_NAME doesn't type-check
       // (same TS quirk noted in the file's existing 'Get web view menu data' test above) — go
       // through a WebViewMenus-typed local first.
+      // eslint-disable-next-line prefer-destructuring
       const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
       return {
         [EXTENSION_NAME]: {
@@ -336,6 +337,8 @@ describe('Simple-mode menu item filtering', () => {
     vi.mocked(settingsService.get).mockResolvedValue('power');
     let subscribedCallback: ((newMode: string) => void) | undefined;
     vi.mocked(settingsService.subscribe).mockImplementation(async (_key, callback) => {
+      // subscribe's generic callback type is inferred as SettingTypes[SettingName] | PlatformError;
+      // narrow it to the concrete signature this test invokes it with below.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       subscribedCallback = callback as (newMode: string) => void;
       return async () => true;
