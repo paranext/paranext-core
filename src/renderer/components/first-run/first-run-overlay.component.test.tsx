@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
+import { ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
 
@@ -28,11 +29,73 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
-      '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your data',
+      '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
+      '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
+      '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
     },
     false,
   ]),
 }));
+// SyncProgressStep (now wired into the shell) subscribes to network events. Return a no-op so the
+// component can mount without crashing in jsdom (no real network layer available in tests).
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: vi.fn(() => () => () => {}),
+}));
+// Mock platform-bible-react to avoid the React version conflict that arises when
+// lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
+// Dialog/DialogContent render children unconditionally; Button forwards click/disabled.
+vi.mock('platform-bible-react', () => {
+  function DialogStub({ children }: { children: ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function DialogContentStub({ children }: { children: ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function DialogTitleStub({ children }: { children: ReactNode }) {
+    return <span>{children}</span>;
+  }
+  function DialogDescriptionStub({ children }: { children: ReactNode }) {
+    return <span>{children}</span>;
+  }
+  function ButtonStub({
+    children,
+    onClick,
+    disabled,
+  }: {
+    [key: string]: unknown;
+    children: ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) {
+    return (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
+  }
+  return {
+    Dialog: DialogStub,
+    DialogContent: DialogContentStub,
+    DialogTitle: DialogTitleStub,
+    DialogDescription: DialogDescriptionStub,
+    Button: ButtonStub,
+    Spinner: () => <span data-testid="spinner" />,
+    Z_INDEX_FIRST_RUN: 9000,
+    useEvent: (
+      event: ((handler: (detail: unknown) => void) => () => void) | undefined,
+      handler: (detail: unknown) => void,
+    ) => {
+      useEffect(() => {
+        if (!event) return () => {};
+        const unsubscribe = event(handler);
+        return () => {
+          unsubscribe();
+        };
+      }, [event, handler]);
+    },
+  };
+});
 const mockGetStatus = vi.mocked(store.getFirstRunStatus);
 
 afterEach(() => vi.clearAllMocks());
