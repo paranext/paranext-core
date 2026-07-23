@@ -107,3 +107,11 @@ Every keyboard shortcut in the entire application — main process, bundled exte
 **Definition of Done:** when you add, change, or remove any keyboard shortcut — a `keydown`/`keyup` handler, an Electron accelerator or `before-input-event` branch, or a `useHotkeys` binding — you must add, update, or remove its entry in the single catalog data file `src/stories/keyboard-shortcuts.data.ts` as part of the same change. A shortcut change that leaves the catalog stale is not done.
 
 See also: [Responsiveness](./responsiveness.mdx) for minimum width requirements and container query guidance.
+
+---
+
+## Storybook stories
+
+Storybook stories for PAPI-coupled components (bundled-extension web views and similar) must behave like the running app — filters actually filter, search re-highlights, scope changes change the results, state transitions run, and writes reflect in the UI. A story that only renders a fixed snapshot and ignores its own controls is a bug.
+
+For the full conventions — the three-file split (`.component.tsx` / `.web-view.tsx` / `.stories.tsx`), where UI logic must live vs. what the story may mock, callback conventions, and the pre-commit verification gate — see [Storybook story guidelines](../../../../../.storybook/storybook-interactivity.md).
