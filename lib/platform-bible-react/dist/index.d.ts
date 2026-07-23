@@ -147,6 +147,12 @@ export type BookChapterControlProps = {
 	 */
 	triggerVariant?: ButtonProps["variant"];
 	/**
+	 * Set to `true` to render a `ChevronsUpDown` indicator at the end of the trigger, signaling that
+	 * it opens a picker. Defaults to `false` (no chevron) — most existing embeddings show the current
+	 * reference alone and don't need one.
+	 */
+	showTriggerChevron?: boolean;
+	/**
 	 * Optional callback fired whenever the control's popover open state changes. Useful when the
 	 * parent needs to react to the picker opening or closing — e.g. dimming a sibling control while
 	 * this one is active. Internal back-navigation within the popover (verses → chapters → books)
@@ -198,7 +204,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
