@@ -17,6 +17,15 @@ public sealed class ProjectSettingsNames
     public const string PB_LANGUAGE_TAG = "platform.languageTag";
     public const string PT_LANGUAGE_TAG = "LanguageTag";
 
+    /// <summary>
+    /// Paratext-only: the raw colon-delimited language id storage ("code:script:region:variant",
+    /// e.g. "en:::"). Not mapped to a <c>platform.*</c> setting. Read directly during project
+    /// enumeration to derive <c>platform.languageTag</c> without going through the
+    /// <c>ProjectSettings.LanguageID</c> getter, which resolves-and-persists for legacy projects
+    /// (see <c>ScrTextExtensions.GetLanguageTag</c>).
+    /// </summary>
+    public const string PT_LANGUAGE_ISO_CODE = "LanguageIsoCode";
+
     public const string PB_VERSIFICATION = "platformScripture.versification";
     public const string PT_VERSIFICATION = "Versification";
 
@@ -198,5 +207,60 @@ public sealed class ProjectSettingsNames
     public static bool IsParatextSettingABoolean(string ptSettingName)
     {
         return s_ptSettingBooleans.Contains(ptSettingName);
+    }
+
+    /// <summary>
+    /// Parses a raw Paratext boolean setting value: "T"/"TRUE" and "F"/"FALSE"
+    /// (case-insensitive). This is the single shared parser for such values; each caller applies
+    /// its own malformed-value policy on a false return (e.g. the project setting getter throws,
+    /// the setter refuses to write, metadata enumeration falls back to a default).
+    /// </summary>
+    /// <param name="rawValue">Raw setting value to parse; null is treated as a malformed
+    /// (non-boolean) value.</param>
+    /// <param name="value">The parsed boolean; false when parsing failed</param>
+    /// <returns>True if <paramref name="rawValue"/> was a well-formed boolean value</returns>
+    public static bool TryParseParatextBoolean(string? rawValue, out bool value)
+    {
+        switch (rawValue?.ToUpperInvariant())
+        {
+            case "T"
+            or "TRUE":
+                value = true;
+                return true;
+            case "F"
+            or "FALSE":
+                value = false;
+                return true;
+            default:
+                value = false;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Raw Paratext settings that back <c>ProjectMetadata</c>'s display fields (see
+    /// <c>ScrTextExtensions.GetProjectDetails</c>): name, fullName, language, languageTag, isEditable.
+    /// A write to one of these changes what the project picker / Home lists show, so the project
+    /// setting setter emits <c>LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE</c> when one of them
+    /// changes. (isPublished has no writable backing setting - it is computed from
+    /// <c>IsResourceProject</c> - so it is not listed.)
+    /// </summary>
+    private static readonly HashSet<string> s_projectMetadataDisplaySettings =
+    [
+        PT_NAME,
+        PT_FULL_NAME,
+        PT_LANGUAGE,
+        PT_LANGUAGE_ISO_CODE,
+        PT_IS_EDITABLE,
+    ];
+
+    /// <summary>
+    /// Whether writing <paramref name="ptSettingName"/> changes a project's display metadata (see
+    /// <see cref="s_projectMetadataDisplaySettings"/>), i.e. whether the project-list caches should
+    /// be invalidated after the write.
+    /// </summary>
+    public static bool IsProjectMetadataDisplaySetting(string ptSettingName)
+    {
+        return s_projectMetadataDisplaySettings.Contains(ptSettingName);
     }
 }

@@ -68,6 +68,7 @@ import {
   OpenWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
+import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
 import memoizeOne from 'memoize-one';
@@ -1515,6 +1516,10 @@ async function openOrReloadWebView(
     deleteWebViewNonce(savedWebViewDefinition.id);
     return undefined;
   }
+
+  // Fires once per renderer session, at the first web view whose content comes back from
+  // `getWebView` (the Home view during startup), not on every subsequent open/reload.
+  markStartupOnce('first-webview-content');
 
   // Set up WebViewDefinition default values
   /** WebView.contentType is assumed to be React by default. Extensions can specify otherwise */

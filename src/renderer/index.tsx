@@ -26,6 +26,7 @@ import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import {
   applyThemeStylesheet,
   getErrorMessage,
@@ -33,6 +34,12 @@ import {
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
+
+// This runs only after the ENTIRE static import graph above has been downloaded, parsed, and
+// evaluated, so it marks the end of bundle evaluation - the window-created -> bundle-eval-end gap
+// contains download+parse+eval. It cannot simply move up: globalThis.startupMarks is set by
+// '@renderer/global-this.model', itself the second import (the first pulls in React).
+markStartup('bundle-eval-end');
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -89,6 +96,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   try {
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    markStartup('papi-connected');
     await initializeSharedStoreService(networkService);
 
     // This needs to run before web views start running and after the network service is running
@@ -141,6 +149,7 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<App />);
+markStartup('root-render');
 
 // #endregion
 

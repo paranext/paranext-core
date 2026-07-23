@@ -45,6 +45,8 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  STARTUP_MARK_PROCESS_START,
+  STARTUP_MARKS_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -56,6 +58,7 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
@@ -197,8 +200,12 @@ async function openExternal(url: string) {
 }
 
 async function main() {
+  // This is the run boundary the startup-waterfall parser keys on (main + process-start).
+  markStartup(STARTUP_MARK_PROCESS_START);
+
   // The network service has to start first, and it uses the shared store after initialization
   await networkService.initialize();
+  markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
 
   // The network object status service relies on seeing everything else start up later
@@ -225,6 +232,7 @@ async function main() {
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
   await extensionHostService.start(PROCESS_CLOSE_TIME_OUT_MS);
+  markStartup('extension-host-forked');
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
@@ -414,6 +422,10 @@ async function main() {
           : path.join(globalThis.resourcesPath, '.erb/dll/preload.js'),
       },
     });
+    // createWindow re-runs mid-session on macOS (app.on('activate') after the window was closed),
+    // so once-guard this so a second window-created mark can't land in the latest run and inflate
+    // the waterfall's Total span.
+    markStartupOnce('window-created');
 
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
@@ -502,6 +514,8 @@ async function main() {
         mainWindow.minimize();
       } else {
         mainWindow.show();
+        // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
+        markStartupOnce('window-shown');
         if (getCommandLineSwitch(CommandLineArgs.Maximize)) {
           logger.info('mainWindow is starting maximized due to --maximize command-line switch');
           mainWindow.maximize();
@@ -637,6 +651,7 @@ async function main() {
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+    if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;

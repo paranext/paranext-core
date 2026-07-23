@@ -3982,6 +3982,19 @@ export declare function formatBytes(fileSize: number, decimals?: number): string
  */
 export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /**
+ * Normalizes a project id to its canonical, case-insensitive form (UPPERCASE) so it can key a
+ * `Map`/`Set` or be compared for equality without a casing mismatch silently dropping a match.
+ *
+ * Paratext project ids are hex GUIDs that the .NET data provider canonicalizes to uppercase;
+ * callers that join or dedupe ids arriving from mixed sources (e.g. an open-tab's `projectId`
+ * against a project list) must fold case the same way. This is the single shared normalizer so
+ * those callers cannot drift apart.
+ *
+ * @param projectId The project id to normalize.
+ * @returns The uppercase form of the id.
+ */
+export declare function normalizeProjectId(projectId: string): string;
+/**
  * Get a localized string representation of the time between two dates
  *
  * @example

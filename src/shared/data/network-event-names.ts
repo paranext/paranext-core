@@ -8,6 +8,7 @@ import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 const PUBLIC_MULTI_SOURCE_EVENT_NAMES = [
   'object:onDidCreateNetworkObject',
   'object:onDidDisposeNetworkObject',
+  'platform.onDidChangeProjects',
 ] satisfies (keyof MultiSourceNetworkEvents)[];
 
 /**

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider;
 using Paranext.DataProvider.NetworkObjects.Documentation;
@@ -7,12 +8,22 @@ namespace TestParanextDataProvider
     [ExcludeFromCodeCoverage]
     internal class DummyPapiClient : PapiClient
     {
-        private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
+        // ConcurrentQueue (not Queue): PDP registration ends in SendEventAsync, and per-project
+        // PDP creation registers PDPs concurrently (same motivation as
+        // _documentationByRequestType below), so concurrent tests can enqueue from multiple
+        // threads at once.
+        private readonly ConcurrentQueue<(string eventType, object? eventParameters)> _sentEvents =
+            new();
 
-        private readonly Dictionary<
+        // ConcurrentDictionary (not Dictionary): RegisterRequestHandlerAsync writes this on every
+        // PDP registration, and per-project PDP creation registers PDPs concurrently (fire-
+        // and-forget, not serialized behind a single creation lock - see
+        // ParatextProjectDataProviderFactoryBase.GetProjectDataProviderID), so concurrent tests can
+        // legitimately hit this from multiple threads at once.
+        private readonly ConcurrentDictionary<
             string,
             OpenRpcSingleMethodDocumentation?
-        > _documentationByRequestType = [];
+        > _documentationByRequestType = new();
 
         #region Overrides of PapiClient
 
@@ -68,7 +79,13 @@ namespace TestParanextDataProvider
 
         public (string eventType, object? eventParameters) NextSentEvent
         {
-            get { return _sentEvents.Dequeue(); }
+            get
+            {
+                // Same contract as Queue.Dequeue: throw when empty
+                return _sentEvents.TryDequeue(out var sentEvent)
+                    ? sentEvent
+                    : throw new InvalidOperationException("No sent events to dequeue.");
+            }
         }
 
         /// <summary>

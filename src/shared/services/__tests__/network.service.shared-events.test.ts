@@ -49,6 +49,7 @@ describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event nam
     const publicKeys: Record<keyof MultiSourceNetworkEvents, true> = {
       'object:onDidCreateNetworkObject': true,
       'object:onDidDisposeNetworkObject': true,
+      'platform.onDidChangeProjects': true,
     };
     Object.keys(publicKeys).forEach((name) =>
       expect(MULTI_SOURCE_EVENT_NAMES.has(name)).toBe(true),
@@ -65,6 +66,7 @@ describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event nam
     const known = [
       'object:onDidCreateNetworkObject',
       'object:onDidDisposeNetworkObject',
+      'platform.onDidChangeProjects',
       'shared-store:change',
     ];
     Array.from(MULTI_SOURCE_EVENT_NAMES).forEach((name) => expect(known).toContain(name));

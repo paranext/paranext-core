@@ -22,6 +22,7 @@ public static class Program
     public static async Task Main()
     {
         Console.WriteLine("Paranext data provider starting up");
+        StartupTiming.Mark("process-start");
         Thread.CurrentThread.Name = "Main";
 
         var listener = new ConsoleTraceListener
@@ -57,6 +58,7 @@ public static class Program
                 Console.WriteLine("Paranext data provider could not connect");
                 return;
             }
+            StartupTiming.Mark("papi-connected");
 
             // Initialize the shared store early since papi uses it
             await SharedStoreService.InitializeAsync(papi);
@@ -70,7 +72,7 @@ public static class Program
             );
             ParatextInfo.ParatextVersion = appVersion;
 
-            var paratextProjects = new LocalParatextProjects();
+            var paratextProjects = new LocalParatextProjects(papi);
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
@@ -92,7 +94,7 @@ public static class Program
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
-            var dblResources = new DblResourcesDataProvider(papi);
+            var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
@@ -106,19 +108,43 @@ public static class Program
                 new MarbleDataLoader()
             );
             var versificationConversionService = new VersificationConversionService(papi);
+
+            // Non-critical: register in the background - started BEFORE the critical barrier is
+            // awaited so these services run concurrently with it without gating "ready". Starting
+            // them after the barrier would shrink the head start TS consumers with bounded one-shot
+            // acquisition (e.g. the checklist and manage-books web views) rely on.
+            // Wrap EACH registration in its own Task.Run so a synchronous throw (e.g. from the
+            // non-async ManageBooksService.RegisterNetworkObjectAsync before its first await) is
+            // captured into that service's task rather than escaping unobserved AND without
+            // orphaning the siblings: Task.WhenAll evaluates its arguments left-to-right, so a bare
+            // Task.Run(() => Task.WhenAll(a(), b(), ...)) that threw synchronously partway through
+            // would leave the already-started tasks unobserved and never start the later ones. Each
+            // Task.Run returns an already-scheduled task, so all five always start and every fault
+            // (sync or async) flows into the WhenAll. Log faults to stderr so they surface at error
+            // level in the main process log - a fault here means these features are missing for the
+            // whole session.
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.WhenAll(
+                    Task.Run(() => inventoryDataProvider.RegisterDataProviderAsync()),
+                    Task.Run(() => checkRunner.RegisterDataProviderAsync()),
+                    Task.Run(() => checklistNetworkObject.InitializeAsync()),
+                    Task.Run(() => manageBooksService.RegisterNetworkObjectAsync()),
+                    Task.Run(() => enhancedResourceFactory.InitializeAsync())
+                ),
+                "Background service registration"
+            );
+
+            StartupTiming.Mark("init-barrier-start");
+            // Critical path: everything the renderer needs to list projects and open an editor.
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 paratextPublishedFactory.InitializeAsync(),
                 versificationConversionService.InitializeAsync(),
-                inventoryDataProvider.RegisterDataProviderAsync(),
-                checkRunner.RegisterDataProviderAsync(),
-                dblResources.RegisterDataProviderAsync(),
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
-                checklistNetworkObject.InitializeAsync(),
-                manageBooksService.RegisterNetworkObjectAsync(),
-                enhancedResourceFactory.InitializeAsync()
+                dblResources.RegisterDataProviderAsync()
             );
+            StartupTiming.Mark("init-barrier-end");
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

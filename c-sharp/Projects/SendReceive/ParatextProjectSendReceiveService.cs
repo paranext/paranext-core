@@ -91,6 +91,11 @@ internal class ParatextProjectSendReceiveService(
     /// </param>
     protected void SyncProjects(String[]? projectIds)
     {
+        // PT10 integration note: paranext-core's project-directory watcher is non-recursive and
+        // does NOT catch an in-place Settings.xml metadata rewrite (name/language/editable) landing
+        // during a Send/Receive receive. PT10's patched implementation of this method must call
+        // LocalParatextProjects.NotifyProjectsChanged() after a sync that can change the project set
+        // or display metadata, so Home / New Tab / the project picker refresh.
 #if DEBUG
         // Dev-only placeholder: paranext-core has no S/R impl. PT10 patches the whole method.
         NotificationService.Send(

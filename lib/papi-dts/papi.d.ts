@@ -945,6 +945,12 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
+    /**
+     * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+     * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+     * as `isNoisyDevModeEnabled`.
+     */
+    var startupMarks: boolean;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -5154,6 +5160,16 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
   };
   /**
    * Mapping of network event names to their payload types. Extensions augment this to declare their
@@ -5838,6 +5854,51 @@ declare module 'shared/models/project-metadata.model' {
      * project.
      */
     projectInterfaces: ProjectInterfaces[];
+    /**
+     * Short display name of the project. Absent when the producing Project Data Provider Factory does
+     * not supply it; consumers should fall back to {@link id}.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    name?: string;
+    /**
+     * Full display name of the project. Absent when not supplied; consumers should fall back to
+     * {@link name}, then {@link id}.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    fullName?: string;
+    /**
+     * Language of the project (raw setting value). Absent when not supplied (no language to show).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    language?: string;
+    /**
+     * BCP-47 language tag of the project. Absent when not supplied (no language to show).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    languageTag?: string;
+    /**
+     * Whether the project's primary content (e.g. Scripture text) is editable.
+     *
+     * **Absence is NOT the same as `false`.** An absent value means the registered default of
+     * `platform.isEditable`, which is `true` - i.e. a factory that omits this field means "editable".
+     * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
+     * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
+     * false`.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    isEditable?: boolean;
+    /**
+     * Whether the project is a published (read-only) resource. An absent value means the registered
+     * default of `platform.isPublished`, which is `false` (not a published resource).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    isPublished?: boolean;
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
     /**
@@ -5944,6 +6005,7 @@ declare module 'shared/models/project-lookup.service-model' {
   } from 'shared/models/project-metadata.model';
   import { ProjectInterfaces } from 'papi-shared-types';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { normalizeProjectId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
   /**
    * Transform the well-known pdp factory id into an id for its network object to use
@@ -6099,6 +6161,7 @@ declare module 'shared/models/project-lookup.service-model' {
     includeProjectInterfaces: string | undefined;
     includePdpFactoryIds: string | undefined;
   };
+  export { normalizeProjectId };
   /**
    * Determines whether the given project interfaces are included based on specified inclusion and
    * exclusion rules.
@@ -6672,6 +6735,13 @@ declare module 'node/utils/util' {
    * @returns True if the process is running in noisy dev mode, false otherwise
    */
   export const isNoisyDevModeEnvVariableSet: () => boolean;
+  /**
+   * Determines if startup timing marks are requested for this launch
+   *
+   * @returns True if the `PT_STARTUP_MARKS` environment variable requests startup timing marks, false
+   *   otherwise
+   */
+  export const isStartupMarksEnvVariableSet: () => boolean;
 }
 declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
@@ -8387,6 +8457,30 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Prefix that identifies a startup timing mark in the logs (see
+   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+   */
+  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+  /**
+   * Name of the mark each process emits first, right after start. The main process's copy is the
+   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+   * and `src/extension-host/extension-host.ts`.
+   */
+  export const STARTUP_MARK_PROCESS_START = 'process-start';
+  /**
+   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+   * can identify the run boundary without importing `global-this.model` (which pulls in React and
+   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+   * `src/shared/global-this.model.ts`.
+   */
+  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
