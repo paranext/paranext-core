@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { useEffect } from 'react';
+import { ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.component';
@@ -20,11 +20,55 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
-      '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your data',
+      '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
+      '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
+      '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
     },
     false,
   ]),
 }));
+// SyncProgressStep subscribes to network events via getNetworkEvent. Return a no-op subscriber so
+// the component mounts without crashing in jsdom (no real network layer available in tests).
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: vi.fn(() => () => () => {}),
+}));
+// Mock platform-bible-react to avoid the React version conflict that arises when
+// lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
+// Button must forward onClick/disabled; useEvent must subscribe/unsubscribe via effects.
+vi.mock('platform-bible-react', () => {
+  function ButtonStub({
+    children,
+    onClick,
+    disabled,
+  }: {
+    children: ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) {
+    return (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
+  }
+  return {
+    Button: ButtonStub,
+    Spinner: () => <span data-testid="spinner" />,
+    useEvent: (
+      event: ((handler: (detail: unknown) => void) => () => void) | undefined,
+      handler: (detail: unknown) => void,
+    ) => {
+      useEffect(() => {
+        if (!event) return () => {};
+        const unsubscribe = event(handler);
+        return () => {
+          unsubscribe();
+        };
+      }, [event, handler]);
+    },
+  };
+});
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
@@ -68,7 +112,17 @@ describe('FirstRunShell', () => {
   });
 
   it('completes when Finish is clicked on the last step', async () => {
-    render(<FirstRunShell entryStep="syncProgress" />);
+    // SyncProgressStep blocks Finish until sync completes; inject a simple stub so this test stays
+    // focused on the shell's completeFirstRun wiring rather than step-level event behavior.
+    function SimpleSyncStep() {
+      return <p>sync progress</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     expect(mockComplete).toHaveBeenCalledWith();
   });
@@ -88,15 +142,35 @@ describe('FirstRunShell', () => {
   });
 
   it('surfaces an error when completing throws', async () => {
+    // SyncProgressStep blocks Finish until sync completes; inject a simple stub so this test stays
+    // focused on the shell's error surface rather than step-level event behavior.
+    function SimpleSyncStep() {
+      return <p>sync progress</p>;
+    }
     mockComplete.mockRejectedValue(new Error('could not finish'));
-    render(<FirstRunShell entryStep="syncProgress" />);
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
   });
 
   it('disables Finish while completeFirstRun is in flight (busy state)', async () => {
+    // SyncProgressStep blocks Finish until sync completes; inject a simple stub so this test stays
+    // focused on the shell's busy state rather than step-level event behavior.
+    function SimpleSyncStep() {
+      return <p>sync progress</p>;
+    }
     mockComplete.mockReturnValue(new Promise(() => {})); // never-settling
-    render(<FirstRunShell entryStep="syncProgress" />);
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
   });
