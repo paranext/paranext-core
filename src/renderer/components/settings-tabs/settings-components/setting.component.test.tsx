@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('Setting disabled forwarding (PT-4214)', () => {
+describe('Setting disabled forwarding', () => {
   it('forwards disabled to the rendered Input for a string setting', () => {
     render(
       <Setting

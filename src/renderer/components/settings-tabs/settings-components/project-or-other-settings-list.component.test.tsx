@@ -8,7 +8,7 @@ import { ProjectOrOtherSettingsList } from './project-or-other-settings-list.com
 // parent SettingsTab computes it once from the auto-sync-blocking store and passes it down, and also
 // renders the single sync-blocked NOTICE above all of a project's groups (see
 // settings-tab.component.test.tsx). A project can have several of these lists (one per settings
-// group), so a per-list store subscription would stack listeners and duplicate the banner (PT-4214).
+// group), so a per-list store subscription would stack listeners and duplicate the banner.
 // This unit just forwards `disabled` to each project setting; the leaf forwarding into
 // platform-bible-react's Input/Switch is covered in setting.component.test.tsx.
 vi.mock('./project-setting.component', () => ({

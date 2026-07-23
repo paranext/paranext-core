@@ -81,7 +81,7 @@ global.webViewComponent = function CommentListWebView({
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
-  // Set on this web view's state by the core auto-sync edit-block driver (PT-4214 Stage U) while an
+  // Set on this web view's state by the core auto-sync edit-block driver while an
   // automatic (scheduled or session) Send/Receive is syncing this project. When true, comment
   // writing is paused: the write affordances below are disabled and a slim notice is shown. Transient
   // runtime state — the provider scrubs it to false on every rehydrate, and the driver re-flags it if
@@ -538,7 +538,7 @@ global.webViewComponent = function CommentListWebView({
     [setScrRef, editorWebViewId, editorWebViewController, recordSelfInitiatedNavigation],
   );
 
-  // PT-4214 Stage U: while this project's automatic Send/Receive is blocking edits (isSyncBlocked),
+  // While this project's automatic Send/Receive is blocking edits (isSyncBlocked),
   // disable every comment write affordance by forcing its capability gate to `false`.
   // platform-bible-react's CommentList exposes no `disabled`/`readOnly` prop; these per-capability
   // callbacks ARE its existing mechanism for hiding/disabling the reply box, assign, edit/delete, and

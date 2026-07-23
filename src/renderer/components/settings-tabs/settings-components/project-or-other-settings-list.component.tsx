@@ -21,8 +21,7 @@ type ProjectOrOtherSettingsListProps = {
   /**
    * When true, each project setting's editor is rendered read-only. Only meaningful for project
    * settings (projectId defined). Computed once by the parent SettingsTab and passed down, so a
-   * project's several setting groups don't each subscribe to the auto-sync-blocking store
-   * (PT-4214).
+   * project's several setting groups don't each subscribe to the auto-sync-blocking store.
    */
   disabled?: boolean;
 };
@@ -42,7 +41,7 @@ export function ProjectOrOtherSettingsList({
   // Only project settings (projectId defined) can be edit-blocked. `disabled` is computed ONCE by
   // the parent SettingsTab (which also renders the single blocked notice above all of a project's
   // groups) and passed down, so a project's several setting groups don't each subscribe to the
-  // auto-sync-blocking store (PT-4214). This component just forwards it to each project setting.
+  // auto-sync-blocking store. This component just forwards it to each project setting.
 
   if (Object.entries(settingProperties).length === 0) return undefined;
 

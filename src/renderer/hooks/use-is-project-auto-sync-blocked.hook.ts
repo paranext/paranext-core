@@ -6,8 +6,8 @@ import { useCallback, useSyncExternalStore } from 'react';
 
 /**
  * Returns whether the given project's edits are currently blocked by an automatic (scheduled or
- * session) Send/Receive (PT-4214 Stage U), updating reactively as the auto-sync-blocking store's
- * visible set changes. An `undefined` project id is never blocked.
+ * session) Send/Receive, updating reactively as the auto-sync-blocking store's visible set changes.
+ * An `undefined` project id is never blocked.
  *
  * Uses `useSyncExternalStore`, which re-reads the current value when it subscribes — a
  * block/unblock emitted between the initial render and the subscription cannot be missed. The

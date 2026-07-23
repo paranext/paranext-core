@@ -25,8 +25,8 @@ export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
 /**
  * Slim notice shown once above a project's settings groups while that project's automatic
  * Send/Receive blocks edits. Rendered here at the tab level — not per settings-group list — because
- * a project's settings are split across several `ProjectOrOtherSettingsList` groups, which used to
- * each render their own identical banner (PT-4214).
+ * a project's settings are split across several `ProjectOrOtherSettingsList` groups; rendering it
+ * per-list would show one identical banner per group.
  */
 const SYNC_BLOCKED_NOTICE_KEY: LocalizeKey = '%settings_projectSyncBlocked_notice%';
 
@@ -244,7 +244,7 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   ]);
 
   // Single blocked notice for the tab's current project, reused in both render branches below so the
-  // two copies can't drift (PT-4214). Falsy (renders nothing) when the project isn't blocked or for
+  // two copies can't drift. Falsy (renders nothing) when the project isn't blocked or for
   // general/user settings.
   const syncBlockedNotice = isProjectSyncBlocked && (
     <div role="status" className="sync-blocked-notice">

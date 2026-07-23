@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 const PANEL_TITLE_KEY = '%webView_legacyCommentManager_commentListPanel_title%';
 const COMMENTARIES_TAB_TITLE_KEY = '%webView_resourcePanel_commentaries_title%';
 
-// The strings backing the Send/Receive edit-block surfaces in the comments panel (PT-4214): the slim
+// The strings backing the Send/Receive edit-block surfaces in the comments panel: the slim
 // "editing paused" notice and the "your change was not saved" error toast. Both must stay defined in
 // every shipped language so a future edit that drops one language fails here.
 const SYNC_BLOCKED_KEYS = [

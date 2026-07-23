@@ -87,7 +87,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
   projectDataProviders: { get: vi.fn() },
 }));
 
-describe('SettingsTab sync-blocked notice dedup (PT-4214)', () => {
+describe('SettingsTab sync-blocked notice dedup', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(false);

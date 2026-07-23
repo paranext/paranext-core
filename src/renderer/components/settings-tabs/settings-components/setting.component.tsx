@@ -46,8 +46,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   className?: string;
   /**
    * When true, the setting's editor is rendered read-only (disabled). Used to make a project's
-   * settings read-only while an automatic Send/Receive is blocking edits on that project (PT-4214).
-   * Defaults to `false`.
+   * settings read-only while an automatic Send/Receive is blocking edits on that project. Defaults
+   * to `false`.
    */
   disabled?: boolean;
 };
@@ -82,8 +82,8 @@ export type OtherSettingValues = SettingTypes[keyof SettingTypes];
 
 /**
  * Props for the UserSetting component. `disabled` is omitted from `BaseSettingProps`: only project
- * settings go read-only during an automatic Send/Receive (PT-4214), and `OtherSetting` does not
- * forward `disabled` — so the type must not advertise a capability the component silently drops.
+ * settings go read-only during an automatic Send/Receive, and `OtherSetting` does not forward
+ * `disabled` — so the type must not advertise a capability the component silently drops.
  */
 export type OtherSettingProps = Omit<
   BaseSettingProps<SettingNames, OtherSettingValues>,

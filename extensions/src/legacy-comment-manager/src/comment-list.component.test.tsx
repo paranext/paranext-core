@@ -43,7 +43,7 @@ function renderPanel(overrides: Partial<CommentListPanelProps> = {}) {
   );
 }
 
-describe('CommentListPanel sync-blocked notice (PT-4214)', () => {
+describe('CommentListPanel sync-blocked notice', () => {
   it('renders the notice when isSyncBlocked is true', () => {
     renderPanel({ isSyncBlocked: true });
     expect(screen.getByRole('status')).toHaveTextContent(SYNC_BLOCKED_NOTICE_TEXT);

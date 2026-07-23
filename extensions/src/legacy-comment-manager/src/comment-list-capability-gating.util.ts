@@ -1,9 +1,9 @@
 /**
- * Pure gating decision behind the comment list's write-affordance capability props (PT-4214 Stage
- * U). Extracted from `comment-list.web-view.tsx` so the deny-while-blocked / pass-through-when-not
- * decision is unit-testable without mounting the full web view (which needs a live PDP, project
- * data subscription, and papi frontend — none of which are available to this extension's plain
- * `vitest` `node` environment).
+ * Pure gating decision behind the comment list's write-affordance capability props. Extracted from
+ * `comment-list.web-view.tsx` so the deny-while-blocked / pass-through-when-not decision is
+ * unit-testable without mounting the full web view (which needs a live PDP, project data
+ * subscription, and papi frontend — none of which are available to this extension's plain `vitest`
+ * `node` environment).
  *
  * Platform-bible-react's `CommentList` exposes no `disabled`/`readOnly` prop; these four capability
  * props ARE its mechanism for hiding/disabling the reply box, assign, resolve, and edit/delete, so
