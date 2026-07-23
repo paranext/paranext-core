@@ -20,13 +20,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
-// Below this measured *column* width (px), every tab in that column hides its title text and
-// shows only its icon. Measured against the column, not the tab's own width — see the effect
-// below for why. Tuned against Simple mode's default Resources column width (~480px, which
-// comfortably fits all 4 tabs' full icon+title content — verified via CDP) so the default layout
-// stays in the roomy state; lower this further only if a real narrower case still shows clipped
-// text instead of collapsing.
-const ICON_ONLY_COLUMN_THRESHOLD_PX = 460;
+// Fixed chrome around the tab bar within its enclosing `.dock-panel` column — specifically
+// `.dock-nav-wrap`'s own inline padding and the project-menu hamburger button's own width/margin,
+// which sit outside `.dock-nav-list` entirely (NOT the per-tab `.drag-initiator` padding or the
+// gaps between tabs — those scale with tab count and are measured live instead; see the effect
+// below). Unlike tab labels, this doesn't depend on locale, tab count, or label length, so a small
+// constant here (rather than deriving it live) is safe. Measured via CDP as the residual gap
+// between `.dock-panel`'s width and the tab bar's real full-size content need (icon+title clones'
+// widths, plus their own drag-initiator padding, plus inter-tab gaps) once those per-tab-scaling
+// parts are already accounted for separately. Re-measure only if this specific wrap-level chrome
+// changes (e.g. the hamburger icon's size/margin or `.dock-nav-wrap`'s own padding), not if a
+// Column 3 tab's label, count, or per-tab padding changes — those adapt on their own.
+const TAB_BAR_CHROME_OVERHEAD_PX = 40;
 
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
@@ -304,9 +309,40 @@ export function PlatformTabTitle({
   // though the wrapping span carried the class).
   const dragIgnoreClass = isPowerMode ? '' : ' drag-ignore';
 
-  // Simple mode only: hide the title text once the enclosing COLUMN narrows below
-  // ICON_ONLY_COLUMN_THRESHOLD_PX. This measures the column (`.dock-panel`), not this tab's own
-  // rendered width — two things were tried first and both failed:
+  // Simple mode only: hide the title text once the tab bar's own full content (icon+title for
+  // every tab in this column) would no longer fit the available space. Deliberately NOT a single
+  // hardcoded pixel threshold for the whole comparison — an earlier version compared the column
+  // width against a constant tuned for the current 4 Column 3 tabs' current English labels, which
+  // was wrong THE FIRST TIME it was tuned (guessed rather than measured, so tabs clipped well
+  // before it ever triggered) and would go wrong AGAIN the moment a label changed, a tab was
+  // added/removed, or the UI ran in a different locale with longer/shorter words. The
+  // content-dependent part of the comparison below is measured live instead, so it adapts
+  // automatically to all of that; only a small, content-INdependent layout constant remains (see
+  // TAB_BAR_CHROME_OVERHEAD_PX below).
+  //
+  // Measures the enclosing `.dock-panel` (the column) for available width — NOT `.dock-nav-wrap`
+  // (tried first; see why it fails below), and NOT this tab's own width (tried before that; see
+  // why that fails further below).
+  //
+  // "How wide would the tab bar be if every tab showed its title" is read from each sibling tab's
+  // `.platform-tab-title-measure` clone (see platform-tab-title.component.scss) — an
+  // always-rendered, invisible, `position: absolute` copy of this tab's own icon+title at full
+  // size, decoupled from whether THIS tab is currently collapsed. Summing every sibling clone's
+  // width (they all live under the same `.dock-panel`) gives the tab bar's true current full-size
+  // need, live, with no caching required.
+  //
+  // A cached "last full measurement" was tried first instead of these clones — reusing the visible
+  // `.dock-nav-list`'s own scrollWidth while not-yet-collapsed, since once collapsed its hidden
+  // title text shrinks that scrollWidth (reading it live at that point would make the tab bar look
+  // like it always "fits" and immediately, wrongly, re-expand). That failed for a different reason:
+  // confirmed via CDP that the very first "not collapsed" measurement can land during a bootstrap
+  // race — e.g. while a sibling tab's web view is still showing its "Unknown" loading placeholder,
+  // or before its label has finished resolving — permanently caching a wrong width (since caching
+  // only updates while not-yet-collapsed, a bad cache taken right before collapsing can never
+  // self-correct). The always-live clones have no such race: they reflect whatever `title` a tab
+  // currently holds, resolved or not, every time.
+  //
+  // Three things were tried for "available width" before landing on `.dock-panel`:
   //
   // 1. A CSS `@container` query on this tab's own width: `container-type: inline-size` gives the
   //    queried element size containment, making its OWN intrinsic size ~0 to break the query's
@@ -316,19 +352,25 @@ export function PlatformTabTitle({
   //    minimum floor unconditionally, regardless of how much room was actually available.
   // 2. A ResizeObserver on this tab's own rendered width (no container-type): rc-dock's tab bar
   //    turned out not to be a simple "shrink tabs to fit" flex layout at all — `.dock-nav-list`
-  //    (the tabs' direct flex container) never gets width-constrained by its wrapper; it just
-  //    renders every tab at full natural size and either lets the wrapper clip/scroll the overflow
-  //    or moves excess tabs into rc-dock's own "more" dropdown, based on its own JS measurement of
-  //    each tab's full (never-shrunk) width. So a tab's OWN rendered width never actually drops
-  //    below any shrink threshold — confirmed via CDP: tabs sat at their full content width no
-  //    matter how narrow the column got, right up until rc-dock moved some of them into the
-  //    dropdown instead.
-  //
-  // Measuring the COLUMN's width directly sidesteps both problems: it reflects the divider
-  // position exactly (no dependency on the tab bar's internal clip/scroll/dropdown mechanics), and
-  // toggling icon-only BEFORE rc-dock measures the tabs means rc-dock's own dropdown only has to
-  // engage once even icon-only tabs don't fit — matching the original "rc-dock's overflow dropdown
-  // remains the floor" design intent.
+  //    never gets width-constrained by its wrapper; it just renders every tab at full natural size
+  //    and either lets the wrapper clip the overflow or moves excess tabs into rc-dock's own "more"
+  //    dropdown, based on its own JS measurement of each tab's full (never-shrunk) width. So a
+  //    tab's OWN rendered width never actually drops below any shrink threshold — confirmed via
+  //    CDP: tabs sat at their full content width no matter how narrow the column got, right up
+  //    until rc-dock moved some of them into the dropdown instead.
+  // 3. A ResizeObserver on `.dock-nav-wrap` (the element whose `overflow-x: clip` actually does the
+  //    clipping) instead of `.dock-panel`, on the theory that its own rendered width IS the
+  //    available space. It has `flex-grow: 0` (rc-dock's own CSS: `.dock-nav-wrap { order: 1;
+  //    flex-grow: 0; }`, with a `flex-grow: 1` sibling `.dock-nav-operations` absorbing all leftover
+  //    space) — so it only shrinks to less than its own content's natural size while genuinely
+  //    being flex-squeezed (not enough total room for the whole `.dock-nav` row), and otherwise just
+  //    settles to "however big my current content is." Confirmed via CDP: once collapsed to
+  //    icon-only (or once comfortably fitting), `.dock-nav-wrap`'s clientWidth got stuck reporting
+  //    its own small content size and never grew even when the column was widened dramatically
+  //    (tested up to a 3000px window) — useless for detecting "is there now enough room to
+  //    re-expand." `.dock-panel` doesn't have this problem: it's the actual resizable column,
+  //    confirmed (both here and by the earlier hardcoded-threshold version) to track the true
+  //    available width correctly in both directions.
   const [isIconOnly, setIsIconOnly] = useState(false);
   useEffect(() => {
     if (isPowerMode) return undefined;
@@ -336,13 +378,36 @@ export function PlatformTabTitle({
     if (!element) return undefined;
     const panel = element.closest('.dock-panel');
     if (!panel) return undefined;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-      setIsIconOnly(entry.contentRect.width < ICON_ONLY_COLUMN_THRESHOLD_PX);
-    });
-    observer.observe(panel);
-    return () => observer.disconnect();
+    const recomputeIsIconOnly = () => {
+      const measureClones = panel.querySelectorAll('.platform-tab-title-measure');
+      const fullContentWidth = Array.from(measureClones).reduce(
+        (total, clone) => total + clone.getBoundingClientRect().width,
+        0,
+      );
+      // The gap the tab bar's own flex container puts between sibling tabs isn't part of any one
+      // tab's own measured width, so it isn't captured by summing the clones above — read it live
+      // from `.dock-nav-list`'s own CSS instead of hardcoding it, so it can't drift out of sync
+      // with that stylesheet.
+      const navList = panel.querySelector('.dock-nav-list');
+      const interTabGapPx = navList ? parseFloat(getComputedStyle(navList).columnGap) || 0 : 0;
+      const interTabGapsTotal = Math.max(0, measureClones.length - 1) * interTabGapPx;
+      const neededWidth = fullContentWidth + interTabGapsTotal + TAB_BAR_CHROME_OVERHEAD_PX;
+      setIsIconOnly(neededWidth > panel.getBoundingClientRect().width);
+    };
+    const resizeObserver = new ResizeObserver(recomputeIsIconOnly);
+    resizeObserver.observe(panel);
+    // A panel resize isn't the only thing that can change the tab bar's full-size content need —
+    // a sibling tab's title resolving from a loading placeholder to its real text (or a tab
+    // being added/removed) changes it too, with the panel itself staying the same size. Since
+    // this tab's own React props don't change when a SIBLING's title resolves, a MutationObserver
+    // on the whole panel (not just this tab's own DOM) is what catches that.
+    const mutationObserver = new MutationObserver(recomputeIsIconOnly);
+    mutationObserver.observe(panel, { childList: true, characterData: true, subtree: true });
+    recomputeIsIconOnly();
+    return () => {
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
   }, [isPowerMode]);
 
   const iconOnlyClass = isIconOnly ? ' icon-only' : '';
@@ -374,6 +439,21 @@ export function PlatformTabTitle({
             <span className={`platform-tab-title-text ${dragIgnoreClass.trim()}`.trim()}>
               {title}
             </span>
+            {/* Always-rendered, invisible full-size measurement clone — see the icon-only-density
+                effect above for why this is measured instead of the visible (possibly collapsed)
+                content. Not shown or reachable: aria-hidden and outside all interactive classes.
+                Wrapped in its own `.drag-initiator` (a new element, not rc-dock's real one around
+                this tab) so it picks up the SAME per-tab padding a real tab gets from that class —
+                still nested under the real `.dock-tab`/`.dock-panel` ancestors this component
+                renders inside, which is what the CSS selectors for that padding key off of. */}
+            {!isPowerMode && (
+              <div className="platform-tab-title-measure" aria-hidden="true">
+                <div className="drag-initiator">
+                  {icon}
+                  <span>{title}</span>
+                </div>
+              </div>
+            )}
           </div>
         </TooltipTrigger>
         {tooltip &&
