@@ -1,18 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  raiseAutoSyncBlock,
-  getAutoSyncBlocking,
+  setBlockedProjects,
+  getBlockedProjectIds,
+  isProjectBlocked,
   subscribeToAutoSyncBlocking,
   resetAutoSyncBlocking,
 } from './auto-sync-blocking-store';
 
 /** Must match SHOW_GRACE_MS in auto-sync-blocking-store.ts */
 const SHOW_GRACE_MS = 200;
-/** Must match SAFETY_TIMEOUT_MS in auto-sync-blocking-store.ts */
-const SAFETY_TIMEOUT_MS = 10 * 60 * 1000;
 
 describe('auto-sync-blocking-store', () => {
-  // The store's show-grace and safety timers mean nearly every test needs timer control
+  // The store's show-grace timer means nearly every test needs timer control.
   beforeEach(() => {
     vi.useFakeTimers();
     resetAutoSyncBlocking();
@@ -22,83 +21,163 @@ describe('auto-sync-blocking-store', () => {
     vi.useRealTimers();
   });
 
-  describe('getAutoSyncBlocking', () => {
-    it('returns false initially', () => {
-      expect(getAutoSyncBlocking()).toBe(false);
+  describe('initial state', () => {
+    it('reports nothing blocked', () => {
+      expect(getBlockedProjectIds().size).toBe(0);
+      expect(isProjectBlocked('P1')).toBe(false);
+    });
+
+    it('treats an undefined project id as never blocked', () => {
+      expect(isProjectBlocked(undefined)).toBe(false);
     });
   });
 
   describe('show grace', () => {
     it('is not visible immediately when blocking starts', () => {
-      raiseAutoSyncBlock();
-      expect(getAutoSyncBlocking()).toBe(false);
+      setBlockedProjects(['P1']);
+      expect(getBlockedProjectIds().size).toBe(0);
+      expect(isProjectBlocked('P1')).toBe(false);
     });
 
     it('becomes visible once the 200 ms grace elapses', () => {
-      raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(getAutoSyncBlocking()).toBe(true);
+      expect(isProjectBlocked('P1')).toBe(true);
+      expect([...getBlockedProjectIds()]).toEqual(['P1']);
     });
 
     it('never becomes visible when blocking clears within the grace (sync finished fast)', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      const clear = raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(150); // still inside the grace window
-      clear();
+      setBlockedProjects([]);
       vi.advanceTimersByTime(SHOW_GRACE_MS); // well past when the grace would have fired
-      expect(getAutoSyncBlocking()).toBe(false);
+      expect(isProjectBlocked('P1')).toBe(false);
       expect(listener).not.toHaveBeenCalled(); // nothing ever showed, so nothing ever notified
     });
 
     it('does not notify listeners during the grace period', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS - 1);
       expect(listener).not.toHaveBeenCalled();
       vi.advanceTimersByTime(1);
       expect(listener).toHaveBeenCalledTimes(1);
     });
+
+    it('shows whatever is blocked when the grace fires, even if the set grew during the grace', () => {
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(100); // inside the grace
+      setBlockedProjects(['P1', 'P2']); // a second project joins the in-flight batch
+      expect(getBlockedProjectIds().size).toBe(0); // still inside the grace
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect([...getBlockedProjectIds()].sort()).toEqual(['P1', 'P2']);
+    });
+
+    it('does not re-arm a fresh grace when a project joins an already-visible batch', () => {
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect(isProjectBlocked('P1')).toBe(true);
+      setBlockedProjects(['P1', 'P2']); // already visible → reflected immediately, no new grace
+      expect(isProjectBlocked('P2')).toBe(true);
+    });
   });
 
-  describe('overlapping blockers', () => {
-    it('stays visible when a second raise arrives before the first clears', () => {
-      const clearA = raiseAutoSyncBlock();
+  describe('case canonicalization (ingestion)', () => {
+    it('canonicalizes ingested project ids to upper case', () => {
+      // The backend gate matches ids OrdinalIgnoreCase and the canonical project id is upper; the
+      // store canonicalizes at ingestion so a mixed/lower-case snapshot still matches a canonical
+      // (upper) query — no casing skew can leave a project silently unblocked in the UI.
+      setBlockedProjects(['proj_a', 'Proj_B']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      const clearB = raiseAutoSyncBlock();
-      clearA();
-      expect(getAutoSyncBlocking()).toBe(true); // blocker B still in flight
-      clearB();
-      expect(getAutoSyncBlocking()).toBe(false);
+      expect([...getBlockedProjectIds()].sort()).toEqual(['PROJ_A', 'PROJ_B']);
+      expect(isProjectBlocked('PROJ_A')).toBe(true);
+      expect(isProjectBlocked('PROJ_B')).toBe(true);
     });
 
-    it('clear is idempotent — clearing twice cannot release another blocker', () => {
-      const clearA = raiseAutoSyncBlock();
+    it('isProjectBlocked matches a non-canonical (mixed/lower-case) query', () => {
+      // The reader canonicalizes its own argument too, so a caller passing a non-canonical id can't
+      // miss a real block (mirrors the driver's isEditorBlocked).
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
-      raiseAutoSyncBlock(); // blocker B, still in flight
-      clearA();
-      clearA(); // duplicate — must be a no-op, not release B
-      expect(getAutoSyncBlocking()).toBe(true);
+      expect(isProjectBlocked('p1')).toBe(true);
+      expect(isProjectBlocked('P1')).toBe(true);
+    });
+  });
+
+  describe('snapshot replace semantics', () => {
+    it('replaces the blocked set wholesale', () => {
+      setBlockedProjects(['P1', 'P2']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect([...getBlockedProjectIds()].sort()).toEqual(['P1', 'P2']);
+
+      setBlockedProjects(['P2', 'P3']); // wholesale replace, not a merge
+      expect(isProjectBlocked('P1')).toBe(false);
+      expect(isProjectBlocked('P2')).toBe(true);
+      expect(isProjectBlocked('P3')).toBe(true);
     });
 
-    it('does not notify listeners when visibility is unchanged (nested raises)', () => {
-      raiseAutoSyncBlock();
+    it('clears blocking when replaced with an empty set', () => {
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect(isProjectBlocked('P1')).toBe(true);
+      setBlockedProjects([]);
+      expect(getBlockedProjectIds().size).toBe(0);
+    });
+
+    it('notifies once when the visible set content changes', () => {
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      raiseAutoSyncBlock(); // second raise — set grows 1→2, visibility still true
+      setBlockedProjects(['P1', 'P2']); // content changed → one notify
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not notify when the replacement set has identical content', () => {
+      setBlockedProjects(['P1', 'P2']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      const listener = vi.fn();
+      subscribeToAutoSyncBlocking(listener);
+      setBlockedProjects(['P2', 'P1']); // same content, different order/array → no change
       expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('no timer-driven expiry', () => {
+    it('leaves no pending timer once blocking is visible', () => {
+      setBlockedProjects(['P1']);
+      expect(vi.getTimerCount()).toBe(1); // the grace timer
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect(vi.getTimerCount()).toBe(0); // grace fired; NO safety leash left running
+    });
+
+    it('never auto-clears a long-running block (no safety timeout)', () => {
+      setBlockedProjects(['P1']);
+      vi.advanceTimersByTime(SHOW_GRACE_MS);
+      expect(isProjectBlocked('P1')).toBe(true);
+      // Well beyond any plausible sync duration — the block persists until the backend clears it.
+      vi.advanceTimersByTime(60 * 60 * 1000);
+      expect(isProjectBlocked('P1')).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('leaves no pending timer after blocking clears inside the grace', () => {
+      setBlockedProjects(['P1']);
+      setBlockedProjects([]); // cleared inside the grace
+      expect(vi.getTimerCount()).toBe(0); // grace timer cancelled, nothing else armed
     });
   });
 
   describe('subscribeToAutoSyncBlocking', () => {
     it('notifies listeners when visibility flips to false', () => {
-      const clear = raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      clear();
+      setBlockedProjects([]);
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
@@ -106,7 +185,7 @@ describe('auto-sync-blocking-store', () => {
       const listener = vi.fn();
       const unsubscribe = subscribeToAutoSyncBlocking(listener);
       unsubscribe();
-      raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(listener).not.toHaveBeenCalled();
     });
@@ -116,103 +195,22 @@ describe('auto-sync-blocking-store', () => {
       const listener2 = vi.fn();
       subscribeToAutoSyncBlocking(listener1);
       subscribeToAutoSyncBlocking(listener2);
-      raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       vi.advanceTimersByTime(SHOW_GRACE_MS);
       expect(listener1).toHaveBeenCalledTimes(1);
       expect(listener2).toHaveBeenCalledTimes(1);
     });
   });
 
-  describe('safety leash', () => {
-    it('auto-clears after 10 minutes if the blocker never clears', () => {
-      const listener = vi.fn();
-      subscribeToAutoSyncBlocking(listener);
-      raiseAutoSyncBlock();
-      vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(getAutoSyncBlocking()).toBe(true);
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS);
-      expect(getAutoSyncBlocking()).toBe(false);
-      expect(listener).toHaveBeenCalledTimes(2); // shown, then auto-cleared
-    });
-
-    it('arms a leash per raise — a later blocker outlives an earlier raise expiring', () => {
-      raiseAutoSyncBlock(); // blocker A raises — A's leash armed
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2);
-      raiseAutoSyncBlock(); // blocker B raises — B gets its own 10 min leash
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // 10 min from A (its leash fires), 5 min from B
-      expect(getAutoSyncBlocking()).toBe(true); // B's own leash is still alive
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // 10 min from B — B's leash fires
-      expect(getAutoSyncBlocking()).toBe(false);
-    });
-
-    it('releases every expired block — a later single raise shows again', () => {
-      raiseAutoSyncBlock();
-      raiseAutoSyncBlock(); // two blockers in flight
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS); // both leashes expire
-      expect(getAutoSyncBlocking()).toBe(false);
-      const clear = raiseAutoSyncBlock(); // a fresh raise blocks again
-      vi.advanceTimersByTime(SHOW_GRACE_MS);
-      expect(getAutoSyncBlocking()).toBe(true);
-      clear(); // its own clear hides again
-      expect(getAutoSyncBlocking()).toBe(false);
-    });
-
-    it('releases only its own block when a stale leash expires — the newer blocker keeps blocking until it clears', () => {
-      raiseAutoSyncBlock(); // blocker A raises at t=0 and is abandoned
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2);
-      const clearB = raiseAutoSyncBlock(); // blocker B raises at t=5min
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS / 2); // t=10min — A's leash expires
-      expect(getAutoSyncBlocking()).toBe(true); // B still in flight — stays blocked
-      clearB();
-      expect(getAutoSyncBlocking()).toBe(false);
-    });
-
-    it('a late clear after the leash already fired is a no-op — it cannot release another blocker (review finding 1)', () => {
-      const clearA = raiseAutoSyncBlock(); // blocker A raises at t=0
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS - 10_000);
-      raiseAutoSyncBlock(); // blocker B raises just before A's leash fires
-      vi.advanceTimersByTime(10_000); // t=10min — A's leash fires, releasing A
-      expect(getAutoSyncBlocking()).toBe(true); // B still in flight
-      clearA(); // A's real clear arrives late — must be a no-op, never release B
-      expect(getAutoSyncBlocking()).toBe(true);
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS); // B's own leash fires
-      expect(getAutoSyncBlocking()).toBe(false);
-    });
-
-    it('an abandoned blocker is released by its own leash despite other blockers clearing (review finding 2)', () => {
-      raiseAutoSyncBlock(); // blocker X raises at t=0 and is abandoned
-      // Ordinary syncs keep raising and clearing by their own tokens — they must never cancel X's
-      // leash, so X is released at t=10min and blocking does not persist indefinitely.
-      for (let i = 0; i < 24; i += 1) {
-        const clear = raiseAutoSyncBlock();
-        vi.advanceTimersByTime(30_000);
-        clear();
-        vi.advanceTimersByTime(4.5 * 60 * 1000);
-      }
-      // Two hours in, between syncs: X's own leash fired at t=10min, so nothing is blocking.
-      expect(getAutoSyncBlocking()).toBe(false);
-    });
-
-    it('cancels the safety leash when blocking clears normally', () => {
-      const listener = vi.fn();
-      subscribeToAutoSyncBlocking(listener);
-      const clear = raiseAutoSyncBlock();
-      vi.advanceTimersByTime(SHOW_GRACE_MS);
-      clear(); // normal completion
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS);
-      expect(getAutoSyncBlocking()).toBe(false);
-      expect(listener).toHaveBeenCalledTimes(2); // shown, then cleared — no extra firing
-    });
-  });
-
   describe('resetAutoSyncBlocking', () => {
-    it('clears state and pending timers', () => {
+    it('clears state and the pending grace timer', () => {
       const listener = vi.fn();
       subscribeToAutoSyncBlocking(listener);
-      raiseAutoSyncBlock();
+      setBlockedProjects(['P1']);
       resetAutoSyncBlocking();
-      vi.advanceTimersByTime(SAFETY_TIMEOUT_MS); // neither grace nor safety should fire
-      expect(getAutoSyncBlocking()).toBe(false);
+      vi.advanceTimersByTime(SHOW_GRACE_MS); // the grace should not fire
+      expect(getBlockedProjectIds().size).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
       expect(listener).not.toHaveBeenCalled();
     });
   });

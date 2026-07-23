@@ -25,10 +25,11 @@ type InFlightSwitch = {
 };
 
 /**
- * Every in-flight (not yet released) switch. `getWorkspaceUpdating()` is exactly "this set is
- * non-empty", so there is no separate counter to keep in lockstep. (Same pattern as
- * auto-sync-blocking-store; extracting a shared abstraction is deliberately deferred — PT-4214
- * Stage U.)
+ * Every in-flight (not yet released) switch. This store is a ref-count model: each concurrent
+ * switch adds one identity-keyed entry and removes it on release, and `getWorkspaceUpdating()` is
+ * exactly "this set is non-empty", so there is no separate counter to keep in lockstep. Each entry
+ * carries its own safety leash (see {@link SWITCH_SAFETY_TIMEOUT_MS}) that releases it if its finish
+ * never arrives.
  */
 const inFlightSwitches = new Set<InFlightSwitch>();
 

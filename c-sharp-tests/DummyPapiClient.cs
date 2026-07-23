@@ -15,6 +15,11 @@ namespace TestParanextDataProvider
         private readonly ConcurrentQueue<(string eventType, object? eventParameters)> _sentEvents =
             new();
 
+        private readonly Queue<(
+            string requestType,
+            IReadOnlyList<object?>? requestContents
+        )> _sentRequests = [];
+
         // ConcurrentDictionary (not Dictionary): RegisterRequestHandlerAsync writes this on every
         // PDP registration, and per-project PDP creation registers PDPs concurrently (fire-
         // and-forget, not serialized behind a single creation lock - see
@@ -24,6 +29,16 @@ namespace TestParanextDataProvider
             string,
             OpenRpcSingleMethodDocumentation?
         > _documentationByRequestType = new();
+
+        /// <summary>
+        /// Test-only override for how a <c>network:registerEvent</c> request resolves. Defaults to
+        /// "main accepted" (returns <c>true</c>) — the normal happy path that services under test
+        /// rely on so they don't take their registration-failure branches. A test can swap in a
+        /// delegate that returns <c>false</c> (registry rejection) or throws (registry failure) to
+        /// exercise those best-effort branches. Scoped strictly to <c>network:registerEvent</c> so
+        /// no other test's <see cref="SendRequestAsync{T}"/> expectations change.
+        /// </summary>
+        public Func<bool> RegisterEventResponse { get; set; } = () => true;
 
         #region Overrides of PapiClient
 
@@ -106,7 +121,35 @@ namespace TestParanextDataProvider
         {
             if (_localMethods.TryGetValue(requestType, out _))
                 return base.SendRequestAsync<T>(requestType, requestContents);
+            _sentRequests.Enqueue((requestType, requestContents));
+            // Central-registry event registration returns an acceptance boolean; defer to the
+            // configurable RegisterEventResponse (defaults to "main accepted", mirroring
+            // ConnectAsync's "pretend we succeeded") so a test can drive the registration-failure
+            // paths. Kept strictly to this one request type so no other test's SendRequestAsync
+            // expectations change.
+            if (requestType == "network:registerEvent")
+                // T is bool here; there is no non-casting way to satisfy the generic return type.
+                return Task.FromResult<T?>((T)(object)RegisterEventResponse());
             return Task.FromResult<T?>(default);
+        }
+
+        /// <summary>
+        /// Test-only count of requests sent through <see cref="SendRequestAsync{T}"/> that were NOT
+        /// handled by a locally-registered handler (i.e. would have gone over the wire to main).
+        /// </summary>
+        public int SentRequestCount
+        {
+            get { return _sentRequests.Count; }
+        }
+
+        /// <summary>
+        /// Test-only dequeue of the oldest captured outgoing request (see
+        /// <see cref="SentRequestCount"/>). Lets tests assert wire calls like
+        /// <c>network:registerEvent</c> without a live PAPI connection.
+        /// </summary>
+        public (string requestType, IReadOnlyList<object?>? requestContents) NextSentRequest
+        {
+            get { return _sentRequests.Dequeue(); }
         }
 
         /// <summary>
@@ -118,6 +161,20 @@ namespace TestParanextDataProvider
         /// </summary>
         public bool IsHandlerRegistered(string requestType) =>
             _localMethods.ContainsKey(requestType);
+
+        /// <summary>
+        /// Test-only helper that invokes a locally-registered request handler directly (bypassing the
+        /// websocket the base client would use) and returns its result. Lets a test assert what a
+        /// registered command handler returns without a live PAPI connection.
+        /// </summary>
+        public object? InvokeRequestHandler(string requestType, params object?[] args)
+        {
+            if (!_localMethods.TryGetValue(requestType, out var handler))
+                throw new InvalidOperationException(
+                    $"No handler registered for request type \"{requestType}\""
+                );
+            return handler.DynamicInvoke(args);
+        }
 
         #endregion
     }

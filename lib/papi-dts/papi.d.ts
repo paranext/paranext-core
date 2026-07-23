@@ -8495,14 +8495,11 @@ declare module 'shared/data/platform.data' {
    * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
    * deliberately long.
    *
-   * Two different consumers share this value and must never diverge:
-   *
-   * - The main process (`shutdown-tasks.ts`) bounds how long app shutdown waits on its final sync.
-   * - The renderer (`auto-sync-blocking-store.ts`) bounds each edit-block safety leash — how long a
-   *   single blocker may block editing if its clearing event never arrives.
-   *
-   * If they diverged, a shutdown sync could outlive the renderer's opinion of it (or vice versa);
-   * tune this value knowing it retimes both.
+   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
+   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
+   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
+   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
+   * when the backend says so rather than on a renderer-side timer.
    *
    * @experimental
    */

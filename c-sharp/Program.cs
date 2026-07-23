@@ -134,6 +134,10 @@ public static class Program
                 "Background service registration"
             );
 
+            // Bridge the S/R write gate to the PAPI (event + getAutoSyncBlocking). Initialized in the
+            // critical barrier below so it is serving before extension activation.
+            var sendReceiveBlockNotifierService = new SendReceiveBlockNotifierService(papi);
+
             StartupTiming.Mark("init-barrier-start");
             // Critical path: everything the renderer needs to list projects and open an editor.
             await Task.WhenAll(
@@ -142,7 +146,8 @@ public static class Program
                 versificationConversionService.InitializeAsync(),
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
-                dblResources.RegisterDataProviderAsync()
+                dblResources.RegisterDataProviderAsync(),
+                sendReceiveBlockNotifierService.InitializeAsync()
             );
             StartupTiming.Mark("init-barrier-end");
 
