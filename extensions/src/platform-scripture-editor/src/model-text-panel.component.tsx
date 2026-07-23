@@ -35,8 +35,6 @@ const SCROLL_MAX_WAIT_MS = 2000;
  * prop.
  */
 export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
-  /** @deprecated Use `%webView_modelTextPanel_selecting%` instead. */
-  '%webView_modelTextPanel_installing%',
   '%webView_modelTextPanel_selecting%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
@@ -338,7 +336,7 @@ export function ModelTextPanel({
     );
   }
 
-  // Installing: resource found but not yet installed.
+  // Selecting: resource found but not yet installed.
   if (isSelecting) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
