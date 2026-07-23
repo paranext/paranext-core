@@ -62,6 +62,8 @@ declare module 'paratext-bible-send-receive' {
    * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
    * - `noChangesToSend` = S/R sent no non-merge revisions
    * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
+   *
+   * @experimental The set of values in this type may change
    */
   export type ResultChangeStatus =
     | 'sentChanges'
@@ -208,6 +210,8 @@ declare module 'paratext-bible-send-receive' {
     /**
      * Granular change-tracking statuses ({@link ResultChangeStatus}); multiple can apply, e.g., sent
      * AND received
+     *
+     * @experimental The set of possible statuses may change
      */
     resultStatuses?: ResultChangeStatus[];
     /** Total conflict count computed by C# */
