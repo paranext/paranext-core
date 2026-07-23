@@ -104,6 +104,12 @@ export type BookChapterControlProps = {
    */
   triggerVariant?: ButtonProps['variant'];
   /**
+   * Set to `true` to render a `ChevronsUpDown` indicator at the end of the trigger, signaling that
+   * it opens a picker. Defaults to `false` (no chevron) — most existing embeddings show the current
+   * reference alone and don't need one.
+   */
+  showTriggerChevron?: boolean;
+  /**
    * Optional callback fired whenever the control's popover open state changes. Useful when the
    * parent needs to react to the picker opening or closing — e.g. dimming a sibling control while
    * this one is active. Internal back-navigation within the popover (verses → chapters → books)
