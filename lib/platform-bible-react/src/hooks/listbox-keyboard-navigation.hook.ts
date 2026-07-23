@@ -86,6 +86,11 @@ export const useListbox = ({
   // Detect if the key event originated from an interactive element inside the currently selected option
   const isInteractiveElement = (element: HTMLElement | undefined) => {
     if (!element) return false;
+    // The listbox container itself is the element whose keydown we handle; it carries tabIndex={0}
+    // only for the ARIA activedescendant focus pattern and is never a control the user types into.
+    // Treating it as interactive would suppress type-ahead (onCharacterPress) whenever DOM focus is
+    // on the container (e.g. on initial focus or after a detail panel closes).
+    if (element === listboxRef.current) return false;
     const tag = element.tagName.toLowerCase();
     if (element.isContentEditable) return true;
     if (INTERACTIVE_ELEMENT_TAG_SELECTORS.includes(tag)) return true;
