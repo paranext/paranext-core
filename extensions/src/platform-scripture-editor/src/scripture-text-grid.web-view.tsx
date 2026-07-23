@@ -61,8 +61,12 @@ import {
   type ZoomMenuLabels,
 } from './scripture-text-grid/resource-cell-view.component';
 
-// The tab is icon-only; this is the hover tooltip / accessible name for it.
+// The tab's visible title, hover tooltip, and accessible name.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
+// Stable module-level array (not recreated per render) for the dedicated, single-key
+// `useLocalizedStrings` call used by the tab title effect — see that effect for why it's separate
+// from `ALL_STRING_KEYS` below.
+const TITLE_LOCALIZED_STRING_KEYS: LocalizeKey[] = [TITLE_KEY];
 const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
 // Notification keys are localized by the notification service, so they are NOT fetched via
 // `useLocalizedStrings`; only keys rendered directly in JSX go in `ALL_STRING_KEYS` below.
@@ -288,13 +292,23 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // "Text Collection" is both the visible tab title (icon+title when the column is roomy, hidden
   // in favor of the icon alone once it narrows — same responsive behavior as the other Column 3
   // tabs) and the hover tooltip, so the tab stays identifiable in every density state.
+  //
+  // Deliberately a SEPARATE, single-key `useLocalizedStrings` call rather than reusing the big
+  // `ALL_STRING_KEYS` batch above (~20+ keys, including the RESOURCE_COLLECTION_OPTIONS_STRING_KEYS
+  // spread): isolating the one string this effect needs is good hygiene regardless, and rules out
+  // slow/never-resolving batch loads as a cause of a missing title. NOTE: this alone does NOT fix
+  // the known issue where this tab's header text doesn't visually refresh until the tab is
+  // activated once (confirmed via CDP: `getOpenWebViewDefinition` shows the correct title/tooltip
+  // for a still-inactive tab, so the data resolves fine — the docking layer just doesn't repaint an
+  // inactive tab header on a title update). That gap is tracked separately; see PT-4208 follow-up.
+  const [titleLocalizedStrings, isLoadingTitle] = useLocalizedStrings(TITLE_LOCALIZED_STRING_KEYS);
   useEffect(() => {
-    if (isLoadingLocalizedStrings) return;
+    if (isLoadingTitle) return;
     updateWebViewDefinition({
-      title: localizedStrings[TITLE_KEY],
-      tooltip: localizedStrings[TITLE_KEY],
+      title: titleLocalizedStrings[TITLE_KEY],
+      tooltip: titleLocalizedStrings[TITLE_KEY],
     });
-  }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+  }, [isLoadingTitle, titleLocalizedStrings, updateWebViewDefinition]);
 
   // Pick the tab icon variant to match the current theme and selected state. The tab icon is
   // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
