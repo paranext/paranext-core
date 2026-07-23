@@ -16,6 +16,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
+      '%firstRun_button_skipForNow%': 'Skip for now',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
