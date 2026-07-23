@@ -37,5 +37,13 @@ type Story = StoryObj<typeof WorkspaceUpdatingOverlayPresentational>;
 export const Default: Story = {
   args: {
     label: 'Updating workspace',
+    isPowerMode: true,
+  },
+};
+
+export const SimpleMode: Story = {
+  args: {
+    label: 'Updating workspace',
+    isPowerMode: false,
   },
 };

@@ -264,6 +264,20 @@ describe('Simple-mode menu item filtering', () => {
               },
             ],
           },
+          contextMenu: {
+            ...webViewMenus[EXTENSION_NAME].contextMenu,
+            items: [
+              ...(webViewMenus[EXTENSION_NAME].contextMenu?.items ?? []),
+              {
+                label: '%test_hiddenWebViewContextMenuItem%',
+                localizeNotes: 'Test item hidden in simple mode',
+                group: 'platform.insert',
+                order: 99,
+                command: 'test.hiddenWebViewContextMenuCommand',
+                isHiddenInSimple: true,
+              },
+            ],
+          },
         },
       };
     })(),
@@ -328,6 +342,40 @@ describe('Simple-mode menu item filtering', () => {
     expect(
       result.topMenu?.items.some(
         (item) => 'command' in item && item.command === 'videoExtension.playVideo',
+      ),
+    ).toBe(true);
+  });
+
+  test('getWebViewMenu excludes isHiddenInSimple items from contextMenu when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.contextMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewContextMenuCommand',
+      ),
+    ).toBe(false);
+  });
+
+  test('getWebViewMenu includes isHiddenInSimple contextMenu items when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.contextMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewContextMenuCommand',
       ),
     ).toBe(true);
   });

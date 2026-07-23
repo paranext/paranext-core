@@ -416,12 +416,7 @@ export function PlatformBibleToolbar() {
           }}
           disabled={!hasProjectPickerItems}
         >
-          <SelectTrigger
-            className={cn(
-              'tw:max-w-64 tw:min-w-48',
-              !isPowerMode && 'tw:border-0 tw:bg-transparent',
-            )}
-          >
+          <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
             <SelectValue
               placeholder={
                 hasProjectPickerItems

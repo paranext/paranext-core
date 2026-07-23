@@ -91,7 +91,7 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
       onNavigate={handleNavigate}
       localizedStrings={localizedStrings}
       className="tw:h-8"
-      groupClassName={isPowerMode ? undefined : 'tw:rounded-full tw:bg-muted/60 tw:p-0.5'}
+      groupClassName={isPowerMode ? undefined : 'tw:rounded-full tw:bg-muted/50 tw:p-0.5'}
       showDivider={!isPowerMode}
     />
   );

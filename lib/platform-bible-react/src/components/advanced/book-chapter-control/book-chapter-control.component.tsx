@@ -925,7 +925,7 @@ export function BookChapterControl({
           {showTriggerChevron && (
             <IconSelector
               data-testid="book-chapter-control-chevron"
-              className="tw:ml-2 tw:size-4 tw:shrink-0 tw:opacity-50"
+              className="tw:ms-2 tw:size-4 tw:shrink-0 tw:opacity-50"
             />
           )}
         </Button>

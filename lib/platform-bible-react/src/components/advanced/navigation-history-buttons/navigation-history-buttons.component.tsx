@@ -75,7 +75,7 @@ export type NavigationHistoryButtonsProps = {
   /**
    * Optional class name applied to the outer `ButtonGroup` wrapper (as opposed to `className`,
    * which applies to each individual button). Use for a pill-shaped container background, e.g.
-   * `"tw:rounded-full tw:bg-muted/60 tw:p-0.5"`. Defaults to `undefined` (no wrapper styling).
+   * `"tw:rounded-full tw:bg-muted/50 tw:p-0.5"`. Defaults to `undefined` (no wrapper styling).
    */
   groupClassName?: string;
   /**
