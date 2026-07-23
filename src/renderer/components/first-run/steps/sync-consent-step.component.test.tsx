@@ -9,7 +9,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     keys.forEach((k) => {
       strings[k] = k; // return the key as-is so tests can assert on localization key usage
     });
-    return [strings];
+    return [strings, false];
   }),
 }));
 
@@ -39,7 +39,7 @@ describe('SyncConsentStep', () => {
   });
 
   it('does not render any buttons (shell owns the footer)', () => {
-    const { container } = render(
+    render(
       <SyncConsentStep
         onNext={vi.fn()}
         onBack={vi.fn()}
@@ -47,6 +47,6 @@ describe('SyncConsentStep', () => {
         setCanProceed={vi.fn()}
       />,
     );
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 });

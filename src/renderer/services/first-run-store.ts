@@ -211,13 +211,23 @@ export async function resolveFirstRunState(): Promise<void> {
   return resolvePromise;
 }
 
-/** Finish the wizard: persist completion, clear the active marker, reveal the app. */
+/**
+ * Finish the wizard: persist completion, clear the active marker, reveal the app.
+ *
+ * @param options.syncSkipped - When true, the user chose "Skip for now" on the sync-consent step.
+ *   Persists `platform.firstRunSyncSkipped=true` so the main-process startup-tasks can suppress
+ *   automatic sync on subsequent launches. Write is best-effort: a failure is logged but does not
+ *   block wizard completion.
+ */
 export async function completeFirstRun(options?: { syncSkipped?: boolean }): Promise<void> {
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
   if (isDemoMode()) {
     setStatus({ kind: 'app' });
     return;
   }
+  // Write firstRunComplete FIRST so a crash between the two writes leaves the wizard closed and
+  // sync enabled (safe fail) rather than sync permanently suppressed from an aborted session.
+  await markFirstRunComplete();
   if (options?.syncSkipped) {
     writeBooleanFlag(SYNC_SKIPPED_KEY, true);
     // Persist durably as a platform setting so the main-process startup-tasks can read it.
@@ -227,7 +237,6 @@ export async function completeFirstRun(options?: { syncSkipped?: boolean }): Pro
       logger.warn(`Failed to persist platform.firstRunSyncSkipped: ${getErrorMessage(e)}`);
     }
   }
-  await markFirstRunComplete();
   setStatus({ kind: 'app' });
 }
 

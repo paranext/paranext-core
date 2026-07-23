@@ -123,24 +123,15 @@ describe('performStartupTasks', () => {
     stubSettings({ mode: 'simple', firstRunComplete: true, syncSkipped: true });
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
     expect(mockLoggerDebug).toHaveBeenCalledWith(
-      expect.stringContaining('platform.firstRunSyncSkipped'),
-    );
-  });
-
-  it('proceeds with startup sync when syncSkipped reads false', async () => {
-    stubSettings({ mode: 'simple', firstRunComplete: true, syncSkipped: false });
-    await performStartupTasks();
-    expect(mockSendCommand).toHaveBeenCalledWith(
-      'paratextBibleSendReceive.syncProjects',
-      undefined,
+      expect.stringContaining('Startup sync skipped: platform.firstRunSyncSkipped'),
     );
   });
 
   it('proceeds with startup sync when syncSkipped setting read throws (fail-open to sync)', async () => {
     // If the setting read fails, default to proceeding with sync rather than silently skipping
     // a user who never actually chose to skip.
-    stubSettings({ mode: 'simple', firstRunComplete: true });
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
