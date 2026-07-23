@@ -42,9 +42,11 @@ vi.mock('@shared/services/network.service', () => ({
 // Mock platform-bible-react to avoid the React version conflict that arises when
 // lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
 // useEvent is re-implemented with the same semantics: subscribe in an effect, unsubscribe on cleanup.
+// Progress renders with the ARIA attributes that the component sets so progress-bar tests still work.
 vi.mock('platform-bible-react', () => ({
   Spinner: () => <div data-testid="spinner" />,
   useEvent: useEventStub,
+  Progress: ProgressStub,
 }));
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -62,6 +64,25 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
+
+/** Minimal Progress stub: renders role="progressbar" with ARIA so progress tests still work. */
+function ProgressStub({
+  value,
+  'aria-label': ariaLabel,
+}: {
+  value?: number;
+  'aria-label'?: string;
+}) {
+  return (
+    <div
+      role="progressbar"
+      aria-label={ariaLabel}
+      aria-valuenow={value}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    />
+  );
+}
 
 /**
  * Minimal useEvent re-implementation for the test environment. Same contract as the real hook: call
@@ -152,5 +173,23 @@ describe('SyncProgressStep', () => {
     });
     expect(await screen.findByText(/sync complete/i)).toBeInTheDocument();
     expect(screen.queryByText(/syncing your data/i)).not.toBeInTheDocument();
+  });
+
+  it('completion block has role="status" so screen readers announce the transition', async () => {
+    render(<SyncProgressStep onNext={vi.fn()} />);
+    act(() => {
+      emitSyncState(true);
+    });
+    act(() => {
+      emitSyncState(false);
+    });
+    const statusRegion = await screen.findByRole('status');
+    expect(statusRegion).toHaveTextContent(/sync complete/i);
+  });
+
+  it('indeterminate state has role="progressbar" without aria-valuenow', () => {
+    render(<SyncProgressStep onNext={vi.fn()} />);
+    const progressbar = screen.getByRole('progressbar');
+    expect(progressbar).not.toHaveAttribute('aria-valuenow');
   });
 });
