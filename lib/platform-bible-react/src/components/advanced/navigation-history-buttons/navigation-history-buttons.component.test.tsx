@@ -191,4 +191,19 @@ describe('NavigationHistoryButtons', () => {
     await screen.findByRole('tooltip');
     expect(document.querySelector('[data-slot="kbd"]')).toBeNull();
   });
+
+  test('does not render a separator by default', () => {
+    render(<NavigationHistoryButtons {...defaultProps} />);
+    expect(document.querySelector('[data-slot="button-group-separator"]')).toBeNull();
+  });
+
+  test('renders a separator between the buttons when showDivider is true', () => {
+    render(<NavigationHistoryButtons {...defaultProps} showDivider />);
+    expect(document.querySelector('[data-slot="button-group-separator"]')).not.toBeNull();
+  });
+
+  test('applies groupClassName to the outer ButtonGroup', () => {
+    render(<NavigationHistoryButtons {...defaultProps} groupClassName="tw:rounded-full" />);
+    expect(screen.getByTestId('navigation-history-buttons')).toHaveClass('tw:rounded-full');
+  });
 });

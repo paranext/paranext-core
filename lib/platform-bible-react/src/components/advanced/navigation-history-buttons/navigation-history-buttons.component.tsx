@@ -1,5 +1,5 @@
 import { Button, type ButtonProps } from '@/components/shadcn-ui/button';
-import { ButtonGroup } from '@/components/shadcn-ui/button-group';
+import { ButtonGroup, ButtonGroupSeparator } from '@/components/shadcn-ui/button-group';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +72,17 @@ export type NavigationHistoryButtonsProps = {
   className?: string;
   /** Variant for the buttons. Defaults to "ghost" */
   variant?: ButtonProps['variant'];
+  /**
+   * Optional class name applied to the outer `ButtonGroup` wrapper (as opposed to `className`,
+   * which applies to each individual button). Use for a pill-shaped container background, e.g.
+   * `"tw:rounded-full tw:bg-muted/60 tw:p-0.5"`. Defaults to `undefined` (no wrapper styling).
+   */
+  groupClassName?: string;
+  /**
+   * Set to `true` to render a vertical `ButtonGroupSeparator` between the back and forward buttons.
+   * Defaults to `false` (no divider) — the plain adjacent-buttons look most embeddings use today.
+   */
+  showDivider?: boolean;
 };
 
 /**
@@ -90,6 +101,8 @@ export function NavigationHistoryButtons({
   showKeyboardShortcuts = true,
   className,
   variant = 'ghost',
+  groupClassName,
+  showDivider = false,
 }: NavigationHistoryButtonsProps) {
   const isMac = isMacOs();
   const interfaceDirection = readDirection();
@@ -237,8 +250,9 @@ export function NavigationHistoryButtons({
     // coordinates across both buttons — moving the pointer between them doesn't re-incur the
     // full open delay.
     <TooltipProvider>
-      <ButtonGroup data-testid="navigation-history-buttons">
+      <ButtonGroup data-testid="navigation-history-buttons" className={groupClassName}>
         {renderNavButton(first, true)}
+        {showDivider && <ButtonGroupSeparator />}
         {renderNavButton(second, false)}
       </ButtonGroup>
     </TooltipProvider>
