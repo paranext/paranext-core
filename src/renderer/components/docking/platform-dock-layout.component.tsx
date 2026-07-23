@@ -133,7 +133,7 @@ export function PlatformDockLayout() {
   return (
     <DockLayoutWrapper
       ref={dockLayoutRef}
-      loadTab={(savedTabInfo) => loadTab(savedTabInfo)}
+      loadTab={loadTab}
       saveTab={saveTab}
       /* Put a visual space around all tab-groups.
        * I tried using CSS padding and margin for this, but both causes overflows. */
