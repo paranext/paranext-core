@@ -20,14 +20,12 @@
   "keywords": ["eslint", "eslintplugin", "paranext"],
   "author": "Paranext",
   "license": "MIT",
-  "peerDependencies": {},
-  "dependencies": {},
   "devDependencies": {
     "@typescript-eslint/parser": ">=5.0.0",
     "@typescript-eslint/utils": "^5.62.0",
     "eslint": ">=8.0.0",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   },
   "volta": {
     "extends": "../../package.json"
