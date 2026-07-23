@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import '@testing-library/jest-dom';
@@ -85,10 +85,18 @@ function stubMatchMedia() {
 
 describe('NotificationDisplay with real Sonner', () => {
   beforeEach(async () => {
+<<<<<<< HEAD
     // Fake timers prevent Sonner's auto-dismiss setTimeout (≥10 s) from entering the real
     // Node.js event loop. Without this the timer fires after jsdom tears down and causes
     // "window is not defined" because React's reconciler accesses window in its scheduler.
     vi.useFakeTimers();
+||||||| parent of fc0cd1df8dc (test(PT-4178): fix flaky notification test and add write-order coverage)
+=======
+    // Use fake timers so Sonner's auto-dismiss setTimeout is registered as a fake timer
+    // and can be drained in afterEach before jsdom tears down. shouldAdvanceTime keeps
+    // real wall-clock time advancing so findByRole polling and Promise chains still work.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+>>>>>>> fc0cd1df8dc (test(PT-4178): fix flaky notification test and add write-order coverage)
     vi.clearAllMocks();
     vi.resetModules();
     mockCurrentThemeType = 'light';
@@ -110,6 +118,7 @@ describe('NotificationDisplay with real Sonner', () => {
     });
     vi.useRealTimers();
   });
+
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
     render(<NotificationDisplay />);
