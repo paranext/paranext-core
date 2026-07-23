@@ -204,6 +204,22 @@ describe('IdentifyStep', () => {
   describe('demo mode', () => {
     beforeEach(() => mockIsDemoMode.mockReturnValue(true));
 
+    it('does not call validateParatextRegistrationData in demo mode', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+      await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
+      await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+      vi.advanceTimersByTime(1500);
+
+      await waitFor(() =>
+        expect(mockSendCommand).not.toHaveBeenCalledWith(
+          'paratextRegistration.validateParatextRegistrationData',
+          expect.anything(),
+        ),
+      );
+    });
+
     it('enables Save and restart when name is non-empty (no code validation needed)', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
