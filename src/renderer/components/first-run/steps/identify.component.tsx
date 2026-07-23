@@ -81,6 +81,7 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
   const validateRegistration = (code: string, nm: string) => {
     if (validationTimeout.current) clearTimeout(validationTimeout.current);
     setRegistrationIsValid(false);
+    if (isDemoMode()) return;
     validationTimeout.current = setTimeout(async () => {
       if (!code.match(REGISTRATION_CODE_REGEX) || !nm.trim()) return;
       setIsValidating(true);
