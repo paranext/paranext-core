@@ -61,11 +61,19 @@ describe('Dock Layout Component', () => {
     it('simple mode: removes the inset except for the top toolbar clearance', () => {
       expect(getDockLayoutOuterInset(false)).toEqual({
         position: 'absolute',
-        top: 48,
+        top: 56,
         bottom: 0,
         left: 0,
         right: 0,
       });
+    });
+
+    it('returns a 56px top inset in simple mode (matches the taller tw:h-14 toolbar)', () => {
+      expect(getDockLayoutOuterInset(false).top).toBe(56);
+    });
+
+    it('keeps a 48px top inset in power mode (matches tw:h-12)', () => {
+      expect(getDockLayoutOuterInset(true).top).toBe(48);
     });
   });
 
