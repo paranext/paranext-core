@@ -27,6 +27,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_next%',
   '%firstRun_button_back%',
   '%firstRun_button_skip%',
+  '%firstRun_button_skipForNow%',
   '%firstRun_button_finish%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
@@ -140,7 +141,7 @@ export function FirstRunShell({
         )}
         {onSkip && (
           <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skip%']}
+            {strings['%firstRun_button_skipForNow%']}
           </Button>
         )}
         <Button onClick={onNext} disabled={!canProceed || isBusy}>
