@@ -144,12 +144,25 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     // Mirrors the real BookChapterControl's trigger (aria-label + disabled) so tests can assert on
     // the disabled state that platform-bible-toolbar.tsx wires up, without pulling in the real
     // component's Radix Popover/Command internals.
-    BookChapterControl: ({ disabled }: { disabled?: boolean }) => (
+    BookChapterControl: ({
+      disabled,
+      className,
+      triggerVariant,
+      showTriggerChevron,
+    }: {
+      disabled?: boolean;
+      className?: string;
+      triggerVariant?: string;
+      showTriggerChevron?: boolean;
+    }) => (
       <button
         type="button"
         aria-label="book-chapter-trigger"
         disabled={disabled}
         data-testid="book-chapter-control"
+        data-classname={className}
+        data-trigger-variant={triggerVariant}
+        data-show-chevron={showTriggerChevron}
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
@@ -158,7 +171,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         {children}
       </div>
     ),
-    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    SelectTrigger: ({
+      children,
+      className,
+    }: {
+      children?: React.ReactNode;
+      className?: string;
+    }) => <div data-select-trigger-classname={className}>{children}</div>,
     SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
       <div data-value={value}>{children}</div>
@@ -690,5 +709,43 @@ describe('PlatformBibleToolbar — Home button visibility by interface mode', ()
     await waitFor(() => {
       expect(screen.getByTestId('toolbar-home-button')).toBeInTheDocument();
     });
+  });
+});
+
+describe('PlatformBibleToolbar — top BCV and project selector styling by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('uses ghost variant, chevron, and fit-content width for the top BCV in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-trigger-variant', 'ghost');
+    expect(control).toHaveAttribute('data-show-chevron', 'true');
+    expect(control.getAttribute('data-classname')).toContain('tw:w-fit');
+  });
+
+  it('uses outline variant, no chevron, and the fixed width for the top BCV in power mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control.getAttribute('data-trigger-variant')).not.toBe('ghost');
+    expect(control).toHaveAttribute('data-show-chevron', 'false');
+    expect(control.getAttribute('data-classname')).toContain('tw:w-96');
+  });
+
+  it('applies ghost styling to the project picker Select in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+    });
+    expect(
+      document
+        .querySelector('[data-select-trigger-classname]')
+        ?.getAttribute('data-select-trigger-classname'),
+    ).toContain('tw:border-0');
   });
 });

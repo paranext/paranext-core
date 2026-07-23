@@ -414,7 +414,12 @@ export function PlatformBibleToolbar() {
           }}
           disabled={!hasProjectPickerItems}
         >
-          <SelectTrigger className="tw:max-w-64 tw:min-w-48">
+          <SelectTrigger
+            className={cn(
+              'tw:max-w-64 tw:min-w-48',
+              !isPowerMode && 'tw:border-0 tw:bg-transparent',
+            )}
+          >
             <SelectValue
               placeholder={
                 hasProjectPickerItems
@@ -462,7 +467,9 @@ export function PlatformBibleToolbar() {
         ref={registerTopBookChapterControl}
         scrRef={scrRef}
         handleSubmit={setScrRef}
-        className="tw:w-96"
+        className={isPowerMode ? 'tw:w-96' : 'tw:w-fit'}
+        triggerVariant={isPowerMode ? undefined : 'ghost'}
+        showTriggerChevron={!isPowerMode}
         disabled={isBookChapterControlDisabled}
         getActiveBookIds={getActiveBookIds}
         recentSearches={recentScriptureRefs}
