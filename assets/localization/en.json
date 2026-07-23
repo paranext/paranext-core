@@ -37,6 +37,7 @@
   "%firstRun_step_identify_heading%": "Enter your registration information",
   "%firstRun_step_identify_registryHelp%": "Can't find your registration code?",
   "%firstRun_step_identify_registryLink%": "Visit Paratext Registry",
+  "%firstRun_step_identify_validatingCode%": "Checking your registration…",
   "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
   "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",
   "%firstRun_step_syncProgress_placeholder%": "Sync progress (coming soon)",
