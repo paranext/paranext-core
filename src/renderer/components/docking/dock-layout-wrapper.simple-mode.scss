@@ -114,45 +114,47 @@ body > .dragging-layer.dock-style-resources {
 
   // Author feedback: the divider between columns must be a visible, clearly-thicker line than the
   // 1px `tw:border-b` on each column's TabToolbar (see tab-toolbar.component.tsx) — 2px so it reads
-  // as heavier at a glance.
+  // as heavier at a glance, and a SINGLE clean line (an earlier attempt here left 3px of transparent
+  // padding on each side of the visible line to create a wider grab area — see git history — but
+  // that padding didn't even work as a hit area: sibling web-view iframes still won hit-testing
+  // across most of it (confirmed via `elementFromPoint` — only ~2 of the padded box's 8px were
+  // actually reachable), and the leftover empty space just made the divider read as two separate
+  // lines instead of one).
   //
-  // The hit area still needs to be much wider than 2px for easy grabbing, but a `transform: scale`
-  // on the divider itself (the previous, invisible-divider approach) would stretch a *visible*
-  // background proportionally too — an 8x scale would render a 16px bar, not a crisp 2px line. So
-  // instead of scaling the whole element, size the hit area directly via flex-basis (actual layout
-  // width, not a visual transform) and paint the thin visible line as a centered `::after` that
-  // doesn't grow with it.
+  // Back to the pre-existing approach for the wide hit area: `transform: scaleX/Y(8)` on the
+  // divider itself, which (unlike a plain flex-basis increase) actually overlays the adjacent
+  // iframes correctly. Scaling the whole element would normally stretch a *visible* background
+  // proportionally too (an 8x scale would render a 16px bar, not a crisp 2px line), so the visible
+  // color lives on a `::after` with the inverse scale (1/8), which exactly cancels the parent's
+  // stretch and leaves no gap around it.
   .dock-divider {
-    flex: 0 0 8px;
+    flex: 0 0 2px;
     background: transparent;
     position: relative;
 
     &::after {
       content: '';
       position: absolute;
+      inset: 0;
       background: var(--border);
     }
   }
 
   .dock-hbox > .dock-divider {
+    transform: scaleX(8);
     cursor: ew-resize;
 
     &::after {
-      inset-block: 0;
-      left: 50%;
-      width: 2px;
-      transform: translateX(-50%);
+      transform: scaleX(0.125); // 1/8, cancels the parent's scaleX(8)
     }
   }
 
   .dock-vbox > .dock-divider {
+    transform: scaleY(8);
     cursor: ns-resize;
 
     &::after {
-      inset-inline: 0;
-      top: 50%;
-      height: 2px;
-      transform: translateY(-50%);
+      transform: scaleY(0.125); // 1/8, cancels the parent's scaleY(8)
     }
   }
 
