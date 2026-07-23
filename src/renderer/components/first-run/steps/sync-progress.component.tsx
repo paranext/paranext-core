@@ -7,10 +7,10 @@ import { LocalizeKey } from 'platform-bible-utils';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
 const KEYS: LocalizeKey[] = [
-  '%firstRun_step_syncProgress_heading%',
   '%firstRun_step_syncProgress_body%',
-  '%firstRun_step_syncProgress_complete_heading%',
   '%firstRun_step_syncProgress_complete_body%',
+  '%firstRun_step_syncProgress_complete_heading%',
+  '%firstRun_step_syncProgress_heading%',
 ];
 
 /**
