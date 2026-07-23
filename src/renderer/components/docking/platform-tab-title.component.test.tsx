@@ -107,10 +107,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** Simulates the enclosing `.dock-panel` column reporting a new width */
-function simulateColumnResize(width: number) {
+/**
+ * Triggers a recompute of the icon-only-density decision (as a real column resize would). The
+ * component reads current geometry directly (`getBoundingClientRect()`) rather than from the resize
+ * entry, so callers must set up the desired panel/measure-clone widths (see
+ * `setPanelWidth`/`setMeasureCloneWidth` below) before calling this.
+ */
+function simulateColumnResize() {
   act(() => {
-    resizeCallback?.([{ contentRect: { width } }]);
+    resizeCallback?.([]);
   });
 }
 
@@ -129,19 +134,51 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
 /**
  * Renders the tab title inside a stand-in for rc-dock's DOM structure: a `.dock-panel` ancestor
- * containing the active tab header (where `PlatformTabTitle` mounts) as a sibling of the active tab
- * content pane, mirroring the DOM walk the component performs (header → `.dock-panel` →
+ * containing `.dock-nav-wrap` > `.dock-nav-list` > the active tab header (where `PlatformTabTitle`
+ * mounts, matching the DOM walk the icon-only-density effect performs) as a sibling of the active
+ * tab content pane (mirroring the last-selected-tint effect's walk: header → `.dock-panel` →
  * `.dock-tabpane-active`).
  */
 function renderTabTitle(id: string) {
   return render(
     <div className="dock-panel">
-      <div className="dock-tab-active">
-        <PlatformTabTitle id={id} text="Tab title" />
+      <div className="dock-nav-wrap">
+        <div className="dock-nav-list">
+          <div className="dock-tab-active">
+            <PlatformTabTitle id={id} text="Tab title" />
+          </div>
+        </div>
       </div>
       <div className="dock-tabpane-active" />
     </div>,
   );
+}
+
+/** A zero-filled `DOMRect`-shaped object with just `width` overridden, for mocking layout in jsdom. */
+function makeRectWithWidth(width: number): DOMRect {
+  return { width, height: 0, top: 0, right: 0, bottom: 0, left: 0, x: 0, y: 0, toJSON: () => ({}) };
+}
+
+/**
+ * Sets `.dock-panel`'s `getBoundingClientRect().width` (jsdom doesn't compute real layout, so this
+ * never reflects actual rendered geometry) to simulate the enclosing column being `width` px wide.
+ */
+function setPanelWidth(container: HTMLElement, width: number) {
+  const panel = container.querySelector('.dock-panel');
+  if (!panel) throw new Error('setPanelWidth: .dock-panel not found');
+  vi.spyOn(panel, 'getBoundingClientRect').mockReturnValue(makeRectWithWidth(width));
+}
+
+/**
+ * Sets this tab's `.platform-tab-title-measure` clone's `getBoundingClientRect().width` (jsdom
+ * doesn't compute real layout) to simulate the tab bar needing `width` px at full icon+title size.
+ * With a single rendered tab (as `renderTabTitle` produces), this clone's width IS the tab bar's
+ * full content width the component sums across siblings.
+ */
+function setMeasureCloneWidth(container: HTMLElement, width: number) {
+  const clone = container.querySelector('.platform-tab-title-measure');
+  if (!clone) throw new Error('setMeasureCloneWidth: .platform-tab-title-measure not found');
+  vi.spyOn(clone, 'getBoundingClientRect').mockReturnValue(makeRectWithWidth(width));
 }
 
 describe('PlatformTabTitle last-selected web view highlighting', () => {
@@ -320,20 +357,47 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
   });
 
-  it('hides the title text once the enclosing column narrows below the icon-only threshold', () => {
+  it('hides the title text once the tab bar’s real full content no longer fits the available space', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     const { container } = renderTabTitle('web-view-1');
+    setPanelWidth(container, 300);
+    setMeasureCloneWidth(container, 500);
 
-    simulateColumnResize(300);
+    simulateColumnResize();
 
     expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
   });
 
-  it('keeps the title text visible when the enclosing column is wide enough', () => {
+  it('keeps the title text visible when the available space exceeds the tab bar’s real full content width', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderTabTitle('web-view-1');
+    setPanelWidth(container, 900);
+    setMeasureCloneWidth(container, 500);
+
+    simulateColumnResize();
+
+    expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
+  });
+
+  it('measures live rather than caching a past reading, so a column that started too narrow correctly expands once genuinely widened', () => {
+    // Regression test for a real bug: an earlier version cached the full-content width only the
+    // first time it saw `!wasIconOnly`, which could capture a wrong value if that first
+    // measurement happened during a transient state (e.g. before a sibling tab's title finished
+    // loading) — and, since the cache only ever updated while NOT collapsed, a bad value taken
+    // right before collapsing could never self-correct, leaving the tab stuck icon-only forever
+    // regardless of how wide the column later became (confirmed via CDP up to a 3000px window).
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     const { container } = renderTabTitle('web-view-1');
 
-    simulateColumnResize(600);
+    setPanelWidth(container, 300);
+    setMeasureCloneWidth(container, 500);
+    simulateColumnResize();
+    expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
+
+    // Widen enough to fit the SAME full-content width (500) again — no caching means this always
+    // re-reads the true current content width, so it must correctly re-expand.
+    setPanelWidth(container, 900);
+    simulateColumnResize();
 
     expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
   });
