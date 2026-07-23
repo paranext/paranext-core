@@ -374,29 +374,32 @@ export function PlatformBibleToolbar() {
         </>
       }
     >
-      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw:h-8"
-              onClick={() => {
-                // This command comes from an extension and is not typed in CommandHandlers.
-                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                (sendCommand as any)('platformGetResources.openHome');
-              }}
-            >
-              <HomeIcon />
-            </Button>
-          </TooltipTrigger>
-          {localizedStrings['%mainMenu_openHome%'] && (
-            <TooltipContent>
-              <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
+      {isPowerMode && (
+        <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-testid="toolbar-home-button"
+                variant="ghost"
+                size="icon"
+                className="tw:h-8"
+                onClick={() => {
+                  // This command comes from an extension and is not typed in CommandHandlers.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                  (sendCommand as any)('platformGetResources.openHome');
+                }}
+              >
+                <HomeIcon />
+              </Button>
+            </TooltipTrigger>
+            {localizedStrings['%mainMenu_openHome%'] && (
+              <TooltipContent>
+                <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {!isPowerMode && (
         <Select
           value={currentProject?.id ?? ''}

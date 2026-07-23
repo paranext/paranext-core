@@ -669,3 +669,26 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
     expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
   });
 });
+
+describe('PlatformBibleToolbar — Home button visibility by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('hides the Home button when platform.interfaceMode is "simple"', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('toolbar-home-button')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the Home button when platform.interfaceMode is "power"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-home-button')).toBeInTheDocument();
+    });
+  });
+});
