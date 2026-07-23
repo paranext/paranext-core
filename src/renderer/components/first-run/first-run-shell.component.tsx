@@ -9,7 +9,7 @@ import { LanguageStep } from './steps/language.component';
 import { InternetSettingsStep } from './steps/internet-settings-step.component';
 import { IdentifyStep } from './steps/identify-step.component';
 import { SyncConsentStep } from './steps/sync-consent-step.component';
-import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
+import { SyncProgressStep } from './steps/sync-progress.component';
 
 /** Runtime order of the wizard steps. */
 export const STEP_ORDER: FirstRunStep[] = [
@@ -26,7 +26,7 @@ export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRu
   internetSettings: InternetSettingsStep,
   identify: IdentifyStep,
   syncConsent: SyncConsentStep,
-  syncProgress: SyncProgressPlaceholderStep,
+  syncProgress: SyncProgressStep,
 };
 
 const KEYS: LocalizeKey[] = [
