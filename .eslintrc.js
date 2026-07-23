@@ -1,4 +1,5 @@
 module.exports = {
+  // TODO: propagate root: true to paranext-multi-extension-template and paranext-extension-template
   root: true,
   extends: [
     // https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb

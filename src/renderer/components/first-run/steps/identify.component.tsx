@@ -8,22 +8,23 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
 // Copied from the paratext-registration extension — keep in sync if the extension changes.
-//   REGISTRATION_CODE_REGEX: extensions/src/paratext-registration/src/components/registration-form-view.component.tsx
-//   REGISTRATION_CODE_CHARACTER_REGEX, REGISTRATION_CODE_INSERT_DASH_REGEX:
+//   REGISTRATION_CODE_REGEX_STRING, REGISTRATION_CODE_LENGTH_WITH_DASHES:
+//     extensions/src/paratext-registration/src/components/registration-form-view.component.tsx
+//   REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX, REGISTRATION_CODE_INSERT_DASH_REGEX_STRING:
 //     extensions/src/paratext-registration/src/components/registration-form.component.tsx
-const REGISTRATION_CODE_CHARACTER_REGEX = '^[a-zA-Z0-9\\-]*$';
+const REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX = '^[a-zA-Z0-9\\-]*$';
 // NOTE: the '[[' below is a pre-existing quirk in the extension's source — copied verbatim so the
 // two stay identical. It is harmless: '[[' only adds literal '[' to the match, which the segment
 // character-class filter in onRegistrationCodeChange rejects for real input anyway.
-const REGISTRATION_CODE_INSERT_DASH_REGEX = '^[a-zA-Z0-9]{6}$|-[[a-zA-Z0-9\\-]{6}$';
-export const REGISTRATION_CODE_REGEX =
+const REGISTRATION_CODE_INSERT_DASH_REGEX_STRING = '^[a-zA-Z0-9]{6}$|-[[a-zA-Z0-9\\-]{6}$';
+export const REGISTRATION_CODE_REGEX_STRING =
   '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
-export const REGISTRATION_CODE_MAX_LENGTH = 34;
+export const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 // Kept as separate constants so each delay can be tuned independently.
 export const VALIDATION_DEBOUNCE_MS = 1000;
 export const INVALID_CODE_DISPLAY_DEBOUNCE_MS = 1000;
 
-export const PARATEXT_REGISTRY_LINK = 'https://registry.paratext.org/';
+const PARATEXT_REGISTRY_LINK = 'https://registry.paratext.org/';
 
 // Eight %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
 // extension's localizedStrings.json via PAPI — they will not appear in en.json.
@@ -84,7 +85,7 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
     const timeout = setTimeout(
       () =>
         setShowInvalidCode(
-          registrationCode.length > 0 && !registrationCode.match(REGISTRATION_CODE_REGEX),
+          registrationCode.length > 0 && !registrationCode.match(REGISTRATION_CODE_REGEX_STRING),
         ),
       INVALID_CODE_DISPLAY_DEBOUNCE_MS,
     );
@@ -107,7 +108,8 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
     if (isDemoMode()) return;
     validationTimeout.current = setTimeout(async () => {
       // Guard at the top so no state update (including setIsValidating) runs after unmount.
-      if (!isMounted.current || !code.match(REGISTRATION_CODE_REGEX) || !newName.trim()) return;
+      if (!isMounted.current || !code.match(REGISTRATION_CODE_REGEX_STRING) || !newName.trim())
+        return;
       setIsValidating(true);
       setError('');
       setErrorDescription('');
@@ -142,8 +144,8 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
     let code = e.target.value;
     // Auto-insert a dash after every 6th alphanumeric character (matches PT9 UX).
     if (
-      !code.match(REGISTRATION_CODE_REGEX) &&
-      code.match(REGISTRATION_CODE_INSERT_DASH_REGEX) &&
+      !code.match(REGISTRATION_CODE_REGEX_STRING) &&
+      code.match(REGISTRATION_CODE_INSERT_DASH_REGEX_STRING) &&
       !registrationCode.endsWith('-')
     ) {
       code += '-';
@@ -156,7 +158,7 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
         .split('-')
         .every(
           (seg, idx, arr) =>
-            seg.match(REGISTRATION_CODE_CHARACTER_REGEX) &&
+            seg.match(REGISTRATION_CODE_CHARACTER_VALIDATION_REGEX) &&
             (idx < arr.length - 1 ? seg.length === 6 : true),
         )
     ) {
@@ -220,15 +222,16 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
           <Input
             id="identify-code"
             className="tw:font-mono"
-            maxLength={REGISTRATION_CODE_MAX_LENGTH}
+            maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
             placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
             value={registrationCode}
             disabled={isRestarting}
             aria-invalid={showInvalidCode || (!!error && !isValidating)}
+            aria-describedby="identify-code-warning identify-code-error"
             onChange={onRegistrationCodeChange}
           />
           {showInvalidCode && (
-            <p className="tw:text-sm tw:text-muted-foreground">
+            <p id="identify-code-warning" className="tw:text-sm tw:text-muted-foreground">
               {strings['%paratextRegistration_warning_invalid_registration_length%']}
             </p>
           )}
@@ -262,7 +265,7 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
       )}
 
       {error && (
-        <Alert variant="destructive">
+        <Alert id="identify-code-error" variant="destructive">
           <AlertCircle className="tw:h-4 tw:w-4" />
           <AlertTitle>{error}</AlertTitle>
           <AlertDescription>{errorDescription}</AlertDescription>
