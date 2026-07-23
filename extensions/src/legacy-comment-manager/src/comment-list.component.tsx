@@ -204,7 +204,7 @@ export function CommentListPanel({
   const noFiltersActive = areCommentFiltersAtDefault(filters) && scopeFilter === UNFILTERED;
 
   // The list area swaps between skeletons (loading), an empty-state message, and the list — but the
-  // toolbar below always renders, so isLoading only governs this region (see PT-4070).
+  // toolbar below always renders, so isLoading only governs this region.
   let listContent: ReactNode;
   if (isLoading) {
     listContent = (
@@ -255,11 +255,9 @@ export function CommentListPanel({
 
   return (
     <div className="tw:flex tw:flex-col tw:h-full">
-      {/* Sticky header: the editing-paused notice (when blocking) and the filter toolbar both stay
-          pinned to the top of whichever ancestor scrolls (PT-4070), so neither scrolls out of view
-          as the comments list scrolls. Previously only the toolbar was sticky, so the notice
-          scrolled away once the list was scrolled down — unlike the Scripture editor's fixed
-          banner. Keeping them in one sticky container pins both together. */}
+      {/* Sticky header: the editing-paused notice (when blocking) and the filter toolbar share one
+          sticky container so both stay pinned to the top of whichever ancestor scrolls and neither
+          scrolls out of view as the comments list scrolls. */}
       <div className="tw:sticky tw:top-0 tw:z-10 tw:shrink-0">
         {/* Slim, non-covering notice shown while this project's automatic Send/Receive is blocking
             edits. Only the write affordances are disabled (by the web view's gated capability
@@ -275,7 +273,7 @@ export function CommentListPanel({
         {/* Filter toolbar — orthogonal filter dropdowns plus the scope dropdown. Rendered regardless
             of the loading state: it must stay mounted across filter changes (each of which briefly
             flips `isLoading` true while the query resubscribes), or the control the user is
-            interacting with would unmount from under them — the strobe PT-4070 exists to prevent. */}
+            interacting with would unmount from under them, causing a visible strobe. */}
         <div className="tw:border-b tw:bg-background tw:flex tw:flex-row tw:flex-wrap tw:gap-1 tw:items-center tw:pb-2 tw:px-4 tw:pt-4">
           <FilterDropdown
             value={filters.resolved}

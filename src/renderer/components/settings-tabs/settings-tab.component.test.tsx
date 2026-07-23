@@ -115,9 +115,9 @@ describe('SettingsTab sync-blocked notice dedup', () => {
 
   it('never renders a notice for the general/user settings view (no project)', async () => {
     // Even mocked to report "blocked", the notice must not appear: the general-settings branch
-    // never reaches the notice-rendering code at all (it is structurally inside the
-    // selectedSidebarItem.projectId branch), unlike the per-list version this replaces which
-    // called the hook unconditionally.
+    // never reaches the notice-rendering code at all — it is structurally inside the
+    // selectedSidebarItem.projectId branch, so a "blocked" hook result can't leak a notice into the
+    // no-project view.
     vi.mocked(useIsProjectAutoSyncBlocked).mockReturnValue(true);
     render(<SettingsTab />);
 

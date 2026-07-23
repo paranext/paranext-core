@@ -73,7 +73,7 @@ describe('ProjectOrOtherSettingsList sync-block disabled wiring', () => {
     expect(screen.getByTestId('other-setting')).toBeInTheDocument();
   });
 
-  it('never renders a notice itself, regardless of disabled (moved to the settings-tab level)', () => {
+  it('never renders a notice itself, regardless of disabled (the notice lives at the settings-tab level)', () => {
     render(
       <ProjectOrOtherSettingsList
         settingProperties={PROJECT_SETTING_PROPERTIES}
