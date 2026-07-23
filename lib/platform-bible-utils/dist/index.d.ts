@@ -1139,6 +1139,12 @@ export type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
+	/**
+	 * Set to `true` to hide this menu item while the app is in Simple interface mode
+	 * (`platform.interfaceMode === 'simple'`). Omit (or set to `false`) for items that should show in
+	 * both modes — most items need no value here at all.
+	 */
+	isHiddenInSimple?: boolean;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1437,6 +1443,10 @@ export declare const menuDocumentSchema: {
 					$ref: string;
 				};
 				order: {
+					description: string;
+					type: string;
+				};
+				isHiddenInSimple: {
 					description: string;
 					type: string;
 				};

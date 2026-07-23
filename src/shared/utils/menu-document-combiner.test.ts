@@ -613,6 +613,28 @@ test('Name prefixes are verified', () => {
   ).toThrow(/Cannot add 'differentPrefix.something'. The new web view must start with test./);
 });
 
+test('isHiddenInSimple flag on a menu item validates and survives combination', () => {
+  const menuCombiner = new MenuDocumentCombiner(startingDoc);
+  menuCombiner.addOrUpdateContribution('test', {
+    mainMenu: {
+      items: [
+        {
+          label: '%test_hiddenItem%',
+          localizeNotes: 'Test item hidden in simple mode',
+          group: 'platform.windowGroup1',
+          order: 99,
+          command: 'test.hiddenCommand',
+          isHiddenInSimple: true,
+        },
+      ],
+    },
+  });
+  const hiddenItem = menuCombiner.rawOutput?.mainMenu.items.find(
+    (item) => 'command' in item && item.command === 'test.hiddenCommand',
+  );
+  expect(hiddenItem).toMatchObject({ isHiddenInSimple: true });
+});
+
 test('Web view menu defaults are combined', () => {
   const menuCombiner = new MenuDocumentCombiner({
     mainMenu: {
