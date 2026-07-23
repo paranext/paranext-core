@@ -80,6 +80,9 @@ export class CommentListPanelWebViewFactory extends WebViewFactory<
       // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power
       // mode) would survive into simple mode and detach the panel from the editor's navigation.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This is the fixed Column 3 Comment List panel and must always remain open in simple mode,
+      // so it's non-closable there. Power mode allows closing/rearranging freely.
+      isClosable: interfaceMode === 'power',
     };
   }
 

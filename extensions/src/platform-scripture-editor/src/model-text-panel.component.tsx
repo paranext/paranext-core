@@ -6,7 +6,16 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { Button, Spinner, useExtraValidMarkers } from 'platform-bible-react';
+import {
+  Button,
+  Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  useExtraValidMarkers,
+  useTruncationTooltip,
+} from 'platform-bible-react';
 import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
 import type {
   DblResourceReference,
@@ -17,6 +26,7 @@ import type {
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import { scrollToVerse } from './editor-dom.util';
+import { getRefLabel } from './resource-reference.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -130,6 +140,18 @@ export function ModelTextPanel({
   }
   const match = dblRef ? dblResources.find((r) => r.dblEntryUid === dblRef.id) : undefined;
   const resourceProjectId = match?.installed ? match.projectId : undefined;
+  const modelTextLabel = effectiveModelText
+    ? getRefLabel(effectiveModelText, dblResources)
+    : undefined;
+
+  // Only show the tooltip when the header's tw:truncate actually clips modelTextLabel — an
+  // unconditional Tooltip would fire on every hover, even when the full label already fits.
+  const {
+    ref: modelTextLabelRef,
+    open: isModelTextLabelTruncatedHovered,
+    onPointerEnter: onModelTextLabelPointerEnter,
+    onPointerLeave: onModelTextLabelPointerLeave,
+  } = useTruncationTooltip<HTMLDivElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
 
@@ -356,15 +378,63 @@ export function ModelTextPanel({
   }
 
   // Active: read-only editor showing the model text.
+  // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
+  // rounded top corners — see _simple-mode.scss) is applied unconditionally, unlike the
+  // Scripture Editor's conditional use of the same class.
   return (
-    <div className="tw:h-screen tw:overflow-auto" dir={options.textDirection}>
-      <Editorial
-        ref={editorRef}
-        scrRef={scrRef}
-        onScrRefChange={handleScrRefChange}
-        options={options}
-        logger={logger}
-      />
+    <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
+      {modelTextLabel && (
+        <TooltipProvider>
+          <Tooltip open={isModelTextLabelTruncatedHovered}>
+            <TooltipTrigger asChild>
+              <div
+                ref={modelTextLabelRef}
+                onPointerEnter={onModelTextLabelPointerEnter}
+                onPointerLeave={onModelTextLabelPointerLeave}
+                // Keyboard/screen-reader users can't hover to trigger the tooltip, so make this
+                // otherwise-non-interactive div focusable and reuse the same truncation-gated
+                // handlers for focus/blur (they only measure ref.current and set state, so they
+                // work regardless of which event triggered them). Matches the tooltip-trigger
+                // pattern in platform-scripture-editor.web-view.tsx's structure-protection wrapper.
+                onFocus={onModelTextLabelPointerEnter}
+                onBlur={onModelTextLabelPointerLeave}
+                // This div has no native interactive role, but it must be focusable so keyboard
+                // users can reach it and trigger the tooltip via the onFocus handler above.
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                tabIndex={0}
+                aria-label={modelTextLabel}
+                data-testid="model-text-header"
+                // 42px total, matching Column 3's dock tab-bar OUTER height (the 36px active tab
+                // plus its 6px --tab-header-to-content-gap) and the Scripture Editor's Simple-mode
+                // toolbar override — all three rows' bottom edges need to land at the same Y, which
+                // matching total row height achieves on its own. tw:items-center centers the text
+                // symmetrically within the full 42px box (no extra top-only padding needed — see
+                // _simple-mode.scss's .scripture-editor-tab-nav-simple comment for why that was
+                // tried and reverted).
+                //
+                // tw:truncate + Tooltip: the column has a 300px minWidth (simple-layout.data.ts), and
+                // "{fullName} ({displayName})" can exceed that at 300px — truncate to keep the fixed
+                // 42px row height intact, with the full label available on hover/focus per the
+                // Responsiveness guideline. useTruncationTooltip keeps the tooltip from firing when
+                // the label already fits and tw:truncate has nothing to clip.
+                className="tw:flex tw:h-[42px] tw:shrink-0 tw:items-center tw:truncate tw:border-b tw:border-border tw:px-3 tw:text-sm tw:font-semibold"
+              >
+                {modelTextLabel}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>{modelTextLabel}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={handleScrRefChange}
+          options={options}
+          logger={logger}
+        />
+      </div>
     </div>
   );
 }

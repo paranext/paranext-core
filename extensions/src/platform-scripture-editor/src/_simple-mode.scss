@@ -1,0 +1,50 @@
+// Simple-mode-ONLY styles for this extension's web views. Every rule here applies exclusively to
+// Simple mode. Unlike the renderer's own dock-layout-wrapper.component.scss, this extension's
+// stylesheets can't use `[data-interface-mode='simple']`: each web view is compiled into its own
+// standalone CSS string (see `?inline` imports in main.ts) and rendered inside its own sandboxed
+// iframe, which never sees the renderer's `data-interface-mode` attribute (that only exists on
+// the renderer's own document.body, a different document). So Simple-mode scoping here is done
+// via plain marker classes applied directly to each web view's own root element instead:
+// `.editor-container-simple` (unconditional in model-text-panel.component.tsx and
+// resource-text-panel.web-view.tsx — both Simple-mode-only web views; conditional on
+// `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes) and
+// `.scripture-editor-tab-nav-simple` (conditional in platform-scripture-editor.web-view.tsx only).
+//
+// This file is @used from _editor-overrides.scss, which all three web-view entry points already
+// @use — so it flows into every web view's compiled CSS without needing to touch each entry point.
+// (Sass hoists an @used module's CSS to the top of the compiled output regardless of source-order
+// position, but neither rule below depends on cascade order relative to any other same-specificity
+// rule, so that hoisting is harmless here — unlike the renderer's dock-layout-wrapper.component.scss,
+// which needed a plain webpack import instead of @use for that reason.)
+
+// Flatten .editor-container's own rounded top corners (10px, set in the vendored ./_editor.scss)
+// to match the flattened column chrome. Specificity alone wins here (two classes vs. one) — no
+// source-order dependency.
+.editor-container-simple .editor-container {
+  border-radius: 0;
+}
+
+// Match the Scripture Editor's TabToolbar height (56px via tw:h-14, from the shared
+// TabToolbarContainer component) to Column 3's dock tab-header row — see
+// docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md, Section 3.
+// `!important` is required for the same reason noted in the original (now-removed) renderer-side
+// attempt: this overrides a Tailwind utility class (`tw:h-14`) applied directly via `className` on
+// the same element, where plain specificity cannot reliably win the tie.
+//
+// The target is 42px, not 36px: Column 3's tab bar (`dock-layout-wrapper.component.scss`) is a
+// 42px-tall `.dock-bar` — the visible 36px active tab plus a 6px `--tab-header-to-content-gap`
+// above it — so matching the OUTER row height (42px), not just the tab's own 36px, is what makes
+// both rows' bottom edges land at the same Y (found via visual verification: matching only 36px
+// left this toolbar's bottom edge 6px higher than Column 3's). Padding stays uniform/zero here —
+// TabToolbarContainer's own `tw:items-center` (already correct per Task 6) centers the buttons
+// symmetrically within the full 42px box; an earlier attempt at asymmetric top-only padding, to
+// mirror Column 3's own 6-gap-then-36-content internal shape, made the icons look off-center
+// within their own row for no alignment benefit — only the row's total height needs to match.
+//
+// padding-block also needed shrinking from TabToolbarContainer's own tw:py-2 (16px total): with
+// tw:box-border and tw:overflow-clip, the original 36px-height attempt left only 20px of content
+// area, and every toolbar button here is tw:h-8 (32px) — so it was clipping the buttons entirely.
+.scripture-editor-tab-nav-simple {
+  height: 42px !important;
+  padding-block: 0 !important;
+}

@@ -1,13 +1,18 @@
 import 'rc-dock/dist/rc-dock.css';
 import './dock-layout-wrapper.component.scss';
+// Simple-mode-ONLY overrides. Must be imported AFTER the stylesheet above so its rules land later
+// in the compiled CSS's cascade order — see the comment at the bottom of
+// dock-layout-wrapper.component.scss for why this can't just be a Sass `@use`.
+import './dock-layout-wrapper.simple-mode.scss';
 
 import { CSSProperties, ForwardedRef, PropsWithChildren, forwardRef } from 'react';
 import DockLayout, { LayoutProps, LayoutData, LayoutBase } from 'rc-dock';
 
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { RCDockTabInfo } from './docking-framework-internal.model';
-import { GROUPS } from './platform-dock-layout-positioning.util';
+import { getGroups } from './platform-dock-layout-positioning.util';
 
 export type DockLayoutWrapperProps = PropsWithChildren<{
   loadTab: (savedTabInfo: SavedTabInfo) => RCDockTabInfo;
@@ -21,17 +26,19 @@ export const DockLayoutWrapper = forwardRef(function DockLayoutWrapper(
   { loadTab, saveTab, onLayoutChange, defaultLayout, style }: DockLayoutWrapperProps,
   ref: ForwardedRef<DockLayout> | undefined,
 ) {
+  const isPowerMode = useIsPowerMode();
   return (
     <DockLayout
       ref={ref}
-      groups={GROUPS}
+      groups={getGroups(isPowerMode)}
       // DockLayout requires LayoutData, but it needs to be LayoutBase in case we use loadTab
       /* eslint-disable no-type-assertion/no-type-assertion */
       defaultLayout={
         (defaultLayout as LayoutData) || { dockbox: { mode: 'horizontal', children: [] } }
       }
       style={style}
-      dropMode="edge"
+      // Simple mode: omit dropMode so tabs can't be dropped onto panel edges to split panels.
+      dropMode={isPowerMode ? 'edge' : undefined}
       loadTab={loadTab}
       // Type assert `saveTab` as not returning `undefined` because rc-dock's types are wrong
       // Here, if `saveTab` returns `undefined` the tab is not saved

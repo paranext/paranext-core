@@ -3,6 +3,8 @@
 // this is required for many overwrites
 /* stylelint-disable selector-class-pattern */
 
+@use './simple-mode';
+
 // Platform.Bible modifications
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the

@@ -92,6 +92,8 @@ export function PlatformTabTitle({
   id,
   webViewId,
 }: PlatformTabTitleProps) {
+  const isPowerMode = useIsPowerMode();
+
   const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
   // This ref will always be defined
@@ -162,7 +164,6 @@ export function PlatformTabTitle({
   // The last-selected tint is a Power-mode-only affordance. In Simple mode the toolbar is the single
   // navigation point and every scripture view follows the same scroll group, so there is no "which
   // tab does the toolbar target" question to answer — the tint would only add confusion there.
-  const isPowerMode = useIsPowerMode();
 
   // Attach a click listener to the tab to focus this tab. Unfortunately rc-dock doesn't expose
   // rc-tabs onTabClick https://github.com/fis-components/rc-tabs/tree/master?tab=readme-ov-file#props
@@ -293,32 +294,50 @@ export function PlatformTabTitle({
     />
   );
 
+  // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
+  // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
+  // library's own supported way to make part of a draggable tab non-draggable. Simple mode's
+  // Resources column keeps a visible, clickable tab bar (unlike the headless Home/Editor columns),
+  // so its tabs need this to block same-column drag-to-reorder. `tabLocked` (set on the tab group)
+  // only blocks drag-to-create-new-panel, not drag-to-reorder within a group — see the group
+  // config comment in platform-dock-layout-positioning.util.ts. Applied to both the icon/title
+  // spans and the wrapping div because rc-dock checks only the exact pointerdown target, not its
+  // ancestors, so any inner element the pointer might land on also needs the marker.
+  const dragIgnoreClass = isPowerMode ? '' : ' drag-ignore';
+
+  const titleWithTooltip = (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            ref={containerRef}
+            className={`platform-tab-title${dragIgnoreClass}`}
+            aria-label={tabLabel}
+            data-web-view-id={webViewId}
+          >
+            <span className={dragIgnoreClass.trim()}>{icon}</span>
+            <span className={dragIgnoreClass.trim()}>{title}</span>
+          </div>
+        </TooltipTrigger>
+        {tooltip &&
+          createPortal(
+            <TooltipContent className="platform-tab-tooltip" side="bottom">
+              <p>{tooltip}</p>
+            </TooltipContent>,
+            document.body,
+          )}
+      </Tooltip>
+    </TooltipProvider>
+  );
+
+  // Simple mode: skip the context menu entirely. Its only item is "Float Tab", which is already a
+  // no-op because the group config has floatable: false. Removing the menu prevents a dead option
+  // from being shown.
+  if (!isPowerMode) return titleWithTooltip;
+
   return (
     <ContextMenu>
-      <ContextMenuTrigger>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div
-                ref={containerRef}
-                className="platform-tab-title"
-                aria-label={tabLabel}
-                data-web-view-id={webViewId}
-              >
-                <span>{icon}</span>
-                <span>{title}</span>
-              </div>
-            </TooltipTrigger>
-            {tooltip &&
-              createPortal(
-                <TooltipContent className="platform-tab-tooltip" side="bottom">
-                  <p>{tooltip}</p>
-                </TooltipContent>,
-                document.body,
-              )}
-          </Tooltip>
-        </TooltipProvider>
-      </ContextMenuTrigger>
+      <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
       </ContextMenuContent>
