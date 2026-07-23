@@ -285,11 +285,15 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     });
   }, [effectiveProjectId, textConnectionPdp]);
 
-  // Icon-only tab: no visible text label, with "Text Collection" as the hover tooltip / accessible
-  // name so the tab stays identifiable.
+  // "Text Collection" is both the visible tab title (icon+title when the column is roomy, hidden
+  // in favor of the icon alone once it narrows — same responsive behavior as the other Column 3
+  // tabs) and the hover tooltip, so the tab stays identifiable in every density state.
   useEffect(() => {
     if (isLoadingLocalizedStrings) return;
-    updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
+    updateWebViewDefinition({
+      title: localizedStrings[TITLE_KEY],
+      tooltip: localizedStrings[TITLE_KEY],
+    });
   }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
 
   // Pick the tab icon variant to match the current theme and selected state. The tab icon is
