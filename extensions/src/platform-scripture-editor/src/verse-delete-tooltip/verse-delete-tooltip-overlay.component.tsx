@@ -1,6 +1,13 @@
 import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
+import {
+  cn,
+  Kbd,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
 import {
   AnchorRect,
@@ -131,9 +138,9 @@ export function VerseDeleteTooltipOverlay({ children }: Props) {
             {armed
               ? formatReplacementStringToArray(message, {
                   key: (
-                    <kbd className="tw:rounded-sm tw:border tw:border-destructive tw:px-1">
+                    <Kbd className="tw:border tw:border-destructive">
                       {confirmingKey(armed.intent)}
-                    </kbd>
+                    </Kbd>
                   ),
                 }).map((part, index) => (
                   // The array is static per render (one fixed localized string + one kbd), so index
