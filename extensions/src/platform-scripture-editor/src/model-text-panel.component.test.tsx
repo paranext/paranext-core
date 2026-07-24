@@ -16,6 +16,7 @@ vi.mock('@eten-tech-foundation/platform-editor', () => ({
 }));
 
 const STRINGS = {
+  '%webView_modelTextPanel_installing%': 'Installing resource…',
   '%webView_modelTextPanel_selecting%': 'Selecting resource…',
   '%webView_modelTextPanel_noProject%': 'No project.',
   '%webView_modelTextPanel_pickModelText%': 'Pick model text…',
@@ -23,7 +24,7 @@ const STRINGS = {
   '%webView_modelTextPanel_installFailed%': "The model text couldn't be installed.",
   '%webView_modelTextPanel_installFailedOffline%':
     "The model text couldn't be installed. Check your connection and try again.",
-  '%webView_modelTextPanel_retry%': 'Retry',
+  '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
 };
 
@@ -92,7 +93,7 @@ describe('ModelTextPanel', () => {
       installResource,
     });
 
-    // The regression (PT-4221): a configured-but-uninstalled model text is never installed and the
+    // Without auto-install, a configured-but-uninstalled model text is never installed and the
     // panel sits on an infinite spinner. It must instead kick off the install so it can resolve.
     await waitFor(() => expect(installResource).toHaveBeenCalledWith('uid-web'));
   });
@@ -104,7 +105,8 @@ describe('ModelTextPanel', () => {
       dblResources: [UNINSTALLED_RESOURCE],
       getResourceChapter,
     });
-    expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+    // Auto-installing a configured resource the user didn't pick reads "Installing…", not "Selecting…".
+    expect(await screen.findByText('Installing resource…')).toBeInTheDocument();
 
     // Simulate the webview re-resolving the catalog after install: the resource is now installed.
     rerender(
@@ -128,7 +130,7 @@ describe('ModelTextPanel', () => {
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
-    await screen.findByRole('button', { name: 'Retry' });
+    await screen.findByRole('button', { name: 'Try again' });
     expect(installResource).toHaveBeenCalledTimes(1);
 
     // The webview re-resolves the list (new array identity) with the same still-uninstalled
@@ -142,7 +144,7 @@ describe('ModelTextPanel', () => {
         })}
       />,
     );
-    await screen.findByRole('button', { name: 'Retry' });
+    await screen.findByRole('button', { name: 'Try again' });
     expect(installResource).toHaveBeenCalledTimes(1);
   });
 
@@ -159,7 +161,7 @@ describe('ModelTextPanel', () => {
     });
 
     // First attempt fails → recovery state.
-    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
 
     // The retry's install succeeds; the webview re-resolves with the resource installed.
@@ -187,7 +189,7 @@ describe('ModelTextPanel', () => {
 
     // Guards the widened render gate: the auto-install case must show the labeled (finite-looking)
     // installing state, not fall through to a bare spinner.
-    expect(await screen.findByText('Selecting resource…')).toBeInTheDocument();
+    expect(await screen.findByText('Installing resource…')).toBeInTheDocument();
   });
 
   it('surfaces a recoverable retry state when auto-install fails, and retries the same resource', async () => {
@@ -200,9 +202,9 @@ describe('ModelTextPanel', () => {
       installResource,
     });
 
-    // Instead of spinning forever (the PT-4221 symptom, on the error path), the panel surfaces the
-    // failure and offers a retry.
-    const retryButton = await screen.findByRole('button', { name: 'Retry' });
+    // Instead of spinning forever on the error path, the panel surfaces the failure and offers a
+    // retry.
+    const retryButton = await screen.findByRole('button', { name: 'Try again' });
     expect(screen.getByText("The model text couldn't be installed.")).toBeInTheDocument();
 
     // The failing install is attempted exactly once — no retry storm.
@@ -233,7 +235,7 @@ describe('ModelTextPanel', () => {
   it('offers the picker (not a dead end) when a configured reference cannot be resolved', async () => {
     // A configured model text that is not a resolvable DBL resource (here a project reference) must
     // not spin forever, and must not be a dead end — it shows a not-found state with a way to
-    // recover by picking another (PT-4221).
+    // recover by picking another.
     const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
       effectiveModelTexts: {

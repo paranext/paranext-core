@@ -11,18 +11,6 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
-    },
-    "%webView_modelTextPanel_installing%": {
-      "deprecationInfo": {
-        "date": "2026-06-12",
-        "message": "The model text panel now uses the %webView_modelTextPanel_selecting%"
-      }
-    },
-    "%webView_resourcePanel_installing%": {
-      "deprecationInfo": {
-        "date": "2026-06-12",
-        "message": "The resource panel now uses the %webView_resourcePanel_selecting%"
-      }
     }
   },
   "localizedStrings": {
@@ -124,7 +112,7 @@
       "%webView_modelTextPanel_installing%": "Installing resource…",
       "%webView_modelTextPanel_noProject%": "No project selected.",
       "%webView_modelTextPanel_pickModelText%": "Pick model text…",
-      "%webView_modelTextPanel_retry%": "Retry",
+      "%webView_modelTextPanel_retry%": "Try again",
       "%webView_modelTextPanel_selecting%": "Selecting resource…",
       "%webView_modelTextPanel_title%": "Model text",
       "%webView_modelTextPanel_title_withResource%": "Model text: {textName}",
@@ -142,7 +130,7 @@
       "%webView_resourcePanel_installFailedOffline%": "The resource couldn't be installed. Check your connection and try again.",
       "%webView_resourcePanel_installing%": "Installing resource…",
       "%webView_resourcePanel_noProject%": "No project selected.",
-      "%webView_resourcePanel_retry%": "Retry",
+      "%webView_resourcePanel_retry%": "Try again",
       "%webView_resourcePanel_selecting%": "Selecting resource…",
       "%webView_selectDblResource_installFailed%": "Failed to install resource. Please try again.",
       "%webView_scriptureTextGrid_title_multiple%": "Text Collection",

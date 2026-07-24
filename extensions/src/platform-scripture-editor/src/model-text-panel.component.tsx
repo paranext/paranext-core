@@ -20,6 +20,7 @@ import { isDblResourceReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
+import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -39,8 +40,9 @@ const SCROLL_MAX_WAIT_MS = 2000;
  * prop.
  */
 export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
-  /** @deprecated Use `%webView_modelTextPanel_selecting%` instead. */
+  // Shown while an auto-installing (not user-picked) resource downloads.
   '%webView_modelTextPanel_installing%',
+  // Shown while a user-picked resource is being selected/installed.
   '%webView_modelTextPanel_selecting%',
   '%webView_modelTextPanel_noProject%',
   '%webView_modelTextPanel_pickModelText%',
@@ -139,14 +141,11 @@ export function ModelTextPanel({
   const [isSelecting, setIsSelecting] = useState(false);
 
   // Auto-install a matched-but-uninstalled configured model text (shared with the resource panel);
-  // without it the panel spins forever with the picker unreachable (PT-4221). Skipped while a manual
-  // pick is in flight (it installs the resource itself).
+  // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
+  // in flight (it installs the resource itself).
   const dblEntryUidToInstall = match && !match.installed ? match.dblEntryUid : undefined;
-  const { isInstalling, installFailed, retryInstall } = useDblResourceAutoInstall(
-    dblEntryUidToInstall,
-    installResource,
-    isSelecting,
-  );
+  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
+    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
 
   // Only used to add a "check your connection" hint to the install-failed message when the machine
   // is definitely offline (the common cause of a failed download on first run).
@@ -294,14 +293,22 @@ export function ModelTextPanel({
       // install-failed state doesn't stick.
       retryInstall();
       try {
-        await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () =>
-          installResource(resource.dblEntryUid),
-        );
+        await selectTextConnection(resource, getUserModelTexts, setUserModelTexts, async () => {
+          try {
+            await installResource(resource.dblEntryUid);
+          } catch (e) {
+            // Record the failure so that once the pick finishes and the auto-install effect
+            // re-enables, its failed-uid guard suppresses a duplicate install attempt; this also
+            // surfaces the install-failed state immediately instead of after a second attempt.
+            markInstallFailed(resource.dblEntryUid);
+            throw e;
+          }
+        });
       } finally {
         setIsSelecting(false);
       }
     },
-    [getUserModelTexts, setUserModelTexts, installResource, retryInstall],
+    [getUserModelTexts, setUserModelTexts, installResource, retryInstall, markInstallFailed],
   );
 
   const handlePickModelText = useCallback(async () => {
@@ -321,7 +328,7 @@ export function ModelTextPanel({
 
   // Not-found: a configured model text can't be resolved to a displayable resource (not in the DBL
   // catalog, a non-DBL reference, or an entry missing its id). Offer the picker so the user can
-  // recover rather than being stranded (PT-4221).
+  // recover rather than being stranded.
   const notFoundState = (
     <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
       <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
@@ -372,38 +379,42 @@ export function ModelTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>
-          {
-            localizedStrings[
-              isOnline
-                ? '%webView_modelTextPanel_installFailed%'
-                : '%webView_modelTextPanel_installFailedOffline%'
-            ]
-          }
-        </p>
-        <Button onClick={() => retryInstall()}>
-          {localizedStrings['%webView_modelTextPanel_retry%']}
-        </Button>
-      </div>
+      <InstallFailedView
+        message={
+          localizedStrings[
+            isOnline
+              ? '%webView_modelTextPanel_installFailed%'
+              : '%webView_modelTextPanel_installFailedOffline%'
+          ]
+        }
+        retryLabel={localizedStrings['%webView_modelTextPanel_retry%']}
+        onRetry={retryInstall}
+      />
     );
   }
 
-  // Installing: resource found but not yet installed — either auto-detected from the configured
-  // model text (isInstalling) or just chosen via the picker (isSelecting).
+  // Installing: resource found but not yet installed. Distinguish the two causes so the label is
+  // accurate: a user pick (isSelecting) reads "Selecting…", while an auto-install of a configured
+  // resource (isInstalling) — where the user picked nothing and it's just downloading — reads
+  // "Installing…".
   if (isSelecting || isInstalling) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
-        <Spinner />
-        <span>{localizedStrings['%webView_modelTextPanel_selecting%']}</span>
-      </div>
+      <InstallingView
+        label={
+          localizedStrings[
+            isSelecting
+              ? '%webView_modelTextPanel_selecting%'
+              : '%webView_modelTextPanel_installing%'
+          ]
+        }
+      />
     );
   }
 
   // Unresolvable: a model text is configured but doesn't resolve to a displayable installed
   // resource (e.g. a non-DBL reference, or a DBL entry missing its id). Show the not-found state
-  // rather than an endless spinner (PT-4221). By here resources have loaded and any
-  // matched-but-uninstalled resource was handled above, so this is a terminal state.
+  // rather than an endless spinner. By here resources have loaded and any matched-but-uninstalled
+  // resource was handled above, so this is a terminal state.
   if (!resourceProjectId) {
     return notFoundState;
   }
