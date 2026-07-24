@@ -144,7 +144,10 @@ export function MarkerMenu({
   const [commandSearch, setCommandSearch] = useState<string>('');
 
   const [codeMatchItems, titleMatchItems] = useMemo(() => {
-    const query = commandSearch.trim().toLowerCase();
+    // A leading `+` is USFM nesting syntax (`\+nd` nests inside an open char span), not part of the
+    // marker code — strip it so `+nd` resolves to the bare `nd` item. Marker codes never start with
+    // `+`, so this only ever affects a typed nest prefix.
+    const query = commandSearch.trim().toLowerCase().replace(/^\+/, '');
     if (!query) {
       // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
       // entries the user cannot insert.
