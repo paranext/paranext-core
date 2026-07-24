@@ -83,8 +83,13 @@ test.describe('scripture editor type-through', () => {
 
     await test.step('content typed before a chapter switch is saved to the chapter it was typed in', async () => {
       // Navigating away flushes the pending save against Jonah 1. Jonah 2 must NOT inherit the
-      // typed tokens (a stale cross-chapter write would put them there)...
+      // typed tokens (a stale cross-chapter write would put them there). Positive control first:
+      // wait for Jonah 2's own verse text ("prayed to Yahweh, his God" appears in 2:1 and nowhere
+      // in chapter 1) so the negative assertion below runs against RENDERED chapter-2 content —
+      // `not.toContainText` alone is satisfied by the empty mid-navigation editor and would pass
+      // vacuously (same rationale as the formatted-default-simple-mode spec's verse-1 control).
       await navigateToolbarBcv(mainPage, 'Jonah 2:1');
+      await expect(editorInput).toContainText('prayed to Yahweh, his God', { timeout: 60_000 });
       await expect(editorInput).not.toContainText(FIRST_BURST, { timeout: 20_000 });
 
       // ...and returning to Jonah 1 must still show the saved edits (the flush persisted them).
