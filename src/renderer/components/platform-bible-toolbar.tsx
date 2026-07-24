@@ -225,13 +225,23 @@ export function PlatformBibleToolbar() {
     osPlatformToReserveSpaceFor !== 'darwin' &&
     windowControlsOverlayRect
       ? {
-          // paddingRight, not the paddingInlineEnd logical property — the native caption buttons
-          // Windows reserves this space for always sit at the physical right edge regardless of
-          // locale direction, so a logical property would reserve the wrong side in RTL.
+          // Physical paddingLeft/paddingRight, chosen from the live-measured rect: Windows moves
+          // the caption buttons to the physical left in RTL locales. Deriving the side from
+          // windowControlsOverlayRect itself is correct in both directions since it reflects the
+          // buttons' actual measured position.
           // +RESERVED_SPACE_BREATHING_ROOM_PX — without it, content sits pixel-flush against the
           // native buttons, which reads as cramped even though nothing actually overlaps.
-          paddingRight:
-            window.innerWidth - windowControlsOverlayRect.right + RESERVED_SPACE_BREATHING_ROOM_PX,
+          ...(windowControlsOverlayRect.left > 0
+            ? { paddingLeft: windowControlsOverlayRect.left + RESERVED_SPACE_BREATHING_ROOM_PX }
+            : undefined),
+          ...(window.innerWidth - windowControlsOverlayRect.right > 0
+            ? {
+                paddingRight:
+                  window.innerWidth -
+                  windowControlsOverlayRect.right +
+                  RESERVED_SPACE_BREATHING_ROOM_PX,
+              }
+            : undefined),
           // @ts-ignore Electron-only property, not in React's CSSProperties type. Toolbar's own
           // drag area (shouldUseAsAppDragArea) doesn't extend into this wrapper, so this strip
           // needs its own drag region or the window can no longer be dragged from here.

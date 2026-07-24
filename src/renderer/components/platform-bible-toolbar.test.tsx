@@ -733,6 +733,23 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     });
   });
 
+  it('reserves space on the left when the live-measured gap is on the left (e.g., RTL locales)', async () => {
+    // left = 150, right = window.innerWidth: the gap sits on the left instead of the right.
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(150, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      // 150px measured gap + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingLeft: '154px',
+      });
+    });
+  });
+
   it('applies no inline override while the overlay geometry is not yet known, falling back to the static class', async () => {
     mockSendCommandForOS('win32');
 
