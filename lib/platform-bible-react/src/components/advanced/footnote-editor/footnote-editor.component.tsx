@@ -14,12 +14,14 @@ import {
   HIDDEN_NOTE_CALLER,
   isInsertEmbedOpOfType,
   MarkerMenuItem as EditorMarkerMenuItem,
+  SelectionRange,
   StateChangeSnapshot,
 } from '@eten-tech-foundation/platform-editor';
 import { Copy } from 'lucide-react';
 import {
   clearPaletteSessionIfCurrent,
   handleMarkerPaletteSessionKeyDown,
+  isImeCompositionKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
 import {
   useCallback,
@@ -60,14 +62,6 @@ export interface FootnoteEditorProps {
   scrRef: SerializedVerseRef;
   /** The unique note key to identify the note being edited used to apply changes to the note */
   noteKey: string | undefined;
-  /**
-   * True when the note being edited was just inserted (as opposed to an existing note being
-   * reopened). When true, once the note content loads the caret is moved to the end of the last
-   * footnote-text char span (`\ft`/`\xt`) so the user can start typing immediately. Existing notes
-   * are left with whatever selection results from loading the note ops, so reopening one doesn't
-   * unexpectedly reposition the caret.
-   */
-  isNewNote?: boolean;
   /** View options of the parent editor */
   editorOptions: EditorOptions;
   /** Trigger key to open the footnote editor marker menu */
@@ -251,7 +245,6 @@ export default function FootnoteEditor({
   onClose,
   scrRef,
   noteKey,
-  isNewNote,
   editorOptions,
   defaultMarkerMenuTrigger,
   localizedStrings,
@@ -329,6 +322,15 @@ export default function FootnoteEditor({
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
 
+  /**
+   * Last live USJ selection of this popover's editor, captured as focus left it (the focusout
+   * listener below). A palette mouse click steals focus BEFORE the commit round-trips, and
+   * Lexical's blur processing can null the live selection outright; the palette commit path
+   * restores this capture so the apply still lands at the caret the user last saw. Reset when a new
+   * note loads so a stale capture can never place a commit inside the wrong note.
+   */
+  const lastFocusOutSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
   // Options for the editorial component
   const options = useMemo<EditorOptions>(
     () => ({
@@ -346,8 +348,8 @@ export default function FootnoteEditor({
     [editorOptions, defaultMarkerMenuTrigger],
   );
 
-  // Stable ref to the current marker mode so the note-load effect below (deps: noteOps/noteKey/
-  // isNewNote — a NEW note being loaded) doesn't also need `options` in its dependency array and
+  // Stable ref to the current marker mode so the note-load effect below (deps: noteOps/noteKey —
+  // a new note being loaded) doesn't also need `options` in its dependency array and
   // re-run (re-applying the note op a second time) if the host's view options are recreated with
   // the same markerMode while the SAME note is still being edited.
   const markerModeRef = useRef(options.view?.markerMode);
@@ -393,6 +395,7 @@ export default function FootnoteEditor({
     let reassertFrame: ReturnType<typeof requestAnimationFrame> | undefined;
     let reassertTimeout: ReturnType<typeof setTimeout> | undefined;
     hasInitializedEditor.current = false;
+    lastFocusOutSelectionRef.current = undefined;
     setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
     if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
@@ -454,7 +457,7 @@ export default function FootnoteEditor({
       if (reassertFrame !== undefined) cancelAnimationFrame(reassertFrame);
       if (reassertTimeout !== undefined) clearTimeout(reassertTimeout);
     };
-  }, [noteOps, noteKey, isNewNote, isDomCaretInsideNote]);
+  }, [noteOps, noteKey, isDomCaretInsideNote]);
 
   /**
    * Gets the current note op from the editor, applies the given caller, calls onChange, and
@@ -683,6 +686,22 @@ export default function FootnoteEditor({
         .then((id) => {
           clearPaletteSessionIfCurrent(paletteSession, token);
           if (id !== undefined) {
+            // A mouse click on a palette item blurs this popover's editor before the commit
+            // round-trips, and Lexical's blur processing can NULL the live selection — focus()
+            // alone then falls back to selecting the document END (the note's closing marker),
+            // where the apply lands the marker as an invalid trailing span while the typed
+            // literal strands at the real caret (live-observed: a red `\fq` after `\f*`). When
+            // the live selection is gone, put the caret back BEFORE focusing: restore the
+            // focus-out capture (exactly where the user last saw the caret), or land at the end
+            // of the note content as a last resort. focus() then re-asserts the now-present
+            // selection instead of jumping to the end, so a mouse commit applies exactly like a
+            // keyboard one. A still-live selection is left completely alone.
+            if (!editorRef.current?.getSelection()) {
+              const lastFocusOutSelection = lastFocusOutSelectionRef.current;
+              if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
+              else editorRef.current?.selectNote(0);
+            }
+            editorRef.current?.focus();
             const selected = items.find((item) => item.marker === id);
             if (selected) {
               editorRef.current?.applyMarkerMenuSelection(selected, {
@@ -690,7 +709,6 @@ export default function FootnoteEditor({
                 literalPrefixLanded,
               });
             }
-            editorRef.current?.focus();
           } else if (!passive) {
             // Focused palette dismissed: the palette's own search input had focus, so bring it
             // back to the editor.
@@ -707,6 +725,26 @@ export default function FootnoteEditor({
     },
     [markerPalette],
   );
+
+  // Capture the last live selection whenever focus leaves this popover's editor. A palette mouse
+  // click (an overlay OUTSIDE this document) steals focus BEFORE the commit round-trips, and
+  // Lexical's blur-path selection processing can NULL the editor-state selection — after which
+  // focus() no longer restores the caret: with no selection it falls back to selecting the
+  // document END, which here is the note's closing marker. focusout fires synchronously at the
+  // moment of the steal, ahead of that nulling, so the selection read here is the caret the user
+  // last saw; the palette commit path in openMarkerPalette restores it when it finds the live
+  // selection gone. Only overwrite when readable: if the selection is already gone at focusout,
+  // the previous capture is the best remaining approximation.
+  useEffect(() => {
+    const handleFocusOut = (event: FocusEvent) => {
+      const editorInput = editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input');
+      if (!editorInput || event.target !== editorInput) return;
+      const selection = editorRef.current?.getSelection();
+      if (selection) lastFocusOutSelectionRef.current = selection;
+    };
+    document.addEventListener('focusout', handleFocusOut);
+    return () => document.removeEventListener('focusout', handleFocusOut);
+  }, []);
 
   // Need to add a window listener for click events that will close the markers menu when you click
   // outside. There is another `onClick` listener for the marker menu that prevents click events
@@ -751,6 +789,13 @@ export default function FootnoteEditor({
       // uncleaned `\fr`-style literal). The shared forwarding table also claims every key during
       // a selection-wrap session so typing cannot replace the wrapped selection.
       const handleKeyDown = (event: KeyboardEvent) => {
+        // Never intercept IME composition keys: an Enter (or `\`) that confirms or feeds a
+        // CJK/complex-script candidate must reach the editor's own composition-guarded handlers,
+        // not open a palette or trip the outside-the-note Enter guard mid-composition. This
+        // capture-phase listener runs ahead of the editor's `isComposing()` guard, so it needs
+        // its own. (The shared forwarding table repeats the check for its in-session keys, so
+        // this outer guard covers only this handler's own trigger paths.)
+        if (isImeCompositionKeyEvent(event)) return;
         if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
 
@@ -804,10 +849,29 @@ export default function FootnoteEditor({
         openMarkerPalette(ctx, items, { passive, literalPrefixLanded: passive });
       };
 
+      // Paste with the DOM caret OUTSIDE the note content is the same stray-caret class as the
+      // Enter/`\` guards above: the editor's paste handling resolves against the caret, so a
+      // paste into the wrapper-para dead space plain-splits the wrapper paragraph instead of
+      // landing in the note. The pointerup/selectionchange snap below normalizes most stray
+      // carets, but both run from async events and can lose the race to the paste itself. Snap
+      // the caret into the note FIRST and let the paste proceed: document-level capture runs
+      // before Lexical's root-element paste listener, and the snap's selection update is
+      // committed on the microtask checkpoint between the two listeners, so the paste lands at
+      // the restored in-note caret. A paste with the caret already inside the note is left
+      // completely alone.
+      const handlePaste = () => {
+        if (!editorInput || document.activeElement !== editorInput) return;
+        if (isDomCaretInsideNote()) return;
+        editorRef.current?.selectNote(0);
+        editorRef.current?.focus();
+      };
+
       document.addEventListener('keydown', handleKeyDown, { capture: true });
+      document.addEventListener('paste', handlePaste, { capture: true });
 
       return () => {
         document.removeEventListener('keydown', handleKeyDown, { capture: true });
+        document.removeEventListener('paste', handlePaste, { capture: true });
       };
     }
 

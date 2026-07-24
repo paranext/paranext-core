@@ -65,11 +65,28 @@ export interface MarkerPaletteSessionDriver {
 }
 
 /**
- * - `'passed'` — modifier-only keydown; nothing happened, the session stays open.
+ * - `'passed'` — modifier-only or IME-composition keydown; nothing happened, the session stays open.
  * - `'continue'` — the key drove the palette (filter/arrows); the session stays open.
  * - `'ended'` — the session is over (commit/dismiss); the caller must clear its session ref.
  */
 export type MarkerPaletteKeyOutcome = 'passed' | 'continue' | 'ended';
+
+/**
+ * True for a keydown fired while an IME (input method editor) composition is underway. Such a key
+ * feeds or confirms a CJK/complex-script candidate and must reach the editor's own
+ * composition-guarded handlers untouched — never open, drive, or dismiss a marker palette. `keyCode
+ * === 229` is the DOM's legacy "handled by IME" signal, needed because some engines fire the first
+ * composition keydown BEFORE `isComposing` flips true.
+ *
+ * The marker-palette hosts register their keydown listeners in CAPTURE phase, AHEAD of the editor's
+ * own `isComposing()` guard, so each entry point needs this check itself: the forwarding table
+ * below applies it to every in-session key, and hosts apply it to their palette-open triggers (e.g.
+ * the `\`/Enter guards in `footnote-editor.component.tsx` and
+ * `platform-scripture-editor.web-view.tsx`).
+ */
+export function isImeCompositionKeyEvent(event: KeyboardEvent): boolean {
+  return event.isComposing || event.keyCode === 229;
+}
 
 const FILTER_CHAR_REGEX: Record<MarkerPaletteSessionKind, RegExp> = {
   // USFM marker characters that filter the palette. Hyphens (milestones `ts-s`/`ts-e`, `qt-s`,
@@ -98,6 +115,13 @@ export function handleMarkerPaletteSessionKeyDown(
   session: MarkerPaletteSessionState,
   driver: MarkerPaletteSessionDriver,
 ): MarkerPaletteKeyOutcome {
+  if (isImeCompositionKeyEvent(event)) {
+    // A composition key is not palette input — claiming an Enter that confirms a CJK candidate
+    // (or ingesting composition keystrokes into the filter) would corrupt the composition. Leave
+    // the session open and let the key reach the editor's composition handling.
+    return 'passed';
+  }
+
   if (
     event.key === 'Shift' ||
     event.key === 'Control' ||
