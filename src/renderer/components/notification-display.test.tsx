@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
+import { toast } from 'sonner';
 import '@testing-library/jest-dom';
 import type { CommandHandlers } from 'papi-shared-types';
 import type { ThemeDefinitionExpanded } from 'platform-bible-utils';
@@ -93,6 +94,15 @@ describe('NotificationDisplay with real Sonner', () => {
       '@renderer/services/notification.service-host'
     );
     await startNotificationService();
+  });
+
+  afterEach(() => {
+    // Sonner auto-dismiss timers fire after jsdom tears down if toasts are still alive,
+    // causing a "window is not defined" unhandled error. Dismissing all toasts here
+    // triggers Sonner's internal clearTimeout calls before the environment is torn down.
+    act(() => {
+      toast.dismiss();
+    });
   });
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
