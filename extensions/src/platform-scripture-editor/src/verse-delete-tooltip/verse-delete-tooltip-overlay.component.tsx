@@ -1,6 +1,13 @@
 import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
+import {
+  cn,
+  Kbd,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
 import {
   AnchorRect,
@@ -122,17 +129,43 @@ export function VerseDeleteTooltipOverlay({ children }: Props) {
               height: armed?.height ?? 0,
             }}
           />
-          <TooltipContent side="bottom" align="start" showArrow={false}>
-            {armed
-              ? formatReplacementStringToArray(message, {
-                  key: <kbd>{confirmingKey(armed.intent)}</kbd>,
+          <TooltipContent
+            side="bottom"
+            align="start"
+            showArrow={false}
+            // Padding moves onto the inner div below so its tint background can reach the
+            // tooltip's rounded edges instead of leaving an untinted padding gutter. Also zero out
+            // TooltipContent's has-data-[slot=kbd]:pe-1.5 (the Kbd we render always matches it) —
+            // that :has() selector otherwise out-specificities a plain tw:p-0 and leaves a gap on
+            // the trailing edge.
+            className={cn(
+              'tw:p-0 tw:has-data-[slot=kbd]:pe-0 tw:bg-background tw:text-destructive tw:border tw:border-destructive',
+            )}
+          >
+            {armed ? (
+              <div className="tw:inline-flex tw:w-full tw:h-full tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-destructive/10 tw:px-3 tw:py-1.5">
+                {formatReplacementStringToArray(message, {
+                  key: (
+                    <Kbd
+                      className={cn(
+                        // Kbd's base styling sets text-muted-foreground (unconditioned) plus
+                        // in-data-[slot=tooltip-content]:text-background (for the default dark
+                        // tooltip). Override both forms explicitly so tailwind-merge drops both
+                        // base rules instead of leaving the winner up to CSS cascade order.
+                        'tw:border tw:border-destructive tw:text-destructive tw:in-data-[slot=tooltip-content]:text-destructive',
+                      )}
+                    >
+                      {confirmingKey(armed.intent)}
+                    </Kbd>
+                  ),
                 }).map((part, index) => (
                   // The array is static per render (one fixed localized string + one kbd), so index
                   // is a stable, safe key — mirrors the about-dialog.component.tsx precedent.
                   // eslint-disable-next-line react/no-array-index-key
                   <Fragment key={`key-${index}`}>{part}</Fragment>
-                ))
-              : undefined}
+                ))}
+              </div>
+            ) : undefined}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
