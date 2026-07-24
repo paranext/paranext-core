@@ -240,6 +240,23 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
 }
 
 /**
+ * Strip a single matching pair of wrapping quote characters (`'...'` or `"..."`) from a raw path
+ * argument.
+ *
+ * Some dev workflows use process managers (e.g., `concurrently` on Windows) that quote
+ * `--extensions`/`--extensionDirs` arguments for a POSIX shell but then execute them via `cmd.exe`,
+ * which does not strip the quotes. The literal quotes then end up as part of the path, and
+ * `path.resolve` silently treats the whole thing as a relative path instead of failing loudly.
+ */
+function stripWrappingQuotes(rawPath: string): string {
+  if (rawPath.length < 2) return rawPath;
+  const first = rawPath[0];
+  if ((first === '"' || first === "'") && rawPath[rawPath.length - 1] === first)
+    return rawPath.slice(1, -1);
+  return rawPath;
+}
+
+/**
  * The directory for extensions bundled into the application
  *
  * - In development: `paranext-core/extensions/dist`
@@ -265,7 +282,7 @@ const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' 
 const extensionRootDirectories: Uri[] = [
   // 1. `--extensionDirs`-provided directories
   ...getCommandLineArgumentsGroup(CommandLineArgs.ExtensionsDir).map(
-    (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
+    (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(stripWrappingQuotes(extensionDirPath))}`,
   ),
   // 2. Installed extensions directory
   installedExtensionsUri,
@@ -291,7 +308,7 @@ if (getCommandLineSwitch(CommandLineArgs.Portable)) {
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
   CommandLineArgs.Extensions,
-).map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`);
+).map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(stripWrappingQuotes(extensionPath))}`);
 
 /**
  * Contents of `nodeFS.readDir()` for all parent folders of extensions. This is expected to be a
