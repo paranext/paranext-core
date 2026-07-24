@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
 
@@ -127,22 +128,81 @@ internal class NoteCallerAndSeparatorSettingTests : PapiTestBase
 
     #endregion
 
-    #region GetProjectSetting — setting absent, falls back to registered default
+    #region GetProjectSetting — setting absent, falls through to ProjectSettingsService.GetDefault
 
     [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, ".")]
     [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "-")]
     [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "+")]
     [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "-")]
-    public void GetProjectSetting_SettingAbsentFromSettingsXml_ReturnsRegisteredDefault(
+    public void GetProjectSetting_SettingAbsentFromSettingsXml_FallsThroughToGetDefaultStub(
         string pbSettingName,
-        string registeredDefault
+        string stubbedDefault
     )
     {
         // Nothing written into ParametersDictionary for this setting, so GetProjectSetting must
-        // fall through to ProjectSettingsService.GetDefault (stubbed above).
+        // fall through to ProjectSettingsService.GetDefault (stubbed in setup). This verifies the
+        // fall-through wiring only — the expected values are the stub's return values, so this
+        // says nothing about what defaults are actually registered. The contribution test below
+        // pins the stubbed values to the real projectSettings.json registration.
         var result = _provider.GetProjectSetting(pbSettingName);
 
-        Assert.That(result, Is.EqualTo(registeredDefault));
+        Assert.That(result, Is.EqualTo(stubbedDefault));
+    }
+
+    #endregion
+
+    #region Registered defaults in the platform-scripture contribution
+
+    /// <summary>
+    /// Path of the platform-scripture projectSettings.json contribution — the file the real
+    /// (non-stubbed) ProjectSettingsService.GetDefault serves defaults from — resolved by
+    /// walking up from the test assembly's directory (tests always run from a bin folder
+    /// inside the repo, so some ancestor is the repo root).
+    /// </summary>
+    private static string GetPlatformScriptureProjectSettingsPath()
+    {
+        string relativePath = Path.Combine(
+            "extensions",
+            "src",
+            "platform-scripture",
+            "contributions",
+            "projectSettings.json"
+        );
+        for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            string candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+        throw new FileNotFoundException(
+            $"Could not find {relativePath} in any ancestor of {AppContext.BaseDirectory}"
+        );
+    }
+
+    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, ".")]
+    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "-")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "+")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "-")]
+    public void PlatformScriptureContribution_RegisteredDefault_IsExpectedLiteral(
+        string pbSettingName,
+        string expectedDefault
+    )
+    {
+        using var json = JsonDocument.Parse(
+            File.ReadAllText(GetPlatformScriptureProjectSettingsPath())
+        );
+
+        string? registeredDefault = json
+            .RootElement.EnumerateArray()
+            .Select(group =>
+                group.TryGetProperty("properties", out var properties)
+                && properties.TryGetProperty(pbSettingName, out var setting)
+                    ? setting.GetProperty("default").GetString()
+                    : null
+            )
+            .SingleOrDefault(value => value != null);
+
+        Assert.That(registeredDefault, Is.EqualTo(expectedDefault));
     }
 
     #endregion

@@ -171,7 +171,12 @@ namespace TestParanextDataProvider
             AddTag(newTag);
         }
 
-        private void AddTag(ScrTag tag)
+        /// <summary>
+        /// Adds a fully constructed tag to the stylesheet. Public so tests can register tags
+        /// carrying presentation values (color, margins, bold, ...) that the stock tags above
+        /// never set.
+        /// </summary>
+        public void AddTag(ScrTag tag)
         {
             AddTagInternal(tag);
             if (!string.IsNullOrEmpty(tag.Endmarker))

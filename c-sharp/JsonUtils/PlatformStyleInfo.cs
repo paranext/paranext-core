@@ -129,6 +129,12 @@ public class PlatformMarkerStyleInfo(ScrTag tag)
     // instance property first (simple-name lookup rules) and fails to compile (CS0236, since this
     // is a static field initializer), rather than binding to the `Paratext.Data.TextProperties`
     // enum from the `using` directive.
+    //
+    // Complete for the ParatextData version currently referenced (see the csproj). Newer
+    // ParatextData adds scNoteSubMarker (.sty name "notesub", for note sub-markers like \fr/\ft);
+    // add that pair here when the ParatextData package is upgraded to a version that defines it —
+    // ParatextProjectDataProviderStyleInfoTests.TextProperties_ScNoteSubMarkerAvailable_MustSerializeNotesub
+    // fails on that upgrade until the pair is added.
     private static readonly (Paratext.Data.TextProperties flag, string name)[] s_textPropertyNames =
 
         [

@@ -163,18 +163,110 @@ namespace TestParanextDataProvider.Projects
             Assert.That(result.Markers["p"].OccursUnder, Is.EquivalentTo(new[] { "c" }));
         }
 
+        /// <summary>
+        /// Registers an extra tag on the project's stylesheet so a test can exercise value
+        /// conversions the stock DummyScrStylesheet tags never set.
+        /// </summary>
+        private void AddStylesheetTag(ScrTag tag) =>
+            ((DummyScrStylesheet)_scrText.DefaultStylesheet).AddTag(tag);
+
         [Test]
         [Description(
-            "GetStyleInfo's default font/size must match the exact ScrText accessors PT9's "
-                + "CSSCreator.CreateUsfmCss(ScrText, ...) reads — ScrText.Language.FontName / "
-                + "ScrText.Language.FontSize — confirming the wiring, not a hard-coded value."
+            "A tag carrying real presentation values must convert to the TS wire values: color "
+                + "as #RRGGBB from the RgbColor channels, indent/margins from thousandths of an "
+                + "inch to inches, point sizes passed through raw, set flags as true, and rank "
+                + "verbatim — all asserted as independent literals."
         )]
-        public void GetStyleInfo_DefaultFontAndSize_MatchScrTextLanguage()
+        public void GetStyleInfo_ValueBearingTag_ConvertsPresentationValues()
         {
+            // RawColor holds ScrTag.ParseColor's normalized (r << 16 | g << 8 | b) form of the
+            // .sty integer color: `\Color 8401664` (0x803300, the legacy B-G-R COLORREF order)
+            // parses to 0x003380. The distinct R (0x00) and B (0x80) channels make a red/blue
+            // channel swap in the #RRGGBB formatting fail loudly.
+            AddStylesheetTag(
+                new ScrTag("zst")
+                {
+                    StyleType = ScrStyleType.scCharacterStyle,
+                    RawColor = 0x003380,
+                    Bold = true,
+                    Italic = true,
+                    Underline = true,
+                    SmallCaps = true,
+                    FontSize = 14,
+                    SpaceBefore = 6,
+                    SpaceAfter = 3,
+                    LineSpacing = 2,
+                    FirstLineIndent = 250,
+                    LeftMargin = 125,
+                    RightMargin = 375,
+                    Rank = 5,
+                }
+            );
+
             var result = _provider.GetStyleInfo(GenesisBookNum);
 
-            Assert.That(result.DefaultFont, Is.EqualTo(_scrText.Language.FontName));
-            Assert.That(result.DefaultFontSize, Is.EqualTo((double)_scrText.Language.FontSize));
+            var zst = result.Markers["zst"];
+            Assert.Multiple(() =>
+            {
+                Assert.That(zst.Color, Is.EqualTo("#003380"));
+                Assert.That(zst.Bold, Is.True);
+                Assert.That(zst.Italic, Is.True);
+                Assert.That(zst.Underline, Is.True);
+                Assert.That(zst.SmallCaps, Is.True);
+                Assert.That(zst.FontSize, Is.EqualTo(14));
+                Assert.That(zst.SpaceBefore, Is.EqualTo(6));
+                Assert.That(zst.SpaceAfter, Is.EqualTo(3));
+                Assert.That(zst.LineSpacing, Is.EqualTo(2));
+                Assert.That(zst.FirstLineIndent, Is.EqualTo(0.25));
+                Assert.That(zst.LeftMargin, Is.EqualTo(0.125));
+                Assert.That(zst.RightMargin, Is.EqualTo(0.375));
+                Assert.That(zst.Rank, Is.EqualTo(5));
+            });
+        }
+
+        [TestCase(ScrJustificationType.scCenter, "center")]
+        [TestCase(ScrJustificationType.scRight, "right")]
+        [TestCase(ScrJustificationType.scBoth, "both")]
+        [Description(
+            "Non-default justification values must map onto the TS justification strings (left, "
+                + "the default, is covered by the omitted-when-unset test above)."
+        )]
+        public void GetStyleInfo_JustificationType_MapsToTsJustificationString(
+            ScrJustificationType justification,
+            string expected
+        )
+        {
+            AddStylesheetTag(
+                new ScrTag("zst")
+                {
+                    StyleType = ScrStyleType.scParagraphStyle,
+                    JustificationType = justification,
+                }
+            );
+
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            Assert.That(result.Markers["zst"].Justification, Is.EqualTo(expected));
+        }
+
+        [Test]
+        [Description(
+            "GetStyleInfo's default font/size read the exact ScrText accessors PT9's "
+                + "CSSCreator.CreateUsfmCss(ScrText, ...) reads — ScrText.Language.FontName / "
+                + "ScrText.Language.FontSize, which resolve to the project's DefaultFont / "
+                + "DefaultFontSize settings. Explicit setting values asserted as literals prove "
+                + "the values flow through, rather than comparing the result to the same "
+                + "accessor the implementation reads."
+        )]
+        public void GetStyleInfo_DefaultFontAndSize_ComeFromProjectDefaultFontSettings()
+        {
+            _scrText.Settings.DefaultFont = "Gentium Plus Test";
+            _scrText.Settings.DefaultFontSize = 13;
+
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            Assert.That(result.DefaultFont, Is.EqualTo("Gentium Plus Test"));
+            Assert.That(result.DefaultFontSize, Is.EqualTo(13));
         }
 
         [Test]
@@ -271,6 +363,49 @@ namespace TestParanextDataProvider.Projects
                     );
                 }
             });
+        }
+
+        [Test]
+        [Description(
+            "Upgrade tripwire: newer ParatextData adds TextProperties.scNoteSubMarker (.sty name "
+                + "\"notesub\", carried by note-internal character markers like \\fr/\\ft/\\xo/\\xt "
+                + "and used by UsfmParser to auto-close them). The version currently referenced "
+                + "doesn't define the member, so the flag is looked up by NAME at runtime and this "
+                + "test passes vacuously today; when a ParatextData upgrade introduces the member, "
+                + "the assert branch activates and fails until the (scNoteSubMarker, \"notesub\") "
+                + "pair is added to PlatformMarkerStyleInfo's flag->name table in "
+                + "PlatformStyleInfo.cs."
+        )]
+        public void TextProperties_ScNoteSubMarkerAvailable_MustSerializeNotesub()
+        {
+            // Reflection (name-based parse) because the member doesn't exist at compile time in
+            // the ParatextData version currently referenced; TryParse also yields the flag value
+            // needed to build the tag once it does exist.
+            if (!Enum.TryParse("scNoteSubMarker", out TextProperties scNoteSubMarker))
+            {
+                Assert.Pass(
+                    "The referenced ParatextData's TextProperties enum does not define "
+                        + "scNoteSubMarker — nothing to serialize yet. This test self-activates "
+                        + "when the ParatextData package is upgraded to a version that adds it."
+                );
+            }
+
+            var markerInfo = new PlatformMarkerStyleInfo(
+                new ScrTag("zzz")
+                {
+                    StyleType = ScrStyleType.scCharacterStyle,
+                    TextProperties = scNoteSubMarker,
+                }
+            );
+
+            Assert.That(
+                markerInfo.TextProperties ?? [],
+                Does.Contain("notesub"),
+                "ParatextData now defines TextProperties.scNoteSubMarker, but "
+                    + "PlatformMarkerStyleInfo does not serialize it — add the "
+                    + "(scNoteSubMarker, \"notesub\") pair to s_textPropertyNames in "
+                    + "PlatformStyleInfo.cs."
+            );
         }
     }
 }
