@@ -12,6 +12,7 @@ import {
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
@@ -59,7 +60,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -67,6 +68,11 @@ const TOOLTIP_DELAY = 300;
 // host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
 // after that initial window, so a single retry here is sufficient.
 const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
+
+// Visual breathing room between content and the native buttons on top of the live-measured overlay
+// width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
+// getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
+const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -209,6 +215,45 @@ export function PlatformBibleToolbar() {
     undefined,
   );
 
+  // Overrides the static Windows/Linux padding guess (applied to Toolbar's own className below)
+  // with a wrapper div carrying the live-measured caption-button width (see
+  // useWindowControlsOverlay), so it isn't reserved twice. macOS's fixed-width traffic lights
+  // still use the static class as-is.
+  const windowControlsOverlayRect = useWindowControlsOverlay();
+  const toolbarReservedSpaceStyle: CSSProperties | undefined =
+    osPlatformToReserveSpaceFor !== undefined &&
+    osPlatformToReserveSpaceFor !== 'darwin' &&
+    windowControlsOverlayRect
+      ? {
+          // Physical paddingLeft/paddingRight, chosen from the live-measured rect: Windows moves
+          // the caption buttons to the physical left in RTL locales. Deriving the side from
+          // windowControlsOverlayRect itself is correct in both directions since it reflects the
+          // buttons' actual measured position.
+          // +RESERVED_SPACE_BREATHING_ROOM_PX — without it, content sits pixel-flush against the
+          // native buttons, which reads as cramped even though nothing actually overlaps.
+          ...(windowControlsOverlayRect.left > 0
+            ? { paddingLeft: windowControlsOverlayRect.left + RESERVED_SPACE_BREATHING_ROOM_PX }
+            : undefined),
+          ...(window.innerWidth - windowControlsOverlayRect.right > 0
+            ? {
+                paddingRight:
+                  window.innerWidth -
+                  windowControlsOverlayRect.right +
+                  RESERVED_SPACE_BREATHING_ROOM_PX,
+              }
+            : undefined),
+          // @ts-ignore Electron-only property, not in React's CSSProperties type. Toolbar's own
+          // drag area (shouldUseAsAppDragArea) doesn't extend into this wrapper, so this strip
+          // needs its own drag region or the window can no longer be dragged from here.
+          WebkitAppRegion: 'drag',
+          // An inset box-shadow, not a border: this div has no explicit height, so a real border
+          // would add to its layout height, throwing off WorkspaceUpdatingOverlay's hardcoded `top`
+          // whenever this branch is active. A box-shadow paints in the same place without occupying
+          // any layout space. var(--border) matches the color Toolbar's own tw:border resolves to.
+          boxShadow: 'inset 0 0 0 1px var(--border)',
+        }
+      : undefined;
+
   const [updateMenuData, setUpdateMenuData] = useState<boolean>(false);
 
   const [menuData] = usePromise(
@@ -291,191 +336,202 @@ export function PlatformBibleToolbar() {
   useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
   return (
-    <Toolbar
-      menuData={menuData}
-      onOpenChange={(isOpen: boolean) => {
-        setUpdateMenuData(isOpen);
-      }}
-      onSelectMenuItem={handleMenuCommand}
-      className={cn(
-        // If the toolbar height changes, the top inset for the workspace updating overlay will need to be updated too.
-        'tw:h-12 tw:bg-transparent',
-        getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
-      )}
-      menubarVariant="muted"
-      shouldUseAsAppDragArea
-      appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
-      configAreaChildren={
-        <>
-          {isSendReceiveAvailable !== false && (
-            // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
-            // is hidden via tw:invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
-            // (keyboard navigation). All three are required: tw:invisible alone is still reachable
-            // by AT and keyboard; aria-hidden alone is still tab-focusable.
-            <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    data-testid="toolbar-sync-button"
-                    variant="ghost"
-                    size="sm"
-                    className={cn(
-                      'pr-twp tw:h-8 tw:shrink-0',
-                      isSendReceiveAvailable === undefined && 'tw:invisible',
-                    )}
-                    // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
-                    aria-hidden={isSendReceiveAvailable === undefined || undefined}
-                    tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
-                    onClick={() => {
-                      sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
-                        logger.warn(
-                          `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-                        ),
-                      );
-                    }}
-                  >
-                    {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
-                    {syncState === 'synced' && (
-                      <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
-                    )}
-                    {
+    <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
+      <Toolbar
+        menuData={menuData}
+        onOpenChange={(isOpen: boolean) => {
+          setUpdateMenuData(isOpen);
+        }}
+        onSelectMenuItem={handleMenuCommand}
+        className={cn(
+          // If the toolbar height changes, the top inset for the workspace updating overlay will need to be updated too.
+          'tw:h-12 tw:bg-transparent',
+          // Only reserve the static guess when there's no live measurement to reserve it above instead.
+          !toolbarReservedSpaceStyle &&
+            getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
+          // Toolbar's own outer container has an unconditional border and inline padding on both sides.
+          // When the wrapper above reserves the trailing space instead, drop Toolbar's own border entirely
+          // (the wrapper carries an equivalent box-shadow — see its style above) and Toolbar's own end-side
+          // padding, which would otherwise stack with the wrapper's live measurement and over-reserve space.
+          toolbarReservedSpaceStyle && 'tw:border-0 tw:pe-0',
+        )}
+        menubarVariant="muted"
+        shouldUseAsAppDragArea
+        appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
+        configAreaChildren={
+          <>
+            {isSendReceiveAvailable !== false && (
+              // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
+              // is hidden via tw:invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
+              // (keyboard navigation). All three are required: tw:invisible alone is still reachable
+              // by AT and keyboard; aria-hidden alone is still tab-focusable.
+              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      data-testid="toolbar-sync-button"
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        'pr-twp tw:h-8 tw:shrink-0',
+                        isSendReceiveAvailable === undefined && 'tw:invisible',
+                      )}
+                      // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
+                      aria-hidden={isSendReceiveAvailable === undefined || undefined}
+                      tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
+                      onClick={() => {
+                        sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
+                          logger.warn(
+                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
+                          ),
+                        );
+                      }}
+                    >
+                      {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
+                      {syncState === 'synced' && (
+                        <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
+                      )}
                       {
-                        idle: localizedStrings['%toolbar_sync%'],
-                        syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                        synced: localizedStrings['%toolbar_sync_status_synced%'],
-                      }[syncState]
-                    }
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="tw:font-light">{localizedStrings['%toolbar_sync_open_status%']}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          {marketingVersion !== '' && (
-            <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge
-                    variant="ghost"
-                    className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
-                  >
-                    {marketingVersion}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p className="tw:font-light">{marketingVersion}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <UserProfilePopover />
-        </>
-      }
-    >
-      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw:h-8"
-              onClick={() => {
-                // This command comes from an extension and is not typed in CommandHandlers.
-                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                (sendCommand as any)('platformGetResources.openHome');
-              }}
-            >
-              <HomeIcon />
-            </Button>
-          </TooltipTrigger>
-          {localizedStrings['%mainMenu_openHome%'] && (
-            <TooltipContent>
-              <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
-      {!isPowerMode && (
-        <Select
-          value={currentProject?.id ?? ''}
-          onValueChange={async (projectId: string) => {
-            try {
-              await openProject(projectId);
-            } catch (e: unknown) {
-              logger.warn(
-                `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
-              );
-            }
-          }}
-          disabled={!hasProjectPickerItems}
-        >
-          <SelectTrigger className="tw:max-w-64 tw:min-w-48">
-            <SelectValue
-              placeholder={
-                hasProjectPickerItems
-                  ? localizedStrings['%projectPicker_toolbar_select_project%']
-                  : localizedStrings['%projectPicker_toolbar_no_projects%']
-              }
-            >
-              {currentProject && (
-                <span
-                  className={cn(
-                    'tw:min-w-0 tw:flex-1 tw:truncate',
-                    currentProjectError && 'tw:text-destructive',
-                  )}
-                >
-                  {currentProjectError ??
-                    `${currentProject.fullName} (${currentProject.shortName})`}
-                </span>
-              )}
-            </SelectValue>
-          </SelectTrigger>
-          {hasProjectPickerItems && (
-            <SelectContent>
-              {projectPickerItems.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="tw:whitespace-normal">
-                  {p.fullName} ({p.shortName})
-                </SelectItem>
-              ))}
-              <SelectSeparator />
-              <button
-                type="button"
-                className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm"
-                onClick={() => showProjectPicker()}
+                        {
+                          idle: localizedStrings['%toolbar_sync%'],
+                          syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+                          synced: localizedStrings['%toolbar_sync_status_synced%'],
+                        }[syncState]
+                      }
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="tw:font-light">
+                      {localizedStrings['%toolbar_sync_open_status%']}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {marketingVersion !== '' && (
+              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="ghost"
+                      className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
+                    >
+                      {marketingVersion}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="tw:font-light">{marketingVersion}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <UserProfilePopover />
+          </>
+        }
+      >
+        <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="tw:h-8"
+                onClick={() => {
+                  // This command comes from an extension and is not typed in CommandHandlers.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                  (sendCommand as any)('platformGetResources.openHome');
+                }}
               >
-                {localizedStrings['%projectPicker_toolbar_more_projects%']}
-              </button>
-            </SelectContent>
-          )}
-        </Select>
-      )}
-      {typeof scrollGroupId === 'number' && (
-        // Key on the scroll group so switching groups remounts and re-seeds the history state.
-        <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
-      )}
-      <BookChapterControl
-        ref={registerTopBookChapterControl}
-        scrRef={scrRef}
-        handleSubmit={setScrRef}
-        className="tw:w-96"
-        disabled={isBookChapterControlDisabled}
-        getActiveBookIds={getActiveBookIds}
-        recentSearches={recentScriptureRefs}
-        onAddRecentSearch={addRecentScriptureRef}
-      />
-      {isPowerMode && (
-        <ScrollGroupSelector
-          availableScrollGroupIds={availableScrollGroupIds}
-          scrollGroupId={scrollGroupId}
-          onChangeScrollGroupId={setScrollGroupId}
-          localizedStrings={scrollGroupLocalizedStrings}
-          className="tw:h-8"
+                <HomeIcon />
+              </Button>
+            </TooltipTrigger>
+            {localizedStrings['%mainMenu_openHome%'] && (
+              <TooltipContent>
+                <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+        {!isPowerMode && (
+          <Select
+            value={currentProject?.id ?? ''}
+            onValueChange={async (projectId: string) => {
+              try {
+                await openProject(projectId);
+              } catch (e: unknown) {
+                logger.warn(
+                  `Toolbar caught an error while trying to open project ${projectId}: ${getErrorMessage(e)}`,
+                );
+              }
+            }}
+            disabled={!hasProjectPickerItems}
+          >
+            <SelectTrigger className="tw:max-w-64 tw:min-w-48">
+              <SelectValue
+                placeholder={
+                  hasProjectPickerItems
+                    ? localizedStrings['%projectPicker_toolbar_select_project%']
+                    : localizedStrings['%projectPicker_toolbar_no_projects%']
+                }
+              >
+                {currentProject && (
+                  <span
+                    className={cn(
+                      'tw:min-w-0 tw:flex-1 tw:truncate',
+                      currentProjectError && 'tw:text-destructive',
+                    )}
+                  >
+                    {currentProjectError ??
+                      `${currentProject.fullName} (${currentProject.shortName})`}
+                  </span>
+                )}
+              </SelectValue>
+            </SelectTrigger>
+            {hasProjectPickerItems && (
+              <SelectContent>
+                {projectPickerItems.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="tw:whitespace-normal">
+                    {p.fullName} ({p.shortName})
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                <button
+                  type="button"
+                  className="tw:w-full tw:cursor-pointer tw:px-2 tw:py-1.5 tw:text-start tw:text-sm"
+                  onClick={() => showProjectPicker()}
+                >
+                  {localizedStrings['%projectPicker_toolbar_more_projects%']}
+                </button>
+              </SelectContent>
+            )}
+          </Select>
+        )}
+        {typeof scrollGroupId === 'number' && (
+          // Key on the scroll group so switching groups remounts and re-seeds the history state.
+          <ReferenceHistoryButtons key={scrollGroupId} scrollGroupId={scrollGroupId} />
+        )}
+        <BookChapterControl
+          ref={registerTopBookChapterControl}
+          scrRef={scrRef}
+          handleSubmit={setScrRef}
+          className="tw:w-96"
           disabled={isBookChapterControlDisabled}
+          getActiveBookIds={getActiveBookIds}
+          recentSearches={recentScriptureRefs}
+          onAddRecentSearch={addRecentScriptureRef}
         />
-      )}
-    </Toolbar>
+        {isPowerMode && (
+          <ScrollGroupSelector
+            availableScrollGroupIds={availableScrollGroupIds}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            localizedStrings={scrollGroupLocalizedStrings}
+            className="tw:h-8"
+            disabled={isBookChapterControlDisabled}
+          />
+        )}
+      </Toolbar>
+    </div>
   );
 }
 
