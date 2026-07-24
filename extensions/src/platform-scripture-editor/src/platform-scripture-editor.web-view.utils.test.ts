@@ -10,11 +10,14 @@ import { MutableRefObject } from 'react';
 import type {
   EditorRef,
   MarkerMenuItem as EditorMarkerMenuItem,
+  SelectionRange,
   StyleInfo,
 } from '@eten-tech-foundation/platform-editor';
 import {
   generateInlineMarkerMenuListItems,
+  isStandardViewEnterKeyEvent,
   markerMenuItemToCommandPaletteItem,
+  restoreSelectionIfLost,
 } from './platform-scripture-editor.web-view.utils';
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
@@ -179,6 +182,86 @@ describe('generateInlineMarkerMenuListItems', () => {
     // fixture above, so this can only pass if the no-styleInfo path is actually wired up.
     expect(items.length).toBeGreaterThan(Object.keys(BASE_STYLE_INFO.markers).length);
     expect(items.some((i) => i.marker === 'wj')).toBe(true);
+  });
+});
+
+describe('isStandardViewEnterKeyEvent', () => {
+  it('claims a plain Enter', () => {
+    expect(isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(true);
+  });
+
+  it('claims Enter regardless of modifier state (PT9 parity: no modifier check)', () => {
+    expect(
+      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true })),
+    ).toBe(true);
+    expect(
+      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true })),
+    ).toBe(true);
+    expect(
+      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true })),
+    ).toBe(true);
+    expect(
+      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true })),
+    ).toBe(true);
+    expect(
+      isStandardViewEnterKeyEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, shiftKey: true }),
+      ),
+    ).toBe(true);
+  });
+
+  it('never claims non-Enter keys, modified or not', () => {
+    expect(isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'a' }))).toBe(false);
+    expect(isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: '\\' }))).toBe(false);
+    expect(
+      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Escape', ctrlKey: true })),
+    ).toBe(false);
+  });
+});
+
+describe('restoreSelectionIfLost', () => {
+  const snapshot: SelectionRange = { start: { jsonPath: '$.content[0].content[1]', offset: 4 } };
+
+  /** Editor stub exposing only the two selection methods the helper consults. */
+  function makeEditor(liveSelection: SelectionRange | undefined) {
+    return {
+      getSelection: vi.fn((): SelectionRange | undefined => liveSelection),
+      setSelection: vi.fn(),
+    };
+  }
+
+  it('restores the snapshot when the live selection is gone', () => {
+    const editor = makeEditor(undefined);
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).toHaveBeenCalledTimes(1);
+    expect(editor.setSelection).toHaveBeenCalledWith(snapshot);
+  });
+
+  it('leaves a live selection completely alone', () => {
+    const liveSelection: SelectionRange = {
+      start: { jsonPath: '$.content[2].content[0]', offset: 0 },
+    };
+    const editor = makeEditor(liveSelection);
+
+    restoreSelectionIfLost(editor, snapshot);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when the selection is gone but no snapshot was captured', () => {
+    const editor = makeEditor(undefined);
+
+    restoreSelectionIfLost(editor, undefined);
+
+    expect(editor.setSelection).not.toHaveBeenCalled();
+  });
+
+  it('tolerates a null editor handle (ref not mounted)', () => {
+    // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
+    // eslint-disable-next-line no-null/no-null
+    expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
   });
 });
 

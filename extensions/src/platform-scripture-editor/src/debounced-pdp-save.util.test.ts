@@ -1,6 +1,6 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { describe, expect, it, vi } from 'vitest';
-import { performDebouncedPdpSave } from './debounced-pdp-save.util';
+import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 
 const usjWith = (text: string): Usj => ({
   type: 'USJ',
@@ -130,6 +130,26 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
     expect(latestSave).toHaveBeenCalledWith(usjWith('Den God tell, more text'));
   });
 
+  it('removes only the LAST literal run when several are present (the one nearest the caret)', () => {
+    // "last occurrence" pin: stripLastLiteralRun uses lastIndexOf, so an earlier settled `\f` in the
+    // same text survives while only the trailing un-settled one is stripped. A first-occurrence
+    // (indexOf) regression would instead yield 'a b\f, more text' and fail here.
+    const latestSave = vi.fn();
+    performDebouncedPdpSave({
+      usj: usjWith('a\\f b\\f, more text'),
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      isPaletteSessionOpen: true,
+      paletteLiteralRun: '\\f',
+      commitPendingMarkerEdits: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+
+    expect(latestSave).toHaveBeenCalledWith(usjWith('a\\f b, more text'));
+  });
+
   it('saves unchanged when the literal is not present in the content', () => {
     const latestSave = vi.fn();
     const usj = usjWith('no literal here');
@@ -220,5 +240,59 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
     });
 
     expect(capturedSave).toHaveBeenCalledWith(usj);
+  });
+});
+
+describe('resolveUsjToSaveToPdp — imperative (non-debounced) save path', () => {
+  // The debounced keystroke save strips a passive palette session's un-settled `\`+filter literal
+  // before writing (performDebouncedPdpSave above), but imperative saves — notably
+  // useEditorPdpSync's push-back when a PDP echo arrives mid-session — read the RAW editor USJ.
+  // This seam guarantees those saves strip the literal too; otherwise the raw literal reaches the
+  // PDP and ParatextData tokenizes the unknown marker into a garbage paragraph that echoes back.
+  it('strips the palette literal from the editor USJ before offering it for save', () => {
+    const result = resolveUsjToSaveToPdp(
+      usjWith('Den God tell\\f, more text'),
+      usjWith('older PDP content'),
+      '\\f',
+    );
+
+    expect(result).toEqual(usjWith('Den God tell, more text'));
+  });
+
+  // When the literal is the ONLY divergence from the PDP, there is nothing real to save — a write
+  // here would be the exact garbage write the stripping exists to prevent. The stripped copy is
+  // compared, not the raw editor USJ, so the save is skipped entirely.
+  it('returns undefined when the palette literal is the only divergence from the PDP', () => {
+    const result = resolveUsjToSaveToPdp(
+      usjWith('Den God tell\\f,'),
+      usjWith('Den God tell,'),
+      '\\f',
+    );
+
+    expect(result).toBeUndefined();
+  });
+
+  it('does not mutate the editor USJ when stripping (the editor still owns that object)', () => {
+    const editorUsj = usjWith('tell\\f,');
+
+    resolveUsjToSaveToPdp(editorUsj, usjWith('older PDP content'), '\\f');
+
+    expect(editorUsj).toEqual(usjWith('tell\\f,'));
+  });
+
+  // No palette session (or a focused session with no literal in the document): behavior must be
+  // byte-identical to the pre-existing save path — the very same object is offered for save.
+  it('returns the editor USJ unchanged when no literal run is given and content differs', () => {
+    const editorUsj = usjWith('tell\\f, stray text is untouched without a session literal');
+
+    expect(resolveUsjToSaveToPdp(editorUsj, usjWith('older PDP content'), undefined)).toBe(
+      editorUsj,
+    );
+  });
+
+  it('returns undefined when the editor USJ already matches the PDP and no literal run is given', () => {
+    expect(
+      resolveUsjToSaveToPdp(usjWith('same text'), usjWith('same text'), undefined),
+    ).toBeUndefined();
   });
 });

@@ -1,4 +1,5 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
+import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 
 /**
  * Inputs to a single fire of the debounced keystroke-driven PDP save. Everything the fire needs is
@@ -26,13 +27,13 @@ export interface DebouncedPdpSaveParams {
   /** Whether a marker-palette session is currently open. */
   isPaletteSessionOpen: boolean;
   /**
-   * The literal trigger run (`\` + typed filter, e.g. `\f`) currently sitting in the document for
-   * a PASSIVE palette session, or undefined for focused sessions (their filter chars never land).
-   * A palette-open flush must not write this un-settled literal to the PDP: ParatextData
-   * tokenizes an unknown marker in body text as a PARAGRAPH, so the raw literal came back as a
-   * garbage paragraph echo (live-observed when clicking a palette entry blurred the iframe and
-   * flushed). The literal is stripped from the SAVED copy only — the document keeps it for the
-   * palette's apply to consume.
+   * The literal trigger run (`\` + typed filter, e.g. `\f`) currently sitting in the document for a
+   * PASSIVE palette session, or undefined for focused sessions (their filter chars never land). A
+   * palette-open flush must not write this un-settled literal to the PDP: ParatextData tokenizes an
+   * unknown marker in body text as a PARAGRAPH, so the raw literal came back as a garbage paragraph
+   * echo (live-observed when clicking a palette entry blurred the iframe and flushed). The literal
+   * is stripped from the SAVED copy only — the document keeps it for the palette's apply to
+   * consume.
    */
   paletteLiteralRun?: string;
   /** Settle pending mid-edit marker text in the editor so the saved USJ matches the screen. */
@@ -43,10 +44,10 @@ export interface DebouncedPdpSaveParams {
 
 /**
  * Returns a copy of `usj` with the LAST occurrence of `literal` removed from its text content, or
- * the original `usj` unchanged when the literal is not present. The walk finds the last string
- * (in document order) containing the literal and removes that string's last occurrence — the
- * position nearest the caret, where a passive palette's trigger literal lives. Never mutates the
- * input (the editor still owns that object).
+ * the original `usj` unchanged when the literal is not present. The walk finds the last string (in
+ * document order) containing the literal and removes that string's last occurrence — the position
+ * nearest the caret, where a passive palette's trigger literal lives. Never mutates the input (the
+ * editor still owns that object).
  */
 function stripLastLiteralRun(usj: Usj, literal: string): Usj {
   const copy: Usj = JSON.parse(JSON.stringify(usj));
@@ -57,8 +58,8 @@ function stripLastLiteralRun(usj: Usj, literal: string): Usj {
         if (entry.includes(literal)) target = { holder: content, index };
         return;
       }
-      if (entry && typeof entry === 'object' && 'content' in entry)
-        walk((entry as { content?: unknown[] }).content);
+      if (entry && typeof entry === 'object' && 'content' in entry && Array.isArray(entry.content))
+        walk(entry.content);
     });
   };
   walk(copy.content);
@@ -68,6 +69,39 @@ function stripLastLiteralRun(usj: Usj, literal: string): Usj {
   const at = text.lastIndexOf(literal);
   target.holder[target.index] = text.slice(0, at) + text.slice(at + literal.length);
   return copy;
+}
+
+/**
+ * Strips a passive palette session's un-settled trigger literal (`\` + typed filter) from `usj`
+ * when one is known, or returns `usj` untouched when there is none (no session, or a focused
+ * session whose filter chars never land in the document). See
+ * {@link DebouncedPdpSaveParams.paletteLiteralRun} for why the literal must never reach the PDP.
+ */
+function stripPaletteLiteral(usj: Usj, literalRun: string | undefined): Usj {
+  return literalRun ? stripLastLiteralRun(usj, literalRun) : usj;
+}
+
+/**
+ * Decides what an imperative "save the editor's USJ if it changed" should write to the PDP: returns
+ * the USJ to save, or `undefined` when there is nothing new to write.
+ *
+ * The debounced keystroke save already strips a passive palette session's un-settled `\`+filter
+ * literal before writing ({@link performDebouncedPdpSave}), but saves also fire OUTSIDE that path
+ * while a session is open — `useEditorPdpSync` pushes newer editor content back up when a PDP echo
+ * arrives — and those read the raw editor USJ, literal included. Writing the literal lets
+ * ParatextData tokenize the unknown marker into a garbage paragraph that echoes back into the
+ * document, so the literal is stripped from the SAVED copy here too (the editor keeps it for the
+ * palette's apply to consume). The STRIPPED copy is also what is compared against the PDP's
+ * content: when the literal is the only divergence there is nothing real to save, and the caller
+ * must record the returned (stripped) USJ as what was sent so the echo comparison converges.
+ */
+export function resolveUsjToSaveToPdp(
+  usjFromEditor: Usj,
+  usjFromPdp: Usj | undefined,
+  paletteLiteralRun: string | undefined,
+): Usj | undefined {
+  const usjToSave = stripPaletteLiteral(usjFromEditor, paletteLiteralRun);
+  return areUsjContentsEqualExceptWhitespace(usjFromPdp, usjToSave) ? undefined : usjToSave;
 }
 
 /**
@@ -94,8 +128,8 @@ function stripLastLiteralRun(usj: Usj, literal: string): Usj {
  * the actual PDP setter via `saveUsjToPdpRawStableRef.current` in
  * `platform-scripture-editor.web-view.tsx` (~line 1923), which is re-pointed to the new chapter's
  * setter from a `useEffect` BODY, not during render. A cross-chapter flush (itself running in an
- * effect CLEANUP) still relies on React's cleanup-before-body ordering to observe the OLD
- * chapter's setter there before that `useEffect` body reassigns it.
+ * effect CLEANUP) still relies on React's cleanup-before-body ordering to observe the OLD chapter's
+ * setter there before that `useEffect` body reassigns it.
  */
 export function performDebouncedPdpSave({
   usj,
@@ -109,11 +143,11 @@ export function performDebouncedPdpSave({
   getEditorUsj,
 }: DebouncedPdpSaveParams): void {
   if (scheduledChapterKey !== currentChapterKey) {
-    capturedSave(paletteLiteralRun ? stripLastLiteralRun(usj, paletteLiteralRun) : usj);
+    capturedSave(stripPaletteLiteral(usj, paletteLiteralRun));
     return;
   }
   if (isPaletteSessionOpen) {
-    latestSave(paletteLiteralRun ? stripLastLiteralRun(usj, paletteLiteralRun) : usj);
+    latestSave(stripPaletteLiteral(usj, paletteLiteralRun));
     return;
   }
   commitPendingMarkerEdits();
