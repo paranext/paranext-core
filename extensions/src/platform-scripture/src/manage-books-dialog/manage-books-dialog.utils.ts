@@ -6,7 +6,9 @@
 
 import { ScrVersType } from '@sillsdev/scripture';
 import type {
+  ManageBooksAction,
   ManageBooksComparisonState,
+  ManageBooksCreateMethod,
   ManageBooksDialogLocalizedStrings,
 } from './manage-books-dialog.types';
 
@@ -146,4 +148,90 @@ export const versificationFallbackName = (value: number | string): string => {
     default:
       return 'Unknown';
   }
+};
+
+/**
+ * Whether a visible book is _not creatable_ from the current Create-from-template reference
+ * project, and so must be treated as non-selectable. In Create > Based on template a book that is
+ * not present in the reference project has no template content to base a new book on; the grid
+ * disables its pill (see `gridItems` in the component) and the selection logic must exclude it
+ * too.
+ *
+ * This is the single source of truth for that determination, shared by the grid (pill disabling)
+ * and `computeSelectableVisibleBooks` (Select-All / counts). Keeping both on one predicate is what
+ * prevents the two notions of "selectable" from drifting — the drift that let Select-All re-add
+ * not-in-reference books, inflating the selection count and tripping the missing-model preflight.
+ *
+ * Returns `false` for any action/method other than Create-from-template, or while no reference
+ * project / book set is available yet (nothing is disabled until we know the reference's book
+ * set).
+ *
+ * @param book 3-letter USFM book id to test.
+ * @param params.action Current dialog action.
+ * @param params.createMethod Current create method.
+ * @param params.hasReferenceProject Whether a reference project is currently selected.
+ * @param params.referencePresentBooks The reference project's present-book set, once loaded
+ *   (`undefined` while it is still loading).
+ * @returns `true` when the book is not in the reference project and so is not selectable.
+ */
+export const isBookNotInCreateReference = (
+  book: string,
+  params: {
+    action: ManageBooksAction;
+    createMethod: ManageBooksCreateMethod;
+    hasReferenceProject: boolean;
+    referencePresentBooks: ReadonlySet<string> | undefined;
+  },
+): boolean =>
+  params.action === 'create' &&
+  params.createMethod === 'fromTemplate' &&
+  params.hasReferenceProject &&
+  params.referencePresentBooks !== undefined &&
+  !params.referencePresentBooks.has(book);
+
+/**
+ * Compute the genuinely _selectable_ visible books for the dialog's current action — the set that
+ * Select-All, the header tri-state checkbox, the selection count, and the "{n} of {m} selected"
+ * announcement all derive from.
+ *
+ * "Selectable" excludes books the grid renders as disabled: in Create > Based on template, books
+ * not present in the reference project (`isBookNotInCreateReference`). Excluding them here is what
+ * keeps Select-All from selecting non-creatable books — the bug where Select-All inflated the count
+ * and tripped the missing-model preflight with books that the orchestrator would only filter out at
+ * submit time anyway.
+ *
+ * Mirrors the dialog's per-action rules: `view` selects nothing; `import` is limited to books with
+ * an attached file; every other action starts from all visible books — then the not-in-reference
+ * books are removed.
+ *
+ * @param params.action Current dialog action.
+ * @param params.visibleBooks Books currently visible (already text/status filtered).
+ * @param params.hasImportFile Predicate: does this book have an attached import file? Only
+ *   consulted for the `import` action (kept as a callback so this helper stays free of the
+ *   importFiles shape).
+ * @param params.createMethod Current create method.
+ * @param params.hasReferenceProject Whether a reference project is currently selected.
+ * @param params.referencePresentBooks The reference project's present-book set, once loaded.
+ * @returns The visible books the user can actually select, in `visibleBooks` order.
+ */
+export const computeSelectableVisibleBooks = (params: {
+  action: ManageBooksAction;
+  visibleBooks: readonly string[];
+  hasImportFile: (book: string) => boolean;
+  createMethod: ManageBooksCreateMethod;
+  hasReferenceProject: boolean;
+  referencePresentBooks: ReadonlySet<string> | undefined;
+}): string[] => {
+  const { action, visibleBooks, hasImportFile } = params;
+  if (action === 'view') return [];
+  const base = action === 'import' ? visibleBooks.filter((b) => hasImportFile(b)) : visibleBooks;
+  return base.filter(
+    (b) =>
+      !isBookNotInCreateReference(b, {
+        action,
+        createMethod: params.createMethod,
+        hasReferenceProject: params.hasReferenceProject,
+        referencePresentBooks: params.referencePresentBooks,
+      }),
+  );
 };

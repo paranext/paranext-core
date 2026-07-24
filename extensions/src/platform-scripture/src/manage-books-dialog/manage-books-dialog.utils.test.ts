@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   computeCompareState,
   computeImportCompareState,
+  computeSelectableVisibleBooks,
   deleteConfirmVariant,
   fmtTemplate,
+  isBookNotInCreateReference,
 } from './manage-books-dialog.utils';
 
 describe('fmtTemplate', () => {
@@ -124,5 +126,177 @@ describe('deleteConfirmVariant', () => {
     // project was about to be deleted — the highest-impact case.
     expect(deleteConfirmVariant(true, true)).not.toBe('all');
     expect(deleteConfirmVariant(true, true)).toBe('allShared');
+  });
+});
+
+describe('isBookNotInCreateReference', () => {
+  const reference = new Set(['GEN', 'EXO']);
+
+  it('is true for a Create-from-template book absent from the reference project', () => {
+    expect(
+      isBookNotInCreateReference('LEV', {
+        action: 'create',
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: reference,
+      }),
+    ).toBe(true);
+  });
+
+  it('is false for a Create-from-template book present in the reference project', () => {
+    expect(
+      isBookNotInCreateReference('GEN', {
+        action: 'create',
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: reference,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false for create methods other than fromTemplate', () => {
+    expect(
+      isBookNotInCreateReference('LEV', {
+        action: 'create',
+        createMethod: 'empty',
+        hasReferenceProject: true,
+        referencePresentBooks: reference,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false for actions other than create', () => {
+    expect(
+      isBookNotInCreateReference('LEV', {
+        action: 'delete',
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: reference,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false while no reference project is selected', () => {
+    expect(
+      isBookNotInCreateReference('LEV', {
+        action: 'create',
+        createMethod: 'fromTemplate',
+        hasReferenceProject: false,
+        referencePresentBooks: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false while the reference book set is still loading (undefined)', () => {
+    // Nothing is disabled until we actually know the reference's book set.
+    expect(
+      isBookNotInCreateReference('LEV', {
+        action: 'create',
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: undefined,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('computeSelectableVisibleBooks', () => {
+  const neverImport = () => false;
+
+  it('selects nothing in view mode', () => {
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'view',
+        visibleBooks: ['GEN', 'EXO'],
+        hasImportFile: neverImport,
+        createMethod: 'empty',
+        hasReferenceProject: false,
+        referencePresentBooks: undefined,
+      }),
+    ).toEqual([]);
+  });
+
+  it('limits import mode to books that have an attached file', () => {
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'import',
+        visibleBooks: ['GEN', 'EXO', 'LEV'],
+        hasImportFile: (b) => b === 'EXO',
+        createMethod: 'empty',
+        hasReferenceProject: false,
+        referencePresentBooks: undefined,
+      }),
+    ).toEqual(['EXO']);
+  });
+
+  it('returns all visible books for delete (no reference filtering)', () => {
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'delete',
+        visibleBooks: ['GEN', 'EXO', 'LEV'],
+        hasImportFile: neverImport,
+        createMethod: 'empty',
+        hasReferenceProject: false,
+        referencePresentBooks: undefined,
+      }),
+    ).toEqual(['GEN', 'EXO', 'LEV']);
+  });
+
+  it('regression: Create-from-template excludes books not in the reference project (so Select-All cannot select disabled books)', () => {
+    // Before the fix, this helper included not-in-reference books in the selectable set — the set
+    // Select-All and the selection count derive from — so Select-All could select books the grid
+    // disables. (The end-to-end count/missing-model-preflight symptoms are wired in the component;
+    // this unit only proves the selectable set excludes them.)
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'create',
+        visibleBooks: ['GEN', 'EXO', 'LEV', 'NUM'],
+        hasImportFile: neverImport,
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: new Set(['GEN', 'EXO']),
+      }),
+    ).toEqual(['GEN', 'EXO']);
+  });
+
+  it('Create-from-template returns all visible books while the reference set is still loading', () => {
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'create',
+        visibleBooks: ['GEN', 'EXO', 'LEV'],
+        hasImportFile: neverImport,
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: undefined,
+      }),
+    ).toEqual(['GEN', 'EXO', 'LEV']);
+  });
+
+  it('Create returns all visible books when no reference project is selected (reference filter inert)', () => {
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'create',
+        visibleBooks: ['GEN', 'EXO', 'LEV'],
+        hasImportFile: neverImport,
+        createMethod: 'fromTemplate',
+        hasReferenceProject: false,
+        referencePresentBooks: new Set(['GEN']),
+      }),
+    ).toEqual(['GEN', 'EXO', 'LEV']);
+  });
+
+  it('import filtering ignores the reference set (create-only filter is inert during import)', () => {
+    // The not-in-reference filter must never narrow a non-create action, even if a reference set
+    // happens to be populated — import is gated only by attached files.
+    expect(
+      computeSelectableVisibleBooks({
+        action: 'import',
+        visibleBooks: ['GEN', 'EXO', 'LEV'],
+        hasImportFile: (b) => b === 'GEN' || b === 'LEV',
+        createMethod: 'fromTemplate',
+        hasReferenceProject: true,
+        referencePresentBooks: new Set(['GEN']),
+      }),
+    ).toEqual(['GEN', 'LEV']);
   });
 });
