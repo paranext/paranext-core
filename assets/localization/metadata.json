@@ -23,6 +23,12 @@
       "message": "We made the internet settings its own page so the localized string needs to indicate that. The new localized string key is %data_loading_error_internetAccess_disabled%."
     }
   },
+  "%firstRun_step_language_placeholder%": {
+    "deprecationInfo": {
+      "date": "2026-07-20",
+      "message": "The Language step now has a real implementation (PT-4176). This placeholder string is no longer used."
+    }
+  },
   "%footnoteEditor_callerDropdown_label%": {
     "fallbackKey": "%Paratext.Base.ScriptureEditor.NoteCallerForm.NoteCallerForm.Text%"
   },
