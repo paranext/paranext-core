@@ -16,10 +16,13 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
+      '%firstRun_button_skipForNow%': 'Skip for now',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
-      '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
+      '%firstRun_step_syncConsent_heading%': 'Sync your data',
+      '%firstRun_step_syncConsent_body%':
+        'Your projects are stored on a shared server. Syncing brings your work up to date and shares it with your team.',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
     false,
@@ -65,6 +68,13 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="syncConsent" />);
     await userEvent.click(screen.getByRole('button', { name: /skip/i }));
     expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
+  });
+
+  it('advances to syncProgress without completing when Next is clicked on sync consent', async () => {
+    render(<FirstRunShell entryStep="syncConsent" />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(mockComplete).not.toHaveBeenCalled();
+    expect(screen.getByText(/sync progress/i)).toBeInTheDocument();
   });
 
   it('completes when Finish is clicked on the last step', async () => {

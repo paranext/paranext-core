@@ -4590,6 +4590,13 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether the user chose "Skip for now" on the sync-consent step of the simple-mode first-run
+     * wizard. Hidden; set once by the first-run store, read by startup-tasks to suppress the
+     * automatic startup sync on subsequent launches. Suppresses only the automatic startup sync;
+     * manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.firstRunSyncSkipped': boolean;
   }
   /**
    * Names for each user setting available on the papi.

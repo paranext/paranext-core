@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { CommandHandlers } from 'papi-shared-types';
@@ -84,6 +84,10 @@ function stubMatchMedia() {
 
 describe('NotificationDisplay with real Sonner', () => {
   beforeEach(async () => {
+    // Use fake timers so Sonner's auto-dismiss setTimeout is registered as a fake timer
+    // and can be drained in afterEach before jsdom tears down. shouldAdvanceTime keeps
+    // real wall-clock time advancing so findByRole polling and Promise chains still work.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     vi.resetModules();
     mockCurrentThemeType = 'light';
@@ -93,6 +97,14 @@ describe('NotificationDisplay with real Sonner', () => {
       '@renderer/services/notification.service-host'
     );
     await startNotificationService();
+  });
+
+  afterEach(() => {
+    // Drain Sonner's auto-dismiss timer (normally fires ~4s after a toast) before the
+    // jsdom environment tears down. Without this, the timer fires post-teardown and calls
+    // React's setToasts which needs window — causing "window is not defined" errors.
+    vi.runAllTimers();
+    vi.useRealTimers();
   });
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {

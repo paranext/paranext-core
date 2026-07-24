@@ -15,11 +15,10 @@ export type FirstRunStatus =
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
-// Written when the user skips sync consent. TODO(PT-4178): no production reader yet, so skipping
-// currently only suppresses the in-wizard sync — the next-launch auto-sync in startup-tasks.ts
-// still fires. PT-4178 (Sync consent) owns making "skip" durably suppress future auto-sync; note
-// that reader lives in the MAIN process, which cannot read this renderer localStorage flag, so the
-// durable signal must be a platform setting (e.g. platform.firstRunSyncSkipped), not this cache.
+// Written when the user skips sync consent. The durable auto-sync gate lives in startup-tasks.ts
+// (main process) and reads platform.firstRunSyncSkipped — see completeFirstRun below. This
+// localStorage cache is renderer-only and not the gating signal; it is kept as a lightweight hint
+// for any future in-wizard logic that needs to know the skip choice without a settings round-trip.
 const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped';
 // Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
 // the real registration backend or triggering a relaunch, and completion is NOT persisted so the
@@ -212,15 +211,32 @@ export async function resolveFirstRunState(): Promise<void> {
   return resolvePromise;
 }
 
-/** Finish the wizard: persist completion, clear the active marker, reveal the app. */
+/**
+ * Finish the wizard: persist completion, clear the active marker, reveal the app.
+ *
+ * @param options.syncSkipped - When true, the user chose "Skip for now" on the sync-consent step.
+ *   Persists `platform.firstRunSyncSkipped=true` so the main-process startup-tasks can suppress
+ *   automatic sync on subsequent launches. Write is best-effort: a failure is logged but does not
+ *   block wizard completion.
+ */
 export async function completeFirstRun(options?: { syncSkipped?: boolean }): Promise<void> {
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
   if (isDemoMode()) {
     setStatus({ kind: 'app' });
     return;
   }
-  if (options?.syncSkipped) writeBooleanFlag(SYNC_SKIPPED_KEY, true);
+  // Write firstRunComplete FIRST so a crash between the two writes leaves the wizard closed and
+  // sync enabled (safe fail) rather than sync permanently suppressed from an aborted session.
   await markFirstRunComplete();
+  if (options?.syncSkipped) {
+    writeBooleanFlag(SYNC_SKIPPED_KEY, true);
+    // Persist durably as a platform setting so the main-process startup-tasks can read it.
+    try {
+      await settingsService.set('platform.firstRunSyncSkipped', true);
+    } catch (e) {
+      logger.warn(`Failed to persist platform.firstRunSyncSkipped: ${getErrorMessage(e)}`);
+    }
+  }
   setStatus({ kind: 'app' });
 }
 
