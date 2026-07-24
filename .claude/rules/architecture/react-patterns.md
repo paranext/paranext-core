@@ -78,11 +78,21 @@ When you modify any vendored shadcn component (under `lib/platform-bible-react/s
 
 **Verification**: before committing changes to any `shadcn-ui/` file, diff against the prior commit on the base branch and confirm every changed line is covered by a `CUSTOM` marker. Reviewers will grep for `CUSTOM` to find all customizations.
 
-## What's Enforced by Linting (Don't Duplicate)
+## Linting: What Tooling Catches (and What It Doesn't)
 
-- Tailwind `tw:` prefix on utility classes → enforced by the project's Tailwind/ESLint config
-- Localized strings → ESLint: no-hardcoded-jsx-strings
-- ARIA localization → ESLint: require-localized-aria
-- Theme colors → ESLint: no-hardcoded-tailwind-colors
+Don't assume these concerns are caught automatically in CI — most are not:
+
+- **Tailwind `tw:` prefix** — required by the Tailwind v4 config (`prefix(tw)` in
+  `lib/platform-bible-react/src/index.css`, and `twMerge` in `utils/shadcn-ui/utils.ts`), **not** by
+  a lint rule. A missing prefix silently produces no styling — no build or lint error flags it.
+- **Localized strings** (`paranext/no-hardcoded-jsx-strings`), **ARIA localization**
+  (`paranext/require-localized-aria`), **theme colors** (`paranext/no-hardcoded-tailwind-colors`) —
+  all live in `.eslintrc.ai.js` (`npm run lint:ai-strict`), which **CI does not run**. The
+  localization/ARIA rules are additionally **off** for `*.stories.tsx` / test files, and target
+  hardcoded JSX literals, not missing localize keys.
+
+CI's `npm run lint` uses `.eslintrc.js`, which enables only `paranext/require-disable-comment` among
+the `paranext/*` rules — so none of the above catch a raw-key leak. For that class, see
+[localized-string-fallbacks.md](../code-quality/localized-string-fallbacks.md).
 
 See [Component-Selection-Quick-Reference.md](../../../.context/standards/Component-Selection-Quick-Reference.md).

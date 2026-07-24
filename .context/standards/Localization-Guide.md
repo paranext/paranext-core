@@ -177,12 +177,18 @@ The consuming extension resolves the keys with `useLocalizedStrings(STRING_KEYS)
 
 **Avoid:**
 - Calling `useLocalizedStrings` (or any `@papi/*` hook) inside a `lib/platform-bible-react/` component — it couples the process-agnostic library to PAPI.
-- Hardcoded English text in JSX. This is enforced by the ESLint rule **`paranext/no-hardcoded-jsx-strings`** (in `lib/eslint-plugin-paranext/`).
+- Hardcoded English text in JSX. The ESLint rule **`paranext/no-hardcoded-jsx-strings`** (in `lib/eslint-plugin-paranext/`) flags this, but only under `npm run lint:ai-strict` — it is **not** part of CI's `npm run lint`, so don't rely on it to catch hardcoded strings.
 - Ad-hoc `localizedStrings: Record<string, string>` props with no typed `STRING_KEYS` tuple — callers lose the typed key list and the partial-map guarantee.
 
 **Why:** the `STRING_KEYS` tuple gives consumers a typed, single-source key list for the `useLocalizedStrings` lookup; the `Partial<Record>` type lets stories pass a subset and trust the fallback; the English-fallback read keeps the component usable in isolation. Established precedent: `BookChapterControl`, `BookSelector`, `MarkerMenu`, `Inventory`, `ScopeSelector`, `CommentEditor`, `CommentList`, `FootnoteEditor`, `UndoRedoButtons`, `ErrorPopover`, `ErrorDump`. See `lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.types.ts` for the `STRING_KEYS` + `…LocalizedStrings` pair and `book-chapter-control.component.tsx` for the `?? 'English'` fallback reads.
 
 > Note: a few components also accept a separate data map prop such as `localizedBookNames?: Map<…>` for localized book names — that is a distinct, data-shaped prop, not the string-key mechanism described here.
+
+> ⚠️ Several components in the precedent list above currently resolve with `strings[key] ?? key`
+> (raw-key fallback) rather than the `?? 'English'` fallback described here — a known deviation
+> tracked for cleanup. A raw-key fallback renders the localize key verbatim on screen when a key is
+> absent. New or edited library components MUST use the English fallback. See the agent rule
+> [`.claude/rules/code-quality/localized-string-fallbacks.md`](../../.claude/rules/code-quality/localized-string-fallbacks.md).
 
 ---
 
