@@ -44,6 +44,28 @@ export const sentinelNoteOp: DeltaOpInsertNoteEmbed = {
   },
 };
 
+/**
+ * A footnote op whose content already holds two `\fp` (footnote-paragraph) spans after the `\ft`
+ * text — the shape the Enter/paste machinery produces. Distinct `cid`s keep the consecutive
+ * same-style `\fp` runs as separate char spans instead of letting the delta merge them.
+ */
+export const twoFpNoteOp: DeltaOpInsertNoteEmbed = {
+  insert: {
+    note: {
+      style: 'f',
+      caller: '+',
+      contents: {
+        ops: [
+          { insert: '1:1 ', attributes: { char: { style: 'fr' } } },
+          { insert: 'first paragraph ', attributes: { char: { style: 'ft' } } },
+          { insert: 'second paragraph ', attributes: { char: { style: 'fp', cid: 'fp-1' } } },
+          { insert: 'third paragraph', attributes: { char: { style: 'fp', cid: 'fp-2' } } },
+        ],
+      },
+    },
+  },
+};
+
 /** The editable-marker-mode view options (Standard view). */
 export const editableView: EditorOptions['view'] = {
   markerMode: 'editable',

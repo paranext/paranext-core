@@ -2,12 +2,14 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import { $getRoot, $isElementNode, LexicalEditor, LexicalNode } from 'lexical';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/shadcn-ui/popover';
+import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-editor';
 import FootnoteEditor from './footnote-editor.component';
 import {
   buildLocalizedStrings,
   editableView,
   scrRef,
   sentinelNoteOp,
+  twoFpNoteOp,
 } from './footnote-editor.fixtures';
 
 /**
@@ -87,17 +89,16 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** Renders the popover exactly as the web view does: FootnoteEditor inside an open Radix popover. */
-function PopoverHost() {
+function PopoverHost({ noteOps = [sentinelNoteOp] }: { noteOps?: DeltaOpInsertNoteEmbed[] }) {
   return (
     <Popover open>
       <PopoverAnchor className="tw:absolute" style={{ top: 120, left: 120 }} />
       <PopoverContent className="tw:w-max tw:min-w-[500px] tw:p-[10px]">
         <FootnoteEditor
-          noteOps={[sentinelNoteOp]}
+          noteOps={noteOps}
           onClose={() => {}}
           scrRef={scrRef}
           noteKey={undefined}
-          isNewNote
           editorOptions={{ view: editableView }}
           defaultMarkerMenuTrigger="\"
           localizedStrings={buildLocalizedStrings()}
@@ -125,6 +126,58 @@ export const EnterInsertsFootnoteParagraph: Story = {
 
     // Enter inserted a footnote paragraph inside the note; the wrapper para was not split.
     expect(rootChildCount(lexical)).toBe(1);
+  },
+};
+
+/**
+ * Each `\fp` (footnote paragraph) must DISPLAY like a paragraph start — its span begins on a new
+ * visual line — while the note stays one inline run in the data (no newline in the DOM text, USJ,
+ * or USFM). The break comes from a `::before { content: '\A' }` generated line break in
+ * editor-overrides.css, so this needs a real layout engine: jsdom computes no line boxes. Also pins
+ * that the mechanism keeps the spans inline: the `\f*` closer glyph stays on the SAME line as the
+ * last `\fp`'s content (a `display: block` approach would push it to its own line), and that a
+ * click inside an `\fp` still lands the caret in that span (the pseudo-element is not in the DOM,
+ * so it can't capture the caret).
+ */
+export const FootnoteParagraphsRenderOnNewLines: Story = {
+  render: () => <PopoverHost noteOps={[twoFpNoteOp]} />,
+  play: async () => {
+    const { editorInput } = await waitForPopover();
+
+    const note = editorInput.querySelector('span.note');
+    if (!note) throw new Error('expanded note span not found');
+    expect(note.classList.contains('expanded')).toBe(true);
+
+    const ft = note.querySelector('span.usfm_ft');
+    const fps = note.querySelectorAll('span.usfm_fp');
+    if (!ft) throw new Error('\\ft span not found');
+    expect(fps).toHaveLength(2);
+
+    // Each \fp starts a NEW visual line: strictly increasing line tops from \ft to each \fp.
+    const ftRect = ft.getBoundingClientRect();
+    const fp1Rect = fps[0].getBoundingClientRect();
+    const fp2Rect = fps[1].getBoundingClientRect();
+    expect(fp1Rect.top).toBeGreaterThan(ftRect.top);
+    expect(fp2Rect.top).toBeGreaterThan(fp1Rect.top);
+
+    // The note's \f* closer glyph shares the last \fp's line (vertical bands overlap) — the
+    // break mechanism must keep the \fp spans inline rather than turning them into blocks.
+    const closer = note.querySelector('span.closing[data-marker="f"]');
+    if (!closer) throw new Error('\\f* closer glyph not found');
+    const closerRect = closer.getBoundingClientRect();
+    expect(closerRect.top).toBeLessThan(fp2Rect.bottom);
+    expect(closerRect.bottom).toBeGreaterThan(fp2Rect.top);
+
+    // The line breaks are generated content only — no newline character exists in the DOM text.
+    expect(editorInput.textContent).not.toContain('\n');
+
+    // Click targeting: clicking the second \fp's text parks the caret inside that span.
+    await userEvent.pointer({ keys: '[MouseLeft]', target: fps[1] });
+    await waitFor(() => {
+      const selection = document.getSelection();
+      const anchorNode = selection?.anchorNode;
+      expect(anchorNode && fps[1].contains(anchorNode)).toBe(true);
+    });
   },
 };
 

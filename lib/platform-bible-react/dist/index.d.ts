@@ -983,14 +983,6 @@ export interface FootnoteEditorProps {
 	scrRef: SerializedVerseRef;
 	/** The unique note key to identify the note being edited used to apply changes to the note */
 	noteKey: string | undefined;
-	/**
-	 * True when the note being edited was just inserted (as opposed to an existing note being
-	 * reopened). When true, once the note content loads the caret is moved to the end of the last
-	 * footnote-text char span (`\ft`/`\xt`) so the user can start typing immediately. Existing notes
-	 * are left with whatever selection results from loading the note ops, so reopening one doesn't
-	 * unexpectedly reposition the caret.
-	 */
-	isNewNote?: boolean;
 	/** View options of the parent editor */
 	editorOptions: EditorOptions;
 	/** Trigger key to open the footnote editor marker menu */
@@ -1067,7 +1059,7 @@ export interface FootnoteEditorMarkerPalette {
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, isNewNote, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 export type MarkerPaletteSessionKind = "backslash" | "enter" | "selection";
 /** The mutable per-session state the forwarding table reads and updates. */
 export interface MarkerPaletteSessionState {
@@ -1100,7 +1092,7 @@ export interface MarkerPaletteSessionDriver {
 	dismiss(): void;
 }
 /**
- * - `'passed'` — modifier-only keydown; nothing happened, the session stays open.
+ * - `'passed'` — modifier-only or IME-composition keydown; nothing happened, the session stays open.
  * - `'continue'` — the key drove the palette (filter/arrows); the session stays open.
  * - `'ended'` — the session is over (commit/dismiss); the caller must clear its session ref.
  */

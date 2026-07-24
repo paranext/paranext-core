@@ -13,7 +13,7 @@
 import { act, render } from '@testing-library/react';
 import type { EditorOptions } from '@eten-tech-foundation/platform-editor';
 import { LexicalEditor } from 'lexical';
-import FootnoteEditor from './footnote-editor.component';
+import FootnoteEditor, { FootnoteEditorMarkerPalette } from './footnote-editor.component';
 import { buildLocalizedStrings, scrRef, sentinelNoteOp } from './footnote-editor.fixtures';
 
 // Re-export the shared fixtures so existing importers of the harness keep working.
@@ -24,13 +24,19 @@ export * from './footnote-editor.fixtures';
  * deferred init, and returns the render utils, the popover's `.editor-input` element, and the
  * mounted Lexical editor instance.
  *
- * The init effect defers `applyUpdate` via `setTimeout(0)` and, for a new note, re-asserts the note
- * selection a frame + a macrotask later; `waitMs` must cover whichever of those a caller asserts on
- * (the default covers the re-assert; pass a smaller value to only wait for `applyUpdate`).
+ * The init effect defers `applyUpdate` via `setTimeout(0)` and re-asserts the note selection a
+ * frame + a macrotask later; `waitMs` must cover whichever of those a caller asserts on (the
+ * default covers the re-assert; pass a smaller value to only wait for `applyUpdate`).
+ *
+ * `markerPalette` (optional) wires up the standard-view `\` palette driver, for suites exercising
+ * the palette open/commit round-trip against the real editor.
  */
 export async function renderPopoverAndWaitForInit(
   view: EditorOptions['view'],
-  { waitMs = 50 }: { waitMs?: number } = {},
+  {
+    waitMs = 50,
+    markerPalette = undefined,
+  }: { waitMs?: number; markerPalette?: FootnoteEditorMarkerPalette } = {},
 ) {
   const utils = render(
     <FootnoteEditor
@@ -38,10 +44,10 @@ export async function renderPopoverAndWaitForInit(
       onClose={() => {}}
       scrRef={scrRef}
       noteKey={undefined}
-      isNewNote
       editorOptions={{ view }}
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
+      markerPalette={markerPalette}
     />,
   );
   const editorInput = utils.container.querySelector('.editor-input');

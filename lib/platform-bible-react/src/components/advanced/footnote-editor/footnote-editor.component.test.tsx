@@ -8,6 +8,7 @@ import type {
   EditorRef,
   MarkerMenuContext,
   MarkerMenuItem as EditorMarkerMenuItem,
+  SelectionRange,
 } from '@eten-tech-foundation/platform-editor';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import FootnoteEditor, {
@@ -331,6 +332,165 @@ describe('FootnoteEditor marker palette wiring', () => {
       });
       expect(editorRef.focus).toHaveBeenCalled();
     });
+
+    it('restores editor focus BEFORE applying the selection (a mouse commit blurs the editor)', async () => {
+      // Clicking a palette item moves focus out of the editor, which can null Lexical's live
+      // selection — applying against a null selection lands the marker at the document tail
+      // instead of the caret (observed live: an invalid `\fq` after the closing `\f*`). Lexical's
+      // focus() synchronously restores the remembered selection, so the commit path must focus
+      // FIRST and only then apply. This is a call-order contract, not just
+      // "both get called".
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'fq' })]);
+      let resolveShow: (id: string | undefined) => void = () => {};
+      const showPromise = new Promise<string | undefined>((resolve) => {
+        resolveShow = resolve;
+      });
+      const markerPalette = makeMarkerPalette(vi.fn(() => showPromise));
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // Every mocked EditorRef method is a `vi.fn()` (see `renderFootnoteEditor`); reaching
+      // `.mock` for the call-order comparison needs the same cast `mockMarkerMenuContext` uses.
+      /* eslint-disable no-type-assertion/no-type-assertion */
+      const focusMock = editorRef.focus as ReturnType<typeof vi.fn>;
+      const applyMock = editorRef.applyMarkerMenuSelection as ReturnType<typeof vi.fn>;
+      /* eslint-enable no-type-assertion/no-type-assertion */
+      // Clear the mount-time focus calls so the order comparison isolates the commit path.
+      focusMock.mockClear();
+
+      resolveShow('fq');
+      await showPromise;
+      // Flush the promise microtask queue so the `.then` handler runs.
+      await Promise.resolve();
+
+      expect(applyMock).toHaveBeenCalledOnce();
+      expect(focusMock).toHaveBeenCalled();
+      expect(Math.min(...focusMock.mock.invocationCallOrder)).toBeLessThan(
+        applyMock.mock.invocationCallOrder[0],
+      );
+    });
+  });
+
+  describe('editable marker mode with markerPalette, commit selection restore', () => {
+    // A palette mouse click steals focus from the editor BEFORE the commit round-trips, and
+    // Lexical's blur processing can null the live selection outright — focus() then falls back
+    // to the document END instead of the caret. The commit path must therefore put the caret
+    // back BEFORE focusing whenever the live selection is gone: restore the selection captured
+    // at focusout (the moment of the steal, while it was still readable), or land at the note
+    // content as a last resort. A still-live selection must be left completely alone.
+
+    /** A structurally-plausible USJ selection snapshot (exact value is opaque to the popover). */
+    const sampleSelection: SelectionRange = {
+      start: { jsonPath: '$.content[0].content[2].content[1].content[0]', offset: 22 },
+    };
+
+    function setUpCommitScenario() {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'fq' })]);
+      let resolveShow: (id: string | undefined) => void = () => {};
+      const showPromise = new Promise<string | undefined>((resolve) => {
+        resolveShow = resolve;
+      });
+      const markerPalette = makeMarkerPalette(vi.fn(() => showPromise));
+      const rendered = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(rendered.editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(rendered.editorInput);
+      rendered.editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // Every mocked EditorRef method is a `vi.fn()` (see `renderFootnoteEditor`); reaching
+      // `.mock` needs the same cast `mockMarkerMenuContext` uses.
+      /* eslint-disable no-type-assertion/no-type-assertion */
+      const mocks = {
+        getSelection: rendered.editorRef.getSelection as ReturnType<typeof vi.fn>,
+        setSelection: rendered.editorRef.setSelection as ReturnType<typeof vi.fn>,
+        selectNote: rendered.editorRef.selectNote as ReturnType<typeof vi.fn>,
+        focus: rendered.editorRef.focus as ReturnType<typeof vi.fn>,
+        apply: rendered.editorRef.applyMarkerMenuSelection as ReturnType<typeof vi.fn>,
+      };
+      /* eslint-enable no-type-assertion/no-type-assertion */
+      // Clear mount-time focus calls so order comparisons isolate the commit path.
+      mocks.focus.mockClear();
+      const commit = async (id: string) => {
+        resolveShow(id);
+        await showPromise;
+        // Flush the promise microtask queue so the `.then` handler runs.
+        await Promise.resolve();
+      };
+      return { ...rendered, mocks, commit };
+    }
+
+    it('restores the focus-out capture BEFORE focusing and applying when the live selection is gone', async () => {
+      const { editorInput, mocks, commit } = setUpCommitScenario();
+
+      // The steal: focusout fires while the selection is still readable (captured)...
+      mocks.getSelection.mockReturnValueOnce(sampleSelection);
+      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+      // ...and by commit time the live selection is gone (getSelection → undefined again).
+
+      await commit('fq');
+
+      expect(mocks.setSelection).toHaveBeenCalledWith(sampleSelection);
+      expect(mocks.apply).toHaveBeenCalledOnce();
+      // Order contract: restore the caret, then focus (which re-asserts it), then apply.
+      expect(mocks.setSelection.mock.invocationCallOrder[0]).toBeLessThan(
+        Math.min(...mocks.focus.mock.invocationCallOrder),
+      );
+      expect(Math.min(...mocks.focus.mock.invocationCallOrder)).toBeLessThan(
+        mocks.apply.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('leaves a live selection completely alone on commit', async () => {
+      const { editorInput, mocks, commit } = setUpCommitScenario();
+
+      // Selection stays readable the whole time (the keyboard-commit case), including at the
+      // probe — even though a focusout captured a snapshot earlier.
+      mocks.getSelection.mockReturnValue(sampleSelection);
+      editorInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+      await commit('fq');
+
+      expect(mocks.setSelection).not.toHaveBeenCalled();
+      expect(mocks.selectNote).not.toHaveBeenCalled();
+      expect(mocks.apply).toHaveBeenCalledOnce();
+    });
+
+    it('falls back to selecting the note content when the selection is gone and nothing was captured', async () => {
+      const { mocks, commit } = setUpCommitScenario();
+
+      // No focusout ever fired (nothing captured) and the live selection is gone.
+      await commit('fq');
+
+      expect(mocks.selectNote).toHaveBeenCalledWith(0);
+      expect(mocks.setSelection).not.toHaveBeenCalled();
+      expect(Math.min(...mocks.selectNote.mock.invocationCallOrder)).toBeLessThan(
+        mocks.apply.mock.invocationCallOrder[0],
+      );
+    });
   });
 
   describe('editable marker mode with markerPalette, an open session forwarding table', () => {
@@ -506,6 +666,86 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
   });
 
+  describe('IME composition keys (isComposing / keyCode 229)', () => {
+    // Composition keystrokes (CJK etc.) feed or confirm an IME candidate; this capture-phase
+    // handler runs ahead of the editor's own `isComposing()` guard, so it needs its own guard —
+    // same requirement the main editor's web-view handler documents. Without it, a composing `\`
+    // opens the palette and a composing Enter trips the outside-the-note guard mid-composition.
+    it('a composing `\\` never opens the palette and is left for the IME', () => {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette();
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const notPrevented = editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: '\\',
+          isComposing: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(markerPalette.show).not.toHaveBeenCalled();
+    });
+
+    it('a composing Enter with the caret outside the note is NOT claimed or rerouted', () => {
+      // The Enter guard reroutes a stray caret into the note — but a composing Enter is the IME
+      // candidate confirmation, not a split request; claiming it would break the composition.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette();
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+
+      const notPrevented = editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          isComposing: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(editorRef.selectNote).not.toHaveBeenCalled();
+    });
+
+    it('a keyCode-229 keydown (composition start before isComposing is set) is left untouched', () => {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
+      const markerPalette = makeMarkerPalette();
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+
+      const notPrevented = editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      expect(notPrevented).toBe(true);
+      expect(editorRef.selectNote).not.toHaveBeenCalled();
+    });
+  });
+
   describe('Enter inside the popover', () => {
     it('with the caret inside the note content: never intercepted (stays on the library \\fp path)', () => {
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
@@ -621,6 +861,57 @@ describe('stray caret snap (wrapper-para dead-space normalization)', () => {
 
     expect(editorRef.selectNote).not.toHaveBeenCalled();
     expect(editorRef.focus).not.toHaveBeenCalled();
+  });
+});
+
+describe('paste guard (dead-space caret)', () => {
+  // The pointerup/selectionchange snap above normalizes most stray carets, but a paste can still
+  // arrive while the DOM caret sits in the wrapper-para dead space (the snap runs from async
+  // events and can lose the race). The engine's paste handling resolves against the caret, so an
+  // outside-the-note paste plain-splits the wrapper paragraph instead of landing in the note.
+  // This capture-phase guard snaps the caret into the note FIRST and lets the paste proceed.
+  it('paste with the DOM caret outside the note: snaps into the note first and lets the paste proceed', () => {
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretOutsideNote(editorInput);
+
+    const notPrevented = editorInput.ownerDocument.dispatchEvent(
+      new Event('paste', { bubbles: true, cancelable: true }),
+    );
+
+    // Snapped into the note, but NOT claimed — the paste itself must still reach the editor.
+    expect(editorRef.selectNote).toHaveBeenCalledWith(0);
+    expect(editorRef.focus).toHaveBeenCalled();
+    expect(notPrevented).toBe(true);
+  });
+
+  it('paste with the caret already inside the note: left completely alone', () => {
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretInsideNote(editorInput);
+
+    const notPrevented = editorInput.ownerDocument.dispatchEvent(
+      new Event('paste', { bubbles: true, cancelable: true }),
+    );
+
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(true);
+  });
+
+  it('non-editable marker mode: paste is never intercepted', () => {
+    const { editorInput, editorRef } = renderFootnoteEditor({
+      view: { markerMode: 'visible', hasSpacing: true, isFormattedFont: true },
+    });
+    placeDomCaretOutsideNote(editorInput);
+
+    const notPrevented = editorInput.ownerDocument.dispatchEvent(
+      new Event('paste', { bubbles: true, cancelable: true }),
+    );
+
+    expect(editorRef.selectNote).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(true);
   });
 });
 

@@ -33,6 +33,35 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
+  it('passes IME composition keydowns (isComposing) through untouched — no claim, no driver calls', () => {
+    // An Enter that confirms a CJK/complex-script candidate arrives with `isComposing` and must
+    // reach the editor's own composition-guarded handlers, not commit the palette. The capture
+    // phase consumers run ahead of MarkerEditPlugin's `editor.isComposing()` guard, so the table
+    // needs its own.
+    const driver = makeDriver();
+    const state = session('selection', 'w');
+    const event = makeEvent('Enter', { isComposing: true });
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('passed');
+    expect(event.defaultPrevented).toBe(false);
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    expect(driver.commit).not.toHaveBeenCalled();
+    expect(driver.dismiss).not.toHaveBeenCalled();
+    expect(driver.update).not.toHaveBeenCalled();
+    expect(state.filter).toBe('w'); // not ingested
+  });
+
+  it('passes keyCode 229 keydowns through untouched even when isComposing is not yet set', () => {
+    // Some engines fire the first composition keydown BEFORE `isComposing` flips true; the legacy
+    // "handled by IME" signal for that keydown is `keyCode === 229` (often with key 'Process').
+    const driver = makeDriver();
+    const state = session('selection', 'w');
+    const event = makeEvent('Process', { keyCode: 229 });
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('passed');
+    expect(event.defaultPrevented).toBe(false);
+    expect(driver.dismiss).not.toHaveBeenCalled();
+    expect(state.filter).toBe('w'); // not ingested
+  });
+
   it('never ingests or claims real chords — the session ends and the chord does its job (copy)', () => {
     const driver = makeDriver();
     const event = makeEvent('c', { ctrlKey: true });

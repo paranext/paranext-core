@@ -1920,6 +1920,44 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
       '\\p \\bd implicitly closed then \\bd explicitly closed\\bd*\\f + \\fr 1.1 \\ft note text\\f* after.\n',
     );
   });
+
+  // Pins that a note holding consecutive \fp (footnote-paragraph) spans stays a single inline
+  // run: the editor renders each \fp as a paragraph start via a CSS-generated line break only,
+  // so the USFM must keep the whole note on one line with no newline characters anywhere inside
+  // it. \fp spans carry closed="false" (they never have their own closing markers), matching
+  // what ParatextData and the editor record for footnote content.
+  test('keeps a note with \\fp footnote paragraphs on one line with no newline characters', () => {
+    const usjWithFpNote: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [
+                { type: 'char', marker: 'fr', closed: 'false', content: ['1:1 '] },
+                { type: 'char', marker: 'ft', closed: 'false', content: ['a '] },
+                { type: 'char', marker: 'fp', closed: 'false', content: ['b '] },
+                { type: 'char', marker: 'fp', closed: 'false', content: ['c'] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(usjWithFpNote, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+
+    expect(resultingUsfm).toBe('\\p \\f + \\fr 1:1 \\ft a \\fp b \\fp c\\f*\n');
+    // The only newline is the paragraph terminator — nothing inside the note.
+    expect(resultingUsfm.slice(0, -1)).not.toContain('\n');
+  });
 });
 
 describe('toUsfm transform USJ 3.1 to spec USFM 3.1', () => {
