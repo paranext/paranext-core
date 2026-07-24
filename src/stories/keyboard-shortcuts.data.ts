@@ -248,14 +248,23 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-paragraph-markers-menu',
-    purpose: 'Open the paragraph markers menu to split the paragraph (Standard view, editable)',
+    purpose:
+      'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style.',
     category: 'Editing',
     context: 'Scripture editor web view',
+    // Enter is claimed in EVERY modifier state, matching PT9's KeyPressEditHandler (no modifier
+    // check): any modifier chord with Enter — including Shift+Enter, which would otherwise insert
+    // a soft line break with no USFM representation — opens the same menu.
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
+  // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
+  // around an \fp span's rendered line break — all in the scripture-editors repo's
+  // ArrowNavigationPlugin) is deliberately NOT cataloged: arrow keys moving the caret in a
+  // natural way is expected editor behavior, not a keyboard shortcut.
   {
     id: 'scripture-text-grid-open-chapter-context',
     purpose: 'Open the chapter-context view for the focused cell',
