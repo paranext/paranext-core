@@ -18,7 +18,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
-import { installDblResourceWithNotification } from './install-dbl-resource.util';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -131,20 +131,15 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // --- Operation callbacks ---
 
-  const installResource = useCallback(
-    async (dblEntryUid: string) => {
-      // Returns false (a no-op) until the provider resolves; this callback's identity then changes,
-      // which re-fires the panel's auto-install effect to do the real install.
-      if (
-        await installDblResourceWithNotification(
-          dblResourcesProvider,
-          dblEntryUid,
-          'model text panel',
-        )
-      )
-        setFetchResources(true);
-    },
-    [dblResourcesProvider],
+  // Re-resolve the cached resource list once an install completes so the resource flips to
+  // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
+  // provider resolves — its identity change then re-fires the panel's auto-install effect for the
+  // real install.
+  const markResourcesStale = useCallback(() => setFetchResources(true), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'model text panel',
+    markResourcesStale,
   );
 
   const setUserModelTexts = useCallback(

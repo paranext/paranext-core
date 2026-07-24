@@ -68,6 +68,38 @@ describe('useDblResourceAutoInstall', () => {
     await waitFor(() => expect(installResource).toHaveBeenCalledTimes(2));
   });
 
+  it('markInstallFailed surfaces installFailed for a uid without an auto-install attempt', () => {
+    // Mirrors a manual pick: the caller installs the resource itself (skipAutoInstall) and reports
+    // the failure via markInstallFailed.
+    const installResource = okInstall();
+    const { result } = renderHook(() => useDblResourceAutoInstall('uid-a', installResource, true));
+
+    expect(result.current.installFailed).toBe(false);
+    act(() => result.current.markInstallFailed('uid-a'));
+
+    expect(result.current.installFailed).toBe(true);
+    expect(result.current.isInstalling).toBe(false);
+    // The hook never ran its own install — the caller already attempted it.
+    expect(installResource).not.toHaveBeenCalled();
+  });
+
+  it('does not fire a duplicate auto-install after markInstallFailed when the pick finishes', async () => {
+    // While the manual pick is in flight (skipAutoInstall = true) the failed uid is recorded; when
+    // the pick finishes (skipAutoInstall = false) the failed-uid guard must suppress the auto-install.
+    const installResource = okInstall();
+    const { result, rerender } = renderHook(
+      ({ skip }: { skip: boolean }) => useDblResourceAutoInstall('uid-a', installResource, skip),
+      { initialProps: { skip: true } },
+    );
+
+    act(() => result.current.markInstallFailed('uid-a'));
+    rerender({ skip: false });
+
+    // The auto-install effect re-enabled, but the recorded failure keeps it from re-downloading.
+    await waitFor(() => expect(result.current.installFailed).toBe(true));
+    expect(installResource).not.toHaveBeenCalled();
+  });
+
   it('attempts a newly-configured uid even while a previous uid is in the failed state', async () => {
     // Only uid-a fails; uid-b installs cleanly.
     const installResource = vi.fn(async (uid: string) => {
