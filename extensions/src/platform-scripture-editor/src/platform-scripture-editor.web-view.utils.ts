@@ -24,6 +24,7 @@ import {
   getMarkerMenuItems,
   type EditorRef,
   type MarkerMenuItem as EditorMarkerMenuItem,
+  type SelectionRange,
   type StyleInfo,
 } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
@@ -105,6 +106,51 @@ export function generateInlineMarkerMenuListItems(
       },
     };
   });
+}
+
+/**
+ * Whether a keydown event is one the Standard view's Enter-palette flow claims. PT9's
+ * KeyPressEditHandler claims the Enter key with NO modifier check, and Standard view matches that:
+ * EVERY Enter variant is claimed, modifiers or not. Letting any variant through to Lexical loses
+ * data — an unclaimed Ctrl/Alt/Meta+Enter plain-splits the paragraph (creating the unmarked
+ * empty-paragraph merge problem the palette exists to prevent), and Shift+Enter's soft line break
+ * has no USFM representation, so it serializes as a plain space.
+ *
+ * Deliberately a pure predicate on the event alone: the caller's surrounding pre-checks (IME
+ * composition bail, focus/session gating, note/marker-text pass-throughs) stay in the web view.
+ *
+ * @param event The keydown event (or any object exposing its `key`)
+ * @returns True when the event is an Enter keypress in any modifier state
+ */
+export function isStandardViewEnterKeyEvent(event: Pick<KeyboardEvent, 'key'>): boolean {
+  return event.key === 'Enter';
+}
+
+/**
+ * Restores an editor's selection from a focus-out snapshot when the live selection has been lost.
+ *
+ * A mouse click on a marker-palette overlay (rendered OUTSIDE the editor's document) blurs the
+ * editor before the palette commit round-trips, and Lexical's blur processing can null the
+ * editor-state selection outright. `focus()` cannot bring a nulled selection back — with nothing
+ * remembered it falls back to selecting the document END — so a commit applied after `focus()`
+ * alone lands the marker at the end of the document instead of at the caret the user last saw.
+ * Restoring the focus-out snapshot BEFORE focusing re-establishes that caret, and `focus()` then
+ * re-asserts it, so a mouse commit applies exactly like a keyboard one.
+ *
+ * A still-live selection is left completely alone, and with no snapshot there is nothing to restore
+ * (`focus()` keeps its default behavior).
+ *
+ * @param editor The live editor handle (e.g. `editorRef.current`); no-op when not mounted
+ * @param lastFocusOutSelection The selection captured when focus last left the editor (a focusout
+ *   listener reads it synchronously, ahead of the blur-path nulling), or `undefined` when none has
+ *   been captured
+ */
+export function restoreSelectionIfLost(
+  editor: Pick<EditorRef, 'getSelection' | 'setSelection'> | null,
+  lastFocusOutSelection: SelectionRange | undefined,
+): void {
+  if (!editor || editor.getSelection()) return;
+  if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
 }
 
 /**
