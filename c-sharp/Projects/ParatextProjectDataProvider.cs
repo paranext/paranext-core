@@ -1711,6 +1711,38 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                     );
                 return boolValue;
             }
+
+            // Convert to bool if this extension setting has a registered boolean default. GetDefault
+            // throws when there is no default (indistinguishable from a PAPI failure), so any error
+            // falls back to the raw string.
+            bool? defaultBool = null;
+            try
+            {
+                if (
+                    ProjectSettingsService.GetDefault(PapiClient, settingName) is JsonElement elem
+                    && elem.ValueKind is JsonValueKind.True or JsonValueKind.False
+                )
+                    defaultBool = elem.GetBoolean();
+            }
+            catch
+            {
+                // No registered default (or PAPI error); keep the raw string
+            }
+
+            if (defaultBool != null)
+            {
+                return settingValue.ToUpperInvariant() switch
+                {
+                    "F" => false,
+                    "FALSE" => false,
+                    "T" => true,
+                    "TRUE" => true,
+                    // A boolean-default setting may hold a non-boolean value (union type), so pass
+                    // the raw string through rather than throwing.
+                    _ => settingValue,
+                };
+            }
+
             return settingValue;
         }
 
@@ -1882,6 +1914,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                             // Normalize to the canonical single-letter form Paratext stores
                             value = boolValue ? "T" : "F";
                         }
+                        else if (value is bool boolValue)
+                            value = boolValue ? "T" : "F";
+                        // PAPI wire values arrive as JsonElement (value is object?), not native bool.
+                        else if (
+                            value is JsonElement je
+                            && je.ValueKind is JsonValueKind.True or JsonValueKind.False
+                        )
+                            value = je.GetBoolean() ? "T" : "F";
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
                         // notify in `Save`
