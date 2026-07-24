@@ -38,9 +38,7 @@
       "Bash(git commit -n:*)",
       "Bash(HUSKY=0:*)",
       "Edit(.claude/settings.json)",
-      "Write(.claude/settings.json)",
       "Edit(.claude/settings.local.json)",
-      "Write(.claude/settings.local.json)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(./secrets/**)",
@@ -52,9 +50,7 @@
       "Read(**/dist/**)",
       "Read(**/*.min.js)",
       "Read(**/*.min.css)",
-      "Read(**/*.map)",
-      "Glob(**/dist/**)",
-      "Grep(**/dist/**)"
+      "Read(**/*.map)"
     ],
     "ask": [
       "Bash(rm -rf:*)",
