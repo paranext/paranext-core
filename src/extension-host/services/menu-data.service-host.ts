@@ -5,19 +5,35 @@ import {
   menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { settingsService } from '@shared/services/settings.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,
+  isPlatformError,
   PlatformMenus,
   MultiColumnMenu,
+  MenuItemBase,
   ReferencedItem,
   WebViewMenu,
   Localized,
   Unsubscriber,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
+
+/**
+ * Removes `isHiddenInSimple` items from a menu item list when `isSimpleMode` is `true`. Returns the
+ * items unchanged (same reference) in Power mode.
+ */
+function filterItemsForSimpleMode<TItem extends MenuItemBase>(
+  items: TItem[],
+  isSimpleMode: boolean,
+): TItem[] {
+  if (!isSimpleMode) return items;
+  return items.filter((item) => !item.isHiddenInSimple);
+}
 
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
@@ -27,11 +43,15 @@ class MenuDataDataProviderEngine
   private unlocalizedMainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
   private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
+  private unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
+  private isSimpleMode = false;
+  private isDisposed = false;
 
   constructor(unlocalizedMenuData: PlatformMenus) {
     super();
     this.#loadAllMenuData(unlocalizedMenuData, unlocalizedMenuData);
     this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildMenus());
+    this.#subscribeToInterfaceMode();
   }
 
   async rebuildMenus(): Promise<void> {
@@ -49,7 +69,10 @@ class MenuDataDataProviderEngine
 
   async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
     if (!this.mainMenu) throw new Error('Missing/invalid main menu data');
-    return this.mainMenu;
+    return {
+      ...this.mainMenu,
+      items: filterItemsForSimpleMode(this.mainMenu.items, this.isSimpleMode),
+    };
   }
 
   // setMainMenu doesn't use instance state but cannot be static because it implements the
@@ -77,7 +100,21 @@ class MenuDataDataProviderEngine
       logger.debug(`Missing/invalid web view menu data for web view ${webViewName}`);
       return { contextMenu: undefined, includeDefaults: false, topMenu: undefined };
     }
-    return webViewMenu;
+    return {
+      ...webViewMenu,
+      topMenu: webViewMenu.topMenu
+        ? {
+            ...webViewMenu.topMenu,
+            items: filterItemsForSimpleMode(webViewMenu.topMenu.items, this.isSimpleMode),
+          }
+        : undefined,
+      contextMenu: webViewMenu.contextMenu
+        ? {
+            ...webViewMenu.contextMenu,
+            items: filterItemsForSimpleMode(webViewMenu.contextMenu.items, this.isSimpleMode),
+          }
+        : undefined,
+    };
   }
 
   // setWebViewMenu doesn't use instance state but cannot be static because it implements the
@@ -88,12 +125,61 @@ class MenuDataDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
+    this.isDisposed = true;
+    if (this.unsubscribeFromInterfaceMode) {
+      await this.unsubscribeFromInterfaceMode();
+      this.unsubscribeFromInterfaceMode = undefined;
+    }
     if (this.unsubscribeOnDidResyncContributions) {
       const success = this.unsubscribeOnDidResyncContributions();
       this.unsubscribeOnDidResyncContributions = undefined;
       return success;
     }
     return true;
+  }
+
+  /**
+   * Reads the initial `platform.interfaceMode` and subscribes to further changes so menu data stays
+   * live if the user switches modes without restarting. Fire-and-forget (the constructor can't be
+   * async): failures are logged, not thrown, and `isDisposed` guards against setting state or
+   * leaking a subscription if this engine is disposed before the async work resolves — mirrors the
+   * `subscribeToInterfaceMode` pattern in `web-view.service-host.ts`'s `registerDockLayout`.
+   */
+  #subscribeToInterfaceMode(): void {
+    const subscribe = async () => {
+      try {
+        const initialMode = await settingsService.get('platform.interfaceMode');
+        if (this.isDisposed) return;
+        this.isSimpleMode = initialMode === 'simple';
+        this.notifyUpdate('*');
+
+        const unsub = await settingsService.subscribe(
+          'platform.interfaceMode',
+          (newMode) => {
+            if (isPlatformError(newMode)) {
+              logger.warn(
+                `Menu data service failed to read updated platform.interfaceMode setting: ${newMode}`,
+              );
+              return;
+            }
+            const newIsSimpleMode = newMode === 'simple';
+            if (newIsSimpleMode === this.isSimpleMode) return;
+            this.isSimpleMode = newIsSimpleMode;
+            this.notifyUpdate('*');
+          },
+          { retrieveDataImmediately: false },
+        );
+
+        if (this.isDisposed) {
+          await unsub();
+        } else {
+          this.unsubscribeFromInterfaceMode = unsub;
+        }
+      } catch (error) {
+        logger.warn(`Menu data service failed to subscribe to platform.interfaceMode: ${error}`);
+      }
+    };
+    subscribe();
   }
 
   #loadAllMenuData(unlocalizedMainMenu: PlatformMenus, menuData: Localized<PlatformMenus>): void {

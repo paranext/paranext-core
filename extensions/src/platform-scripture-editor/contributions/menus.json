@@ -158,6 +158,7 @@
           },
           {
             "label": "%webView_legacyCommentManager_openComments%",
+            "isHiddenInSimple": true,
             "group": "platformScriptureEditor.comments",
             "order": 1,
             "command": "legacyCommentManager.openCommentList"

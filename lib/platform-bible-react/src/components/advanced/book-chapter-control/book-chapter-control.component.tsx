@@ -12,6 +12,7 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { IconSelector } from '@tabler/icons-react';
 import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
 import {
   getSectionLongName,
@@ -70,6 +71,7 @@ export function BookChapterControl({
   submitKeys,
   triggerContent,
   triggerVariant = 'outline',
+  showTriggerChevron = false,
   onOpenChange,
   onCloseAutoFocus,
   modal = false,
@@ -920,6 +922,12 @@ export function BookChapterControl({
           }}
         >
           {triggerContent ?? <span className="tw:truncate">{currentDisplayValue}</span>}
+          {showTriggerChevron && (
+            <IconSelector
+              data-testid="book-chapter-control-chevron"
+              className="tw:ms-2 tw:size-4 tw:shrink-0 tw:opacity-50"
+            />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent

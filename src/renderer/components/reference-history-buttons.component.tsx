@@ -1,4 +1,5 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import {
   getReferenceHistorySync,
   navigateReferenceHistorySync,
@@ -27,6 +28,7 @@ export type ReferenceHistoryButtonsProps = {
  * rendering.
  */
 export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButtonsProps) {
+  const isPowerMode = useIsPowerMode();
   const [history, setHistory] = useState<ReferenceHistory>(() =>
     getReferenceHistorySync(scrollGroupId),
   );
@@ -89,6 +91,8 @@ export function ReferenceHistoryButtons({ scrollGroupId }: ReferenceHistoryButto
       onNavigate={handleNavigate}
       localizedStrings={localizedStrings}
       className="tw:h-8"
+      groupClassName={isPowerMode ? undefined : 'tw:rounded-full tw:bg-muted/50 tw:p-0.5'}
+      showDivider={!isPowerMode}
     />
   );
 }

@@ -56,6 +56,12 @@ export type MenuItemBase = OrderedItem & {
   tooltip?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
+  /**
+   * Set to `true` to hide this menu item while the app is in Simple interface mode
+   * (`platform.interfaceMode === 'simple'`). Omit (or set to `false`) for items that should show in
+   * both modes — most items need no value here at all.
+   */
+  isHiddenInSimple?: boolean;
 };
 
 /** Menu item that hosts a submenu */
@@ -397,6 +403,11 @@ export const menuDocumentSchema = {
           description:
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
           type: 'number',
+        },
+        isHiddenInSimple: {
+          description:
+            'Set to `true` to hide this menu item while the app is in Simple interface mode. Omit (or set to `false`) for items that should show in both modes.',
+          type: 'boolean',
         },
       },
       required: ['label', 'group', 'order'],

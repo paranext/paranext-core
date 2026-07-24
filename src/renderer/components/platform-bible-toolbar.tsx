@@ -298,8 +298,10 @@ export function PlatformBibleToolbar() {
       }}
       onSelectMenuItem={handleMenuCommand}
       className={cn(
-        // If the toolbar height changes, the top inset for the workspace updating overlay will need to be updated too.
-        'tw:h-12 tw:bg-transparent',
+        // If the toolbar height changes, the top inset for the workspace updating overlay and
+        // getDockLayoutOuterInset (platform-dock-layout-positioning.util.ts) will need updating too.
+        isPowerMode ? 'tw:h-12' : 'tw:h-14',
+        'tw:bg-transparent',
         getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
       )}
       menubarVariant="muted"
@@ -374,29 +376,32 @@ export function PlatformBibleToolbar() {
         </>
       }
     >
-      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="tw:h-8"
-              onClick={() => {
-                // This command comes from an extension and is not typed in CommandHandlers.
-                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                (sendCommand as any)('platformGetResources.openHome');
-              }}
-            >
-              <HomeIcon />
-            </Button>
-          </TooltipTrigger>
-          {localizedStrings['%mainMenu_openHome%'] && (
-            <TooltipContent>
-              <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
-            </TooltipContent>
-          )}
-        </Tooltip>
-      </TooltipProvider>
+      {isPowerMode && (
+        <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-testid="toolbar-home-button"
+                variant="ghost"
+                size="icon"
+                className="tw:h-8"
+                onClick={() => {
+                  // This command comes from an extension and is not typed in CommandHandlers.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                  (sendCommand as any)('platformGetResources.openHome');
+                }}
+              >
+                <HomeIcon />
+              </Button>
+            </TooltipTrigger>
+            {localizedStrings['%mainMenu_openHome%'] && (
+              <TooltipContent>
+                <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {!isPowerMode && (
         <Select
           value={currentProject?.id ?? ''}
@@ -411,7 +416,7 @@ export function PlatformBibleToolbar() {
           }}
           disabled={!hasProjectPickerItems}
         >
-          <SelectTrigger className="tw:max-w-64 tw:min-w-48">
+          <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
             <SelectValue
               placeholder={
                 hasProjectPickerItems
@@ -459,7 +464,9 @@ export function PlatformBibleToolbar() {
         ref={registerTopBookChapterControl}
         scrRef={scrRef}
         handleSubmit={setScrRef}
-        className="tw:w-96"
+        className={isPowerMode ? 'tw:w-96' : 'tw:w-fit'}
+        triggerVariant={isPowerMode ? undefined : 'ghost'}
+        showTriggerChevron={!isPowerMode}
         disabled={isBookChapterControlDisabled}
         getActiveBookIds={getActiveBookIds}
         recentSearches={recentScriptureRefs}

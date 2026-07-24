@@ -89,15 +89,16 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
 /**
  * Outer inset around the whole dock layout, relative to its positioned parent. Power mode keeps the
- * original 8px gap on every side below the main toolbar; Simple mode removes that gap on the
- * left/right/bottom (only the 48px top clearance for the main toolbar is preserved) — see
+ * original 8px gap on every side below the main toolbar (48px top, matching `tw:h-12`); Simple mode
+ * removes that gap on the left/right/bottom and uses a 56px top clearance instead, matching the
+ * taller `tw:h-14` Simple-mode toolbar — see
  * `docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md`, Section 7.
  */
 export function getDockLayoutOuterInset(isPowerMode: boolean): CSSProperties {
   if (isPowerMode) {
     return { position: 'absolute', top: 48, bottom: 8, left: 8, right: 8 };
   }
-  return { position: 'absolute', top: 48, bottom: 0, left: 0, right: 0 };
+  return { position: 'absolute', top: 56, bottom: 0, left: 0, right: 0 };
 }
 
 /** Initial sizes for each tab in CSS `px` units if created as floating tabs */
