@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
-import { cleanup, render } from '@testing-library/react';
+import React from 'react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
@@ -24,6 +25,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(() => ({
     Focus: () => [mockFocusSubject, vi.fn()],
   })),
+  useDataProvider: vi.fn(() => undefined),
 }));
 
 vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook', () => ({
@@ -32,6 +34,13 @@ vi.mock('@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook'
 
 vi.mock('@renderer/hooks/use-last-focused-tab-id.hook', () => ({
   useLastFocusedTabId: vi.fn(() => undefined),
+}));
+
+// Mock heavy transitive deps that run side-effects at module init in jsdom.
+vi.mock('../../../shared/services/logger.service');
+vi.mock('@renderer/services/theme.service-host', () => ({
+  __esModule: true,
+  localThemeService: {},
 }));
 
 // Default to power mode so the existing tint tests exercise the tint; the Simple-mode suppression
@@ -52,6 +61,26 @@ vi.mock('@shared/services/logger.service', () => ({
 vi.mock('@shared/services/window.service', () => ({
   windowService: { dataProviderName: 'platform.windowServiceDataProvider' },
 }));
+
+// PlatformTabTitle subscribes to the window-focus data provider and renders localized strings.
+// Stub the context-menu/tooltip primitives so the context-menu-gating tests below can assert on
+// presence/absence of the ContextMenu wrapper without depending on Radix's portal/asChild behavior.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const actual = await importOriginal<object>();
+  return {
+    ...actual,
+    ContextMenu: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="context-menu">{children}</div>
+    ),
+    ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    ContextMenuContent: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    ContextMenuItem: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    Tooltip: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    TooltipProvider: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    TooltipTrigger: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    TooltipContent: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+  };
+});
 
 // #endregion
 
@@ -231,5 +260,24 @@ describe('PlatformTabTitle last-selected web view highlighting', () => {
     expect(container.querySelector('.dock-tabpane-active')).not.toHaveClass(
       cssClassTabContentLastSelected,
     );
+  });
+});
+
+describe('PlatformTabTitle context-menu gating', () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+  });
+
+  it('power mode: wraps the title in a ContextMenu', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    expect(screen.queryByTestId('context-menu')).toBeInTheDocument();
+  });
+
+  it('simple mode: does not wrap the title in a ContextMenu', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    render(<PlatformTabTitle text="Tab" id="tab-1" />);
+    expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument();
   });
 });

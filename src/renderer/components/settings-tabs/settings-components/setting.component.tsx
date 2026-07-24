@@ -44,6 +44,12 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   defaultSetting: TSettingValue;
   /** Additional css classes to help with unique styling of the Settings component */
   className?: string;
+  /**
+   * When true, the setting's editor is rendered read-only (disabled). Used to make a project's
+   * settings read-only while an automatic Send/Receive is blocking edits on that project. Defaults
+   * to `false`.
+   */
+  disabled?: boolean;
 };
 
 /**
@@ -74,8 +80,15 @@ type ProjectSettingsControls = {
 /** Values of SettingTypes */
 export type OtherSettingValues = SettingTypes[keyof SettingTypes];
 
-/** Props for the UserSetting component */
-export type OtherSettingProps = BaseSettingProps<SettingNames, OtherSettingValues>;
+/**
+ * Props for the UserSetting component. `disabled` is omitted from `BaseSettingProps`: only project
+ * settings go read-only during an automatic Send/Receive, and `OtherSetting` does not forward
+ * `disabled` — so the type must not advertise a capability the component silently drops.
+ */
+export type OtherSettingProps = Omit<
+  BaseSettingProps<SettingNames, OtherSettingValues>,
+  'disabled'
+>;
 
 /** Values from the useSetting hook to manage the setting */
 type OtherSettingsControls = {
@@ -102,7 +115,10 @@ type CombinedSettingProps =
       never
     >
   | SettingProps<
-      Omit<OtherSettingProps, 'defaultSetting'>,
+      // `disabled` is re-added here (it is omitted from the public `OtherSettingProps` so the
+      // OtherSetting wrapper doesn't advertise a prop it drops) because the shared `Setting`
+      // renderer reads `disabled` uniformly for both variants; only ProjectSetting ever passes it.
+      Omit<OtherSettingProps, 'defaultSetting'> & { disabled?: boolean },
       OtherSettingsControls,
       never,
       // Necessary for flexibility in handleChangeSetting, couldn't use unknown
@@ -137,6 +153,7 @@ export function Setting({
   label,
   className,
   description,
+  disabled = false,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -242,14 +259,26 @@ export function Setting({
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
-        <Input key={settingKey} onChange={debouncedHandleChange} defaultValue={setting} />
+        <Input
+          key={settingKey}
+          onChange={debouncedHandleChange}
+          defaultValue={setting}
+          disabled={disabled}
+        />
       );
     else if (typeof setting === 'boolean')
       component = (
-        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
+        <Switch
+          key={settingKey}
+          onCheckedChange={debouncedHandleChange}
+          defaultChecked={setting}
+          disabled={disabled}
+        />
       );
     else if (typeof setting === 'object')
       if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+        // interfaceLanguage is a user (not project) setting, so it is never subject to per-project
+        // Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled` prop, so none is passed.
         component = (
           <UiLanguageSelector
             className="language-selector"
@@ -267,6 +296,7 @@ export function Setting({
             key={settingKey}
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
+            disabled={disabled}
           />
         );
       }
@@ -296,6 +326,7 @@ export function Setting({
     errorMessage,
     languages,
     defaultLanguages,
+    disabled,
   ]);
 
   return (

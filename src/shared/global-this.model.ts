@@ -69,6 +69,12 @@ declare global {
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
+  /**
+   * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+   * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+   * as `isNoisyDevModeEnabled`.
+   */
+  var startupMarks: boolean;
 }
 /* eslint-enable */
 

@@ -12,9 +12,9 @@ import {
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
+import { Home, HOME_STRING_KEYS } from './home.component';
+import { useLocalProjects } from './use-local-projects.hook';
 
-const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
 
 globalThis.webViewComponent = function HomeWebView() {
@@ -207,66 +207,13 @@ globalThis.webViewComponent = function HomeWebView() {
     syncsCompletedCount, // triggers a re-fetch each time a sync completes
   ]);
 
-  const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
-  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
-
-  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
-    'platformGetResources.excludePdpFactoryIdsInHome',
-    defaultExcludePdpFactoryIds,
-  );
-
-  const excludePdpFactoryIds = useMemo(() => {
-    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
-      logger.warn(
-        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-        excludePdpFactoryIdsInHomePossiblyError,
-      );
-      return defaultExcludePdpFactoryIds;
-    }
-    return excludePdpFactoryIdsInHomePossiblyError;
-  }, [excludePdpFactoryIdsInHomePossiblyError]);
-
-  useEffect(() => {
-    let promiseIsCurrent = true;
-    const getLocalProjects = async () => {
-      const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds,
-      });
-      const projectInfo = await Promise.all(
-        projectMetadata.map(async (data) => {
-          const pdp = await papi.projectDataProviders.get('platform.base', data.id);
-          return {
-            projectId: data.id,
-            isPublished: await pdp.getSetting('platform.isPublished'),
-            fullName: await pdp.getSetting('platform.fullName'),
-            name: await pdp.getSetting('platform.name'),
-            language: await pdp.getSetting('platform.language'),
-          };
-        }),
-      );
-
-      if (promiseIsCurrent && isMounted.current) {
-        setIsLoadingLocalProjects(false);
-        setLocalProjectsInfo(projectInfo);
-      }
-    };
-
-    if (isSendReceiveInProgress) {
-      return;
-    }
-    getLocalProjects();
-
-    return () => {
-      // Mark this promise as old and not to be used
-      promiseIsCurrent = false;
-    };
-  }, [
-    isSendReceiveInProgress,
-    excludePdpFactoryIds,
-    resourcesList,
-    syncsCompletedCount, // triggers a re-fetch each time a sync completes
-  ]);
+  const { localProjectsInfo, isLoadingLocalProjects } = useLocalProjects({
+    logLabel: 'Home',
+    // Pause fetching while a Send/Receive runs and resume when it finishes.
+    enabled: !isSendReceiveInProgress,
+    // Re-fetch when the cached resource list changes or a sync completes.
+    refetchTriggers: [resourcesList, syncsCompletedCount],
+  });
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 

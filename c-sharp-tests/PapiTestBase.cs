@@ -46,6 +46,10 @@ namespace TestParanextDataProvider
                 ScrTextCollection.Remove(project, false);
 
             _client?.Dispose();
+            // LocalParatextProjects is now IDisposable (it owns a project-directory watcher). The
+            // test double never starts a watcher - it has no PapiClient - so this is a no-op, but
+            // dispose it anyway to honor the contract (and satisfy NUnit1032).
+            _projects?.Dispose();
         }
         #endregion
 

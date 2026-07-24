@@ -876,6 +876,16 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
   };
 
   /**

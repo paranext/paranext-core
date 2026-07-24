@@ -71,6 +71,14 @@ export class CommentListPanelWebViewFactory extends WebViewFactory<
 
     return {
       ...savedWebView,
+      state: {
+        ...savedWebView.state,
+        // Always rebuild un-blocked. `isSyncBlocked` is transient runtime state owned by the core
+        // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+        // restore a read-only panel from the saved layout (mirrors the scripture editor's scrub in
+        // platform-scripture-editor main.ts). The driver re-flags it if a sync is still in flight.
+        isSyncBlocked: false,
+      },
       title,
       projectId,
       content: commentListWebView,
@@ -80,6 +88,9 @@ export class CommentListPanelWebViewFactory extends WebViewFactory<
       // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power
       // mode) would survive into simple mode and detach the panel from the editor's navigation.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This is the fixed Column 3 Comment List panel and must always remain open in simple mode,
+      // so it's non-closable there. Power mode allows closing/rearranging freely.
+      isClosable: interfaceMode === 'power',
     };
   }
 

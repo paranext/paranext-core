@@ -11,8 +11,10 @@ namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 /// <summary>
 /// Data provider that can install, update and uninstall DBL (Digital Bible Library) resources
 /// </summary>
-internal class DblResourcesDataProvider(PapiClient papiClient)
-    : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
+internal class DblResourcesDataProvider(
+    PapiClient papiClient,
+    LocalParatextProjects paratextProjects
+) : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
     // These UIDs are also used by the TypeScript `useCommentaryMarkerStyles` hook to load
     // per-commentary marker stylesheets (extensions/src/platform-scripture-editor/src/
@@ -296,6 +298,9 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             );
 
         SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+        // A newly installed resource is a new project on disk; tell the project-list consumers
+        // (Home, New Tab, project picker) so it shows up without waiting for an unrelated refresh.
+        paratextProjects.NotifyProjectsChanged();
     }
 
     /// <summary>
@@ -364,6 +369,9 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             );
 
         SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+        // An uninstalled resource is a project removed from disk; tell the project-list consumers so
+        // it disappears from Home / New Tab / the project picker without an unrelated refresh.
+        paratextProjects.NotifyProjectsChanged();
     }
 
     #endregion

@@ -5,7 +5,10 @@
 //
 // Derived from
 // https://github.com/paranext/paratext-bible-internal-extensions/blob/b50ebb16505f8069fd517af39dea29de7d7569bb/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// TODO(PT-4233): Update the SHA above to the companion PR's merged commit once it lands.
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
+// NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
+// added in core before the upstream adopts them). Do not replace the module block wholesale.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -35,10 +38,9 @@ declare module 'paratext-bible-send-receive' {
    *   administrator must upgrade it
    * - `projectVersionUpgraded` = S/R sort-of failed. The project was upgraded to a higher version of
    *   Paratext. You must update Paratext to open the project
-   * - `sentChanges` = S/R sent ≥1 non-merge revision
-   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
-   * - `noChangesToSend` = S/R sent no non-merge revisions
-   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
+   *
+   * For granular detail about what was sent/received, see {@link ResultChangeStatus} and
+   * {@link ResultInfo.resultStatuses}.
    */
   export type ResultStatus =
     | 'succeeded'
@@ -46,7 +48,22 @@ declare module 'paratext-bible-send-receive' {
     | 'initialReceive'
     | 'failed'
     | 'notUpgraded'
-    | 'projectVersionUpgraded'
+    | 'projectVersionUpgraded';
+
+  /**
+   * Granular change-tracking status for a single S/R result. Supplements (does not replace)
+   * {@link ResultStatus} on {@link ResultInfo.resultStatus}.
+   *
+   * Exactly one send-axis value applies (`sentChanges` or `noChangesToSend`) and exactly one
+   * receive-axis value applies (`receivedChanges` or `noChangesReceived`), so two values appear in
+   * {@link ResultInfo.resultStatuses} simultaneously when both axes are present.
+   *
+   * - `sentChanges` = S/R sent ≥1 non-merge revision
+   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
+   * - `noChangesToSend` = S/R sent no non-merge revisions
+   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
+   */
+  export type ResultChangeStatus =
     | 'sentChanges'
     | 'receivedChanges'
     | 'noChangesToSend'
@@ -188,8 +205,11 @@ declare module 'paratext-bible-send-receive' {
     conflictsInfo: ConflictInfo[];
     /** Additional information provided in some cases when a S/R fails */
     failureMessage?: string;
-    /** Granular statuses that apply to this result (multiple can apply, e.g., sent AND received) */
-    resultStatuses?: ResultStatus[];
+    /**
+     * Granular change-tracking statuses ({@link ResultChangeStatus}); multiple can apply, e.g., sent
+     * AND received
+     */
+    resultStatuses?: ResultChangeStatus[];
     /** Total conflict count computed by C# */
     conflictCount?: number;
   };

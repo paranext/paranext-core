@@ -107,7 +107,7 @@ type DecoratorConfig = {
   hasProject?: boolean;
   /** Whether the user can write admin settings. */
   canWriteProjectSettings?: boolean;
-  /** Disable install so the Installing state is observable (otherwise it auto-completes). */
+  /** Disable install so the Selecting state is observable (otherwise it auto-completes). */
   disableInstall?: boolean;
 };
 
@@ -239,8 +239,8 @@ export const NoModelText: Story = {
   decorators: [createDecorator({})],
 };
 
-/** A configured resource that is still installing (install disabled so the state is observable). */
-export const Installing: Story = {
+/** A configured resource that is still being selected (install disabled so the state is observable). */
+export const Selecting: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], disableInstall: true })],
 };
 

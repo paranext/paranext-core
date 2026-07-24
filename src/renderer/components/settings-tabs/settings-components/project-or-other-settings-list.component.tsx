@@ -18,6 +18,12 @@ type ProjectOrOtherSettingsListProps = {
   groupDescription?: string;
   /** Additional css classes to help with unique styling of the ProjectOrOtherSettingsList */
   className?: string;
+  /**
+   * When true, each project setting's editor is rendered read-only. Only meaningful for project
+   * settings (projectId defined). Computed once by the parent SettingsTab and passed down, so a
+   * project's several setting groups don't each subscribe to the auto-sync-blocking store.
+   */
+  disabled?: boolean;
 };
 
 /**
@@ -30,7 +36,13 @@ export function ProjectOrOtherSettingsList({
   groupLabel,
   groupDescription,
   className,
+  disabled = false,
 }: ProjectOrOtherSettingsListProps) {
+  // Only project settings (projectId defined) can be edit-blocked. `disabled` is computed ONCE by
+  // the parent SettingsTab (which also renders the single blocked notice above all of a project's
+  // groups) and passed down, so a project's several setting groups don't each subscribe to the
+  // auto-sync-blocking store. This component just forwards it to each project setting.
+
   if (Object.entries(settingProperties).length === 0) return undefined;
 
   return (
@@ -56,6 +68,7 @@ export function ProjectOrOtherSettingsList({
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 defaultSetting={property.default as ProjectSettingValues}
                 className="card-content"
+                disabled={disabled}
               />
             ) : (
               <OtherSetting

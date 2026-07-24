@@ -1880,12 +1880,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   ) : undefined;
 
   return (
-    <div className="tw:flex tw:flex-col tw:h-screen">
+    <div
+      className={`tw:flex tw:flex-col tw:h-screen${isPowerMode ? '' : ' editor-container-simple'}`}
+    >
       <TabToolbar
         onSelectProjectMenuItem={menuCommandHandler}
         onSelectViewInfoMenuItem={menuCommandHandler}
         projectMenuData={webViewMenu.topMenu}
-        className="scripture-editor-tab-nav tw:block tw:z-10"
+        className={`scripture-editor-tab-nav tw:block tw:z-10${isPowerMode ? '' : ' scripture-editor-tab-nav-simple'}`}
         startAreaChildren={
           <>
             {bcvControls}

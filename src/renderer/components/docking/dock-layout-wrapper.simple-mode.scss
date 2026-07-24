@@ -1,0 +1,168 @@
+// Simple-mode-ONLY styles for the dock layout. Every rule in this file applies exclusively to
+// Simple mode — either scoped via `[data-interface-mode='simple']` (set on document.body by
+// app.component.tsx's Main; see docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md)
+// or by targeting dock-style classes (`.dock-style-resources`, `.dock-style-headless`) that only
+// ever appear in Simple mode's layout data (simple-layout.data.ts) and its Storybook prototype
+// (ten-layout-shared.tsx) — never in the Power-mode layout. Power mode's own styles live in
+// dock-layout-wrapper.component.scss and are never touched by this file.
+
+// #region SIMPLE-MODE DROP BLOCK //////////////////////////////////////
+// Blocking drag-and-drop for simple mode's resources column (`.dock-style-resources`, the one
+// simple-mode column that keeps a visible, interactive tab bar) turned out to need a JS-level fix,
+// not CSS: `tabLocked: true` on the tab group only blocks the DockDropLayer/DockDropEdge paths
+// (panel edge/middle drops), and disabling pointer-events on `.dock-tab-hit-area` (an earlier
+// attempt here) didn't work either — that hit-area is a CHILD of the tab's actual drag-registered
+// element (rc-dock's `.drag-initiator`, added by `DragDropDiv`), so making only the child
+// non-interactive still leaves the parent `.drag-initiator` itself as a fully valid drag source
+// and drop target; pointer hit-testing simply resolves to the parent underneath. The real fix
+// (both same-column reorder and cross-column move) is the `drag-ignore` class rc-dock's own
+// `DragDropDiv.onPointerDown` checks for, applied in simple mode by `platform-tab-title.component`.
+// #endregion SIMPLE-MODE DROP BLOCK ///////////////////////////////////
+
+// #region SIMPLE-MODE DRAG APPEARANCE /////////////////////////////////
+// Tabs in simple mode behaviorally snap back when dragged (see DROP BLOCK above), but
+// rc-dock still renders them as if they were draggable: tabs use `cursor: pointer`/`default`
+// from rc-dock's tabs.less and a `.dragging-layer` ghost element is appended to `<body>`
+// during drag (DragManager.js `createDraggingElement`). Make tabs look click-only.
+// Tabs ARE clickable to activate, so `cursor: pointer` is the natural choice and overrides
+// the `cursor: default` rc-dock applies to active tabs.
+.dock-panel.dock-style-resources .dock-tab,
+.dock-panel.dock-style-resources .dock-tab.dock-tab-active,
+.dock-panel.dock-style-resources .dock-tab .drag-initiator {
+  cursor: pointer;
+}
+
+// rc-dock fades the source tab to 30% opacity during drag (tabs.less `.dock-tab.dragging`).
+// Suppress that so the tab doesn't appear to react to drag attempts.
+.dock-panel.dock-style-resources .dock-tab.dragging {
+  opacity: 1;
+}
+
+// rc-dock appends `.dragging-layer` to `<body>` with the tab group's class
+// (`groupClassNames` in `node_modules/rc-dock/lib/Utils.js` → e.g. `dock-style-resources`), so
+// we can scope hiding it to simple-mode columns. `visibility: hidden` keeps the element
+// in the DOM (rc-dock measures it during drag) without showing the ghost.
+body > .dragging-layer.dock-style-resources {
+  visibility: hidden;
+}
+// #endregion SIMPLE-MODE DRAG APPEARANCE //////////////////////////////
+
+// #region SIMPLE-MODE HEADLESS BAR /////////////////////////////////////
+// In simple mode, columns 1 (home) and 2 (editor) use HEADLESS_GROUP so their tab bars are
+// invisible — a single fixed locked tab doesn't benefit from a tab bar. The `pointer-events: none`
+// keeps the bar from intercepting clicks/drags. The hover/focus/dropping selectors override
+// rc-dock's built-in headless behavior, which would otherwise fade the bar back in. Mirrors
+// HEADLESS_STYLE in `src/stories/platform/ten-layout-shared.tsx`.
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless .dock-bar {
+  pointer-events: none;
+}
+
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless .dock-bar:hover,
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless .dock-bar:focus-within,
+.dock-layout > :not(.dock-fbox) .dock-panel.dock-style-headless.dock-panel-dropping .dock-bar {
+  opacity: 0;
+  height: 20px;
+}
+// #endregion SIMPLE-MODE HEADLESS BAR //////////////////////////////////
+
+// #region SIMPLE-MODE FOCUS RING //////////////////////////////////////
+// Clicking inside a WebView's content triggers the browser's default focus outline on the iframe.
+// Reset it in Simple mode, matching the outline-reset pattern already used elsewhere in
+// dock-layout-wrapper.component.scss (e.g. the .dock-tab-btn:focus-visible reset in its TAB HEADER
+// region).
+[data-interface-mode='simple'] .web-view:focus {
+  outline: none;
+}
+// #endregion SIMPLE-MODE FOCUS RING ///////////////////////////////////
+
+// #region SIMPLE-MODE TAB SELECTION LOOK //////////////////////////////
+// Author feedback: the Resources column's selected/focused tab must always look the same
+// (light background, normal text) — never the dark "window focus" tint. Competing rule is
+// `.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.platform-dock-tab-window-focus`
+// (0,5,0) in dock-layout-wrapper.component.scss's TAB HEADER region; match that specificity and
+// rely on this file being @used AFTER that rule is defined (source order) to win.
+[data-interface-mode='simple']
+  .dock-panel.dock-style-platform-bible
+  .dock-tab.platform-dock-tab-window-focus {
+  --tab-background: var(--tab-front-blur);
+  color: currentColor;
+}
+
+// Author feedback: remove the vertical divider between tabs entirely so tabs sit flush against
+// each other. Competing rule is `.dock-layout .dock-panel.dock-style-platform-bible
+// .dock-tab:not(.dock-tab-active)::before` (0,5,1) in dock-layout-wrapper.component.scss's TAB
+// SEPARATOR region; match that specificity (source order wins, since this file is @used later).
+[data-interface-mode='simple']
+  .dock-panel.dock-style-platform-bible
+  .dock-tab:not(.dock-tab-active)::before {
+  content: none;
+}
+// #endregion SIMPLE-MODE TAB SELECTION LOOK ////////////////////////////
+
+// #region SIMPLE-MODE CHROME (padding/gap/radius/divider) ///////////////
+// Ports the Storybook prototype's NO_PADDING_STYLE (src/stories/platform/ten-layout-shared.tsx)
+// into production. Scoped to [data-interface-mode="simple"] (set by app.component.tsx's Main)
+// so Power mode keeps its existing padded, rounded, gapped chrome untouched.
+[data-interface-mode='simple'] {
+  .dock-layout {
+    gap: 0;
+  }
+
+  // Collapse the divider to a near-invisible 1px, but keep a wide, easy-to-grab resize hit area via
+  // rc-dock's own transform-based hit-area expansion (matches the prototype's approach).
+  .dock-divider {
+    flex: 0 0 1px;
+    background: transparent;
+  }
+
+  .dock-hbox > .dock-divider {
+    transform: scaleX(8);
+    cursor: ew-resize;
+  }
+
+  .dock-vbox > .dock-divider {
+    transform: scaleY(8);
+    cursor: ns-resize;
+  }
+
+  // Remove padding from all chrome elements.
+  .dock-panel,
+  .dock-tabpane,
+  .platform-panel,
+  .web-view {
+    padding: 0;
+  }
+
+  // Remove border radius from most elements. The .dock-panel rule below handles
+  // .dock-panel separately with higher specificity to override the competing
+  // rule in dock-layout-wrapper.component.scss (.dock-layout .dock-panel.dock-style-platform-bible).
+  .dock-tabpane,
+  .platform-panel,
+  .web-view {
+    border-radius: 0;
+  }
+
+  // .dock-panel border-radius removal must target .dock-style-platform-bible to match
+  // the specificity of the existing rule in dock-layout-wrapper.component.scss, which uses
+  // .dock-layout .dock-panel.dock-style-platform-bible (specificity 0,3,0).
+  // Our rule .dock-panel.dock-style-platform-bible has (0,3,0), so source order wins.
+  //
+  // Deliberately NOT comprehensive: only the outer column/panel/tabpane/web-view containers are
+  // squared off. Tab headers (.dock-tab, .dock-tab-btn) and their fillets keep their native rounded
+  // corners — reverted per author feedback after seeing the fully-flattened look in the running app
+  // (square tab headers read as visually wrong; square outer columns/panes read as intended).
+  .dock-panel.dock-style-platform-bible {
+    border-radius: 0;
+  }
+
+  // .dock.dock-top is the other half of the original grouped selector in
+  // dock-layout-wrapper.component.scss
+  // (`.dock.dock-top, .dock-layout .dock-panel.dock-style-platform-bible { border-radius: var(--radius); }`)
+  // — the outermost dock box, not a per-column panel. It was missed by the override above, which
+  // only re-targeted the `.dock-panel.dock-style-platform-bible` half. Our selector here (0,3,0)
+  // beats the original `.dock.dock-top` (0,2,0) outright, no source-order tie-break needed.
+  .dock.dock-top {
+    border-radius: 0;
+  }
+}
+// #endregion SIMPLE-MODE CHROME //////////////////////////////////////

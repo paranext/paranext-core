@@ -24,6 +24,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
 | Current Epic            | [Current-Epic.md](.context/standards/Current-Epic.md)                     | What the current epic is, where it is articulated (roadmap, JIRA sprint board, Discord), is work item in epic? |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
+| Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
 
 ## Terminology
 

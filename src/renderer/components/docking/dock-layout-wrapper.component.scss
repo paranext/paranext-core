@@ -545,3 +545,12 @@ $tab-bottom-rounding: vars.$space--sm;
   visibility: visible;
 }
 // #endregion CONTROLS ///////////////////////////////////////////////
+
+// All Simple-mode-ONLY styles (including the ones that depend on this file's own rules above via
+// source-order specificity tie-breaks) live in ./dock-layout-wrapper.simple-mode.scss, imported
+// as a separate stylesheet AFTER this one in dock-layout-wrapper.component.tsx — plain webpack
+// style imports concatenate in import order, preserving the same cascade position these rules
+// held when they lived at the bottom of this file. (Note: `@use` was deliberately NOT used here —
+// Sass hoists an `@use`d module's compiled CSS to the top of the importing file's output
+// regardless of where the `@use` statement appears in the source, which would have put these
+// rules BEFORE the ones above instead of after, breaking every source-order tie-break comment.)

@@ -309,14 +309,50 @@ async function open(
 
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
+      // Uses the async factory (the sync createNetworkEventEmitter is deprecated) so the events can
+      // carry `x-experimental` in the generated OpenRPC document — these are recently-added switch-
+      // pairing events whose contract isn't settled (see their @experimental TSDoc in the d.ts). The
+      // payload type is inferred from the NetworkEvents augmentation, so no explicit generic here.
+      // Awaited before emit: the enclosing handler is async, so this only adds first-use latency and
+      // the will-start event still fires before the switch below.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<{
-          switchId: string;
-        }>(PROJECT_SWITCH_WILL_START_EVENT);
+        projectSwitchWillStartEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_WILL_START_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary:
+                'Emitted just before a scripture editor web view is opened or replaced with a new project.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       if (!projectSwitchDidFinishEmitter)
-        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<{
-          switchId: string;
-        }>(PROJECT_SWITCH_DID_FINISH_EVENT);
+        projectSwitchDidFinishEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_DID_FINISH_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary: 'Emitted after the scripture editor web view open/replace call resolves.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary:
+                    'The switchId of the onWillSwitchProject event that started this switch.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
@@ -574,6 +610,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       // BCV control (which is the single navigation point in simple mode). Power mode preserves the
       // saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This webview is dual-mode: in simple mode it's the fixed 3-column layout's Column 2 and
+      // must always remain open, so it's non-closable there. Power mode allows closing/rearranging
+      // freely, matching its pre-existing behavior.
+      isClosable: interfaceMode === 'power',
     };
   }
 
@@ -930,6 +970,11 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       // with the scripture editor (which is also forced to 0 in simple mode). Power mode preserves
       // the saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This tab is part of the fixed 3-column simple-mode layout (Column 1) and must always
+      // remain open there, so it's non-closable in simple mode. Power mode allows closing (this
+      // webview type isn't currently opened outside the fixed layout, but this keeps it consistent
+      // with the other fixed-layout webviews rather than hardcoding `false`).
+      isClosable: interfaceMode === 'power',
     };
   },
 };
@@ -1012,6 +1057,8 @@ function createResourceTextPanelProvider(
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
       // commentaries are read-only reference panels that navigate independently; they are
       // not scroll-synced with the scripture editor in simple mode.
+      // Re-read every call so mode changes are picked up at open/replace/restore time.
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       return {
         ...savedWebView,
         title,
@@ -1022,6 +1069,9 @@ function createResourceTextPanelProvider(
           ...savedWebView.state,
           resourceType,
         },
+        // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
+        // must always remain open there, so it's non-closable in simple mode.
+        isClosable: interfaceMode === 'power',
       };
     },
   };

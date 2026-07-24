@@ -47,6 +47,8 @@ import {
   isTab,
   RCDockTabInfo,
 } from '@renderer/components/docking/docking-framework-internal.model';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -65,6 +67,8 @@ export function PlatformDockLayout() {
    * this pattern in some way. Maybe just export `onLayoutChange`?
    */
   const onLayoutChangeRef = useRef<OnLayoutChange | undefined>(undefined);
+
+  const isPowerMode = useIsPowerMode();
 
   useEffect(() => {
     // Register with `web-view.service.ts` so it can perform operations on us
@@ -129,17 +133,11 @@ export function PlatformDockLayout() {
   return (
     <DockLayoutWrapper
       ref={dockLayoutRef}
-      loadTab={loadTab}
+      loadTab={(savedTabInfo) => loadTab(savedTabInfo)}
       saveTab={saveTab}
       /* Put a visual space around all tab-groups.
        * I tried using CSS padding and margin for this, but both causes overflows. */
-      style={{
-        position: 'absolute',
-        top: 48,
-        bottom: 8,
-        left: 8,
-        right: 8,
-      }}
+      style={getDockLayoutOuterInset(isPowerMode)}
       onLayoutChange={(layout, currentTabId, direction) => {
         let webViewDefinition: WebViewDefinition | undefined;
         const didCloseWebView = direction === 'remove';

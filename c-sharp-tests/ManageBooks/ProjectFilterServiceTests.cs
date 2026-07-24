@@ -689,8 +689,8 @@ namespace TestParanextDataProvider.ManageBooks
             ParatextProjects.FakeAddProject(details, scrText);
         }
 
-        // ResourceDummyScrText overrides IsResourceProject so we can exercise the
-        // ProjectSummary.IsResource plumbing without needing a real ResourceScrText
+        // ResourceDummyScrText (shared test double) overrides IsResourceProject so we can exercise
+        // the ProjectSummary.IsResource plumbing without needing a real ResourceScrText
         // (which depends on a zipped-resource file on disk).
         private ResourceDummyScrText CreateResourceScrText(
             string name,
@@ -711,23 +711,6 @@ namespace TestParanextDataProvider.ManageBooks
             scrText.Settings.TranslationInfo = new TranslationInformation(type, baseName);
             scrText.Settings.Editable = editable;
             return scrText;
-        }
-
-        // -----------------------------------------------------------------
-        // Support: marker subclass for resource-project test coverage.
-        //
-        // ScrText.IsResourceProject is `virtual` and defaults to false on
-        // DummyScrText. Resources in production override it to true (see
-        // ResourceScrText.cs and JoinedScrText.cs). This subclass mirrors that
-        // override so the filter-service IsResource plumbing can be tested
-        // without needing a real on-disk zipped resource.
-        // -----------------------------------------------------------------
-        private sealed class ResourceDummyScrText : DummyScrText
-        {
-            public ResourceDummyScrText(Paranext.DataProvider.Projects.ProjectDetails details)
-                : base(details) { }
-
-            public override bool IsResourceProject => true;
         }
     }
 }

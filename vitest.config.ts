@@ -15,6 +15,7 @@ const config = defineConfig(async () => {
         'src/**/*.test.ts',
         'src/**/*.test.tsx',
         'tools/pt9-css-converter/src/**/*.test.ts',
+        '.erb/scripts/**/*.test.ts',
       ],
     },
   };
