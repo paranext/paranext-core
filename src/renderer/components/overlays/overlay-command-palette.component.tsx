@@ -162,6 +162,11 @@ function PaletteItem({
       value={item.id}
       disabled={item.disabled}
       onSelect={() => onSelect(item.id)}
+      // Toolbar-button discipline: pressing the mouse button must not move focus (from the
+      // palette's own search input here, or — when the input lost the cross-frame focus fight —
+      // from the requesting editor). cmdk selects on click, which still fires after a
+      // default-prevented mousedown.
+      onMouseDown={(event) => event.preventDefault()}
       className="tw:flex tw:items-center tw:gap-2"
     >
       <PaletteItemContent item={item} />
@@ -204,6 +209,12 @@ function PassivePaletteItem({
         if (item.disabled) return;
         onSelect(item.id);
       }}
+      // The passive palette's whole contract is that focus stays in the requesting editor — but a
+      // mouse PRESS on an item would move focus to this document before the click commit ever
+      // reaches the editor, blurring it and nulling Lexical's live selection (the commit then
+      // applies the marker at the document tail instead of the caret). preventDefault on mousedown
+      // keeps focus where it is; the click still fires and selects.
+      onMouseDown={(event) => event.preventDefault()}
       className={cn(
         'tw:relative tw:flex tw:cursor-default tw:items-center tw:gap-2 tw:rounded-sm tw:px-2 tw:py-1.5 tw:text-sm tw:outline-hidden tw:select-none',
         item.disabled && 'tw:pointer-events-none tw:opacity-50',
@@ -352,11 +363,12 @@ export function OverlayCommandPalettePresentational({
   );
 
   // BOTH modes bypass cmdk's own fuzzy filtering: the filtered list is computed with the same
-  // filterPaletteItems function the host uses to resolve a commit — keeping what's on screen and
-  // what the host would select in agreement. Passive filters by the externally-driven filterText;
-  // active by the input mirror (which external filterText updates overwrite).
+  // filterPaletteItems function (and mode) the host uses to resolve a commit — keeping what's on
+  // screen and what the host would select in agreement. Passive filters by the externally-driven
+  // filterText; active by the input mirror (which external filterText updates overwrite).
   const filteredItems = useMemo(
-    () => filterPaletteItems(items, passive ? filterText : inputValue),
+    () =>
+      filterPaletteItems(items, passive ? filterText : inputValue, passive ? 'passive' : 'active'),
     [items, passive, filterText, inputValue],
   );
   const highlightedItem: CommandPaletteItem | undefined = filteredItems[selectedIndex];
@@ -642,25 +654,28 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
   // Mirror the ACTIVE palette's local input/highlight into the overlay store, so a forwarded
   // commitCommandPaletteSelection (which resolves from the STORE's filterText/selectedIndex)
   // always picks exactly what the palette displays — the store is the single source of truth
-  // for selection, regardless of where the keystrokes landed.
+  // for selection, regardless of where the keystrokes landed. The filter mode comes from the
+  // request so these item counts match the host's own filterPaletteItems calls exactly.
+  const filterMode = overlay.request.passive ? 'passive' : 'active';
+
   const handleFilterTextChange = useCallback(
     (filterText: string) => {
       updateCommandPaletteState(overlay.id, {
         filterText,
-        itemCount: filterPaletteItems(overlay.items, filterText).length,
+        itemCount: filterPaletteItems(overlay.items, filterText, filterMode).length,
       });
     },
-    [overlay.id, overlay.items],
+    [overlay.id, overlay.items, filterMode],
   );
 
   const handleSelectedIndexChange = useCallback(
     (selectedIndex: number) => {
       updateCommandPaletteState(overlay.id, {
         selectedIndex,
-        itemCount: filterPaletteItems(overlay.items, overlay.filterText).length,
+        itemCount: filterPaletteItems(overlay.items, overlay.filterText, filterMode).length,
       });
     },
-    [overlay.id, overlay.items, overlay.filterText],
+    [overlay.id, overlay.items, overlay.filterText, filterMode],
   );
 
   return (

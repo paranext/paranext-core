@@ -255,10 +255,29 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(onSelect).toHaveBeenCalledWith('save');
     });
 
-    it('filters with the same startsWith-on-label algorithm the host commit uses (no fuzzy drift)', () => {
+    it('filters with the same containment algorithm the host commit uses (no cmdk fuzzy drift)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // cmdk's fuzzy scoring would keep 'Open File' for the subsequence 'onf' ('OpeN File');
+      // plain containment must not — otherwise the display would disagree with what a forwarded
+      // commit picks from the store-filtered list.
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'onf' } });
+
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Save File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('matches typed text against item descriptions, not just labels', () => {
       const items: CommandPaletteItem[] = [
-        { id: 'f', label: 'f' },
-        { id: 'xf', label: 'xf' },
+        { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
       ];
 
       render(
@@ -269,12 +288,30 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'f' } });
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Normal' } });
 
-      // startsWith keeps only 'f'; cmdk's fuzzy contains-match would also keep 'xf' — and then the
-      // display would disagree with what a forwarded commit picks from the store-filtered list.
-      expect(screen.getByText('f')).toBeInTheDocument();
-      expect(screen.queryByText('xf')).not.toBeInTheDocument();
+      expect(screen.getByText('Paragraph (p)')).toBeInTheDocument();
+      expect(screen.queryByText('Margin (m)')).not.toBeInTheDocument();
+    });
+
+    it('matches labels case-insensitively (lowercase input finds capitalized labels)', () => {
+      const items: CommandPaletteItem[] = [
+        { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        { id: 'q1', label: 'Poetry Line 1 (q1)', description: 'First level poetry' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'paragraph' } });
+
+      expect(screen.getByText('Paragraph (p)')).toBeInTheDocument();
+      expect(screen.queryByText('Poetry Line 1 (q1)')).not.toBeInTheDocument();
     });
 
     it('reports typed filter text via onFilterTextChange so the store can mirror it', () => {
@@ -404,6 +441,41 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
     });
 
+    it('should prefix-match the filterText case-insensitively (typed lowercase marker finds capitalized label)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Save File')).toBeInTheDocument();
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
+    });
+
+    it('should keep prefix semantics (a mid-label match hides the item)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="File"
+          noResultsText="Nothing found"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // 'File' appears inside 'Open File' and 'Save File' but starts neither label — the passive
+      // marker palette filters by typed prefix, so containment must not match
+      expect(screen.queryByText('Open File')).not.toBeInTheDocument();
+      expect(screen.queryByText('Save File')).not.toBeInTheDocument();
+      expect(screen.getByText('Nothing found')).toBeInTheDocument();
+    });
+
     it('should show noResultsText when filterText matches nothing', () => {
       render(
         <OverlayCommandPalettePresentational
@@ -528,6 +600,53 @@ describe('OverlayCommandPalettePresentational', () => {
       fireEvent.click(screen.getByText('Cannot Click'));
 
       expect(onSelect).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('mouse commits must not steal focus (mousedown default-prevented)', () => {
+    // Pressing the mouse button on a palette item is what transfers focus to the renderer
+    // document — BEFORE the click commit round-trips to the requesting editor. For the editor
+    // (main web view or footnote popover) that blur can null Lexical's live selection, and the
+    // marker apply then lands at the document tail instead of the caret. The classic
+    // toolbar-button discipline: preventDefault on mousedown so a click commits without the
+    // palette ever taking focus. The click must still select (selection fires on click, not
+    // mousedown).
+
+    it('passive mode: mousedown on an item is default-prevented and click still selects', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const item = screen.getByText('Save File');
+      // fireEvent returns false when preventDefault was called on the (cancelable) event.
+      expect(fireEvent.mouseDown(item)).toBe(false);
+      fireEvent.click(item);
+      expect(onSelect).toHaveBeenCalledWith('save');
+    });
+
+    it('active mode: mousedown on a cmdk item is default-prevented and click still selects', () => {
+      const onSelect = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={onSelect}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const item = screen.getByText('Save File');
+      expect(fireEvent.mouseDown(item)).toBe(false);
+      // cmdk selects on click, which preventDefault-on-mousedown must not suppress.
+      fireEvent.click(item);
+      expect(onSelect).toHaveBeenCalledWith('save');
     });
   });
 

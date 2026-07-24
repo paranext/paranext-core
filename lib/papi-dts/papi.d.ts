@@ -9291,40 +9291,51 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      *
      * @remarks
      * Passive-palette filtering and commit resolution match the externally supplied filter text
-     * case-sensitively against the PREFIX of each item's RAW `label`: a leading `+` in the filter is
+     * case-insensitively against the PREFIX of each item's `label`: a leading `+` in the filter is
      * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
-     * shows every item. Because this runs on raw label strings while the component renders localized
-     * labels, items passed to a passive palette must use plain-string labels (not `LocalizeKey`s), or
-     * the host-computed highlight can diverge from the rendered list. Localization-aware filtering is
-     * a recorded follow-up.
+     * shows every item. `LocalizeKey` labels are resolved to localized text when the palette is
+     * shown, so matching always runs against the same label text the palette displays.
      */
     passive?: boolean;
   }
   /**
-   * Filters command palette items by prefix-matching `filterText` against each item's `label`,
-   * mirroring PT9's marker dropdown filtering (`MarkerDropdownControl.UpdateMarkerList`,
-   * MarkerDropdownControl.cs:105-114): a leading `+` in the filter text is stripped before matching
-   * (so a filter of `"+w"` matches the same items as `"w"`), and the match is ordinal
-   * (case-sensitive), like PT9's `StringComparison.Ordinal`. Returns `items` unchanged when
+   * How {@link filterPaletteItems} matches filter text against items — one mode per palette flavor:
+   *
+   * - `'passive'` — case-insensitive PREFIX match on `label` only. Passive palettes show bare marker
+   *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
+   *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
+   *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+   * - `'active'` — case-insensitive CONTAINMENT match over `label`, `description`, and `badge`, so the
+   *   palette's search box finds items by any visible text (e.g. typing a description word).
+   */
+  export type PaletteFilterMode = 'active' | 'passive';
+  /**
+   * Filters command palette items by matching `filterText` against each item's text, with
+   * per-{@link PaletteFilterMode} semantics: passive palettes prefix-match the `label` only (with a
+   * leading `+` stripped from the filter first), active palettes containment-match over `label`,
+   * `description`, and `badge`. Both modes match case-insensitively (custom USFM markers may be
+   * capitalized, and search-box input should never be case-picky). Returns `items` unchanged when
    * `filterText` is empty or undefined.
    *
    * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
-   * `commitCommandPaletteSelection` (to resolve the highlighted item) and the passive command palette
+   * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
    * component (to render the filtered list) — using one function for both keeps host-side selection
    * and on-screen rendering from disagreeing about which items are visible.
    *
    * @remarks
-   * Matching operates on RAW `label` strings: host-side filtering and commit resolution never see
-   * localized text, while the component renders localized labels. Items passed to a passive palette
-   * must therefore use plain-string labels (not `LocalizeKey`s), or the host-computed highlight can
-   * diverge from the rendered list. Localization-aware filtering is a recorded follow-up.
+   * Matching operates directly on the strings in `items` with no localization of its own. Both
+   * callers pass items whose `LocalizeKey` text was already resolved to localized strings when the
+   * palette was shown (see {@link IOverlayService.showCommandPalette}), so host-side filtering, commit
+   * resolution, and the rendered list all match against the same display text.
    * @param items The full, unfiltered list of command palette items
    * @param filterText The current filter text, or undefined/empty for no filtering
-   * @returns The subset of `items` whose `label` starts with the (stripped) filter text
+   * @param mode Which palette flavor's matching semantics to apply
+   * @returns The subset of `items` matching the filter text under the given mode
    */
   export function filterPaletteItems(
     items: CommandPaletteItem[],
     filterText: string | undefined,
+    mode: PaletteFilterMode,
   ): CommandPaletteItem[];
   /**
    *
@@ -9412,6 +9423,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     /**
      * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
      * the selected item's `id`, or `undefined` if dismissed.
+     *
+     * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
+     * the palette is shown, so all filtering — the palette's own search box and text forwarded via
+     * {@link updateCommandPalette} — matches against the text the user actually sees.
      *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
@@ -9553,7 +9568,11 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** The original request */
         request: CommandPaletteRequest;
-        /** Items to render */
+        /**
+         * Items to render, with any `LocalizeKey` `label`/`description`/`badge` text already resolved
+         * to localized strings at show time — filtering, commit resolution, and rendering all read
+         * from here so they always agree on each item's text.
+         */
         items: CommandPaletteItem[];
         /**
          * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive

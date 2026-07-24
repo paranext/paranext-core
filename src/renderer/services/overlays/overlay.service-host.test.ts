@@ -4,8 +4,10 @@ import {
   ABORTED,
   RESOURCE_EXHAUSTED,
   FAILED_PRECONDITION,
+  LanguageStrings,
 } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
+import { localizationService } from '@shared/services/localization.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { CommandPaletteRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
 import { getOverlays, getOverlayById, clearAllOverlays } from './overlay-store';
@@ -635,7 +637,7 @@ describe('overlay.service-host', () => {
     it('should show passive, narrow via updateFilter, clamp via moveSelection, and commit the highlighted id', async () => {
       const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
 
-      // filterText narrows to items starting with "F" (ordinal, case-sensitive): Footnote, Figure
+      // filterText narrows to items whose label starts with "F": Footnote, Figure
       await overlayService.updateCommandPalette('test-webview', { filterText: 'F' });
 
       let overlay = getOverlayById(getOverlays()[0].id);
@@ -679,6 +681,36 @@ describe('overlay.service-host', () => {
       await overlayService.updateCommandPalette('test-webview', { filterText: 'f' });
       await overlayService.commitCommandPaletteSelection('test-webview');
       expect(await promise).toBe('f');
+    });
+
+    it('should narrow passive palettes by case-insensitive prefix (lowercase filter finds capitalized labels)', async () => {
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      // 'fi' must match 'Figure' (and only it) even though the label is capitalized
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'fi' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      // Commit resolved the palette rather than dropping on a 0-match filter
+      expect(getOverlays()).toHaveLength(0);
+      expect(await promise).toBe('fig');
+    });
+
+    it('should commit an ACTIVE palette via case-insensitive containment over label and description', async () => {
+      const activeRequest: CommandPaletteRequest = {
+        items: [
+          { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
+          { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        ],
+      };
+      const promise = overlayService.showCommandPalette(activeRequest, 'test-webview');
+
+      // 'normal' appears only in the DESCRIPTION of 'Paragraph (p)', in different case — the
+      // forwarded-keystroke commit path must match it the same way the on-screen list does
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'normal' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      expect(getOverlays()).toHaveLength(0);
+      expect(await promise).toBe('p');
     });
 
     it('should skip disabled items when committing, selecting the next enabled item', async () => {
@@ -798,6 +830,126 @@ describe('overlay.service-host', () => {
       getOverlays()[0].resolve(undefined);
       vi.useRealTimers();
       return promise2;
+    });
+  });
+
+  describe('command palette item localization', () => {
+    /** Localized strings the mock localization service knows about */
+    const LOCALIZED_STRINGS: LanguageStrings = {
+      '%marker_ft_label%': 'Footnote',
+      '%marker_fig_label%': 'Figure',
+      '%marker_ft_description%': 'Footnote text',
+      '%marker_ft_badge%': 'Deprecated',
+    };
+
+    beforeEach(() => {
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementation(
+        async ({ localizeKeys }) => {
+          const strings: LanguageStrings = {};
+          localizeKeys.forEach((key) => {
+            if (LOCALIZED_STRINGS[key] !== undefined) strings[key] = LOCALIZED_STRINGS[key];
+          });
+          return strings;
+        },
+      );
+    });
+
+    afterEach(() => {
+      // Restore the file-level default so later tests see an empty localization map again
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementation(async () => ({}));
+    });
+
+    it('should narrow and commit an ACTIVE palette by its LOCALIZED label when items use LocalizeKeys', async () => {
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'ft', label: '%marker_ft_label%' },
+          { id: 'fig', label: '%marker_fig_label%' },
+        ],
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+
+      // Item localization resolves before the entry is stored — wait for the overlay to appear
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+
+      // The user sees "Footnote" on screen, so forwarded keystrokes spell the localized text
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'foot' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      // Commit resolved the palette instead of dropping on a 0-match raw-key filter
+      expect(getOverlays()).toHaveLength(0);
+      expect(await promise).toBe('ft');
+    });
+
+    it('should prefix-match a PASSIVE palette against localized labels', async () => {
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'ft', label: '%marker_ft_label%' }, // "Footnote"
+          { id: 'fig', label: '%marker_fig_label%' }, // "Figure"
+        ],
+        passive: true,
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'fi' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      expect(getOverlays()).toHaveLength(0);
+      expect(await promise).toBe('fig');
+    });
+
+    it('should store items with label, description, and badge resolved at show time', async () => {
+      const request: CommandPaletteRequest = {
+        items: [
+          {
+            id: 'ft',
+            label: '%marker_ft_label%',
+            description: '%marker_ft_description%',
+            badge: '%marker_ft_badge%',
+          },
+          { id: 'zz', label: '%marker_unknown_label%' },
+        ],
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+
+      const overlays = getOverlays();
+      // Only commandPalette overlays exist in this test
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      expect(palette.items[0]).toMatchObject({
+        label: 'Footnote',
+        description: 'Footnote text',
+        badge: 'Deprecated',
+      });
+      // A key the localization service does not know keeps its raw key text, matching the
+      // component's display fallback
+      expect(palette.items[1].label).toBe('%marker_unknown_label%');
+
+      palette.resolve(undefined);
+      await promise;
+    });
+
+    it('should pass plain-string items through untouched and create the overlay synchronously', () => {
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'ft', label: 'Footnote' },
+          { id: 'xt', label: 'Cross Reference' },
+        ],
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+
+      // No LocalizeKeys → no localization await: the overlay must exist synchronously so the
+      // palette is immediately drivable (forwarded keystrokes can arrive right after show)
+      const overlays = getOverlays();
+      expect(overlays).toHaveLength(1);
+      // Only commandPalette overlays exist in this test
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      expect(palette.items).toBe(request.items);
+
+      palette.resolve(undefined);
+      return promise;
     });
   });
 

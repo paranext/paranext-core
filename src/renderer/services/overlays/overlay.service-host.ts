@@ -19,6 +19,7 @@ import { logger } from '@shared/services/logger.service';
 import { sendCommand } from '@shared/services/command.service';
 import {
   formatReplacementString,
+  isLocalizeKey,
   isPlatformError,
   LocalizeKey,
   newGuid,
@@ -28,9 +29,10 @@ import {
   FAILED_PRECONDITION,
   RESOURCE_EXHAUSTED,
 } from 'platform-bible-utils';
-import type { PlatformError } from 'platform-bible-utils';
+import type { LanguageStrings, PlatformError } from 'platform-bible-utils';
 import type { ReactElement } from 'react';
 import {
+  CommandPaletteItem,
   CommandPaletteRequest,
   filterPaletteItems,
   IOverlayService,
@@ -525,8 +527,53 @@ async function onPopoverDismissed(overlayId: string): Promise<string | undefined
 }
 
 /**
+ * Collects the `LocalizeKey` values found in command palette items' `label`, `description`, and
+ * `badge` fields. Empty when every field is a plain string.
+ */
+function collectPaletteItemLocalizeKeys(items: CommandPaletteItem[]): LocalizeKey[] {
+  const keys: LocalizeKey[] = [];
+  items.forEach((item) => {
+    [item.label, item.description, item.badge].forEach((value) => {
+      if (value !== undefined && isLocalizeKey(value)) keys.push(value);
+    });
+  });
+  return keys;
+}
+
+/**
+ * Resolves `LocalizeKey` values in command palette items' `label`/`description`/`badge` fields to
+ * localized strings via the localization service; plain-string fields pass through unchanged. A key
+ * the service does not know (or a failed lookup) keeps its raw key text — the same fallback the
+ * command palette component applies when rendering — so the resolved items are exactly what the
+ * palette displays.
+ */
+async function localizePaletteItems(
+  items: CommandPaletteItem[],
+  localizeKeys: LocalizeKey[],
+): Promise<CommandPaletteItem[]> {
+  let localizedStrings: LanguageStrings = {};
+  try {
+    localizedStrings = await localizationService.getLocalizedStrings({ localizeKeys });
+  } catch {
+    // Leave the map empty — every key falls back to its raw text below
+  }
+  const resolve = (value: string | LocalizeKey): string =>
+    isLocalizeKey(value) ? (localizedStrings[value] ?? value) : value;
+  return items.map((item) => ({
+    ...item,
+    label: resolve(item.label),
+    description: item.description ? resolve(item.description) : undefined,
+    badge: item.badge ? resolve(item.badge) : undefined,
+  }));
+}
+
+/**
  * Shows a command palette overlay with searchable/filterable items. Validates the request, checks
  * visibility, translates coordinates, and returns the user's selection or undefined if dismissed.
+ *
+ * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings here,
+ * before the overlay entry is stored, so host-side filtering and commit resolution operate on the
+ * same strings the palette renders.
  *
  * @param request The command palette request with items and optional anchor
  * @param webViewId The webViewId that originated the request
@@ -549,6 +596,16 @@ async function showCommandPalette(
   if (!debounceCheck('commandPalette', webViewId)) {
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
+
+  // Resolve LocalizeKey item text ONCE, up front, so the stored entry only ever holds the same
+  // resolved strings the palette renders — host-side filtering and commit can then never disagree
+  // with the on-screen list. Skipped entirely (no await) when every item field is a plain string,
+  // preserving synchronous overlay creation for those callers.
+  const itemLocalizeKeys = collectPaletteItemLocalizeKeys(request.items);
+  const items =
+    itemLocalizeKeys.length > 0
+      ? await localizePaletteItems(request.items, itemLocalizeKeys)
+      : request.items;
 
   // Replace any existing command palette from this webView
   const existingOverlays = getOverlaysByWebView(webViewId).filter(
@@ -584,7 +641,7 @@ async function showCommandPalette(
       id: overlayId,
       webViewId,
       request,
-      items: request.items,
+      items,
       selectedIndex: 0,
       position,
       resolve: (selectedId) => {
@@ -653,7 +710,11 @@ async function updateCommandPalette(
     return;
   }
 
-  const filteredCount = filterPaletteItems(entry.items, nextFilterText).length;
+  const filteredCount = filterPaletteItems(
+    entry.items,
+    nextFilterText,
+    entry.request.passive ? 'passive' : 'active',
+  ).length;
   updateCommandPaletteState(entry.id, {
     filterText: nextFilterText,
     selectedIndexDelta: update.moveSelection,
@@ -682,7 +743,11 @@ async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
     return;
   }
 
-  const filtered = filterPaletteItems(entry.items, entry.filterText);
+  const filtered = filterPaletteItems(
+    entry.items,
+    entry.filterText,
+    entry.request.passive ? 'passive' : 'active',
+  );
   if (filtered.length === 0) {
     logger.warn(
       `commitCommandPaletteSelection: filter ${JSON.stringify(entry.filterText)} matches 0 of ` +
