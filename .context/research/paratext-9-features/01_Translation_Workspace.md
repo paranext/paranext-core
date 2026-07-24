@@ -352,6 +352,120 @@ The Translation Workspace encompasses the core features users interact with dail
 | 0 | `Paratext/WindowMenu/SaveTextCombinationsForm.cs` | HelpData dialog | `SaveTextCombinationsForm` |
 | 1 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Import in D0 | Line 14: `using Paratext.Base.ParatextWindows` |
 
+**Floating-window chrome** (sub-feature "Float windows anywhere") — added 2026-07-23 by the
+floating-windows investigation. This sub-feature previously had **no** implementation anchor here,
+which led a PRD to assert that none existed; it does.
+
+| Depth | File | Found Via | Evidence |
+|-------|------|-----------|----------|
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextFloatWindow.cs` | Investigation | Line 19: `sealed class ParatextFloatWindow : FloatWindow, IActiveWindowProvider, PersistedDockingWindow` (280 lines) — owns pushpin/always-on-top (`:55-66`), title+icon rules (`:103-117`), pin-state persistence (`:79`), min/max DWM workarounds (`:119-154`, PTX-17379), edge snapping (`:161`), 6-item reduced toolbar and title bar (`:204-270`) |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextDockingTheme.cs` | Investigation | `:31` installs `ParatextFloatWindowFactory` as the **only** float-window factory; `:180-216` builds the tab-bar right-click menu — "Dock window" (`:196`), "Open as a floating window" (`:203`), "Move to autohide" (`:210`) |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Investigation | `:368-411` `ChangeDockState` dock↔float state machine; `:395-400` centers over the main form only when the in-memory `floatBounds` (`:49`) is null |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Investigation | `:371-376` `IsDockStateValid` — the Ctrl gate: **without** Ctrl, Float is valid only while the pointer is outside `MainWindow.Bounds` |
+| 1 | `Paratext/WindowCollection.cs` | Investigation | `:1209-1214` `OpenAsType.Floating`; `:1348-1354` `GetFloatWindowFromPersistString` restores bounds + pin state with **no** off-screen clamping |
+| 2 | `PtxUtils.UI/Winforms/SnappingFormHelper.cs` | Investigation | 15px edge snapping to other Paratext forms and `Screen.FromControl(owner).WorkingArea` (`:31, 56-69`); unconditional — the `EnableFormSnapping` setting is never read |
+| 2 | `PtxUtils.UI/DialogRestorer.cs` | Investigation | `:186-276` off-screen clamping and multi-monitor spanning rules; `:278-285` never restores minimized (PT-3114) |
+
+**Corrections to common assumptions** (verified 2026-07-23 against `~/Paratext@master`):
+
+- The docking library is **WeifenLuo.WinFormsUI.Docking (DockPanel Suite) v3.0.4.0**, a checked-in
+  WinForms DLL (`ParatextBase/ParatextBase.csproj:186-189`) — **not** AvalonDock, which appears
+  nowhere in the tree.
+- "Always on top" is an **owner-window** relationship (`Owner = DockPanel.FindForm()`,
+  `ParatextFloatWindow.cs:55-66`), **not** `TopMost` — a pinned float window sits above Paratext
+  only, never above other applications. This is what produces the documented maximize-while-pinned
+  taskbar trap (HelpData "What are the limitations of a floating window?").
+- Float geometry persists **across restarts** (`Settings.Default.WindowCollectionMemento`,
+  `Paratext/MainForm.cs:2423`) and into **named, shareable** layouts — pin state rides along as the
+  float window's `PersistString`.
+- The Open dialog's first-run "Open As" default is **Panel**, not Floating
+  (`SelectScrTextsForm.cs:850`), despite a stale XML doc comment at `OpenAsType.cs:11` saying
+  otherwise. 17 tools hard-code `OpenAsType.Floating` with no user choice.
+
+**Additional HelpData Items** (floating chrome; `Paratext/HelpData.xml`):
+- ID: `7554630d-9d2a-43d5-bac9-2210b054bf11` - "What is a floating window?" (line 23634)
+- ID: `95609de1-987e-4da4-bc8b-6b1d507bad09` - "What are the limitations of a floating window?" (line 2676)
+- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (line 15339)
+
+**Autohide area** (sub-feature) — added 2026-07-23 by the Quick-Reference & Autohide investigation.
+This sub-feature previously appeared in **one cell** of this file (the floating-window addendum's
+tab-bar menu row) and in none of 1.6's Sub-Features, Implementation, UI Entry Points or HelpData
+lists — which led a PRD to assert that autohide "has no PT9 source-file citation … the only source
+is a HelpData description of end-user behavior, not implementation." **That assertion is refuted:**
+there is a dedicated flyout class, a ~400-line hand-written strip, a user setting, unit tests, a BVT
+test, and 17 HelpData items.
+
+What it is: a **right-edge-only overlay dock zone of the single main-window `DockPanel`**. Any
+`ParatextWindow` may be moved there; its tab collapses to a 16×16 icon in a vertical strip pinned to
+the right edge **of the main window** (not of the screen), and clicking the icon slides out a flyout
+that **overlays** — does not re-flow — the document area at **25% of the dock area's width** by
+default, user-resizable by a splitter.
+
+| Depth | File | Found Via | Evidence |
+|-------|------|-----------|----------|
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextDockingTheme.cs` | Investigation | `:207-212` "Move to autohide" → `ChangeDockState(DockState.DockRightAutoHide)` (loc key `ParatextDockingTheme_3`); `:193-198` "Dock window" → `ChangeDockState(DockState.Document)`; `:742-1150` **`ParatextAutoHideStrip : AutoHideStripBase`** — sizes (`:745-748`, collapsed 20/28 at `:772, 868`, expanded 90), `MeasureHeight()` returns 0 when empty (`:834-843`), `AllTabs` = right-autohide panes only (`:821-822`), scrollbar overflow (`:811-819, 1108-1137`), tooltips (`:899-923`), expand/collapse + persist (`:952-991`), paint incl. badges (`:993-1071`) |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextAutoHideWindow.cs` | Investigation | 78 lines — `ParatextAutoHideWindow : DockPanel.AutoHideWindowControl`; `AnimateTime = 140` ms (`:11`); `DisplayingRectangle`/`OnLayout` overrides; per-edge splitter (`:47-62`); non-active panes parked off-screen at `x = -width` (`:64-73`) |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Investigation | `:368-411` `ChangeDockState` state machine (accepts only `DockRightAutoHide`/`Document`/`Float`, else throws); **`:138-168` `MakeActive()`** — the single auto-activate funnel: `if (Pane.IsAutoHide) DockPanel.ActiveAutoHideContent = this`, then a *deferred* `DockHandler.Activate()` (calling `Activate()` alone would collapse the flyout); `:574-578, 684-695` lazy load — autohidden content defers `LoadWindow()` to `OnActivated` |
+| 0 | `ParatextBase/Themes/DockingTheme/SendReceiveBadgeHelper.cs` | Investigation | 100 lines — the **colored dot**: 10px filled ellipse drawn iff a Send/Receive **update is available** for the project/resource. Set by `Paratext/Repository/AutoSendReceiveManager.cs:430-449`, cleared by performing a Send/Receive (`:197-210`). **Unrelated to activation** |
+| 0 | `ParatextBase/Themes/DockingTheme/ScrollGroupBadgeHelper.cs` | Investigation | 93 lines — scroll-group letter badge on strip icons; its visibility raises the collapsed strip from 20 to 28 px |
+| 1 | `Paratext/WindowCollection.cs` | Investigation | `:1234-1238` `OpenAsType.AutoHide`; `:650-652` `ResetAutoHideStripWindow()` before layout load (**PTXS-20868**, z-order fix); `:698-705` re-seeds `Pane.ActiveContent` for autohide panes saved with none (**PTX-18050**, invisible-pane fix); `:675-679` force-resets `Dock*Portion` to 0.25 after load; `:884-894` deferred invalidate on close; `:1204-1205` new-tab anchoring skips autohide panes |
+| 1 | `Paratext/EditMenu/ListForm.cs` | Investigation | `:900-912` the **canonical auto-activate referrer** — a Results-list selection calls `ptw.MakeActive()` then scrolls to the match |
+| 1 | `ParatextBase/ParatextWindows/WindowStackManager.cs` | Investigation | `:124-133, 199-217` undo-layout-change snapshot/restore of autohide panes incl. `AutoHidePortion` |
+| 1 | `ParatextBase/ParatextWindows/WindowManagerHelper.cs` | Investigation | `:206-207` `FirstActiveWindow` excludes autohidden windows — they don't drive the main toolbar |
+| 1 | `ParatextBase/CommonForms/SelectScrTextsForm.Designer.cs` | Investigation | `:414` the Open dialog's "Open As → **Autohide**" option (`OpenAsType.AutoHide = 4`, `ParatextBase/ParatextWindows/OpenAsType.cs:40-44`) |
+| 1 | `ParatextBase/SharedSettings/Settings.Designer.cs` | Investigation | `:152-162` user setting `AutoHideBarExpanded` (default `False`) — strip expanded (90px, icon+label) vs collapsed (icon only) |
+| 1 | `ParatextBase/MegaMenu/MegaMenuButton.cs` | Investigation | `:122-191` sets `HideWhenMouseLeaves = false` while a menu is open so the flyout doesn't collapse under it; same pattern in `Paratext/ParallelPassages/ParallelPassagesTool.cs:516-523` |
+| 2 | `ParatextBase/WeifenLuo.WinFormsUI.Docking.dll` | Investigation | **v3.0.4.0, binary only — no source in tree.** Owns flyout geometry (`DockPanel.AutoHideWindowRectangle`), `DockContentHandler.AutoHidePortion` (default `0.25`), the mouse-leave collapse timer, and XML persistence of `DockState` + `AutoHidePortion`. Reproduce with `ilspycmd -t WeifenLuo.WinFormsUI.Docking.DockPanel <dll>` |
+| — | `Paratext.Tests/WindowMenu/WindowCollectionTests.cs` | Investigation | `:538-613` three `[TestCase]`-driven undo-layout tests covering `DockRightAutoHide`; `UserInterfaceTests/BVTRepository9_1.cs:38` drives the "Move to autohide" context item |
+
+**Autohide UI entry points** — there is **no** application-menu command, toolbar button, keyboard
+shortcut, or drag gesture that enters autohide:
+- Tab-bar right-click > **"Move to autohide"** (also available from a *floating* window's tab bar)
+- Tab-bar right-click > **"Dock window"** on an expanded flyout — returns it to a docked panel
+- Open dialog > "Open As" > **Autohide**
+- Click an icon in the strip to expand; click the active icon again to collapse
+- The strip's expand/collapse arrow (icon-only ⇄ icon+label), persisted in `AutoHideBarExpanded`
+- ≡ main menu > Window > *(window name)* — `MakeActive()`, which expands an autohidden window
+
+**Corrections to common assumptions** (verified 2026-07-23):
+
+- **The strip is at the right edge of the main window**, not of the screen, and consumes
+  `DockPadding.Right` (~23 px) once anything is autohidden. It measures 0 and is invisible when empty.
+- **The flyout is 25% of the dock area** (the `DockPanel`'s client rect minus its padding, including
+  the strip) — **not 25% of the screen**, as HelpData `ac545da7` loosely says. Clamped to
+  `dockArea.Width - 24`, user-resizable by a 4 px splitter, per-content and persisted into layouts —
+  but re-seeded to 0.25 on every fresh move into autohide.
+- **The colored dot means "a Send/Receive or resource update is available"**, not "something
+  referred to this window". Nothing connects the badge to activation. HelpData: *"The dot remains
+  until you Send/Receive the project."*
+- **Auto-activate is real** and funnels through `ParatextWindow.MakeActive()` (~40 call sites); the
+  Results-list path is the one HelpData describes. The flyout then stays open until the mouse-leave
+  rule fires — there is no timed auto-collapse.
+- **Re-collapse** is a mouse-leave timer (2 × `MouseHoverTime`, ~800 ms) that is **disabled while
+  the flyout's pane is activated** — so a focused flyout never auto-collapses. Hover-to-expand is
+  **off** (`ShowAutoHideContentOnHover = false`, set in two places).
+- **Autohide state IS persisted** — per-content `DockState`/`AutoHidePortion` into both the restart
+  memento and named/shareable layouts.
+- **Any `ParatextWindow` can be autohidden** (`DockAreas` is set once in the base class and
+  overridden nowhere); there is no cap — overflow adds a scrollbar. Biblical Terms Renderings and a
+  back-translation are eligible, but autohide is **not** their default placement; the user moves
+  them there.
+- **Right edge only in practice.** The plumbing is edge-agnostic but nothing routes to the other
+  three; a window reaching `DockLeft/Top/BottomAutoHide` would render no strip icon and be
+  unreachable.
+- Content is **lazily loaded on first expand and then kept alive** — never unloaded while collapsed.
+
+**Autohide HelpData Items** (`Paratext/HelpData.xml`; 17 items mention autohide):
+- ID: `ac545da7-b7dd-4d2a-8102-160ddcc85a74` - "What is the autohide area and what is it for?" (line 5562)
+- ID: `bb04b325-539c-48b3-ad53-313a339203be` - "How do I arrange open items in Paratext?" (line 24544;
+  section "Move to or from autohide" at `:24624`, right-click-menu inventory at `:24605-24616`)
+- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (`:15384` documents
+  the Open-dialog autohide option)
+- ID: `f47bd6e2-4747-4fd6-add4-0cb4864c9e43` (line 20106) / `199ecab8-4f56-4453-9940-69ab35575f93`
+  (line 22279) - the colored dot, for projects and for resources respectively
+- IDs `e804749d-8c0c-48c1-9605-2a554592169c` (1865) and `1a140dc5-0380-440d-8d1f-d5a88fe1c7af`
+  (25624) - shared/modified layouts explicitly include autohide contents
+
 **UI Entry Points**:
 - ≡ Paratext > Layout > Save current layout
   - Menu Structure: `MainForm`, handler `saveTextCombinationToolStripMenuItem_Click`, line 1357
@@ -462,17 +576,23 @@ The Translation Workspace encompasses the core features users interact with dail
 **Description**: Floating window for checking a Scripture reference without changing main navigation.
 
 **Sub-Features**:
-- Floating popup window (always separate)
-- Does not affect main scroll position
-- Opens from clickable reference icons
+- Floating popup window (always separate) — hosted in `ParatextFloatWindow`, so it inherits the
+  full float chrome: title bar, "Always on top" pushpin, and a nav toolbar (back/forward, scroll
+  group, project/resource combo, BCV verse control)
+- Does not affect main scroll position (`ScrollGroup.None` at creation — but the user may join it
+  to a group afterwards; the scroll-group button stays enabled)
+- **Singleton** — at most one Quick Reference window exists; a second request re-targets the
+  existing one and focuses its editor
+- Opens from clickable reference icons, and from five further entry points (below)
 
 **Sources**:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Quick reference`; Handler: `quickReferenceToolStripMenuItem_Click`; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Tools > Quick reference`; Handler: `quickReferenceToolStripMenuItem_Click`; Owner: `ParatextWindowWithMenus`; Shortcut **Ctrl+Q** | `[MS]` |
 | Manual | Keyboard shortcuts documentation | `[M]` |
 | HelpData | Keyword: `ComponentQuickReferenceWindow`; 2 items | `[H]` |
+| Code | `WindowCollection.OpenQuickModeWindow` + 5 NUnit tests | `[C]` |
 
 **Key Quote** (from HelpData):
 > "A Quick Reference window is a text window which does not scroll together with any other open items"
@@ -481,24 +601,73 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `quickReferenceToolStripMenuItem_Click` at line 363 |
+| 0 | `Paratext/WindowCollection.cs` | Investigation | `:277-304` **`OpenQuickModeWindow(ScrText, VerseRef)`** — the whole feature. Singleton field `:75`; `new TextForm(true)`; `ScrollingGroup = ScrollGroup.None` (`:283`); `ShowWindow(…, OpenAsType.Floating)` (`:288`); re-target branch `:291-299`; cleared on close `:876-877` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `quickReferenceToolStripMenuItem_Click` at **line 380**; Designer `:830` `ShortcutKeys = Keys.Control \| Keys.Q`, `:832` text, `:742` parent menu; enablement gate `:164` (Scripture projects only) |
+| 0 | `Paratext/TextForm.cs` | Investigation | `:182-192` `TextForm(bool isQuickMode, …)`. The flag changes exactly **two** things: caption suffix `" (Quick Reference)"` (`:649-650`) and copyright-banner suppression (`:4117`) |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextFloatWindow.cs` | Investigation | the hosting float chrome — see the 1.6 floating-window addendum |
+| 1 | `ParatextInternalShared/ScriptureEditor/ScriptureViewSource.cs` | Investigation | `:315-335` `GetDefaultScriptureView` — decides which view the popup renders in |
+| 1 | `Paratext/Checking/Reference/ReferenceAnnotation.cs` | Investigation | `:55-62` `Click` → `OpenQuickModeWindow`; `:40-53` valid vs invalid icon/style; `:68` hover text |
+| 1 | `Paratext/Checking/Reference/ReferenceAnnotationSource.cs` | Investigation | produces the clickable icons; registered per-project at `TextForm.cs:904-911` |
+| 1 | `ParatextBase/ParatextWindows/WindowCollectionBase.cs` | Investigation | `:144` abstract `OpenQuickModeWindow`; `:22-39` `OpenWindowBehavior.QuickReference` |
+| 1 | `CorePluginInterfaces/IPluginHost.cs` | Investigation | `:52-73` public plugin API for opening a Quick Reference window |
+| — | `Paratext.Tests/WindowMenu/WindowCollectionTests.cs` | Investigation | `:866, 995, 1092, 1190, 1286` — asserts singleton reuse, `ScrollGroup.None`, `DockState.Float` |
 
-**UI Entry Points**:
-- ≡ Tab > Tools > Quick reference
-  - Menu Structure: `ParatextWindowWithMenus`, handler `quickReferenceToolStripMenuItem_Click`, line 363
-  - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
-  - HelpData ID: `747ceec6-54f3-4a94-8b71-157492cb2ac6`
-  - Question: "How do I open a Quick Reference window?"
-- Click valid reference icon in text
-  - HelpData ID: `daad5fd1-67ba-40f0-96bb-7f570e165755`
-  - Dialog: `faq`
-  - Question: "What is a Quick Reference window?"
+**UI Entry Points** (the inventory previously listed 2 of 8):
+- ≡ Tab > Tools > Quick reference — **Ctrl+Q** (`ParatextWindowWithMenus.cs:380`; enabled only for
+  Scripture projects). HelpData `747ceec6-…`
+- Click a **valid** reference icon in the text (`ReferenceAnnotation.cs:55-62`; the red-X invalid
+  icon is inert). HelpData `daad5fd1-…`
+- Results list > View > **Quick reference mode**, then double-click / Alt+↑ / Alt+↓ a result
+  (`Paratext/EditMenu/ListForm.cs:720-728, 904-908`; persisted in `Settings.Default.List_UseQuickMode`)
+- Find/Replace > **"Quick Reference Mode"** checkbox — seeds the Results list it creates
+  (`Paratext/EditMenu/FindReplaceForm.cs:766-769`)
+- Project-qualified `link:ref:prj:…` hyperlink click in the editor
+  (`Paratext/TextForm.cs:2722-2735` — only when the link supplied a `ScrText`; otherwise the main
+  window navigates instead)
+- Link click in an XML-resource window (`Paratext/XmlResource/XmlResourceWindow.cs:1290-1300`)
+- `quickref:` link click in an Enhanced Resource / Marble window
+  (`Paratext/Marble/MarbleForm.cs:2059-2063`; markup `quickref:` + zero-padded `BBBCCCVVV`)
+- Plugin API `OpenWindowBehavior.QuickReference` (`ParatextBase/Plugins/ParatextPluginUtils.cs:154`)
+
+**Corrections** (verified 2026-07-23 against `~/Paratext@master` by the autohide/Quick-Reference
+investigation):
+
+- The handler is at **`ParatextWindowWithMenus.cs:380`**, not 363 — the file has drifted. Both the
+  old Implementation row and the old UI-Entry-Point row cited 363.
+- **"No dedicated dialog class / HelpData-documented behavior only" is wrong.** There is no class
+  *named* `QuickReference*`, but the feature is concrete code: `WindowCollection.OpenQuickModeWindow`
+  (with an abstract seam in `WindowCollectionBase`), a singleton field, a dedicated
+  `OpenWindowBehavior.QuickReference` enum value with XML docs, a public plugin API, and five NUnit
+  tests. The window itself is `TextForm(isQuickMode: true)` hosted in `ParatextFloatWindow`.
+- **The popup does NOT render in "Unformatted" view.** `OpenQuickModeWindow` resolves the view via
+  `ScriptureViewSource.GetDefaultScriptureView` (`:315-335`): **`Standard`** for an editable
+  Scripture project, **`Formatted`** for a resource / any non-editable project, `Study Bible` /
+  `Study Bible Additions` for those project types, and `Standard Specification` on a book with a
+  Bible-module association. `"Unformatted"` appears nowhere on the Quick Reference path.
+- **Ctrl+Q is sourced twice** — `ParatextWindowWithMenus.Designer.cs:830` and the HelpData shortcut
+  list (`HelpData.xml:8477`, "Ctrl + Q = Open Quick Reference window").
+- The window is **not read-only** and not view-restricted by virtue of being quick-mode; it is an
+  ordinary text window in a float window.
+- Quick-mode-ness **does not survive a layout save/restore**: `TextFormMemento` has no quick-mode
+  field and the restore path uses the parameterless ctor (`isQuickMode = false`), so a restored
+  window comes back as a plain floating `TextForm` and is no longer the singleton.
+- **Standard vs Unformatted**, verbatim from `ParatextInternalShared/ScriptureViews/*.xml`:
+  Standard has the Notes secondary pane (footnote pane) and `StyleDropdownEnabled` true;
+  Unformatted has neither, plus `DoMapping=false`, `UseMarkerPopup=false`, `PreserveWhitespace=true`.
+  "Marker validation" is **not** a view setting — the nearest is `UseMarkerPopup`, which gates the
+  marker *autocomplete* dropdown.
+- PT9 defines **21** scripture views, 13 user-selectable; the commonly-cited five (Preview, Basic,
+  Formatted, Unformatted, Standard) are what `TextForm.IsViewSelectable` leaves for a plain editable
+  translation on a canonical, non-module book.
 
 **HelpData Items**:
-- ID: `747ceec6-54f3-4a94-8b71-157492cb2ac6` - "How do I open a Quick Reference window?"
-- ID: `daad5fd1-67ba-40f0-96bb-7f570e165755` - "What is a Quick Reference window?"
+- ID: `747ceec6-54f3-4a94-8b71-157492cb2ac6` - "How do I open a Quick Reference window?" (line 15321)
+- ID: `daad5fd1-67ba-40f0-96bb-7f570e165755` - "What is a Quick Reference window?" (line 29661)
+- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (line 15339) —
+  Quick Reference heads the "always open as a floating window" list
+- `HelpData.xml:8477` - keyboard-shortcut list entry for Ctrl+Q
 
-**Validation**: [MS] - - [M] [H] [C] — Last verified: 2026-01-20
+**Validation**: [MS] - - [M] [H] [C] — Last verified: 2026-07-23
 
 ---
 
