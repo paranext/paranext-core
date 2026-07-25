@@ -3,8 +3,24 @@ import { useEvent, Spinner, Progress } from 'platform-bible-react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getNetworkEvent } from '@shared/services/network.service';
 import type { SyncProgressDetail, SyncProgressEvent } from 'paratext-bible-send-receive';
-import { LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey, PlatformEvent } from 'platform-bible-utils';
 import { FirstRunStepProps } from '../first-run-step-props.model';
+
+type SyncProgressStepProps = FirstRunStepProps & {
+  /**
+   * S/R "sync started/ended" event source. Defaults to the live
+   * `paratextBibleSendReceive.onSyncStateChanged` network event. Injectable (with
+   * {@link SyncProgressStepProps.onSyncProgressEvent}) so Storybook stories and tests can drive the
+   * step deterministically without a live PAPI backend; production callers omit it. Pass a
+   * reference-stable event — a changing reference re-subscribes the listener on every render.
+   */
+  onSyncStateChangedEvent?: PlatformEvent<SyncProgressEvent>;
+  /**
+   * S/R progress event source. Defaults to the live `paratextBibleSendReceive.onSyncProgress`
+   * network event. See {@link SyncProgressStepProps.onSyncStateChangedEvent}.
+   */
+  onSyncProgressEvent?: PlatformEvent<SyncProgressDetail>;
+};
 
 const KEYS: LocalizeKey[] = [
   '%firstRun_step_syncProgress_body%',
@@ -14,24 +30,49 @@ const KEYS: LocalizeKey[] = [
 ];
 
 /**
- * Sync progress wizard step (PT-4179). Subscribes to S/R live-progress events and enables the
- * Finish button only after observing a full sync cycle (isSyncing: true → isSyncing: false).
- *
- * Assumption: sync is already in flight when this step mounts. The Sync consent step (PT-4178) is
- * responsible for calling `paratextBibleSendReceive.syncProjects` before it calls `onNext()` to
- * advance here. If that call is absent or sync finishes before this step mounts, the Finish button
- * stays disabled permanently — the event stream is fire-and-forget with no sync-state query API.
- * This is a known limitation; PT-4180 may surface a query API once the per-project contract is
- * confirmed.
- *
- * PT-4219 (demo mode) replaces this component entirely via the shell's stepComponents injection.
+ * How long to wait after mount before assuming sync completed before this step was reached. If no
+ * S/R events arrive within this window, the completion event was missed and we enable Finish.
  */
-export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
+const SYNC_STARTED_TIMEOUT_MS = 30_000;
+
+/**
+ * Cannot use `<Progress value={undefined}>` for the indeterminate case — its indicator style uses
+ * `value || 0`, rendering a stuck empty bar instead of an animation. Use a div+Spinner instead.
+ */
+function IndeterminateProgress({ label }: { label: string }) {
+  return (
+    <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100}>
+      <Spinner />
+    </div>
+  );
+}
+
+/**
+ * Sync progress wizard step. Subscribes to S/R live-progress events and enables the Finish button
+ * only after observing a full sync cycle (isSyncing: true → isSyncing: false).
+ *
+ * Assumption: sync is already in flight when this step mounts. The sync-consent step is responsible
+ * for calling `paratextBibleSendReceive.sendReceiveProjects` before advancing here — that call
+ * fires the `onSyncStateChanged` events this step depends on.
+ *
+ * Recovery: if sync completes before this step mounts, no events will arrive. After
+ * {@link SYNC_STARTED_TIMEOUT_MS} with no events, `setSyncComplete(true)` fires as a fallback so
+ * Finish is always reachable. The event stream is otherwise fire-and-forget with no query API.
+ *
+ * In demo mode, the shell's `stepComponents` injection replaces this component entirely.
+ */
+export function SyncProgressStep({
+  setCanProceed,
+  onSyncStateChangedEvent: injectedOnSyncStateChangedEvent,
+  onSyncProgressEvent: injectedOnSyncProgressEvent,
+}: SyncProgressStepProps) {
   const [strings] = useLocalizedStrings(KEYS);
   const [progressText, setProgressText] = useState('');
+  // null from SyncProgressDetail.progressValue is normalized to undefined; both mean indeterminate.
   const [progressValue, setProgressValue] = useState<number | undefined>(undefined);
   const [syncComplete, setSyncComplete] = useState(false);
-  // Ref (not state) so the handler callback stays stable without re-creating on every state change.
+  // Ref (not state) so the handler stays stable across renders — changing it would cause useEvent
+  // to tear down and re-attach the S/R event listener on each render.
   const hasSyncStartedRef = useRef(false);
 
   // Gate the shell's Finish button: disabled while syncing, enabled on completion.
@@ -39,14 +80,28 @@ export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
     setCanProceed?.(syncComplete);
   }, [syncComplete, setCanProceed]);
 
-  const onSyncStateChangedEvent = useMemo(
-    () => getNetworkEvent<SyncProgressEvent>('paratextBibleSendReceive.onSyncStateChanged'),
+  // Recovery: if no S/R events arrive within SYNC_STARTED_TIMEOUT_MS, sync completed before this
+  // step mounted and we missed the completion event. Enable Finish so the user is never stuck.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      if (!hasSyncStartedRef.current) setSyncComplete(true);
+    }, SYNC_STARTED_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, []); // mount-only: hasSyncStartedRef is a stable ref; setSyncComplete is a stable state setter
+
+  // useMemo is consistent with other renderer call sites; getNetworkEvent's Map cache means the
+  // deps never change, so these references are stable across renders. An injected event (Storybook/
+  // tests) takes precedence over the live network event; production omits the injected props.
+  const defaultOnSyncStateChangedEvent = useMemo(
+    () => getNetworkEvent('paratextBibleSendReceive.onSyncStateChanged'),
     [],
   );
-  const onSyncProgressEvent = useMemo(
-    () => getNetworkEvent<SyncProgressDetail>('paratextBibleSendReceive.onSyncProgress'),
+  const defaultOnSyncProgressEvent = useMemo(
+    () => getNetworkEvent('paratextBibleSendReceive.onSyncProgress'),
     [],
   );
+  const onSyncStateChangedEvent = injectedOnSyncStateChangedEvent ?? defaultOnSyncStateChangedEvent;
+  const onSyncProgressEvent = injectedOnSyncProgressEvent ?? defaultOnSyncProgressEvent;
 
   const handleSyncStateChanged = useCallback(({ isSyncing }: SyncProgressEvent) => {
     if (isSyncing) {
@@ -60,6 +115,9 @@ export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
 
   const handleSyncProgress = useCallback(
     ({ progressText: text, progressValue: value }: SyncProgressDetail) => {
+      // Belt-and-suspenders: a progress event also confirms sync is under way, covering any code
+      // path that emits onSyncProgress before (or instead of) onSyncStateChanged isSyncing:true.
+      hasSyncStartedRef.current = true;
       setProgressText(text);
       setProgressValue(value ?? undefined);
     },
@@ -68,6 +126,8 @@ export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
 
   useEvent(onSyncStateChangedEvent, handleSyncStateChanged);
   useEvent(onSyncProgressEvent, handleSyncProgress);
+
+  const progressLabel = strings['%firstRun_step_syncProgress_heading%'];
 
   if (syncComplete) {
     // role="status" announces the completion transition to screen readers when this block mounts.
@@ -91,39 +151,23 @@ export function SyncProgressStep({ setCanProceed }: FirstRunStepProps) {
       <p className="tw:text-sm tw:text-muted-foreground">
         {strings['%firstRun_step_syncProgress_body%']}
       </p>
-      {progressText && (
+      {progressText || progressValue !== undefined ? (
         <div className="tw:mt-2 tw:flex tw:flex-col tw:gap-1">
           {progressValue !== undefined ? (
-            // Determinate: progressText is the current item name (e.g. "GreekNT")
-            <Progress
-              value={Math.round(progressValue * 100)}
-              aria-label={strings['%firstRun_step_syncProgress_heading%']}
-            />
+            // Determinate: progressValue drives the bar; progressText is the current item label.
+            <Progress value={Math.round(progressValue * 100)} aria-label={progressLabel} />
           ) : (
-            // Indeterminate: no aria-valuenow signals indeterminate per ARIA spec; Spinner is visual.
-            <div
-              role="progressbar"
-              aria-label={strings['%firstRun_step_syncProgress_heading%']}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <Spinner />
-            </div>
+            <IndeterminateProgress label={progressLabel} />
           )}
-          <p className="tw:text-xs tw:text-muted-foreground">{progressText}</p>
+          {progressText && (
+            <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
+              {progressText}
+            </p>
+          )}
         </div>
-      )}
-      {!progressText && (
-        // No progress text yet; aria-live="polite" on the outer div isn't wired here by default.
-        // Use the same indeterminate progressbar pattern for consistency.
-        <div
-          role="progressbar"
-          aria-label={strings['%firstRun_step_syncProgress_heading%']}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <Spinner />
-        </div>
+      ) : (
+        // No progress events received yet — show indeterminate spinner.
+        <IndeterminateProgress label={progressLabel} />
       )}
     </div>
   );

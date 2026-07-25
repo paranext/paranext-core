@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { LocalizeKey } from 'platform-bible-utils';
+import { FirstRunStepProps } from '../first-run-step-props.model';
 
 const KEYS: LocalizeKey[] = ['%firstRun_step_identify_placeholder%'];
 
@@ -11,7 +13,8 @@ const KEYS: LocalizeKey[] = ['%firstRun_step_identify_placeholder%'];
  * startup the reducer routes to Sync consent (see the store's resume test). PT-4177 MUST add an
  * end-to-end test that registration validity is reliably `true` before routing (no re-show/loop).
  */
-export function IdentifyPlaceholderStep() {
+export function IdentifyPlaceholderStep({ setCanProceed }: FirstRunStepProps) {
+  useEffect(() => setCanProceed?.(true), [setCanProceed]);
   const [strings] = useLocalizedStrings(KEYS);
   return <p className="tw:text-sm">{strings['%firstRun_step_identify_placeholder%']}</p>;
 }
