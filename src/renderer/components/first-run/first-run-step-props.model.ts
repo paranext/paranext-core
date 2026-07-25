@@ -20,9 +20,10 @@ export interface FirstRunStepProps {
    */
   onSkip?: () => void;
   /**
-   * Report whether the shell's Next button should be enabled. Next defaults to enabled. Pass
-   * `false` to disable Next temporarily (e.g. while validating), or `undefined` to suppress it
-   * entirely for steps that own their own primary action.
+   * Report whether the shell's Next button should be enabled. If not called, the shell's prior
+   * state persists — which is disabled for any step reached via navigation (the shell resets to
+   * disabled on every step change), and enabled only for the initial entry step. Pass `undefined`
+   * to suppress the Next button entirely for steps that own their own primary action.
    */
   setCanProceed?: (canProceed: boolean | undefined) => void;
   /**

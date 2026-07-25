@@ -59,7 +59,8 @@ function IndeterminateProgress({ label }: { label: string }) {
  * {@link SYNC_STARTED_TIMEOUT_MS} with no events, `setSyncComplete(true)` fires as a fallback so
  * Finish is always reachable. The event stream is otherwise fire-and-forget with no query API.
  *
- * In demo mode, the shell's `stepComponents` injection replaces this component entirely.
+ * In Storybook shell stories, `stepComponents` replaces this step with a plain stub; for
+ * interactive previews of the real sync states, see `sync-progress.component.stories.tsx`.
  */
 export function SyncProgressStep({
   setCanProceed,

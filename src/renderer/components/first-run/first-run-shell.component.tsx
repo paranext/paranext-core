@@ -95,7 +95,7 @@ export function FirstRunShell({
 
   const onNext = useCallback(() => {
     const next = STEP_ORDER[index + 1];
-    // Sync step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
+    // Synchronous step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
     // Only the final step calls completeFirstRun(), which is async and needs the busy state.
     if (next) goToStep(next);
     else runAction(() => completeFirstRun());
@@ -158,8 +158,9 @@ export function FirstRunShell({
         )}
         {canProceed !== undefined && (
           <Button onClick={onNext} disabled={!canProceed || isBusy}>
-            {/* Spinner while completeFirstRun() is in flight, or while the last step is still gating
-                (e.g. waiting for sync to complete) — both are "async with duration" states. */}
+            {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
+                an async precondition (e.g. sync completing). If a future last step gates on user
+                input rather than async work, this assumption should be revisited. */}
             {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
             {nextLabel}
           </Button>
