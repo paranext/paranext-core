@@ -316,7 +316,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     protected override Task StartDataProviderAsync()
     {
-        _paratextProjects.Initialize();
+        // Minimal initialization suffices here: the factory guarantees the project's ScrText
+        // exists (via targeted load or the completed scan) before constructing a PDP, and in
+        // no-snapshot mode the full scan already ran before any PDP exists.
+        _paratextProjects.EnsureMinimalInitialized();
         return Task.CompletedTask;
     }
 

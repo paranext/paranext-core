@@ -8,12 +8,27 @@ namespace TestParanextDataProvider.Projects
 {
     internal class TestLocalParatextProjectsInTempDir : LocalParatextProjects
     {
-        private TemporaryFolder _folder;
+        // Owned only when this instance created the temp folder itself; null when the caller
+        // passed an existing root (multi-instance tests that simulate a second app run over the
+        // same project root own that folder's lifetime themselves).
+        private readonly TemporaryFolder? _ownedFolder;
+        private readonly string _rootFolder;
 
-        public TestLocalParatextProjectsInTempDir()
-            : base()
+        public TestLocalParatextProjectsInTempDir(
+            PapiClient? papiClient = null,
+            string? existingRootFolder = null
+        )
+            : base(papiClient)
         {
-            _folder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
+            if (existingRootFolder == null)
+            {
+                _ownedFolder = new TemporaryFolder(TestContext.CurrentContext.Test.ID);
+                _rootFolder = _ownedFolder.Path;
+            }
+            else
+            {
+                _rootFolder = existingRootFolder;
+            }
         }
 
         public override void Dispose()
@@ -21,14 +36,14 @@ namespace TestParanextDataProvider.Projects
             // Dispose the base's FileSystemWatcher and debounce Timer before the temp folder they
             // watch is torn down.
             base.Dispose();
-            _folder.Dispose();
+            _ownedFolder?.Dispose();
             // Reset ScrTextCollection's folder to be the global test project folder
             ParatextData.Initialize(FixtureSetup.TestFolderPath, false);
         }
 
-        protected override string ProjectRootFolder => _folder.Path;
+        protected override string ProjectRootFolder => _rootFolder;
 
-        public string TestProjectRootFolder => _folder.Path;
+        public string TestProjectRootFolder => _rootFolder;
 
         internal void CreateTempProject(string folder, ProjectDetails projectDetails)
         {

@@ -38,6 +38,28 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
 
     protected override Task StartFactoryAsync()
     {
+        if (_paratextProjects.IsInSnapshotMode)
+        {
+            // Snapshot mode: don't block factory registration on the project scan - project lists
+            // are served from the snapshot and individual projects are targeted-loaded on demand.
+            // Kick the minimal ParatextData initialization (which targeted loads wait on, bounded)
+            // in the background.
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.Run(_paratextProjects.EnsureMinimalInitialized),
+                "Minimal Paratext initialization (snapshot mode)"
+            );
+            // Also kick the full scan (idempotent, scan-gate-aware) in the background. Normally
+            // this just joins/no-ops behind Program.cs's early Initialize task, but when that
+            // early scan FAULTED this is the retry - without it nothing else ever runs the scan
+            // again and the whole session serves increasingly stale snapshot data (mirroring how
+            // the non-snapshot branch below retries a failed early scan synchronously).
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.Run(_paratextProjects.Initialize),
+                "Full project scan (snapshot mode)"
+            );
+            return Task.CompletedTask;
+        }
+
         _paratextProjects.Initialize();
         return Task.CompletedTask;
     }
@@ -90,7 +112,12 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
                     ScrText scrText;
                     try
                     {
-                        scrText = LocalParatextProjects.GetParatextProject(id);
+                        // Targeted-load-aware resolution: identical to GetParatextProject once the
+                        // scan has completed (or when no snapshot is in play); before that it
+                        // constructs the project from its snapshot entry (or falls back to
+                        // waiting out the scan). Failures throw, and the eviction below keeps
+                        // failed lookups self-healing.
+                        scrText = _paratextProjects.GetParatextProjectOrLoadTargeted(id);
                     }
                     catch (KeyNotFoundException)
                     {

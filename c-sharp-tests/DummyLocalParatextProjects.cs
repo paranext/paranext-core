@@ -20,5 +20,11 @@ namespace TestParanextDataProvider
         {
             // Nothing to do
         }
+
+        public override void EnsureMinimalInitialized()
+        {
+            // Nothing to do (mirrors Initialize: tests fake projects straight into the global
+            // ScrTextCollection and must not re-point ParatextData at the real project root)
+        }
     }
 }

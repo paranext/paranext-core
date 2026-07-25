@@ -9,10 +9,26 @@ internal static class ParatextGlobals
     private static readonly object s_locker = new();
     private static bool s_initialized = false;
 
-    public static void Initialize(string dataFolderPath)
+    /// <summary>
+    /// One-time, process-wide ParatextData bootstrap: installs
+    /// <see cref="PlatformScrTextCollection"/> and the encoding/alert/registry/ICU shims, then
+    /// points ParatextData at the projects root (which runs the initial project scan unless
+    /// deferred). Idempotent and thread-safe; later calls only re-point the data path (used by
+    /// tests) and re-arm the scan deferral when requested.
+    /// </summary>
+    /// <param name="dataFolderPath">Folder ParatextData should treat as the projects root.</param>
+    /// <param name="deferProjectScan">
+    /// When true, arms <see cref="PlatformScrTextCollection.DeferInitialProjectRefresh"/> right
+    /// before ParatextData initialization so the initial project scan inside
+    /// <c>ScrTextCollection.InitializeInternal</c> is skipped (snapshot mode); the caller then
+    /// runs the real scan later via <c>ScrTextCollection.RefreshScrTexts</c>.
+    /// </param>
+    public static void Initialize(string dataFolderPath, bool deferProjectScan = false)
     {
         if (s_initialized)
         {
+            if (deferProjectScan)
+                PlatformScrTextCollection.DeferInitialProjectRefresh();
             // Update the paratext data path to make sure we're using the latest path passed in
             // For now, this is only used in tests
             SetParatextDataPath(dataFolderPath);
@@ -43,6 +59,11 @@ internal static class ParatextGlobals
 
             // Required for ICU.NET
             ICUDllLocator.Initialize(false, false);
+
+            // Arm the one-shot scan deferral before ParatextData.Initialize runs the initial
+            // refresh (inside SetParatextDataPath below).
+            if (deferProjectScan)
+                PlatformScrTextCollection.DeferInitialProjectRefresh();
 
             // Now tell Paratext.Data to use the specified folder
             SetParatextDataPath(dataFolderPath);

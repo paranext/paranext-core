@@ -86,12 +86,19 @@ public static class Program
             // Initializes the versioning manager
             VersioningManager.Initialize();
 
+            // Load the persisted project-metadata snapshot (if valid for this app version) so
+            // project lists and targeted project loads can be served before the full scan
+            // completes. Must run before the early Initialize below so that scan defers to the
+            // snapshot-mode gate; with no valid snapshot this is a no-op and startup is unchanged.
+            paratextProjects.TryEnterSnapshotMode(appInfo.Version);
+
             // Start the project scan as soon as its prerequisites are ready (ParatextData
             // settings/version, versioning manager) so it overlaps the rest of pre-barrier init
             // instead of starting inside the barrier. Initialize is idempotent behind a lock, so
             // the factories' StartFactoryAsync calls in the barrier below wait for (or no-op
-            // after) this same scan. A failure here is retried by the barrier's own Initialize
-            // call, which is where it would surface.
+            // after) this same scan. A failure here is retried by the factories' own Initialize
+            // calls - synchronous in the barrier without a snapshot (where it would surface), and
+            // kicked in the background with error logging in snapshot mode.
             ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
                 Task.Run(paratextProjects.Initialize),
                 "Early project scan"

@@ -75,7 +75,14 @@ internal sealed class InventoryDataProvider(
             return Task.CompletedTask;
         }
 
-        var scrText = LocalParatextProjects.GetParatextProject(anyProjectDetails.Metadata.Id);
+        // Resolve through the instance's targeted-load-aware path, NOT the static
+        // GetParatextProject: on a warm (snapshot-served) start this runs pre-scan, when the
+        // ScrTextCollection may not contain the project yet - the static lookup then throws
+        // ProjectNotFoundException, and because Program.cs registers this provider
+        // fire-and-forget with no retry, inventories would be unavailable all session.
+        var scrText = _paratextProjects.GetParatextProjectOrLoadTargeted(
+            anyProjectDetails.Metadata.Id
+        );
         var dataSource = new ChecksDataSource(scrText);
         foreach (var inventoryId in InventoryFactory.GetAvailableInventoryIds())
         {
