@@ -1,4 +1,7 @@
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidCreateNetworkObject,
+} from '@shared/services/network-object.service';
 import {
   ProjectDataProviderFactoryMetadataInfo,
   ProjectMetadata,
@@ -22,7 +25,6 @@ import {
   slice,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
-  wait,
 } from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
@@ -533,6 +535,37 @@ async function internalGetMetadata(
 }
 
 /**
+ * Waits for the next PDP factory network object to register or for the given timeout to elapse,
+ * whichever comes first. Used by the metadata retry loop so a PDP factory that registers mid-wait
+ * (e.g. the .NET factories, which only register after the startup project scan completes) is
+ * queried immediately instead of waiting out the rest of the poll interval.
+ */
+function waitForNextPdpFactoryOrTimeout(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      if (timeout !== undefined) clearTimeout(timeout);
+      unsubscribe?.();
+      resolve();
+    };
+    unsubscribe = onDidCreateNetworkObject((networkObjectDetails) => {
+      if (networkObjectDetails.objectType === PDP_FACTORY_OBJECT_TYPE) settle();
+    });
+    if (settled) {
+      // The event fired before the subscription call returned, so `settle` could not unsubscribe.
+      // Clean up now that we have the unsubscriber.
+      unsubscribe();
+      return;
+    }
+    timeout = setTimeout(settle, timeoutMs);
+  });
+}
+
+/**
  * Gets project metadata from PDPFs filtered down by various filtering options. If this process
  * started recently and this finds no project metadata, waits a bit and tries again because it may
  * be that not all PDPFs have started yet.
@@ -555,9 +588,11 @@ async function internalGetMetadataWithRetries(
     logger.debug(
       `Did not find any project metadata around ${performance.now()} for ${JSON.stringify(options)}. Will retry`,
     );
-    // Intentionally stopping this method execution to wait some time
+    // Intentionally stopping this method execution to wait some time. A PDP factory registering
+    // mid-wait (e.g. after the startup project scan) cuts the wait short so its projects are
+    // picked up immediately rather than after the rest of the poll interval.
     // eslint-disable-next-line no-await-in-loop
-    await wait(GRACE_PERIOD_WAIT_TIME_MS);
+    await waitForNextPdpFactoryOrTimeout(GRACE_PERIOD_WAIT_TIME_MS);
     // Intentionally stopping this method execution to try getting project metadata again
     // eslint-disable-next-line no-await-in-loop
     allProjectsMetadataArray = await internalGetMetadata(options);

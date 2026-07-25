@@ -12,7 +12,10 @@ import {
   getPDPFactoryNetworkObjectNameFromId,
   testingProjectLookupService,
 } from '@shared/models/project-lookup.service-model';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidCreateNetworkObject,
+} from '@shared/services/network-object.service';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import {
   IProjectDataProviderFactory,
@@ -29,6 +32,7 @@ vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: {
     get: vi.fn(),
   },
+  onDidCreateNetworkObject: vi.fn(() => () => {}),
 }));
 
 vi.mock('@shared/services/network-object-status.service', () => ({
@@ -1344,5 +1348,110 @@ describe('Nested retry skip behavior', () => {
     vi.useRealTimers();
     vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['performance'] });
     vi.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
+  });
+});
+
+describe('Event-driven retry wake-up', () => {
+  const testProjectId = 'test-project';
+  const baseProjectInterfaces: ProjectInterfaces[] = ['platform.base', 'platform.placeholder'];
+  const basePdpfName = getPDPFactoryNetworkObjectNameFromId('base');
+  const basePdpfDetails = {
+    id: basePdpfName,
+    objectType: PDP_FACTORY_OBJECT_TYPE,
+    attributes: { projectInterfaces: baseProjectInterfaces },
+  } as NetworkObjectDetails;
+  const PENDING = Symbol('pending');
+
+  /**
+   * Sets up the common scenario: no PDPFs registered yet, base PDPF data ready to serve once
+   * `pdpfRegistered` flips to true, and capture of `onDidCreateNetworkObject` listeners so tests
+   * can simulate a factory registering.
+   */
+  function setUpPendingRegistrationScenario() {
+    const scenario = {
+      pdpfRegistered: false,
+      createListeners: [] as ((details: NetworkObjectDetails) => void)[],
+    };
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      scenario.pdpfRegistered ? { [basePdpfName]: basePdpfDetails } : {},
+    );
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectService.get.mockImplementation(async (networkObjectId: string) =>
+      networkObjectId === basePdpfName
+        ? {
+            async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+              return [{ id: testProjectId, projectInterfaces: baseProjectInterfaces }];
+            },
+          }
+        : undefined,
+    );
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    onDidCreateNetworkObject.mockImplementation(
+      (callback: (details: NetworkObjectDetails) => void) => {
+        scenario.createListeners.push(callback);
+        return () => {};
+      },
+    );
+    return scenario;
+  }
+
+  beforeEach(() => {
+    // Fake both performance (for the grace period check) and setTimeout (for the wait() delay)
+    // so the retry loop's timing is fully controlled. performance.now() restarts at 0, inside the
+    // grace period, so retries fire.
+    vi.useRealTimers();
+    vi.useFakeTimers({ toFake: ['performance', 'setTimeout'] });
+  });
+
+  // Restore the timer configuration from beforeAll so subsequent tests aren't affected
+  afterAll(() => {
+    vi.useRealTimers();
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['performance'] });
+    vi.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
+  });
+
+  it('re-queries immediately when a PDP factory registers instead of waiting out the retry interval', async () => {
+    const scenario = setUpPendingRegistrationScenario();
+
+    const metadataPromise = projectLookupService.getMetadataForAllProjects();
+    expect(await Promise.race([metadataPromise, Promise.resolve(PENDING)])).toBe(PENDING);
+
+    // Advance well under the 1s retry interval - the loop should still be waiting
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await Promise.race([metadataPromise, Promise.resolve(PENDING)])).toBe(PENDING);
+
+    // A PDP factory registers. The pending retry wait should wake immediately - no further timer
+    // advancement (beyond microtask flushing) is allowed here.
+    scenario.pdpfRegistered = true;
+    scenario.createListeners.forEach((callback) => callback(basePdpfDetails));
+    await vi.advanceTimersByTimeAsync(0);
+
+    const resolvedResult = await Promise.race([metadataPromise, Promise.resolve(PENDING)]);
+    expect(resolvedResult).not.toBe(PENDING);
+    const projectsMetadata = resolvedResult as ProjectMetadata[];
+    expect(projectsMetadata.length).toBe(1);
+    expect(projectsMetadata[0].id).toBe(testProjectId);
+  });
+
+  it('does not wake the retry wait when a non-PDPF network object registers', async () => {
+    const scenario = setUpPendingRegistrationScenario();
+
+    const metadataPromise = projectLookupService.getMetadataForAllProjects();
+    expect(await Promise.race([metadataPromise, Promise.resolve(PENDING)])).toBe(PENDING);
+
+    // Flip the data on so that IF the loop re-queried, it would resolve - proving a wake-up
+    scenario.pdpfRegistered = true;
+    scenario.createListeners.forEach((callback) =>
+      callback({ id: 'unrelated', objectType: 'not-a-pdpf' } as NetworkObjectDetails),
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Still pending: a non-PDPF registration must not trigger a re-query
+    expect(await Promise.race([metadataPromise, Promise.resolve(PENDING)])).toBe(PENDING);
+
+    // Let the normal poll interval resolve it so the promise doesn't dangle
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await Promise.race([metadataPromise, Promise.resolve(PENDING)])).not.toBe(PENDING);
   });
 });

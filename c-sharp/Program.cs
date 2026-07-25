@@ -11,9 +11,11 @@ using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
+using Paratext.Data.Languages;
 using Paratext.Data.Repository;
 using PtxUtils;
 using PtxUtils.Progress;
+using SIL.WritingSystems;
 
 namespace Paranext.DataProvider;
 
@@ -63,6 +65,7 @@ public static class Program
             // Initialize the shared store early since papi uses it
             await SharedStoreService.InitializeAsync(papi);
             papi.SetSharedStore(SharedStoreService.GetSharedStore());
+            StartupTiming.Mark("shared-store-initialized");
 
             // Log the ParatextData.dll assembly version then change it to 10.<our semver>
             var appInfo = AppService.GetAppInfo(papi);
@@ -71,17 +74,72 @@ public static class Program
                 $"ParatextData.dll assembly version: {ParatextInfo.ParatextVersion}. Changing to {appVersion}"
             );
             ParatextInfo.ParatextVersion = appVersion;
+            StartupTiming.Mark("app-info-initialized");
 
             var paratextProjects = new LocalParatextProjects(papi);
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
+            StartupTiming.Mark("paratext-data-settings-initialized");
 
             // Initializes the versioning manager
             VersioningManager.Initialize();
 
+            // Start the project scan as soon as its prerequisites are ready (ParatextData
+            // settings/version, versioning manager) so it overlaps the rest of pre-barrier init
+            // instead of starting inside the barrier. Initialize is idempotent behind a lock, so
+            // the factories' StartFactoryAsync calls in the barrier below wait for (or no-op
+            // after) this same scan. A failure here is retried by the barrier's own Initialize
+            // call, which is where it would surface.
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.Run(paratextProjects.Initialize),
+                "Early project scan"
+            );
+
+            // Pre-warm the one-time SIL LanguageLookup construction (SLDR langtags fetch + parse,
+            // multiple seconds cold) that ScrTextExtensions.GetLanguageTag's legacy fallback
+            // (LanguageIdHelper.FromCommonLanguageName) forces lazily for projects with a
+            // missing/placeholder LanguageIsoCode. Warming it here keeps that cost off the first
+            // getAvailableProjects request, which is on the critical path to showing scripture.
+            ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
+                Task.Run(async () =>
+                {
+                    // LanguageLookup requires Sldr, which the scan initializes early on
+                    // (ParatextData.Initialize -> WritingSystemRepository.Initialize). Wait for
+                    // that instead of initializing Sldr here so the warm-up stays a pure
+                    // optimization with no init-ordering responsibilities of its own; skip
+                    // (bounded) if the scan never gets there - the organic fallback still works.
+                    var sldrDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+                    while (!Sldr.IsInitialized)
+                    {
+                        if (DateTime.UtcNow > sldrDeadline)
+                        {
+                            Console.WriteLine(
+                                "Skipping LanguageLookup warm-up: Sldr was not initialized in time"
+                            );
+                            return;
+                        }
+                        await Task.Delay(50);
+                    }
+                    StartupTiming.Mark("language-lookup-warm-start");
+                    // Load langtags from the SLDR cache (or the embedded fallback) WITHOUT the
+                    // network download the LanguageLookup ctor would otherwise attempt. This keeps
+                    // the warm-up off the network entirely and skips CreateSldrCacheDirectory -
+                    // the one throw site outside Sldr's catch blocks, which would poison
+                    // LanguageIdHelper's exception-caching Lazy for the whole session. Cost:
+                    // langtags.json is not refreshed this session (nothing else refreshes it
+                    // either - it is first-load-only in libpalaso and ParatextData - so resolution
+                    // matches the organic path minus at most one conditional GET of freshness).
+                    Sldr.InitializeLanguageTags(downloadLanguageTags: false);
+                    LanguageIdHelper.FromCommonLanguageName("English");
+                    StartupTiming.Mark("language-lookup-warm-end");
+                }),
+                "LanguageLookup warm-up"
+            );
+
             SettingsService.Initialize(papi);
+            StartupTiming.Mark("settings-service-initialized");
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var paratextPublishedFactory = new ParatextPublishedProjectDataProviderFactory(
                 papi,

@@ -109,12 +109,27 @@ internal static class ScrTextExtensions
         string? isoCode = scrText.GetRawParatextSetting(ProjectSettingsNames.PT_LANGUAGE_ISO_CODE);
         // Mirror ProjectSettings.LanguageID: a present, non-":::" code is used directly; otherwise
         // resolve from the language name (without the getter's SetSetting persist).
-        LanguageId? languageId =
-            !string.IsNullOrEmpty(isoCode) && isoCode != ":::"
-                ? new LanguageId(isoCode)
-                : LanguageIdHelper.FromCommonLanguageName(
-                    scrText.GetRawParatextSetting(ProjectSettingsNames.PT_LANGUAGE, "")
+        LanguageId? languageId;
+        if (!string.IsNullOrEmpty(isoCode) && isoCode != ":::")
+        {
+            languageId = new LanguageId(isoCode);
+        }
+        else
+        {
+            // The first FromCommonLanguageName call process-wide constructs the SIL LanguageLookup
+            // (SLDR langtags fetch + parse) - multiple seconds cold. Program.cs pre-warms it at
+            // startup; log when a caller still pays it so a slow metadata request is attributable.
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            languageId = LanguageIdHelper.FromCommonLanguageName(
+                scrText.GetRawParatextSetting(ProjectSettingsNames.PT_LANGUAGE, "")
+            );
+            if (stopwatch.ElapsedMilliseconds > 500)
+                Console.WriteLine(
+                    $"Legacy language-name resolution for project '{scrText.Name}' took "
+                        + $"{stopwatch.ElapsedMilliseconds} ms (LanguageLookup construction was not "
+                        + "pre-warmed in time)"
                 );
+        }
         // Match ScrText.CreateLayoutEngine's null/empty-code -> English coercion.
         return languageId == null || languageId.Code == "" ? "en" : languageId.Id;
     }
