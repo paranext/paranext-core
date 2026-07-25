@@ -535,37 +535,6 @@ async function internalGetMetadata(
 }
 
 /**
- * Waits for the next PDP factory network object to register or for the given timeout to elapse,
- * whichever comes first. Used by the metadata retry loop so a PDP factory that registers mid-wait
- * (e.g. the .NET factories, which only register after the startup project scan completes) is
- * queried immediately instead of waiting out the rest of the poll interval.
- */
-function waitForNextPdpFactoryOrTimeout(timeoutMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let unsubscribe: (() => void) | undefined;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
-      if (timeout !== undefined) clearTimeout(timeout);
-      unsubscribe?.();
-      resolve();
-    };
-    unsubscribe = onDidCreateNetworkObject((networkObjectDetails) => {
-      if (networkObjectDetails.objectType === PDP_FACTORY_OBJECT_TYPE) settle();
-    });
-    if (settled) {
-      // The event fired before the subscription call returned, so `settle` could not unsubscribe.
-      // Clean up now that we have the unsubscriber.
-      unsubscribe();
-      return;
-    }
-    timeout = setTimeout(settle, timeoutMs);
-  });
-}
-
-/**
  * Gets project metadata from PDPFs filtered down by various filtering options. If this process
  * started recently and this finds no project metadata, waits a bit and tries again because it may
  * be that not all PDPFs have started yet.
@@ -579,38 +548,68 @@ function waitForNextPdpFactoryOrTimeout(timeoutMs: number): Promise<void> {
 async function internalGetMetadataWithRetries(
   options: ProjectMetadataFilterOptions = {},
 ): Promise<ProjectMetadata[]> {
-  let allProjectsMetadataArray: ProjectMetadata[] = await internalGetMetadata(options);
+  // Subscribe BEFORE the first attempt so a PDP factory that registers while an attempt's
+  // fan-out is in flight (the attempt's network-object snapshot predating the registration) is
+  // never lost: the retry loop re-queries immediately instead of sleeping out the poll interval.
+  // This is race-free because the main process updates the network-object snapshot before
+  // forwarding the creation event to other processes, so a re-query triggered by the event is
+  // guaranteed to see the newly registered factory.
+  let pdpfCreatedSinceAttemptStart = false;
+  let wakeWaiter: (() => void) | undefined;
+  const unsubscribe = onDidCreateNetworkObject((networkObjectDetails) => {
+    if (networkObjectDetails.objectType !== PDP_FACTORY_OBJECT_TYPE) return;
+    pdpfCreatedSinceAttemptStart = true;
+    wakeWaiter?.();
+  });
+  /** Waits for the next PDP factory registration or the poll interval, whichever comes first */
+  const waitForWakeOrTimeout = async () => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    await new Promise<void>((resolve) => {
+      wakeWaiter = resolve;
+      timeout = setTimeout(resolve, GRACE_PERIOD_WAIT_TIME_MS);
+    });
+    clearTimeout(timeout);
+    wakeWaiter = undefined;
+  };
+  try {
+    let allProjectsMetadataArray: ProjectMetadata[] = await internalGetMetadata(options);
 
-  // If we're in the first little while of the process, there's a chance not all the PDPFs have
-  // loaded. Let's wait a bit and try again if we got no matching project metadata
-  let retryTimes = 0;
-  while (allProjectsMetadataArray.length === 0 && performance.now() < LOAD_TIME_GRACE_PERIOD_MS) {
-    logger.debug(
-      `Did not find any project metadata around ${performance.now()} for ${JSON.stringify(options)}. Will retry`,
-    );
-    // Intentionally stopping this method execution to wait some time. A PDP factory registering
-    // mid-wait (e.g. after the startup project scan) cuts the wait short so its projects are
-    // picked up immediately rather than after the rest of the poll interval.
-    // eslint-disable-next-line no-await-in-loop
-    await waitForNextPdpFactoryOrTimeout(GRACE_PERIOD_WAIT_TIME_MS);
-    // Intentionally stopping this method execution to try getting project metadata again
-    // eslint-disable-next-line no-await-in-loop
-    allProjectsMetadataArray = await internalGetMetadata(options);
-    retryTimes += 1;
-    if (allProjectsMetadataArray.length > 0)
+    // If we're in the first little while of the process, there's a chance not all the PDPFs have
+    // loaded. Let's wait a bit and try again if we got no matching project metadata
+    let retryTimes = 0;
+    while (allProjectsMetadataArray.length === 0 && performance.now() < LOAD_TIME_GRACE_PERIOD_MS) {
       logger.debug(
-        `Finally found project metadata on retry ${retryTimes} around ${performance.now()} for ${JSON.stringify(options)}! ${JSON.stringify(
-          allProjectsMetadataArray.map((projectMetadata) => projectMetadata.id),
-        )}`,
+        `Did not find any project metadata around ${performance.now()} for ${JSON.stringify(options)}. Will retry`,
       );
-  }
-  if (allProjectsMetadataArray.length === 0) {
-    logger.warn(
-      `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`,
-    );
-  }
+      if (!pdpfCreatedSinceAttemptStart) {
+        // Intentionally stopping this method execution to wait some time
+        // eslint-disable-next-line no-await-in-loop
+        await waitForWakeOrTimeout();
+      }
+      // Consume the pending wake-up. Cleared before the attempt (not after) so a factory
+      // registering during the attempt sets it again and skips the next wait.
+      pdpfCreatedSinceAttemptStart = false;
+      // Intentionally stopping this method execution to try getting project metadata again
+      // eslint-disable-next-line no-await-in-loop
+      allProjectsMetadataArray = await internalGetMetadata(options);
+      retryTimes += 1;
+      if (allProjectsMetadataArray.length > 0)
+        logger.debug(
+          `Finally found project metadata on retry ${retryTimes} around ${performance.now()} for ${JSON.stringify(options)}! ${JSON.stringify(
+            allProjectsMetadataArray.map((projectMetadata) => projectMetadata.id),
+          )}`,
+        );
+    }
+    if (allProjectsMetadataArray.length === 0) {
+      logger.warn(
+        `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`,
+      );
+    }
 
-  return allProjectsMetadataArray;
+    return allProjectsMetadataArray;
+  } finally {
+    unsubscribe();
+  }
 }
 
 function transformGetMetadataForProjectParametersToFilter(

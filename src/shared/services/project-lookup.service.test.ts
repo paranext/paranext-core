@@ -1358,6 +1358,7 @@ describe('Event-driven retry wake-up', () => {
   const basePdpfDetails = {
     id: basePdpfName,
     objectType: PDP_FACTORY_OBJECT_TYPE,
+    functionNames: [],
     attributes: { projectInterfaces: baseProjectInterfaces },
   } as NetworkObjectDetails;
   const PENDING = Symbol('pending');
@@ -1453,5 +1454,38 @@ describe('Event-driven retry wake-up', () => {
     // Let the normal poll interval resolve it so the promise doesn't dangle
     await vi.advanceTimersByTimeAsync(1000);
     expect(await Promise.race([metadataPromise, Promise.resolve(PENDING)])).not.toBe(PENDING);
+  });
+  it('re-queries immediately when a PDP factory registered while the first attempt was in flight (lost-wake race)', async () => {
+    const scenario = setUpPendingRegistrationScenario();
+
+    // Make attempt 0's network-object snapshot controllable: it stays pending until we resolve
+    // it, simulating a fan-out that started before the factory registered and concluded after.
+    let resolveFirstSnapshot: ((details: Record<string, unknown>) => void) | undefined;
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a vitest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => {
+      if (!resolveFirstSnapshot) {
+        return new Promise((resolve) => {
+          resolveFirstSnapshot = resolve;
+        });
+      }
+      return scenario.pdpfRegistered ? { [basePdpfName]: basePdpfDetails } : {};
+    });
+
+    const metadataPromise = projectLookupService.getMetadataForAllProjects();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(resolveFirstSnapshot).toBeDefined();
+
+    // The factory registers WHILE attempt 0 is still in flight...
+    scenario.pdpfRegistered = true;
+    scenario.createListeners.forEach((callback) => callback(basePdpfDetails));
+    // ...then attempt 0 concludes with its stale (empty) pre-registration snapshot
+    resolveFirstSnapshot?.({});
+    await vi.advanceTimersByTimeAsync(0);
+
+    // The loop must re-query immediately (no timer advancement beyond microtasks) because the
+    // registration event arrived during the attempt - not wait out the 1s retry interval
+    const resolvedResult = await Promise.race([metadataPromise, Promise.resolve(PENDING)]);
+    expect(resolvedResult).not.toBe(PENDING);
+    expect((resolvedResult as ProjectMetadata[])[0].id).toBe(testProjectId);
   });
 });
