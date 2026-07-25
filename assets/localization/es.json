@@ -411,6 +411,8 @@
   "%overlay_commandPalette_searchPlaceholder%": "Buscar...",
   "%overlay_commandPalette_noResults%": "No se encontraron resultados",
   "%overlay_workspaceUpdating%": "Actualizando la vista del proyecto",
+  "%physicalKey_backspace%": "Retroceso",
+  "%physicalKey_delete%": "Supr",
   "%project_full_name_missing%": "*Falta el Nombre*",
   "%project_language_missing%": "*Falta el Idioma*",
   "%project_name_missing%": "_SinNombre_",
