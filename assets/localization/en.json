@@ -324,6 +324,8 @@
   "%overlay_commandPalette_searchPlaceholder%": "Search...",
   "%overlay_commandPalette_noResults%": "No results found",
   "%overlay_workspaceUpdating%": "Updating project view",
+  "%physicalKey_backspace%": "Backspace",
+  "%physicalKey_delete%": "Delete",
   "%product_name%": "Platform.Bible",
   "%product_shortName%": "Platform",
   "%project_full_name_missing%": "*Name Missing*",
