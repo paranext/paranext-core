@@ -52,7 +52,7 @@
   "%firstRun_step_syncConsent_body%": "When working on shared projects, syncing updates your local copy and shares your changes with others.",
   "%firstRun_step_syncConsent_heading%": "Sync your projects",
   "%firstRun_step_syncProgress_body%": "Setting up your projects. This may take a few minutes.",
-  "%firstRun_step_syncProgress_complete_body%": "Your projects are ready. Click Finish to open the app.",
+  "%firstRun_step_syncProgress_complete_body%": "Your projects are ready.",
   "%firstRun_step_syncProgress_complete_heading%": "Sync complete",
   "%firstRun_step_syncProgress_heading%": "Syncing your data",
   "%firstRun_stepIndicator%": "Step {stepNumber} of {stepCount}",

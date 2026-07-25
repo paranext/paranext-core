@@ -65,8 +65,18 @@ vi.mock('platform-bible-react', () => {
       </button>
     );
   }
+  function ProgressStub({
+    value,
+    'aria-label': ariaLabel,
+  }: {
+    value?: number;
+    'aria-label'?: string;
+  }) {
+    return <div role="progressbar" aria-valuenow={value} aria-label={ariaLabel} />;
+  }
   return {
     Button: ButtonStub,
+    Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
     useEvent: (
       event: ((handler: (detail: unknown) => void) => () => void) | undefined,
@@ -100,6 +110,13 @@ beforeEach(() => {
 });
 
 describe('FirstRunShell', () => {
+  // Stub for syncProgress used in shell-wiring tests. Does not call setCanProceed; Finish stays
+  // enabled because these tests render with entryStep="syncProgress", which uses the shell's initial
+  // useState(true) — goToStep is not called for the entry step, so the step gets the initial value.
+  function SimpleSyncStep() {
+    return <p>sync progress</p>;
+  }
+
   it('advances through steps with the shell Next button', async () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     expect(screen.getByText(/language step/i)).toBeInTheDocument();
@@ -159,11 +176,6 @@ describe('FirstRunShell', () => {
   });
 
   it('completes when Finish is clicked on the last step', async () => {
-    // SyncProgressStep blocks Finish until sync completes; inject a simple stub so this test stays
-    // focused on the shell's completeFirstRun wiring rather than step-level event behavior.
-    function SimpleSyncStep() {
-      return <p>sync progress</p>;
-    }
     render(
       <FirstRunShell
         entryStep="syncProgress"
@@ -205,11 +217,6 @@ describe('FirstRunShell', () => {
   });
 
   it('surfaces an error when completing throws', async () => {
-    // SyncProgressStep blocks Finish until sync completes; inject a simple stub so this test stays
-    // focused on the shell's error surface rather than step-level event behavior.
-    function SimpleSyncStep() {
-      return <p>sync progress</p>;
-    }
     mockComplete.mockRejectedValue(new Error('could not finish'));
     render(
       <FirstRunShell
@@ -222,11 +229,6 @@ describe('FirstRunShell', () => {
   });
 
   it('disables Finish while completeFirstRun is in flight (busy state)', async () => {
-    // SyncProgressStep blocks Finish until sync completes; inject a simple stub so this test stays
-    // focused on the shell's busy state rather than step-level event behavior.
-    function SimpleSyncStep() {
-      return <p>sync progress</p>;
-    }
     mockComplete.mockReturnValue(new Promise(() => {})); // never-settling
     render(
       <FirstRunShell

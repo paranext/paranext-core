@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
@@ -96,6 +96,9 @@ vi.mock('platform-bible-react', () => {
     DialogTitle: DialogTitleStub,
     DialogDescription: DialogDescriptionStub,
     Button: ButtonStub,
+    Progress: ({ value, 'aria-label': l }: { value?: number; 'aria-label'?: string }) => (
+      <div role="progressbar" aria-valuenow={value} aria-label={l} />
+    ),
     Spinner: () => <span data-testid="spinner" />,
     Z_INDEX_FIRST_RUN: 9000,
     useEvent: (
@@ -143,7 +146,10 @@ beforeAll(() => {
   }
 });
 
-afterEach(() => vi.clearAllMocks());
+// beforeEach (not afterEach) so mocks are clean even when a prior test throws mid-run.
+beforeEach(() => vi.clearAllMocks());
+// restoreAllMocks resets vi.spyOn implementations; clearAllMocks alone does not.
+afterEach(() => vi.restoreAllMocks());
 
 describe('FirstRunOverlay', () => {
   it('renders nothing when status is app', () => {
