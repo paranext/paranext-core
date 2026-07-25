@@ -1,3 +1,5 @@
+// Storybook stub: .storybook/papi-stubs/renderer-papi-hooks.ts re-exports all hooks except
+// useLocalizedStrings. If you add or remove an export here, keep that stub in sync.
 export { default as useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 export { default as useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 export { default as useScrollGroupScrRef } from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
