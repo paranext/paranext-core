@@ -8,10 +8,9 @@ const KEYS: LocalizeKey[] = ['%firstRun_step_identify_placeholder%'];
 /**
  * Placeholder for the Identify step. Replaced by PT-4177.
  *
- * NOTE for PT-4177: the real Identify step saves registration and calls `platform.restart`, which
- * relaunches the app. The store's `wizardActive` marker survives the relaunch, so on the next
- * startup the reducer routes to Sync consent (see the store's resume test). PT-4177 MUST add an
- * end-to-end test that registration validity is reliably `true` before routing (no re-show/loop).
+ * PT-4177 note: the real step calls `platform.restart` after saving registration. The store's
+ * `wizardActive` marker survives the relaunch so the wizard resumes at Sync consent — verify this
+ * with a test (see the store's existing resume-routing test as the model).
  */
 export function IdentifyPlaceholderStep({ setCanProceed }: FirstRunStepProps) {
   useEffect(() => setCanProceed?.(true), [setCanProceed]);
