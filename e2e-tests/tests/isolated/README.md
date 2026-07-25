@@ -21,4 +21,8 @@ npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e
 ## Subdirectories
 
 - `comment-assignment/` — tests for assigning comments to users
+- `navigation-history/` — tests for back/forward reference history navigation
 - `overlay/` — tests for the project-switch transition overlay
+- `scroll-groups/` — tests for scroll-group synchronization between scripture editors
+- `title-bar/` — tests for title bar layout, e.g. reserved space for native window controls
+- `verse-navigation/` — tests for verse navigation keyboard shortcuts

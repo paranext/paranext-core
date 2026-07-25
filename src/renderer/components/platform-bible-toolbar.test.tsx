@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import React from 'react';
 import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
@@ -58,6 +59,10 @@ vi.mock('@renderer/hooks/use-navigation-target-web-view.hook', () => ({
   // Typed so tests can mockReturnValue a resolved target (the factory's inferred return type
   // would otherwise be plain `undefined`)
   useNavigationTargetWebView: vi.fn((): ResolvedWebView | undefined => undefined),
+}));
+
+vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
+  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
@@ -129,14 +134,18 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...actual,
+    // `className` is captured on a testid'd wrapper so tests can assert whether the static
+    // OS-reserved-space class is applied, without depending on the real Toolbar's DOM structure.
     Toolbar: ({
+      className,
       configAreaChildren,
       children,
     }: {
+      className?: string;
       configAreaChildren?: React.ReactNode;
       children?: React.ReactNode;
     }) => (
-      <div>
+      <div data-testid="toolbar-root" className={className}>
         <div data-testid="toolbar-config-area">{configAreaChildren}</div>
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
@@ -667,5 +676,106 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
 
     expect(result).toBe(false);
     expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlatformBibleToolbar — title bar reserved space', () => {
+  const mockSendCommandForOS = (osPlatform: string) => {
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+        if (commandName === 'platform.getOSPlatform') return osPlatform;
+        if (commandName === 'platform.isFullScreen') return false;
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // clearAllMocks() does not reset a prior test's mockReturnValue (see precedent above), so
+    // restore the default explicitly
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(undefined);
+  });
+
+  it('reserves the live-measured overlay width plus breathing room on Windows, and does not also apply the static class', async () => {
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(0, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      // OS controls area width 150px + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingRight: '154px',
+      });
+    });
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-[calc(138px+1rem)]');
+    // Toolbar's own container has an unconditional border and tw:px-4 (16px end padding); when the
+    // wrapper above reserves the trailing space, Toolbar's own border must be dropped entirely (not
+    // just the end side) and its own end-side padding suppressed, or the border stops short at
+    // Toolbar's narrower edge instead of enclosing the reserved strip, and the wrapper's live
+    // measurement stacks on top of the 16px, over-reserving space.
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-0');
+    // The wrapper carries an equivalent border itself (as a layout-neutral box-shadow, not an
+    // actual border — see the toolbarReservedSpaceStyle comment in the component), so the outline
+    // encloses the full toolbar-plus-reserved-space region on every side instead of stopping short
+    // at Toolbar's narrower edge.
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+      boxShadow: 'inset 0 0 0 1px var(--border)',
+    });
+  });
+
+  it('reserves space on the left when the live-measured gap is on the left (e.g., RTL locales)', async () => {
+    // left = 150, right = window.innerWidth: the gap sits on the left instead of the right.
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(150, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      // 150px measured gap + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingLeft: '154px',
+      });
+    });
+  });
+
+  it('applies no inline override while the overlay geometry is not yet known, falling back to the static class', async () => {
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-[calc(138px+1rem)]');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
+  });
+
+  it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
+    mockSendCommandForOS('darwin');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:ps-[85px]');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
   });
 });
