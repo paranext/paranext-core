@@ -71,12 +71,14 @@ export function FirstRunShell({
     }
   }, []);
 
-  // Reset per-step chrome as part of the navigation itself (same commit as setStep), so the
-  // incoming step's own setCanProceed(false) on mount is applied AFTER this and is not overridden.
+  // Reset per-step chrome as part of the navigation itself (same commit as setStep). Always start
+  // disabled so the incoming step's mount effect decides the initial proceed state — steps that
+  // want to start enabled call setCanProceed(true) in their own mount effect, steps that need to
+  // gate (e.g. syncProgress) call setCanProceed(false). This is fully step-agnostic.
   const goToStep = useCallback((next: FirstRunStep) => {
     setError('');
     setIsBusy(false);
-    setCanProceed(true);
+    setCanProceed(false);
     setStep(next);
   }, []);
 
@@ -144,7 +146,9 @@ export function FirstRunShell({
           </Button>
         )}
         <Button onClick={onNext} disabled={!canProceed || isBusy}>
-          {isBusy && <Spinner />}
+          {/* Spinner while completeFirstRun() is in flight, or while the last step is still gating
+              (e.g. waiting for sync to complete) — both are "async with duration" states. */}
+          {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
           {nextLabel}
         </Button>
       </div>

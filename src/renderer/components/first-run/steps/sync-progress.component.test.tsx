@@ -5,35 +5,41 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SyncProgressStep } from './sync-progress.component';
 
 // vi.hoisted creates values before module hoisting, making them usable in vi.mock factories.
-// Each test renders a fresh component, so React cleanup between tests removes all event handlers
-// (useEvent's useEffect cleanup calls the returned unsubscriber, which deletes from the Set).
-const { emitSyncState, emitProgress, mockGetNetworkEvent } = vi.hoisted(() => {
-  // Store handlers as (detail: unknown) => void to avoid unsafe `as` casts in the mock factory.
-  // Type safety is enforced at the emit call sites (emitSyncState, emitProgress) below.
-  const stateHandlers = new Set<(e: unknown) => void>();
-  const progressHandlers = new Set<(d: unknown) => void>();
+const { emitSyncState, emitProgress, mockGetNetworkEvent, clearHandlers, getHandlerCounts } =
+  vi.hoisted(() => {
+    // Store handlers as (detail: unknown) => void to avoid unsafe `as` casts in the mock factory.
+    // Type safety is enforced at the emit call sites (emitSyncState, emitProgress) below.
+    const stateHandlers = new Set<(e: unknown) => void>();
+    const progressHandlers = new Set<(d: unknown) => void>();
 
-  return {
-    mockGetNetworkEvent: (eventName: string) => (handler: (detail: unknown) => void) => {
-      if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
-        stateHandlers.add(handler);
-        return () => {
-          stateHandlers.delete(handler);
-        };
-      }
-      if (eventName === 'paratextBibleSendReceive.onSyncProgress') {
-        progressHandlers.add(handler);
-        return () => {
-          progressHandlers.delete(handler);
-        };
-      }
-      return () => {};
-    },
-    emitSyncState: (isSyncing: boolean) => stateHandlers.forEach((h) => h({ isSyncing })),
-    emitProgress: (progressText: string, progressValue?: number) =>
-      progressHandlers.forEach((h) => h({ progressText, progressValue })),
-  };
-});
+    return {
+      mockGetNetworkEvent: (eventName: string) => (handler: (detail: unknown) => void) => {
+        if (eventName === 'paratextBibleSendReceive.onSyncStateChanged') {
+          stateHandlers.add(handler);
+          return () => {
+            stateHandlers.delete(handler);
+          };
+        }
+        if (eventName === 'paratextBibleSendReceive.onSyncProgress') {
+          progressHandlers.add(handler);
+          return () => {
+            progressHandlers.delete(handler);
+          };
+        }
+        return () => {};
+      },
+      emitSyncState: (isSyncing: boolean) => stateHandlers.forEach((h) => h({ isSyncing })),
+      emitProgress: (progressText: string, progressValue?: number) =>
+        progressHandlers.forEach((h) => h({ progressText, progressValue })),
+      // Explicit clear in case RTL automatic cleanup is ever disabled in the test environment.
+      clearHandlers: () => {
+        stateHandlers.clear();
+        progressHandlers.clear();
+      },
+      // Number of live subscribers per event, so a test can assert unsubscribe fired on unmount.
+      getHandlerCounts: () => ({ state: stateHandlers.size, progress: progressHandlers.size }),
+    };
+  });
 
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: mockGetNetworkEvent,
@@ -101,9 +107,11 @@ function useEventStub(
   }, [event, handler]);
 }
 
-// Suppress console.error from React about missing act() wrappers (expected in async event tests)
 beforeEach(() => {
   vi.clearAllMocks();
+  // Explicit guard: RTL normally clears handlers via useEffect cleanup on unmount, but clear
+  // unconditionally so isolation holds even if cleanup is ever disabled in the environment.
+  clearHandlers();
 });
 
 describe('SyncProgressStep', () => {
@@ -156,9 +164,9 @@ describe('SyncProgressStep', () => {
     act(() => {
       emitSyncState(false);
     });
-    // If the guard worked, setCanProceed was called exactly once (the mount → false call).
-    // No async work happens here — the guard synchronously prevents the state update,
-    // so there is nothing to waitFor.
+    // act() already flushed all React state updates. If the guard had failed and setSyncComplete(true)
+    // were called, its downstream useEffect(setCanProceed(true)) would already be in the call record.
+    // Only the mount-effect call (false) should appear.
     expect(setCanProceed).toHaveBeenCalledTimes(1);
     expect(setCanProceed).toHaveBeenCalledWith(false);
   });
@@ -191,5 +199,62 @@ describe('SyncProgressStep', () => {
     render(<SyncProgressStep onNext={vi.fn()} />);
     const progressbar = screen.getByRole('progressbar');
     expect(progressbar).not.toHaveAttribute('aria-valuenow');
+  });
+
+  it('enables Finish when isSyncing:false follows an onSyncProgress event (no prior isSyncing:true)', async () => {
+    // Belt-and-suspenders: onSyncProgress also sets hasSyncStartedRef so that a subsequent
+    // isSyncing:false enables Finish, covering code paths that emit progress before the
+    // onSyncStateChanged isSyncing:true event.
+    const setCanProceed = vi.fn();
+    render(<SyncProgressStep onNext={vi.fn()} setCanProceed={setCanProceed} />);
+    act(() => {
+      emitProgress('SomeProject', 0.5);
+    });
+    act(() => {
+      emitSyncState(false);
+    });
+    await waitFor(() => expect(setCanProceed).toHaveBeenCalledWith(true));
+  });
+
+  it('enables Finish after 30 s timeout when no events arrive (recovery for pre-mount sync completion)', () => {
+    // Simulates sync completing before this step mounted — no S/R events ever arrive.
+    // act() flushes all React state updates after the timer fires, so the synchronous expect
+    // already sees the downstream setCanProceed(true) call from the syncComplete useEffect.
+    vi.useFakeTimers();
+    try {
+      const setCanProceed = vi.fn();
+      render(<SyncProgressStep onNext={vi.fn()} setCanProceed={setCanProceed} />);
+      act(() => vi.advanceTimersByTime(30_000));
+      expect(setCanProceed).toHaveBeenCalledWith(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does NOT complete via the 30 s timeout once a sync is under way (recovery guard)', () => {
+    // Guards the hasSyncStartedRef branch: an in-flight sync (a progress event arrived) must not be
+    // marked complete just because 30 s elapses without a completion event — only a real
+    // isSyncing:false transition may enable Finish.
+    vi.useFakeTimers();
+    try {
+      const setCanProceed = vi.fn();
+      render(<SyncProgressStep onNext={vi.fn()} setCanProceed={setCanProceed} />);
+      act(() => {
+        emitProgress('GreekNT', 0.5);
+      });
+      act(() => vi.advanceTimersByTime(30_000));
+      expect(setCanProceed).not.toHaveBeenCalledWith(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('unsubscribes from both S/R events on unmount (listener cleanup)', () => {
+    const { unmount } = render(<SyncProgressStep onNext={vi.fn()} />);
+    // Both events are subscribed while mounted.
+    expect(getHandlerCounts()).toEqual({ state: 1, progress: 1 });
+    unmount();
+    // useEvent's cleanup removes both listeners; a leak would leave a nonzero count here.
+    expect(getHandlerCounts()).toEqual({ state: 0, progress: 0 });
   });
 });

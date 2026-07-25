@@ -17,12 +17,12 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 
 describe('placeholder steps', () => {
   it('language placeholder renders its coming-soon text', () => {
-    render(<LanguagePlaceholderStep />);
+    render(<LanguagePlaceholderStep onNext={vi.fn()} />);
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
   });
 
   it('sync consent placeholder renders its coming-soon text', () => {
-    render(<SyncConsentPlaceholderStep />);
+    render(<SyncConsentPlaceholderStep onNext={vi.fn()} />);
     expect(screen.getByText(/sync consent/i)).toBeInTheDocument();
   });
 });
