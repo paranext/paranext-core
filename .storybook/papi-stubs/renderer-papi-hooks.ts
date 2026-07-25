@@ -42,9 +42,11 @@ export { default as useRecentScriptureRefs } from '@renderer/hooks/papi-hooks/us
  */
 export function useLocalizedStrings(
   localizationKeys: LocalizeKey[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- part of the real hook signature
+  // Unused in this stub; required to match the real hook's signature for drop-in compatibility.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   localizationLocales?: string[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- part of the real hook signature
+  // Unused in this stub; required to match the real hook's signature for drop-in compatibility.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [localizedStrings: LocalizationData, isLoading: boolean] {
   return [getLocalizedStrings(localizationKeys ?? []), false];

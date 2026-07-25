@@ -18,19 +18,15 @@
  */
 
 import { ConnectionStatus } from '@shared/data/rpc.model';
-import type { EventHandler, RequestParams } from '@shared/data/rpc.model';
 import type { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import type { SerializedRequestType } from '@shared/utils/util';
 import type { JSONRPCResponse } from 'json-rpc-2.0';
 
 export const createRpcHandler = async (): Promise<IRpcMethodRegistrar> => ({
   connectionStatus: ConnectionStatus.Connected,
-  connect: async (_localEventHandler: EventHandler) => true,
+  connect: async () => true,
   disconnect: async () => {},
-  request: async (
-    requestType: SerializedRequestType,
-    _requestParams: RequestParams,
-  ): Promise<JSONRPCResponse> => ({
+  request: async (requestType: SerializedRequestType): Promise<JSONRPCResponse> => ({
     jsonrpc: '2.0',
     // json-rpc requires an id; 0 is fine for these unanswerable Storybook requests.
     id: 0,
