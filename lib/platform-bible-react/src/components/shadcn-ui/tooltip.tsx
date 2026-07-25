@@ -70,11 +70,17 @@ function TooltipContent({
   // collision-avoidance shifts the content away from a very small or edge-positioned trigger).
   // showArrow={false} removes the element from the DOM so it can never appear.
   showArrow = true,
+  // CUSTOM: Added arrowClassName so callers that restyle TooltipContent's background/border (e.g.
+  // a destructive-themed tooltip) can restyle the arrow to match, instead of being stuck with the
+  // hardcoded bg-foreground/fill-foreground default.
+  arrowClassName,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & {
   // CUSTOM: showArrow prop — see comment above for full semantics
   showArrow?: boolean;
+  // CUSTOM: arrowClassName prop — see comment above for full semantics
+  arrowClassName?: string;
 }) {
   return (
     <TooltipPrimitive.Portal>
@@ -95,7 +101,40 @@ function TooltipContent({
         {children}
         {/* CUSTOM: Conditionally render arrow based on showArrow prop */}
         {showArrow && (
-          <TooltipPrimitive.Arrow className="tw:z-50 tw:size-2.5 tw:translate-y-[calc(-50%_-_2px)] tw:rotate-45 tw:rounded-[2px] tw:bg-foreground tw:fill-foreground" />
+          <TooltipPrimitive.Arrow
+            // CUSTOM: Merge arrowClassName so it can override the default bg-foreground/fill-foreground.
+            // Also (a) nudge the rotated-square arrow flush against the content box (translate-y for a
+            // top/bottom content, translate-x for a left/right one — the old unconditional
+            // translate-y-only nudge only ever positioned the arrow correctly for side="bottom"), and
+            // (b) clip it down to the triangular half that points away from the content box, so a
+            // caller that adds a border via arrowClassName (e.g. the destructive confirmation hint)
+            // doesn't get a doubled/crossing border line — or, without clipping the fill too, a
+            // mismatched-color fill bleeding into the content — where the unclipped "back" half of the
+            // diamond overlaps the content's own border.
+            //
+            // Empirically (verified via getBoundingClientRect straddle measurements, not just visual
+            // inspection — see PT-4236 investigation) side="top" needs the exact same translate/clip as
+            // side="bottom", NOT the mirrored values symmetry would suggest — this falls out of Radix
+            // computing the arrow's base position from its declared height prop (5), while we override
+            // the *rendered* height to 10 via CSS (tw:size-2.5), and that mismatch isn't direction-
+            // specific. All keyed off the ancestor Content's own data-side via in-data-*, since Radix
+            // doesn't put data-side on the Arrow itself. Clipping is a no-op for the default
+            // borderless/same-fill arrow, so this is safe generally.
+            //
+            // KNOWN LIMITATION: side="left"/"right" here mirror side="right"'s clip/translate by the
+            // same axis-not-direction logic as top/bottom, but visual testing found it to be very
+            // buggy with the arrow polygon positioned and clipped incorrectly. Do not treat these
+            // two as trustworthy; `destructive-key-confirmation.component.tsx` (the only bordered-
+            // arrow consumer today) deliberately skips adding a border for side="left"/"right" until this is fixed, which is
+            // why the wrong clip-path is currently harmless — flag this if you add a second bordered-
+            // arrow consumer that can render on the left/right.
+            className={cn(
+              'tw:z-50 tw:size-2.5 tw:rotate-45 tw:rounded-xs tw:bg-foreground tw:fill-foreground',
+              'tw:in-data-[side=bottom]:translate-y-[calc(-50%-1px)] tw:in-data-[side=top]:translate-y-[calc(-50%-1px)] tw:in-data-[side=left]:translate-x-[calc(-50%-1px)] tw:in-data-[side=right]:translate-x-[calc(-50%-1px)]',
+              'tw:in-data-[side=bottom]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=top]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=left]:[clip-path:polygon(0_0,100%_0,100%_100%)] tw:in-data-[side=right]:[clip-path:polygon(0_0,100%_0,100%_100%)]',
+              arrowClassName,
+            )}
+          />
         )}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>

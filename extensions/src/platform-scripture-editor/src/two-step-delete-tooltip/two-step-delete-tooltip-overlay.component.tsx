@@ -1,27 +1,27 @@
-import React, { Fragment, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import {
-  cn,
-  Kbd,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from 'platform-bible-react';
-import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
+import { DestructiveKeyConfirmation } from 'platform-bible-react';
+import { LocalizeKey } from 'platform-bible-utils';
 import {
   AnchorRect,
   ArmedHint,
   computeAnchorRect,
+  CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
   confirmingKey,
   readArmedHint,
-} from './verse-delete-tooltip.utils';
+} from './two-step-delete-tooltip.utils';
 
 const REMOVE_VERSE_MARKER_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_verseDelete_removeVerseMarker%';
+  '%webView_platformScriptureEditor_twoStepDelete_removeVerseMarker%';
 const DELETE_SELECTION_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_verseDelete_deleteSelection%';
-const LOCALIZED_STRING_KEYS: LocalizeKey[] = [REMOVE_VERSE_MARKER_KEY, DELETE_SELECTION_KEY];
+  '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%';
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  REMOVE_VERSE_MARKER_KEY,
+  DELETE_SELECTION_KEY,
+  ...CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
+];
+
+const EMPTY_ANCHOR_RECT: AnchorRect = { top: 0, left: 0, width: 0, height: 0 };
 
 type ArmedData = AnchorRect & ArmedHint;
 
@@ -30,15 +30,16 @@ type Props = { children: React.ReactNode };
 /**
  * Renders the destructive "press again to delete" hint while a verse marker (or a selection
  * containing verse markers) is armed for the two-step delete. This lives in core — not the editor
- * repo — so the user-facing copy is localized and the surface is a vetted ShadCN Tooltip rather
- * than a hand-rolled one.
+ * repo — so the user-facing copy is localized. Rendering itself is delegated to
+ * `platform-bible-react`'s `DestructiveKeyConfirmation`; this component owns only detecting the
+ * armed state and where to anchor it.
  *
  * The editor (shared-react's StructureKeyboardPlugin) publishes the armed state to its root as
  * `data-verse-delete-intent`/`data-verse-delete-kind` and marks the armed marker with
- * `verse-selected`; this overlay observes those DOM signals and anchors a Tooltip to the marker.
+ * `verse-selected`; this overlay observes those DOM signals and anchors the hint to the marker.
  * Mirrors {@link ../paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component}.
  */
-export function VerseDeleteTooltipOverlay({ children }: Props) {
+export function TwoStepDeleteTooltipOverlay({ children }: Props) {
   const [armed, setArmed] = useState<ArmedData | undefined>(undefined);
 
   // positionAnchorRef: the position:relative element; coordinate origin for getBoundingClientRect.
@@ -107,68 +108,18 @@ export function VerseDeleteTooltipOverlay({ children }: Props) {
   }, []); // refs are stable; empty deps is correct
 
   const messageKey = armed?.kind === 'selection' ? DELETE_SELECTION_KEY : REMOVE_VERSE_MARKER_KEY;
-  const message = localizedStrings[messageKey];
+  const showArrow = armed?.kind !== 'selection';
 
   return (
     <div ref={positionAnchorRef} className="tw:relative">
       {children}
-      <TooltipProvider>
-        {/* onOpenChange no-op satisfies Radix's controlled-component contract and silences the dev warning */}
-        <Tooltip open={!!armed} onOpenChange={() => {}}>
-          <TooltipTrigger
-            aria-hidden="true"
-            tabIndex={-1}
-            className={cn(
-              'tw:absolute tw:opacity-0 tw:pointer-events-none',
-              'tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0',
-            )}
-            style={{
-              top: armed?.top ?? 0,
-              left: armed?.left ?? 0,
-              width: armed?.width ?? 0,
-              height: armed?.height ?? 0,
-            }}
-          />
-          <TooltipContent
-            side="bottom"
-            align="start"
-            showArrow={false}
-            // Padding moves onto the inner div below so its tint background can reach the
-            // tooltip's rounded edges instead of leaving an untinted padding gutter. Also zero out
-            // TooltipContent's has-data-[slot=kbd]:pe-1.5 (the Kbd we render always matches it) —
-            // that :has() selector otherwise out-specificities a plain tw:p-0 and leaves a gap on
-            // the trailing edge.
-            className={cn(
-              'tw:p-0 tw:has-data-[slot=kbd]:pe-0 tw:bg-background tw:text-destructive tw:border tw:border-destructive',
-            )}
-          >
-            {armed ? (
-              <div className="tw:inline-flex tw:w-full tw:h-full tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-destructive/10 tw:px-3 tw:py-1.5">
-                {formatReplacementStringToArray(message, {
-                  key: (
-                    <Kbd
-                      className={cn(
-                        // Kbd's base styling sets text-muted-foreground (unconditioned) plus
-                        // in-data-[slot=tooltip-content]:text-background (for the default dark
-                        // tooltip). Override both forms explicitly so tailwind-merge drops both
-                        // base rules instead of leaving the winner up to CSS cascade order.
-                        'tw:border tw:border-destructive tw:text-destructive tw:in-data-[slot=tooltip-content]:text-destructive',
-                      )}
-                    >
-                      {confirmingKey(armed.intent)}
-                    </Kbd>
-                  ),
-                }).map((part, index) => (
-                  // The array is static per render (one fixed localized string + one kbd), so index
-                  // is a stable, safe key — mirrors the about-dialog.component.tsx precedent.
-                  // eslint-disable-next-line react/no-array-index-key
-                  <Fragment key={`key-${index}`}>{part}</Fragment>
-                ))}
-              </div>
-            ) : undefined}
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <DestructiveKeyConfirmation
+        open={!!armed}
+        anchorRect={armed ?? EMPTY_ANCHOR_RECT}
+        message={localizedStrings[messageKey]}
+        confirmingKeyLabel={armed ? localizedStrings[confirmingKey(armed.intent)] : ''}
+        showArrow={showArrow}
+      />
     </div>
   );
 }
