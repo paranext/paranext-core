@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import * as store from '@renderer/services/first-run-store';
@@ -96,6 +96,17 @@ describe('FirstRunOverlay', () => {
     mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
     render(<FirstRunOverlay />);
     await userEvent.keyboard('{Escape}');
+    expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
+  });
+
+  it('does not dismiss when the user interacts outside the dialog (non-dismissable gate)', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+    // Radix's DismissableLayer listens for pointer events on `document` to detect an interaction
+    // outside the dialog content; `document.body` is outside the content node, so this drives the
+    // real outside-interaction path that `onPointerDownOutside`/`onInteractOutside` guard against.
+    fireEvent.pointerDown(document.body);
+    fireEvent.pointerUp(document.body);
     expect(screen.getByText(/choose your language/i)).toBeInTheDocument();
   });
 
