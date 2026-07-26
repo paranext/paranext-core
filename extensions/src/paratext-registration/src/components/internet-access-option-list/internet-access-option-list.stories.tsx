@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { ReactElement, useState } from 'react';
 import { InternetUse } from 'paratext-registration';
-import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
+import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 import {
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,

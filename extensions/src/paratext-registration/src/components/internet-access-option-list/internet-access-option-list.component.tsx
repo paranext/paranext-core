@@ -1,5 +1,5 @@
 import { InternetUse } from 'paratext-registration';
-import { RadioGroup, RadioGroupItem } from 'platform-bible-react';
+import { cn, RadioGroup, RadioGroupItem } from 'platform-bible-react';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
 type OptionRow = {
@@ -43,17 +43,9 @@ const OPTION_ROWS: OptionRow[] = [
   },
 ];
 
+// Derived from OPTION_ROWS so adding a new row automatically includes its strings.
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
-  '%paratextRegistration_description_internetUse_option_Enabled%',
-  '%paratextRegistration_description_internetUse_option_Enabled_details%',
-  '%paratextRegistration_description_internetUse_option_VpnRequired%',
-  '%paratextRegistration_description_internetUse_option_VpnRequired_details%',
-  '%paratextRegistration_description_internetUse_option_Disabled%',
-  '%paratextRegistration_description_internetUse_option_Disabled_details%',
-  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%',
-  '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%',
-  '%paratextRegistration_description_internetUse_option_ProxyOnly%',
-  '%paratextRegistration_description_internetUse_option_ProxyOnly_details%',
+  ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
   '%paratextRegistration_internetUse_comingSoon%',
   '%paratextRegistration_internetUse_footer%',
 ];
@@ -80,8 +72,8 @@ export function InternetAccessOptionList({
       <RadioGroup
         value={value}
         onValueChange={(v) => {
-          // BlockInSensitiveLocations is always disabled; its rows can never fire, but guard
-          // explicitly so a future isEnabled change cannot silently pass an invalid value.
+          // Narrow v to InternetUse before calling onChange. BlockInSensitiveLocations is
+          // not an InternetUse member; this check makes the cast below sound.
           if (v === 'BlockInSensitiveLocations') return;
           onChange(v as InternetUse);
         }}
@@ -90,7 +82,10 @@ export function InternetAccessOptionList({
         {OPTION_ROWS.map((row) => (
           <div
             key={row.value}
-            className={`tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5${!disabled && row.isEnabled ? ' tw:hover:bg-accent' : ''}`}
+            className={cn(
+              'tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5',
+              !disabled && row.isEnabled && 'tw:hover:bg-accent',
+            )}
           >
             <RadioGroupItem
               value={row.value}
@@ -103,7 +98,12 @@ export function InternetAccessOptionList({
                 <label
                   htmlFor={`internet-option-${row.value}`}
                   aria-disabled={!row.isEnabled || undefined}
-                  className={`tw:text-sm tw:font-medium${row.isEnabled && !disabled ? ' tw:cursor-pointer' : ' tw:cursor-not-allowed tw:text-muted-foreground'}`}
+                  className={cn(
+                    'tw:text-sm tw:font-medium',
+                    row.isEnabled && !disabled
+                      ? 'tw:cursor-pointer'
+                      : 'tw:cursor-not-allowed tw:text-muted-foreground',
+                  )}
                 >
                   {localizedStrings[row.labelKey]}
                 </label>

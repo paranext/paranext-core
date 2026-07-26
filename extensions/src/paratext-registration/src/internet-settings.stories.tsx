@@ -100,11 +100,20 @@ export const UnsavedChanges: Story = {
 export const DeveloperSectionExpanded: Story = {
   decorators: [createDecorator({})],
   play: async ({ canvasElement }) => {
-    const { userEvent } = await import('@storybook/testing-library');
-    const buttons = Array.from(canvasElement.querySelectorAll('button'));
-    const header = buttons.find((b) => b.textContent?.includes('Developer'));
-    if (header) await userEvent.click(header);
+    const { userEvent, within } = await import('@storybook/testing-library');
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: /Developer only/ }));
   },
+};
+
+/** Save in progress: form disabled, buttons disabled, no alert yet. */
+export const Saving: Story = {
+  decorators: [
+    createDecorator({
+      isFormDisabled: true,
+      saveState: SaveState.IsSaving,
+    }),
+  ],
 };
 
 /** Mid-restart: buttons disabled, spinner visible, success alert showing. */

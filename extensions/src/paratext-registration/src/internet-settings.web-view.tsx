@@ -4,7 +4,7 @@ import { useLocalizedStrings } from '@papi/frontend/react';
 import { InternetSettings } from 'paratext-registration';
 import { usePromise } from 'platform-bible-react';
 import { getErrorMessage, wait } from 'platform-bible-utils';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { INTERNET_SETTINGS_STRING_KEYS, InternetSettingsForm } from './internet-settings.component';
 import { SaveState } from './utils';
 
@@ -26,6 +26,10 @@ async function saveInternetSettings(internetSettings: InternetSettings) {
 
 // #endregion
 
+// Run once per renderer-process session. Ensures the post-restart detection in the mount
+// effect does not misfire when the panel is reopened while a restart countdown is in progress.
+let hasRunStartupRestartCheck = false;
+
 globalThis.webViewComponent = function InternetSettingsComponent({
   useWebViewState,
 }: WebViewProps) {
@@ -46,10 +50,14 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   const [saveError, setSaveError] = useState('');
 
   // If the app just finished restarting, transition from IsRestarting to HasSaved.
+  // The module-level flag ensures this fires exactly once per renderer session, not on every
+  // panel reopen (e.g. the user closes and reopens the panel during the countdown window).
   useEffect(() => {
-    if (saveState === SaveState.IsRestarting) setSaveState(SaveState.HasSaved);
-    // Intentionally empty deps: runs once on mount to detect a post-restart session.
-    // Including saveState/setSaveState in deps would re-run on every state change instead.
+    if (!hasRunStartupRestartCheck) {
+      hasRunStartupRestartCheck = true;
+      if (saveState === SaveState.IsRestarting) setSaveState(SaveState.HasSaved);
+    }
+    // Intentionally empty deps: the module-level guard makes the check run once per session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,17 +72,37 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     InternetSettings | undefined
   >();
 
-  // Fetch current settings from PAPI on mount; undefined until resolved.
-  const [fetchedInternetSettings] = usePromise(getInternetSettings, undefined);
+  // Stable wrapper so usePromise fires exactly once. Catches PAPI command errors and surfaces
+  // them via saveError so the user sees an actionable message instead of a silent locked form.
+  const getInternetSettingsSafe = useCallback(async () => {
+    try {
+      return await getInternetSettings();
+    } catch (err: unknown) {
+      if (isMounted.current) setSaveError(getErrorMessage(err));
+      return undefined;
+    }
+  }, []); // stable: isMounted is a ref, setSaveError is a useState setter, getInternetSettings is module-level
+
+  // Fetch current settings from PAPI on mount; undefined until resolved or on error.
+  const [fetchedInternetSettings] = usePromise(getInternetSettingsSafe, undefined);
+
+  // Guard against overwriting an in-progress user edit if the callback were ever replaced.
+  const hasSyncedFetch = useRef(false);
 
   // When fetch resolves, update both staged and saved baselines.
   useEffect(() => {
     if (fetchedInternetSettings === undefined) return;
-    setInternetSettings(fetchedInternetSettings);
+    if (!hasSyncedFetch.current) {
+      hasSyncedFetch.current = true;
+      setInternetSettings(fetchedInternetSettings);
+    }
     setSavedInternetSettings(fetchedInternetSettings);
   }, [fetchedInternetSettings, setInternetSettings]);
 
-  const isFormDisabled = savedInternetSettings === undefined || saveState === SaveState.IsSaving;
+  const isFormDisabled =
+    savedInternetSettings === undefined ||
+    saveState === SaveState.IsSaving ||
+    saveState === SaveState.IsRestarting;
 
   const handleSaveAndRestart = async () => {
     setSaveState(SaveState.IsSaving);
@@ -82,24 +110,30 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     try {
       await saveInternetSettings(internetSettings);
       // Update the saved baseline so Reset reflects the just-persisted state.
-      setSavedInternetSettings(internetSettings);
+      if (isMounted.current) setSavedInternetSettings(internetSettings);
       // Queue restart asynchronously so the UI can update first.
       (async () => {
         try {
           await wait(INTERNET_SETTINGS_RESTART_DELAY_MS);
           // Guard: if the panel was closed before the timer fired, skip restart.
           if (isMounted.current) await papi.commands.sendCommand('platform.restart');
-        } catch {
+        } catch (err: unknown) {
           logger.warn(
             'Failed to restart after saving Internet settings! The user will need to restart manually.',
           );
+          if (isMounted.current) {
+            setSaveError(getErrorMessage(err));
+            setSaveState(SaveState.HasNotSaved);
+          }
         }
       })();
       if (isMounted.current) setSaveState(SaveState.IsRestarting);
     } catch (err: unknown) {
       logger.warn(`Failed to save Internet settings: ${getErrorMessage(err)}`);
-      setSaveError(getErrorMessage(err));
-      setSaveState(SaveState.HasNotSaved);
+      if (isMounted.current) {
+        setSaveError(getErrorMessage(err));
+        setSaveState(SaveState.HasNotSaved);
+      }
     }
   };
 
