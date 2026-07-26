@@ -89,7 +89,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-
 describe('ModelTextPanel', () => {
   it('shows the "Pick model text" empty state when no model text is configured', () => {
     renderPanel();
