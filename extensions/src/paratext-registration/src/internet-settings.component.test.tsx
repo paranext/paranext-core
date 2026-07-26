@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -135,6 +136,8 @@ describe('InternetSettingsForm', () => {
     expect(screen.queryByText('Save and restart sentinel')).not.toBeInTheDocument();
     // Both action buttons are disabled via areButtonsDisabled when the form is disabled
     expect(screen.getByRole('button', { name: 'Reset sentinel' })).toBeDisabled();
+    // The save button is also disabled (it shares areButtonsDisabled)
+    expect(screen.getByText('Restarting sentinel').closest('button')).toBeDisabled();
   });
 
   test('restarting alert is visible when saveState is IsRestarting', () => {

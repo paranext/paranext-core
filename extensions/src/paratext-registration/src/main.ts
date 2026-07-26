@@ -18,11 +18,21 @@ async function showParatextRegistration(): Promise<string | undefined> {
 }
 
 async function showInternetSettings(): Promise<string | undefined> {
-  return papi.webViews.openWebView(
-    internetSettingsWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 450, height: 500 } },
-    { existingId: '?' },
-  );
+  const layout = {
+    type: 'float',
+    position: 'center',
+    floatSize: { width: 450, height: 500 },
+  } as const;
+  // Reuse the existing panel if one is already open; otherwise open a new one.
+  const existingId = await papi.webViews.openWebView(internetSettingsWebViewType, layout, {
+    existingId: '?',
+    createNewIfNotFound: false,
+  });
+  if (existingId) {
+    await papi.webViews.reloadWebView(internetSettingsWebViewType, existingId);
+    return existingId;
+  }
+  return papi.webViews.openWebView(internetSettingsWebViewType, layout);
 }
 
 /**
