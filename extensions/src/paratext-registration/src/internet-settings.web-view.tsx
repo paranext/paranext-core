@@ -87,7 +87,10 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // #endregion
 
   // Whether you should be able to type into the form
-  const isFormDisabled = isLoadingCurrentInternetSettings || saveState === SaveState.IsSaving;
+  const isFormDisabled =
+    isLoadingCurrentInternetSettings ||
+    saveState === SaveState.IsSaving ||
+    saveState === SaveState.IsRestarting;
 
   const saveAndRestart = async () => {
     setSaveState(SaveState.IsSaving);
