@@ -36,6 +36,7 @@ export function DeveloperSection({
       <Button
         variant="ghost"
         size="sm"
+        disabled={disabled}
         aria-expanded={isExpanded}
         aria-controls="developer-section-content"
         className="tw:flex tw:w-full tw:items-center tw:justify-between tw:px-2 tw:font-normal tw:text-muted-foreground"

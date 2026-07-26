@@ -6,11 +6,11 @@ import { deepEqual } from 'platform-bible-utils';
 import {
   DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,
-} from './components/developer-section.component';
+} from './components/developer-section/developer-section.component';
 import {
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
-} from './components/internet-access-option-list.component';
+} from './components/internet-access-option-list/internet-access-option-list.component';
 import { scrollToRef, SaveState } from './utils';
 
 /**
@@ -124,9 +124,7 @@ export function InternetSettingsForm({
         <Button
           variant="outline"
           disabled={areButtonsDisabled}
-          onClick={() => {
-            if (savedInternetSettings) onInternetSettingsChange(savedInternetSettings);
-          }}
+          onClick={() => onInternetSettingsChange(savedInternetSettings!)}
         >
           {localizedStrings['%paratextRegistration_button_reset%']}
         </Button>

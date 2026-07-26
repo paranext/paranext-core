@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
+import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 import { DeveloperSection, DEVELOPER_SECTION_STRING_KEYS } from './developer-section.component';
 
 const localizedStrings = getLocalizedStrings(DEVELOPER_SECTION_STRING_KEYS);
