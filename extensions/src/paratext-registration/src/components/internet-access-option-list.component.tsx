@@ -79,14 +79,18 @@ export function InternetAccessOptionList({
     <div className="tw:flex tw:flex-col tw:gap-1">
       <RadioGroup
         value={value}
-        // BlockInSensitiveLocations rows are always disabled, so only InternetUse values fire here
-        onValueChange={(v) => onChange(v as InternetUse)}
+        onValueChange={(v) => {
+          // BlockInSensitiveLocations is always disabled; its rows can never fire, but guard
+          // explicitly so a future isEnabled change cannot silently pass an invalid value.
+          if (v === 'BlockInSensitiveLocations') return;
+          onChange(v as InternetUse);
+        }}
         disabled={disabled}
       >
         {OPTION_ROWS.map((row) => (
           <div
             key={row.value}
-            className="tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5 tw:hover:bg-accent"
+            className={`tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5${!disabled && row.isEnabled ? ' tw:hover:bg-accent' : ''}`}
           >
             <RadioGroupItem
               value={row.value}
@@ -98,7 +102,8 @@ export function InternetAccessOptionList({
               <div className="tw:flex tw:items-center tw:justify-between">
                 <label
                   htmlFor={`internet-option-${row.value}`}
-                  className={`tw:cursor-pointer tw:text-sm tw:font-medium${!row.isEnabled ? ' tw:cursor-not-allowed tw:text-muted-foreground' : ''}`}
+                  aria-disabled={!row.isEnabled || undefined}
+                  className={`tw:text-sm tw:font-medium${row.isEnabled && !disabled ? ' tw:cursor-pointer' : ' tw:cursor-not-allowed tw:text-muted-foreground'}`}
                 >
                   {localizedStrings[row.labelKey]}
                 </label>
