@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
   type LanguageInfo,
 } from 'platform-bible-react';
-import { CircleUserRound, Globe, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
+import { CircleUserRound, Languages, Monitor, Moon, Sun, User, Wifi } from 'lucide-react';
 import {
   useData,
   useDataProvider,
@@ -358,7 +358,7 @@ export function UserProfilePopover() {
         </div>
         <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">
           <span className="tw:flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:pt-1 tw:text-xs tw:text-muted-foreground">
-            <Globe className="tw:size-3.5" />
+            <Languages className="tw:size-3.5" />
             {localizedStrings['%userProfile_language%']}
           </span>
           <ToggleGroup
