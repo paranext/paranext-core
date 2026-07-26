@@ -139,7 +139,7 @@
     },
     "es": {
       "%internetSettings_webView_subtitle%": "Gestiona cómo Paratext accede a internet. Esta configuración solo afecta a la aplicación Paratext (no todo el tráfico de internet en tu computadora) y se comparte con cualquier Paratext 9 instalado.",
-      "%internetSettings_webView_title%": "Configuración de Internet",
+      "%internetSettings_webView_title%": "Internet y conectividad",
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
       "%mainMenu_openInternetSettings%": "Configuración de Internet...",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
@@ -155,6 +155,7 @@
       "%paratextRegistration_alert_validRegistration_description%": "Ahora puede guardar los cambios y la aplicación se reiniciará para aplicarlos.",
       "%paratextRegistration_app_startup_description%": "¡Bienvenido a {%product_name%}! Para comenzar, inicie sesión con su información de registro.",
       "%paratextRegistration_button_reset%": "Restablecer",
+      "%paratextRegistration_button_restarting%": "Reiniciando...",
       "%paratextRegistration_button_saveAndRestart%": "Guardar y reiniciar",
       "%paratextRegistration_commit_comment_changing_user%": "Antes de cambiar el usuario registrado",
       "%paratextRegistration_description_internetUse_disclaimer%": "Estas configuraciones de Internet solo afectan la conexión a los servicios de Paratext, como el Registro, Enviar/Recibir y la descarga de recursos.",
