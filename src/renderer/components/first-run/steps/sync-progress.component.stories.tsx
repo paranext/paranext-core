@@ -90,3 +90,46 @@ export const MidSync: Story = {
 export const AllDone: Story = {
   args: { script: { state: [true, false] } },
 };
+
+/**
+ * Two projects in progress: GreekNT finished, TPTS is currently syncing at 75%. Demonstrates
+ * row accumulation — each unique `progressText` in a determinate event creates a new row, and
+ * the previous row flips to done when the next project arrives.
+ *
+ * Terminal state (all events emitted synchronously on mount):
+ * - GreekNT row: done (✓)
+ * - TPTS row:    syncing (spinner), global bar at 75 %
+ */
+export const MultiProject: Story = {
+  args: {
+    script: {
+      state: [true],
+      progress: [
+        { progressText: 'GreekNT', progressValue: 0.1 },
+        { progressText: 'GreekNT', progressValue: 0.5 },
+        { progressText: 'TPTS', progressValue: 0.75 },
+      ],
+    },
+  },
+};
+
+/**
+ * Sync finished after two projects. Shows the completion heading with both project rows
+ * marked done (✓). Demonstrates that rows persist into the completion state.
+ *
+ * Terminal state:
+ * - Completion heading shown
+ * - GreekNT row: done (✓)
+ * - TPTS row:    done (✓)
+ */
+export const AllDoneWithProjects: Story = {
+  args: {
+    script: {
+      state: [true, false],
+      progress: [
+        { progressText: 'GreekNT', progressValue: 0.3 },
+        { progressText: 'TPTS', progressValue: 0.7 },
+      ],
+    },
+  },
+};
