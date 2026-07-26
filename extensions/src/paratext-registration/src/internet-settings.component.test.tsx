@@ -128,11 +128,13 @@ describe('InternetSettingsForm', () => {
     expect(onSaveAndRestart).toHaveBeenCalledTimes(1);
   });
 
-  test('Save and restart button shows Restarting text when saveState is IsRestarting', () => {
-    renderForm({ saveState: SaveState.IsRestarting });
+  test('Save and restart button shows Restarting text and is disabled when saveState is IsRestarting', () => {
+    renderForm({ saveState: SaveState.IsRestarting, isFormDisabled: true });
     // Button renders restarting text; "Save and restart sentinel" is no longer the accessible name
     expect(screen.getByText('Restarting sentinel')).toBeInTheDocument();
     expect(screen.queryByText('Save and restart sentinel')).not.toBeInTheDocument();
+    // Both action buttons are disabled via areButtonsDisabled when the form is disabled
+    expect(screen.getByRole('button', { name: 'Reset sentinel' })).toBeDisabled();
   });
 
   test('restarting alert is visible when saveState is IsRestarting', () => {
@@ -145,5 +147,12 @@ describe('InternetSettingsForm', () => {
     renderForm({ saveError: 'Something went wrong' });
     expect(screen.getByText('Error sentinel')).toBeInTheDocument();
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+  });
+
+  test('success alert shows "restarted" copy after HasSaved state', () => {
+    renderForm({ saveState: SaveState.HasSaved });
+    expect(screen.getByText('Settings updated sentinel')).toBeInTheDocument();
+    expect(screen.getByText('Restarted sentinel')).toBeInTheDocument();
+    expect(screen.queryByText('Restarting description sentinel')).not.toBeInTheDocument();
   });
 });

@@ -48,7 +48,8 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // If the app just finished restarting, transition from IsRestarting to HasSaved.
   useEffect(() => {
     if (saveState === SaveState.IsRestarting) setSaveState(SaveState.HasSaved);
-    // This hook must only run once on mount.
+    // Intentionally empty deps: runs once on mount to detect a post-restart session.
+    // Including saveState/setSaveState in deps would re-run on every state change instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -86,7 +87,8 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       (async () => {
         try {
           await wait(INTERNET_SETTINGS_RESTART_DELAY_MS);
-          await papi.commands.sendCommand('platform.restart');
+          // Guard: if the panel was closed before the timer fired, skip restart.
+          if (isMounted.current) await papi.commands.sendCommand('platform.restart');
         } catch {
           logger.warn(
             'Failed to restart after saving Internet settings! The user will need to restart manually.',
@@ -95,7 +97,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
       })();
       if (isMounted.current) setSaveState(SaveState.IsRestarting);
     } catch (err: unknown) {
-      logger.warn(`Failed to save Internet settings ${err}`);
+      logger.warn(`Failed to save Internet settings: ${getErrorMessage(err)}`);
       setSaveError(getErrorMessage(err));
       setSaveState(SaveState.HasNotSaved);
     }

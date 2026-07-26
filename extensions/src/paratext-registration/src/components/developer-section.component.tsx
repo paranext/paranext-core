@@ -36,6 +36,8 @@ export function DeveloperSection({
       <Button
         variant="ghost"
         size="sm"
+        aria-expanded={isExpanded}
+        aria-controls="developer-section-content"
         className="tw:flex tw:w-full tw:items-center tw:justify-between tw:px-2 tw:font-normal tw:text-muted-foreground"
         onClick={() => setIsExpanded((prev) => !prev)}
       >
@@ -44,34 +46,32 @@ export function DeveloperSection({
           className={`tw:size-4 tw:transition-transform${isExpanded ? ' tw:rotate-180' : ''}`}
         />
       </Button>
-      {isExpanded && (
-        <div className="tw:mt-2 tw:px-2">
-          <ToggleGroup
-            type="single"
-            value={displayValue}
-            onValueChange={(v) => {
-              if (!v) return; // Ignore deselect attempts — the toggle must always have a value.
-              onServerChange(v as 'Production' | 'Development');
-            }}
-            disabled={disabled}
+      <div id="developer-section-content" className="tw:mt-2 tw:px-2" hidden={!isExpanded}>
+        <ToggleGroup
+          type="single"
+          value={displayValue}
+          onValueChange={(v) => {
+            if (!v) return; // Ignore deselect attempts — the toggle must always have a value.
+            onServerChange(v as 'Production' | 'Development');
+          }}
+          disabled={disabled}
+        >
+          <ToggleGroupItem
+            value="Production"
+            variant="outline"
+            data-testid="server-type-production"
           >
-            <ToggleGroupItem
-              value="Production"
-              variant="outline"
-              data-testid="server-type-production"
-            >
-              {localizedStrings['%paratextRegistration_label_serverType_option_Production%']}
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="Development"
-              variant="outline"
-              data-testid="server-type-development"
-            >
-              {localizedStrings['%paratextRegistration_label_serverType_option_Development%']}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      )}
+            {localizedStrings['%paratextRegistration_label_serverType_option_Production%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="Development"
+            variant="outline"
+            data-testid="server-type-development"
+          >
+            {localizedStrings['%paratextRegistration_label_serverType_option_Development%']}
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
     </div>
   );
 }
