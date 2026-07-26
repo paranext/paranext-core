@@ -35,6 +35,34 @@ const KEYS: LocalizeKey[] = [
  */
 const SYNC_STARTED_TIMEOUT_MS = 30_000;
 
+/** A project row accumulated from live S/R progress events. */
+type ProjectRow = {
+  /** Bare project name from progressText (e.g. "GreekNT"). */
+  name: string;
+  status: 'syncing' | 'done';
+};
+
+/** Renders the list of per-project rows below the global progress bar. */
+function ProjectRowList({ rows }: { rows: ProjectRow[] }) {
+  return (
+    // role="list" is explicit: Tailwind's reset removes list semantics in some browsers (Safari).
+    <ul role="list" className="tw:mt-2 tw:flex tw:flex-col tw:gap-1">
+      {rows.map((row) => (
+        <li key={row.name} className="tw:flex tw:items-center tw:gap-2 tw:text-sm">
+          {row.status === 'syncing' ? (
+            // Decorative: the global progressbar already announces overall sync progress.
+            <Spinner aria-hidden="true" />
+          ) : (
+            // Decorative: row text provides the accessible label.
+            <span aria-hidden="true">✓</span>
+          )}
+          <span>{row.name}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * Cannot use `<Progress value={undefined}>` for the indeterminate case — its indicator style uses
  * `value || 0`, rendering a stuck empty bar instead of an animation. Use a div+Spinner instead.
@@ -75,6 +103,9 @@ export function SyncProgressStep({
   // Ref (not state) so the handler stays stable across renders — changing it would cause useEvent
   // to tear down and re-attach the S/R event listener on each render.
   const hasSyncStartedRef = useRef(false);
+  const [rows, setRows] = useState<ProjectRow[]>([]);
+  /** Last project name seen in a determinate event — guards against duplicate row creation. */
+  const lastProjectNameRef = useRef('');
 
   // Gate the shell's Finish button: disabled while syncing, enabled on completion.
   useEffect(() => {
@@ -108,9 +139,9 @@ export function SyncProgressStep({
     if (isSyncing) {
       hasSyncStartedRef.current = true;
     } else if (hasSyncStartedRef.current) {
-      // Only mark complete on isSyncing: false AFTER seeing isSyncing: true. Prevents a stale
-      // isSyncing: false event (emitted before this step mounted) from prematurely enabling Finish.
+      // Only mark complete after seeing isSyncing:true — stale-event guard.
       setSyncComplete(true);
+      setRows((prev) => prev.map((r) => ({ ...r, status: 'done' as const })));
     }
   }, []);
 
@@ -121,6 +152,17 @@ export function SyncProgressStep({
       hasSyncStartedRef.current = true;
       setProgressText(text);
       setProgressValue(value ?? undefined);
+
+      // Row accumulation: only for determinate events with a non-empty, new project name.
+      // Indeterminate events (progressValue null/undefined) carry localized status messages
+      // ("Reconnecting…"), not project names — skip them.
+      if (value != null && text && text !== lastProjectNameRef.current) {
+        lastProjectNameRef.current = text;
+        setRows((prev) => [
+          ...prev.map((r) => (r.status === 'syncing' ? { ...r, status: 'done' as const } : r)),
+          { name: text, status: 'syncing' },
+        ]);
+      }
     },
     [],
   );
@@ -131,15 +173,19 @@ export function SyncProgressStep({
   const progressLabel = strings['%firstRun_step_syncProgress_heading%'];
 
   if (syncComplete) {
-    // role="status" announces the completion transition to screen readers when this block mounts.
     return (
-      <div role="status" className="tw:flex tw:flex-col tw:gap-2">
-        <h2 className="tw:text-base tw:font-medium">
-          {strings['%firstRun_step_syncProgress_complete_heading%']}
-        </h2>
-        <p className="tw:text-sm tw:text-muted-foreground">
-          {strings['%firstRun_step_syncProgress_complete_body%']}
-        </p>
+      <div className="tw:flex tw:flex-col tw:gap-2">
+        {/* role="status" wraps only the announcement text — not the rows — so screen readers
+            do not re-read the whole project list on the heading transition. */}
+        <div role="status" className="tw:flex tw:flex-col tw:gap-2">
+          <h2 className="tw:text-base tw:font-medium">
+            {strings['%firstRun_step_syncProgress_complete_heading%']}
+          </h2>
+          <p className="tw:text-sm tw:text-muted-foreground">
+            {strings['%firstRun_step_syncProgress_complete_body%']}
+          </p>
+        </div>
+        {rows.length > 0 && <ProjectRowList rows={rows} />}
       </div>
     );
   }
@@ -170,6 +216,7 @@ export function SyncProgressStep({
         // No progress events received yet — show indeterminate spinner.
         <IndeterminateProgress label={progressLabel} />
       )}
+      {rows.length > 0 && <ProjectRowList rows={rows} />}
     </div>
   );
 }

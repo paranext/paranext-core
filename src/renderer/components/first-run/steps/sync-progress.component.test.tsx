@@ -133,7 +133,9 @@ describe('SyncProgressStep', () => {
       emitSyncState(true);
       emitProgress('GreekNT', 0.4);
     });
-    expect(await screen.findByText('GreekNT')).toBeInTheDocument();
+    // findAllByText: 'GreekNT' now appears in both the progress-text <p> and the row list <span>.
+    const matches = await screen.findAllByText('GreekNT');
+    expect(matches.length).toBeGreaterThan(0);
   });
 
   it('sets aria-valuenow on the progress bar when progressValue is provided', async () => {
@@ -256,5 +258,63 @@ describe('SyncProgressStep', () => {
     unmount();
     // useEvent's cleanup removes both listeners; a leak would leave a nonzero count here.
     expect(getHandlerCounts()).toEqual({ state: 0, progress: 0 });
+  });
+
+  describe('per-project row accumulation', () => {
+    it('creates a row when the first determinate progress event arrives', async () => {
+      render(<SyncProgressStep onNext={vi.fn()} />);
+      act(() => {
+        emitProgress('GreekNT', 0.5);
+      });
+      // findAllByText: 'GreekNT' appears in both the aria-live progress <p> and the row <span>;
+      // assert at least one match so either element satisfies the row-exists intent.
+      const matches = await screen.findAllByText('GreekNT');
+      expect(matches.length).toBeGreaterThan(0);
+    });
+
+    it('adds a second row and leaves the first when progressText changes to a new project', async () => {
+      render(<SyncProgressStep onNext={vi.fn()} />);
+      act(() => {
+        emitProgress('GreekNT', 0.3);
+        emitProgress('TPTS', 0.7);
+      });
+      // findAllByText: both names appear in both the aria-live progress <p> and the row <span>.
+      const greekNtMatches = await screen.findAllByText('GreekNT');
+      expect(greekNtMatches.length).toBeGreaterThan(0);
+      const tptsMatches = screen.getAllByText('TPTS');
+      expect(tptsMatches.length).toBeGreaterThan(0);
+    });
+
+    it('does not create a row for an indeterminate event (no progressValue)', () => {
+      render(<SyncProgressStep onNext={vi.fn()} />);
+      // Omitting progressValue sends undefined — same guard as null (value != null is false).
+      act(() => {
+        emitProgress('Reconnecting…');
+      });
+      expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+    });
+
+    it('does not create a duplicate row when the same progressText arrives again', async () => {
+      render(<SyncProgressStep onNext={vi.fn()} />);
+      act(() => {
+        emitProgress('GreekNT', 0.3);
+        emitProgress('GreekNT', 0.8); // same project, higher progress
+      });
+      const items = await screen.findAllByRole('listitem');
+      expect(items).toHaveLength(1);
+    });
+
+    it('rows remain visible in the completion state', async () => {
+      render(<SyncProgressStep onNext={vi.fn()} />);
+      act(() => {
+        emitSyncState(true);
+        emitProgress('GreekNT', 0.5);
+      });
+      act(() => {
+        emitSyncState(false);
+      });
+      expect(await screen.findByText(/sync complete/i)).toBeInTheDocument();
+      expect(screen.getByText('GreekNT')).toBeInTheDocument();
+    });
   });
 });
