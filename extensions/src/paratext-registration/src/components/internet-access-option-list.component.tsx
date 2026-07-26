@@ -79,6 +79,7 @@ export function InternetAccessOptionList({
     <div className="tw:flex tw:flex-col tw:gap-1">
       <RadioGroup
         value={value}
+        // BlockInSensitiveLocations rows are always disabled, so only InternetUse values fire here
         onValueChange={(v) => onChange(v as InternetUse)}
         disabled={disabled}
       >
