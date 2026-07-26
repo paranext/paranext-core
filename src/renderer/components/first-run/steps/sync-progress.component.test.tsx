@@ -133,9 +133,10 @@ describe('SyncProgressStep', () => {
       emitSyncState(true);
       emitProgress('GreekNT', 0.4);
     });
-    // findAllByText: 'GreekNT' now appears in both the progress-text <p> and the row list <span>.
-    const matches = await screen.findAllByText('GreekNT');
-    expect(matches.length).toBeGreaterThan(0);
+    // 'GreekNT' now appears in both the aria-live <p> and the row <li>; scope to the <p> so this
+    // test stays independent from row-accumulation behavior.
+    const liveRegion = await screen.findByText('GreekNT', { selector: 'p' });
+    expect(liveRegion).toBeInTheDocument();
   });
 
   it('sets aria-valuenow on the progress bar when progressValue is provided', async () => {
@@ -266,10 +267,8 @@ describe('SyncProgressStep', () => {
       act(() => {
         emitProgress('GreekNT', 0.5);
       });
-      // findAllByText: 'GreekNT' appears in both the aria-live progress <p> and the row <span>;
-      // assert at least one match so either element satisfies the row-exists intent.
-      const matches = await screen.findAllByText('GreekNT');
-      expect(matches.length).toBeGreaterThan(0);
+      const item = await screen.findByRole('listitem');
+      expect(item).toHaveTextContent('GreekNT');
     });
 
     it('adds a second row and leaves the first when progressText changes to a new project', async () => {
@@ -278,11 +277,10 @@ describe('SyncProgressStep', () => {
         emitProgress('GreekNT', 0.3);
         emitProgress('TPTS', 0.7);
       });
-      // findAllByText: both names appear in both the aria-live progress <p> and the row <span>.
-      const greekNtMatches = await screen.findAllByText('GreekNT');
-      expect(greekNtMatches.length).toBeGreaterThan(0);
-      const tptsMatches = screen.getAllByText('TPTS');
-      expect(tptsMatches.length).toBeGreaterThan(0);
+      const items = await screen.findAllByRole('listitem');
+      expect(items).toHaveLength(2);
+      expect(items[0]).toHaveTextContent('GreekNT');
+      expect(items[1]).toHaveTextContent('TPTS');
     });
 
     it('does not create a row for an indeterminate event (no progressValue)', () => {
