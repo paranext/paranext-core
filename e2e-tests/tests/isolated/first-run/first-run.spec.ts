@@ -1,16 +1,17 @@
 /**
  * E2E tests for the first-run wizard (PT-4175 / PT-4179).
  *
- * These tests use isolated.fixture (fresh Electron per test) because the first-run
- * wizard is a one-time modal that only shows on a clean profile. preConfigureSettings
- * forces platform.firstRunComplete: false so the wizard always appears even on a dev
- * machine where the developer has already completed first-run.
+ * These tests use isolated.fixture (fresh Electron per test) because the first-run wizard is a
+ * one-time modal that only shows on a clean profile. preConfigureSettings forces
+ * platform.firstRunComplete: false so the wizard always appears even on a dev machine where the
+ * developer has already completed first-run.
  *
  * Tests cover the navigable (no live S/R backend required) paths:
- *   - Wizard appears and localisation resolves
- *   - Forward navigation: Language → Identify → Sync consent
- *   - Skip setup on Sync consent closes the wizard
- *   - Sync progress step renders the syncing heading with Finish disabled
+ *
+ * - Wizard appears and localisation resolves
+ * - Forward navigation: Language → Identify → Sync consent
+ * - Skip setup on Sync consent closes the wizard
+ * - Sync progress step renders the syncing heading with Finish disabled
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { preConfigureSettings } from '../../../fixtures/helpers';
