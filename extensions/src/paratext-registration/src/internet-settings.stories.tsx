@@ -125,3 +125,15 @@ export const SaveError: Story = {
     }),
   ],
 };
+
+/**
+ * Post-restart: the app has come back up and the success alert shows a "restart completed" message
+ * rather than the countdown message. Buttons are disabled — the settings are saved.
+ */
+export const HasSaved: Story = {
+  decorators: [
+    createDecorator({
+      saveState: SaveState.HasSaved,
+    }),
+  ],
+};

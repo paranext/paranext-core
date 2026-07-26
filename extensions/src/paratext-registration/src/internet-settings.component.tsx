@@ -14,8 +14,9 @@ import {
 import { scrollToRef, SaveState } from './utils';
 
 /**
- * All localization keys used by InternetSettingsForm and its sub-components. Pass these into the
- * platform's localization hook and forward the resolved map into the `localizedStrings` prop.
+ * All localization keys used by InternetSettingsForm and its sub-components — including keys from
+ * `InternetAccessOptionList` and `DeveloperSection`. Callers need only pass this one constant into
+ * the platform's localization hook and forward the resolved map into the `localizedStrings` prop.
  */
 export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_webView_title%',

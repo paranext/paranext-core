@@ -1,5 +1,5 @@
 /**
- * E2E tests for PT-4235 — Internet & Connectivity settings UI.
+ * E2E tests for the Internet & Connectivity settings UI.
  *
  * Covers:
  *
@@ -14,17 +14,7 @@
  */
 import { test, expect } from '../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../fixtures/helpers';
-
-/** Opens the internet settings panel from the profile popover. */
-async function openInternetSettings(mainPage: import('@playwright/test').Page) {
-  await mainPage.getByTestId('user-profile-popover-trigger').click();
-  await mainPage.getByTestId('user-profile-action-network').click();
-}
-
-/** Returns a FrameLocator scoped to the internet settings web view iframe. */
-function internetSettingsFrame(mainPage: import('@playwright/test').Page) {
-  return mainPage.frameLocator('iframe').filter({ hasText: 'Internet & Connectivity' });
-}
+import { internetSettingsFrame, openInternetSettings } from './internet-settings.page';
 
 test.describe('Internet & Connectivity settings', () => {
   test('profile popover shows "Internet and connectivity" label and opens settings panel', async ({

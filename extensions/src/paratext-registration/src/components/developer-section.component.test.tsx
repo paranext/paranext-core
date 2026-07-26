@@ -40,15 +40,15 @@ function renderSection(overrides: Partial<DeveloperSectionProps> = {}) {
 describe('DeveloperSection', () => {
   test('server toggle not visible when collapsed (default)', () => {
     renderSection();
-    expect(screen.queryByTestId('server-type-production')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('server-type-development')).not.toBeInTheDocument();
+    expect(screen.getByTestId('server-type-production')).not.toBeVisible();
+    expect(screen.getByTestId('server-type-development')).not.toBeVisible();
   });
 
   test('clicking the header expands the section and shows the toggle', () => {
     renderSection();
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
-    expect(screen.getByTestId('server-type-production')).toBeInTheDocument();
-    expect(screen.getByTestId('server-type-development')).toBeInTheDocument();
+    expect(screen.getByTestId('server-type-production')).toBeVisible();
+    expect(screen.getByTestId('server-type-development')).toBeVisible();
   });
 
   test('clicking the header again collapses the section', () => {
@@ -56,7 +56,7 @@ describe('DeveloperSection', () => {
     const header = screen.getByRole('button', { name: /Developer only/ });
     fireEvent.click(header);
     fireEvent.click(header);
-    expect(screen.queryByTestId('server-type-production')).not.toBeInTheDocument();
+    expect(screen.getByTestId('server-type-production')).not.toBeVisible();
   });
 
   test('Production item is active when selectedServer is Production', () => {
