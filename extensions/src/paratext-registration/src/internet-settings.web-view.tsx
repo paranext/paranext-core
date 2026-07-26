@@ -3,7 +3,7 @@ import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { InternetSettings } from 'paratext-registration';
 import { usePromise } from 'platform-bible-react';
-import { deepEqual, getErrorMessage, wait } from 'platform-bible-utils';
+import { getErrorMessage, wait } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
 import { SaveState } from './utils';
 import { INTERNET_SETTINGS_STRING_KEYS, InternetSettingsForm } from './internet-settings.component';
@@ -73,36 +73,23 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     getInternetSettings,
     internetSettings,
   );
-  const [currentInternetSettings, setCurrentInternetSettings] = useState<
-    InternetSettings | undefined
-  >();
+  // The last-persisted settings; undefined while the initial fetch is in flight.
+  const [savedInternetSettings, setSavedInternetSettings] = useState<InternetSettings | undefined>(
+    undefined,
+  );
 
   // Set the form to show the current internet settings when we receive it
   useEffect(() => {
     setInternetSettings(fetchedInternetSettings);
-    setCurrentInternetSettings(fetchedInternetSettings);
-  }, [fetchedInternetSettings, setCurrentInternetSettings, setInternetSettings]);
+    setSavedInternetSettings(fetchedInternetSettings);
+  }, [fetchedInternetSettings, setInternetSettings]);
 
   // #endregion
 
   // Whether you should be able to type into the form
   const isFormDisabled = isLoadingCurrentInternetSettings || saveState === SaveState.IsSaving;
 
-  const isProxyHostValid =
-    internetSettings.permittedInternetUse !== 'ProxyOnly' || !!internetSettings.proxyHost;
-
-  const hasUnsavedChanges = !deepEqual(currentInternetSettings, internetSettings);
-
-  const isButtonDisabled =
-    isFormDisabled ||
-    isLoadingCurrentInternetSettings ||
-    !hasUnsavedChanges ||
-    !isProxyHostValid ||
-    saveState === SaveState.IsRestarting;
-
   const saveAndRestart = async () => {
-    if (!hasUnsavedChanges) return;
-
     setSaveState(SaveState.IsSaving);
     setSaveError('');
 
@@ -134,9 +121,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     <InternetSettingsForm
       localizedStrings={localizedStrings}
       internetSettings={internetSettings}
+      savedInternetSettings={savedInternetSettings}
       onInternetSettingsChange={setInternetSettings}
       isFormDisabled={isFormDisabled}
-      isSaveDisabled={isButtonDisabled}
       saveState={saveState}
       saveError={saveError}
       onSaveAndRestart={saveAndRestart}
