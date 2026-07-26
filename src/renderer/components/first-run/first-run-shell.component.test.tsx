@@ -197,4 +197,24 @@ describe('FirstRunShell', () => {
     // The blocking step's mount effect must win — Next must be disabled
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
   });
+
+  it('does not render the step indicator on the syncProgress interstitial step', () => {
+    render(<FirstRunShell entryStep="syncProgress" />);
+    // Pattern "Step N of M" must be absent; syncProgress is an interstitial.
+    expect(screen.queryByText(/step \d+ of \d+/i)).not.toBeInTheDocument();
+  });
+
+  it('does not render the Back button on syncProgress even when reached from an earlier step', async () => {
+    // entryStep="syncConsent" sets entryIndex=2; navigating Next takes index to 3 (syncProgress).
+    // Without the interstitial guard, index(3) > entryIndex(2) would show Back — verify the guard fires.
+    render(<FirstRunShell entryStep="syncConsent" />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+  });
+
+  it('shows "Step 3 of 3" for syncConsent (syncProgress excluded from count)', () => {
+    render(<FirstRunShell entryStep="syncConsent" />);
+    // formatReplacementString fills {stepNumber} → 3, {stepCount} → 3 (NUMBERED_STEPS.length).
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
+  });
 });

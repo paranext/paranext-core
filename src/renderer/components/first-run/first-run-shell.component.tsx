@@ -13,6 +13,12 @@ import { SyncProgressStep } from './steps/sync-progress.component';
 /** Runtime order of the wizard steps. */
 export const STEP_ORDER: FirstRunStep[] = ['language', 'identify', 'syncConsent', 'syncProgress'];
 
+/** Steps that are interstitials — shown after numbered steps, excluded from the stepper count. */
+export const INTERSTITIAL_STEPS = new Set<FirstRunStep>(['syncProgress']);
+
+/** Steps shown in the stepper (excludes interstitials). Length drives the "of N" count. */
+export const NUMBERED_STEPS = STEP_ORDER.filter((s) => !INTERSTITIAL_STEPS.has(s));
+
 /** Default step bodies. Sibling tickets replace individual entries with their real step. */
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
   language: LanguagePlaceholderStep,
@@ -52,6 +58,8 @@ export function FirstRunShell({
   const [strings] = useLocalizedStrings(KEYS);
 
   const index = STEP_ORDER.indexOf(step);
+  const isInterstitial = INTERSTITIAL_STEPS.has(step);
+  const numberedIndex = NUMBERED_STEPS.indexOf(step); // −1 for interstitials
   const isLastStep = index === STEP_ORDER.length - 1;
   // Back floor is the resume entry step, not index 0: the startup reducer resumes a post-relaunch
   // user at `syncConsent`, and the already-completed identify/language steps behind it must not be
@@ -91,8 +99,9 @@ export function FirstRunShell({
   }, [index, runAction, goToStep]);
 
   const onBack = useMemo(
-    () => (index > entryIndex ? () => goToStep(STEP_ORDER[index - 1]) : undefined),
-    [index, entryIndex, goToStep],
+    () =>
+      !isInterstitial && index > entryIndex ? () => goToStep(STEP_ORDER[index - 1]) : undefined,
+    [isInterstitial, index, entryIndex, goToStep],
   );
 
   const onSkip = useMemo(
@@ -104,10 +113,6 @@ export function FirstRunShell({
   );
 
   const StepComponent = stepComponents[step];
-  const indicator = formatReplacementString(strings['%firstRun_stepIndicator%'], {
-    stepNumber: index + 1,
-    stepCount: STEP_ORDER.length,
-  });
   const nextLabel = isLastStep
     ? strings['%firstRun_button_finish%']
     : strings['%firstRun_button_next%'];
@@ -118,11 +123,16 @@ export function FirstRunShell({
         <h1 className="tw:text-lg tw:font-medium">
           {formatReplacementString(strings['%firstRun_title%'], strings)}
         </h1>
-        {/* aria-live so screen readers announce the step change on Next/Back — focus stays on the
-            persistent Next button, so without this the navigation is silent. */}
-        <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
-          {indicator}
-        </p>
+        {/* aria-live so screen readers announce numbered-step changes. Hidden for interstitials
+            (syncProgress): the step's own heading and role="status" provide the screen-reader context. */}
+        {!isInterstitial && (
+          <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
+            {formatReplacementString(strings['%firstRun_stepIndicator%'], {
+              stepNumber: numberedIndex + 1,
+              stepCount: NUMBERED_STEPS.length,
+            })}
+          </p>
+        )}
       </div>
 
       <StepComponent
