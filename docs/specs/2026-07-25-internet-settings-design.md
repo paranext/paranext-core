@@ -52,6 +52,7 @@ extensions/src/paratext-registration/src/
 │   ├── internet-access-option-list.stories.tsx    NEW
 │   ├── internet-access-option-list.component.test.tsx  NEW
 │   ├── developer-section.component.tsx            NEW
+│   ├── developer-section.stories.tsx              NEW
 │   └── developer-section.component.test.tsx       NEW
 ├── internet-settings.component.tsx                UPDATED (orchestrator + inline ConfirmRestartDialog)
 ├── internet-settings.component.test.tsx           NEW
@@ -107,6 +108,8 @@ Each row has a `Tooltip` that appears on hover over the entire row (not just an 
 
 Options 3–5 render as `disabled` `RadioGroupItem`s with a "Coming soon" badge. If the current value from PT9 migration is one of these, the row renders selected-but-disabled (no special handling needed here — the Getting Started flow handles the interception).
 
+**Proxy settings card:** The existing proxy settings card (shown when `permittedInternetUse === 'ProxyOnly'`) is **removed** in this redesign. `ProxyOnly` is coming-soon/disabled, making the card unreachable via normal UI. Leaving it in place while the radio is disabled would show a proxy form with no way to activate it, which is confusing. When "Configure proxy" ships as a real feature, the card logic returns. Remove the `permittedInternetUse === 'ProxyOnly'` conditional block and all proxy field inputs from `InternetSettingsForm`.
+
 Footer text below the group: "Disabled options are planned for future updates."
 
 Option 2 wording is intentionally "some" — it only gates Registry / Send-Receive / DBL, not all services. Do not change to "all" or "specific."
@@ -123,6 +126,8 @@ type DeveloperSectionProps = {
 ```
 
 Renders a clickable "Developer only" header with a chevron. Collapsed by default (collapse state is `useState` local to this component).
+
+**Visibility:** The section is always rendered (no developer gate), just collapsed. There is no existing developer-mode flag in the codebase to gate on, and the ticket does not specify one. If a future gate is needed it can be added as a prop without changing the component's internals.
 
 When expanded: a two-item toggle for **Production** / **Development** only. QA and Test values exist in `ServerType` but are not surfaced in this UI.
 
@@ -141,10 +146,10 @@ Not extracted to its own file — only used once and its `open` state is managed
 type InternetSettingsFormProps = {
   localizedStrings: LanguageStrings;
   internetSettings: InternetSettings; // staged (user-edited)
-  savedInternetSettings: InternetSettings | undefined; // last persisted (change detection)
+  savedInternetSettings: InternetSettings | undefined; // last persisted; undefined while fetch is in flight
   onInternetSettingsChange: (s: InternetSettings) => void;
-  isFormDisabled: boolean;
-  saveState: SaveState; // drives the restarting/success alert
+  isFormDisabled: boolean; // true while loading or while saveState === IsSaving
+  saveState: SaveState; // drives the restarting/success alert and Done button disabled state
   saveError: string;
   onSaveAndRestart: () => void; // fired by "Restart Now"
   onCloseWithoutSaving: () => void; // fired by "Done" (no changes) OR "Don't restart"
@@ -153,7 +158,17 @@ type InternetSettingsFormProps = {
 
 Removed from current props: `isSaveDisabled`, old `onSaveAndRestart`.  
 Manages `isConfirmDialogOpen: boolean` locally.  
-Computes `hasUnsavedChanges = !deepEqual(internetSettings, savedInternetSettings)`.
+Computes `hasUnsavedChanges = savedInternetSettings !== undefined && !deepEqual(internetSettings, savedInternetSettings)`.
+
+**Important:** `hasUnsavedChanges` is `false` while `savedInternetSettings` is `undefined` (fetch still in flight). This prevents the confirm dialog from opening spuriously before the initial load resolves. Confirm that `deepEqual(x, undefined)` from `platform-bible-utils` returns `false` without throwing during implementation.
+
+**"Done" button disabled states** — disabled when any of:
+
+- `savedInternetSettings` is `undefined` (initial load in flight)
+- `isFormDisabled` is `true` (loading or `IsSaving`)
+- `saveState === IsRestarting` (restart already scheduled — the 5-second window)
+
+After "Restart Now" is clicked, the "Done" button is disabled for the remainder of the 5-second restart window so the user cannot trigger a second dialog cycle.
 
 Render layout (top to bottom):
 
@@ -163,7 +178,7 @@ Render layout (top to bottom):
 4. `DeveloperSection`
 5. Save error alert (if `saveError` set)
 6. Restarting/success alert (if `saveState === IsRestarting || HasSaved`)
-7. "Done" button (right-aligned)
+7. "Done" button (right-aligned; disabled per rules above)
 8. `ConfirmRestartDialog` (Dialog, controlled by `isConfirmDialogOpen`)
 
 ---
@@ -172,22 +187,26 @@ Render layout (top to bottom):
 
 ```
 Web view opens
+  → savedInternetSettings = undefined (Done button disabled)
   → fetch savedInternetSettings via PAPI
   → set staged internetSettings = savedInternetSettings
+  → Done button becomes enabled
 
 User selects an option row
   → onInternetSettingsChange updates staged internetSettings
-  → hasUnsavedChanges = !deepEqual(staged, saved)
+  → hasUnsavedChanges = !deepEqual(staged, saved)   [false if saved is still undefined]
 
-User clicks "Done"
+User clicks "Done" (only reachable when not disabled)
   ├── no changes → onCloseWithoutSaving() → web view self-closes (DOM walk)
   └── changes    → setIsConfirmDialogOpen(true)
                      │
                      ├── "Restart Now"
-                     │     → setSaveState(IsSaving)
+                     │     → setIsConfirmDialogOpen(false)
+                     │     → setSaveState(IsSaving)        [Done button now disabled]
                      │     → save settings via PAPI
-                     │     → setSaveState(IsRestarting)
+                     │     → setSaveState(IsRestarting)    [Done button stays disabled]
                      │     → schedule platform.restart after 5 s
+                     │     (form shows restarting alert; Done stays disabled for the 5 s window)
                      │
                      └── "Don't restart"
                            → setIsConfirmDialogOpen(false)
@@ -206,17 +225,27 @@ User clicks tab X button (rc-dock close)
 **`user-profile-popover.component.tsx`:**
 
 - `<Globe className="tw:size-3.5" />` (Language row, line ~361) → `<Languages className="tw:size-3.5" />` — update import from `lucide-react`
-- The "Network" button label is driven by `%userProfile_networkSettings%`; update the localization value to "Internet and connectivity" (no code change, just the string file)
+- The "Network" button label is driven by `%userProfile_networkSettings%`; update the localization value to "Internet and connectivity" (no code change in the component itself)
 
 **`user-profile-popover.test.tsx`:**
 
 - Update mock sentinel for `%userProfile_networkSettings%` to `'Internet and connectivity row'`
+
+**Localization files** (exact locations, confirmed):
+
+- `assets/localization/en.json` line 463: `"Network settings"` → `"Internet and connectivity"`
+- `assets/localization/es.json` line 563: `"Configuración de red"` → _(Spanish translation needed)_
+
+**Note on "menu item" acceptance criterion:** The ticket AC says "Menu item and page heading read 'Internet & Connectivity'." There is **no traditional menu item** for internet settings in `menus.json` — the only entry point is the profile popover button. The AC's "menu item" refers to that profile popover button (renamed above). No new menu entry needs to be added.
 
 ---
 
 ## Localization Changes
 
 **`extensions/src/paratext-registration/contributions/localizedStrings.json`**
+
+**`extensions/src/paratext-registration/src/internet-settings.component.tsx` — `INTERNET_SETTINGS_STRING_KEYS` array**  
+Every new localization key used by the form **must** be added to this exported array. The web view passes it to `useLocalizedStrings`; missing keys silently render as empty strings. Add all new `%paratextRegistration_*%` and `%internetSettings_*%` keys from this section to that array.
 
 Updated values (existing keys):
 | Key | New English value |
@@ -263,16 +292,26 @@ Server environment labels reuse existing keys:
 | `ComingSoonSelected` | A coming-soon value is the current setting (row selected but disabled) |
 | `FormDisabled`       | `disabled={true}` — all rows non-interactive                           |
 
+### `components/developer-section.stories.tsx` (new)
+
+| Story               | Description                                             |
+| ------------------- | ------------------------------------------------------- |
+| `Collapsed`         | Default state — server toggle not visible               |
+| `Expanded`          | Section open, Production active                         |
+| `DevelopmentActive` | Section open, Development active                        |
+| `Disabled`          | `disabled={true}` — header still visible, toggle greyed |
+
 ### `internet-settings.stories.tsx` (updated)
 
-| Story                      | Status                                                              |
-| -------------------------- | ------------------------------------------------------------------- |
-| `Default`                  | Updated — new radio list, Unrestricted selected, Done button        |
-| `DisabledAccessSelected`   | New — option 2 selected                                             |
-| `ConfirmDialogOpen`        | New — confirm-restart dialog visible                                |
-| `DeveloperSectionExpanded` | New — developer section open, Production/Development toggle visible |
-| `Restarting`               | Keep — form disabled, restarting alert                              |
-| `SaveError`                | Keep — error alert                                                  |
+| Story                      | Status                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------- |
+| `Default`                  | Updated — new radio list, Unrestricted selected, Done enabled                 |
+| `Loading`                  | New — `savedInternetSettings` undefined, Done button disabled (initial fetch) |
+| `DisabledAccessSelected`   | New — option 2 selected, Done enabled                                         |
+| `ConfirmDialogOpen`        | New — confirm-restart dialog visible                                          |
+| `DeveloperSectionExpanded` | New — developer section open, Production/Development toggle visible           |
+| `Restarting`               | Keep — form disabled, Done disabled, restarting alert                         |
+| `SaveError`                | Keep — error alert                                                            |
 
 ---
 
@@ -291,25 +330,27 @@ Server environment labels reuse existing keys:
 
 ### Unit — `components/developer-section.component.test.tsx`
 
-| Test                                     | Assertion                         |
-| ---------------------------------------- | --------------------------------- |
-| Collapsed by default                     | Server toggle not in DOM          |
-| Header click expands                     | Toggle becomes visible            |
-| Header click again collapses             | Toggle hidden                     |
-| Production selected by default           | Production item `data-state="on"` |
-| Development click fires `onServerChange` | Called with `'Development'`       |
-| `disabled` prop disables toggle          | Toggle not interactive            |
+| Test                                                      | Assertion                         |
+| --------------------------------------------------------- | --------------------------------- |
+| Collapsed by default                                      | Server toggle not in DOM          |
+| Header click expands                                      | Toggle becomes visible            |
+| Header click again collapses                              | Toggle hidden                     |
+| Production item active when `selectedServer='Production'` | Production item `data-state="on"` |
+| Development click fires `onServerChange`                  | Called with `'Development'`       |
+| `disabled` prop disables toggle                           | Toggle not interactive            |
 
 ### Unit — `internet-settings.component.test.tsx`
 
-| Test                                            | Assertion                                        |
-| ----------------------------------------------- | ------------------------------------------------ |
-| Done with no changes → no dialog                | `onCloseWithoutSaving` called; dialog not in DOM |
-| Done with changes → dialog opens                | Confirm dialog appears                           |
-| Dialog "Restart Now" → `onSaveAndRestart`       | Callback fired; dialog closes                    |
-| Dialog "Don't restart" → `onCloseWithoutSaving` | Callback fired; dialog closes                    |
-| `SaveState.IsRestarting` → alert visible        | Restarting alert in DOM                          |
-| `saveError` set → error alert visible           | Destructive alert in DOM                         |
+| Test                                                           | Assertion                                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Done disabled while `savedInternetSettings` is `undefined`     | "Done" button has `disabled` attribute; `onCloseWithoutSaving` not called |
+| Done disabled while `saveState === IsRestarting`               | "Done" button has `disabled` attribute                                    |
+| Done with no changes → no dialog                               | `onCloseWithoutSaving` called; dialog not in DOM                          |
+| Done with changes → dialog opens                               | Confirm dialog appears                                                    |
+| Dialog "Restart Now" → `onSaveAndRestart`; Done stays disabled | Callback fired; dialog closes; Done still disabled (`IsRestarting`)       |
+| Dialog "Don't restart" → `onCloseWithoutSaving`                | Callback fired; dialog closes                                             |
+| `SaveState.IsRestarting` → restarting alert visible            | Restarting alert in DOM                                                   |
+| `saveError` set → error alert visible                          | Destructive alert in DOM                                                  |
 
 ### E2E — `e2e-tests/tests/isolated/internet-settings.spec.ts`
 
@@ -342,8 +383,8 @@ Server environment labels reuse existing keys:
 
 ## Open Items
 
-1. **Tooltip copy** — 5 tooltip strings need final copy from the UX mockup (v0.app link in ticket). Use placeholder strings during development.
+1. **Tooltip copy** — 5 tooltip strings need final copy from the UX mockup (v0.app link in ticket). Use placeholder strings during development; update before merging.
 2. **Confirm dialog description** — short explanation text needs UX copy.
-3. **`%userProfile_networkSettings%` location** — find which platform localization file owns this key during implementation.
-4. **Spanish translations** — add `es` entries for all new localization keys.
-5. **Proxy settings card** — the existing proxy settings card (shown when `permittedInternetUse === 'ProxyOnly'`) is not referenced in the ticket. The new design's radio list makes it unreachable via normal UI (ProxyOnly is coming-soon/disabled). Confirm during implementation whether to remove the card entirely or leave it hidden for graceful PT9 fallback.
+3. **Spanish translations** — add `es` entries for all new localization keys, including `assets/localization/es.json` for `%userProfile_networkSettings%`.
+4. **Web view float size** — the current `floatSize: { width: 450, height: 500 }` in `internet-settings.web-view-provider.ts` may need increasing to accommodate the new content (subtitle, 5 radio rows with badges, developer section, Done button). Verify visually during implementation and adjust if content is clipped.
+5. **`deepEqual(x, undefined)` behavior** — confirm `platform-bible-utils` `deepEqual` returns `false` (not throws) when the second argument is `undefined`, since `hasUnsavedChanges` relies on this before `savedInternetSettings` resolves.
