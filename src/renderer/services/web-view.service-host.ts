@@ -92,6 +92,7 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
+import withWindowScopedWebViewIds from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -835,10 +836,13 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
   // subsequent `saveLayout`) sees the current mode without another settings round-trip.
   currentInterfaceMode = interfaceMode;
+  // Only the shared constants get their web view ids scoped — a layout restored from storage was
+  // read through `localWindowStorage`, so it is already this window's own and its ids were scoped
+  // when it was first loaded.
   const layoutToLoad =
     interfaceMode === 'simple'
-      ? dockLayoutVar.simpleLayout
-      : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
+      ? withWindowScopedWebViewIds(dockLayoutVar.simpleLayout)
+      : getStorageValue(DOCK_LAYOUT_KEY, withWindowScopedWebViewIds(dockLayoutVar.testLayout));
   const enabledEntries = await getEnabledSupplementEntries();
   if (enabledEntries.length === 0) {
     // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
