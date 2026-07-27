@@ -12132,6 +12132,7 @@ declare module 'renderer/services/theme.service-host' {
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     dispose(): Promise<boolean>;
   }
+  /** Set up this window's access to the app-wide theme service. Safe to call more than once */
   export function initialize(): Promise<void>;
   /** This is an internal-only export for testing purposes and should not be used in development */
   export const testingThemeService: {
