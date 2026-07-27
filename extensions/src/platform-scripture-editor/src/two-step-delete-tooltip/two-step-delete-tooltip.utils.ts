@@ -67,3 +67,25 @@ export function computeAnchorRect(marker: HTMLElement, positionAnchor: HTMLEleme
 export function confirmingKey(intent: ArmedHint['intent']): LocalizeKey {
   return getLocalizeKeyForPhysicalKey(intent === 'deleteForward' ? 'Delete' : 'Backspace');
 }
+
+/**
+ * Platform symbol macOS uses for each confirming key, per the Keyboard shortcuts guideline's
+ * "Preferred representations by OS" table (Backspace `⌫`, Forward Delete `⌦`). These are OS
+ * symbols, not translated text, so they bypass localization entirely.
+ */
+const MAC_KEY_SYMBOLS: Record<ArmedHint['intent'], string> = {
+  deleteBackward: '⌫',
+  deleteForward: '⌦',
+};
+
+/**
+ * Display label for the confirming key, following each OS's own convention: macOS shows the
+ * platform symbol (`⌫`/`⌦`); other platforms show the localized word (e.g. "Backspace"/"Delete").
+ */
+export function getConfirmingKeyDisplayLabel(
+  intent: ArmedHint['intent'],
+  localizedWord: string,
+  isMac: boolean,
+): string {
+  return isMac ? MAC_KEY_SYMBOLS[intent] : localizedWord;
+}
