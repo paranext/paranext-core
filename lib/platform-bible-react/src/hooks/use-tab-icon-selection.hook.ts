@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useViewVisibility } from './use-view-visibility.hook';
 
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
@@ -33,10 +33,15 @@ export function pickTabIconUrl(
  * tab's live selected state.
  *
  * The tab icon is painted by the platform as a static CSS `background-image`, so a `currentColor`
- * SVG can't follow the theme or selection state — callers must swap the actual icon URL. This hook
- * detects selection by polling whether this web view's iframe has an `offsetParent` (rc-dock hides
- * an inactive tab's pane with `display: none`, which clears `offsetParent`); rc-dock fires no event
- * reachable from inside the iframe on tab switches, so polling is the only option.
+ * SVG can't follow the theme or selection state — callers must swap the actual icon URL. "Selected"
+ * here means this tab is the active one in its group: rc-dock renders exactly one tab's pane at a
+ * time, hiding the rest with `display: none`, so "my pane is currently visible" and "I'm the
+ * selected tab" are the same condition — this reuses `useViewVisibility`'s event-driven
+ * `IntersectionObserver` detection rather than polling `frameElement.offsetParent` on an interval.
+ * `pickTabIconUrl`'s `undefined` ("selection unknown") case is effectively unreachable through this
+ * call site, since `useViewVisibility` resolves synchronously on first render with no unknown
+ * window, but `pickTabIconUrl` keeps accepting it as a standalone, independently-testable
+ * function.
  *
  * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
  * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
@@ -46,29 +51,7 @@ export function pickTabIconUrl(
  * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.
  */
 export function useTabIconSelection(isDarkTheme: boolean, tabIconUrls: TabIconUrls): string {
-  const [isTabSelected, setIsTabSelected] = useState<boolean | undefined>(undefined);
-
-  useEffect(() => {
-    const read = (): boolean | undefined => {
-      try {
-        const { frameElement } = window;
-        if (!(frameElement instanceof HTMLElement)) return undefined;
-        return !!frameElement.offsetParent;
-      } catch {
-        return undefined;
-      }
-    };
-    const update = () =>
-      setIsTabSelected((prev) => {
-        const next = read();
-        return prev === next ? prev : next;
-      });
-    update();
-    // rc-dock fires no event we can hook from inside the iframe on tab switches, so poll cheaply.
-    const id = window.setInterval(update, 500);
-    return () => window.clearInterval(id);
-  }, []);
-
+  const isTabSelected = useViewVisibility();
   return pickTabIconUrl(isDarkTheme, isTabSelected, tabIconUrls);
 }
 
