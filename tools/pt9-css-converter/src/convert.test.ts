@@ -200,6 +200,8 @@ describe('convert', () => {
     expect(scss).not.toContain("[dir='rtl']");
   });
 
+  // prettier startup + format takes ~800 ms in isolation but can exceed the 5 s default under
+  // full parallel-suite load; 15 s gives comfortable headroom on a loaded CI worker.
   test('emits prettier-conformant SCSS (no formatting drift through prettier)', async () => {
     // Exercises every shape that previously failed prettier --check on the
     // downstream marker-style files: uppercase hex, trailing-zero decimals,
@@ -217,5 +219,5 @@ describe('convert', () => {
     const formatted = await prettier.format(scss, { ...config, parser: 'scss' });
 
     expect(scss).toBe(formatted);
-  });
+  }, 15000);
 });
