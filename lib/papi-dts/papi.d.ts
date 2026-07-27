@@ -956,6 +956,8 @@ declare module 'shared/global-this.model' {
      * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
      * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
      * `platform.getFocusedWindowId`). `null` until the renderer reads the URL parameter.
+     *
+     * @experimental
      */
     var windowId: string | null;
   }
@@ -4017,6 +4019,8 @@ declare module 'shared/services/web-view.service-model' {
    * Command names that are hosted by the renderer process and need to be registered with
    * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
    * the generic names that forward to the focused window's scoped handler.
+   *
+   * @experimental
    */
   export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
     'platform.about',
@@ -4044,6 +4048,8 @@ declare module 'shared/services/web-view.service-model' {
    * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
    * an implementation detail of multi-window routing and are deliberately left undocumented. The main
    * process attaches these when it registers the routing proxies.
+   *
+   * @experimental
    */
   export const RENDERER_HOSTED_COMMAND_DOCS: Partial<
     Record<(typeof RENDERER_HOSTED_COMMAND_NAMES)[number], SingleMethodDocumentation>
@@ -4442,9 +4448,17 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
-    /** Create a new application window */
+    /**
+     * Create a new application window
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.createWindow': () => Promise<void>;
-    /** Get the ID of the currently focused window, or undefined if no window is focused */
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
@@ -8511,7 +8525,11 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /** Query parameter key used to pass the Electron BrowserWindow ID to the renderer process */
+  /**
+   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+   *
+   * @experimental
+   */
   export const WINDOW_ID = 'windowId';
   /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
