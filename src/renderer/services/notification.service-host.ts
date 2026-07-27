@@ -200,10 +200,16 @@ const notificationService: INotificationService = {
   dismiss,
 };
 
-/** Register the network object that backs the notification service */
+/**
+ * Register the network object that backs the notification service.
+ *
+ * Registered under this window's scoped name (e.g. `NotificationService-1`) so every window can
+ * serve its own notification UI. The main process publishes the generic name and forwards to the
+ * focused window, so a notification raised by a background task lands where the user is looking.
+ */
 export async function startNotificationService(): Promise<void> {
   await networkObjectService.set(
-    NotificationServiceNetworkObjectName,
+    `${NotificationServiceNetworkObjectName}-${globalThis.windowId}`,
     notificationService,
     undefined,
     undefined,

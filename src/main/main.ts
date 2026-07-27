@@ -33,6 +33,7 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
+import { startNotificationRoutingService } from '@main/services/notification-routing.service';
 import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
 import {
   addWindow,
@@ -268,6 +269,7 @@ async function main() {
   // (e.g. "WebViewService-1", "platform.openSettings-1") and the proxies route to the focused window.
   await startWebViewRoutingService();
   await startCommandRoutingService();
+  await startNotificationRoutingService();
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();

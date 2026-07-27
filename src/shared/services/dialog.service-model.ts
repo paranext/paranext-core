@@ -35,3 +35,16 @@ export interface DialogService {
 
 /** Prefix on requests that indicates that the request is related to dialog operations */
 export const CATEGORY_DIALOG = 'dialog';
+
+/**
+ * Dialog requests served by the renderer process. A dialog belongs to the window the user is
+ * working in, so each renderer registers these under window-scoped names and the main process
+ * registers proxies under the generic names that forward to the focused window.
+ *
+ * @experimental
+ */
+export const RENDERER_HOSTED_DIALOG_REQUEST_NAMES = [
+  'showDialog',
+  'selectProject',
+  'showAboutDialog',
+] as const;
