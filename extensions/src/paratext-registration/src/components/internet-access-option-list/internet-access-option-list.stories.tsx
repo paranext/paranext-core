@@ -6,7 +6,7 @@ import {
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   type InternetAccessOptionListProps,
-} from './internet-access-option-list.component';
+} from 'platform-bible-react';
 
 const localizedStrings = getLocalizedStrings(INTERNET_ACCESS_OPTION_LIST_STRING_KEYS);
 

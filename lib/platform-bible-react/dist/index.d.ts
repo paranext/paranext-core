@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, LocalizeKey, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
@@ -1211,6 +1211,32 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
+type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
+export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
+export type InternetAccessOptionListProps = {
+	/** Localized strings; pass strings resolved from `INTERNET_ACCESS_OPTION_LIST_STRING_KEYS`. */
+	localizedStrings: LanguageStrings;
+	/** The currently selected internet use value. */
+	value: InternetUse;
+	/** Called when the user selects an active (non-coming-soon) option. */
+	onChange: (v: InternetUse) => void;
+	/** When true, all rows are non-interactive (loading or saving in progress). */
+	disabled: boolean;
+};
+export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
+type ServerType = "Production" | "QualityAssurance" | "Development" | "Test";
+export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
+export type DeveloperSectionProps = {
+	/** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
+	localizedStrings: LanguageStrings;
+	/** The currently selected server type. QA and Test values display as Production. */
+	selectedServer: ServerType;
+	/** Called when the user switches to Production or Development. */
+	onServerChange: (s: ServerType) => void;
+	/** When true, the toggle items are non-interactive (loading or saving in progress). */
+	disabled: boolean;
+};
+export declare function DeveloperSection({ localizedStrings, selectedServer, onServerChange, disabled, }: DeveloperSectionProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the MarkerMenu component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
