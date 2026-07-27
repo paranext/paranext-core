@@ -46,6 +46,10 @@ const OPTION_ROWS: OptionRow[] = [
   },
 ];
 
+function isInternetUse(v: string): v is InternetUse {
+  return OPTION_ROWS.some((row) => row.value !== 'BlockInSensitiveLocations' && row.value === v);
+}
+
 // Derived from OPTION_ROWS so adding a new row automatically includes its strings.
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
@@ -75,10 +79,8 @@ export function InternetAccessOptionList({
       <RadioGroup
         value={value}
         onValueChange={(v) => {
-          // Narrow v to InternetUse before calling onChange. BlockInSensitiveLocations is
-          // not an InternetUse member; this check makes the cast below sound.
-          if (v === 'BlockInSensitiveLocations') return;
-          onChange(v as InternetUse);
+          // BlockInSensitiveLocations is UI-only; isInternetUse excludes it.
+          if (isInternetUse(v)) onChange(v);
         }}
         disabled={disabled}
       >

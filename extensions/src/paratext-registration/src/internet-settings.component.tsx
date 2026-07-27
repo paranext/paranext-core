@@ -124,7 +124,9 @@ export function InternetSettingsForm({
         <Button
           variant="outline"
           disabled={areButtonsDisabled}
-          onClick={() => onInternetSettingsChange(savedInternetSettings!)}
+          onClick={() => {
+            if (savedInternetSettings) onInternetSettingsChange(savedInternetSettings);
+          }}
         >
           {localizedStrings['%paratextRegistration_button_reset%']}
         </Button>
