@@ -285,7 +285,7 @@ declare module 'papi-shared-types' {
      * the automatic startup sync on subsequent launches. Suppresses only the automatic startup
      * sync; manual Send/Receive is unaffected. Never reset by core.
      */
-    'platform.firstRunSyncSkipped': boolean;
+    'platform.suppressStartupSync': boolean;
   }
 
   /**
