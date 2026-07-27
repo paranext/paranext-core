@@ -120,6 +120,8 @@ export function FirstRunShell({
     [canSkip, step, runAction],
   );
 
+  // React refs passed to DOM elements must be initialized with null, not undefined.
+  // eslint-disable-next-line no-null/no-null
   const finishButtonRef = useRef<HTMLButtonElement>(null);
   // Focus the Finish button the moment it becomes enabled on the last step. Without this, keyboard
   // and screen-reader users on an interstitial (no Back, no other controls) have no signal that
