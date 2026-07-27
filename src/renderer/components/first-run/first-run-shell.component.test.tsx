@@ -65,11 +65,12 @@ describe('FirstRunShell', () => {
     expect(screen.getByText(/identify step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.queryByText(/identify step/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/internet settings \(coming soon\)/i)).toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
-    // A post-relaunch user resumes at syncConsent; the already-completed identify/language steps
-    // behind it must be unreachable (backing into Identify would re-trigger the relaunch).
+    // A post-relaunch user resumes at syncConsent; the already-completed language/internet/identify
+    // steps behind it must be unreachable (backing into the Identify step would re-trigger the relaunch).
     render(<FirstRunShell entryStep="syncConsent" />);
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
@@ -124,8 +125,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-<<<<<<< HEAD
-        stepComponents={{ ...STUB_STEPS, identify: BlockingStep }}
+        stepComponents={{ ...STUB_STEPS, internet: BlockingStep }}
       />,
     );
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
