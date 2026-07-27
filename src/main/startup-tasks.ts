@@ -180,14 +180,14 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
   let syncSkipped = false;
   try {
-    syncSkipped = (await settingsService.get('platform.firstRunSyncSkipped')) === true;
+    syncSkipped = (await settingsService.get('platform.suppressStartupSync')) === true;
   } catch (e) {
     logger.warn(
-      `Could not read platform.firstRunSyncSkipped; proceeding with sync: ${getErrorMessage(e)}`,
+      `Could not read platform.suppressStartupSync; proceeding with sync: ${getErrorMessage(e)}`,
     );
   }
   if (syncSkipped) {
-    logger.debug('Startup sync skipped: platform.firstRunSyncSkipped is true');
+    logger.debug('Startup sync skipped: platform.suppressStartupSync is true');
     return;
   }
 

@@ -58,7 +58,7 @@ function stubSettings({ mode = 'simple', firstRunComplete = true, syncSkipped = 
   mockSettingsGet.mockImplementation(async (key: string) => {
     if (key === 'platform.interfaceMode') return mode;
     if (key === 'platform.firstRunComplete') return firstRunComplete;
-    if (key === 'platform.firstRunSyncSkipped') return syncSkipped;
+    if (key === 'platform.suppressStartupSync') return syncSkipped;
     throw new Error(`Unexpected settings key in test stub: ${key}`);
   });
 }
@@ -125,7 +125,7 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
     expect(mockLoggerDebug).toHaveBeenCalledWith(
-      expect.stringContaining('Startup sync skipped: platform.firstRunSyncSkipped'),
+      expect.stringContaining('Startup sync skipped: platform.suppressStartupSync'),
     );
   });
 
@@ -135,7 +135,7 @@ describe('performStartupTasks', () => {
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.firstRunSyncSkipped') throw new Error('read failed');
+      if (key === 'platform.suppressStartupSync') throw new Error('read failed');
       throw new Error(`Unexpected settings key in test stub: ${key}`);
     });
     await performStartupTasks();
@@ -144,7 +144,7 @@ describe('performStartupTasks', () => {
       undefined,
     );
     expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('platform.firstRunSyncSkipped'),
+      expect.stringContaining('platform.suppressStartupSync'),
     );
   });
 
