@@ -186,6 +186,14 @@ describe('SyncProgressStep', () => {
     expect(screen.queryByText(/syncing your data/i)).not.toBeInTheDocument();
   });
 
+  it('syncing state has role="status" so screen readers see the initial heading', () => {
+    render(<SyncProgressStep onNext={vi.fn()} />);
+    // Both syncing and completion branches have role="status"; they are mutually exclusive —
+    // only one is in the DOM at a time.
+    const statusRegion = screen.getByRole('status');
+    expect(statusRegion).toHaveTextContent(/syncing your data/i);
+  });
+
   it('completion block has role="status" so screen readers announce the transition', async () => {
     render(<SyncProgressStep onNext={vi.fn()} />);
     act(() => {
@@ -194,7 +202,9 @@ describe('SyncProgressStep', () => {
     act(() => {
       emitSyncState(false);
     });
-    const statusRegion = await screen.findByRole('status');
+    // After transition the syncing branch is unmounted; only the completion status region remains.
+    await screen.findByText(/sync complete/i);
+    const statusRegion = screen.getByRole('status');
     expect(statusRegion).toHaveTextContent(/sync complete/i);
   });
 
@@ -292,7 +302,7 @@ describe('SyncProgressStep', () => {
       expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
     });
 
-    it('does not create a duplicate row when the same progressText arrives again', async () => {
+    it('does not create a duplicate row when the same progressText arrives again consecutively', async () => {
       render(<SyncProgressStep onNext={vi.fn()} />);
       act(() => {
         emitProgress('GreekNT', 0.3);
@@ -300,6 +310,20 @@ describe('SyncProgressStep', () => {
       });
       const items = await screen.findAllByRole('listitem');
       expect(items).toHaveLength(1);
+    });
+
+    it('does not create a duplicate row when progressText recurs non-consecutively', async () => {
+      // Guards against the case where a retry or interleaved progress re-emits an earlier project
+      // name. The old lastProjectNameRef guard only caught consecutive duplicates; this case
+      // (GreekNT → TPTS → GreekNT) would have produced a second GreekNT row with a duplicate key.
+      render(<SyncProgressStep onNext={vi.fn()} />);
+      act(() => {
+        emitProgress('GreekNT', 0.3);
+        emitProgress('TPTS', 0.5);
+        emitProgress('GreekNT', 0.9); // same as first, non-consecutive
+      });
+      const items = await screen.findAllByRole('listitem');
+      expect(items).toHaveLength(2); // only 2 unique projects
     });
 
     it('rows remain visible in the completion state', async () => {

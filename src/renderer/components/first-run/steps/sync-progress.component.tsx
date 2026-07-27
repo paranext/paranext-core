@@ -80,9 +80,11 @@ function IndeterminateProgress({ label }: { label: string }) {
  * Sync progress wizard step. Subscribes to S/R live-progress events and enables the Finish button
  * only after observing a full sync cycle (isSyncing: true → isSyncing: false).
  *
- * Assumption: sync is already in flight when this step mounts. The sync-consent step is responsible
- * for calling `paratextBibleSendReceive.sendReceiveProjects` before advancing here — that call
- * fires the `onSyncStateChanged` events this step depends on.
+ * Assumption: sync may be in flight or may have already completed when this step mounts. If the
+ * sync-consent step fires `sendReceiveProjects` (async, non-blocking) before advancing, events will
+ * arrive here. If it calls `syncProjects` and waits for completion before advancing, sync is already
+ * done and no events will arrive (the recovery timeout below is the only path to Finish in that
+ * case). The exact handoff must be reconciled with PT-4178.
  *
  * Recovery: if sync completes before this step mounts, no events will arrive. After
  * {@link SYNC_STARTED_TIMEOUT_MS} with no events, `setSyncComplete(true)` fires as a fallback so
@@ -105,8 +107,6 @@ export function SyncProgressStep({
   // to tear down and re-attach the S/R event listener on each render.
   const hasSyncStartedRef = useRef(false);
   const [rows, setRows] = useState<ProjectRow[]>([]);
-  /** Last project name seen in a determinate event — guards against duplicate row creation. */
-  const lastProjectNameRef = useRef('');
 
   // Gate the shell's Finish button: disabled while syncing, enabled on completion.
   useEffect(() => {
@@ -155,15 +155,19 @@ export function SyncProgressStep({
       const normalizedValue = value ?? undefined;
       setProgressValue(normalizedValue);
 
-      // Row accumulation: only for determinate events with a non-empty, new project name.
-      // Indeterminate events (progressValue null/undefined) carry localized status messages
-      // ("Reconnecting…"), not project names — skip them.
-      if (normalizedValue !== undefined && text && text !== lastProjectNameRef.current) {
-        lastProjectNameRef.current = text;
-        setRows((prev) => [
-          ...prev.map((r) => (r.status === 'syncing' ? { ...r, status: 'done' as const } : r)),
-          { name: text, status: 'syncing' },
-        ]);
+      // Row accumulation: only for determinate events with a non-empty project name that is not
+      // already in the list. Indeterminate events (progressValue null/undefined) carry localized
+      // status messages ("Reconnecting…"), not project names — skip them. The membership check
+      // is inside setRows so it uses the committed state and handles both consecutive and
+      // non-consecutive recurrences (e.g. a retry that re-emits an earlier project name).
+      if (normalizedValue !== undefined && text) {
+        setRows((prev) => {
+          if (prev.some((r) => r.name === text)) return prev;
+          return [
+            ...prev.map((r) => (r.status === 'syncing' ? { ...r, status: 'done' as const } : r)),
+            { name: text, status: 'syncing' },
+          ];
+        });
       }
     },
     [],
@@ -194,12 +198,17 @@ export function SyncProgressStep({
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-2">
-      <h2 className="tw:text-base tw:font-medium">
-        {strings['%firstRun_step_syncProgress_heading%']}
-      </h2>
-      <p className="tw:text-sm tw:text-muted-foreground">
-        {strings['%firstRun_step_syncProgress_body%']}
-      </p>
+      {/* role="status" mirrors the completion branch so screen readers are told the heading
+          for both states. Wraps only the static heading/body — not the progress indicator
+          (which changes frequently) — to avoid over-announcing. */}
+      <div role="status" className="tw:flex tw:flex-col tw:gap-1">
+        <h2 className="tw:text-base tw:font-medium">
+          {strings['%firstRun_step_syncProgress_heading%']}
+        </h2>
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {strings['%firstRun_step_syncProgress_body%']}
+        </p>
+      </div>
       {progressText || progressValue !== undefined ? (
         <div className="tw:mt-2 tw:flex tw:flex-col tw:gap-1">
           {progressValue !== undefined ? (
