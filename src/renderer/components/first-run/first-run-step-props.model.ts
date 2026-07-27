@@ -1,8 +1,10 @@
 /**
- * Props every first-run wizard step receives from the shell. The shell owns the footer buttons and
- * step navigation; a step renders only its body and, if it needs to gate progress, calls
- * `setCanProceed(false)`. Sibling tickets (PT-4176/77/78/79) implement real steps by swapping
- * entries in the shell's `stepComponents` map.
+ * Props every first-run wizard step receives from the shell. By default, the shell owns the footer
+ * buttons and step navigation; a step renders only its body and, if it needs to gate progress,
+ * calls `setCanProceed(false)`. Steps that need a custom footer (e.g. sync-consent) receive
+ * navigation callbacks directly via these props and suppress the shell's shared footer. Sibling
+ * tickets (PT-4176/77/78/79) implement real steps by swapping entries in the shell's
+ * `stepComponents` map.
  */
 export interface FirstRunStepProps {
   /**
