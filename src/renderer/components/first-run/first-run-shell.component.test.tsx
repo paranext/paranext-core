@@ -18,6 +18,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
+      '%firstRun_step_internet_placeholder%': 'Internet settings (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
@@ -42,10 +43,16 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: () => <p>identify step</p> }}
+        stepComponents={{
+          ...DEFAULT_STEP_COMPONENTS,
+          internet: () => <p>internet step</p>,
+          identify: () => <p>identify step</p>,
+        }}
       />,
     );
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText(/internet step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText(/identify step/i)).toBeInTheDocument();
   });
@@ -53,14 +60,14 @@ describe('FirstRunShell', () => {
   it('goes back to a step visited earlier this session', async () => {
     render(
       <FirstRunShell
-        entryStep="language"
+        entryStep="internet"
         stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: () => <p>identify step</p> }}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internet -> identify
     expect(screen.getByText(/identify step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.getByText(/language picker/i)).toBeInTheDocument();
+    expect(screen.queryByText(/identify step/i)).not.toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
@@ -120,14 +127,11 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: BlockingStep }}
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, internet: BlockingStep }}
       />,
     );
-    // Start on language (Next should be enabled)
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
-    // Navigate into identify (the blocking step)
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    // The blocking step's mount effect must win — Next must be disabled
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
   });
 });
