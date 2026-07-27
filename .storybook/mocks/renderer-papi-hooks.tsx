@@ -16,11 +16,11 @@
  * language step's data — qualifying setup languages, available-language autonyms, the current
  * interface language (interactive), the loading flag — and to render real English strings.
  */
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import type { LanguageInfo } from 'platform-bible-react';
 import type { LocalizeKey } from 'platform-bible-utils';
 import { getLocalizedStrings } from '../localization.utils';
-import { getFirstRunLanguageMock } from './first-run-language-mock-channel';
+import { FirstRunLanguageMockContext } from './first-run-language-mock-channel';
 
 // Pass every other renderer hook straight through to the real implementation (explicit re-export,
 // not `export *`, so it never collides with the three replaced exports below). Keep in sync if the
@@ -51,7 +51,7 @@ export function useSetting(
   _key: string,
   defaultState: string[],
 ): [string[], (newData: string[]) => Promise<undefined>, () => void, boolean] {
-  const mock = getFirstRunLanguageMock();
+  const mock = useContext(FirstRunLanguageMockContext);
   const initial = mock?.interfaceLanguage ?? defaultState;
   const [value, setValue] = useState<string[]>(initial);
   return [
@@ -74,7 +74,7 @@ type LanguageDataTuple = [Record<string, LanguageInfo>, undefined, boolean];
  * with no backend.
  */
 export function useData(): unknown {
-  const mock = getFirstRunLanguageMock();
+  const mock = useContext(FirstRunLanguageMockContext);
   return new Proxy(
     {},
     {
