@@ -39,18 +39,27 @@ import type {
 } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
+import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
+import { useIsOnline } from './use-is-online.hook';
 import {
   isDblResourceReference,
   isProjectReference,
   getRefLabel,
 } from './resource-reference.utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
+  '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
+  '%webView_resourcePanel_installFailed%',
+  '%webView_resourcePanel_installFailedOffline%',
+  '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -188,6 +197,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [textConnectionsProvider],
   );
 
+  // Re-resolve the cached resource list once an install completes so the resource flips to
+  // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
+  // provider resolves — its identity change then re-fires the auto-install effect for the real
+  // install.
+  const markResourcesStale = useCallback(() => setFetchResources(true), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'resource text panel',
+    markResourcesStale,
+  );
+
   // #endregion
 
   // #region Filter list based on resourceType
@@ -242,11 +262,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const [isSelecting, setIsSelecting] = useState(false);
 
   if (isDblResourceReference(selectedRef)) {
-    dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
+    dblMatch = findCachedDblResource(selectedRef, dblResources);
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
   } else if (isProjectReference(selectedRef)) {
     resourceProjectId = selectedRef.id;
   }
+
+  // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
+  // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
+  // pick is in flight (it installs the resource itself).
+  const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
+  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
+    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
+
+  // Only used to add a "check your connection" hint to the install-failed message when offline.
+  const isOnline = useIsOnline();
 
   // Load PT9-derived marker styles when the displayed resource is a supported commentary.
   // Keyed on the resource's project id (not the user's projectId prop) since the resource is what
@@ -350,35 +380,31 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       setIsSelecting(true);
+      // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
+      retryInstall();
       try {
         await selectTextConnection(
           resource,
           getUserResourceTexts,
           setUserResourceTexts,
-          dblResourcesProvider
-            ? async (dblEntryUid) => {
-                try {
-                  await dblResourcesProvider.installDblResource(dblEntryUid);
-                  setFetchResources(true);
-                } catch (e: unknown) {
-                  papi.notifications.send({
-                    message: '%webView_selectDblResource_installFailed%',
-                    severity: 'error',
-                  });
-                  logger.warn(
-                    `Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`,
-                  );
-                  throw e;
-                }
-              }
-            : undefined,
+          async (dblEntryUid: string) => {
+            try {
+              await installResource(dblEntryUid);
+            } catch (e) {
+              // Record the failure so that once the pick finishes and the auto-install effect
+              // re-enables, its failed-uid guard suppresses a duplicate install attempt; this also
+              // surfaces the install-failed state immediately instead of after a second attempt.
+              markInstallFailed(dblEntryUid);
+              throw e;
+            }
+          },
           (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
         );
       } finally {
         setIsSelecting(false);
       }
     },
-    [dblResourcesProvider, getUserResourceTexts, setUserResourceTexts],
+    [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
   );
 
   const showResourcePicker = useDialogCallback(
@@ -468,13 +494,38 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Installing state: selected DblResource found but not yet installed
-  if (isSelecting) {
+  // Install failed: the selected resource is in the catalog but couldn't be installed. Offer a
+  // retry rather than spinning forever; a success drops out of this state on its own. When offline
+  // (the usual first-run cause), hint at the connection.
+  if (installFailed) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
-        <Spinner />
-        <span>{localizedStrings['%webView_resourcePanel_selecting%']}</span>
-      </div>
+      <InstallFailedView
+        message={
+          localizedStrings[
+            isOnline
+              ? '%webView_resourcePanel_installFailed%'
+              : '%webView_resourcePanel_installFailedOffline%'
+          ]
+        }
+        retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
+        onRetry={retryInstall}
+      />
+    );
+  }
+
+  // Installing state: selected DblResource found but not yet installed. Distinguish the two causes
+  // so the label is accurate: a user pick (isSelecting) reads "Selecting…", while an auto-install
+  // of a configured resource (isInstalling) — where the user picked nothing and it's just
+  // downloading — reads "Installing…".
+  if (isSelecting || isInstalling) {
+    return (
+      <InstallingView
+        label={
+          localizedStrings[
+            isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%'
+          ]
+        }
+      />
     );
   }
 

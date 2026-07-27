@@ -1,7 +1,7 @@
 import { dirname, join } from 'path';
 import type { StorybookConfig } from '@storybook/react-webpack5';
 import { mergeWithCustomize } from 'webpack-merge';
-import { RuleSetRule } from 'webpack';
+import { NormalModuleReplacementPlugin, RuleSetRule } from 'webpack';
 
 const config: StorybookConfig = {
   stories: [
@@ -164,6 +164,38 @@ const config: StorybookConfig = {
         '@papi/core$': join(__dirname, 'papi-stubs/core.ts'),
       };
     }
+
+    // Renderer app components (startup-wizard shell/steps, dialogs, overlays) import
+    // `useLocalizedStrings` from the `@renderer/hooks/papi-hooks` barrel. The real hook opens a PAPI
+    // WebSocket that has no backend in Storybook, rejecting unhandled after ~10s ("Timeout reached
+    // when waiting for websocket connected to settle") and crashing every startup-wizard story. The
+    // stub re-exports the real hooks and overrides only `useLocalizedStrings` to resolve strings
+    // without a connection.
+    //
+    // This MUST use NormalModuleReplacementPlugin, not `resolve.alias`: the base renderer webpack
+    // config resolves `@renderer/*` via `TsconfigPathsPlugin` (webpack.config.base.ts), which wins
+    // over `resolve.alias`, so an alias entry is silently ignored (that is why the `@papi/*` aliases
+    // above work — `@papi` is not a tsconfig path — but a `@renderer/...` alias would not). The
+    // replacement rewrites the request in `beforeResolve`, before TsconfigPaths runs. The `$`-anchored
+    // regex matches only the exact barrel, so deep-path `@renderer/hooks/papi-hooks/*` imports (used
+    // by the stub itself to re-export the real hooks) still resolve normally.
+    webpackConfig.plugins = webpackConfig.plugins ?? [];
+    webpackConfig.plugins.push(
+      new NormalModuleReplacementPlugin(
+        /^@renderer\/hooks\/papi-hooks$/,
+        join(__dirname, 'papi-stubs/renderer-papi-hooks.ts'),
+      ),
+      // Stop `networkService.initialize()` from constructing a real renderer RpcClient, which tries
+      // to open a PAPI WebSocket that has no backend in Storybook and rejects unhandled after ~10s
+      // ("Timeout reached when waiting for websocket connected to settle"), crashing renderer
+      // stories via the dev overlay. The inert handler makes initialize() succeed with no socket, so
+      // no connection is attempted. Same reasoning as above re: replacement plugin vs `resolve.alias`
+      // (`@shared/*` is a TsconfigPathsPlugin path).
+      new NormalModuleReplacementPlugin(
+        /^@shared\/services\/rpc-handler\.factory$/,
+        join(__dirname, 'papi-stubs/rpc-handler.factory.ts'),
+      ),
+    );
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({

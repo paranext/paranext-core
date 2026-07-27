@@ -25,6 +25,7 @@ import {
   CommandLineArgs,
   getCommandLineArgumentsGroup,
   getCommandLineSwitch,
+  stripWrappingQuotes,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
@@ -265,7 +266,7 @@ const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' 
 const extensionRootDirectories: Uri[] = [
   // 1. `--extensionDirs`-provided directories
   ...getCommandLineArgumentsGroup(CommandLineArgs.ExtensionsDir).map(
-    (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
+    (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(stripWrappingQuotes(extensionDirPath))}`,
   ),
   // 2. Installed extensions directory
   installedExtensionsUri,
@@ -291,7 +292,7 @@ if (getCommandLineSwitch(CommandLineArgs.Portable)) {
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
   CommandLineArgs.Extensions,
-).map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(extensionPath)}`);
+).map((extensionPath) => `${FILE_PROTOCOL}${path.resolve(stripWrappingQuotes(extensionPath))}`);
 
 /**
  * Contents of `nodeFS.readDir()` for all parent folders of extensions. This is expected to be a

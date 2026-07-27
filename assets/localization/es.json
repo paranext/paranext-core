@@ -498,6 +498,7 @@
   "%settings_platform_zoomFactor_description%": "Se aplica a toda la aplicación. El valor predeterminado es 1. El rango permitido es de 0,5 a 3.",
   "%settings_platform_zoomFactor_errorMessage%": "El rango permitido es de {lowerLimit} a {upperLimit}.",
   "%settings_platform_zoomFactor_label%": "Zoom",
+  "%settings_projectSyncBlocked_notice%": "Edición pausada — se está realizando un Enviar/Recibir automático para este proyecto. La configuración es de solo lectura hasta que finalice.",
   "%settings_sidebar_generalSettingsLabel%": "Configuración general",
   "%settings_sidebar_projectsComboBoxPlaceholder%": "Seleccionar proyecto",
   "%settings_sidebar_projectSettingsLabel%": "Configuración del proyecto",
