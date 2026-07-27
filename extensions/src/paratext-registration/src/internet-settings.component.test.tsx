@@ -158,4 +158,48 @@ describe('InternetSettingsForm', () => {
     expect(screen.getByText('Restarted sentinel')).toBeInTheDocument();
     expect(screen.queryByText('Restarting description sentinel')).not.toBeInTheDocument();
   });
+
+  describe('focus management', () => {
+    function buildProps(
+      overrides: Partial<InternetSettingsFormProps> = {},
+    ): InternetSettingsFormProps {
+      return {
+        localizedStrings: mockLocalizedStrings,
+        internetSettings: defaultSettings,
+        savedInternetSettings: defaultSettings,
+        onInternetSettingsChange: vi.fn(),
+        isFormDisabled: false,
+        saveState: SaveState.HasNotSaved,
+        saveError: '',
+        onSaveAndRestart: vi.fn(),
+        ...overrides,
+      };
+    }
+
+    test('focuses checked radio button when form becomes enabled after initial loading', () => {
+      const { rerender } = render(
+        <InternetSettingsForm {...buildProps({ isFormDisabled: true })} />,
+      );
+      rerender(<InternetSettingsForm {...buildProps({ isFormDisabled: false })} />);
+      expect(
+        document.querySelector<HTMLElement>('button[data-state="checked"]:not(:disabled)'),
+      ).toHaveFocus();
+    });
+
+    test('focuses success alert when save state first enters IsRestarting', () => {
+      const props = buildProps();
+      const { rerender } = render(<InternetSettingsForm {...props} />);
+      rerender(<InternetSettingsForm {...props} saveState={SaveState.IsRestarting} />);
+      expect(
+        screen.getByText('Settings updated sentinel').closest('[tabindex="-1"]'),
+      ).toHaveFocus();
+    });
+
+    test('focuses error alert when a save error first appears', () => {
+      const props = buildProps();
+      const { rerender } = render(<InternetSettingsForm {...props} />);
+      rerender(<InternetSettingsForm {...props} saveError="Something went wrong" />);
+      expect(screen.getByText('Error sentinel').closest('[tabindex="-1"]')).toHaveFocus();
+    });
+  });
 });

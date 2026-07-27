@@ -13,6 +13,7 @@ import {
 } from 'platform-bible-react';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { deepEqual } from 'platform-bible-utils';
+import { useEffect, useRef } from 'react';
 import { scrollToRef, SaveState } from './utils';
 
 /**
@@ -73,6 +74,46 @@ export function InternetSettingsForm({
 
   const areButtonsDisabled = !hasUnsavedChanges || isFormDisabled;
 
+  const radioGroupContainerRef = useRef<HTMLDivElement>(null);
+  const successAlertRef = useRef<HTMLDivElement>(null);
+  const errorAlertRef = useRef<HTMLDivElement>(null);
+
+  // Focus the selected radio button when the form first becomes interactive (fetch complete).
+  const prevIsFormDisabledRef = useRef(true);
+  useEffect(() => {
+    const wasDisabled = prevIsFormDisabledRef.current;
+    prevIsFormDisabledRef.current = isFormDisabled;
+    if (wasDisabled && !isFormDisabled) {
+      const checked = radioGroupContainerRef.current?.querySelector<HTMLElement>(
+        'button[data-state="checked"]:not(:disabled)',
+      );
+      checked?.focus();
+    }
+  }, [isFormDisabled]);
+
+  // Focus the success alert when the save-triggered state transition first appears.
+  const prevSaveStateRef = useRef(saveState);
+  useEffect(() => {
+    const prev = prevSaveStateRef.current;
+    prevSaveStateRef.current = saveState;
+    if (
+      prev !== saveState &&
+      (saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved)
+    ) {
+      successAlertRef.current?.focus();
+    }
+  }, [saveState]);
+
+  // Focus the error alert when a save error first appears.
+  const prevSaveErrorRef = useRef(saveError);
+  useEffect(() => {
+    const prev = prevSaveErrorRef.current;
+    prevSaveErrorRef.current = saveError;
+    if (!prev && saveError) {
+      errorAlertRef.current?.focus();
+    }
+  }, [saveError]);
+
   return (
     <div className="tw:flex tw:h-screen tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
       <div>
@@ -84,12 +125,16 @@ export function InternetSettingsForm({
         </p>
       </div>
 
-      <InternetAccessOptionList
-        localizedStrings={localizedStrings}
-        value={internetSettings.permittedInternetUse}
-        onChange={(v) => onInternetSettingsChange({ ...internetSettings, permittedInternetUse: v })}
-        disabled={isFormDisabled}
-      />
+      <div ref={radioGroupContainerRef}>
+        <InternetAccessOptionList
+          localizedStrings={localizedStrings}
+          value={internetSettings.permittedInternetUse}
+          onChange={(v) =>
+            onInternetSettingsChange({ ...internetSettings, permittedInternetUse: v })
+          }
+          disabled={isFormDisabled}
+        />
+      </div>
 
       <DeveloperSection
         localizedStrings={localizedStrings}
@@ -99,7 +144,16 @@ export function InternetSettingsForm({
       />
 
       {saveError && (
-        <Alert ref={scrollToRef} variant="destructive">
+        <Alert
+          ref={(el: HTMLDivElement | null) => {
+            scrollToRef(el);
+            errorAlertRef.current = el;
+          }}
+          // tabIndex={-1} makes the alert programmatically focusable so focus can move here after a save error
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          tabIndex={-1}
+          variant="destructive"
+        >
           <AlertCircle className="tw:h-4 tw:w-4" />
           <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
           <AlertDescription>{saveError}</AlertDescription>
@@ -107,7 +161,15 @@ export function InternetSettingsForm({
       )}
 
       {!saveError && (saveState === SaveState.IsRestarting || saveState === SaveState.HasSaved) && (
-        <Alert ref={scrollToRef}>
+        <Alert
+          ref={(el: HTMLDivElement | null) => {
+            scrollToRef(el);
+            successAlertRef.current = el;
+          }}
+          // tabIndex={-1} makes the alert programmatically focusable so focus can move here after save
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          tabIndex={-1}
+        >
           <CircleCheck className="tw:h-4 tw:w-4" />
           <AlertTitle>
             {localizedStrings['%paratextRegistration_alert_updatedInternetSettings_2%']}
