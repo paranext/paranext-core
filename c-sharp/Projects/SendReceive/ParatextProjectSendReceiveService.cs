@@ -37,6 +37,10 @@ internal class ParatextProjectSendReceiveService(
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.cancelSync",
                 CancelSync
+            ),
+            PapiClient.RegisterRequestHandlerAsync(
+                "command:paratextBibleSendReceive.breakSyncLock",
+                BreakSyncLock
             )
         );
     }
@@ -127,6 +131,22 @@ internal class ParatextProjectSendReceiveService(
     {
         throw new PlatformUnimplementedException(
             $"Command '{nameof(CancelSync)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        );
+    }
+
+    /// <summary>
+    /// Breaks (releases) the Send/Receive server lock for each given project and reports
+    /// per-project success. Recovery for a project whose lock is held by the current user
+    /// THEMSELVES (this same person on another computer, or a previous interrupted sync). The
+    /// server only permits breaking a lock you own, so this can never break another user's lock.
+    /// Exception is thrown if this function is not implemented in the current application.
+    /// </summary>
+    /// <param name="projectIds">Ids of the projects whose server lock to break.</param>
+    /// <returns>Map of (upper-cased) project id → whether that project's lock was broken.</returns>
+    protected Task<Dictionary<string, bool>> BreakSyncLock(List<string> projectIds)
+    {
+        throw new PlatformUnimplementedException(
+            $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
         );
     }
 

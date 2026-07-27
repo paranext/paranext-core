@@ -424,6 +424,24 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
 
     /**
+     * Breaks (releases) the Send/Receive server lock for each given project and reports per-project
+     * success. Recovery for a project whose lock is held by the current user THEMSELVES (this same
+     * person on another computer, or a previous interrupted sync). The server only permits breaking
+     * a lock you own, so this can never break another user's lock.
+     *
+     * Note: this command is served from the dotnet process.
+     *
+     * @param projectIds Ids of the projects whose server lock to break
+     * @returns Map of (upper-cased) project id → whether that project's lock was broken
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.breakSyncLock': (
+      projectIds: string[],
+    ) => Promise<{ [projectId: string]: boolean }>;
+
+    /**
      * Returns the S/R write gate's current {@link SyncWriteLockSnapshot} so subscribers can seed
      * their blocking state on init instead of assuming unblocked (e.g. after a renderer reload
      * during an in-flight sync).
