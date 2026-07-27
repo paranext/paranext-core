@@ -1,3 +1,10 @@
+---
+paths:
+  - ".claude/agents/**"
+  - ".claude/commands/**"
+  - ".claude/skills/**"
+---
+
 ## Agent/Command/Skill Authoring: Link, Don't Paraphrase
 
 When writing or editing files in `.claude/agents/`, `.claude/commands/`, or `.claude/skills/`, prefer generic patterns over content that goes stale. Ask: "If a standard changes, would this text need to be hand-updated?" If yes, link to the source instead of restating it.

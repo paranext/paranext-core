@@ -257,7 +257,9 @@ standalone command, so this can happen days later in a fresh session:
 `/prd-to-jira .context/research/investigations/$SLUG/brief.md`.
 
 Per-work-item design and implementation planning (e.g. `superpowers:writing-plans`) happen
-**after** Jira creation, one work item at a time — not in this command.
+**after** Jira creation, one work item at a time — not in this command. As each plan is executed,
+record deviations from the approved plan in the plan doc itself — it doubles as the
+implementation's deviation log.
 
 ## Error handling
 
