@@ -4,7 +4,7 @@ description: Mandatory localization patterns for all user-facing text in paranex
 version: 1.5.0
 status: active
 created: 2026-03-04
-last_updated: 2026-07-16
+last_updated: 2026-07-27
 toc: true
 ---
 
@@ -386,7 +386,7 @@ In `localizedStrings.json`:
 
 ## Embedding JSX in Localized Text with formatReplacementStringToArray
 
-`formatReplacementString` only produces a plain string, so it can't carry a React element (a link, an icon, a `<kbd>`) embedded mid-sentence. For that case, use its sibling `formatReplacementStringToArray` from `platform-bible-utils`: it tokenizes the same `{placeholder}` syntax but returns an array of strings interleaved with whatever replacer values you pass — including JSX — which you render directly as children.
+`formatReplacementString` only produces a plain string, so it can't carry a React element (a link, an icon, a `Kbd`) embedded mid-sentence. For that case, use its sibling `formatReplacementStringToArray` from `platform-bible-utils`: it tokenizes the same `{placeholder}` syntax but returns an array of strings interleaved with whatever replacer values you pass — including JSX — which you render directly as children.
 
 ```tsx
 import { formatReplacementStringToArray } from 'platform-bible-utils';
@@ -405,7 +405,9 @@ import { formatReplacementStringToArray } from 'platform-bible-utils';
 </p>
 ```
 
-**Why this matters:** embedding a non-text element (a `<kbd>`, an icon, a link) by string-concatenating it before or after a localized string — e.g. `<kbd>Backspace</kbd> {message}` — bakes in an assumption about word order and spacing that not every language shares, and forces the element into a fixed position the string can't control. Letting the *localized string itself* place the `{placeholder}` fixes both problems: each translation decides where the embedded element goes, and any surrounding punctuation/spacing lives in the translated string, not in code.
+**Why this matters:** embedding a non-text element (a `Kbd`, an icon, a link) by string-concatenating it before or after a localized string — e.g. `<Kbd>{key}</Kbd> {message}` — bakes in an assumption about word order and spacing that not every language shares, and forces the element into a fixed position the string can't control. Letting the *localized string itself* place the `{placeholder}` fixes both problems: each translation decides where the embedded element goes, and any surrounding punctuation/spacing lives in the translated string, not in code.
+
+For key names specifically, use the `Kbd`/`KbdGroup` components exported from `platform-bible-react` rather than a raw `<kbd>` element, per the [Tooltips guideline](../../lib/platform-bible-react/src/stories/guidelines/tooltips.mdx). And don't hardcode a key's display word (`"Backspace"`, `"Delete"`) — once merged, `getLocalizeKeyForPhysicalKey` (`platform-bible-utils/keyboard-util.ts`, added in [#2590](https://github.com/paranext/paranext-core/pull/2590)) resolves a `NameablePhysicalKey` to its localized key, so the key label goes through the same localization pipeline as everything else instead of being hardcoded per caller.
 
 **Reference implementation:** `src/renderer/components/dialogs/about-dialog.component.tsx` (the `%about_db_ip_attribution_format%` string interpolates two `<a>` links this way).
 
@@ -530,7 +532,7 @@ Alternative design: use a dedicated `xxxKey` field (e.g. `ErrorMessageKey`) alon
 
 | Version | Date       | Change          |
 | ------- | ---------- | --------------- |
-| 1.5.0   | 2026-07-16 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/kbd elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |
+| 1.5.0   | 2026-07-27 | Added "Embedding JSX in Localized Text with formatReplacementStringToArray" section (mid-sentence JSX interpolation, e.g. links/`Kbd` elements, via the existing `formatReplacementStringToArray` utility — was previously undocumented and had already been reimplemented once as a local helper; also notes to use the shadcn `Kbd`/`KbdGroup` components and, once merged, `getLocalizeKeyForPhysicalKey` for key names rather than hardcoding them). Added "Spanish (es) Localization Decisions" section distilled from the team's "Localization decisions - Paratext 10 Studio" Google Doc (Spanish tab): regional-variant/priority guidance, formal `usted` register, error-message templates, capitalization rules, and verb-mood rules (infinitive for controls, conjugated imperative for messages/alerts). French tab exists but is not yet authoritative, so not captured. |
 | 1.4.0   | 2026-06-17 | Added "Localizing Shared Library Components (`lib/platform-bible-react/`)" section: process-agnostic library components must not call `useLocalizedStrings`/PAPI; they expose a frozen `STRING_KEYS` tuple + a `Partial<Record<…>>` type + an optional `localizedStrings?` prop with English-fallback reads, and the consumer resolves and passes strings down. Named the hardcoded-string enforcer as the real ESLint rule `paranext/no-hardcoded-jsx-strings`. Added a "one key-prefix convention per feature namespace" subsection under Conventions › Key Format (prefer camelCase feature-prefix with `_` subsegments; don't mix camelCase and snake_case variants of the same prefix). Grounded against `book-chapter-control`, `book-selector`, and `marker-menu`. |
 | 1.3.0   | 2026-04-29 | Added "Text Direction (RTL/LTR)" section codifying per-content direction via `useProjectSetting('platform.textDirection', defaultTextDirection)`. Forbids hardcoded language-code equality checks (`x === 'he' \|\| x === 'ar'`). References `platform-scripture-editor.web-view.tsx` (the `defaultTextDirection` constant and the `OHEBGRK` branch) as the canonical pattern. Clarifies separation between global UI direction (`readDirection()`) and per-content direction. Sourced from markers-checklist PR feedback (RTL-hardcoding comment). |
 | 1.2.0   | 2026-04-21 | Added `toc: true` + machine-readable TOC block now that the guide has grown past the stub-patterns.md threshold. No content changes. |
