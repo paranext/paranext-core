@@ -70,9 +70,9 @@ export function InternetSettingsForm({
 
   const areButtonsDisabled = !hasUnsavedChanges || isFormDisabled;
 
-  const radioGroupContainerRef = useRef<HTMLDivElement>(null);
-  const successAlertRef = useRef<HTMLDivElement>(null);
-  const errorAlertRef = useRef<HTMLDivElement>(null);
+  const radioGroupContainerRef = useRef<HTMLDivElement | undefined>(undefined);
+  const successAlertRef = useRef<HTMLDivElement | undefined>(undefined);
+  const errorAlertRef = useRef<HTMLDivElement | undefined>(undefined);
 
   // Focus the selected radio button when the form first becomes interactive (fetch complete).
   const prevIsFormDisabledRef = useRef(true);
@@ -121,7 +121,11 @@ export function InternetSettingsForm({
         </p>
       </div>
 
-      <div ref={radioGroupContainerRef}>
+      <div
+        ref={(el) => {
+          radioGroupContainerRef.current = el ?? undefined;
+        }}
+      >
         <InternetAccessOptionList
           localizedStrings={localizedStrings}
           value={internetSettings.permittedInternetUse}
@@ -143,7 +147,7 @@ export function InternetSettingsForm({
         <Alert
           ref={(el: HTMLDivElement | null) => {
             scrollToRef(el);
-            errorAlertRef.current = el;
+            errorAlertRef.current = el ?? undefined;
           }}
           // tabIndex={-1} makes the alert programmatically focusable so focus can move here after a save error
           // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
@@ -160,7 +164,7 @@ export function InternetSettingsForm({
         <Alert
           ref={(el: HTMLDivElement | null) => {
             scrollToRef(el);
-            successAlertRef.current = el;
+            successAlertRef.current = el ?? undefined;
           }}
           // tabIndex={-1} makes the alert programmatically focusable so focus can move here after save
           // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
