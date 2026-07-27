@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 import { useEvent, Spinner, Progress } from 'platform-bible-react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { getNetworkEvent } from '@shared/services/network.service';
@@ -55,7 +56,7 @@ function ProjectRowList({ rows }: { rows: ProjectRow[] }) {
             <Spinner aria-hidden="true" />
           ) : (
             // Decorative: row text provides the accessible label.
-            <span aria-hidden="true">✓</span>
+            <Check aria-hidden="true" className="tw:h-4 tw:w-4" />
           )}
           <span>{row.name}</span>
         </li>
@@ -142,7 +143,7 @@ export function SyncProgressStep({
     } else if (hasSyncStartedRef.current) {
       // Only mark complete after seeing isSyncing:true — stale-event guard.
       setSyncComplete(true);
-      setRows((prev) => prev.map((r) => ({ ...r, status: 'done' as const })));
+      setRows((prev) => prev.map((row) => ({ ...row, status: 'done' as const })));
     }
   }, []);
 
@@ -162,9 +163,11 @@ export function SyncProgressStep({
       // non-consecutive recurrences (e.g. a retry that re-emits an earlier project name).
       if (normalizedValue !== undefined && text) {
         setRows((prev) => {
-          if (prev.some((r) => r.name === text)) return prev;
+          if (prev.some((row) => row.name === text)) return prev;
           return [
-            ...prev.map((r) => (r.status === 'syncing' ? { ...r, status: 'done' as const } : r)),
+            ...prev.map((row) =>
+              row.status === 'syncing' ? { ...row, status: 'done' as const } : row,
+            ),
             { name: text, status: 'syncing' },
           ];
         });
