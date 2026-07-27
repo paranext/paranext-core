@@ -1,3 +1,5 @@
+using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
+
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
@@ -104,10 +106,19 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
 
         // Register the pull command so a renderer can read the current snapshot on demand instead of
         // waiting for the next transition. GetBlockState returns the snapshot the handler serializes
-        // straight back to the caller.
+        // straight back to the caller. The command is @experimental (see the TS declaration), so its
+        // registration also carries the x-experimental wire marker per the Experimental APIs
+        // standard.
         await PapiClient.RegisterRequestHandlerAsync(
             GetAutoSyncBlockingCommand,
-            SendReceiveWriteLock.GetBlockState
+            SendReceiveWriteLock.GetBlockState,
+            null,
+            Create(
+                "Returns the S/R write gate's current block-state snapshot ({ isBlocking, "
+                    + "projectIds }) so a renderer can seed its blocking state on demand instead of "
+                    + "waiting for the next onSyncWriteLockChanged transition.",
+                result: ResultOf("object", "The write gate's current block-state snapshot")
+            )
         );
     }
 

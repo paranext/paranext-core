@@ -79,7 +79,7 @@ export function initAutoSyncBlockingService(): () => void {
   // fire-and-forget SendEventAsync, an off-contract raise reorder, or a provider that restarts
   // disarmed without re-emitting), the visible blocked set stays stale until the next real
   // transition or a full renderer reload. Closing that gap needs an editor-mount re-query, tracked
-  // on PT-4214; until that lands, this one-shot seed is the only recovery.
+  // on PT-4265; until that lands, this one-shot seed is the only recovery.
   (async () => {
     try {
       const snapshot = await sendCommand(GET_AUTO_SYNC_BLOCKING_COMMAND);

@@ -429,9 +429,15 @@ declare module 'papi-shared-types' {
      * person on another computer, or a previous interrupted sync). The server only permits breaking
      * a lock you own, so this can never break another user's lock.
      *
+     * This is the **server-side repository lock** held on the S/R server — unrelated to the local
+     * in-process sync write gate reported by the neighboring
+     * `paratextBibleSendReceive.onSyncWriteLockChanged` event /
+     * `paratextBibleSendReceive.getAutoSyncBlocking` command.
+     *
      * Note: this command is served from the dotnet process.
      *
-     * @param projectIds Ids of the projects whose server lock to break
+     * @param projectIds Ids of the projects whose server lock to break. An empty array is a no-op:
+     *   it resolves to an empty map without contacting the server
      * @returns Map of (upper-cased) project id → whether that project's lock was broken
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)

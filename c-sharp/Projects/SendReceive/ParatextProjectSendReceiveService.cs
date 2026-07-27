@@ -1,4 +1,5 @@
 using Paranext.DataProvider.Services;
+using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
 
@@ -38,9 +39,30 @@ internal class ParatextProjectSendReceiveService(
                 "command:paratextBibleSendReceive.cancelSync",
                 CancelSync
             ),
+            // breakSyncLock is @experimental (see the TS declaration), so its registration also
+            // carries the x-experimental wire marker per the Experimental APIs standard.
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.breakSyncLock",
-                BreakSyncLock
+                BreakSyncLock,
+                null,
+                Create(
+                    "Breaks (releases) the Send/Receive server-side repository lock for each given "
+                        + "project and reports per-project success. Unrelated to the local "
+                        + "in-process sync write gate reported by onSyncWriteLockChanged / "
+                        + "getAutoSyncBlocking.",
+                    [
+                        Param(
+                            "projectIds",
+                            "Ids of the projects whose server lock to break. An empty array is a "
+                                + "no-op (empty result, server not contacted).",
+                            "array"
+                        ),
+                    ],
+                    ResultOf(
+                        "object",
+                        "Map of (upper-cased) project id → whether that project's lock was broken"
+                    )
+                )
             )
         );
     }
@@ -139,9 +161,13 @@ internal class ParatextProjectSendReceiveService(
     /// per-project success. Recovery for a project whose lock is held by the current user
     /// THEMSELVES (this same person on another computer, or a previous interrupted sync). The
     /// server only permits breaking a lock you own, so this can never break another user's lock.
+    /// This is the <b>server-side repository lock</b> held on the S/R server — unrelated to the
+    /// local in-process write gate (<see cref="SendReceiveWriteLock"/>) reported by the
+    /// neighboring onSyncWriteLockChanged event / getAutoSyncBlocking command.
     /// Exception is thrown if this function is not implemented in the current application.
     /// </summary>
-    /// <param name="projectIds">Ids of the projects whose server lock to break.</param>
+    /// <param name="projectIds">Ids of the projects whose server lock to break. An empty list is
+    /// a no-op: the result is an empty map and the server is never contacted.</param>
     /// <returns>Map of (upper-cased) project id → whether that project's lock was broken.</returns>
     protected Task<Dictionary<string, bool>> BreakSyncLock(List<string> projectIds)
     {
