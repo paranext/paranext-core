@@ -770,15 +770,6 @@ async function main() {
         return;
       }
 
-      // Open new window: Ctrl+Shift+N (Cmd+Shift+N on Mac)
-      if ((input.control || input.meta) && input.shift && input.key === 'N') {
-        event.preventDefault();
-        createWindow().catch((e) => {
-          logger.error(`Failed to create new window: ${getErrorMessage(e)}`);
-        });
-        return;
-      }
-
       // PT9 verse navigation shortcuts: F8/Ctrl+F8 chapter, F9/Ctrl+F9 book,
       // Ctrl+Up/Ctrl+Down verse, Ctrl+B open Book Chapter Control (PT-4033).
       // On macOS the modified shortcuts use Command instead of Control
