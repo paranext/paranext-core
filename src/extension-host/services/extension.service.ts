@@ -25,6 +25,7 @@ import {
   CommandLineArgs,
   getCommandLineArgumentsGroup,
   getCommandLineSwitch,
+  stripWrappingQuotes,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
@@ -237,23 +238,6 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
     extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
 
   return extensionManifest;
-}
-
-/**
- * Strip a single matching pair of wrapping quote characters (`'...'` or `"..."`) from a raw path
- * argument.
- *
- * Some dev workflows use process managers (e.g., `concurrently` on Windows) that quote
- * `--extensions`/`--extensionDirs` arguments for a POSIX shell but then execute them via `cmd.exe`,
- * which does not strip the quotes. The literal quotes then end up as part of the path, and
- * `path.resolve` silently treats the whole thing as a relative path instead of failing loudly.
- */
-function stripWrappingQuotes(rawPath: string): string {
-  if (rawPath.length < 2) return rawPath;
-  const first = rawPath[0];
-  if ((first === '"' || first === "'") && rawPath[rawPath.length - 1] === first)
-    return rawPath.slice(1, -1);
-  return rawPath;
 }
 
 /**

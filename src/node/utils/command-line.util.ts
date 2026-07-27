@@ -166,3 +166,29 @@ export function getCommandLineSwitch(argName: CommandLineArgs) {
   const argNames: string[] = commandLineArgumentsAliases[argName];
   return argNames.some((alias) => process.argv.includes(alias));
 }
+
+/**
+ * Strip a single matching pair of wrapping quote characters (`'...'` or `"..."`) from a raw
+ * command-line argument.
+ *
+ * Some dev workflows use process managers (e.g., `concurrently` on Windows) that quote arguments
+ * for a POSIX shell but then execute them via `cmd.exe`, which does not strip the quotes. The
+ * literal quotes then end up as part of the value instead of being removed.
+ *
+ * @param rawArg Raw command-line argument value, possibly wrapped in a single matching pair of
+ *   quote characters
+ * @returns `rawArg` with a single matching pair of wrapping quotes removed, or `rawArg` unchanged
+ *   if it is not wrapped in a matching pair of quotes
+ *
+ *   Ex: `stripWrappingQuotes('"C:\\foo"')` returns `'C:\\foo'`
+ *
+ *   Ex: `stripWrappingQuotes('C:\\foo')` returns `'C:\\foo'`
+ */
+export function stripWrappingQuotes(rawArg: string): string {
+  if (rawArg.length < 2) return rawArg;
+  const first = rawArg[0];
+  if ((first === '"' || first === "'") && rawArg[rawArg.length - 1] === first)
+    return rawArg.slice(1, -1);
+
+  return rawArg;
+}
