@@ -69,7 +69,7 @@ function SyncConsentStep({
       }
       secondaryButton={
         !isSyncing && onSkip ? (
-          <Button variant="ghost" onClick={onSkip}>
+          <Button variant="outline" onClick={onSkip}>
             {strings['%firstRun_button_skipSync%']}
           </Button>
         ) : undefined
