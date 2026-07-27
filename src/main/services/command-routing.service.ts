@@ -7,7 +7,10 @@
 import { getTargetWindowId } from '@main/services/window-state.service';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
-import { RENDERER_HOSTED_COMMAND_NAMES } from '@shared/services/web-view.service-model';
+import {
+  RENDERER_HOSTED_COMMAND_DOCS,
+  RENDERER_HOSTED_COMMAND_NAMES,
+} from '@shared/services/web-view.service-model';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 
@@ -19,16 +22,22 @@ import { serializeRequestType } from '@shared/utils/util';
 export async function startCommandRoutingService(): Promise<void> {
   const registrations = RENDERER_HOSTED_COMMAND_NAMES.map(async (commandName) => {
     const genericRequestType = serializeRequestType(CATEGORY_COMMAND, commandName);
-    await networkService.registerRequestHandler(genericRequestType, async (...args: unknown[]) => {
-      const targetWindowId = getTargetWindowId();
-      if (targetWindowId === undefined)
-        throw new Error(`No windows available to route command ${commandName}`);
-      const scopedRequestType = serializeRequestType(
-        CATEGORY_COMMAND,
-        `${commandName}-${targetWindowId}`,
-      );
-      return networkService.request(scopedRequestType, ...args);
-    });
+    await networkService.registerRequestHandler(
+      genericRequestType,
+      async (...args: unknown[]) => {
+        const targetWindowId = getTargetWindowId();
+        if (targetWindowId === undefined)
+          throw new Error(`No windows available to route command ${commandName}`);
+        const scopedRequestType = serializeRequestType(
+          CATEGORY_COMMAND,
+          `${commandName}-${targetWindowId}`,
+        );
+        return networkService.request(scopedRequestType, ...args);
+      },
+      // The generic name is the documented public API; the scoped names the renderers register
+      // under are internal, so this proxy is where the OpenRPC docs belong
+      RENDERER_HOSTED_COMMAND_DOCS[commandName],
+    );
   });
 
   await Promise.all(registrations);
