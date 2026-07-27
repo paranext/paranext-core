@@ -119,7 +119,6 @@ describe('NotificationDisplay with real Sonner', () => {
     vi.useRealTimers();
   });
 
-
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
     render(<NotificationDisplay />);
 

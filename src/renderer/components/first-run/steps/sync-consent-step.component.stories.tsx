@@ -17,10 +17,10 @@ export default meta;
 
 type Story = StoryObj<typeof SyncConsentStep>;
 
-/** Both "Sync" (primary) and "Don't sync yet" (secondary) are visible. */
+/** Both "Sync" (primary) and "Skip automatic sync" (secondary) are visible. */
 export const Default: Story = {};
 
-/** "Sync" has been clicked; spinner is visible and "Don't sync yet" is hidden while sync runs. */
+/** "Sync" has been clicked; spinner is visible and "Skip automatic sync" is hidden while sync runs. */
 export const Syncing: Story = {
   args: {
     // Never resolves so the component stays in the syncing/busy state indefinitely.

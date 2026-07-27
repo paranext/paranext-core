@@ -175,7 +175,7 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
-  // Sync-consent gate: if the user chose "Don't sync yet" on the sync-consent step, honor that
+  // Sync-consent gate: if the user chose "Skip automatic sync" on the sync-consent step, honor that
   // permanently. On an unreadable flag, default to syncing (consent-safe: the user likely never
   // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
   let syncSkipped = false;

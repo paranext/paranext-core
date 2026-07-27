@@ -281,10 +281,10 @@ export async function resolveFirstRunState(): Promise<void> {
 /**
  * Finish the wizard: persist completion, clear the active marker, reveal the app.
  *
- * @param options.syncSkipped - When true, the user chose "Don't sync yet" on the sync-consent step.
- *   Persists `platform.firstRunSyncSkipped=true` so the main-process startup-tasks can suppress
- *   automatic sync on subsequent launches. Write is best-effort: a failure is logged but does not
- *   block wizard completion.
+ * @param options.syncSkipped - When true, the user chose "Skip automatic sync" on the sync-consent
+ *   step. Persists `platform.firstRunSyncSkipped=true` so the main-process startup-tasks can
+ *   suppress automatic sync on subsequent launches. Write is best-effort: a failure is logged but
+ *   does not block wizard completion.
  */
 export async function completeFirstRun(options?: { syncSkipped?: boolean }): Promise<void> {
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.

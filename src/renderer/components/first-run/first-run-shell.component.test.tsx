@@ -28,19 +28,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_finish%': 'Finish',
-<<<<<<< HEAD
       '%firstRun_step_internet_placeholder%': 'Internet settings (coming soon)',
       '%firstRun_step_syncConsent_heading%': 'Sync your projects',
-||||||| parent of 2fbf2891bee (feat(PT-4178): sync consent step — relabeled buttons, shared form, skip state)
-      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
-      '%firstRun_step_syncConsent_heading%': 'Sync your data',
-=======
-      '%firstRun_button_sync%': 'Sync',
-      '%firstRun_button_dontSyncYet%': "Don't sync yet",
-      '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
-      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
-      '%firstRun_step_syncConsent_heading%': 'Sync your data',
->>>>>>> 2fbf2891bee (feat(PT-4178): sync consent step — relabeled buttons, shared form, skip state)
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
