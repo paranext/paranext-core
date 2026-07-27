@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockRegisterEngine } = vi.hoisted(() => ({
   mockRegisterEngine: vi.fn(),
@@ -12,10 +12,8 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-// subscribeAllThemes is invoked inside an async IIFE in the engine constructor. Calling handler
-// synchronously here resolves the engine's AsyncVariable immediately so that a later dispose()
-// call (in the catch block of initialize()) finds the variable already settled and skips
-// rejectWithReason — preventing unhandled promise rejections in tests.
+// Call handler synchronously so the engine's AsyncVariable settles before a later dispose() (in
+// initialize()'s catch) can call rejectWithReason, avoiding unhandled rejections in tests.
 vi.mock('@shared/services/theme-data.service', () => ({
   themeDataService: {
     subscribeAllThemes: vi

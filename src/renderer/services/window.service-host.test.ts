@@ -64,12 +64,18 @@ const {
 });
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
+  getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
+  // detectFocus() calls getDockLayout().getTabInfoByElement, so the dock layout stays stubbed for
+  // the engine constructor's initial focus detection (see enginesToDispose below). That detection
+  // can resolve after the test finishes, so this mock must not be cleared — a cleared getDockLayout
+  // would resolve to undefined and throw.
   getDockLayout: vi.fn(async () => ({
     focusTab: vi.fn(),
-    getTabInfoByElement: vi.fn(() => undefined),
+    getTabInfoByDirectionFromTab: vi.fn().mockReturnValue(undefined),
+    getTabInfoByElement: vi.fn().mockReturnValue(undefined),
     getTabInfoById: getTabInfoByIdMock,
-    getTabInfoByDirectionFromTab: vi.fn(() => undefined),
   })),
+  getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
   onDidCloseWebView: (callback: CloseWebViewCallback) => {
     closeWebViewCallbacks.push(callback);
     return () => true;
@@ -82,8 +88,6 @@ vi.mock('@renderer/services/web-view.service-host', () => ({
     updateWebViewCallbacks.push(callback);
     return () => true;
   },
-  getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
-  getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
 }));
 
 vi.mock('@shared/services/data-provider.service', () => ({
