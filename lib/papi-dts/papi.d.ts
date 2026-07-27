@@ -10444,14 +10444,14 @@ declare module 'shared/services/window.service-model' {
      */
     dataProviderName: 'platform.windowServiceDataProvider';
   }>;
-  /** Focus of the app window is on a WebView iframe with the specified id */
+  /** Focus of the window is on a WebView iframe with the specified id */
   export type FocusSubjectWebView = {
     focusType: 'webView';
     /** ID of the WebView in focus (its tab ID is the same) */
     id: string;
   };
   /**
-   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
    *
    * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
    * focused in the WebView's iframe
@@ -10463,11 +10463,11 @@ declare module 'shared/services/window.service-model' {
     /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
     id: string;
   };
-  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
   export type FocusSubjectOther = {
     focusType: 'other';
   };
-  /** Current item that is the subject of top-level app window focus */
+  /** Current item that is the subject of top-level focus in the window */
   export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
   /**
    * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
@@ -10480,9 +10480,9 @@ declare module 'shared/services/window.service-model' {
    * focus subject shapes change.
    */
   export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
-  /** Specific item that is intended to be focused in the top-level app window */
+  /** Specific item that is intended to be focused at the top level of the window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the app window focus */
+  /** Instructions that indicate how to change the focus within the window */
   export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
   export type WindowDataTypes = {
     Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;

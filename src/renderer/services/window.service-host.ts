@@ -44,7 +44,7 @@ const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
 });
 
 /**
- * Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.).
+ * Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.).
  *
  * This contains the exact element that is being focused. It is a helper internally for this file
  * only. It helps with determining when "other" focus subject changes
