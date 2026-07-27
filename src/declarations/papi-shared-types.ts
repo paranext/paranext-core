@@ -79,9 +79,17 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
-    /** Create a new application window */
+    /**
+     * Create a new application window
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.createWindow': () => Promise<void>;
-    /** Get the ID of the currently focused window, or undefined if no window is focused */
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
     'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
