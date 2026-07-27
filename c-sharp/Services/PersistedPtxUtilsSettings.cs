@@ -6,14 +6,16 @@ internal class PersistedPtxUtilsSettings : IPtxUtilsSettings
 {
     private readonly PapiClient _papiClient;
 
-    // Set when the initial load fails (e.g. times out), so SafeSave doesn't overwrite the user's
-    // previously-persisted mementos with this instance's fallback-to-empty default.
-    private readonly bool _loadFailed;
+    // True until the settings service is confirmed reachable, so SafeSave doesn't overwrite the
+    // user's previously-persisted mementos with this instance's fallback-to-empty default.
+    // Re-checked (not permanent) so a transient startup-race timeout doesn't block saving for the
+    // rest of the session once the service comes up.
+    private bool _loadUnconfirmed;
 
     public PersistedPtxUtilsSettings(PapiClient papiClient)
     {
         _papiClient = papiClient;
-        _loadFailed = !SettingsService.TryGetSetting(
+        _loadUnconfirmed = !SettingsService.TryGetSetting(
             papiClient,
             Settings.PTX_UTILS_MEMENTO_DATA,
             out SerializableStringDictionary? value
@@ -37,8 +39,16 @@ internal class PersistedPtxUtilsSettings : IPtxUtilsSettings
 
     public void SafeSave()
     {
-        if (_loadFailed)
+        if (
+            _loadUnconfirmed
+            && !SettingsService.TryGetSetting(
+                _papiClient,
+                Settings.PTX_UTILS_MEMENTO_DATA,
+                out SerializableStringDictionary? _
+            )
+        )
             return;
+        _loadUnconfirmed = false;
 
         SettingsService.SetSetting(_papiClient, Settings.PTX_UTILS_MEMENTO_DATA, MementoData);
     }

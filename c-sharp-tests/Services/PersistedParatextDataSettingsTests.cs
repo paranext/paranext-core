@@ -50,10 +50,10 @@ public class PersistedParatextDataSettingsTests
     }
 
     [Test]
-    public void SafeSave_AfterFailedLoad_DoesNotOverwritePersistedValue()
+    public void SafeSave_WhileStillUnreachable_DoesNotOverwritePersistedValue()
     {
         // Load fails (missing setting) and falls back to empty; SafeSave must skip the write so
-        // it can't clobber whatever is actually persisted.
+        // it can't clobber whatever is actually persisted, as long as it's still unreachable.
         var settings = new PersistedParatextDataSettings(_client);
         settings.LastRegistryDataCachedTimes["someProject"] = "mutated";
 
@@ -65,6 +65,29 @@ public class PersistedParatextDataSettingsTests
             ),
             Is.Null
         );
+    }
+
+    [Test]
+    public void SafeSave_OnceReachableAfterAFailedLoad_PersistsAccumulatedChanges()
+    {
+        // Initial load fails; changes accumulate in memory while the service is unreachable.
+        var settings = new PersistedParatextDataSettings(_client);
+        settings.LastRegistryDataCachedTimes["someProject"] = "queued-before-service-available";
+        settings.SafeSave(); // still unreachable; skipped
+
+        // The service becomes reachable.
+        _settingsService.AddSettingValue(
+            Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+            new SerializableStringDictionary()
+        );
+
+        settings.SafeSave(); // must retry, notice it's reachable now, and persist
+
+        var saved = (SerializableStringDictionary)
+            _settingsService.GetSettingValue(
+                Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
+            )!;
+        Assert.That(saved["someProject"], Is.EqualTo("queued-before-service-available"));
     }
 
     [Test]
