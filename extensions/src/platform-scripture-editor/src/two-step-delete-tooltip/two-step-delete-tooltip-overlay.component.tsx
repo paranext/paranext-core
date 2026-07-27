@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { DestructiveKeyConfirmation } from 'platform-bible-react';
+import { DestructiveKeyConfirmation, isMacOs } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
+import { findScrollContainer } from '../editor-dom.util';
 import {
   AnchorRect,
   ArmedHint,
   computeAnchorRect,
   CONFIRMING_KEY_LOCALIZED_STRING_KEYS,
   confirmingKey,
+  getConfirmingKeyDisplayLabel,
   readArmedHint,
 } from './two-step-delete-tooltip.utils';
 
@@ -46,7 +48,7 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
   const positionAnchorRef = useRef<HTMLDivElement>(null);
-  // scrollContainerRef: the ancestor whose scroll moves content; assigned by walking ancestors.
+  // scrollContainerRef: the ancestor whose scroll moves content; assigned via findScrollContainer.
   const scrollContainerRef = useRef<HTMLElement | undefined>(undefined);
   const rafIdRef = useRef<number>(0);
 
@@ -56,19 +58,12 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
     const positionAnchor = positionAnchorRef.current;
     if (!positionAnchor) return undefined;
 
-    // Find the scroll container by walking UP through parentElement ancestors until one has
-    // overflow-y auto/scroll; falls back to positionAnchor. (Same approach as the paragraph
-    // tooltip overlay — the editor's scroll container is an ancestor of positionAnchor.)
-    let scrollContainer: HTMLElement = positionAnchor;
-    let candidate: HTMLElement | null = positionAnchor.parentElement;
-    while (candidate) {
-      const { overflowY } = window.getComputedStyle(candidate);
-      if (overflowY === 'auto' || overflowY === 'scroll') {
-        scrollContainer = candidate;
-        break;
-      }
-      candidate = candidate.parentElement;
-    }
+    // Style-only matching (requireOverflow: false): this lookup runs once on mount, possibly before
+    // content has loaded and made anything overflow, so "actually overflowing right now" would be
+    // the wrong criterion here. Falls back to positionAnchor if no scrolling ancestor is found.
+    // Mirrors ParagraphMarkerTooltipOverlay.
+    const scrollContainer =
+      findScrollContainer(positionAnchor, { requireOverflow: false }) ?? positionAnchor;
     scrollContainerRef.current = scrollContainer;
 
     const sync = () => {
@@ -117,7 +112,15 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
         open={!!armed}
         anchorRect={armed ?? EMPTY_ANCHOR_RECT}
         message={localizedStrings[messageKey]}
-        confirmingKeyLabel={armed ? localizedStrings[confirmingKey(armed.intent)] : ''}
+        confirmingKeyLabel={
+          armed
+            ? getConfirmingKeyDisplayLabel(
+                armed.intent,
+                localizedStrings[confirmingKey(armed.intent)],
+                isMacOs(),
+              )
+            : ''
+        }
         showArrow={showArrow}
       />
     </div>
