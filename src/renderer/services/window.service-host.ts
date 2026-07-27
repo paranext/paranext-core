@@ -11,8 +11,6 @@ import {
   getWebViewIdFromFocusSubject,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
-import { logger } from '@shared/services/logger.service';
-import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
@@ -40,6 +38,7 @@ import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
