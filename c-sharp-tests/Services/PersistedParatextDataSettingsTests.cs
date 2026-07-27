@@ -24,17 +24,18 @@ public class PersistedParatextDataSettingsTests
         _client.Dispose();
     }
 
-    [TestCase()]
+    [Test]
     public void Constructor_SettingLookupFails_FallsBackToEmptyInsteadOfThrowing()
     {
         // No AddSettingValue call, so DummySettingsService's "get" handler throws, mirroring how
-        // a real timeout surfaces as a thrown exception from SettingsService.GetSetting.
-        PersistedParatextDataSettings? settings = null;
-        Assert.DoesNotThrow(() => settings = new PersistedParatextDataSettings(_client));
-        Assert.That(settings!.LastRegistryDataCachedTimes, Is.Empty);
+        // a real timeout surfaces as a thrown exception from SettingsService.GetSetting. If
+        // construction throws, this test fails with that exception.
+        var settings = new PersistedParatextDataSettings(_client);
+
+        Assert.That(settings.LastRegistryDataCachedTimes, Is.Empty);
     }
 
-    [TestCase()]
+    [Test]
     public void Constructor_SettingPresent_ReturnsStoredValue()
     {
         var stored = new SerializableStringDictionary { ["someProject"] = "2026-01-01" };
@@ -46,5 +47,42 @@ public class PersistedParatextDataSettingsTests
         var settings = new PersistedParatextDataSettings(_client);
 
         Assert.That(settings.LastRegistryDataCachedTimes, Is.EqualTo(stored));
+    }
+
+    [Test]
+    public void SafeSave_AfterFailedLoad_DoesNotOverwritePersistedValue()
+    {
+        // Load fails (missing setting) and falls back to empty; SafeSave must skip the write so
+        // it can't clobber whatever is actually persisted.
+        var settings = new PersistedParatextDataSettings(_client);
+        settings.LastRegistryDataCachedTimes["someProject"] = "mutated";
+
+        settings.SafeSave();
+
+        Assert.That(
+            _settingsService.GetSettingValue(
+                Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
+            ),
+            Is.Null
+        );
+    }
+
+    [Test]
+    public void SafeSave_AfterSuccessfulLoad_PersistsValue()
+    {
+        _settingsService.AddSettingValue(
+            Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+            new SerializableStringDictionary()
+        );
+        var settings = new PersistedParatextDataSettings(_client);
+        settings.LastRegistryDataCachedTimes["someProject"] = "2026-01-01";
+
+        settings.SafeSave();
+
+        var saved = (SerializableStringDictionary)
+            _settingsService.GetSettingValue(
+                Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
+            )!;
+        Assert.That(saved["someProject"], Is.EqualTo("2026-01-01"));
     }
 }
