@@ -113,6 +113,11 @@ export {
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
 } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export {
+  default as DeveloperSection,
+  DEVELOPER_SECTION_STRING_KEYS,
+} from './components/advanced/developer-section/developer-section.component';
+export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
 export { MarkerMenu, MARKER_MENU_STRING_KEYS } from './components/advanced/marker-menu.component';
 export type {
   MarkerMenuProps,
