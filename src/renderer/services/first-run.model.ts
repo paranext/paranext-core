@@ -1,4 +1,4 @@
-/** The four setup steps, in runtime order. */
+/** The five setup steps, in runtime order. */
 export type FirstRunStep =
   | 'language'
   | 'internetSettings'
