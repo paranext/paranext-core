@@ -203,7 +203,9 @@ async function resolveInternal(): Promise<void> {
             await settingsService.set('platform.firstRunSyncSkipped', true);
           }
         } catch (e) {
-          logger.warn(`Failed to re-persist platform.firstRunSyncSkipped: ${getErrorMessage(e)}`);
+          logger.warn(
+            `Self-heal write of platform.firstRunSyncSkipped failed: ${getErrorMessage(e)}`,
+          );
         }
       }
       setStatus({ kind: 'app' });
