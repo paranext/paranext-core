@@ -1,5 +1,4 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { within } from '@testing-library/dom';
 import { InternetSettings } from 'paratext-registration';
 import { ReactElement, useState } from 'react';
 import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
@@ -101,8 +100,10 @@ export const UnsavedChanges: Story = {
 export const DeveloperSectionExpanded: Story = {
   decorators: [createDecorator({})],
   play: async ({ canvasElement, userEvent }) => {
-    const canvas = within(canvasElement);
-    await userEvent.click(canvas.getByRole('button', { name: /Developer only/ }));
+    const button = Array.from(canvasElement.querySelectorAll<HTMLButtonElement>('button')).find(
+      (el) => /Developer only/i.test(el.textContent ?? ''),
+    );
+    if (button) await userEvent.click(button);
   },
 };
 

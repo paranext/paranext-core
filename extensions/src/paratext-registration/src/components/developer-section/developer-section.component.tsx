@@ -52,8 +52,8 @@ export function DeveloperSection({
           type="single"
           value={displayValue}
           onValueChange={(v) => {
-            if (!v) return; // Ignore deselect attempts — the toggle must always have a value.
-            onServerChange(v as 'Production' | 'Development');
+            // ToggleGroup deselect emits ''; ignore it so the toggle always has a value.
+            if (v === 'Production' || v === 'Development') onServerChange(v);
           }}
           disabled={disabled}
         >
