@@ -10,6 +10,17 @@ vi.mock('@renderer/services/first-run-store', async (importActual) => {
   const actual = await importActual<typeof store>();
   return { ...actual, getFirstRunStatus: vi.fn(), retryFirstRunResolution: vi.fn() };
 });
+// WizardStepper is not yet in the shared dist that the test environment resolves — stub it so
+// tests for overlay/shell navigation don't fail due to a missing component.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('platform-bible-react')>();
+  return {
+    ...actual,
+    // Stub component must return null (not undefined) because React requires null for empty renders in JSX
+    // eslint-disable-next-line no-null/no-null
+    WizardStepper: () => null,
+  };
+});
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {

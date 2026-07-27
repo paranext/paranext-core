@@ -1,8 +1,13 @@
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
 import { completeFirstRun } from '@renderer/services/first-run-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
-import { Button, Spinner } from 'platform-bible-react';
-import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import { Button, Spinner, WizardStepper } from 'platform-bible-react';
+import {
+  formatReplacementString,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguageStep } from './steps/language.component';
@@ -66,6 +71,8 @@ export function FirstRunShell({
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
+  const [interfaceLanguage] = useSetting('platform.interfaceLanguage', ['en']);
+  const locale = isPlatformError(interfaceLanguage) ? 'en' : (interfaceLanguage[0] ?? 'en');
 
   const index = STEP_ORDER.indexOf(step);
   const isInterstitial = INTERSTITIAL_STEPS.has(step);
@@ -134,6 +141,13 @@ export function FirstRunShell({
   }, [canProceed, isLastStep]);
 
   const StepComponent = stepComponents[step];
+  const fmt = new Intl.NumberFormat(locale);
+  const indicator = !isInterstitial
+    ? formatReplacementString(strings['%firstRun_stepIndicator%'], {
+        stepNumber: fmt.format(numberedIndex + 1),
+        stepCount: fmt.format(NUMBERED_STEPS.length),
+      })
+    : '';
   const nextLabel = isLastStep
     ? strings['%firstRun_button_finish%']
     : strings['%firstRun_button_next%'];
@@ -147,12 +161,16 @@ export function FirstRunShell({
         {/* aria-live so screen readers announce numbered-step changes. Hidden for interstitials
             (syncProgress): the step's own heading and role="status" provide the screen-reader context. */}
         {!isInterstitial && (
-          <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
-            {formatReplacementString(strings['%firstRun_stepIndicator%'], {
-              stepNumber: numberedIndex + 1,
-              stepCount: NUMBERED_STEPS.length,
-            })}
-          </p>
+          <>
+            <p className="tw:sr-only" aria-live="polite">
+              {indicator}
+            </p>
+            <WizardStepper
+              currentStep={numberedIndex + 1}
+              totalSteps={NUMBERED_STEPS.length}
+              locale={locale}
+            />
+          </>
         )}
       </div>
 
@@ -166,28 +184,32 @@ export function FirstRunShell({
 
       {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
 
-      <div className="tw:flex tw:justify-end tw:gap-2">
-        {onBack && (
-          <Button variant="outline" onClick={onBack} disabled={isBusy}>
-            {strings['%firstRun_button_back%']}
-          </Button>
-        )}
-        {onSkip && (
-          // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
-          // reason, the shell will need to accept a skip-label callback from that step.
-          <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skipSync%']}
-          </Button>
-        )}
-        {canProceed !== undefined && (
-          <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
-            {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
-                an async precondition (e.g. sync completing). If a future last step gates on user
-                input rather than async work, this assumption should be revisited. */}
-            {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
-            {nextLabel}
-          </Button>
-        )}
+      <div className="tw:flex tw:items-center tw:justify-between">
+        <div>
+          {onBack && (
+            <Button variant="outline" onClick={onBack} disabled={isBusy}>
+              {strings['%firstRun_button_back%']}
+            </Button>
+          )}
+        </div>
+        <div className="tw:flex tw:gap-2">
+          {onSkip && (
+            // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
+            // reason, the shell will need to accept a skip-label callback from that step.
+            <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
+              {strings['%firstRun_button_skipSync%']}
+            </Button>
+          )}
+          {canProceed !== undefined && (
+            <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
+              {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
+                  an async precondition (e.g. sync completing). If a future last step gates on user
+                  input rather than async work, this assumption should be revisited. */}
+              {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
+              {nextLabel}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );
