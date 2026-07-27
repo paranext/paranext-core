@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getNetworkEvent, requestNoRetry } from '@shared/services/network.service';
+import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { setBlockedProjects } from '@renderer/services/auto-sync-blocking-store';
 import { logger } from '@shared/services/logger.service';
 import { initAutoSyncBlockingService } from './auto-sync-blocking-service';
 
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(),
+}));
+
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(),
-  requestNoRetry: vi.fn(),
 }));
 
 vi.mock('@renderer/services/auto-sync-blocking-store', () => ({
@@ -57,7 +61,7 @@ describe('initAutoSyncBlockingService', () => {
     );
 
     // Default: no core serves the initial-state command (an older core / absent extension).
-    vi.mocked(requestNoRetry).mockRejectedValue(new Error('command not registered'));
+    vi.mocked(sendCommand).mockRejectedValue(new Error('command not registered'));
   });
 
   describe('event source', () => {
@@ -119,13 +123,13 @@ describe('initAutoSyncBlockingService', () => {
     it('queries the current blocking state on init', async () => {
       initAutoSyncBlockingService();
       await flushSeeding();
-      expect(vi.mocked(requestNoRetry)).toHaveBeenCalledWith(
-        'command:paratextBibleSendReceive.getAutoSyncBlocking',
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.getAutoSyncBlocking',
       );
     });
 
     it('seeds the blocked projects when the query reports an in-flight sync (reload mid-sync)', async () => {
-      vi.mocked(requestNoRetry).mockResolvedValue({ isBlocking: true, projectIds: ['p1'] });
+      vi.mocked(sendCommand).mockResolvedValue({ isBlocking: true, projectIds: ['p1'] });
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).toHaveBeenCalledTimes(1);
@@ -133,21 +137,21 @@ describe('initAutoSyncBlockingService', () => {
     });
 
     it('does not seed when the query reports no sync in flight', async () => {
-      vi.mocked(requestNoRetry).mockResolvedValue({ isBlocking: false, projectIds: [] });
+      vi.mocked(sendCommand).mockResolvedValue({ isBlocking: false, projectIds: [] });
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
     });
 
     it('does not seed when the query result is malformed', async () => {
-      vi.mocked(requestNoRetry).mockResolvedValue('yes');
+      vi.mocked(sendCommand).mockResolvedValue('yes');
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
     });
 
     it('swallows a failed query and keeps the assume-unblocked default', async () => {
-      vi.mocked(requestNoRetry).mockRejectedValue(new Error('extension absent'));
+      vi.mocked(sendCommand).mockRejectedValue(new Error('extension absent'));
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
@@ -155,7 +159,7 @@ describe('initAutoSyncBlockingService', () => {
 
     it('lets a live event win over the snapshot — no seeding after an event arrived', async () => {
       let resolveQuery: ((snapshot: unknown) => void) | undefined;
-      vi.mocked(requestNoRetry).mockImplementation(
+      vi.mocked(sendCommand).mockImplementation(
         async () =>
           new Promise((resolve) => {
             resolveQuery = resolve;
@@ -175,7 +179,7 @@ describe('initAutoSyncBlockingService', () => {
 
     it('does not seed after cleanup', async () => {
       let resolveQuery: ((snapshot: unknown) => void) | undefined;
-      vi.mocked(requestNoRetry).mockImplementation(
+      vi.mocked(sendCommand).mockImplementation(
         async () =>
           new Promise((resolve) => {
             resolveQuery = resolve;

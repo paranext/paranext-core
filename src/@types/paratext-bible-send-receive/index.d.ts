@@ -267,6 +267,21 @@ declare module 'paratext-bible-send-receive' {
     /** 0–1 fraction; null/undefined ⇒ indeterminate. */
     progressValue?: number | null;
   };
+
+  /**
+   * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on
+   * (the wire shape of the C# `SendReceiveBlockState`). Carried identically by both the
+   * `paratextBibleSendReceive.onSyncWriteLockChanged` network event and the
+   * `paratextBibleSendReceive.getAutoSyncBlocking` command return.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncWriteLockSnapshot = {
+    /** Whether the S/R write gate is currently blocking edits on any project */
+    isBlocking: boolean;
+    /** Ids of the blocked projects. `isBlocking` false always pairs with an empty array. */
+    projectIds: string[];
+  };
 }
 
 declare module 'papi-shared-types' {
@@ -274,6 +289,7 @@ declare module 'papi-shared-types' {
     ResultsData,
     SyncProgressDetail,
     SyncProgressEvent,
+    SyncWriteLockSnapshot,
   } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
 
@@ -406,6 +422,21 @@ declare module 'papi-shared-types' {
      *   this command (e.g., Paratext 10 Studio)
      */
     'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
+
+    /**
+     * Returns the S/R write gate's current {@link SyncWriteLockSnapshot} so subscribers can seed
+     * their blocking state on init instead of assuming unblocked (e.g. after a renderer reload
+     * during an in-flight sync).
+     *
+     * Note: this command is served from the dotnet process. Unlike most Send/Receive commands it is
+     * registered by core's own `SendReceiveBlockNotifierService` rather than the extension, so it
+     * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 Studio
+     * arms the gate). Older cores lack it entirely and requests reject.
+     *
+     * @returns The write gate's current snapshot
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getAutoSyncBlocking': () => Promise<SyncWriteLockSnapshot>;
   }
 
   export interface NetworkEvents {
@@ -413,5 +444,14 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
     /** Emitted repeatedly during a sync with the current project name or reconnect status */
     'paratextBibleSendReceive.onSyncProgress': SyncProgressDetail;
+    /**
+     * Emitted by the dotnet process whenever the S/R write gate arms or disarms, carrying the
+     * gate's full current {@link SyncWriteLockSnapshot}. Fires for ALL sync types (manual +
+     * scheduled + session). Only fires in Paratext 10 Studio builds where the gate gets armed;
+     * plain Platform.Bible never emits it.
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onSyncWriteLockChanged': SyncWriteLockSnapshot;
   }
 }

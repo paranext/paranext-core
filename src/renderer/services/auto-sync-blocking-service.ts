@@ -1,30 +1,27 @@
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { getNetworkEvent, requestNoRetry } from '@shared/services/network.service';
-import { serializeRequestType } from '@shared/utils/util';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { getErrorMessage, isString } from 'platform-bible-utils';
 import { setBlockedProjects } from './auto-sync-blocking-store';
 
-/**
- * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on.
- * Carried identically by both the change event and the init-consult command (see the C#
- * `SendReceiveBlockState`). `isBlocking` false always pairs with an empty `projectIds`.
- */
-type SyncWriteLockSnapshot = { isBlocking: boolean; projectIds: string[] };
+// The `SyncWriteLockSnapshot` payload both signal surfaces below carry is declared in the
+// `paratext-bible-send-receive` type seam (`src/@types/paratext-bible-send-receive/index.d.ts`):
+// a backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits
+// on. `isBlocking` false always pairs with an empty `projectIds`.
 
-// Backend-authoritative network event: the C# write gate emits a full snapshot on every arm/disarm,
-// for ALL sync types (manual + scheduled + session). This is the single signal source for blocking
-// — the store never combines it with any other opinion. Only fires in Paratext 10 Studio builds
-// where the patch arms the gate; plain Platform.Bible never emits it.
+// Backend-authoritative network event (declared in the seam's `NetworkEvents`): the C# write gate
+// emits a full snapshot on every arm/disarm, for ALL sync types (manual + scheduled + session).
+// This is the single signal source for blocking — the store never combines it with any other
+// opinion. Only fires in Paratext 10 Studio builds where the patch arms the gate; plain
+// Platform.Bible never emits it.
 const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
 
 /**
  * Command served by the C# backend (the emitter of {@link SYNC_WRITE_LOCK_CHANGED_EVENT}) returning
- * the current {@link SyncWriteLockSnapshot}, so this service can seed the store on init instead of
- * assuming unblocked. Requested untyped (the same pattern as `paratextBibleSendReceive.cancelSync`
- * in shutdown-tasks) because the copied `paratext-bible-send-receive.d.ts` command contract does
- * not declare it. Served on Paratext 10 Studio (returns not-blocking on plain Platform.Bible);
- * older cores lack it entirely and the request rejects, leaving the assume-unblocked default.
+ * the current snapshot, so this service can seed the store on init instead of assuming unblocked.
+ * Declared in the seam's `CommandHandlers`, so it is sent through the typed `sendCommand`. Served
+ * on Paratext 10 Studio (returns not-blocking on plain Platform.Bible); older cores lack it
+ * entirely and the request rejects, leaving the assume-unblocked default.
  */
 const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
 
@@ -72,9 +69,7 @@ export function initAutoSyncBlockingService(): () => void {
     return [];
   };
 
-  const unsubscribe = getNetworkEvent<SyncWriteLockSnapshot>(SYNC_WRITE_LOCK_CHANGED_EVENT)((
-    event,
-  ) => {
+  const unsubscribe = getNetworkEvent(SYNC_WRITE_LOCK_CHANGED_EVENT)((event) => {
     hasReceivedEvent = true;
     setBlockedProjects(readBlockedProjectIds(event));
   });
@@ -87,9 +82,7 @@ export function initAutoSyncBlockingService(): () => void {
   // on PT-4214; until that lands, this one-shot seed is the only recovery.
   (async () => {
     try {
-      const snapshot = await requestNoRetry<[], unknown>(
-        serializeRequestType(CATEGORY_COMMAND, GET_AUTO_SYNC_BLOCKING_COMMAND),
-      );
+      const snapshot = await sendCommand(GET_AUTO_SYNC_BLOCKING_COMMAND);
       // Only seed if nothing live has spoken: an event that arrived while the request was in flight
       // (either direction) supersedes this snapshot and must win, so we never clobber it here.
       if (!hasReceivedEvent && !isDisposed) {
