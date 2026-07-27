@@ -121,6 +121,14 @@ export function DestructiveKeyConfirmation({
                       // tooltip). Override both forms explicitly so tailwind-merge drops both base
                       // rules instead of leaving the winner up to CSS cascade order.
                       'tw:border tw:border-destructive tw:in-data-[slot=tooltip-content]:text-destructive',
+                      // Kbd's own tw:min-w-5 (20px) is smaller than a localized key label like
+                      // "Retroceso" can need, and that explicit min-width overrides the flex item's
+                      // content-based automatic minimum. Without shrink-0, once the sibling message
+                      // text item wraps and the row runs out of width, flexbox shrinks the Kbd down
+                      // toward that 20px floor instead of the message, clipping the key label. Pin
+                      // Kbd to its fit-content width and let the message text (which wraps freely)
+                      // absorb the shrink instead.
+                      'tw:shrink-0',
                     )}
                   >
                     {confirmingKeyLabel}
