@@ -8473,6 +8473,16 @@ declare module 'renderer/services/scroll-group.service-host' {
     scrRef: SerializedVerseRef,
     sourceProjectId?: string,
   ): boolean;
+  /**
+   * Register the network object that backs the scroll group service.
+   *
+   * The reference-history navigation commands are NOT registered here: the physical left/right
+   * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
+   * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
+   * the window service this state module deliberately does not import). Programmatic offset
+   * navigation is exposed through this network object's `navigateReferenceHistory` method below
+   * rather than a duplicate command.
+   */
   export function startScrollGroupService(): Promise<void>;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {

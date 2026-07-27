@@ -11,41 +11,63 @@ import { createCachedInitializer } from '@shared/utils/cached-initializer';
 let dataProvider: IWindowService | undefined;
 
 // `createCachedInitializer` already drops its cached promise when the initializer rejects, so a
-// transient failure (e.g. no window open yet while the extension host is starting) can't
-// permanently break `papi.window` for the session. What it can't know about is the provider going
-// away later, so `initializeWindowService` swaps in a fresh initializer when its provider is
-// disposed. In the renderer `globalThis.windowId` is stable, so the cache is only ever re-armed
-// there when the window itself is going away.
+// transient failure (e.g. this window's provider not registered yet) can't permanently break
+// `papi.window` for the session. What it can't know about is the provider going away later, so
+// `initializeWindowService` swaps in a fresh initializer when its provider is disposed.
+//
+// Only the renderer takes this path — see `getWindowService` below for why the extension host
+// cannot cache.
 let initialize = createCachedInitializer(initializeWindowService);
 
-async function resolveProviderName(): Promise<string> {
-  if (globalThis.windowId) {
-    return `${windowServiceProviderName}-${globalThis.windowId}`;
-  }
-  // Extension host: resolve the focused window's scoped provider
+/** Resolve the scoped provider for whichever window currently has focus */
+async function getFocusedWindowService(): Promise<IWindowService> {
   const focusedWindowId = await sendCommand('platform.getFocusedWindowId');
   if (focusedWindowId === undefined) {
     throw new Error('Window service is not available: no focused window found. Is a window open?');
   }
-  return `${windowServiceProviderName}-${focusedWindowId}`;
+  const provider = await dataProviderService.get(
+    // dataProviderService.get expects the literal provider name type, but the scoped name is built
+    // dynamically at runtime
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    `${windowServiceProviderName}-${focusedWindowId}` as typeof windowServiceProviderName,
+  );
+  if (!provider) throw new Error('Window service undefined');
+  return provider;
 }
 
 async function initializeWindowService(): Promise<void> {
-  const scopedName = await resolveProviderName();
   const provider = await dataProviderService.get(
-    // dataProviderService.get expects the literal provider name type, but the scoped
-    // name is built dynamically at runtime
+    // Same runtime-built name assertion as in `getFocusedWindowService`
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    scopedName as typeof windowServiceProviderName,
+    `${windowServiceProviderName}-${globalThis.windowId}` as typeof windowServiceProviderName,
   );
   if (!provider) throw new Error('Window service undefined');
   dataProvider = provider;
-  // Re-arm the initializer when the resolved provider is disposed (e.g. its window closed) so the
-  // next call re-resolves to whatever window is focused at that time.
+  // Re-arm the initializer if this window's provider is disposed, so a later call rebuilds it
+  // rather than handing back a dead provider.
   provider.onDidDispose(() => {
     dataProvider = undefined;
     initialize = createCachedInitializer(initializeWindowService);
   });
+}
+
+/**
+ * Get the window service provider this process should be talking to.
+ *
+ * In the renderer that is always this window's own provider, so it is resolved once and cached for
+ * the window's lifetime.
+ *
+ * The extension host has no window of its own, so `papi.window` there means "whichever window has
+ * focus right now" — and that changes every time the user clicks between windows, with no event to
+ * invalidate a cache on. Caching the first resolution would pin the extension host to whatever
+ * window happened to be focused on its first call, so it resolves per call instead. `papi.window`
+ * is not a hot path from the extension host; correctness beats saving a round trip here.
+ */
+async function getWindowService(): Promise<IWindowService> {
+  if (!globalThis.windowId) return getFocusedWindowService();
+  await initialize();
+  if (!dataProvider) throw new Error('Window service undefined');
+  return dataProvider;
 }
 
 // Dynamic proxy target so dataProviderName returns the scoped name at access time (not at module
@@ -63,8 +85,7 @@ const windowServiceProxyTarget = {
   },
 };
 
-export const windowService = createSyncProxyForAsyncObject<IWindowService>(async () => {
-  await initialize();
-  if (!dataProvider) throw new Error('Window service undefined');
-  return dataProvider;
-}, windowServiceProxyTarget);
+export const windowService = createSyncProxyForAsyncObject<IWindowService>(
+  getWindowService,
+  windowServiceProxyTarget,
+);
