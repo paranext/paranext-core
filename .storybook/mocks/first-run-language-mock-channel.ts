@@ -1,11 +1,16 @@
 /**
  * Opt-in channel for the first-run language-step Storybook mock.
  *
- * Kept as its own dependency-free module (only a `type` import) so story files under `src/` can
- * import the setters without pulling the webpack-only `renderer-papi-hooks.tsx` mock (and its
+ * Kept as its own module (only a `type` import of LanguageInfo) so story files under `src/` can
+ * import from here without pulling the webpack-only `renderer-papi-hooks.tsx` mock (and its
  * `require.context` localization util) into `tsc` typecheck. The webpack-aliased mock reads this
  * same module instance at hook-call time. See `.storybook/mocks/renderer-papi-hooks.tsx`.
+ *
+ * Prefer {@link FirstRunLanguageMockContext} over {@link setFirstRunLanguageMock} for new stories —
+ * the context approach is safe on the autodocs page (multiple stories rendered simultaneously),
+ * whereas the global singleton causes stories to clobber each other's mock data on re-renders.
  */
+import { createContext } from 'react';
 import type { LanguageInfo } from 'platform-bible-react';
 
 /** Story-controlled data for the first-run language step. */
@@ -19,6 +24,16 @@ export type FirstRunLanguageMock = {
   /** Loading flag for the `SetupDialogLanguages` data (gates the wizard's Next button). */
   isLoading: boolean;
 };
+
+/**
+ * React context for per-story mock isolation. Each story wraps its component in a
+ * `FirstRunLanguageMockContext.Provider` so stories rendered simultaneously on the autodocs page
+ * each read their own mock rather than a shared global. Consumed by the hooks in
+ * `renderer-papi-hooks.tsx` via `useContext`.
+ */
+export const FirstRunLanguageMockContext = createContext<FirstRunLanguageMock | undefined>(
+  undefined,
+);
 
 let activeMock: FirstRunLanguageMock | undefined;
 

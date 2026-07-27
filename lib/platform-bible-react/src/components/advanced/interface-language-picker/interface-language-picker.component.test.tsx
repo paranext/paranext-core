@@ -99,6 +99,26 @@ describe('InterfaceLanguagePicker', () => {
     expect(screen.getByText('Tok Pisin')).toBeInTheDocument(); // but it matches
   });
 
+  test('selecting a language does not filter out the remaining options (cmdk v1 regression)', async () => {
+    const onChange = vi.fn();
+    render(
+      <InterfaceLanguagePicker
+        languages={LANGUAGES}
+        value="en"
+        onChange={onChange}
+        localizedStrings={STRINGS}
+      />,
+    );
+    await userEvent.click(screen.getByText('Español'));
+    expect(onChange).toHaveBeenCalledWith('es');
+    // All languages must remain visible — cmdk v1 would overwrite the search input with the
+    // selected item's value prop ('es'), filtering out every non-matching language.
+    expect(screen.getByText('English')).toBeInTheDocument();
+    expect(screen.getByText('Español')).toBeInTheDocument();
+    expect(screen.getByText('中文（简体）')).toBeInTheDocument();
+    expect(screen.getByText('Tok Pisin')).toBeInTheDocument();
+  });
+
   test('hides the search box when there is only one language', () => {
     render(
       <InterfaceLanguagePicker
