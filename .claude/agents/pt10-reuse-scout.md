@@ -143,7 +143,7 @@ Recommendation: {choice} — Rationale: {why}
 Anchor the recommendation in `Architecture.md`: name the documented pattern the feature should
 follow (a shared/main/extension-host service, a data provider, a network object, an extension
 contribution) and check the placement honors the process/import boundaries and security model it
-defines. If you recommend a **new top-level folder / service / extension**, you MUST (per the
+defines. If you recommend a **new top-level folder / service / extension**, you must (per the
 `discover-before-implementing` rule) state specific reasons no existing folder fits and name the
 existing code that will be **reused (called, not duplicated)** — and flag that a new top-level
 structure needs explicit human approval.
