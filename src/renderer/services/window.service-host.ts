@@ -10,7 +10,7 @@ import {
   FocusSubjectTab,
   getWebViewIdFromFocusSubject,
 } from '@shared/services/window.service-model';
-import { registerEngineByType } from '@shared/services/data-provider.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
@@ -516,16 +516,17 @@ export async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          // Register under window-scoped name (e.g. "platform.windowServiceDataProvider-1")
-          // so multiple renderers can coexist. The main process or window aggregator handles
-          // routing to the correct window.
-          // registerEngineByType returns a generic IDisposableDataProvider; assert to
-          // IWindowService since we know we're registering a WindowDataProviderEngine
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          dataProvider = (await registerEngineByType<WindowDataTypes>(
-            `${windowServiceProviderName}-${globalThis.windowId}`,
+          // Register under this window's scoped name (e.g. "platform.windowServiceDataProvider-1")
+          // so multiple renderers can coexist. The main process routes the generic name to the
+          // focused window.
+          dataProvider = await dataProviderService.registerEngine(
+            // Only the name needs asserting — it is built at runtime, but registerEngine expects
+            // the literal provider name and infers the right provider type from it, the same way
+            // window.service.ts resolves it on the consuming side
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            `${windowServiceProviderName}-${globalThis.windowId}` as typeof windowServiceProviderName,
             new WindowDataProviderEngine(),
-          )) as unknown as IWindowService;
+          );
           resolve();
         } catch (error) {
           reject(error);
