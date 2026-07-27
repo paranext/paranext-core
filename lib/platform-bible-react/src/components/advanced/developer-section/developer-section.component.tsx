@@ -55,7 +55,9 @@ export function DeveloperSection({
       >
         <span>{localizedStrings['%paratextRegistration_developer_section_label%']}</span>
         <ChevronDown
-          className={`tw:size-4 tw:transition-transform${isExpanded ? ' tw:rotate-180' : ''}`}
+          className={['tw:size-4', 'tw:transition-transform', isExpanded && 'tw:rotate-180']
+            .filter(Boolean)
+            .join(' ')}
         />
       </Button>
       <div id="developer-section-content" className="tw:mt-2 tw:px-2" hidden={!isExpanded}>
