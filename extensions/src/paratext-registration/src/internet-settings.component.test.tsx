@@ -33,7 +33,7 @@ beforeAll(() => {
 const mockLocalizedStrings = {
   '%internetSettings_webView_title%': 'Title sentinel',
   '%internetSettings_webView_subtitle%': 'Subtitle sentinel',
-  '%paratextRegistration_button_reset%': 'Reset sentinel',
+  '%paratextRegistration_button_reset%': 'Discard changes sentinel',
   '%paratextRegistration_button_saveAndRestart%': 'Save and restart sentinel',
   '%paratextRegistration_button_restarting%': 'Restarting sentinel',
   '%general_error_title%': 'Error sentinel',
@@ -82,14 +82,14 @@ function renderForm(overrides: Partial<InternetSettingsFormProps> = {}) {
 describe('InternetSettingsForm', () => {
   test('Reset and Save buttons are disabled when savedInternetSettings is undefined', () => {
     renderForm({ savedInternetSettings: undefined });
-    expect(screen.getByRole('button', { name: 'Reset sentinel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discard changes sentinel' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save and restart sentinel' })).toBeDisabled();
   });
 
   test('Reset and Save buttons are disabled when staged settings equal saved settings', () => {
     // staged === saved (defaultSettings deep-equals defaultSettings)
     renderForm();
-    expect(screen.getByRole('button', { name: 'Reset sentinel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discard changes sentinel' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save and restart sentinel' })).toBeDisabled();
   });
 
@@ -99,7 +99,7 @@ describe('InternetSettingsForm', () => {
       permittedInternetUse: 'Enabled',
     };
     renderForm({ internetSettings: changedSettings, savedInternetSettings: defaultSettings });
-    expect(screen.getByRole('button', { name: 'Reset sentinel' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Discard changes sentinel' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Save and restart sentinel' })).toBeEnabled();
   });
 
@@ -114,7 +114,7 @@ describe('InternetSettingsForm', () => {
       savedInternetSettings: defaultSettings,
       onInternetSettingsChange,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Reset sentinel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes sentinel' }));
     expect(onInternetSettingsChange).toHaveBeenCalledWith(defaultSettings);
   });
 
@@ -135,7 +135,7 @@ describe('InternetSettingsForm', () => {
     expect(screen.getByText('Restarting sentinel')).toBeInTheDocument();
     expect(screen.queryByText('Save and restart sentinel')).not.toBeInTheDocument();
     // Both action buttons are disabled via areButtonsDisabled when the form is disabled
-    expect(screen.getByRole('button', { name: 'Reset sentinel' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Discard changes sentinel' })).toBeDisabled();
     // The save button is also disabled (it shares areButtonsDisabled)
     expect(screen.getByText('Restarting sentinel').closest('button')).toBeDisabled();
   });
