@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { vi } from '@storybook/test';
+import { spyOn, restoreAllMocks } from 'storybook/test';
 import * as commandService from '@shared/services/command.service';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
@@ -19,8 +19,8 @@ const meta: Meta<typeof InternetSettingsStep> = {
   },
   beforeEach() {
     // Default: fetch resolves with production/vpn-required settings.
-    vi.spyOn(commandService, 'sendCommand').mockResolvedValue(MOCK_SETTINGS);
-    return () => vi.restoreAllMocks();
+    spyOn(commandService, 'sendCommand').mockResolvedValue(MOCK_SETTINGS);
+    return () => restoreAllMocks();
   },
 };
 export default meta;
@@ -30,10 +30,10 @@ type Story = StoryObj<typeof InternetSettingsStep>;
 /** Spinner is shown while settings are loading; Next is disabled. */
 export const Loading: Story = {
   beforeEach() {
-    vi.spyOn(commandService, 'sendCommand').mockImplementation(
+    spyOn(commandService, 'sendCommand').mockImplementation(
       () => new Promise(() => {}), // never resolves — keeps component in loading state
     );
-    return () => vi.restoreAllMocks();
+    return () => restoreAllMocks();
   },
 };
 
@@ -43,18 +43,18 @@ export const Default: Story = {};
 /** Enabled (unrestricted internet) option pre-selected. */
 export const Enabled: Story = {
   beforeEach() {
-    vi.spyOn(commandService, 'sendCommand').mockResolvedValue({
+    spyOn(commandService, 'sendCommand').mockResolvedValue({
       ...MOCK_SETTINGS,
       permittedInternetUse: 'Enabled',
     });
-    return () => vi.restoreAllMocks();
+    return () => restoreAllMocks();
   },
 };
 
 /** Error alert shown and Retry button visible when the initial fetch fails. */
 export const FetchError: Story = {
   beforeEach() {
-    vi.spyOn(commandService, 'sendCommand').mockRejectedValue(new Error('Connection refused'));
-    return () => vi.restoreAllMocks();
+    spyOn(commandService, 'sendCommand').mockRejectedValue(new Error('Connection refused'));
+    return () => restoreAllMocks();
   },
 };
