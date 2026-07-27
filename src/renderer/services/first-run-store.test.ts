@@ -145,6 +145,38 @@ describe('resolveFirstRunState', () => {
     expect(mockResolveReg).not.toHaveBeenCalled(); // never routed back into the wizard
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
   });
+
+  it('re-persists platform.firstRunSyncSkipped when cache indicates a failed write', async () => {
+    // Reproduces the analogous failure for syncSkipped: the wizard wrote the localStorage cache but
+    // settingsService.set threw. A subsequent launch finds firstRunComplete=true but
+    // firstRunSyncSkipped still false on disk — the self-heal must re-persist from the cache.
+    localStorage.setItem('platform-bible.firstRunSyncSkipped', 'true');
+    stubSettings({ firstRunComplete: true }); // firstRunSyncSkipped key not stubbed → returns undefined
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockSet).toHaveBeenCalledWith('platform.firstRunSyncSkipped', true);
+  });
+
+  it('does not re-persist platform.firstRunSyncSkipped when the setting is already persisted', async () => {
+    localStorage.setItem('platform-bible.firstRunSyncSkipped', 'true');
+    mockGet.mockImplementation(async (key: string) => {
+      if (key === 'platform.interfaceMode') return 'simple';
+      if (key === 'platform.firstRunComplete') return true;
+      // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+      if (key === 'platform.firstRunSyncSkipped') return true;
+      return undefined;
+    });
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
+  });
+
+  it('does not attempt platform.firstRunSyncSkipped self-heal when cache says skip never happened', async () => {
+    stubSettings({ firstRunComplete: true }); // no SYNC_SKIPPED_KEY in localStorage
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
+  });
 });
 
 describe('demo mode (PT-4219)', () => {
