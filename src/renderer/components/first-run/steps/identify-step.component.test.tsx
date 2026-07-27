@@ -8,7 +8,7 @@ import {
   IdentifyStep,
   INVALID_CODE_DISPLAY_DEBOUNCE_MS,
   VALIDATION_DEBOUNCE_MS,
-} from './identify.component';
+} from './identify-step.component';
 
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -157,9 +157,9 @@ describe('IdentifyStep', () => {
     expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
   });
 
-  it('calls setCanProceed(false) on mount to keep shell Next permanently disabled', () => {
+  it('calls setCanProceed(null) on mount to suppress the shell Next button entirely', () => {
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
-    expect(setCanProceed).toHaveBeenCalledWith(false);
+    expect(setCanProceed).toHaveBeenCalledWith(null);
   });
 
   it('renders name and code inputs with accessible labels', () => {
@@ -219,6 +219,34 @@ describe('IdentifyStep', () => {
       expect(screen.getByText(/code must be/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/registration code/i)).toHaveAttribute('aria-invalid', 'true');
     });
+  });
+
+  it('shows error and keeps Save disabled when validation request throws', async () => {
+    mockSendCommand.mockRejectedValueOnce(new Error('Network error'));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+
+    await waitFor(() => expect(screen.getByText('Error')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
+  });
+
+  it('clears validation error immediately when user types again', async () => {
+    mockSendCommand.mockResolvedValueOnce(false);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() => expect(screen.getByText(/not found/i)).toBeInTheDocument());
+
+    // Typing clears the error immediately (without waiting for debounce).
+    await user.keyboard('{Backspace}');
+    expect(screen.queryByText(/not found/i)).not.toBeInTheDocument();
   });
 
   it('validates with the correct name when code is entered before name', async () => {

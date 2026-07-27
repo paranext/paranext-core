@@ -7,7 +7,7 @@ import { ComponentType, useCallback, useMemo, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguageStep } from './steps/language.component';
 import { InternetPlaceholderStep } from './steps/internet.placeholder.component';
-import { IdentifyStep } from './steps/identify.component';
+import { IdentifyStep } from './steps/identify-step.component';
 import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
 import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
 
@@ -54,7 +54,7 @@ export function FirstRunShell({
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
-  const [canProceed, setCanProceed] = useState(true);
+  const [canProceed, setCanProceed] = useState<boolean | null>(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
@@ -151,10 +151,12 @@ export function FirstRunShell({
             {strings['%firstRun_button_skip%']}
           </Button>
         )}
-        <Button onClick={onNext} disabled={!canProceed || isBusy}>
-          {isBusy && <Spinner />}
-          {nextLabel}
-        </Button>
+        {canProceed !== null && (
+          <Button onClick={onNext} disabled={!canProceed || isBusy}>
+            {isBusy && <Spinner />}
+            {nextLabel}
+          </Button>
+        )}
       </div>
     </div>
   );

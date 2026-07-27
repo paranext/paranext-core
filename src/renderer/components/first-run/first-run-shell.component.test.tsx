@@ -87,6 +87,22 @@ describe('FirstRunShell', () => {
     expect(mockComplete).toHaveBeenCalledWith();
   });
 
+  it('hides Next when a step passes null to setCanProceed (step owns its own primary action)', async () => {
+    function OwnsActionStep({ setCanProceed }: FirstRunStepProps) {
+      useEffect(() => setCanProceed?.(null), [setCanProceed]);
+      return <p>own action</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, language: OwnsActionStep }}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
+    );
+  });
+
   it('disables Next while a step reports it cannot proceed', async () => {
     function BlockingStep({ setCanProceed }: FirstRunStepProps) {
       useEffect(() => setCanProceed?.(false), [setCanProceed]);
