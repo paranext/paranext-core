@@ -4,7 +4,11 @@ import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
-import { IdentifyStep, VALIDATION_DEBOUNCE_MS } from './identify.component';
+import {
+  IdentifyStep,
+  INVALID_CODE_DISPLAY_DEBOUNCE_MS,
+  VALIDATION_DEBOUNCE_MS,
+} from './identify.component';
 
 vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 vi.mock('@renderer/hooks/papi-hooks', () => ({
@@ -147,5 +151,170 @@ describe('IdentifyStep', () => {
 
     await waitFor(() => expect(onRestartAfterSave).toHaveBeenCalledOnce());
     expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
+  });
+
+  it('calls setCanProceed(false) on mount to keep shell Next permanently disabled', () => {
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    expect(setCanProceed).toHaveBeenCalledWith(false);
+  });
+
+  it('renders name and code inputs with accessible labels', () => {
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    expect(screen.getByLabelText(/registration name/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/registration code/i)).toBeInTheDocument();
+  });
+
+  it('renders a Paratext Registry link', () => {
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    const link = screen.getByRole('link', { name: /visit paratext registry/i });
+    expect(link).toHaveAttribute('href', 'https://registry.paratext.org/');
+  });
+
+  it('shows valid registration alert when backend confirms the name+code', async () => {
+    mockSendCommand.mockResolvedValueOnce(true);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+
+    await waitFor(() => expect(screen.getByText(/registration accepted/i)).toBeInTheDocument());
+  });
+
+  it('auto-inserts a dash after every 6th alphanumeric character typed', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    const codeInput = screen.getByLabelText(/registration code/i);
+    await user.type(codeInput, 'ABCDEF');
+    expect(codeInput).toHaveValue('ABCDEF-');
+  });
+
+  it('removes the dash and the preceding character when backspacing over an auto-inserted dash', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    const codeInput = screen.getByLabelText(/registration code/i);
+    await user.type(codeInput, 'ABCDEF');
+    expect(codeInput).toHaveValue('ABCDEF-');
+    await user.keyboard('{Backspace}');
+    expect(codeInput).toHaveValue('ABCDE');
+  });
+
+  it('shows format warning and sets aria-invalid after debounce when code has wrong format', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration code/i), 'ABC');
+    expect(screen.queryByText(/code must be/i)).not.toBeInTheDocument();
+
+    vi.advanceTimersByTime(INVALID_CODE_DISPLAY_DEBOUNCE_MS + 1);
+
+    await waitFor(() => {
+      expect(screen.getByText(/code must be/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/registration code/i)).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+
+  it('validates with the correct name when code is entered before name', async () => {
+    mockSendCommand.mockResolvedValueOnce(true);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+
+    await waitFor(() => {
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'paratextRegistration.validateParatextRegistrationData',
+        expect.objectContaining({ name: 'Test User', code: VALID_CODE }),
+      );
+    });
+  });
+
+  it('re-disables Save immediately when a valid code is edited (synchronous state reset)', async () => {
+    mockSendCommand.mockResolvedValueOnce(true);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+
+    await user.keyboard('{Backspace}');
+    expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
+  });
+
+  it('shows error and re-enables Save when setParatextRegistrationData fails', async () => {
+    mockSendCommand.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('Server error'));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Error')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled();
+    });
+  });
+
+  describe('demo mode', () => {
+    beforeEach(() => mockIsDemoMode.mockReturnValue(true));
+
+    it('does not call validateParatextRegistrationData in demo mode', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+      await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
+      await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+      vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+
+      expect(mockSendCommand).not.toHaveBeenCalledWith(
+        'paratextRegistration.validateParatextRegistrationData',
+        expect.anything(),
+      );
+    });
+
+    it('enables Save and restart when name is non-empty (no code validation needed)', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+      await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+      );
+    });
+
+    it('calls onNext (not platform.restart) when Save and restart is clicked', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+
+      await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+      );
+
+      await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+      expect(onNext).toHaveBeenCalledOnce();
+      expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
+      expect(mockSendCommand).not.toHaveBeenCalledWith(
+        'paratextRegistration.setParatextRegistrationData',
+        expect.anything(),
+      );
+    });
   });
 });
