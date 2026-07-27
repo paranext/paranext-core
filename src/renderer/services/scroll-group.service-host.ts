@@ -737,11 +737,23 @@ export async function startScrollGroupService(): Promise<void> {
   // object below
   subscribeToRemoteScrollGroupUpdates();
 
-  // Scroll groups are app-global, so exactly one renderer publishes the network object no matter
-  // how many windows are open — whichever one starts first. A later window's registration fails
-  // because the name is already claimed by another renderer process, which is expected rather than
-  // an error: it stays in step through the events above, so a remote caller reaching the hosting
-  // window still moves every window.
+  await hostOrAttachToScrollGroupService();
+}
+
+/**
+ * Publish the scroll group network object from this window, or step aside for the window already
+ * publishing it and take over when that window closes.
+ *
+ * Scroll groups are app-global, so exactly one renderer publishes the object no matter how many
+ * windows are open. Losing the race is expected rather than an error — every window stays in step
+ * through the events in {@link subscribeToRemoteScrollGroupUpdates} regardless, so a remote caller
+ * reaching the hosting window still moves them all.
+ *
+ * The takeover matters because that mirroring hides the failure: if the hosting window closed and
+ * nothing re-published, every window would keep navigating correctly on screen while remote
+ * `papi.scrollGroups` calls silently died for the rest of the session.
+ */
+async function hostOrAttachToScrollGroupService(): Promise<void> {
   try {
     // Mark ONLY the two experimental methods on the (otherwise stable) scroll group network object,
     // via per-method `x-experimental` in documentation.methods[] — NOT the whole-object 5th-param

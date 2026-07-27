@@ -19,7 +19,7 @@ export const windowServiceObjectToProxy = Object.freeze({
   dataProviderName: windowServiceProviderName,
 });
 
-/** Focus of the app window is on a WebView iframe with the specified id */
+/** Focus of the window is on a WebView iframe with the specified id */
 export type FocusSubjectWebView = {
   focusType: 'webView';
   /** ID of the WebView in focus (its tab ID is the same) */
@@ -27,7 +27,7 @@ export type FocusSubjectWebView = {
 };
 
 /**
- * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+ * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
  *
  * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
  * focused in the WebView's iframe
@@ -40,12 +40,12 @@ export type FocusSubjectTab = {
   id: string;
 };
 
-/** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+/** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
 export type FocusSubjectOther = {
   focusType: 'other';
 };
 
-/** Current item that is the subject of top-level app window focus */
+/** Current item that is the subject of top-level focus in the window */
 export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
 
 /**
@@ -65,10 +65,10 @@ export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string
   return undefined;
 }
 
-/** Specific item that is intended to be focused in the top-level app window */
+/** Specific item that is intended to be focused at the top level of the window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
-/** Instructions that indicate how to change the app window focus */
+/** Instructions that indicate how to change the focus within the window */
 export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
 // Data Type to initialize data provider engine with

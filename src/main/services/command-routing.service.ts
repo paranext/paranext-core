@@ -67,7 +67,7 @@ export async function startCommandRoutingService(): Promise<void> {
       ),
     ),
     ...RENDERER_HOSTED_DIALOG_REQUEST_NAMES.map((requestName) =>
-      // ponytail: no OpenRPC docs on the generic dialog names. The renderer's doc objects reference
+      // No OpenRPC docs on the generic dialog names. The renderer's doc objects reference
       // `dialog-definition.model` (renderer-only) for the dialog-type enum, so they cannot move to
       // the shared model the way RENDERER_HOSTED_COMMAND_DOCS did without relocating that model
       // too. The docs still appear in the OpenRPC document under the scoped names. Move
