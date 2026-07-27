@@ -108,6 +108,11 @@ export {
   inventoryStatusColumn,
   getInventoryHeader,
 } from './components/advanced/inventory/inventory-columns';
+export {
+  default as InternetAccessOptionList,
+  INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
 export { MarkerMenu, MARKER_MENU_STRING_KEYS } from './components/advanced/marker-menu.component';
 export type {
   MarkerMenuProps,
