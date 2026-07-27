@@ -135,7 +135,18 @@ global.webViewComponent = function CommentListWebView({
 
   const commentListPanelIconUrl = useTabIconSelection(isDarkTheme, COMMENT_LIST_PANEL_ICON_URLS);
   useEffect(() => {
-    if (isPowerMode || !isCommentListPanel) return;
+    // `isCommentListPanel` is fixed for this component instance's whole lifetime (derived from the
+    // webViewType prop), so there's no icon to clear when it's false — this instance never set one.
+    if (!isCommentListPanel) return;
+    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
+    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
+    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
+    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
+    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
+    if (isPowerMode) {
+      updateWebViewDefinition({ iconUrl: undefined });
+      return;
+    }
     updateWebViewDefinition({ iconUrl: commentListPanelIconUrl });
   }, [isPowerMode, isCommentListPanel, commentListPanelIconUrl, updateWebViewDefinition]);
 
