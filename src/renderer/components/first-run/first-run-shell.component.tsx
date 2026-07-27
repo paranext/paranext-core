@@ -12,7 +12,13 @@ import { SyncConsentStep } from './steps/sync-consent-step.component';
 import { SyncProgressStep } from './steps/sync-progress.component';
 
 /** Runtime order of the wizard steps. */
-export const STEP_ORDER: FirstRunStep[] = ['language', 'internetSettings', 'identify', 'syncConsent'];
+export const STEP_ORDER: FirstRunStep[] = [
+  'language',
+  'internetSettings',
+  'identify',
+  'syncConsent',
+  'syncProgress',
+];
 
 /** Steps that are interstitials — shown after numbered steps, excluded from the stepper count. */
 export const INTERSTITIAL_STEPS = new Set<FirstRunStep>(['syncProgress']);
@@ -34,8 +40,8 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_stepIndicator%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
-  '%firstRun_button_skipSync%',
   '%firstRun_button_finish%',
+  '%firstRun_button_skipSync%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
 ];

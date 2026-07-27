@@ -38,11 +38,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
-      '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_syncConsent_heading%': 'Sync your projects',
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_finish%': 'Finish',
       '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_syncProgress_heading%': 'Syncing your data',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
@@ -220,6 +220,26 @@ describe('FirstRunShell', () => {
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
     );
   });
+
+  it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {
+    mockComplete.mockRejectedValue(new Error('could not finish'));
+    function SyncCompleter({ onNext: notifyDone }: FirstRunStepProps) {
+      return (
+        <button type="button" onClick={notifyDone}>
+          sync done
+        </button>
+      );
+    }
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SyncCompleter }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /sync done/i }));
+    expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
+  });
+
 
   it('disables Next while a step reports it cannot proceed', async () => {
     function BlockingStep({ setCanProceed }: FirstRunStepProps) {
