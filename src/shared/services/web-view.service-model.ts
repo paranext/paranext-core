@@ -7,6 +7,7 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
 import { CommandNames, WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
@@ -286,4 +287,49 @@ export const RENDERER_HOSTED_COMMAND_NAMES = [
   'platform.usersnapReportIssue',
   'platform.isUsersnapFormCurrentlyOpen',
   'platform.closeOpenUsersnapForm',
+  // Navigation commands act on the window's own navigation target (the web view the top toolbar
+  // follows), so they must run in the window the user is looking at, not whichever renderer
+  // happened to register first.
+  'platform.goToNextChapter',
+  'platform.goToPreviousChapter',
+  'platform.goToNextBook',
+  'platform.goToPreviousBook',
+  'platform.goToNextVerse',
+  'platform.goToPreviousVerse',
+  'platform.openBookChapterControl',
+  'platform.navigateLeftInReferenceHistory',
+  'platform.navigateRightInReferenceHistory',
 ] as const satisfies readonly CommandNames[];
+
+/**
+ * OpenRPC documentation for renderer-hosted commands, keyed by the generic (unscoped) command name.
+ *
+ * The documentation belongs to the generic name because that is the command consumers call; the
+ * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
+ * an implementation detail of multi-window routing and are deliberately left undocumented. The main
+ * process attaches these when it registers the routing proxies.
+ */
+export const RENDERER_HOSTED_COMMAND_DOCS: Partial<
+  Record<(typeof RENDERER_HOSTED_COMMAND_NAMES)[number], SingleMethodDocumentation>
+> = {
+  'platform.navigateLeftInReferenceHistory': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Navigate the reference history of the active scroll group (the one the top toolbar ' +
+        'follows) in the physical "left" direction (back in LTR, forward in RTL)',
+      params: [],
+      result: { name: 'didNavigate', schema: { type: 'boolean' } },
+    },
+  },
+  'platform.navigateRightInReferenceHistory': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Navigate the reference history of the active scroll group (the one the top toolbar ' +
+        'follows) in the physical "right" direction (forward in LTR, back in RTL)',
+      params: [],
+      result: { name: 'didNavigate', schema: { type: 'boolean' } },
+    },
+  },
+};
