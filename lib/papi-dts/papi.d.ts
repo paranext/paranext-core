@@ -8556,6 +8556,7 @@ declare module 'shared/services/localization.service-model' {
       Record<string, LanguageInfo>,
       never
     >;
+    /** @experimental */
     SetupDialogLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
   };
   module 'papi-shared-types' {
@@ -8602,6 +8603,7 @@ declare module 'shared/services/localization.service-model' {
      * (`%firstRun_*%`) keys.
      *
      * @returns Qualifying user-interface languages, keyed by raw locale tag
+     * @experimental
      */
     getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
     /**
@@ -8624,6 +8626,8 @@ declare module 'shared/services/localization.service-model' {
     /**
      * This data cannot be changed. Trying to use this setter will always throw. It is derived from
      * the loaded localization data.
+     *
+     * @experimental
      */
     setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
   } & OnDidDispose &

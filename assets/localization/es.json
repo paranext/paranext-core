@@ -156,6 +156,7 @@
   "%firstRun_language_noResults%": "No hay idiomas coincidentes",
   "%firstRun_language_search_placeholder%": "Buscar idiomas…",
   "%firstRun_language_selected%": "Seleccionado",
+  "%firstRun_language_setFailed%": "No se pudo cambiar el idioma. Inténtelo de nuevo.",
   "%firstRun_language_title%": "Elija su idioma",
   "%firstRun_loading%": "Iniciando la configuración…",
   "%firstRun_loading_detail%": "Comprobando su información de registro. Esto puede tardar un momento.",

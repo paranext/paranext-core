@@ -34,6 +34,7 @@ export type LocalizationDataDataTypes = {
   LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
   LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
   AvailableInterfaceLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
+  /** @experimental */
   SetupDialogLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
 };
 
@@ -83,6 +84,7 @@ export type ILocalizationService = {
    * (`%firstRun_*%`) keys.
    *
    * @returns Qualifying user-interface languages, keyed by raw locale tag
+   * @experimental
    */
   getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
   /**
@@ -105,6 +107,8 @@ export type ILocalizationService = {
   /**
    * This data cannot be changed. Trying to use this setter will always throw. It is derived from
    * the loaded localization data.
+   *
+   * @experimental
    */
   setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
 } & OnDidDispose &

@@ -4,6 +4,7 @@ import { logger } from '@shared/services/logger.service';
 import { InterfaceLanguagePicker, type LanguageInfo } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
 const KEYS: LocalizeKey[] = [
@@ -12,6 +13,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_language_search_placeholder%',
   '%firstRun_language_noResults%',
   '%firstRun_language_selected%',
+  '%firstRun_language_setFailed%',
 ];
 
 const ENGLISH_FALLBACK_LANGUAGES: Record<string, LanguageInfo> = { en: { autonym: 'English' } };
@@ -66,10 +68,10 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
 
   const handleChange = (tag: string) => {
     if (tag === primaryLanguage) return;
-    // setInterfaceLanguage is async; catch the rejection so a failed write is logged, not swallowed.
     setInterfaceLanguage([tag, ...safeInterfaceLanguage.filter((l) => l !== tag)]).catch(
       (e: unknown) => {
         logger.warn(`LanguageStep: failed to set interface language: ${getErrorMessage(e)}`);
+        toast.error(strings['%firstRun_language_setFailed%']);
       },
     );
   };

@@ -6,6 +6,7 @@ import '@testing-library/jest-dom';
 import type { LanguageInfo } from 'platform-bible-react';
 import { newPlatformError, type PlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
+import { toast } from 'sonner';
 
 // setInterfaceLanguage is async; resolve by default so the component's `.catch(...)` has a promise.
 const mockSetInterfaceLanguage = vi.fn(() => Promise.resolve());
@@ -38,6 +39,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_language_search_placeholder%': 'Search languages',
       '%firstRun_language_noResults%': 'No matching languages',
       '%firstRun_language_selected%': 'Selected',
+      '%firstRun_language_setFailed%': "Couldn't change language. Please try again.",
     },
     false,
   ]),
@@ -51,6 +53,7 @@ vi.mock('@shared/services/localization.service', () => ({
   localizationService: { dataProviderName: 'platform.localizationDataServiceDataProvider' },
 }));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 // jsdom doesn't ship ResizeObserver or scrollIntoView; cmdk (used inside InterfaceLanguagePicker)
 // instantiates a ResizeObserver on mount. No-op stubs are sufficient since the tests don't assert
@@ -135,11 +138,12 @@ describe('LanguageStep', () => {
     expect(mockSetInterfaceLanguage).not.toHaveBeenCalled();
   });
 
-  test('logs a warning instead of crashing when the setting write rejects', async () => {
+  test('logs a warning and shows an error toast when the setting write rejects', async () => {
     mockSetInterfaceLanguage.mockRejectedValueOnce(new Error('write failed'));
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     await userEvent.click(screen.getByText('Español'));
     await vi.waitFor(() => expect(logger.warn).toHaveBeenCalled());
+    expect(toast.error).toHaveBeenCalledWith("Couldn't change language. Please try again.");
   });
 
   test('falls back to English only when the language data is a platform error', () => {
