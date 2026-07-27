@@ -26,8 +26,20 @@ export class UnsubscriberAsyncList {
    * @returns `true` if all unsubscribers succeeded, `false` otherwise.
    */
   async runAllUnsubscribers(): Promise<boolean> {
-    const unsubs = [...this.unsubscribers].map((unsubscriber) => unsubscriber());
-    const results = await Promise.all(unsubs);
+    // Each unsubscriber is invoked and awaited independently so one that throws — synchronously or
+    // otherwise — cannot stop the rest from running. This list is what cleans up after a window
+    // closes, which happens repeatedly once more than one window can be open rather than only once
+    // at shutdown, so a single bad unsubscriber must not strand everything behind it.
+    const results = await Promise.all(
+      [...this.unsubscribers].map(async (unsubscriber) => {
+        try {
+          return await unsubscriber();
+        } catch (error) {
+          console.error(`UnsubscriberAsyncList ${this.name}: Unsubscriber threw! ${error}`);
+          return false;
+        }
+      }),
+    );
     this.unsubscribers.clear();
     return results.every((unsubscriberSucceeded, index) => {
       if (!unsubscriberSucceeded)
