@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { fn, within, userEvent, waitFor } from 'storybook/test';
+import { expect, fn, spyOn, within, userEvent, waitFor } from 'storybook/test';
 import * as commandService from '@shared/services/command.service';
 import { IdentifyStep } from './identify.component';
 
@@ -50,21 +50,9 @@ export const FilledValid: Story = {
 export const InvalidCode: Story = {
   parameters: {
     beforeEach: () => {
-      const original = commandService.sendCommand;
       // Replaces sendCommand so every validation attempt returns false (not found).
-      // Object.defineProperty avoids a type assertion against the overloaded generic.
-      Object.defineProperty(commandService, 'sendCommand', {
-        value: fn().mockResolvedValue(false),
-        writable: true,
-        configurable: true,
-      });
-      return () => {
-        Object.defineProperty(commandService, 'sendCommand', {
-          value: original,
-          writable: true,
-          configurable: true,
-        });
-      };
+      const spy = spyOn(commandService, 'sendCommand').mockResolvedValue(false);
+      return () => spy.mockRestore();
     },
   },
   play: async ({ canvasElement }) => {
@@ -85,23 +73,11 @@ export const InvalidCode: Story = {
 export const RestartPending: Story = {
   parameters: {
     beforeEach: () => {
-      const original = commandService.sendCommand;
-      const mock = fn()
+      const spy = spyOn(commandService, 'sendCommand')
         .mockResolvedValueOnce(true) // validateParatextRegistrationData → valid
         .mockResolvedValueOnce(undefined) // setParatextRegistrationData → ok
         .mockReturnValueOnce(new Promise<never>(() => {})); // platform.restart → never settles
-      Object.defineProperty(commandService, 'sendCommand', {
-        value: mock,
-        writable: true,
-        configurable: true,
-      });
-      return () => {
-        Object.defineProperty(commandService, 'sendCommand', {
-          value: original,
-          writable: true,
-          configurable: true,
-        });
-      };
+      return () => spy.mockRestore();
     },
   },
   play: async ({ canvasElement }) => {
