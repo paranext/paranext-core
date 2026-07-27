@@ -27,7 +27,7 @@ export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_button_saveAndRestart%',
   '%paratextRegistration_button_restarting%',
   '%general_error_title%',
-  '%paratextRegistration_alert_updatedInternetSettings%',
+  '%paratextRegistration_alert_updatedInternetSettings_2%',
   '%paratextRegistration_alert_updatedRegistration_description%',
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
@@ -110,7 +110,7 @@ export function InternetSettingsForm({
         <Alert ref={scrollToRef}>
           <CircleCheck className="tw:h-4 tw:w-4" />
           <AlertTitle>
-            {localizedStrings['%paratextRegistration_alert_updatedInternetSettings%']}
+            {localizedStrings['%paratextRegistration_alert_updatedInternetSettings_2%']}
           </AlertTitle>
           <AlertDescription>
             {saveState === SaveState.IsRestarting
