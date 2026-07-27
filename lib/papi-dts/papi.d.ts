@@ -951,7 +951,12 @@ declare module 'shared/global-this.model' {
      * as `isNoisyDevModeEnabled`.
      */
     var startupMarks: boolean;
-    /** Window id of the Electron browser window */
+    /**
+     * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
+     * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
+     * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
+     * `platform.getFocusedWindowId`). `null` until the renderer reads the URL parameter.
+     */
     var windowId: string | null;
   }
   /** Type of Platform.Bible process */
@@ -4007,6 +4012,21 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+  /**
+   * Command names that are hosted by the renderer process and need to be registered with
+   * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+   * the generic names that forward to the focused window's scoped handler.
+   */
+  export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
+    'platform.about',
+    'platform.openSettings',
+    'platform.openProjectSettings',
+    'platform.openUserSettings',
+    'platform.usersnapSubmitIdea',
+    'platform.usersnapReportIssue',
+    'platform.isUsersnapFormCurrentlyOpen',
+    'platform.closeOpenUsersnapForm',
+  ];
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
@@ -4401,6 +4421,10 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /** Create a new application window */
+    'platform.createWindow': () => Promise<void>;
+    /** Get the ID of the currently focused window, or undefined if no window is focused */
+    'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */
@@ -8466,6 +8490,8 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /** Query parameter key used to pass the Electron BrowserWindow ID to the renderer process */
+  export const WINDOW_ID = 'windowId';
   /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
   /**
@@ -10407,29 +10433,29 @@ declare module 'shared/services/window.service-model' {
   }
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export type IWindowService = {
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Get information about the current subject of focus in the current window
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the current window's current subject of focus
      */
     getFocus(selector: undefined): Promise<FocusSubject>;
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Get information about the current subject of focus in the current window
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the current window's current subject of focus
      */
     getFocus(): Promise<FocusSubject>;
     /**
-     * Sets the subject of focus in the main app window.
+     * Sets the subject of focus in the current window.
      *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -10440,10 +10466,10 @@ declare module 'shared/services/window.service-model' {
       focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
-     * Sets the subject of focus in the main app window.
+     * Sets the subject of focus in the current window.
      *
      * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -10459,7 +10485,7 @@ declare module 'shared/services/window.service-model' {
       focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     * Subscribe to run a callback function when the current window's subject of focus is changed
      *
      * @param selector `undefined`. Does not have to be provided
      * @param callback Function to run with the updated localized menuContent for this selector. If
@@ -11496,7 +11522,7 @@ declare module '@papi/backend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service that allows to interact with the current application window
      */
     window: IWindowService;
   };
@@ -11754,7 +11780,7 @@ declare module '@papi/backend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export const window: IWindowService;
 }
@@ -12342,7 +12368,7 @@ declare module '@papi/frontend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service that allows to interact with the current application window
      */
     window: IWindowService;
     /**
@@ -12511,7 +12537,7 @@ declare module '@papi/frontend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export const window: IWindowService;
   /**
