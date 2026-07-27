@@ -208,9 +208,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
     resourceType === 'ScriptureResource' ? BIBLE_TEXTS_ICON_URLS : COMMENTARIES_ICON_URLS;
   const tabIconUrl = useTabIconSelection(isDarkTheme, tabIconUrls);
   useEffect(() => {
-    // Power mode: no tab icon, exactly as today — do not call updateWebViewDefinition at all so an
-    // already-set iconUrl (there shouldn't be one) is never touched.
-    if (isPowerMode) return;
+    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
+    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
+    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
+    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
+    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
+    if (isPowerMode) {
+      updateWebViewDefinition({ iconUrl: undefined });
+      return;
+    }
     updateWebViewDefinition({ iconUrl: tabIconUrl });
   }, [isPowerMode, tabIconUrl, updateWebViewDefinition]);
 
