@@ -4,7 +4,7 @@ import { FirstRunStep } from '@renderer/services/first-run.model';
 import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
-import { FirstRunStepComponent, FirstRunStepProps } from './first-run-step-props.model';
+import { FirstRunStepComponent } from './first-run-step-props.model';
 import { LanguageStep } from './steps/language.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
 import { SyncConsentStep } from './steps/sync-consent-step.component';
