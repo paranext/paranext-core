@@ -114,6 +114,7 @@
   },
   "localizedStrings": {
     "en": {
+      "%internetSettings_button_retry%": "Retry",
       "%internetSettings_webView_subtitle%": "Manage how Paratext accesses the internet. These settings only apply to the Paratext app (not all internet traffic on your computer), and are shared with any co-installed Paratext 9.",
       "%internetSettings_webView_title%": "Internet Settings",
       "%internetSettings_webView_title_2%": "Internet & Connectivity",
@@ -190,6 +191,7 @@
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show “Paratext Registration Information” on startup"
     },
     "es": {
+      "%internetSettings_button_retry%": "Reintentar",
       "%internetSettings_webView_subtitle%": "Gestiona cómo Paratext accede a internet. Esta configuración solo afecta a la aplicación Paratext (no todo el tráfico de internet en tu computadora) y se comparte con cualquier Paratext 9 instalado.",
       "%internetSettings_webView_title%": "Configuración de Internet",
       "%internetSettings_webView_title_2%": "Internet y conectividad",

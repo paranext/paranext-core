@@ -1,5 +1,10 @@
 /** The four setup steps, in runtime order. */
-export type FirstRunStep = 'language' | 'identify' | 'syncConsent' | 'syncProgress';
+export type FirstRunStep =
+  | 'language'
+  | 'internetSettings'
+  | 'identify'
+  | 'syncConsent'
+  | 'syncProgress';
 
 /** Result of checking the user's Paratext registration. `unknown` = the backend hasn't answered. */
 export type RegistrationValidity = 'valid' | 'invalid' | 'unknown';

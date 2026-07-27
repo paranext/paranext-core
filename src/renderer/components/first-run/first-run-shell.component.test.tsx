@@ -28,6 +28,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
+function InternetSettingsPlaceholder() {
+  return <p>Internet settings placeholder</p>;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // clearAllMocks clears call history but NOT implementations, and no global mockReset is
@@ -40,16 +44,32 @@ beforeEach(() => {
 
 describe('FirstRunShell', () => {
   it('advances through steps with the shell Next button', async () => {
-    render(<FirstRunShell entryStep="language" />);
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{
+          ...DEFAULT_STEP_COMPONENTS,
+          internetSettings: InternetSettingsPlaceholder,
+        }}
+      />,
+    );
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(<FirstRunShell entryStep="language" />);
-    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{
+          ...DEFAULT_STEP_COMPONENTS,
+          internetSettings: InternetSettingsPlaceholder,
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
+    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.getByText(/language picker/i)).toBeInTheDocument();
   });
@@ -111,13 +131,18 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: BlockingStep }}
+        stepComponents={{
+          ...DEFAULT_STEP_COMPONENTS,
+          internetSettings: InternetSettingsPlaceholder,
+          identify: BlockingStep,
+        }}
       />,
     );
     // Start on language (Next should be enabled)
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
-    // Navigate into identify (the blocking step)
-    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    // Navigate through internetSettings into identify (the blocking step)
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify (BlockingStep)
     // The blocking step's mount effect must win — Next must be disabled
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
   });
