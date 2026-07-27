@@ -1,9 +1,11 @@
+import { ComponentType } from 'react';
+
 /**
  * Props every first-run wizard step receives from the shell. By default, the shell owns the footer
  * buttons and step navigation; a step renders only its body and, if it needs to gate progress,
- * calls `setCanProceed(false)`. Steps that need a custom footer (e.g. sync-consent) receive
- * navigation callbacks directly via these props and suppress the shell's shared footer. Sibling
- * tickets (PT-4176/77/78/79) implement real steps by swapping entries in the shell's
+ * calls `setCanProceed(false)`. Steps that declare {@link FirstRunStepComponent.managesOwnFooter}
+ * receive navigation callbacks directly via these props and suppress the shell's shared footer.
+ * Sibling tickets (PT-4176/77/78/79) implement real steps by swapping entries in the shell's
  * `stepComponents` map.
  */
 export interface FirstRunStepProps {
@@ -15,8 +17,23 @@ export interface FirstRunStepProps {
   onNext: () => void;
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
-  /** Skip the rest of setup and finish. Present only on Sync consent. */
+  /**
+   * Skip the rest of setup and finish (persists `platform.suppressStartupSync = true`). Provided
+   * only to steps that declare {@link FirstRunStepComponent.managesOwnFooter}.
+   */
   onSkip?: () => void;
   /** Report whether the shell's Next button should be enabled. Next defaults to enabled. */
   setCanProceed?: (canProceed: boolean) => void;
 }
+
+/**
+ * A first-run wizard step component. Extends `ComponentType<FirstRunStepProps>` with an optional
+ * static capability flag:
+ *
+ * - `managesOwnFooter`: when `true`, the step renders its own footer buttons (e.g. `WizardStepForm`)
+ *   and the shell suppresses its shared footer row for that step. The shell also passes `onSkip`
+ *   only to steps with this flag.
+ */
+export type FirstRunStepComponent = ComponentType<FirstRunStepProps> & {
+  managesOwnFooter?: boolean;
+};
