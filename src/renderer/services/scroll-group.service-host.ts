@@ -709,55 +709,93 @@ const scrollGroupService: IScrollGroupRemoteService = {
  * navigation is exposed through this network object's `navigateReferenceHistory` method below
  * rather than a duplicate command.
  */
+/**
+ * Keep this window's in-memory scroll-group state current when another window writes to it.
+ *
+ * A scroll group is app-global — group 1 is on the same reference in every window — but the local
+ * `*Sync` readers above serve each renderer from its own module state, and `writeScrRef` only
+ * broadcasts. Without this, a navigation in one window would never reach the other. Applied
+ * straight into the state rather than through `writeScrRef` so a remote update is not re-broadcast,
+ * and without persisting: the writing window already saved these exact values under the same
+ * (deliberately unscoped, app-global) storage keys.
+ *
+ * The emitting window receives its own events too, which lands as a harmless re-apply of values it
+ * just wrote.
+ */
+function subscribeToRemoteScrollGroupUpdates(): void {
+  onDidUpdateScrRef(({ scrollGroupId, scrRef, sourceProjectId }) => {
+    scrRefs[scrollGroupId] = deepClone(scrRef);
+    scrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
+  });
+  onDidChangeReferenceHistory(({ scrollGroupId, history }) => {
+    referenceHistories.set(scrollGroupId, deepClone(history));
+  });
+}
+
 export async function startScrollGroupService(): Promise<void> {
-  // Mark ONLY the two experimental methods on the (otherwise stable) scroll group network object,
-  // via per-method `x-experimental` in documentation.methods[] — NOT the whole-object 5th-param
-  // fanout, which would wrongly mark the stable getScrRef/setScrRef methods too. Mirrors the
-  // `@experimental` TSDoc on these methods in IScrollGroupRemoteService.
-  await networkObjectService.set(
-    NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
-    scrollGroupService,
-    'object',
-    undefined,
-    {
-      methods: [
-        {
-          name: 'getReferenceHistory',
-          'x-experimental': true,
-          summary: 'Get a copy of the reference history for the provided scroll group',
-          params: [
-            {
-              name: 'scrollGroupId',
-              required: true,
-              summary: 'Scroll group whose history to get',
-              schema: { type: 'number' },
-            },
-          ],
-          result: { name: 'referenceHistory', schema: { type: 'object' } },
-        },
-        {
-          name: 'navigateReferenceHistory',
-          'x-experimental': true,
-          summary:
-            'Navigate within the reference history of the provided scroll group ' +
-            '(negative offset = back, positive = forward)',
-          params: [
-            {
-              name: 'scrollGroupId',
-              required: true,
-              summary: 'Scroll group whose history to navigate',
-              schema: { type: 'number' },
-            },
-            {
-              name: 'offset',
-              required: true,
-              summary: 'Signed number of steps: negative = back, positive = forward',
-              schema: { type: 'number' },
-            },
-          ],
-          result: { name: 'didNavigate', schema: { type: 'boolean' } },
-        },
-      ],
-    },
-  );
+  // Every window mirrors every other window's navigation, whether or not it hosts the network
+  // object below
+  subscribeToRemoteScrollGroupUpdates();
+
+  // Scroll groups are app-global, so exactly one renderer publishes the network object no matter
+  // how many windows are open — whichever one starts first. A later window's registration fails
+  // because the name is already claimed by another renderer process, which is expected rather than
+  // an error: it stays in step through the events above, so a remote caller reaching the hosting
+  // window still moves every window.
+  try {
+    // Mark ONLY the two experimental methods on the (otherwise stable) scroll group network object,
+    // via per-method `x-experimental` in documentation.methods[] — NOT the whole-object 5th-param
+    // fanout, which would wrongly mark the stable getScrRef/setScrRef methods too. Mirrors the
+    // `@experimental` TSDoc on these methods in IScrollGroupRemoteService.
+    await networkObjectService.set(
+      NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+      scrollGroupService,
+      'object',
+      undefined,
+      {
+        methods: [
+          {
+            name: 'getReferenceHistory',
+            'x-experimental': true,
+            summary: 'Get a copy of the reference history for the provided scroll group',
+            params: [
+              {
+                name: 'scrollGroupId',
+                required: true,
+                summary: 'Scroll group whose history to get',
+                schema: { type: 'number' },
+              },
+            ],
+            result: { name: 'referenceHistory', schema: { type: 'object' } },
+          },
+          {
+            name: 'navigateReferenceHistory',
+            'x-experimental': true,
+            summary:
+              'Navigate within the reference history of the provided scroll group ' +
+              '(negative offset = back, positive = forward)',
+            params: [
+              {
+                name: 'scrollGroupId',
+                required: true,
+                summary: 'Scroll group whose history to navigate',
+                schema: { type: 'number' },
+              },
+              {
+                name: 'offset',
+                required: true,
+                summary: 'Signed number of steps: negative = back, positive = forward',
+                schema: { type: 'number' },
+              },
+            ],
+            result: { name: 'didNavigate', schema: { type: 'boolean' } },
+          },
+        ],
+      },
+    );
+  } catch (e) {
+    logger.debug(
+      `Another window is already publishing the scroll group service. ${getErrorMessage(e)}`,
+    );
+  }
 }
