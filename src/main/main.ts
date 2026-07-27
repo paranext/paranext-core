@@ -325,6 +325,26 @@ async function main() {
   // Live reference to the internal windows array — reflects current state, not a snapshot
   const windows = getWindows();
 
+  /**
+   * Whether the whole app is quitting, as opposed to a single window being closed. Set from
+   * `before-quit`, which fires ahead of every window's `close`, so a window's close handler can
+   * tell the two apart (see the `close` handler in `createWindow`).
+   *
+   * Distinct from the `isAppQuitting` guard on `will-quit` further below, which tracks whether that
+   * handler's graceful shutdown has already started.
+   */
+  let isAppQuitRequested = false;
+  app.on('before-quit', () => {
+    isAppQuitRequested = true;
+  });
+
+  /** In-flight shutdown-task run, so a multi-window quit runs them once rather than once per window */
+  let shutdownTasksPromise: Promise<void> | undefined;
+  const runShutdownTasksOnce = (): Promise<void> => {
+    shutdownTasksPromise ??= performShutdownTasks();
+    return shutdownTasksPromise;
+  };
+
   // #region Set up the protocol client to receive navigation to this app's URI scheme
 
   // Launch the portable app if we're in it; otherwise use the normal path
@@ -647,15 +667,10 @@ async function main() {
       }
     });
 
-    if (process.platform === 'darwin') {
-      (async () => {
-        try {
-          windowCloseUnsubscribers.add(await subscribeCurrentMacosMenubar());
-        } catch (error) {
-          logger.info(`Failed to build the macOS menubar ${error}`);
-        }
-      })();
-    }
+    // NOTE: the macOS menubar is NOT subscribed here. `Menu.setApplicationMenu` is process-global,
+    // so one subscription serves every window; subscribing per window would rebuild and re-set the
+    // same application menu once per open window on every change. It is subscribed once at startup
+    // instead — see the `darwin` block next to `createWindow()`'s first call.
 
     // The reason this code is here and not in the `app.on('will-quit')` code is that the
     // `will-quit` event only gets triggered after all windows have been closed (including this
@@ -667,10 +682,16 @@ async function main() {
     // the window until the sync completes.
     let isWindowClosing = false;
     newWindow.on('close', async (event) => {
-      // Shutdown tasks belong to the app going down, not to a window going away. Closing any window
-      // other than the last one is an ordinary window close, so let Electron handle it: `windows`
-      // is the live array and this window is only removed from it on `closed`, below.
-      if (windows.length > 1) return;
+      // Shutdown tasks belong to the app going down, not to a window going away.
+      //
+      // Two ways the app goes down, and both have to be caught here. Closing the last remaining
+      // window is one. A quit (Cmd+Q, menu Quit, OS logout) is the other, and it does NOT show up
+      // as a last-window close: Electron closes every window, and `windows` — the live array — is
+      // only trimmed in the `closed` handler below, which runs after all of these `close` handlers.
+      // Checking the window count alone would therefore see 2 windows in BOTH handlers and skip
+      // the shutdown sync entirely, which is exactly the data loss this bracket exists to prevent.
+      // `isAppQuitRequested` is set from `before-quit`, which fires ahead of any `close`.
+      if (!isAppQuitRequested && windows.length > 1) return;
 
       // A second close click while the first shutdown is still running falls through to Electron's
       // default close on purpose: with the shutdown sync's request timeout disabled by the
@@ -680,7 +701,7 @@ async function main() {
       // the in-flight sync mid-flight — same risk profile as force-quitting the app.
       if (isWindowClosing) return;
 
-      // Prevents the last window from initially closing
+      // Prevents the window from initially closing
       event.preventDefault();
       isWindowClosing = true;
       // The app is on its way down: stop the startup boot-race retry loop so it can't fire a startup
@@ -688,7 +709,9 @@ async function main() {
       startupTasksAbort.abort();
 
       try {
-        await performShutdownTasks();
+        // On a multi-window quit every window reaches this line, so the tasks are shared rather
+        // than run once per window — each window waits on the same run before destroying itself.
+        await runShutdownTasksOnce();
       } finally {
         // `event.preventDefault()` above suppresses Electron's default close; destroy() here
         // triggers the 'closed' event and allows the app to quit.
