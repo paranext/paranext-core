@@ -3,12 +3,7 @@ import { LocalizedStringValue } from 'platform-bible-utils';
 import { IconSearch } from '@tabler/icons-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { InputGroup, InputGroupAddon } from '@/components/shadcn-ui/input-group';
-import {
-  Command,
-  CommandEmpty,
-  CommandItem,
-  CommandList,
-} from '../../shadcn-ui/command';
+import { Command, CommandEmpty, CommandItem, CommandList } from '../../shadcn-ui/command';
 import { LanguageInfo } from '../ui-language-selector.component';
 
 /**

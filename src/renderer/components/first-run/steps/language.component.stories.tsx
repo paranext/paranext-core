@@ -34,11 +34,13 @@ function withFirstRunMock(mock: Partial<FirstRunLanguageMock>) {
     isLoading: false,
     ...mock,
   };
-  return (Story: ComponentType) => (
-    <FirstRunLanguageMockContext.Provider value={resolvedMock}>
-      <Story />
-    </FirstRunLanguageMockContext.Provider>
-  );
+  return function StoryDecorator(Story: ComponentType) {
+    return (
+      <FirstRunLanguageMockContext.Provider value={resolvedMock}>
+        <Story />
+      </FirstRunLanguageMockContext.Provider>
+    );
+  };
 }
 
 const meta: Meta<typeof LanguageStep> = {
