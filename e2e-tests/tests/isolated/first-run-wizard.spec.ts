@@ -10,8 +10,10 @@
  *
  * `app.fixture` pre-seeds `platform.firstRunComplete: true` to bypass the wizard for smoke tests.
  * This test deliberately needs the wizard to appear, so it uses `isolated.fixture` which performs
- * no such pre-seeding, and seeds only `platform.interfaceMode: 'simple'` to keep the app in the
- * mode where first-run gating applies (power mode bypasses the gate).
+ * no such pre-seeding, and seeds `platform.interfaceMode: 'simple'` (so the async resolveInternal
+ * path doesn't bypass the gate for power-mode users) plus `platform.firstRunComplete: false` (so a
+ * developer who has completed the wizard locally — writing firstRunComplete: true to dev-appdata —
+ * does not silently suppress the gate in this test).
  *
  * ## Why the dialog is always visible for a fresh profile
  *
@@ -29,11 +31,17 @@ test.describe('First-run wizard overlay', () => {
   let restoreSettings: (() => void) | undefined;
 
   test.beforeAll(() => {
-    // Write simple-mode setting to the shared dev-appdata settings file BEFORE launchElectronApp
-    // runs (the isolated fixture's electronApp fixture calls launchElectronApp). Playwright runs
-    // beforeAll before test-scoped fixture setup, so this write precedes the Electron launch.
-    // We deliberately do NOT set 'platform.firstRunComplete' so the overlay gate stays active.
-    restoreSettings = preConfigureSettings({ 'platform.interfaceMode': 'simple' });
+    // Write settings to the shared dev-appdata settings file BEFORE launchElectronApp runs (the
+    // isolated fixture's electronApp fixture calls launchElectronApp). Playwright runs beforeAll
+    // before test-scoped fixture setup, so this write precedes the Electron launch.
+    // firstRunComplete: false is explicit — a developer who has completed the wizard locally may
+    // have firstRunComplete: true in dev-appdata, which would let resolveInternal dismiss the
+    // overlay immediately even though the loading state briefly appeared. Being explicit ensures
+    // the overlay gate stays active for the full test on any developer machine.
+    restoreSettings = preConfigureSettings({
+      'platform.interfaceMode': 'simple',
+      'platform.firstRunComplete': false,
+    });
   });
 
   test.afterAll(() => {
@@ -41,8 +49,10 @@ test.describe('First-run wizard overlay', () => {
   });
 
   test('renders the first-run overlay for a fresh profile', async ({ mainPage }) => {
-    // The first-run overlay is a non-dismissable Dialog (role="dialog"). It is present in one of
-    // three states:
+    // Cannot call waitForAppReady here — the loading overlay's role="status" spinner causes
+    // waitForOverlayGone (inside waitForAppReady) to time out while the first-run gate is active.
+    //
+    // The first-run overlay is a non-dismissable Dialog. It is present in one of three states:
     //   • loading  — a spinner while settingsService resolves firstRunComplete
     //   • wizard   — the step-by-step onboarding flow
     //   • error    — registration backend unreachable (expected in E2E without a live Paratext install)
@@ -50,7 +60,7 @@ test.describe('First-run wizard overlay', () => {
     // Any of these states means the overlay is working. Power-mode bypass does not apply here
     // because the fresh isolated user-data dir has no localStorage cache, so
     // computeInitialStatus() returns { kind: 'loading' } and the overlay renders immediately.
-    const dialog = mainPage.locator('[role="dialog"]');
+    const dialog = mainPage.locator('[data-testid="first-run-dialog"]');
     await expect(dialog).toBeVisible({ timeout: 15_000 });
   });
 });

@@ -69,6 +69,7 @@ export function FirstRunGate({
   return (
     <Dialog open onOpenChange={() => {}}>
       <DialogContent
+        data-testid="first-run-dialog"
         showCloseButton={false}
         className={FULL_SCREEN_CONTENT}
         style={{ zIndex: Z_INDEX_FIRST_RUN }}
