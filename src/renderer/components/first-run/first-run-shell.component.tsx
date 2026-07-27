@@ -26,8 +26,6 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_stepIndicator%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
-  '%firstRun_button_skip%',
-  '%firstRun_button_skipForNow%',
   '%firstRun_button_finish%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
@@ -102,6 +100,10 @@ export function FirstRunShell({
     [step, runAction],
   );
 
+  // syncConsent manages its own footer (Back, "Don't sync yet", "Sync") via WizardStepForm so the
+  // shell does not render a second button row for that step.
+  const stepManagesOwnFooter = step === 'syncConsent';
+
   const StepComponent = stepComponents[step];
   const indicator = formatReplacementString(strings['%firstRun_stepIndicator%'], {
     stepNumber: index + 1,
@@ -133,22 +135,19 @@ export function FirstRunShell({
 
       {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
 
-      <div className="tw:flex tw:justify-end tw:gap-2">
-        {onBack && (
-          <Button variant="outline" onClick={onBack} disabled={isBusy}>
-            {strings['%firstRun_button_back%']}
+      {!stepManagesOwnFooter && (
+        <div className="tw:flex tw:justify-end tw:gap-2">
+          {onBack && (
+            <Button variant="outline" onClick={onBack} disabled={isBusy}>
+              {strings['%firstRun_button_back%']}
+            </Button>
+          )}
+          <Button onClick={onNext} disabled={!canProceed || isBusy}>
+            {isBusy && <Spinner />}
+            {nextLabel}
           </Button>
-        )}
-        {onSkip && (
-          <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skipForNow%']}
-          </Button>
-        )}
-        <Button onClick={onNext} disabled={!canProceed || isBusy}>
-          {isBusy && <Spinner />}
-          {nextLabel}
-        </Button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
