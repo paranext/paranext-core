@@ -21,7 +21,8 @@ const defaultSyncFn = (): Promise<void> =>
  * Sync consent wizard step. Presents "Sync" and "Skip automatic sync" options.
  *
  * "Sync" fires `paratextBibleSendReceive.syncProjects` (all projects — all-or-nothing per PT-4261)
- * and then advances via `onNext`. The sync progress interstitial (PT-4179) shows while sync runs.
+ * and then advances via `onNext`. Sync runs to completion with a local button spinner; PT-4179 will
+ * add a dedicated progress interstitial when it lands.
  *
  * "Skip automatic sync" calls `onSkip`, which marks `platform.suppressStartupSync = true` so the
  * main-process startup sync gate skips auto-sync permanently. The app then opens in simple mode
@@ -32,7 +33,7 @@ const defaultSyncFn = (): Promise<void> =>
  * `onSync` is injectable for Storybook and unit-test isolation. Production callers omit it and the
  * component defaults to the live `syncProjects` command.
  */
-export function SyncConsentStep({
+function SyncConsentStep({
   onNext,
   onBack,
   onSkip,
@@ -85,4 +86,11 @@ export function SyncConsentStep({
   );
 }
 
+/**
+ * Declares that this step manages its own footer buttons. The shell reads this flag to suppress its
+ * shared footer row and to pass `onSkip` to the step.
+ */
+SyncConsentStep.managesOwnFooter = true;
+
+export { SyncConsentStep };
 export default SyncConsentStep;
