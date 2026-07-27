@@ -119,7 +119,7 @@ describe('performStartupTasks', () => {
     );
   });
 
-  it('skips startup sync when user chose "Skip for now" on sync consent step', async () => {
+  it('skips startup sync when user chose "Don\'t sync yet" on sync consent step', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true, syncSkipped: true });
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();

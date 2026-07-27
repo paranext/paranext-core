@@ -41,10 +41,11 @@ const KEYS: LocalizeKey[] = [
 ];
 
 /**
- * Owns the wizard chrome (title, step indicator) and the footer (Back / Skip / Next), plus step
- * navigation. Runs ordinary forward/back navigation seeded from `entryStep` (the startup reducer
- * already chose where to start). Derives the Next busy state from the async action and surfaces a
- * thrown action as an inline error.
+ * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
+ * navigation. Steps that need a custom footer (e.g. sync-consent) set `stepManagesOwnFooter` to
+ * suppress the shared one. Runs ordinary forward/back navigation seeded from `entryStep` (the
+ * startup reducer already chose where to start). Derives the Next busy state from the async action
+ * and surfaces a thrown action as an inline error.
  */
 export function FirstRunShell({
   entryStep,

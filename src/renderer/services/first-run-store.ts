@@ -194,6 +194,18 @@ async function resolveInternal(): Promise<void> {
       }
     }
     if (firstRunComplete) {
+      // Self-heal: if the settings write for firstRunSyncSkipped failed at wizard completion,
+      // re-attempt it so the next startup correctly suppresses auto-sync.
+      if (readBooleanFlag(SYNC_SKIPPED_KEY)) {
+        try {
+          const syncSkipped = await settingsService.get('platform.firstRunSyncSkipped');
+          if (isPlatformError(syncSkipped) || syncSkipped !== true) {
+            await settingsService.set('platform.firstRunSyncSkipped', true);
+          }
+        } catch (e) {
+          logger.warn(`Failed to re-persist platform.firstRunSyncSkipped: ${getErrorMessage(e)}`);
+        }
+      }
       setStatus({ kind: 'app' });
       return;
     }
@@ -269,7 +281,7 @@ export async function resolveFirstRunState(): Promise<void> {
 /**
  * Finish the wizard: persist completion, clear the active marker, reveal the app.
  *
- * @param options.syncSkipped - When true, the user chose "Skip for now" on the sync-consent step.
+ * @param options.syncSkipped - When true, the user chose "Don't sync yet" on the sync-consent step.
  *   Persists `platform.firstRunSyncSkipped=true` so the main-process startup-tasks can suppress
  *   automatic sync on subsequent launches. Write is best-effort: a failure is logged but does not
  *   block wizard completion.
