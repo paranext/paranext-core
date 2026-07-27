@@ -27,66 +27,60 @@ describe('pickTabIconUrl', () => {
   });
 });
 
+// jsdom has no IntersectionObserver; stub it capturing the callback so tests can simulate
+// selection changes (same pattern as use-view-visibility.hook.test.ts, which this hook now
+// delegates its detection to — rc-dock renders exactly one tab's pane at a time, so "my pane is
+// visible" and "I'm the selected tab" are the same condition).
+type MinimalIntersectionCallback = (entries: { isIntersecting: boolean }[]) => void;
+
+let intersectionCallback: MinimalIntersectionCallback | undefined;
+const mockObserve = vi.fn();
+const mockDisconnect = vi.fn();
+
+beforeEach(() => {
+  intersectionCallback = undefined;
+  mockObserve.mockClear();
+  mockDisconnect.mockClear();
+  vi.stubGlobal(
+    'IntersectionObserver',
+    vi.fn((callback: MinimalIntersectionCallback) => {
+      intersectionCallback = callback;
+      return { observe: mockObserve, disconnect: mockDisconnect };
+    }),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+/** Simulates the observer reporting a selection (visibility) change */
+function simulateSelectionChange(isSelected: boolean) {
+  act(() => {
+    intersectionCallback?.([{ isIntersecting: isSelected }]);
+  });
+}
+
 describe('useTabIconSelection', () => {
-  let frameElement: HTMLElement | undefined;
-
-  beforeEach(() => {
-    vi.useFakeTimers();
-    frameElement = document.createElement('iframe');
-    Object.defineProperty(window, 'frameElement', {
-      configurable: true,
-      get: () => frameElement,
-    });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
-  it('falls back to lightDefault before the first selection poll resolves anything conclusive', () => {
-    // No offsetParent getter defined on frameElement yet: offsetParent reads as null/undefined-ish,
-    // but frameElement itself is a valid HTMLElement, so the very first poll (fired synchronously by
-    // the effect) already resolves a concrete false. This case models frameElement being entirely
-    // unavailable (e.g. not inside an iframe), which the hook treats as "selection unknown".
-    frameElement = undefined;
+  it('resolves to lightUnselected by default (jsdom reports zero geometry, so the tab starts not-selected)', () => {
     const { result } = renderHook(() => useTabIconSelection(false, URLS));
-    expect(result.current).toBe(URLS.lightDefault);
-  });
-
-  it('resolves to lightSelected once the iframe has an offsetParent', () => {
-    Object.defineProperty(frameElement, 'offsetParent', {
-      configurable: true,
-      value: document.createElement('div'),
-    });
-    const { result } = renderHook(() => useTabIconSelection(false, URLS));
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
-    expect(result.current).toBe(URLS.lightSelected);
-  });
-
-  it('resolves to lightUnselected once the iframe has no offsetParent', () => {
-    Object.defineProperty(frameElement, 'offsetParent', {
-      configurable: true,
-      // Testing the case where offsetParent is null (element hidden with display: none)
-      // eslint-disable-next-line no-null/no-null
-      value: null,
-    });
-    const { result } = renderHook(() => useTabIconSelection(false, URLS));
-    act(() => {
-      vi.advanceTimersByTime(500);
-    });
     expect(result.current).toBe(URLS.lightUnselected);
   });
 
-  it('returns the dark variant immediately when isDarkTheme is true, regardless of selection polling', () => {
-    Object.defineProperty(frameElement, 'offsetParent', {
-      configurable: true,
-      // Testing with null offsetParent (hidden element)
-      // eslint-disable-next-line no-null/no-null
-      value: null,
-    });
+  it('resolves to lightSelected once the tab becomes the active/visible one', () => {
+    const { result } = renderHook(() => useTabIconSelection(false, URLS));
+    simulateSelectionChange(true);
+    expect(result.current).toBe(URLS.lightSelected);
+  });
+
+  it('resolves back to lightUnselected once the tab becomes inactive again', () => {
+    const { result } = renderHook(() => useTabIconSelection(false, URLS));
+    simulateSelectionChange(true);
+    simulateSelectionChange(false);
+    expect(result.current).toBe(URLS.lightUnselected);
+  });
+
+  it('returns the dark variant immediately when isDarkTheme is true, regardless of selection', () => {
     const { result } = renderHook(() => useTabIconSelection(true, URLS));
     expect(result.current).toBe(URLS.dark);
   });
