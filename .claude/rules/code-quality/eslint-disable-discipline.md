@@ -1,3 +1,12 @@
+---
+paths:
+  - **/*.ts
+  - **/*.tsx
+  - **/*.js
+  - **/*.jsx
+  - **/*.scss
+---
+
 ## Fix Code, Don't Suppress Warnings
 
 When you encounter any code quality error — ESLint, TypeScript, Prettier, Stylelint, or other tooling — pause and reconsider before suppressing it:

@@ -1,3 +1,12 @@
+---
+paths:
+  - **/*.ts
+  - **/*.tsx
+  - **/*.js
+  - **/*.jsx
+  - **/*.scss
+---
+
 ## Lint-Sweep Verification
 
 When you make a "lint-fix sweep" commit (one whose stated purpose is to clear lint errors across multiple files), the commit MUST include a final repo-wide verification step, not just per-file `eslint --fix` runs.

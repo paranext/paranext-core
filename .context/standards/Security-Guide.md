@@ -7,7 +7,7 @@ description: CSP design, module import restrictions, extension sandboxing, and s
 
 This document covers security policies and restrictions for Platform.Bible development, with a focus on the extension sandbox.
 
-For secret-handling rules (no hardcoded credentials, no `.env` files, etc.), see the "Never Commit Secrets" section in root `CLAUDE.md`.
+For secret-handling rules (no hardcoded credentials, no `.env` files, etc.), see [.claude/rules/code-quality/no-secrets.md](../../.claude/rules/code-quality/no-secrets.md).
 
 ---
 

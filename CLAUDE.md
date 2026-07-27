@@ -34,42 +34,11 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 - **Data Provider**: A backend service (typically C#/.NET) that provides data to the frontend via PAPI
 - **WebView**: An extension-provided React UI that runs in an iframe within the renderer process
 
-## Tech Stack
-
-| Layer              | Technology                            |
-| ------------------ | ------------------------------------- |
-| Desktop Framework  | Electron                              |
-| Frontend           | React, TypeScript, SCSS, Tailwind CSS |
-| Backend (Node)     | TypeScript, WebSocket (JSON-RPC 2.0)  |
-| Backend (Data)     | .NET 8 / C#                           |
-| Build System       | Webpack                               |
-| Testing            | Vitest, Storybook                     |
-| Package Management | npm workspaces (monorepo)             |
-
 ## Architecture
 
-### Multi-Process Architecture
-
-The application runs as four separate processes that communicate via JSON-RPC over WebSocket:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Main Process (Electron)               │
-│  • Window management & app lifecycle                     │
-│  • Spawns and manages child processes                    │
-└────────────────┬────────────────────────────────────────┘
-                 │ JSON-RPC over WebSocket (port 8876)
-    ┌────────────┼────────────┬───────────────────┐
-    │            │            │                   │
-┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
-│ Renderer   │ │ Extension  │ │ .NET Data       │
-│ (React UI) │ │ Host       │ │ Provider        │
-│            │ │            │ │                 │
-│ • Web UI   │ │ • Loads    │ │ • Project data  │
-│ • Dialogs  │ │  extensions│ │ • Paratext     │
-│ • WebViews │ │ • PAPI     │ │   integration   │
-└────────────┘ └────────────┘ └─────────────────┘
-```
+The app runs as four processes — Electron main, renderer (React UI), extension host, and the
+.NET data provider — communicating over JSON-RPC via WebSocket (port 8876). Diagram and details:
+[Architecture.md](.context/standards/Architecture.md).
 
 ### Key Codebase Locations
 
@@ -92,58 +61,16 @@ The application runs as four separate processes that communicate via JSON-RPC ov
 
 `@main/*` → `src/main/`, `@node/*` → `src/node/`, `@extension-host/*` → `src/extension-host/`, `@renderer/*` → `src/renderer/`, `@shared/*` → `src/shared/`
 
-## Common Commands
+## Commands
 
-### Development
+All scripts are defined in `package.json` — read it (or run `npm run`) for the full list (`npm start`, `npm test`, `npm run build` / `lint` / `format` / `typecheck`; C# tests via `dotnet test` in `c-sharp-tests/`). Two that are easy to miss:
 
 ```bash
-# Start development (headless with CDP enabled)
+# Start development headless with CDP enabled (for agent-driven and E2E runs)
 ./.erb/scripts/refresh.sh
 
-# Start development (visible window - for manual development)
-npm start
-
-# Build the entire project (TypeScript, extensions, .NET, types)
-npm run build
-```
-
-### Testing
-
-```bash
-# Run all TypeScript tests
-npm test
-
-# Run single TypeScript test with watch mode
-npm test -- path/to/test-file.test.ts --watch
-
-# Run C# unit tests
-cd c-sharp-tests
-dotnet test
-
-# Run C# tests with watch mode
-cd c-sharp-tests
-dotnet watch test
-```
-
-### Code Quality
-
-```bash
-# Format code (happens automatically on commit)
-npm run format
-
-# Lint TypeScript
-npm run lint
-
-# Fix linting issues automatically
-npm run lint-fix
-
-# Format C# code
-cd c-sharp
-dotnet tool restore
-dotnet csharpier .
-
-# Type checking
-npm run typecheck
+# Format C# — csharpier is a local dotnet tool and needs a restore first
+cd c-sharp && dotnet tool restore && dotnet csharpier .
 ```
 
 ## Development Workflow
@@ -155,11 +82,6 @@ npm run typecheck
 
 ## Coding Discipline
 
-- Read existing code before suggesting modifications.
-- If multiple interpretations of a task exist, present them — do not pick silently.
-- Frame tasks as verifiable goals: "Fix the bug" → "Write a test that reproduces it, then make it pass."
-- When any code quality tool flags your code (ESLint, TypeScript, Prettier, Stylelint), fix the code first. Only suppress warnings if the fix would be significantly worse.
-- Don't add features, refactor code, or make "improvements" beyond what was asked.
 - Avoid indecipherable [initialisms and abbreviations](.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations).
 
 ## Send/Receive Write Gate
@@ -173,41 +95,10 @@ armed automatic Send/Receive rejects the write fail-fast (the `(SR_EDIT_BLOCKED)
 while a starting sync waits, bounded, for open write scopes to drain before it replaces files on
 disk.
 
-The gate has **no thread affinity** (its state is a single atomic word — an armed flag, an
-in-flight write count, and an arm generation — not an OS lock): a scope may be disposed on a
-different thread, holding one across an `await` is safe, and `SetSyncing`/`Clear` may run on any
-threads. `SetSyncing` returns a token; end the bracket with `Clear(token)` (a stale token is a
-logged no-op, so a late Clear can never disarm a newer sync) and keep parameterless `Clear()` for
-crash recovery — it force-disarms unconditionally and is idempotent. Nested `EnterWrite` calls do
-not crash, but they are NOT safe: if a sync arms while the outer scope is open, the inner call
-throws the sentinel mid-mutation — keep one scope per mutation (delegate to an un-gated core
-inside a single scope, as `SetBookUsfmInScope` does). Keep scopes **tight** — the mutation and
-nothing else — because every open scope delays a starting sync's bounded drain toward its timeout.
-
-This is an **in-process** gate, distinct from the S/R server-side repository lock
-(`lockrepo`/`unlockrepo` between clients) — do not conflate the two. `SendReceiveWriteLockCoverageTests`
-(`c-sharp-tests/Projects/SendReceive/`) scans the source tree (excluding `bin`/`obj`) for direct
-project-write call patterns (a general `.Save(` heuristic, `PutText`, comment `SaveUser`/`SaveEdits`,
-and `File`/`FileManager` deletes) and fails on any hit that isn't covered per site by ONE of: gate
-evidence (an `EnterWrite`/`EnterSyncWriteScope` call above it in the same method); an inline
-`// SR-write-gate: exempt — <reason>` marker on/above the write (for writes reached only through an
-already-gated caller — the un-gated `SetBookUsfmInScope` core and the ManageBooks orchestrators,
-each citing its gated caller + `TODO(PT-4210)`); or a whole-file entry on the test's exempt list,
-which is reserved for **not-project-data** files only. Per-site (not whole-file), so a NEW ungated
-write added to an already-gated file is still caught.
-
-## Never Commit Secrets
-
-This is an open-source repository. Never introduce secrets into the codebase:
-
-- **No hardcoded credentials**: API keys, tokens, passwords, connection strings, private keys.
-- **No secret files**: `.env`, `.env.*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `credentials.json`, `service-account.json`.
-- **No secrets in commit messages or PR descriptions.**
-- **No base64-encoded or obfuscated secrets** — encoding is not encryption.
-
-If a feature needs a secret at runtime, use environment variables or Platform.Bible's settings system. Never provide a default value that is an actual secret.
-
-Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the secret-detection linters. If a hook fails, fix the underlying issue. If you suspect you've staged a file containing secrets, unstage it before committing.
+The full gate semantics — thread affinity, the `SetSyncing`/`Clear(token)` protocol,
+nested-scope hazards, and the `SendReceiveWriteLockCoverageTests` exemption markers — live in
+[send-receive-write-gate.md](.claude/rules/send-receive-write-gate.md), which auto-loads when you
+work in `c-sharp/`.
 
 ## Git & PR Conventions
 
@@ -237,15 +128,3 @@ Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the se
 **macOS**: Requires MacPorts with icu4c libraries. The .NET build automatically copies dylibs to output directory.
 
 **Windows**: Use WSL2 for cross-platform testing.
-
-## Version Management
-
-- Use Node.js version specified in `package.json` → `volta.node` (recommend using Volta)
-- Requires .NET 8 SDK
-
-## Links
-
-- [PAPI Documentation](https://paranext.github.io/paranext-core/papi-dts)
-- [React Components Docs](https://paranext.github.io/paranext-core/platform-bible-react)
-- [Utilities Docs](https://paranext.github.io/paranext-core/platform-bible-utils)
-- [Extension Template](https://github.com/paranext/paranext-extension-template/wiki)
