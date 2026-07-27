@@ -133,14 +133,16 @@ const cssClassTabHeaderLastSelected = 'platform-dock-tab-last-selected';
 const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
 /**
- * Renders the tab title inside a stand-in for rc-dock's DOM structure: a `.dock-panel` ancestor
+ * The tab title mounted inside a stand-in for rc-dock's DOM structure: a `.dock-panel` ancestor
  * containing `.dock-nav-wrap` > `.dock-nav-list` > the active tab header (where `PlatformTabTitle`
  * mounts, matching the DOM walk the icon-only-density effect performs) as a sibling of the active
  * tab content pane (mirroring the last-selected-tint effect's walk: header → `.dock-panel` →
- * `.dock-tabpane-active`).
+ * `.dock-tabpane-active`). Factored out (not just called from `renderTabTitle`) so a test can also
+ * pass it to `rerender` to re-render the identical tree after changing a mock, e.g.
+ * `useIsPowerMode`.
  */
-function renderTabTitle(id: string, tooltip?: string) {
-  return render(
+function tabTitleTree(id: string, tooltip?: string) {
+  return (
     <div className="dock-panel">
       <div className="dock-nav-wrap">
         <div className="dock-nav-list">
@@ -150,8 +152,13 @@ function renderTabTitle(id: string, tooltip?: string) {
         </div>
       </div>
       <div className="dock-tabpane-active" />
-    </div>,
+    </div>
   );
+}
+
+/** Renders {@link tabTitleTree}. */
+function renderTabTitle(id: string, tooltip?: string) {
+  return render(tabTitleTree(id, tooltip));
 }
 
 /** A zero-filled `DOMRect`-shaped object with just `width` overridden, for mocking layout in jsdom. */
@@ -493,5 +500,24 @@ describe('PlatformTabTitle responsive icon-only density (Simple mode)', () => {
     expect(
       screen.queryByText('Extra detail beyond the title', { selector: 'p' }),
     ).toBeInTheDocument();
+  });
+
+  it('resets icon-only state on a Simple->Power mode switch at runtime, so a tab that was collapsed in Simple mode does not stay stuck icon-only-styled in Power mode', () => {
+    // Regression test for a real bug: the icon-only effect's early return for Power mode never
+    // reset `isIconOnly`, and both modes render the tab title through the same code path that
+    // applies the icon-only class — so a tab collapsed to icon-only in Simple mode stayed stuck
+    // that way after switching to Power mode at runtime (`useIsPowerMode` is a live subscription,
+    // so the effect does re-run on the switch — it just didn't clear the stale state).
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container, rerender } = renderTabTitle('web-view-1');
+    setPanelWidth(container, 300);
+    setMeasureCloneWidth(container, 500);
+    simulateColumnResize();
+    expect(container.querySelector('.platform-tab-title')).toHaveClass('icon-only');
+
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    rerender(tabTitleTree('web-view-1'));
+
+    expect(container.querySelector('.platform-tab-title')).not.toHaveClass('icon-only');
   });
 });
