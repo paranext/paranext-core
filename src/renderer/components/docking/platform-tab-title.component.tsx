@@ -373,7 +373,13 @@ export function PlatformTabTitle({
   //    available width correctly in both directions.
   const [isIconOnly, setIsIconOnly] = useState(false);
   useEffect(() => {
-    if (isPowerMode) return undefined;
+    // `isPowerMode` is a live subscription, so this effect re-runs on a runtime Simple->Power
+    // switch — reset the stale Simple-mode value rather than just skipping setup, since both modes
+    // render the tab title through the same code path that applies the icon-only class/aria-label.
+    if (isPowerMode) {
+      setIsIconOnly(false);
+      return undefined;
+    }
     const element = containerRef.current;
     if (!element) return undefined;
     const panel = element.closest('.dock-panel');
