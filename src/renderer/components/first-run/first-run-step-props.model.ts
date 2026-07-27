@@ -1,8 +1,8 @@
 /**
  * Props every first-run wizard step receives from the shell. The shell owns the footer buttons and
  * step navigation; a step renders only its body and, if it needs to gate progress, calls
- * `setCanProceed(false)`. Sibling tickets (PT-4176/77/78/79) implement real steps by swapping
- * entries in the shell's `stepComponents` map.
+ * `setCanProceed(false)`. Steps are implemented by their individual tickets (PT-4176/77/78/79 and
+ * PT-4235) by swapping entries in the shell's `stepComponents` map.
  */
 export interface FirstRunStepProps {
   /**
