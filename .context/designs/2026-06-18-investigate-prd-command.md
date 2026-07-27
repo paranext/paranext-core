@@ -1404,7 +1404,7 @@ readable). The Send/Receive PRD is ideal because the inventory's worked example 
 `10.1 Send/Receive → SendReceiveProjectsForm`.
 
 **Files:**
-- Test input: `/mnt/c/Users/Paratext/Downloads/PRD-Power-Donna syncs her project with the team_0-003.md`
+- Test input: `PRD-Power-Donna syncs her project with the team_0-003.md`
 
 - [ ] **Step 1: Sanity-check the agents are loadable**
 
@@ -1418,7 +1418,7 @@ Expected: all five listed.
 
 Invoke (from a context where the profile is active):
 ```
-/investigate-prd "/mnt/c/Users/Paratext/Downloads/PRD-Power-Donna syncs her project with the team_0-003.md"
+/investigate-prd "PRD-Power-Donna syncs her project with the team_0-003.md"
 ```
 
 - [ ] **Step 3: Verify the brief**

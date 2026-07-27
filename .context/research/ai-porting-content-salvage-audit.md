@@ -7,8 +7,8 @@ was deliberately dropped. This audit targets the remaining gap: **durable CONTEN
 paranext-core / PT9 / PT10 knowledge — that lives in the `ai-porting` source but is not yet
 represented in the embedded profile.
 
-- **SOURCE (ai-porting):** `/home/paratext/git/ai-prompts/ai-porting` (its `.context/`, `.claude/`)
-- **DEST (embedded profile):** `/home/paratext/git/pcwt-embed-claude` (its `.context/`, `.claude/`, `CLAUDE.md`)
+- **SOURCE (ai-porting):** the private `ai-prompts` repo's `ai-porting/` directory (its `.context/`, `.claude/`)
+- **DEST (embedded profile):** the embedded-profile staging repo (internal) (its `.context/`, `.claude/`, `CLAUDE.md`)
 
 Effort key: **S** ≈ a bullet / a paragraph; **M** ≈ a new subsection or a small new file; **L** ≈ a multi-file corpus import.
 
@@ -208,7 +208,7 @@ neither the PORT list nor this leave-behind list. Dispositions:
   and is corrected in the ported version.
 - **PT9 TestLodge test-case corpus** (`.context/research/test-cases/`, 782 files) — **left in
   place**, deliberately. It is the behavioral QA oracle for PT9-parity work, but at 782 files it
-  would dominate this repo's research area; consult it in the `ai-prompts` checkout when a
+  would dominate this repo's research area; consult it in the private `ai-prompts` repo (team-internal) when a
   parity feature needs it. Revisit if `ai-prompts` is ever archived out of reach.
 - **`pr-reviewer-completeness` / `pr-reviewer-consistency` agents** — **left behind**. Their
   every-upstream-item-has-a-downstream-item lens is coupled to the phase-artifact chain

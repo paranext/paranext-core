@@ -10,12 +10,12 @@
 
 ## Global Constraints
 
-- Repo: worktree `/home/paratext/git/workspaces/prd-donna-syncs-projects/paranext-core`, branch `ai/investigate-prd-command`. All paths relative to it. Never run git ops in the canonical checkout.
+- Repo: a dedicated feature worktree, branch `ai/investigate-prd-command`. All paths relative to it. Never run git ops in the canonical checkout.
 - Never introduce time estimates (hours/days/weeks) into any template or example.
 - User-facing template text must avoid AI jargon (no "aspect breakdown", "constellation", "sub-flow" in brief/feedback templates).
 - No `%key%`-shaped tokens anywhere (AI-009 pre-commit hook scans comments too).
 - No ticket IDs or PR numbers in the authored prompt files (transient-ref rule) — design docs may cite them, command/agent files may not.
-- Every commit: `npx prettier --check` the touched files first; commit messages end with `Co-authored-by: Claude Fable 5 <noreply@anthropic.com>` and `Session-URL: https://claude.ai/code/session_01HPQh3ZyPgiRd72FcTY7PXb`.
+- Every commit: `npx prettier --check` the touched files first; commit messages end with `Co-authored-by: Claude Fable 5 <noreply@anthropic.com>` and a `Session-URL` trailer.
 - Exact section names are load-bearing across files: `PT9 claims to verify`, `New in Paratext 10 — confirm these are intentional`, `Questions for the product owner`, `Engineering decisions`, `DEPTH`, `capability-scan`, `PC-` id prefix. Task 7 greps for drift.
 
 ---
