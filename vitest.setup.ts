@@ -48,7 +48,10 @@ new Intl.ListFormat(locale).format(['a', 'b']);
 // correctly controls the current test's fake clock.
 //
 // When fake timers are NOT active, @sinonjs/fake-timers does NOT set a `.clock` property on
-// `setTimeout`, so the fake-timer branch is skipped and a microtask flush suffices.
+// `setTimeout`, so the fake-timer branch is skipped. We still wrap the drain in act() so
+// React flushes any pending state updates (e.g., from resolved Promises in usePromise hooks)
+// that were queued while cb() ran — a bare Promise.resolve() only drains one microtask level
+// and misses multi-await async chains (e.g., two sequential sendCommand() awaits in a hook).
 configure({
   asyncWrapper: async (cb) => {
     // Temporarily clear the React act environment flag so that `waitFor` polling intervals don't
@@ -80,7 +83,9 @@ configure({
           vi.advanceTimersByTime(0);
         });
       } else {
-        await Promise.resolve(); // real timers: a microtask flush is sufficient
+        await act(async () => {
+          await Promise.resolve(); // real timers: flush pending microtasks inside act()
+        });
       }
       return result;
     } finally {
