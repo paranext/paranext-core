@@ -3,8 +3,8 @@ import { completeFirstRun } from '@renderer/services/first-run-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { ComponentType, useCallback, useMemo, useState } from 'react';
-import { FirstRunStepProps } from './first-run-step-props.model';
+import { useCallback, useMemo, useState } from 'react';
+import { FirstRunStepComponent, FirstRunStepProps } from './first-run-step-props.model';
 import { LanguageStep } from './steps/language.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
 import { SyncConsentStep } from './steps/sync-consent-step.component';
@@ -14,7 +14,7 @@ import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.c
 export const STEP_ORDER: FirstRunStep[] = ['language', 'identify', 'syncConsent', 'syncProgress'];
 
 /** Default step bodies. Sibling tickets replace individual entries with their real step. */
-export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
+export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, FirstRunStepComponent> = {
   language: LanguageStep,
   identify: IdentifyPlaceholderStep,
   syncConsent: SyncConsentStep,
@@ -43,7 +43,7 @@ export function FirstRunShell({
   stepComponents = DEFAULT_STEP_COMPONENTS,
 }: {
   entryStep: FirstRunStep;
-  stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
+  stepComponents?: Record<FirstRunStep, FirstRunStepComponent>;
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
   const [canProceed, setCanProceed] = useState(true);
@@ -93,19 +93,19 @@ export function FirstRunShell({
     [index, entryIndex, goToStep],
   );
 
+  const StepComponent = stepComponents[step];
+
   const onSkip = useMemo(
     () =>
-      step === 'syncConsent'
+      StepComponent.managesOwnFooter
         ? () => runAction(() => completeFirstRun({ syncSkipped: true }))
         : undefined,
-    [step, runAction],
+    [StepComponent, runAction],
   );
 
-  // syncConsent manages its own footer (Back, "Skip automatic sync", "Sync") via WizardStepForm so the
-  // shell does not render a second button row for that step.
-  const stepManagesOwnFooter = step === 'syncConsent';
-
-  const StepComponent = stepComponents[step];
+  // Steps that declare managesOwnFooter render their own footer buttons (e.g. WizardStepForm);
+  // the shell suppresses its shared footer row for those steps.
+  const stepManagesOwnFooter = !!StepComponent.managesOwnFooter;
   const indicator = formatReplacementString(strings['%firstRun_stepIndicator%'], {
     stepNumber: index + 1,
     stepCount: STEP_ORDER.length,
