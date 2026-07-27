@@ -85,6 +85,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   const [showInvalidCode, setShowInvalidCode] = useState(false);
   const [error, setError] = useState('');
   const [errorDescription, setErrorDescription] = useState('');
+  const [saveError, setSaveError] = useState('');
+  const [saveErrorDescription, setSaveErrorDescription] = useState('');
   const [isRestarting, setIsRestarting] = useState(false);
 
   const isMounted = useRef(false);
@@ -189,7 +191,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       return;
     }
     setIsRestarting(true);
-    setError('');
+    setSaveError('');
+    setSaveErrorDescription('');
     try {
       await commandService.sendCommand('paratextRegistration.setParatextRegistrationData', {
         name,
@@ -204,8 +207,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
     } catch (err) {
       if (!isMounted.current) return;
-      setError(strings['%general_error_title%']);
-      setErrorDescription(getErrorMessage(err));
+      setSaveError(strings['%general_error_title%']);
+      setSaveErrorDescription(getErrorMessage(err));
       setIsRestarting(false);
     }
   };
@@ -295,6 +298,14 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
           <AlertCircle className="tw:h-4 tw:w-4" />
           <AlertTitle>{error}</AlertTitle>
           <AlertDescription>{errorDescription}</AlertDescription>
+        </Alert>
+      )}
+
+      {saveError && (
+        <Alert id="identify-save-error" variant="destructive">
+          <AlertCircle className="tw:h-4 tw:w-4" />
+          <AlertTitle>{saveError}</AlertTitle>
+          <AlertDescription>{saveErrorDescription}</AlertDescription>
         </Alert>
       )}
 
