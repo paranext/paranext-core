@@ -219,6 +219,8 @@ export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
+export { default as WizardStepper } from './components/basics/wizard-stepper.component';
+export type { WizardStepperProps } from './components/basics/wizard-stepper.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
