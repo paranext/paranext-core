@@ -125,7 +125,7 @@ describe('InternetSettingsStep', () => {
 
     await waitFor(() => expect(screen.getByText(/save failed/i)).toBeInTheDocument());
     // setCanProceed(false) must be called after the failed save
-    const calls = setCanProceed.mock.calls.map((c: [boolean]) => c[0]);
+    const calls = setCanProceed.mock.calls.map((c) => c[0]);
     expect(calls.at(-1)).toBe(false);
   });
 

@@ -10,7 +10,7 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 const STUB_STEPS = {
   ...DEFAULT_STEP_COMPONENTS,
   language: () => <p>language step</p>,
-  internet: () => <p>internet step</p>,
+  internetSettings: InternetSettingsPlaceholder,
   identify: () => <p>identify step</p>,
 };
 
@@ -34,6 +34,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
+function InternetSettingsPlaceholder() {
+  return <p>Internet settings placeholder</p>;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   // clearAllMocks clears call history but NOT implementations, and no global mockReset is
@@ -49,27 +53,24 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     expect(screen.getByText(/language step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/internet step/i)).toBeInTheDocument();
+    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText(/identify step/i)).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(
-      <FirstRunShell
-        entryStep="internet"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: () => <p>identify step</p> }}
-      />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internet -> identify
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
+    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify
     expect(screen.getByText(/identify step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
     expect(screen.queryByText(/identify step/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/internet settings \(coming soon\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
-    // A post-relaunch user resumes at syncConsent; the already-completed language/internet/identify
+    // A post-relaunch user resumes at syncConsent; the already-completed language/internetSettings/identify
     // steps behind it must be unreachable (backing into the Identify step would re-trigger the relaunch).
     render(<FirstRunShell entryStep="syncConsent" />);
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
@@ -95,7 +96,7 @@ describe('FirstRunShell', () => {
     );
     await waitFor(() => screen.getByRole('button', { name: /skip/i }));
     // Navigate away — shell must reset canSkip so the next step does not inherit it.
-    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
     expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
@@ -159,11 +160,13 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...STUB_STEPS, internet: BlockingStep }}
+        stepComponents={{ ...STUB_STEPS, internetSettings: BlockingStep }}
       />,
     );
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    // Navigate into internetSettings (the blocking step)
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings (BlockingStep)
+    // The blocking step's mount effect must win — Next must be disabled
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
   });
 });
