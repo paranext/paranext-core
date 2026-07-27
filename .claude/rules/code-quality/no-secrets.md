@@ -13,4 +13,4 @@ If a feature needs a secret at runtime, use environment variables or Platform.Bi
 
 When porting PT9 features that involve encryption, decryption, or secrets, document the _mechanism_ (e.g., "uses AES-256 decryption with a key from user config") but never copy actual keys, passwords, or secret values into PT10 artifacts, test fixtures, or code. Use placeholder values like `"<encryption-key-from-user-config>"` in specifications and contracts.
 
-If you suspect you've staged a file containing secrets, unstage it before committing.
+Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the secret-detection linters. If a hook fails, fix the underlying issue. If you suspect you've staged a file containing secrets, unstage it before committing.
