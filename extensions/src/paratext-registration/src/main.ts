@@ -25,7 +25,7 @@ async function showInternetSettings(): Promise<string | undefined> {
   );
 }
 
-// Startup registration is handled by the renderer-side first-run overlay (PT-4175) — opening WebViews here races WebViewService.
+// Startup registration is handled by the renderer-side first-run overlay — opening WebViews here races WebViewService.
 export async function activate(context: ExecutionActivationContext) {
   logger.debug('Paratext Registration is activating!');
 

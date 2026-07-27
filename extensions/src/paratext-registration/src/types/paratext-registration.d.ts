@@ -129,4 +129,12 @@ declare module 'papi-shared-types' {
       registrationData: RegistrationData,
     ) => Promise<boolean>;
   }
+
+  export interface SettingTypes {
+    /**
+     * @deprecated 22 July 2026. The startup registration prompt this controlled was replaced by the
+     *   first-run gating overlay.
+     */
+    'paratextRegistration.shouldShowOnStartup': boolean;
+  }
 }
