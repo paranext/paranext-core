@@ -45,7 +45,7 @@ type ProjectRow = {
 /** Renders the list of per-project rows below the global progress bar. */
 function ProjectRowList({ rows }: { rows: ProjectRow[] }) {
   return (
-    // role="list" is explicit: Tailwind's reset removes list semantics in some browsers (Safari).
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Tailwind strips list semantics in Safari; role="list" re-establishes them for VoiceOver
     <ul role="list" className="tw:mt-2 tw:flex tw:flex-col tw:gap-1">
       {rows.map((row) => (
         <li key={row.name} className="tw:flex tw:items-center tw:gap-2 tw:text-sm">
@@ -151,12 +151,13 @@ export function SyncProgressStep({
       // path that emits onSyncProgress before (or instead of) onSyncStateChanged isSyncing:true.
       hasSyncStartedRef.current = true;
       setProgressText(text);
-      setProgressValue(value ?? undefined);
+      const normalizedValue = value ?? undefined;
+      setProgressValue(normalizedValue);
 
       // Row accumulation: only for determinate events with a non-empty, new project name.
       // Indeterminate events (progressValue null/undefined) carry localized status messages
       // ("Reconnecting…"), not project names — skip them.
-      if (value != null && text && text !== lastProjectNameRef.current) {
+      if (normalizedValue !== undefined && text && text !== lastProjectNameRef.current) {
         lastProjectNameRef.current = text;
         setRows((prev) => [
           ...prev.map((r) => (r.status === 'syncing' ? { ...r, status: 'done' as const } : r)),
