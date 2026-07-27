@@ -219,5 +219,5 @@ describe('convert', () => {
     const formatted = await prettier.format(scss, { ...config, parser: 'scss' });
 
     expect(scss).toBe(formatted);
-  }, 15000);
+  }, 15_000);
 });
