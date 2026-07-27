@@ -84,10 +84,11 @@ export function DestructiveKeyConfirmation({
           // :has() selector otherwise out-specificities a plain tw:p-0 and leaves a gap on the
           // trailing edge.
           className={cn(
-            // tw:max-w-none overrides TooltipContent's default tw:max-w-xs (320px): this hint's text
-            // is short but varies by locale (e.g. Spanish translations run longer than English), and
-            // wrapping mid-Kbd looks broken, so prefer a single line over wrapping.
-            'tw:max-w-none tw:whitespace-nowrap tw:p-0 tw:has-data-[slot=kbd]:pe-0 tw:bg-background tw:text-destructive tw:border tw:border-destructive',
+            // Rely on TooltipContent's default tw:max-w-xs (320px) and normal wrapping: this hint's
+            // text is short and usually fits on one line, but locale length varies (e.g. Spanish runs
+            // longer than English), so allow it to wrap rather than force tw:whitespace-nowrap, which
+            // could clip or overflow on a narrow webview.
+            'tw:p-0 tw:has-data-[slot=kbd]:pe-0 tw:bg-background tw:text-destructive tw:border tw:border-destructive',
           )}
           // The arrow's polygon paints via the SVG `fill` property, and opacity-modified fill-*
           // classes (fill-destructive/10) don't generate real CSS here — bake the same tint as an
