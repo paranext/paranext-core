@@ -20,7 +20,6 @@ import {
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
-  useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import {
@@ -109,17 +108,10 @@ global.webViewComponent = function CommentListWebView({
   // needed (and nothing gets serialized into persisted layouts).
   const isCommentListPanel = webViewType === COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
 
-  // #region Tab icon (Simple mode only, Comment List panel only — Power mode and the non-panel
-  // comment-list web view type both keep this tab/view text-only, as today)
-
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
-  const isPowerMode = useMemo(() => {
-    if (isPlatformError(interfaceModePossiblyError)) {
-      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
-      return false;
-    }
-    return interfaceModePossiblyError === 'power';
-  }, [interfaceModePossiblyError]);
+  // #region Tab icon (Comment List panel only, both Power and Simple mode — matching Text
+  // Collection's convention; per-product-decision this tab keeps its icon in Power mode too,
+  // unlike Bible Texts/Commentaries which stay Simple-mode-only. The non-panel comment-list web
+  // view type still keeps its tab/view text-only, as today.)
 
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
@@ -146,17 +138,8 @@ global.webViewComponent = function CommentListWebView({
     // `isCommentListPanel` is fixed for this component instance's whole lifetime (derived from the
     // webViewType prop), so there's no icon to clear when it's false — this instance never set one.
     if (!isCommentListPanel) return;
-    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
-    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
-    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
-    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
-    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
-    if (isPowerMode) {
-      updateWebViewDefinition({ iconUrl: undefined });
-      return;
-    }
     updateWebViewDefinition({ iconUrl: commentListPanelIconUrl });
-  }, [isPowerMode, isCommentListPanel, commentListPanelIconUrl, updateWebViewDefinition]);
+  }, [isCommentListPanel, commentListPanelIconUrl, updateWebViewDefinition]);
 
   // #endregion
 
