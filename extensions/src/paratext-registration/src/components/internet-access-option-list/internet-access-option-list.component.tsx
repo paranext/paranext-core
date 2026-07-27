@@ -1,8 +1,11 @@
 import { InternetUse } from 'paratext-registration';
-import { cn, RadioGroup, RadioGroupItem } from 'platform-bible-react';
+import { Badge, cn, RadioGroup, RadioGroupItem } from 'platform-bible-react';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 
 type OptionRow = {
+  // BlockInSensitiveLocations is included here as a UI-only option that the UX spec requires
+  // showing in this list, but it is not part of the InternetUse type that PAPI persists — the
+  // onChange handler filters it out before calling the caller (see the if-guard below).
   value: InternetUse | 'BlockInSensitiveLocations';
   labelKey: LocalizeKey;
   descriptionKey: LocalizeKey;
@@ -12,13 +15,13 @@ type OptionRow = {
 const OPTION_ROWS: OptionRow[] = [
   {
     value: 'Enabled',
-    labelKey: '%paratextRegistration_description_internetUse_option_Enabled%',
+    labelKey: '%paratextRegistration_description_internetUse_option_Enabled_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_Enabled_details%',
     isEnabled: true,
   },
   {
     value: 'VpnRequired',
-    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired%',
+    labelKey: '%paratextRegistration_description_internetUse_option_VpnRequired_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_VpnRequired_details%',
     isEnabled: true,
   },
@@ -37,7 +40,7 @@ const OPTION_ROWS: OptionRow[] = [
   },
   {
     value: 'ProxyOnly',
-    labelKey: '%paratextRegistration_description_internetUse_option_ProxyOnly%',
+    labelKey: '%paratextRegistration_description_internetUse_option_ProxyOnly_2%',
     descriptionKey: '%paratextRegistration_description_internetUse_option_ProxyOnly_details%',
     isEnabled: false,
   },
@@ -108,9 +111,9 @@ export function InternetAccessOptionList({
                   {localizedStrings[row.labelKey]}
                 </label>
                 {!row.isEnabled && (
-                  <span className="tw:shrink-0 tw:rounded tw:bg-muted tw:px-1.5 tw:py-0.5 tw:text-xs tw:text-muted-foreground">
+                  <Badge variant="muted">
                     {localizedStrings['%paratextRegistration_internetUse_comingSoon%']}
-                  </span>
+                  </Badge>
                 )}
               </div>
               <p className="tw:text-xs tw:text-muted-foreground">
