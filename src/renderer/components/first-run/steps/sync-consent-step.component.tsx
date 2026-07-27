@@ -10,7 +10,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_step_syncConsent_heading%',
   '%firstRun_step_syncConsent_body%',
   '%firstRun_button_back%',
-  '%firstRun_button_dontSyncYet%',
+  '%firstRun_button_skipSync%',
   '%firstRun_button_sync%',
 ];
 
@@ -18,12 +18,12 @@ const defaultSyncFn = (): Promise<void> =>
   sendCommand('paratextBibleSendReceive.syncProjects', undefined);
 
 /**
- * Sync consent wizard step. Presents "Sync" and "Don't sync yet" options.
+ * Sync consent wizard step. Presents "Sync" and "Skip automatic sync" options.
  *
  * "Sync" fires `paratextBibleSendReceive.syncProjects` (all projects — all-or-nothing per PT-4261)
  * and then advances via `onNext`. The sync progress interstitial (PT-4179) shows while sync runs.
  *
- * "Don't sync yet" calls `onSkip`, which marks `platform.firstRunSyncSkipped = true` so the
+ * "Skip automatic sync" calls `onSkip`, which marks `platform.firstRunSyncSkipped = true` so the
  * main-process startup sync gate skips auto-sync permanently. The app then opens in simple mode
  * with no synced projects; since the simple layout expects at least one project in the editor, the
  * empty-state UI (e.g. a prompt to open or download a project) must handle this gracefully — that
@@ -69,7 +69,7 @@ export function SyncConsentStep({
       secondaryButton={
         !isSyncing && onSkip ? (
           <Button variant="ghost" onClick={onSkip}>
-            {strings['%firstRun_button_dontSyncYet%']}
+            {strings['%firstRun_button_skipSync%']}
           </Button>
         ) : undefined
       }

@@ -101,7 +101,7 @@ export function FirstRunShell({
     [step, runAction],
   );
 
-  // syncConsent manages its own footer (Back, "Don't sync yet", "Sync") via WizardStepForm so the
+  // syncConsent manages its own footer (Back, "Skip automatic sync", "Sync") via WizardStepForm so the
   // shell does not render a second button row for that step.
   const stepManagesOwnFooter = step === 'syncConsent';
 

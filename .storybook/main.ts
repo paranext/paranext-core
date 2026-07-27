@@ -170,7 +170,6 @@ const config: StorybookConfig = {
       };
     }
 
-<<<<<<< HEAD
     // Renderer app components (startup-wizard shell/steps, dialogs, overlays) import
     // `useLocalizedStrings` from the `@renderer/hooks/papi-hooks` barrel. The real hook opens a PAPI
     // WebSocket that has no backend in Storybook, rejecting unhandled after ~10s ("Timeout reached
