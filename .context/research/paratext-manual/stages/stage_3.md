@@ -12,10 +12,10 @@ In this third stage of an SIL translation project you will do comprehension test
 
 The following modules will help you in this stage:
 
-16. [**Draft a Back Translation**](/16.BT1)
+16. [**Draft a Back Translation**](../chapters/16_back_translation_1.md)
 
-17. [**Interlinearize a project**](/17.BT2)
+17. [**Interlinearize a project**](../chapters/17_back_translation_2.md)
 
-18. [**Compare Text**](/18.CT)
+18. [**Compare Text**](../chapters/18_compare_text.md)
 
-19. [**Basic checks 3**](/19.BC3)
+19. [**Basic checks 3**](../chapters/19_basic_checks_3.md)

@@ -14,7 +14,7 @@ On this page
 
 **Before you start** Before you can use the plan, it must have been configured. [Your project administrator who will add the appropriate organisational plan and configure it for your team.]
 
-**Why is this important?** There are so many tasks to do in a translation project. It is important to have a system to make sure you do all these tasks. Now that your plan has been configured, you can use the plan to see what tasks have been assigned to you to do next. When you finish the task, you can mark the task as completed and see the next task to do. You can use this information to generate reports for supervisors and donors (see [Project progress 2](/6.PP2)).
+**Why is this important?** There are so many tasks to do in a translation project. It is important to have a system to make sure you do all these tasks. Now that your plan has been configured, you can use the plan to see what tasks have been assigned to you to do next. When you finish the task, you can mark the task as completed and see the next task to do. You can use this information to generate reports for supervisors and donors (see [Project progress 2](./06_project_plan_2.md)).
 
 **What are we going to do?** You will mark a variety of tasks as complete. The exact steps will vary slightly depending on whether you do the task once per project, once per book, or by chapter. The place to mark progress for all types of tasks is the Status column.
 

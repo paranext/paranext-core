@@ -21,7 +21,7 @@ On this page
 ## 6.1 Make sure the progress of the plan is up-to-date[​](#1baa7ce081654a3a9aa755bf4ebdfc4d "Direct link to 6.1 Make sure the progress of the plan is up-to-date")
 
 1. Open the Assignments and Progress (the blue button)
-2. Update the progress on all tasks (see [3. Assignments and Progress](/3.PP1) for instructions on each type of task).
+2. Update the progress on all tasks (see [3. Assignments and Progress](./03_project_plan_1.md) for instructions on each type of task).
 
 ## 6.2 Change an assignment[​](#420f3c9ae4d6494d8246e72237cc8030 "Direct link to 6.2 Change an assignment")
 

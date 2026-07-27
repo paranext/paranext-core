@@ -10,9 +10,9 @@ On this page
 
 # 12. Basic Checks 2
 
-**Introduction** In this module, you will learn to do several other basic checks (**Characters**, **punctuation**, **capitals**, and **repeated words)**. As in the first Basic Checks module (5. [Basic checks 1](/5.BC1)), it is easiest to run these checks from the Assignments and Progress. However, if you want to check several books, you will need to use the **Tools** menu.
+**Introduction** In this module, you will learn to do several other basic checks (**Characters**, **punctuation**, **capitals**, and **repeated words)**. As in the first Basic Checks module (5. [Basic checks 1](./05_basic_checks_1.md)), it is easiest to run these checks from the Assignments and Progress. However, if you want to check several books, you will need to use the **Tools** menu.
 
-**Before you start** You have typed your translation in Paratext 9. Be sure that you have checked the chapter/verse numbers and markers, as described in 5. [Basic checks 1](/5.BC1), before continuing and that your administrator has either completed the setup of the checks or is with you to do the setup now.
+**Before you start** You have typed your translation in Paratext 9. Be sure that you have checked the chapter/verse numbers and markers, as described in 5. [Basic checks 1](./05_basic_checks_1.md), before continuing and that your administrator has either completed the setup of the checks or is with you to do the setup now.
 
 **Why is this important?** Paratext 9 has eleven **Basic Checks**. You have already seen the first two, chapter/verse numbers and markers. This module will help you to find errors linked to characters, punctuation, capital letters and repeated words. Even though these errors may not influence the content of the text, correcting them makes the text easier to read.
 

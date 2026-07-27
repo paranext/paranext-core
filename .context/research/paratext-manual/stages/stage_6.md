@@ -12,8 +12,8 @@ The sixth stage (SIL) [or fourth stage USB], of a translation project is the fin
 
 The following modules will help you in this stage:
 
-23. [Compare Parallel Passages](/23.PP)
+23. [Compare Parallel Passages](../chapters/23_parallel_passages.md)
 
-24. [Finalising for Publication](/24.FFP)
+24. [Finalising for Publication](../chapters/24_finalizing.md)
 
-25. [Create a Study Bible](/25.StudyBibles)
+25. [Create a Study Bible](../chapters/25_study_bibles.md)

@@ -110,9 +110,9 @@ to clear the stale registration.
 
 ## Hazards
 
-- **Shared stash stack**: a repo's stash is shared across ALL its worktrees, and other
-  sessions may push/pop it concurrently. Never use bare `git stash` in a worktree
-  (existing project convention) — prefer a WIP commit; if you must stash, use
+- **Shared stash stack**: a repo's stash is shared across **all** its worktrees, and other
+  sessions may push/pop it concurrently — a bare `git stash` made here can be popped (or
+  clobbered) from any other worktree of the same repo. Prefer a WIP commit; if you must stash, use
   `git stash push -u -m "<branch>: why"`, capture your entry's SHA from
   `git stash list --format='%H %gs'`, restore with `git stash apply <sha>` (not `pop`),
   then drop the entry by re-finding it by message.

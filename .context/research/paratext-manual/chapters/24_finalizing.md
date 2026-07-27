@@ -89,7 +89,7 @@ When your images are indexed, you can try different searches.
 > > ℹ️ **Note**
 > > A plug-in for doing map names will soon be available (Map Labeler Plugin). In the meantime you can continue with the old system of identifying map names as explained below.
 
-> **Warning:** The Combined NT Maps Biblical Terms list is not a standard list in Paratext 9. It is [**available here**](/img/CombinedNTMapBiblicalTerms.xml): and once downloaded, the file should be copied into "My Paratext 9 Projects"
+> **Warning:** The Combined NT Maps Biblical Terms list is not a standard list in Paratext 9. It is [**available here**](https://manual.paratext.org/img/CombinedNTMapBiblicalTerms.xml): and once downloaded, the file should be copied into "My Paratext 9 Projects"
 
 1. Click in your project.
 2. Use the Biblical Terms tool
@@ -126,7 +126,7 @@ OR
 
 ## 24.5 Check parallel passages[​](#41283e7f0e9e4ad0b0cc096515eaea02 "Direct link to 24.5 Check parallel passages")
 
-- See module [PP Compare Parallel passages](/23.PP)
+- See module [PP Compare Parallel passages](./23_parallel_passages.md)
 
 ## 24.6 Verify all checks are complete[​](#bad57bb5b1164152978a284244e46078 "Direct link to 24.6 Verify all checks are complete")
 
@@ -181,7 +181,7 @@ From the word list, do the following checks:
 
 It is common to mark words in the printed text with an asterisk when there is a glossary entry for the word/phrase or add a link in the electronic versions. It is recommended to leave this until the end to avoid missing words because of spelling errors. You do this in the Biblical Terms Tool using the Link Renderings to Glossary command.
 
-What about entries in the glossary that are not on the Biblical Terms list? For these, you need to add entries to your project list. This involves finding the word/phrase in the text and creating an entry in your project Biblical terms list. (see [10.7](/10.BT#f683ccf4cdcf45f09c516c09c78ab277)) It is recommended start by doing a few glossary entries at a time.
+What about entries in the glossary that are not on the Biblical Terms list? For these, you need to add entries to your project list. This involves finding the word/phrase in the text and creating an entry in your project Biblical terms list. (see [10.7](./10_biblical_terms.md#f683ccf4cdcf45f09c516c09c78ab277)) It is recommended start by doing a few glossary entries at a time.
 
 1. Ensure you have editing permission for all book.
 2. In the Biblical Terms tool, select a few glossary entries.

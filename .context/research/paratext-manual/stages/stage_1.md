@@ -14,12 +14,12 @@ There are several stages in a translation project. In this first stage, you will
 
 The following modules will help you in this stage:
 
-2. [Organising your desktop](/2.OD)
+2. [Organising your desktop](../chapters/02_organizing_desktop.md)
 
-3. [Assignments and progress](/3.PP1)
+3. [Assignments and progress](../chapters/03_project_plan_1.md)
 
-4. [Keyboarding your draft](/4.KD)
+4. [Keyboarding your draft](../chapters/04_keyboarding.md)
 
-5. [Basic checks](/5.BC1)
+5. [Basic checks](../chapters/05_basic_checks_1.md)
 
-6. [Project progress](/6.PP2)
+6. [Project progress](../chapters/06_project_plan_2.md)

@@ -118,7 +118,7 @@ Choose as appropriate:
 1. **≡ Tab**, under **Tools** > **Spell Check Current Book**
 
    - *A window appears with a list of some words in the current book.*
-2. Make corrections as explained above [8.2](/8.SP#66602cff1c654a81ae88a1f8b7e7842f)
+2. Make corrections as explained above [8.2](./08_spell_check.md#66602cff1c654a81ae88a1f8b7e7842f)
 3. Click **More items available** to see additional words.
 4. Continue as needed.
 

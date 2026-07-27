@@ -626,7 +626,7 @@ Before backend TDD begins, sweep the PT9 source for **`Localizer.Str(...)` calls
 
 This was learned the hard way: the markers-checklist port shipped two backend strings (`MarkerSettingsForm_1`, `CLParagraphCellsDataSource_1`) as English literals because the localization gap was found only during late review, then had to be retrofitted (33 language sections re-added, C# rewired to resolve at the wire boundary). A discovery-time `Localizer.Str` sweep would have surfaced every key before any backend code was written.
 
-> The PT9-archaeology discovery agent (`.claude/agents/pt9-archaeologist.md`) performs this `Localizer.Str` sweep and emits a `UserFacingStrings` digest — consume that digest when planning a feature's localization.
+> The PT9-archaeology discovery agent (`.claude/agents/pt9-archaeologist.md`) performs this `Localizer.Str` sweep and emits a `### User-facing strings` digest section in its report — consume that digest when planning a feature's localization.
 
 ---
 

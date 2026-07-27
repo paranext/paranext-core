@@ -76,9 +76,7 @@ This feature allows teams to view and edit whitespace and invisible characters i
 
 The **Administrator** enables it by clicking the dropdown on the paragraph icon on the toolbar
 
-```
-![](./2088789703.png)
-```
+_(An illustrative screenshot from the source page was not captured in this scrape.)_
 
 ## 4.5 Adding text in another marker – title or introduction[​](#8ec1c85f258b4da2ae2062a80f9897d1 "Direct link to 4.5 Adding text in another marker – title or introduction")
 

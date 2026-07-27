@@ -12,7 +12,7 @@ On this page
 
 **Introduction** In this module you will learn how to run the remaining basic checks (references, quoted text, numbers, punctuation in pairs and quotations). As in the first two basic checks modules, it is easier to run the checks from Assignments and Progress. However, if you want to check more than one book then you need to run the checks from the checking menu.
 
-**Before you start** You have typed your translation into Paratext. Make sure you have done the checks described in modules [BC1](/5.BC1) and [BC2](/12.BC2) before continuing. And that either your administrator has done the setup for the checks or is available to do the setup with you.
+**Before you start** You have typed your translation into Paratext. Make sure you have done the checks described in modules [BC1](./05_basic_checks_1.md) and [BC2](./12_basic_checks_2.md) before continuing. And that either your administrator has done the setup for the checks or is available to do the setup with you.
 
 **Why this is important** Paratext has eleven basic checks. You have already seen the first six checks. This last set of checks helps you find errors related to material referred from other books. You want to be sure the references are accurate so that the reader can find those passages.
 

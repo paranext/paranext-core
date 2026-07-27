@@ -114,15 +114,15 @@ distinct source once**, recording which aspects it covers. The unit of fan-out i
 source, not the aspect.
 
 - **Wave A (single response, in parallel):** one `feature-mapper` (`subagent_type: "feature-mapper"`)
-  **per distinct PT9 source**, passing that source's `PT9_REFERENCES` **and the list of aspects it
-  covers**, **and** `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`, pass the PRD summary,
+  **per distinct PT9 source**, passing that source's `PT9_REFERENCES` and `ASPECTS:` (the list of
+  aspects it covers), **and** `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`, pass the PRD summary,
   **the numbered NN/NTH tables**, and the full aspect breakdown — the scout sweeps the PT10 repos
   by each distinct PT9 form/category and tags what it finds by the NN/NTH it covers). Dispatch all
   of these in one message.
 - **Wave B (single response, in parallel):** for each `feature-mapper` that returned a map, one
   `pt9-archaeologist` (`subagent_type: "pt9-archaeologist"`, pass that source's `PT9_MAP` **and
-  the interpreter's `PT9 claims to verify` rows that touch this source — all rows if unsure** —
-  the archaeologist returns a verdict per claim). Pair each
+  `PT9_CLAIMS:` — the interpreter's `PT9 claims to verify` rows that touch this source, all rows
+  if unsure** — the archaeologist returns a verdict per claim). Pair each
   archaeologist with the `feature-mapper` output whose `## PT9 map: {feature}` heading matches that
   source — keep the **distinct-PT9-source → mapper → archaeologist** correspondence strictly 1:1
   (each may cover several aspects). **Exception:** if two mappers come back with maps of the
@@ -283,8 +283,9 @@ The token sets differ by agent: `prd-interpreter` ends with `DONE` / `DONE_WITH_
 `BLOCKED`; the three investigation agents end with `DONE` / `DONE_WITH_CONCERNS` /
 `NEEDS_CONTEXT`. Handle by phase:
 - `prd-interpreter`'s `DONE_WITH_CONCERNS` → its `CLARIFICATION-{N}` items trigger the **Step 3
-  soundness gate** (stop and ask before investigating); do **not** silently defer these to
-  Step 6.
+  soundness gate** (stop and ask before investigating — or, when no user can respond, proceed
+  with the suggested resolutions per Step 3's headless exception); do **not** silently defer
+  these to Step 6.
 - an investigation agent's `DONE_WITH_CONCERNS` or `NEEDS_CONTEXT` → material for Step 6
   (answer/route) and brief §6–§7; not a stop.
 - any `BLOCKED` → stop-and-ask.

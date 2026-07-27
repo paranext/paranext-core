@@ -55,7 +55,7 @@ Generated: 2026-01-14 15:13
 
 ### 12. Basic Checks 2
 - **File:** `chapters/12_basic_checks_2.md`
-- **Overview:** In this module, you will learn to do several other basic checks (**Characters**, **punctuation**, **capitals**, and **repeated words)**. As in the first Basic Checks module (5. [Basic checks 1](/5.BC1)), it is easiest to run these checks from the Assignments and Progress. However, if you want to check several books, you will need to use the **Tools** menu.
+- **Overview:** In this module, you will learn to do several other basic checks (**Characters**, **punctuation**, **capitals**, and **repeated words)**. As in the first Basic Checks module (5. [Basic checks 1](chapters/05_basic_checks_1.md)), it is easiest to run these checks from the Assignments and Progress. However, if you want to check several books, you will need to use the **Tools** menu.
 
 ### 13. Formatting checks
 - **File:** `chapters/13_formatting_checks.md`

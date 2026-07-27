@@ -87,7 +87,7 @@ If you haven’t already saved a layout, then we recommend you do the following:
 ### **Open and arrange the windows**[​](#f5f12c7b122148ca9b9b4edd7c7eb807 "Direct link to f5f12c7b122148ca9b9b4edd7c7eb807")
 
 - 1= Text collection
-  - **≡ Paratext** menu, under **Paratext** choose **Open Text Collection**, select several resources, click **Right arrow** button, click **OK**. (See [2.5](/2.OD#204f93f95d7e4da7aa004d8b2aefaa86))
+  - **≡ Paratext** menu, under **Paratext** choose **Open Text Collection**, select several resources, click **Right arrow** button, click **OK**. (See [2.5](./02_organizing_desktop.md#204f93f95d7e4da7aa004d8b2aefaa86))
 - 2 = Your project
   - **≡ Paratext** menu under **Paratext** > **Open**, Projects
 - 5 = Renderings

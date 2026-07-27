@@ -57,9 +57,9 @@ lives in.
 ### Localize-key sweep (do this now, not later)
 
 Catalogue every PT9 user-facing string in the feature's files so all localize keys are known
-*before* backend TDD begins. Missing this early is costly: a checklist port shipped two backend
-strings as English literals because the localization gap was not found until late review, then
-needed a retroactive multi-language retrofit. Sweep the feature's `.cs` files for:
+*before* backend TDD begins — see
+[Localization-Guide.md § "Catalogue PT9 user-facing strings during discovery"](../../.context/standards/Localization-Guide.md)
+for why finding these late is costly. Sweep the feature's `.cs` files for:
 
 ```bash
 grep -rn 'Localizer\.Str' {feature-files} --include='*.cs'   # PT9 user-facing string API (key + English default)

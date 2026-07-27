@@ -35,7 +35,7 @@ It is preferable that someone who is not involved in your translation checks it.
 
 ## 16.1 Create a new project for the back translation[​](#44530c9822fc4c2d9677cc06c747491c "Direct link to 16.1 Create a new project for the back translation")
 
-> **Warning:** The project is created once by an Administrator. If a project exists see [16.2 below](/16.BT1#e6cb21ddb31146938d0576ea7f4f3b06).
+> **Warning:** The project is created once by an Administrator. If a project exists see [16.2 below](./16_back_translation_1.md#e6cb21ddb31146938d0576ea7f4f3b06).
 
 - **≡ Paratext** under **Paratext** > **New Project**
 

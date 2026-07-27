@@ -12,20 +12,20 @@ The second stage of a translation project involves checking by the team. In this
 
 The following modules will help you in this stage:
 
-7. [Proper Names](/7.PN) (see Help)
+7. [Proper Names](../chapters/07_proper_names.md) (see Help)
 
-8. [Spell Checking](/8.SP)
+8. [Spell Checking](../chapters/08_spell_check.md)
 
-9. [Glossary](/9.GL)
+9. [Glossary](../chapters/09_glossary.md)
 
-10. [A 4-Step process for consistent Biblical Terms](/10.BT)
+10. [A 4-Step process for consistent Biblical Terms](../chapters/10_biblical_terms.md)
 
-11. [Compare a word or phrase](/11.MP)
+11. [Compare a word or phrase](../chapters/11_compare_word.md)
 
-12. [Basic Checks](/12.BC2)
+12. [Basic Checks](../chapters/12_basic_checks_2.md)
 
-13. [Formatting checks](/13.FC)
+13. [Formatting checks](../chapters/13_formatting_checks.md)
 
-14. [Printing Drafts](/14.PD)
+14. [Printing Drafts](../chapters/14_printing_drafts.md)
 
-15. [Using Notes](/15.UN)
+15. [Using Notes](../chapters/15_using_notes.md)

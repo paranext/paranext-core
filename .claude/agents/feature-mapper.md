@@ -1,6 +1,6 @@
 ---
 name: feature-mapper
-description: "Read-only agent for /investigate-prd. Maps a PRD's Paratext 9 references (form, category) to the bundled Feature Inventory and returns the PT9 entry points, forms, implementing classes, and manual/Help references — the 'where to look in PT9' map. Runs for PT9-port and hybrid aspects. Input: PT9_REFERENCES."
+description: "Read-only agent for /investigate-prd. Maps a PRD's Paratext 9 references (form, category) to the bundled Feature Inventory and returns the PT9 entry points, forms, implementing classes, and manual/Help references — the 'where to look in PT9' map. Runs for PT9-port and hybrid aspects. Inputs: PT9_REFERENCES, optional ASPECTS."
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -14,6 +14,8 @@ archaeologist to read from. **Do NOT use Edit, Write, or any file-modifying tool
 
 - `PT9_REFERENCES` — the form name(s) and/or inventory category for one aspect (e.g.
   `SendReceiveProjectsForm`, `Category 10 — Collaboration & Sync`).
+- `ASPECTS` *(optional)* — the PRD aspect id(s) this source covers; echo them verbatim in your
+  output header line so the caller's aspect bookkeeping doesn't depend on its own records alone.
 
 ## First action
 
@@ -84,6 +86,7 @@ Return one markdown block:
 
 ```
 ## PT9 map: {feature name} ({C.F})
+Aspects: {ASPECTS verbatim, or "not provided"}
 ### Entry points
 | Menu path | Handler | Shortcut | Source file:line |
 ### Forms / dialogs

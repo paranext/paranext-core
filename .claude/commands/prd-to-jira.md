@@ -5,8 +5,9 @@ description: Create the Jira epic + work items from an approved /investigate-prd
 # PRD to Jira
 
 Turn the approved investigation brief at **$ARGUMENTS** into a Jira parent issue with one child
-work item per proposed work item. Requires the Atlassian MCP server (Jira tools); if it isn't
-connected, say so and stop.
+work item per proposed work item. **Creating** issues requires the Atlassian MCP server (Jira
+tools); **drafting** doesn't — if Jira isn't connected, say so and follow step 1's offline path
+(full drafts, stopping at the dry-run gate, which applies either way).
 
 ## Preconditions
 

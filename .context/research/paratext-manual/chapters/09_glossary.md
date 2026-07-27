@@ -100,7 +100,7 @@ In Paratext
 
 ## 9.7 Add a Biblical Term[​](#717471a3fbf3477fbab8e730af1b1ad7 "Direct link to 9.7 Add a Biblical Term")
 
-- see the section [**10.7 Add a term – from reference text search**](/10.BT#f683ccf4cdcf45f09c516c09c78ab277)
+- see the section [**10.7 Add a term – from reference text search**](./10_biblical_terms.md#f683ccf4cdcf45f09c516c09c78ab277)
 
 ## 9.8 Recall[​](#2843edbecf5e4950944e24a78538bc99 "Direct link to 9.8 Recall")
 

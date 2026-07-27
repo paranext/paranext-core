@@ -12,7 +12,7 @@ On this page
 
 **Introduction** In this module, you will check the chapters/verses and the markers using two methods: The Assignments and Progress and the project menu (4a.Checking).
 
-**Before you start** You must have already typed some text in Paratext 9. Now you want to start checking. In this module we start with the first two basic checks. The remaining checks are covered in [Basic Checks 2](/12.BC2) and [Basic Checks 3](/19.BC3).
+**Before you start** You must have already typed some text in Paratext 9. Now you want to start checking. In this module we start with the first two basic checks. The remaining checks are covered in [Basic Checks 2](./12_basic_checks_2.md) and [Basic Checks 3](./19_basic_checks_3.md).
 
 **Why this is important** These checks allow you to be sure that you have all the chapters and verses and that the other markers are correct. It is important to run the chapter/verse check first because all the other checks depend on it. Doing these checks allows you to complete the Drafting stage.
 
