@@ -17,7 +17,10 @@ import {
 } from '@shared/models/dialog-options.model';
 import { registerCommand } from '@shared/services/command.service';
 import { CommandNames } from 'papi-shared-types';
-import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
+import {
+  CATEGORY_DIALOG,
+  RENDERER_HOSTED_DIALOG_REQUEST_NAMES,
+} from '@shared/services/dialog.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
@@ -324,6 +327,17 @@ async function selectProject(
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
+/**
+ * Serialize a dialog request type under this window's scoped name (e.g. `dialog:showDialog-1`).
+ * Dialogs open in a window, so each renderer serves its own; the main process registers proxies
+ * under the generic names that forward to whichever window has focus.
+ */
+function scopedDialogRequestType(
+  requestName: (typeof RENDERER_HOSTED_DIALOG_REQUEST_NAMES)[number],
+) {
+  return serializeRequestType(CATEGORY_DIALOG, `${requestName}-${globalThis.windowId}`);
+}
+
 /** Register the commands that back the PAPI dialog service */
 export async function startDialogService(): Promise<void> {
   await initialize();
@@ -334,7 +348,7 @@ export async function startDialogService(): Promise<void> {
   const unsubPromises: Promise<UnsubscriberAsync>[] = [];
   unsubPromises.push(
     networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_DIALOG, 'showDialog'),
+      scopedDialogRequestType('showDialog'),
       showDialog,
       {
         method: {
@@ -406,7 +420,7 @@ export async function startDialogService(): Promise<void> {
   );
   unsubPromises.push(
     networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_DIALOG, 'selectProject'),
+      scopedDialogRequestType('selectProject'),
       selectProject,
       {
         method: {
@@ -461,7 +475,7 @@ export async function startDialogService(): Promise<void> {
   );
   unsubPromises.push(
     networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_DIALOG, 'showAboutDialog'),
+      scopedDialogRequestType('showAboutDialog'),
       showAboutDialog,
       {
         method: {
