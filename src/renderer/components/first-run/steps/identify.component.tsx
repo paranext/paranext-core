@@ -45,6 +45,21 @@ const KEYS: LocalizeKey[] = [
 ];
 
 /**
+ * Props for the Identify wizard step. Extends {@link FirstRunStepProps} with a swappable restart
+ * trigger for PT-4182.
+ */
+export interface IdentifyStepProps extends FirstRunStepProps {
+  /**
+   * Called after registration data is saved successfully. Defaults to `platform.restart`. PT-4182
+   * injects a batched-restart alternative here.
+   *
+   * Known gap: the `isRestarting` overlay still shows even when this prop does not trigger a real
+   * restart. PT-4182 will need to address the overlay state.
+   */
+  onRestartAfterSave?: () => void | Promise<void>;
+}
+
+/**
  * Identify step of the first-run wizard (step 'identify' in STEP_ORDER). Collects and validates the
  * user's Paratext registration name + code, then calls `platform.restart` to apply the
  * registration. The store's `wizardActive` flag (already set when the wizard started) survives the
@@ -57,7 +72,7 @@ const KEYS: LocalizeKey[] = [
  * Eight localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
  */
-export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
+export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: IdentifyStepProps) {
   // Always block the shell's generic Next — this step owns its own explicit restart action.
   useEffect(() => setCanProceed?.(false), [setCanProceed]);
 
@@ -186,7 +201,7 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
       // Restart immediately — the explicit "Save and restart" button already sets the expectation.
       // The process terminates here; setIsRestarting(true) above keeps the button in "Restarting…"
       // until the app exits.
-      await commandService.sendCommand('platform.restart');
+      await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
     } catch (err) {
       if (!isMounted.current) return;
       setError(strings['%general_error_title%']);
@@ -200,6 +215,17 @@ export function IdentifyStep({ onNext, setCanProceed }: FirstRunStepProps) {
   const isSaveDisabled = inDemoMode
     ? !name.trim()
     : !name.trim() || !registrationIsValid || isValidating || isRestarting;
+
+  if (isRestarting) {
+    return (
+      <div className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:py-8 tw:text-center">
+        <Spinner />
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {strings['%paratextRegistration_button_restarting%']}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-4">
