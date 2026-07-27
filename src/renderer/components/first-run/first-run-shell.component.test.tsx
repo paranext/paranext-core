@@ -27,7 +27,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_button_sync%': 'Sync',
-      '%firstRun_button_dontSyncYet%': "Don't sync yet",
+      '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_heading%': 'Sync your data',
@@ -74,9 +74,9 @@ describe('FirstRunShell', () => {
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
-  it('completes with a sync-skipped hint when "Don\'t sync yet" is clicked on sync consent', async () => {
+  it('completes with a sync-skipped hint when "Skip automatic sync" is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    await userEvent.click(screen.getByRole('button', { name: /don't sync yet/i }));
+    await userEvent.click(screen.getByRole('button', { name: /skip automatic sync/i }));
     expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
   });
 

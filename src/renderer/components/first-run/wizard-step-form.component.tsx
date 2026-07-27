@@ -6,7 +6,7 @@ interface WizardStepFormProps {
   error?: string;
   /** Back button node, rendered on the left. Omit when no back navigation is available. */
   backButton?: ReactNode;
-  /** Secondary action (e.g. "Don't sync yet"), rendered to the left of the primary button. */
+  /** Secondary action (e.g. "Skip automatic sync"), rendered to the left of the primary button. */
   secondaryButton?: ReactNode;
   primaryButton: ReactNode;
 }

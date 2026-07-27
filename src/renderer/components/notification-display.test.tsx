@@ -1,10 +1,4 @@
-<<<<<<< HEAD
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-||||||| parent of 703815c9168 (test(PT-4178): fix flaky notification test and add write-order coverage)
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-=======
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
->>>>>>> 703815c9168 (test(PT-4178): fix flaky notification test and add write-order coverage)
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { toast } from 'sonner';
 import '@testing-library/jest-dom';
@@ -114,7 +108,6 @@ describe('NotificationDisplay with real Sonner', () => {
       toast.dismiss();
     });
   });
-
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
     render(<NotificationDisplay />);

@@ -25,7 +25,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_finish%': 'Finish',
       '%firstRun_button_sync%': 'Sync',
-      '%firstRun_button_dontSyncYet%': "Don't sync yet",
+      '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
       '%firstRun_step_syncConsent_heading%': 'Sync your data',
