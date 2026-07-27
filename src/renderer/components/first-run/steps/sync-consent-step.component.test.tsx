@@ -7,9 +7,9 @@ import { SyncConsentStep } from './sync-consent-step.component';
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn((keys: string[]) => {
     const strings: Record<string, string> = {
-      '%firstRun_step_syncConsent_heading%': 'Sync your data',
+      '%firstRun_step_syncConsent_heading%': 'Sync your projects',
       '%firstRun_step_syncConsent_body%':
-        'Your projects are stored on a shared server. Syncing brings your work up to date and shares it with your team.',
+        'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_button_sync%': 'Sync',
@@ -33,12 +33,12 @@ beforeEach(() => {
 describe('SyncConsentStep', () => {
   it('renders the sync consent heading', () => {
     render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
-    expect(screen.getByRole('heading')).toHaveTextContent('Sync your data');
+    expect(screen.getByRole('heading')).toHaveTextContent('Sync your projects');
   });
 
   it('renders the sync consent body', () => {
     render(<SyncConsentStep onNext={vi.fn()} onSync={makeOnSync()} />);
-    expect(screen.getByText(/shared server/i)).toBeInTheDocument();
+    expect(screen.getByText(/shared projects/i)).toBeInTheDocument();
   });
 
   it('renders "Sync" and "Skip automatic sync" buttons when onSkip is provided', () => {
