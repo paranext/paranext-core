@@ -1103,7 +1103,13 @@ export type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
 };
-/** An interface mode a menu item can be hidden in. */
+/**
+ * An interface mode a menu item can be hidden in.
+ *
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in `src/declarations/papi-shared-types.ts`
+ * — this package can't import that app-level type (dependency layering runs the other way), so this
+ * is an independently declared, structurally identical union rather than a shared one.
+ */
 export type InterfaceMode = "simple" | "power";
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
