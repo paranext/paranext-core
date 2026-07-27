@@ -87,4 +87,21 @@ describe('DeveloperSection', () => {
     expect(screen.getByTestId('server-type-production')).toBeDisabled();
     expect(screen.getByTestId('server-type-development')).toBeDisabled();
   });
+
+  test('QualityAssurance and Test selectedServer display as Production being active', () => {
+    renderSection({ selectedServer: 'QualityAssurance' });
+    fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+    expect(screen.getByTestId('server-type-production')).toHaveAttribute('data-state', 'on');
+    expect(screen.getByTestId('server-type-development')).toHaveAttribute('data-state', 'off');
+  });
+
+  test('clicking Production while on QA/Test calls onServerChange with Production (escape hatch)', () => {
+    const onServerChange = vi.fn();
+    renderSection({ selectedServer: 'QualityAssurance', onServerChange });
+    fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+    // Clicking the already-active Production item triggers Radix deselect (value='').
+    // The component must intercept this and call onServerChange('Production').
+    fireEvent.click(screen.getByTestId('server-type-production'));
+    expect(onServerChange).toHaveBeenCalledWith('Production');
+  });
 });

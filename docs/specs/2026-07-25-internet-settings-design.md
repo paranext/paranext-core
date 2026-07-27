@@ -17,8 +17,9 @@ Redesign the existing `paratext-registration` internet settings surface:
 - Developer-only collapsible section (server environment toggle)
 - Profile popover rename + icon swap
 
-**This is a standalone settings surface. It is NOT part of the first-run wizard (PT-4174).**  
-The sub-components are designed to be portable so a future wizard step can reuse them without modifications.
+This is a standalone settings surface **and** a first-run wizard step (added during implementation
+after design). The `InternetAccessOptionList` and `DeveloperSection` sub-components live in
+`platform-bible-react` so both surfaces share the same UI without duplication.
 
 ---
 
