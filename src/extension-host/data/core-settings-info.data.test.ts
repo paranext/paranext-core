@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { platformSettings, coreSettingsValidators } from './core-settings-info.data';
 
-describe('platform.firstRunSyncSkipped setting', () => {
+describe('platform.suppressStartupSync setting', () => {
   it('is declared as a hidden setting with a false default', () => {
     const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
-    const setting = group.properties['platform.firstRunSyncSkipped'];
+    const setting = group.properties['platform.suppressStartupSync'];
     expect(setting).toBeDefined();
     expect(setting?.default).toBe(false);
     expect(setting?.isHidden).toBe(true);
   });
 
   it('validates that the value is a boolean', async () => {
-    const validator = coreSettingsValidators['platform.firstRunSyncSkipped'];
+    const validator = coreSettingsValidators['platform.suppressStartupSync'];
     expect(validator).toBeDefined();
     await expect(validator?.(true, false, {})).resolves.toBe(true);
     // The whole point of this case is to feed a NON-boolean past the validator's compile-time
