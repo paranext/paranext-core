@@ -45,6 +45,7 @@
   "%firstRun_step_identify_registryLink%": "Visit Paratext Registry",
   "%firstRun_step_identify_validatingCode%": "Checking your registration…",
   "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
+  "%firstRun_step_internet_placeholder%": "Internet settings (coming soon)",
   "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",
   "%firstRun_step_syncProgress_placeholder%": "Sync progress (coming soon)",
   "%firstRun_stepIndicator%": "Step {stepNumber} of {stepCount}",
