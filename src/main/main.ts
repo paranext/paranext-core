@@ -1073,6 +1073,7 @@ async function main() {
     },
     {
       method: {
+        'x-experimental': true,
         summary: 'Create a new application window',
         params: [],
         result: {
@@ -1090,6 +1091,7 @@ async function main() {
     },
     {
       method: {
+        'x-experimental': true,
         summary: 'Get the ID of the currently focused window',
         params: [],
         result: {

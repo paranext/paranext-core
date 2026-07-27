@@ -80,6 +80,8 @@ declare global {
    * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
    * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
    * `platform.getFocusedWindowId`). `null` until the renderer reads the URL parameter.
+   *
+   * @experimental
    */
   var windowId: string | null;
 }
