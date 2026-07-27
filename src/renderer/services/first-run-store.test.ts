@@ -146,36 +146,36 @@ describe('resolveFirstRunState', () => {
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
   });
 
-  it('re-persists platform.firstRunSyncSkipped when cache indicates a failed write', async () => {
+  it('re-persists platform.suppressStartupSync when cache indicates a failed write', async () => {
     // Reproduces the analogous failure for syncSkipped: the wizard wrote the localStorage cache but
     // settingsService.set threw. A subsequent launch finds firstRunComplete=true but
-    // firstRunSyncSkipped still false on disk — the self-heal must re-persist from the cache.
-    localStorage.setItem('platform-bible.firstRunSyncSkipped', 'true');
-    stubSettings({ firstRunComplete: true }); // firstRunSyncSkipped key not stubbed → returns undefined
+    // suppressStartupSync still false on disk — the self-heal must re-persist from the cache.
+    localStorage.setItem('platform-bible.suppressStartupSync', 'true');
+    stubSettings({ firstRunComplete: true }); // suppressStartupSync key not stubbed → returns undefined
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunSyncSkipped', true);
+    expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
   });
 
-  it('does not re-persist platform.firstRunSyncSkipped when the setting is already persisted', async () => {
-    localStorage.setItem('platform-bible.firstRunSyncSkipped', 'true');
+  it('does not re-persist platform.suppressStartupSync when the setting is already persisted', async () => {
+    localStorage.setItem('platform-bible.suppressStartupSync', 'true');
     // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.firstRunSyncSkipped') return true;
+      if (key === 'platform.suppressStartupSync') return true;
       return undefined;
     });
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
   });
 
-  it('does not attempt platform.firstRunSyncSkipped self-heal when cache says skip never happened', async () => {
+  it('does not attempt platform.suppressStartupSync self-heal when cache says skip never happened', async () => {
     stubSettings({ firstRunComplete: true }); // no SYNC_SKIPPED_KEY in localStorage
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
   });
 });
 
@@ -217,7 +217,7 @@ describe('demo mode (PT-4219)', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).not.toHaveBeenCalled();
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
-    expect(localStorage.getItem('platform-bible.firstRunSyncSkipped')).toBeNull();
+    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBeNull();
   });
 });
 
@@ -241,20 +241,20 @@ describe('completeFirstRun', () => {
 
   it('records a sync-skipped hint when skipping', async () => {
     await completeFirstRun({ syncSkipped: true });
-    expect(localStorage.getItem('platform-bible.firstRunSyncSkipped')).toBe('true');
+    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('true');
   });
 
-  it('persists platform.firstRunSyncSkipped when sync is skipped', async () => {
+  it('persists platform.suppressStartupSync when sync is skipped', async () => {
     await completeFirstRun({ syncSkipped: true });
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunSyncSkipped', true);
+    expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
   });
 
-  it('does not write platform.firstRunSyncSkipped when sync is not skipped', async () => {
+  it('does not write platform.suppressStartupSync when sync is not skipped', async () => {
     await completeFirstRun();
-    expect(mockSet).not.toHaveBeenCalledWith('platform.firstRunSyncSkipped', expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
   });
 
-  it('writes firstRunComplete before firstRunSyncSkipped (crash-safe ordering)', async () => {
+  it('writes firstRunComplete before suppressStartupSync (crash-safe ordering)', async () => {
     // A crash between the two writes must leave the wizard closed and sync enabled.
     // If the order were swapped, an aborted session would permanently suppress sync.
     const callOrder: string[] = [];
@@ -267,7 +267,7 @@ describe('completeFirstRun', () => {
     await completeFirstRun({ syncSkipped: true });
 
     const completeIdx = callOrder.indexOf('platform.firstRunComplete');
-    const skippedIdx = callOrder.indexOf('platform.firstRunSyncSkipped');
+    const skippedIdx = callOrder.indexOf('platform.suppressStartupSync');
     expect(completeIdx).toBeGreaterThanOrEqual(0);
     expect(skippedIdx).toBeGreaterThanOrEqual(0);
     expect(completeIdx).toBeLessThan(skippedIdx);
@@ -277,14 +277,14 @@ describe('completeFirstRun', () => {
     // Make the syncSkipped write fail, but the firstRunComplete write succeed
     // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
     mockSet.mockImplementation(async (key: string) => {
-      if (key === 'platform.firstRunSyncSkipped') throw new Error('write failed');
+      if (key === 'platform.suppressStartupSync') throw new Error('write failed');
       return undefined;
     });
     await completeFirstRun({ syncSkipped: true });
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
-    expect(mockSet).toHaveBeenCalledWith('platform.firstRunSyncSkipped', true);
-    expect(localStorage.getItem('platform-bible.firstRunSyncSkipped')).toBe('true');
+    expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
+    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('true');
   });
 });
 

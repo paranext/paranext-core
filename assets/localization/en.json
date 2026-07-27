@@ -393,7 +393,7 @@
   "%settings_platform_comments_enabled_description%": "Whether reading and writing comments in projects is enabled. This is an experimental feature.",
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
   "%settings_platform_firstRunComplete_label%": "Setup complete",
-  "%settings_platform_firstRunSyncSkipped_label%": "Sync skipped on first run",
+  "%settings_platform_suppressStartupSync_label%": "Suppress automatic startup sync",
   "%settings_platform_group1_description%": "Settings pertaining to the software overall",
   "%settings_platform_group1_label_alternative%": "General",
   "%settings_platform_group1_label%": "Platform Settings",
