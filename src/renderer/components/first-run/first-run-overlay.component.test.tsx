@@ -28,8 +28,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
       '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
-      '%firstRun_step_syncConsent_heading%': 'Sync your data',
-      '%firstRun_step_syncConsent_body%': 'Your projects are stored on a shared server.',
+      '%firstRun_step_syncConsent_heading%': 'Sync your projects',
+      '%firstRun_step_syncConsent_body%':
+        'When working on shared projects, syncing updates your local copy.',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
       '%firstRun_language_title%': 'Choose your language',
       '%firstRun_language_instruction%': 'You can change it later.',
