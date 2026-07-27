@@ -147,7 +147,7 @@ export type BookChapterControlProps = {
 	 */
 	triggerVariant?: ButtonProps["variant"];
 	/**
-	 * Set to `true` to render a `ChevronsUpDown` indicator at the end of the trigger, signaling that
+	 * Set to `true` to render an up-down chevron indicator at the end of the trigger, signaling that
 	 * it opens a picker. Defaults to `false` (no chevron) — most existing embeddings show the current
 	 * reference alone and don't need one.
 	 */
