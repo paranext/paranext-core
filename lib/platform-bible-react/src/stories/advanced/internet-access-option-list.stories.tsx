@@ -30,7 +30,9 @@ const localizedStrings = {
   '%paratextRegistration_internetUse_footer%': 'Disabled options are planned for future updates.',
 };
 
-function Controlled(props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & { initialValue: InternetUse }) {
+function Controlled(
+  props: Omit<InternetAccessOptionListProps, 'value' | 'onChange'> & { initialValue: InternetUse },
+) {
   const { initialValue, ...rest } = props;
   const [value, setValue] = useState<InternetUse>(initialValue);
   return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
@@ -60,8 +62,8 @@ export const DisabledAccess: Story = {
 };
 
 /**
- * A coming-soon value is the current setting (e.g., persisted from an older PT9 migration). The
- * row renders selected-but-disabled; the user cannot interact with it.
+ * A coming-soon value is the current setting (e.g., persisted from an older PT9 migration). The row
+ * renders selected-but-disabled; the user cannot interact with it.
  */
 export const ComingSoonSelected: Story = {
   render: (args) => <Controlled {...args} initialValue="Disabled" />,

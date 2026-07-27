@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { DeveloperSection, DEVELOPER_SECTION_STRING_KEYS } from 'platform-bible-react';
+import { DeveloperSection, DEVELOPER_SECTION_STRING_KEYS } from 'platform-bible-react/experimental';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 
 const localizedStrings = getLocalizedStrings(DEVELOPER_SECTION_STRING_KEYS);

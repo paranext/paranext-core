@@ -1,16 +1,12 @@
 import { AlertCircle, CircleCheck } from 'lucide-react';
 import { InternetSettings } from 'paratext-registration';
+import { Alert, AlertDescription, AlertTitle, Button, Spinner } from 'platform-bible-react';
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
   DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
-  Spinner,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { deepEqual } from 'platform-bible-utils';
 import { useEffect, useRef } from 'react';

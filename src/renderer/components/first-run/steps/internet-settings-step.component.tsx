@@ -1,14 +1,11 @@
 import type { InternetSettings } from 'paratext-registration';
+import { Alert, AlertDescription, Button, Spinner } from 'platform-bible-react';
 import {
-  Alert,
-  AlertDescription,
-  Button,
   DeveloperSection,
   DEVELOPER_SECTION_STRING_KEYS,
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
-  Spinner,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
