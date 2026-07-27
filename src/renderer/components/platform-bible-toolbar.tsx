@@ -1,8 +1,8 @@
 import logo from '@assets/icon.png';
-import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
+  useData,
   useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
@@ -28,6 +28,7 @@ import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
@@ -62,6 +63,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
+
+const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
 // Heuristic delay before retrying the send/receive availability check on startup. The extension
 // host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
@@ -209,27 +212,14 @@ export function PlatformBibleToolbar() {
     undefined,
   );
 
-  const [updateMenuData, setUpdateMenuData] = useState<boolean>(false);
-
-  const [menuData] = usePromise(
-    useCallback(async () => {
-      setUpdateMenuData(false);
-      const newMenuData = await provideMenuData(false);
-
-      if (
-        Object.values(newMenuData.columns).some(
-          (column) =>
-            typeof column === 'object' && 'label' in column && column.label.startsWith('%'),
-        )
-      ) {
-        setTimeout(() => setUpdateMenuData(true), 1000);
-      }
-
-      return newMenuData;
-      // updateMenuData needs to be included for the menu contents to reevaluate when menu is (re)opened
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [updateMenuData]),
-    { columns: {}, groups: {}, items: [] },
+  // Live-subscribed (not a one-shot fetch): the extension host calls notifyUpdate('*') on this
+  // data provider both when platform.interfaceMode changes (menu-data.service-host.ts) and when
+  // contributions resync (which also covers localized-string loading completing), so this always
+  // reflects the current mode and current localization without needing to reopen the menu —
+  // matching the pattern web-view.component.tsx already uses for WebViewMenu.
+  const [menuData] = useData(menuDataService.dataProviderName).MainMenu(
+    undefined,
+    MAIN_MENU_DEFAULT,
   );
 
   const [marketingVersion] = usePromise(
@@ -293,9 +283,6 @@ export function PlatformBibleToolbar() {
   return (
     <Toolbar
       menuData={menuData}
-      onOpenChange={(isOpen: boolean) => {
-        setUpdateMenuData(isOpen);
-      }}
       onSelectMenuItem={handleMenuCommand}
       className={cn(
         // If the toolbar height changes, the top inset for the workspace updating overlay and

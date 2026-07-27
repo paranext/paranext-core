@@ -2,20 +2,17 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
-
-vi.mock('@renderer/components/platform-bible-menu.data', () => ({
-  provideMenuData: vi.fn(async () => ({ columns: {}, groups: {}, items: [] })),
-}));
 
 vi.mock('@renderer/components/user-profile-popover/user-profile-popover.component', () => ({
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
@@ -47,6 +44,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       { type: 'light', id: 'light', themeFamilyId: 'light', label: 'Light', cssVariables: {} },
       vi.fn(),
     ]),
+    MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
   useDialogCallback: vi.fn(() => vi.fn()),
@@ -747,5 +745,24 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
         .querySelector('[data-select-trigger-classname]')
         ?.getAttribute('data-select-trigger-classname'),
     ).toContain('tw:border-0');
+  });
+});
+
+describe('PlatformBibleToolbar — main menu data stays live', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('subscribes to MainMenu via useData instead of a one-shot fetch, so interface-mode and localization updates reach it without reopening the menu', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(useData).toHaveBeenCalledWith(menuDataService.dataProviderName);
+    });
+    const dataProviderHooks = vi.mocked(useData).mock.results.at(-1)?.value;
+    expect(dataProviderHooks.MainMenu).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ columns: {}, groups: {}, items: [] }),
+    );
   });
 });
