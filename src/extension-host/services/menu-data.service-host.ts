@@ -81,7 +81,13 @@ class MenuDataDataProviderEngine
 
   async getUnlocalizedMainMenu(): Promise<MultiColumnMenu> {
     if (!this.unlocalizedMainMenu) throw new Error('Missing/invalid unlocalized main menu data');
-    return this.unlocalizedMainMenu;
+    // subscribeCurrentMacosMenubar (platform-macos-menubar.util.ts) builds the native macOS
+    // application menu from this data, registered unconditionally on darwin — it must apply the
+    // same interface-mode filter as getMainMenu, or a hidden item would still appear there.
+    return {
+      ...this.unlocalizedMainMenu,
+      items: filterItemsForInterfaceMode(this.unlocalizedMainMenu.items, this.currentMode),
+    };
   }
 
   // setUnlocalizedMainMenu doesn't use instance state but cannot be static because it implements

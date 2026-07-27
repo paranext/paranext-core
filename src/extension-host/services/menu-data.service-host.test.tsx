@@ -324,6 +324,23 @@ describe('Simple-mode menu item filtering', () => {
     ).toBe(true);
   });
 
+  test('getUnlocalizedMainMenu excludes hiddenInterfaceModes items when platform.interfaceMode is simple, matching getMainMenu (macOS menubar consistency)', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getUnlocalizedMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+  });
+
   test('getWebViewMenu excludes hiddenInterfaceModes items from topMenu when platform.interfaceMode is simple', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
