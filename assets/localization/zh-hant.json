@@ -134,6 +134,7 @@
   "%firstRun_language_noResults%": "沒有符合的語言",
   "%firstRun_language_search_placeholder%": "搜尋語言…",
   "%firstRun_language_selected%": "已選擇",
+  "%firstRun_language_setFailed%": "無法變更語言。請再試一次。",
   "%firstRun_language_title%": "選擇您的語言",
   "%firstRun_loading%": "正在啟動設定…",
   "%firstRun_loading_detail%": "正在檢查您的註冊資訊。這可能需要一點時間。",

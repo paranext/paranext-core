@@ -36,6 +36,7 @@
   "%firstRun_language_noResults%": "No matching languages",
   "%firstRun_language_search_placeholder%": "Search languages…",
   "%firstRun_language_selected%": "Selected",
+  "%firstRun_language_setFailed%": "Couldn't change language. Please try again.",
   "%firstRun_language_title%": "Choose your language",
   "%firstRun_loading%": "Starting setup…",
   "%firstRun_loading_detail%": "Checking your registration information. This may take a moment.",

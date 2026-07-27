@@ -9,6 +9,8 @@ import { LanguageInfo } from '../ui-language-selector.component';
 /**
  * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
  * feed the result to the `localizedStrings` prop.
+ *
+ * @experimental
  */
 export const INTERFACE_LANGUAGE_PICKER_STRING_KEYS = Object.freeze([
   '%firstRun_language_search_placeholder%',
@@ -16,10 +18,12 @@ export const INTERFACE_LANGUAGE_PICKER_STRING_KEYS = Object.freeze([
   '%firstRun_language_selected%',
 ] as const);
 
+/** @experimental */
 export type InterfaceLanguagePickerLocalizedStrings = {
   [K in (typeof INTERFACE_LANGUAGE_PICKER_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
+/** @experimental */
 export type InterfaceLanguagePickerProps = {
   /** Languages to offer, keyed by BCP-47 tag. Displayed by autonym (native script). */
   languages: Record<string, LanguageInfo>;
@@ -46,6 +50,8 @@ function sortLanguages(entries: [string, LanguageInfo][]): [string, LanguageInfo
  * Searchable, scrollable list for choosing the interface language. Each option is shown by its
  * autonym (native script); search matches the autonym, names in other UI languages, and other known
  * names (the latter for matching only — never displayed). Scales to hundreds of languages.
+ *
+ * @experimental
  */
 export function InterfaceLanguagePicker({
   languages,

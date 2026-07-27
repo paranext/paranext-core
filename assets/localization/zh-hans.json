@@ -134,6 +134,7 @@
   "%firstRun_language_noResults%": "没有匹配的语言",
   "%firstRun_language_search_placeholder%": "搜索语言…",
   "%firstRun_language_selected%": "已选择",
+  "%firstRun_language_setFailed%": "无法更改语言。请重试。",
   "%firstRun_language_title%": "选择您的语言",
   "%firstRun_loading%": "正在启动设置…",
   "%firstRun_loading_detail%": "正在检查您的注册信息。这可能需要一点时间。",

@@ -136,6 +136,7 @@
   "%firstRun_language_noResults%": "Aucune langue correspondante",
   "%firstRun_language_search_placeholder%": "Rechercher des langues…",
   "%firstRun_language_selected%": "Sélectionné",
+  "%firstRun_language_setFailed%": "Impossible de changer la langue. Veuillez réessayer.",
   "%firstRun_language_title%": "Choisissez votre langue",
   "%firstRun_loading%": "Démarrage de la configuration…",
   "%firstRun_loading_detail%": "Vérification de vos informations d'enregistrement. Cela peut prendre un moment.",
