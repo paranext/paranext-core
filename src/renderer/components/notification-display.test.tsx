@@ -102,11 +102,16 @@ describe('NotificationDisplay with real Sonner', () => {
 
   afterEach(() => {
     // Sonner auto-dismiss timers fire after jsdom tears down if toasts are still alive,
-    // causing a "window is not defined" unhandled error. Dismissing all toasts here
-    // triggers Sonner's internal clearTimeout calls before the environment is torn down.
+    // causing a "window is not defined" unhandled error. Dismissing all toasts signals
+    // Sonner to wind down, but dismiss() itself schedules a removal-animation timer.
+    // clearAllTimers() cancels that timer before it can fire against a torn-down jsdom,
+    // and useRealTimers() stops the shouldAdvanceTime interval that would otherwise keep
+    // ticking the fake queue into the next test's setup.
     act(() => {
       toast.dismiss();
     });
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
