@@ -42,6 +42,9 @@ connected, say so and stop.
 1. **Resolve the target.** Site `paratextstudio.atlassian.net`, project `PT`. Verify the issue
    types with the issue-type metadata tool — expect **Combined** (parent) and **Sub-task**
    (child). If the names differ from this, show the user what exists and ask before proceeding.
+   If Jira is unreachable (no Atlassian tools in this session), skip this verification, note that
+   in the drafts, and continue — the dry-run gate below still applies, and the check runs at
+   creation time.
 2. **Draft everything locally first**: the parent summary + description and every child
    summary + description. Fill the descriptions from the brief and the investigation findings —
    don't thin them out; the PT-4025…PT-4030 tickets are the level of detail to match.

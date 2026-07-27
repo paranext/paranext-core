@@ -90,7 +90,10 @@ present them to the user before investigating:
 > {list each CLARIFICATION-N with its suggested resolution}
 > Want me to proceed with my best assumptions, or would you like to clarify first?
 
-Wait for the user. Do not invent answers.
+Wait for the user. Do not invent answers. The exception is a run where no user can respond (a
+headless or scripted invocation): there, proceed with each CLARIFICATION's suggested resolution
+and carry it into the brief — §6 for product-tagged, §7 for engineering-tagged — marked as an
+unconfirmed assumption.
 
 Use each CLARIFICATION's `Audience` tag: engineering-tagged items are questions the user (usually
 the implementation owner) can often answer on the spot — ask them directly. For product-tagged
