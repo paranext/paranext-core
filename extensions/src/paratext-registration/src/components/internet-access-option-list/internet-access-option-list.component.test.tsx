@@ -24,7 +24,7 @@ beforeAll(() => {
   };
 });
 
-const mockLocalizedStrings = {
+const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details%': 'Desc Enabled sentinel',
   '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
@@ -40,7 +40,7 @@ const mockLocalizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': 'Desc Proxy sentinel',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
   '%paratextRegistration_internetUse_footer%': 'Footer text sentinel',
-} as LanguageStrings;
+};
 
 function renderList(overrides: Partial<InternetAccessOptionListProps> = {}) {
   const defaults: InternetAccessOptionListProps = {

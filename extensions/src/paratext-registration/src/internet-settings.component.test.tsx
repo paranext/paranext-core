@@ -30,7 +30,7 @@ beforeAll(() => {
 });
 
 // Sentinel strings: deliberately differ from production English to prove localization wiring.
-const mockLocalizedStrings = {
+const mockLocalizedStrings: LanguageStrings = {
   '%internetSettings_webView_title%': 'Title sentinel',
   '%internetSettings_webView_subtitle%': 'Subtitle sentinel',
   '%paratextRegistration_button_reset%': 'Discard changes sentinel',
@@ -57,7 +57,7 @@ const mockLocalizedStrings = {
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
   '%paratextRegistration_label_serverType_option_Development%': 'Development',
-} as LanguageStrings;
+};
 
 const defaultSettings: InternetSettings = {
   permittedInternetUse: 'VpnRequired',
