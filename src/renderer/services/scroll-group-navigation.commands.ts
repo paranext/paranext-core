@@ -327,14 +327,29 @@ export const navigationCommandHandlers: {
   'platform.openBookChapterControl': openBookChapterControl,
 };
 
+/**
+ * Register a navigation command under this window's scoped name (e.g.
+ * `platform.goToNextChapter-1`). Every one of these acts on the window's own navigation target, so
+ * each renderer owns its own handler and the main process's routing proxy forwards the generic name
+ * to whichever window is focused. The OpenRPC docs live with the proxy, on the generic name, since
+ * that is the name consumers call.
+ */
+function registerScopedNavigationCommand(
+  commandName: CommandNames,
+  handler: () => Promise<unknown>,
+) {
+  // The scoped name is built at runtime, so it can't be one of the literal CommandNames
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return registerCommand(`${commandName}-${globalThis.windowId}` as CommandNames, handler);
+}
+
 /** Registers the PT-4032 navigation commands. Call once at renderer startup */
 export async function startScrollGroupNavigationCommands(): Promise<void> {
-  const didNavigateResult = { name: 'didNavigate', schema: { type: 'boolean' } } as const;
   await Promise.all([
     ...Object.entries(navigationCommandHandlers).map(([commandName, handler]) =>
       // Object.entries widens the key to string; the map above pins each name to its handler type
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      registerCommand(commandName as CommandNames, handler),
+      registerScopedNavigationCommand(commandName as CommandNames, handler),
     ),
     // Reference-history keyboard commands (PT-4033) live here with the other active-target
     // navigation commands: they resolve the scroll group to act on from the shared navigation target
@@ -343,43 +358,17 @@ export async function startScrollGroupNavigationCommands(): Promise<void> {
     // physical→logical RTL swap (in navigateReferenceHistoryPhysicalSync), so the main-process
     // keyboard handler dispatches the physical key with no arguments. No-op (`false`) when the
     // active web view has no numbered scroll group (a detached ref).
-    registerCommand(
-      'platform.navigateLeftInReferenceHistory',
-      async () => {
-        const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
-        return scrollGroupId === undefined
-          ? false
-          : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left');
-      },
-      {
-        method: {
-          'x-experimental': true,
-          summary:
-            'Navigate the reference history of the active scroll group (the one the top toolbar ' +
-            'follows) in the physical "left" direction (back in LTR, forward in RTL)',
-          params: [],
-          result: didNavigateResult,
-        },
-      },
-    ),
-    registerCommand(
-      'platform.navigateRightInReferenceHistory',
-      async () => {
-        const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
-        return scrollGroupId === undefined
-          ? false
-          : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right');
-      },
-      {
-        method: {
-          'x-experimental': true,
-          summary:
-            'Navigate the reference history of the active scroll group (the one the top toolbar ' +
-            'follows) in the physical "right" direction (forward in LTR, back in RTL)',
-          params: [],
-          result: didNavigateResult,
-        },
-      },
-    ),
+    registerScopedNavigationCommand('platform.navigateLeftInReferenceHistory', async () => {
+      const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
+      return scrollGroupId === undefined
+        ? false
+        : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left');
+    }),
+    registerScopedNavigationCommand('platform.navigateRightInReferenceHistory', async () => {
+      const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
+      return scrollGroupId === undefined
+        ? false
+        : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right');
+    }),
   ]);
 }
