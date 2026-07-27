@@ -162,6 +162,11 @@ const config: StorybookConfig = {
         '@papi/frontend/react$': join(__dirname, 'papi-stubs/frontend-react.ts'),
         '@papi/frontend$': join(__dirname, 'papi-stubs/frontend.ts'),
         '@papi/core$': join(__dirname, 'papi-stubs/core.ts'),
+        // `@renderer/hooks/papi-hooks` calls through to the PAPI localization data provider, which
+        // has no live connection in Storybook. Alias to an inert stub that resolves localization
+        // keys from the bundled en.json (same source as the @papi stubs above). Exact-match ($)
+        // key so submodule imports are unaffected.
+        '@renderer/hooks/papi-hooks$': join(__dirname, 'papi-stubs/renderer-hooks.ts'),
       };
     }
 
