@@ -12,13 +12,7 @@ import { SyncConsentStep } from './steps/sync-consent-step.component';
 import { SyncProgressStep } from './steps/sync-progress.component';
 
 /** Runtime order of the wizard steps. */
-export const STEP_ORDER: FirstRunStep[] = [
-  'language',
-  'internetSettings',
-  'identify',
-  'syncConsent',
-  'syncProgress',
-];
+export const STEP_ORDER: FirstRunStep[] = ['language', 'internetSettings', 'identify', 'syncConsent'];
 
 /** Steps that are interstitials — shown after numbered steps, excluded from the stepper count. */
 export const INTERSTITIAL_STEPS = new Set<FirstRunStep>(['syncProgress']);

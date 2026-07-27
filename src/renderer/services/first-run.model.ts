@@ -1,4 +1,4 @@
-/** The five setup steps, in runtime order. */
+/** Steps 1-4 (navigable). 'syncProgress' is a post-consent interstitial, not a numbered step. */
 export type FirstRunStep =
   | 'language'
   | 'internetSettings'
