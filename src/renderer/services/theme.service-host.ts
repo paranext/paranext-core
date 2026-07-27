@@ -34,6 +34,7 @@ import themesDataObject from '@shared/data/themes.data.json';
 import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
 import { themeDataService } from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 
 /** Raw un-expanded themes that are built into the software */
 // We know this is the right data type because we write this data
@@ -575,33 +576,62 @@ const themeServiceEngine = new ThemeDataProviderEngine(
   saveUserThemesToLocalStorage,
 );
 
-let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IThemeService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          const systemThemeChangesInfo = listenToSystemThemeChanges();
 
-          dataProvider = await dataProviderService.registerEngine(
-            themeServiceDataProviderName,
-            themeServiceEngine,
-          );
+/**
+ * Cached initializer behind {@link initialize}. Held in a mutable binding because it is re-armed
+ * when the window hosting the theme engine closes, so this window can take the engine over.
+ */
+let runInitialize: () => Promise<void>;
 
-          dataProvider.onDidDispose(() => {
-            systemThemeChangesInfo.unsubscribe();
-          });
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
+/**
+ * Host the theme engine in this window, or attach to the window already hosting it.
+ *
+ * Unlike the window and web view services, the theme is app-global — one current theme, one set of
+ * user themes — so it gets exactly one engine rather than one per window. Whichever renderer starts
+ * first wins the name; the rest consume it over the network and see the same state. Registration
+ * failure is treated as "someone else got there first" because that is the only way the name can be
+ * taken: nothing else in the app registers it, and the retry below re-enters this same path.
+ */
+async function hostOrAttachToThemeEngine(): Promise<void> {
+  try {
+    const systemThemeChangesInfo = listenToSystemThemeChanges();
+    dataProvider = await dataProviderService.registerEngine(
+      themeServiceDataProviderName,
+      themeServiceEngine,
+    );
+    dataProvider.onDidDispose(() => {
+      systemThemeChangesInfo.unsubscribe();
     });
+    return;
+  } catch (e) {
+    logger.debug(
+      `Another window is already hosting the theme service; attaching to it. ${getErrorMessage(e)}`,
+    );
   }
-  return initializationPromise;
+
+  const hostedProvider = await dataProviderService.get(themeServiceDataProviderName);
+  if (!hostedProvider) throw new Error('Theme service undefined');
+  dataProvider = hostedProvider;
+  // When the hosting window closes its provider goes with it, so re-arm and take over. Every
+  // remaining window does this; the one that wins the re-registration becomes the new host and the
+  // others attach to it on their own retry.
+  hostedProvider.onDidDispose(() => {
+    runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
+    runInitialize().catch((e) => {
+      logger.warn(
+        `Failed to re-host the theme service after its host closed: ${getErrorMessage(e)}`,
+      );
+    });
+  });
+}
+
+runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
+
+/** Set up this window's access to the app-wide theme service. Safe to call more than once */
+export async function initialize(): Promise<void> {
+  return runInitialize();
 }
 
 /** This is an internal-only export for testing purposes and should not be used in development */
