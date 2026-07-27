@@ -46,15 +46,15 @@ const KEYS: LocalizeKey[] = [
 
 /**
  * Props for the Identify wizard step. Extends {@link FirstRunStepProps} with a swappable restart
- * trigger for PT-4182.
+ * trigger.
  */
 export interface IdentifyStepProps extends FirstRunStepProps {
   /**
-   * Called after registration data is saved successfully. Defaults to `platform.restart`. PT-4182
-   * injects a batched-restart alternative here.
+   * Called after registration data is saved successfully. Defaults to `platform.restart`. When
+   * provided (e.g. for testing or a batched-restart flow), `platform.restart` is not called.
    *
    * Known gap: the `isRestarting` overlay still shows even when this prop does not trigger a real
-   * restart. PT-4182 will need to address the overlay state.
+   * restart.
    */
   onRestartAfterSave?: () => void | Promise<void>;
 }
@@ -110,6 +110,9 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   }, [registrationCode]);
 
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Incremented each time a new validation request is dispatched; stale in-flight responses
+  // check their captured generation before writing state.
+  const validationGeneration = useRef(0);
 
   // Clear any pending validation timer on unmount so it doesn't fire against a dead component.
   useEffect(
@@ -127,6 +130,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       // Guard at the top so no state update (including setIsValidating) runs after unmount.
       if (!isMounted.current || !code.match(REGISTRATION_CODE_REGEX_STRING) || !newName.trim())
         return;
+      validationGeneration.current += 1;
+      const gen = validationGeneration.current;
       setIsValidating(true);
       setError('');
       setErrorDescription('');
@@ -136,7 +141,7 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
           // email/supporterName are not collected in the first-run form (Paratext manages them separately).
           { name: newName, code, email: '', supporterName: '' },
         );
-        if (!isMounted.current) return;
+        if (!isMounted.current || validationGeneration.current !== gen) return;
         setRegistrationIsValid(!!isValid);
         if (!isValid) {
           setError(strings['%paratextRegistration_alert_invalidRegistration%']);
@@ -145,9 +150,10 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
           );
         }
       } catch {
-        if (isMounted.current) setRegistrationIsValid(false);
+        if (isMounted.current && validationGeneration.current === gen)
+          setRegistrationIsValid(false);
       } finally {
-        if (isMounted.current) setIsValidating(false);
+        if (isMounted.current && validationGeneration.current === gen) setIsValidating(false);
       }
     }, VALIDATION_DEBOUNCE_MS);
   };

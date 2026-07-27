@@ -124,6 +124,10 @@ describe('IdentifyStep', () => {
     await waitFor(() => expect(screen.getByText(/restarting/i)).toBeInTheDocument());
     expect(screen.queryByLabelText(/registration name/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/registration code/i)).not.toBeInTheDocument();
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      'paratextRegistration.setParatextRegistrationData',
+      expect.objectContaining({ name: 'Test User', code: VALID_CODE }),
+    );
   });
 
   it('calls onRestartAfterSave instead of platform.restart when provided', async () => {
