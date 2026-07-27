@@ -21,15 +21,15 @@ import { scrollToRef, SaveState } from './utils';
  * the platform's localization hook and forward the resolved map into the `localizedStrings` prop.
  */
 export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
-  '%internetSettings_webView_title_2%',
-  '%internetSettings_webView_subtitle%',
-  '%paratextRegistration_button_reset%',
-  '%paratextRegistration_button_saveAndRestart%',
-  '%paratextRegistration_button_restarting%',
   '%general_error_title%',
+  '%internetSettings_webView_subtitle%',
+  '%internetSettings_webView_title_2%',
   '%paratextRegistration_alert_updatedInternetSettings_2%',
   '%paratextRegistration_alert_updatedRegistration_description%',
   '%paratextRegistration_alert_updatedRegistration_description_hasRestarted%',
+  '%paratextRegistration_button_reset%',
+  '%paratextRegistration_button_restarting%',
+  '%paratextRegistration_button_saveAndRestart%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   ...DEVELOPER_SECTION_STRING_KEYS,
 ];

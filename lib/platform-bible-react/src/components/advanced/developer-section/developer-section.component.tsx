@@ -74,8 +74,12 @@ export function DeveloperSection({
           type="single"
           value={displayValue}
           onValueChange={(v) => {
-            // ToggleGroup deselect emits ''; ignore it so the toggle always has a value.
             if (v === 'Production' || v === 'Development') onServerChange(v);
+            // Radix single-toggle fires '' when the already-selected item is clicked (deselect).
+            // If the user is on QA/Test (displayed as Production), that click should switch them
+            // to actual Production so they're not stranded with no escape route.
+            else if (v === '' && selectedServer !== 'Production' && selectedServer !== 'Development')
+              onServerChange('Production');
           }}
           disabled={disabled}
         >
