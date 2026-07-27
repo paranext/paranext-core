@@ -88,13 +88,10 @@ export class CommentListPanelWebViewFactory extends WebViewFactory<
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
-      // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
-      // exactly as today (see comment-list.web-view.tsx for the live theme/selection-adaptive
-      // swap, likewise gated on Power mode).
-      iconUrl:
-        interfaceMode === 'simple'
-          ? 'papi-extension://legacyCommentManager/assets/message-square.svg'
-          : savedWebView.iconUrl,
+      // Shown in both Power and Simple mode (product decision), matching Text Collection's
+      // existing icon convention — see comment-list.web-view.tsx for the live theme/selection-
+      // adaptive swap, likewise unconditional.
+      iconUrl: 'papi-extension://legacyCommentManager/assets/message-square.svg',
       // In simple mode, force the comments panel to scroll group 0 so it stays verse-synced with
       // the Scripture editor (which is also forced to 0 in simple mode). Power mode preserves the
       // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power
