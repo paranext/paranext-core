@@ -1,7 +1,7 @@
 import { dirname, join } from 'path';
 import type { StorybookConfig } from '@storybook/react-webpack5';
 import { mergeWithCustomize } from 'webpack-merge';
-import { RuleSetRule } from 'webpack';
+import webpack, { RuleSetRule } from 'webpack';
 
 const config: StorybookConfig = {
   stories: [
@@ -169,6 +169,17 @@ const config: StorybookConfig = {
         '@renderer/hooks/papi-hooks$': join(__dirname, 'papi-stubs/renderer-hooks.ts'),
       };
     }
+
+    // Belt-and-suspenders: NormalModuleReplacementPlugin intercepts @renderer/hooks/papi-hooks
+    // at normalModuleFactory.beforeResolve — before TsconfigPathsPlugin can remap @renderer/* to
+    // src/renderer/*, ensuring the stub is always used in place of the real PAPI-dependent hook.
+    if (!webpackConfig.plugins) webpackConfig.plugins = [];
+    webpackConfig.plugins.push(
+      new webpack.NormalModuleReplacementPlugin(
+        /@renderer\/hooks\/papi-hooks$/,
+        join(__dirname, 'papi-stubs/renderer-hooks.ts'),
+      ),
+    );
 
     // Remove the Storybook Webpack rules that we already have our own rules for
     return mergeWithCustomize({
