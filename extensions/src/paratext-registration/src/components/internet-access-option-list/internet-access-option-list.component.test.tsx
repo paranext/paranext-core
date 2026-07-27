@@ -25,9 +25,9 @@ beforeAll(() => {
 });
 
 const mockLocalizedStrings = {
-  '%paratextRegistration_description_internetUse_option_Enabled%': 'Unrestricted',
+  '%paratextRegistration_description_internetUse_option_Enabled_2%': 'Unrestricted',
   '%paratextRegistration_description_internetUse_option_Enabled_details%': 'Desc Enabled sentinel',
-  '%paratextRegistration_description_internetUse_option_VpnRequired%': 'Disable access sentinel',
+  '%paratextRegistration_description_internetUse_option_VpnRequired_2%': 'Disable access sentinel',
   '%paratextRegistration_description_internetUse_option_VpnRequired_details%': 'Desc VPN sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled%': 'Disable ALL sentinel',
   '%paratextRegistration_description_internetUse_option_Disabled_details%':
@@ -36,7 +36,7 @@ const mockLocalizedStrings = {
     'Block sensitive sentinel',
   '%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%':
     'Desc Sensitive sentinel',
-  '%paratextRegistration_description_internetUse_option_ProxyOnly%': 'Configure proxy sentinel',
+  '%paratextRegistration_description_internetUse_option_ProxyOnly_2%': 'Configure proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': 'Desc Proxy sentinel',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
   '%paratextRegistration_internetUse_footer%': 'Footer text sentinel',

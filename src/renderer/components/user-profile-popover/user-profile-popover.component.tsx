@@ -48,7 +48,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_power_label%',
   '%userProfile_interfaceMode_power_description%',
   '%userProfile_profileAndRegistration%',
-  '%userProfile_networkSettings%',
+  '%userProfile_networkSettings_2%',
   '%userProfile_language%',
   '%userProfile_appearance%',
   '%userProfile_appearance_light%',
@@ -353,7 +353,7 @@ export function UserProfilePopover() {
             data-testid="user-profile-action-network"
           >
             <Wifi className="tw:size-3.5" />
-            {localizedStrings['%userProfile_networkSettings%']}
+            {localizedStrings['%userProfile_networkSettings_2%']}
           </Button>
         </div>
         <div className="tw:flex tw:items-start tw:justify-between tw:gap-2 tw:px-2">

@@ -19,7 +19,7 @@ import { scrollToRef, SaveState } from './utils';
  * the platform's localization hook and forward the resolved map into the `localizedStrings` prop.
  */
 export const INTERNET_SETTINGS_STRING_KEYS: LocalizeKey[] = [
-  '%internetSettings_webView_title%',
+  '%internetSettings_webView_title_2%',
   '%internetSettings_webView_subtitle%',
   '%paratextRegistration_button_reset%',
   '%paratextRegistration_button_saveAndRestart%',
@@ -75,7 +75,7 @@ export function InternetSettingsForm({
     <div className="tw:flex tw:h-screen tw:flex-col tw:gap-4 tw:overflow-y-auto tw:p-4">
       <div>
         <h2 className="tw:text-lg tw:font-semibold">
-          {localizedStrings['%internetSettings_webView_title%']}
+          {localizedStrings['%internetSettings_webView_title_2%']}
         </h2>
         <p className="tw:text-sm tw:text-muted-foreground">
           {localizedStrings['%internetSettings_webView_subtitle%']}
