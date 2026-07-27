@@ -596,12 +596,16 @@ let runInitialize: () => Promise<void>;
  */
 async function hostOrAttachToThemeEngine(): Promise<void> {
   try {
-    const systemThemeChangesInfo = listenToSystemThemeChanges();
-    dataProvider = await dataProviderService.registerEngine(
+    const hostedEngine = await dataProviderService.registerEngine(
       themeServiceDataProviderName,
       themeServiceEngine,
     );
-    dataProvider.onDidDispose(() => {
+    dataProvider = hostedEngine;
+    // Only the hosting window watches the OS dark-mode preference, and only once it has actually
+    // won the name. Listening before registering would leak a media-query listener in every window
+    // that loses the race, since the unsubscribe below is only reached on the success path.
+    const systemThemeChangesInfo = listenToSystemThemeChanges();
+    hostedEngine.onDidDispose(() => {
       systemThemeChangesInfo.unsubscribe();
     });
     return;
