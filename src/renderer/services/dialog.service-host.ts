@@ -494,6 +494,7 @@ export async function startDialogService(): Promise<void> {
   );
   // Register under window-scoped name so multiple windows can coexist. The main process
   // command routing proxy handles forwarding the generic name to the focused window.
+  // The scoped name is built at runtime, so it can't be one of the literal `CommandNames`
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const scopedAboutCommand = `platform.about-${globalThis.windowId}` as CommandNames;
   unsubPromises.push(registerCommand(scopedAboutCommand, showAboutDialog));

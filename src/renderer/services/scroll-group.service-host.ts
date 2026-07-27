@@ -700,16 +700,6 @@ const scrollGroupService: IScrollGroupRemoteService = {
 };
 
 /**
- * Register the network object that backs the scroll group service.
- *
- * The reference-history navigation commands are NOT registered here: the physical left/right
- * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
- * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
- * the window service this state module deliberately does not import). Programmatic offset
- * navigation is exposed through this network object's `navigateReferenceHistory` method below
- * rather than a duplicate command.
- */
-/**
  * Keep this window's in-memory scroll-group state current when another window writes to it.
  *
  * A scroll group is app-global — group 1 is on the same reference in every window — but the local
@@ -732,6 +722,16 @@ function subscribeToRemoteScrollGroupUpdates(): void {
   });
 }
 
+/**
+ * Register the network object that backs the scroll group service.
+ *
+ * The reference-history navigation commands are NOT registered here: the physical left/right
+ * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
+ * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
+ * the window service this state module deliberately does not import). Programmatic offset
+ * navigation is exposed through this network object's `navigateReferenceHistory` method below
+ * rather than a duplicate command.
+ */
 export async function startScrollGroupService(): Promise<void> {
   // Every window mirrors every other window's navigation, whether or not it hosts the network
   // object below

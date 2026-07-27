@@ -836,13 +836,16 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
   // subsequent `saveLayout`) sees the current mode without another settings round-trip.
   currentInterfaceMode = interfaceMode;
-  // Only the shared constants get their web view ids scoped — a layout restored from storage was
-  // read through `localWindowStorage`, so it is already this window's own and its ids were scoped
-  // when it was first loaded.
-  const layoutToLoad =
+  // Every layout gets its web view ids scoped to this window, including one restored from storage:
+  // `localWindowStorage` migrates a pre-multi-window layout from its unprefixed key WITHOUT
+  // deleting it, so two windows can each migrate the same legacy blob and end up holding the same
+  // unscoped ids. Re-scoping replaces the suffix rather than stacking another one, so this is safe
+  // to run on a layout this window already scoped and saved.
+  const layoutToLoad = withWindowScopedWebViewIds(
     interfaceMode === 'simple'
-      ? withWindowScopedWebViewIds(dockLayoutVar.simpleLayout)
-      : getStorageValue(DOCK_LAYOUT_KEY, withWindowScopedWebViewIds(dockLayoutVar.testLayout));
+      ? dockLayoutVar.simpleLayout
+      : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout),
+  );
   const enabledEntries = await getEnabledSupplementEntries();
   if (enabledEntries.length === 0) {
     // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.

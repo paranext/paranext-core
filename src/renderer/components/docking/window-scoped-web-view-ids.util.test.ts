@@ -69,6 +69,35 @@ describe('withWindowScopedWebViewIds', () => {
     expect(readWebViewTab(shared).id).toBe('abc-123');
   });
 
+  test('replaces an existing window suffix rather than stacking another one', () => {
+    // Layouts are re-scoped on every load, including one this window saved with scoped ids already
+    const alreadyScoped = layoutWithWebView('abc-123-w1');
+
+    const scoped = withWindowScopedWebViewIds(alreadyScoped);
+
+    expect(readWebViewTab(scoped).id).toBe('abc-123-w2');
+  });
+
+  test('re-scoping is stable, so repeated loads do not drift the id', () => {
+    const once = withWindowScopedWebViewIds(layoutWithWebView('abc-123'));
+    const twice = withWindowScopedWebViewIds(once);
+
+    expect(readWebViewTab(twice).id).toBe(readWebViewTab(once).id);
+  });
+
+  test('sends the same legacy layout to different ids in different windows', () => {
+    // Two windows can each migrate the same pre-multi-window layout from the undeleted legacy
+    // storage key, so identical input has to come out per-window distinct
+    const legacy = layoutWithWebView('abc-123');
+
+    globalThis.windowId = '1';
+    const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
+    globalThis.windowId = '2';
+    const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
+
+    expect(inWindow1).not.toBe(inWindow2);
+  });
+
   test('leaves tabs that are not web views alone', () => {
     const layout = {
       dockbox: { mode: 'horizontal', children: [{ tabs: [{ id: 'some-tool', tabType: 'tool' }] }] },
