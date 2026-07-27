@@ -4,8 +4,8 @@ import { LocalizeKey } from 'platform-bible-utils';
 const KEYS: LocalizeKey[] = ['%firstRun_step_internet_placeholder%'];
 
 /**
- * Placeholder for the Internet settings step. Replaced by PT-4259 (swap the shell's
- * `stepComponents.internet`).
+ * Placeholder for the Internet settings step. Replaced by the real step via
+ * `stepComponents.internet`.
  */
 export function InternetPlaceholderStep() {
   const [strings] = useLocalizedStrings(KEYS);
