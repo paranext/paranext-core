@@ -116,13 +116,12 @@ export function InterfaceLanguagePicker({
       )}
       <CommandList>
         <CommandEmpty>{noResults}</CommandEmpty>
-        {visibleEntries.map(({ tag, info, keywords }) => {
+        {visibleEntries.map(({ tag, info }) => {
           const isSelected = tag === value;
           return (
             <CommandItem
               key={tag}
               value={tag}
-              keywords={keywords}
               // aria-current (not aria-selected, which cmdk uses for the keyboard-highlighted item).
               // `data-checked` drives the check mark the vendored CommandItem ALREADY renders
               // (command.tsx appends an IconCheck gated on `group-data-[checked=true]`), so we don't
