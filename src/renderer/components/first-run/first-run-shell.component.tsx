@@ -54,7 +54,7 @@ export function FirstRunShell({
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
-  const [canProceed, setCanProceed] = useState<boolean | null>(true);
+  const [canProceed, setCanProceed] = useState<boolean | undefined>(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
@@ -151,7 +151,7 @@ export function FirstRunShell({
             {strings['%firstRun_button_skip%']}
           </Button>
         )}
-        {canProceed !== null && (
+        {canProceed !== undefined && (
           <Button onClick={onNext} disabled={!canProceed || isBusy}>
             {isBusy && <Spinner />}
             {nextLabel}

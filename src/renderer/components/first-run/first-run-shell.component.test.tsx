@@ -87,9 +87,9 @@ describe('FirstRunShell', () => {
     expect(mockComplete).toHaveBeenCalledWith();
   });
 
-  it('hides Next when a step passes null to setCanProceed (step owns its own primary action)', async () => {
+  it('hides Next when a step passes undefined to setCanProceed (step owns its own primary action)', async () => {
     function OwnsActionStep({ setCanProceed }: FirstRunStepProps) {
-      useEffect(() => setCanProceed?.(null), [setCanProceed]);
+      useEffect(() => setCanProceed?.(undefined), [setCanProceed]);
       return <p>own action</p>;
     }
     render(

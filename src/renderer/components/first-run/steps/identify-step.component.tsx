@@ -74,7 +74,7 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  */
 export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: IdentifyStepProps) {
   // Suppress the shell's generic Next entirely — this step owns its own explicit restart action.
-  useEffect(() => setCanProceed?.(null), [setCanProceed]);
+  useEffect(() => setCanProceed?.(undefined), [setCanProceed]);
 
   const [strings] = useLocalizedStrings(KEYS);
 
