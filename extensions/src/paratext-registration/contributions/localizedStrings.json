@@ -62,6 +62,30 @@
         "message": "Changed the value of this locale to just be \"Paratext Registration\". The new key is %paratextRegistration_webView_title_2%.",
         "date": "2025-09-15"
       }
+    },
+    "%settings_paratextRegistration_registration_internet_group_description%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_registration_internet_group_label%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_shouldShowOnStartup_description%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_shouldShowOnStartup_label%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
     }
   },
   "localizedStrings": {
