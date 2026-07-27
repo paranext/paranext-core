@@ -613,7 +613,7 @@ test('Name prefixes are verified', () => {
   ).toThrow(/Cannot add 'differentPrefix.something'. The new web view must start with test./);
 });
 
-test('isHiddenInSimple flag on a menu item validates and survives combination', () => {
+test('hiddenInterfaceModes flag on a menu item validates and survives combination', () => {
   const menuCombiner = new MenuDocumentCombiner(startingDoc);
   menuCombiner.addOrUpdateContribution('test', {
     mainMenu: {
@@ -624,7 +624,7 @@ test('isHiddenInSimple flag on a menu item validates and survives combination', 
           group: 'platform.windowGroup1',
           order: 99,
           command: 'test.hiddenCommand',
-          isHiddenInSimple: true,
+          hiddenInterfaceModes: ['simple'],
         },
       ],
     },
@@ -632,7 +632,7 @@ test('isHiddenInSimple flag on a menu item validates and survives combination', 
   const hiddenItem = menuCombiner.rawOutput?.mainMenu.items.find(
     (item) => 'command' in item && item.command === 'test.hiddenCommand',
   );
-  expect(hiddenItem).toMatchObject({ isHiddenInSimple: true });
+  expect(hiddenItem).toMatchObject({ hiddenInterfaceModes: ['simple'] });
 });
 
 test('Web view menu defaults are combined', () => {

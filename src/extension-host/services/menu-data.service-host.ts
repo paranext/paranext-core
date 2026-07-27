@@ -14,6 +14,7 @@ import {
   PlatformMenus,
   MultiColumnMenu,
   MenuItemBase,
+  InterfaceMode,
   ReferencedItem,
   WebViewMenu,
   Localized,
@@ -23,16 +24,12 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
 
-/**
- * Removes `isHiddenInSimple` items from a menu item list when `isSimpleMode` is `true`. Returns the
- * items unchanged (same reference) in Power mode.
- */
-function filterItemsForSimpleMode<TItem extends MenuItemBase>(
+/** Removes items whose `hiddenInterfaceModes` includes `currentMode` from a menu item list. */
+function filterItemsForInterfaceMode<TItem extends MenuItemBase>(
   items: TItem[],
-  isSimpleMode: boolean,
+  currentMode: InterfaceMode,
 ): TItem[] {
-  if (!isSimpleMode) return items;
-  return items.filter((item) => !item.isHiddenInSimple);
+  return items.filter((item) => !item.hiddenInterfaceModes?.includes(currentMode));
 }
 
 class MenuDataDataProviderEngine
@@ -44,7 +41,7 @@ class MenuDataDataProviderEngine
   private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
   private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
   private unsubscribeFromInterfaceMode: UnsubscriberAsync | undefined;
-  private isSimpleMode = false;
+  private currentMode: InterfaceMode = 'power';
   private isDisposed = false;
 
   constructor(unlocalizedMenuData: PlatformMenus) {
@@ -71,7 +68,7 @@ class MenuDataDataProviderEngine
     if (!this.mainMenu) throw new Error('Missing/invalid main menu data');
     return {
       ...this.mainMenu,
-      items: filterItemsForSimpleMode(this.mainMenu.items, this.isSimpleMode),
+      items: filterItemsForInterfaceMode(this.mainMenu.items, this.currentMode),
     };
   }
 
@@ -105,13 +102,13 @@ class MenuDataDataProviderEngine
       topMenu: webViewMenu.topMenu
         ? {
             ...webViewMenu.topMenu,
-            items: filterItemsForSimpleMode(webViewMenu.topMenu.items, this.isSimpleMode),
+            items: filterItemsForInterfaceMode(webViewMenu.topMenu.items, this.currentMode),
           }
         : undefined,
       contextMenu: webViewMenu.contextMenu
         ? {
             ...webViewMenu.contextMenu,
-            items: filterItemsForSimpleMode(webViewMenu.contextMenu.items, this.isSimpleMode),
+            items: filterItemsForInterfaceMode(webViewMenu.contextMenu.items, this.currentMode),
           }
         : undefined,
     };
@@ -150,7 +147,7 @@ class MenuDataDataProviderEngine
       try {
         const initialMode = await settingsService.get('platform.interfaceMode');
         if (this.isDisposed) return;
-        this.isSimpleMode = initialMode === 'simple';
+        this.currentMode = initialMode;
         this.notifyUpdate('*');
 
         const unsub = await settingsService.subscribe(
@@ -162,9 +159,8 @@ class MenuDataDataProviderEngine
               );
               return;
             }
-            const newIsSimpleMode = newMode === 'simple';
-            if (newIsSimpleMode === this.isSimpleMode) return;
-            this.isSimpleMode = newIsSimpleMode;
+            if (newMode === this.currentMode) return;
+            this.currentMode = newMode;
             this.notifyUpdate('*');
           },
           { retrieveDataImmediately: false },

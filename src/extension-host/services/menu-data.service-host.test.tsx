@@ -237,7 +237,7 @@ describe('Simple-mode menu item filtering', () => {
           group: 'paratext.sendReceive',
           order: 99,
           command: 'test.hiddenMainMenuCommand',
-          isHiddenInSimple: true,
+          hiddenInterfaceModes: ['simple'],
         },
       ],
     },
@@ -260,7 +260,7 @@ describe('Simple-mode menu item filtering', () => {
                 group: 'videoExtension.videoTop',
                 order: 99,
                 command: 'test.hiddenWebViewMenuCommand',
-                isHiddenInSimple: true,
+                hiddenInterfaceModes: ['simple'],
               },
             ],
           },
@@ -274,7 +274,7 @@ describe('Simple-mode menu item filtering', () => {
                 group: 'platform.insert',
                 order: 99,
                 command: 'test.hiddenWebViewContextMenuCommand',
-                isHiddenInSimple: true,
+                hiddenInterfaceModes: ['simple'],
               },
             ],
           },
@@ -283,7 +283,7 @@ describe('Simple-mode menu item filtering', () => {
     })(),
   };
 
-  test('getMainMenu excludes isHiddenInSimple items when platform.interfaceMode is simple', async () => {
+  test('getMainMenu excludes hiddenInterfaceModes items when platform.interfaceMode is simple', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
     const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
@@ -307,7 +307,7 @@ describe('Simple-mode menu item filtering', () => {
     ).toBe(true);
   });
 
-  test('getMainMenu includes isHiddenInSimple items when platform.interfaceMode is power', async () => {
+  test('getMainMenu includes hiddenInterfaceModes items when platform.interfaceMode is power', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('power');
     const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
@@ -324,7 +324,7 @@ describe('Simple-mode menu item filtering', () => {
     ).toBe(true);
   });
 
-  test('getWebViewMenu excludes isHiddenInSimple items from topMenu when platform.interfaceMode is simple', async () => {
+  test('getWebViewMenu excludes hiddenInterfaceModes items from topMenu when platform.interfaceMode is simple', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
     const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
@@ -346,7 +346,7 @@ describe('Simple-mode menu item filtering', () => {
     ).toBe(true);
   });
 
-  test('getWebViewMenu excludes isHiddenInSimple items from contextMenu when platform.interfaceMode is simple', async () => {
+  test('getWebViewMenu excludes hiddenInterfaceModes items from contextMenu when platform.interfaceMode is simple', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('simple');
     const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
@@ -363,7 +363,7 @@ describe('Simple-mode menu item filtering', () => {
     ).toBe(false);
   });
 
-  test('getWebViewMenu includes isHiddenInSimple contextMenu items when platform.interfaceMode is power', async () => {
+  test('getWebViewMenu includes hiddenInterfaceModes contextMenu items when platform.interfaceMode is power', async () => {
     const { settingsService } = await import('@shared/services/settings.service');
     vi.mocked(settingsService.get).mockResolvedValue('power');
     const engine = testingMenuDataService.implementMenuDataDataProviderEngine(

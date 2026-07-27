@@ -1103,6 +1103,8 @@ export type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
 };
+/** An interface mode a menu item can be hidden in. */
+export type InterfaceMode = "simple" | "power";
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
@@ -1140,11 +1142,10 @@ export type MenuItemBase = OrderedItem & {
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
 	/**
-	 * Set to `true` to hide this menu item while the app is in Simple interface mode
-	 * (`platform.interfaceMode === 'simple'`). Omit (or set to `false`) for items that should show in
-	 * both modes — most items need no value here at all.
+	 * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+	 * items that should show in every mode — most items need no value here at all.
 	 */
-	isHiddenInSimple?: boolean;
+	hiddenInterfaceModes?: InterfaceMode[];
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1446,9 +1447,13 @@ export declare const menuDocumentSchema: {
 					description: string;
 					type: string;
 				};
-				isHiddenInSimple: {
+				hiddenInterfaceModes: {
 					description: string;
 					type: string;
+					items: {
+						enum: string[];
+					};
+					uniqueItems: boolean;
 				};
 			};
 			required: string[];

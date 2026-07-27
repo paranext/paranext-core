@@ -16,6 +16,9 @@ export type OrderedItem = {
   order: number;
 };
 
+/** An interface mode a menu item can be hidden in. */
+export type InterfaceMode = 'simple' | 'power';
+
 export type OrderedExtensibleContainer = OrderedItem & {
   /** Determines whether other items can be added to this after it has been defined */
   isExtensible?: boolean;
@@ -57,11 +60,10 @@ export type MenuItemBase = OrderedItem & {
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
   /**
-   * Set to `true` to hide this menu item while the app is in Simple interface mode
-   * (`platform.interfaceMode === 'simple'`). Omit (or set to `false`) for items that should show in
-   * both modes — most items need no value here at all.
+   * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+   * items that should show in every mode — most items need no value here at all.
    */
-  isHiddenInSimple?: boolean;
+  hiddenInterfaceModes?: InterfaceMode[];
 };
 
 /** Menu item that hosts a submenu */
@@ -404,10 +406,12 @@ export const menuDocumentSchema = {
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
           type: 'number',
         },
-        isHiddenInSimple: {
+        hiddenInterfaceModes: {
           description:
-            'Set to `true` to hide this menu item while the app is in Simple interface mode. Omit (or set to `false`) for items that should show in both modes.',
-          type: 'boolean',
+            'Interface modes in which this menu item should be hidden. Omit (or use an empty array) for items that should show in every mode.',
+          type: 'array',
+          items: { enum: ['simple', 'power'] },
+          uniqueItems: true,
         },
       },
       required: ['label', 'group', 'order'],
