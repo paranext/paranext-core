@@ -84,7 +84,7 @@ test.describe('Internet & Connectivity settings', () => {
 
     // Wait for the form to finish loading (buttons become present but disabled)
     const saveButton = frame.getByRole('button', { name: 'Save and restart' });
-    const resetButton = frame.getByRole('button', { name: 'Reset' });
+    const resetButton = frame.getByRole('button', { name: 'Discard changes' });
 
     await expect(saveButton).toBeDisabled({ timeout: 10_000 });
     await expect(resetButton).toBeDisabled();
@@ -98,7 +98,7 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
 
     const saveButton = frame.getByRole('button', { name: 'Save and restart' });
-    const resetButton = frame.getByRole('button', { name: 'Reset' });
+    const resetButton = frame.getByRole('button', { name: 'Discard changes' });
     await expect(saveButton).toBeDisabled({ timeout: 10_000 });
 
     // Default is VpnRequired; clicking Unrestricted (option 1) makes a change.
@@ -118,7 +118,7 @@ test.describe('Internet & Connectivity settings', () => {
     await expect(frame.locator('h2')).toBeVisible({ timeout: 15_000 });
 
     const saveButton = frame.getByRole('button', { name: 'Save and restart' });
-    const resetButton = frame.getByRole('button', { name: 'Reset' });
+    const resetButton = frame.getByRole('button', { name: 'Discard changes' });
     await expect(saveButton).toBeDisabled({ timeout: 10_000 });
 
     // Change selection
