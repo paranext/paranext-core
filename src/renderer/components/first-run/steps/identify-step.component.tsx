@@ -73,8 +73,8 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
  */
 export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: IdentifyStepProps) {
-  // Always block the shell's generic Next — this step owns its own explicit restart action.
-  useEffect(() => setCanProceed?.(false), [setCanProceed]);
+  // Suppress the shell's generic Next entirely — this step owns its own explicit restart action.
+  useEffect(() => setCanProceed?.(null), [setCanProceed]);
 
   const [strings] = useLocalizedStrings(KEYS);
 
@@ -125,6 +125,9 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   const validateRegistration = (code: string, newName: string) => {
     if (validationTimeout.current) clearTimeout(validationTimeout.current);
     setRegistrationIsValid(false);
+    // Clear any stale error immediately so the alert doesn't linger while the user keeps typing.
+    setError('');
+    setErrorDescription('');
     if (isDemoMode()) return;
     validationTimeout.current = setTimeout(async () => {
       // Guard at the top so no state update (including setIsValidating) runs after unmount.
@@ -133,8 +136,6 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       validationGeneration.current += 1;
       const gen = validationGeneration.current;
       setIsValidating(true);
-      setError('');
-      setErrorDescription('');
       try {
         const isValid = await commandService.sendCommand(
           'paratextRegistration.validateParatextRegistrationData',
@@ -149,9 +150,12 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
             strings['%paratextRegistration_alert_invalidRegistration_description%'],
           );
         }
-      } catch {
-        if (isMounted.current && validationGeneration.current === gen)
+      } catch (err) {
+        if (isMounted.current && validationGeneration.current === gen) {
           setRegistrationIsValid(false);
+          setError(strings['%general_error_title%']);
+          setErrorDescription(getErrorMessage(err));
+        }
       } finally {
         if (isMounted.current && validationGeneration.current === gen) setIsValidating(false);
       }
@@ -223,7 +227,7 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   // Demo: only a non-empty name is required (no real code validation). Real: backend must confirm.
   const isSaveDisabled = inDemoMode
     ? !name.trim()
-    : !name.trim() || !registrationIsValid || isValidating || isRestarting;
+    : !name.trim() || !registrationIsValid || isValidating;
 
   if (isRestarting) {
     return (
@@ -247,7 +251,7 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
           <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">
             {strings['%paratextRegistration_label_registrationName%']}
           </label>
-          <Input id="identify-name" value={name} disabled={isRestarting} onChange={onNameChange} />
+          <Input id="identify-name" value={name} onChange={onNameChange} />
         </div>
 
         <div className="tw:flex tw:flex-col tw:gap-1">
@@ -260,7 +264,6 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
             maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
             placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
             value={registrationCode}
-            disabled={isRestarting}
             aria-invalid={showInvalidCode || (!!error && !isValidating)}
             aria-describedby="identify-code-warning identify-code-error"
             onChange={onRegistrationCodeChange}
@@ -317,14 +320,7 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
 
       <div className="tw:flex tw:justify-end">
         <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
-          {isRestarting ? (
-            <>
-              <Spinner />
-              {strings['%paratextRegistration_button_restarting%']}
-            </>
-          ) : (
-            strings['%paratextRegistration_button_saveAndRestart%']
-          )}
+          {strings['%paratextRegistration_button_saveAndRestart%']}
         </Button>
       </div>
     </div>

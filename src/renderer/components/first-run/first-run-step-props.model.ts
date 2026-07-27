@@ -15,6 +15,10 @@ export interface FirstRunStepProps {
   onBack?: () => void;
   /** Skip the rest of setup and finish. Present only on Sync consent. */
   onSkip?: () => void;
-  /** Report whether the shell's Next button should be enabled. Next defaults to enabled. */
-  setCanProceed?: (canProceed: boolean) => void;
+  /**
+   * Report whether the shell's Next button should be enabled. Next defaults to enabled. Pass
+   * `false` to disable Next temporarily (e.g. while validating), or `null` to suppress it entirely
+   * for steps that own their own primary action.
+   */
+  setCanProceed?: (canProceed: boolean | null) => void;
 }

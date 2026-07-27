@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { expect, fn, spyOn, within, userEvent, waitFor } from 'storybook/test';
 import * as commandService from '@shared/services/command.service';
-import { IdentifyStep } from './identify.component';
+import { IdentifyStep } from './identify-step.component';
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
