@@ -47,16 +47,37 @@ public class PersistedPtxUtilsSettingsTests
     }
 
     [Test]
-    public void SafeSave_AfterFailedLoad_DoesNotOverwritePersistedValue()
+    public void SafeSave_WhileStillUnreachable_DoesNotOverwritePersistedValue()
     {
         // Load fails (missing setting) and falls back to empty; SafeSave must skip the write so
-        // it can't reset the user's actual stored mementos.
+        // it can't reset the user's actual stored mementos, as long as it's still unreachable.
         var settings = new PersistedPtxUtilsSettings(_client);
         settings.MementoData["someKey"] = "mutated";
 
         settings.SafeSave();
 
         Assert.That(_settingsService.GetSettingValue(Settings.PTX_UTILS_MEMENTO_DATA), Is.Null);
+    }
+
+    [Test]
+    public void SafeSave_OnceReachableAfterAFailedLoad_PersistsAccumulatedChanges()
+    {
+        // Initial load fails; changes accumulate in memory while the service is unreachable.
+        var settings = new PersistedPtxUtilsSettings(_client);
+        settings.MementoData["someKey"] = "queued-before-service-available";
+        settings.SafeSave(); // still unreachable; skipped
+
+        // The service becomes reachable.
+        _settingsService.AddSettingValue(
+            Settings.PTX_UTILS_MEMENTO_DATA,
+            new SerializableStringDictionary()
+        );
+
+        settings.SafeSave(); // must retry, notice it's reachable now, and persist
+
+        var saved = (SerializableStringDictionary)
+            _settingsService.GetSettingValue(Settings.PTX_UTILS_MEMENTO_DATA)!;
+        Assert.That(saved["someKey"], Is.EqualTo("queued-before-service-available"));
     }
 
     [Test]
