@@ -82,9 +82,9 @@ function IndeterminateProgress({ label }: { label: string }) {
  *
  * Assumption: sync may be in flight or may have already completed when this step mounts. If the
  * sync-consent step fires `sendReceiveProjects` (async, non-blocking) before advancing, events will
- * arrive here. If it calls `syncProjects` and waits for completion before advancing, sync is already
- * done and no events will arrive (the recovery timeout below is the only path to Finish in that
- * case). The exact handoff must be reconciled with PT-4178.
+ * arrive here. If it calls `syncProjects` and waits for completion before advancing, sync is
+ * already done and no events will arrive (the recovery timeout below is the only path to Finish in
+ * that case). The exact handoff must be reconciled with PT-4178.
  *
  * Recovery: if sync completes before this step mounts, no events will arrive. After
  * {@link SYNC_STARTED_TIMEOUT_MS} with no events, `setSyncComplete(true)` fires as a fallback so
