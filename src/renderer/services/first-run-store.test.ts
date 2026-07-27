@@ -159,10 +159,10 @@ describe('resolveFirstRunState', () => {
 
   it('does not re-persist platform.firstRunSyncSkipped when the setting is already persisted', async () => {
     localStorage.setItem('platform-bible.firstRunSyncSkipped', 'true');
+    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
-      // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
       if (key === 'platform.firstRunSyncSkipped') return true;
       return undefined;
     });
