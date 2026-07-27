@@ -58,13 +58,13 @@ const OPTION_ROWS: OptionRow[] = [
   },
 ];
 
-function isInternetUse(v: string): v is InternetUse {
-  return OPTION_ROWS.some((row) => row.value !== 'BlockInSensitiveLocations' && row.value === v);
+function isInternetUse(value: string): value is InternetUse {
+  return OPTION_ROWS.some(
+    (row) => row.value !== 'BlockInSensitiveLocations' && row.value === value,
+  );
 }
 
-/**
- * @experimental This export is unstable and may change shape or disappear without notice
- */
+/** @experimental This export is unstable and may change shape or disappear without notice */
 // Derived from OPTION_ROWS so adding a new row automatically includes its strings.
 export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   ...OPTION_ROWS.flatMap((row) => [row.labelKey, row.descriptionKey]),
@@ -72,9 +72,7 @@ export const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_internetUse_footer%',
 ];
 
-/**
- * @experimental This export is unstable and may change shape or disappear without notice
- */
+/** @experimental This export is unstable and may change shape or disappear without notice */
 export type InternetAccessOptionListProps = {
   /** Localized strings; pass strings resolved from `INTERNET_ACCESS_OPTION_LIST_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
@@ -86,9 +84,7 @@ export type InternetAccessOptionListProps = {
   disabled: boolean;
 };
 
-/**
- * @experimental This export is unstable and may change shape or disappear without notice
- */
+/** @experimental This export is unstable and may change shape or disappear without notice */
 export function InternetAccessOptionList({
   localizedStrings,
   value,

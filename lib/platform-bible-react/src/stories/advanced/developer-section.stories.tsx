@@ -55,8 +55,8 @@ export const QualityAssuranceActive: Story = {
 };
 
 /**
- * `disabled={true}` — header still clickable, but the Production/Development toggle is greyed
- * out and non-interactive.
+ * `disabled={true}` — header still clickable, but the Production/Development toggle is greyed out
+ * and non-interactive.
  */
 export const Disabled: Story = {
   args: { disabled: true },

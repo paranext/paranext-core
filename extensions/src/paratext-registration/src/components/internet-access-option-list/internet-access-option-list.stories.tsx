@@ -5,7 +5,7 @@ import {
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   type InternetAccessOptionListProps,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import { getLocalizedStrings } from '../../../../../../.storybook/localization.utils';
 
 const localizedStrings = getLocalizedStrings(INTERNET_ACCESS_OPTION_LIST_STRING_KEYS);

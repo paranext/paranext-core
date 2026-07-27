@@ -1,6 +1,7 @@
 import { ChevronDown } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
+import { cn } from '@/utils/shadcn-ui/utils';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useState } from 'react';
 
@@ -15,32 +16,26 @@ import { useState } from 'react';
 // prop wiring. Update this alias whenever the authoritative type changes.
 type ServerType = 'Production' | 'QualityAssurance' | 'Development' | 'Test';
 
-/**
- * @experimental This export is unstable and may change shape or disappear without notice
- */
+/** @experimental This export is unstable and may change shape or disappear without notice */
 export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_developer_section_label%',
   '%paratextRegistration_label_serverType_option_Production%',
   '%paratextRegistration_label_serverType_option_Development%',
 ];
 
-/**
- * @experimental This export is unstable and may change shape or disappear without notice
- */
+/** @experimental This export is unstable and may change shape or disappear without notice */
 export type DeveloperSectionProps = {
   /** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
   /** The currently selected server type. QA and Test values display as Production. */
   selectedServer: ServerType;
   /** Called when the user switches to Production or Development. */
-  onServerChange: (s: ServerType) => void;
+  onServerChange: (server: ServerType) => void;
   /** When true, the toggle items are non-interactive (loading or saving in progress). */
   disabled: boolean;
 };
 
-/**
- * @experimental This export is unstable and may change shape or disappear without notice
- */
+/** @experimental This export is unstable and may change shape or disappear without notice */
 export function DeveloperSection({
   localizedStrings,
   selectedServer,
@@ -64,9 +59,7 @@ export function DeveloperSection({
       >
         <span>{localizedStrings['%paratextRegistration_developer_section_label%']}</span>
         <ChevronDown
-          className={['tw:size-4', 'tw:transition-transform', isExpanded && 'tw:rotate-180']
-            .filter(Boolean)
-            .join(' ')}
+          className={cn('tw:size-4', 'tw:transition-transform', isExpanded && 'tw:rotate-180')}
         />
       </Button>
       <div id="developer-section-content" className="tw:mt-2 tw:px-2" hidden={!isExpanded}>
@@ -78,7 +71,11 @@ export function DeveloperSection({
             // Radix single-toggle fires '' when the already-selected item is clicked (deselect).
             // If the user is on QA/Test (displayed as Production), that click should switch them
             // to actual Production so they're not stranded with no escape route.
-            else if (v === '' && selectedServer !== 'Production' && selectedServer !== 'Development')
+            else if (
+              v === '' &&
+              selectedServer !== 'Production' &&
+              selectedServer !== 'Development'
+            )
               onServerChange('Production');
           }}
           disabled={disabled}

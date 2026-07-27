@@ -42,12 +42,15 @@ vi.mock('platform-bible-react', () => ({
     </button>
   ),
   Spinner: () => <div data-testid="spinner" />,
-  InternetAccessOptionList: ({ onChange }: { onChange: (v: string) => void }) => (
+}));
+
+vi.mock('platform-bible-react/experimental', () => ({
+  InternetAccessOptionList: ({ onChange }: { onChange: (value: string) => void }) => (
     <button data-testid="option-list" type="button" onClick={() => onChange('Enabled')}>
       option list
     </button>
   ),
-  DeveloperSection: ({ onServerChange }: { onServerChange: (s: string) => void }) => (
+  DeveloperSection: ({ onServerChange }: { onServerChange: (server: string) => void }) => (
     <button data-testid="dev-section" type="button" onClick={() => onServerChange('Development')}>
       dev section
     </button>
