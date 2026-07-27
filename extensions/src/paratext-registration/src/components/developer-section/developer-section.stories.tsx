@@ -24,8 +24,7 @@ export const Collapsed: Story = {};
 
 /** Section expanded — Production is the active server. */
 export const Expanded: Story = {
-  play: async ({ canvasElement }) => {
-    const { userEvent } = await import('@storybook/testing-library');
+  play: async ({ canvasElement, userEvent }) => {
     const header = canvasElement.querySelector('button');
     if (header) await userEvent.click(header);
   },
@@ -34,8 +33,7 @@ export const Expanded: Story = {
 /** Section expanded — Development is the active server. */
 export const DevelopmentActive: Story = {
   args: { selectedServer: 'Development' },
-  play: async ({ canvasElement }) => {
-    const { userEvent } = await import('@storybook/testing-library');
+  play: async ({ canvasElement, userEvent }) => {
     const header = canvasElement.querySelector('button');
     if (header) await userEvent.click(header);
   },
@@ -47,8 +45,7 @@ export const DevelopmentActive: Story = {
  */
 export const Disabled: Story = {
   args: { disabled: true },
-  play: async ({ canvasElement }) => {
-    const { userEvent } = await import('@storybook/testing-library');
+  play: async ({ canvasElement, userEvent }) => {
     const header = canvasElement.querySelector('button');
     if (header) await userEvent.click(header);
   },

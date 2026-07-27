@@ -25,7 +25,7 @@ type Story = StoryObj<typeof InternetAccessOptionList>;
 
 function createDecorator(initialValue: InternetUse) {
   return function Decorator(
-    Story: (update?: { args: InternetAccessOptionListProps }) => ReactElement,
+    Story: (update?: { args: Partial<InternetAccessOptionListProps> }) => ReactElement,
   ) {
     const [value, setValue] = useState<InternetUse>(initialValue);
     return <Story args={{ value, onChange: setValue }} />;
