@@ -17,6 +17,12 @@
       "message": "The comment editor now uses the generic %cancelButton_tooltip% key."
     }
   },
+  "%data_loading_error_internetAccess_disabled%": {
+    "deprecationInfo": {
+      "date": "2026-07-26",
+      "message": "Updated error text to include a link to the internet settings panel. The new key is %data_loading_error_internetAccess_disabled_2%."
+    }
+  },
   "%data_loading_error_paratextData_internet_disabled%": {
     "deprecationInfo": {
       "date": "2025-09-24",
@@ -151,6 +157,12 @@
   "%undoButton_tooltip%": {
     "notes": "The tooltip text for the undo button in the common undo/redo control used in various editors.",
     "fallbackKey": "%Paratext.Base.ProjectComments.CommentEditorForm.uiUndo.ToolTipText%"
+  },
+  "%userProfile_networkSettings%": {
+    "deprecationInfo": {
+      "date": "2026-07-26",
+      "message": "Renamed to \"Internet and connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
+    }
   },
   "%yes%": {
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",

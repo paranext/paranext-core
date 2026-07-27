@@ -15,12 +15,18 @@ import { useState } from 'react';
 // prop wiring. Update this alias whenever the authoritative type changes.
 type ServerType = 'Production' | 'QualityAssurance' | 'Development' | 'Test';
 
+/**
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_developer_section_label%',
   '%paratextRegistration_label_serverType_option_Production%',
   '%paratextRegistration_label_serverType_option_Development%',
 ];
 
+/**
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export type DeveloperSectionProps = {
   /** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
@@ -32,6 +38,9 @@ export type DeveloperSectionProps = {
   disabled: boolean;
 };
 
+/**
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
 export function DeveloperSection({
   localizedStrings,
   selectedServer,

@@ -4,13 +4,25 @@
       "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
     },
     "%paratextRegistration_description_internetUse_option_Enabled%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[0]%"
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[0]%",
+      "deprecationInfo": {
+        "message": "Shortened label to \"Unrestricted\". The new key is %paratextRegistration_description_internetUse_option_Enabled_2%.",
+        "date": "2026-07-26"
+      }
     },
     "%paratextRegistration_description_internetUse_option_Disabled%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%",
+      "deprecationInfo": {
+        "message": "Changed label to \"Disable ALL internet access\". The new key is %paratextRegistration_description_internetUse_option_Disabled_2%.",
+        "date": "2026-07-26"
+      }
     },
     "%paratextRegistration_description_internetUse_option_VpnRequired%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%",
+      "deprecationInfo": {
+        "message": "Changed label to \"Disable access to some Bible translation services\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
+        "date": "2026-07-26"
+      }
     },
     "%paratextRegistration_label_proxyHost%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
@@ -93,21 +105,15 @@
         "date": "2026-07-26"
       }
     },
-    "%paratextRegistration_description_internetUse_option_Enabled%": {
-      "deprecationInfo": {
-        "message": "Shortened label to \"Unrestricted\". The new key is %paratextRegistration_description_internetUse_option_Enabled_2%.",
-        "date": "2026-07-26"
-      }
-    },
     "%paratextRegistration_description_internetUse_option_ProxyOnly%": {
       "deprecationInfo": {
         "message": "Changed label to \"Configure proxy\". The new key is %paratextRegistration_description_internetUse_option_ProxyOnly_2%.",
         "date": "2026-07-26"
       }
     },
-    "%paratextRegistration_description_internetUse_option_VpnRequired%": {
+    "%paratextRegistration_alert_updatedInternetSettings%": {
       "deprecationInfo": {
-        "message": "Changed label to \"Disable access to some Bible translation services\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
+        "message": "Changed label to \"Internet and Connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_2%.",
         "date": "2026-07-26"
       }
     }
@@ -125,7 +131,8 @@
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
       "%paratextRegistration_alert_unchangedRegistration_description%": "Registration name and code have not been changed.",
-      "%paratextRegistration_alert_updatedInternetSettings%": "Internet and Connectivity settings updated",
+      "%paratextRegistration_alert_updatedInternetSettings%": "Internet settings updated",
+      "%paratextRegistration_alert_updatedInternetSettings_2%": "Internet and Connectivity settings updated",
       "%paratextRegistration_alert_updatedRegistration%": "Registration information updated",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
@@ -140,7 +147,8 @@
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Block internet when in sensitive locations",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Automatically blocks Paratext internet access in configured sensitive areas.",
-      "%paratextRegistration_description_internetUse_option_Disabled%": "Disable ALL internet access",
+      "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
+      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Disable ALL internet access",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Blocks all internet access within the Paratext app. Other applications on your computer are not affected.",
       "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
       "%paratextRegistration_description_internetUse_option_Enabled_2%": "Unrestricted",
@@ -216,7 +224,8 @@
       "%paratextRegistration_description_internetUse_disclaimer%": "Estas configuraciones de Internet solo afectan la conexión a los servicios de Paratext, como el Registro, Enviar/Recibir y la descarga de recursos.",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Bloquear internet en lugares sensibles",
       "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Bloquea automáticamente el acceso a internet de Paratext en áreas sensibles configuradas.",
-      "%paratextRegistration_description_internetUse_option_Disabled%": "Deshabilitar TODO el acceso a internet",
+      "%paratextRegistration_description_internetUse_option_Disabled%": "Deshabilitar todo uso de Internet",
+      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Deshabilitar TODO el acceso a internet",
       "%paratextRegistration_description_internetUse_option_Disabled_details%": "Bloquea todo el acceso a internet dentro de la aplicación Paratext. Otras aplicaciones en tu computadora no se ven afectadas.",
       "%paratextRegistration_description_internetUse_option_Enabled%": "Permitir uso de Internet sin restricción",
       "%paratextRegistration_description_internetUse_option_Enabled_2%": "Sin restricciones",
