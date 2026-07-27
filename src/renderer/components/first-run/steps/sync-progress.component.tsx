@@ -45,7 +45,8 @@ type ProjectRow = {
 /** Renders the list of per-project rows below the global progress bar. */
 function ProjectRowList({ rows }: { rows: ProjectRow[] }) {
   return (
-    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Tailwind strips list semantics in Safari; role="list" re-establishes them for VoiceOver
+    // Tailwind's reset strips list semantics in Safari; role="list" re-establishes them for VoiceOver.
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles
     <ul role="list" className="tw:mt-2 tw:flex tw:flex-col tw:gap-1">
       {rows.map((row) => (
         <li key={row.name} className="tw:flex tw:items-center tw:gap-2 tw:text-sm">
