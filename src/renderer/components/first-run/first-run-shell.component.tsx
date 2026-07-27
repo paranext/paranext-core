@@ -20,7 +20,7 @@ export const STEP_ORDER: FirstRunStep[] = [
   'syncProgress',
 ];
 
-/** Default step bodies. Sibling tickets replace individual entries with their real step. */
+/** Step components for the wizard; placeholder entries are replaced when their sibling tickets land. */
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
   language: LanguageStep,
   internet: InternetPlaceholderStep,
@@ -35,7 +35,6 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_next%',
   '%firstRun_button_back%',
   '%firstRun_button_skip%',
-  '%firstRun_button_skipForNow%',
   '%firstRun_button_finish%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
@@ -149,7 +148,7 @@ export function FirstRunShell({
         )}
         {onSkip && (
           <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skipForNow%']}
+            {strings['%firstRun_button_skip%']}
           </Button>
         )}
         {canProceed !== undefined && (

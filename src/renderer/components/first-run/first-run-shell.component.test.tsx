@@ -15,6 +15,11 @@ const STUB_STEPS = {
 };
 
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
+// SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
+// shell tests exercise navigation wiring without a live PAPI backend.
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(() => Promise.resolve()),
+}));
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -22,11 +27,20 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
-      '%firstRun_button_skip%': 'Skip',
-      '%firstRun_button_skipForNow%': 'Skip for now',
       '%firstRun_button_finish%': 'Finish',
+<<<<<<< HEAD
       '%firstRun_step_internet_placeholder%': 'Internet settings (coming soon)',
       '%firstRun_step_syncConsent_heading%': 'Sync your projects',
+||||||| parent of 2fbf2891bee (feat(PT-4178): sync consent step — relabeled buttons, shared form, skip state)
+      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
+      '%firstRun_step_syncConsent_heading%': 'Sync your data',
+=======
+      '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_dontSyncYet%': "Don't sync yet",
+      '%firstRun_step_language_placeholder%': 'Language picker (coming soon)',
+      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
+      '%firstRun_step_syncConsent_heading%': 'Sync your data',
+>>>>>>> 2fbf2891bee (feat(PT-4178): sync consent step — relabeled buttons, shared form, skip state)
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
@@ -82,7 +96,7 @@ describe('FirstRunShell', () => {
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // Skip is shown after SyncConsentStep's mount effect calls setCanSkip(true).
+    // "Skip automatic sync" button is rendered by SyncConsentStep's own footer (WizardStepForm).
     await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
     expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
   });
@@ -104,11 +118,11 @@ describe('FirstRunShell', () => {
     expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
-  it('advances to syncProgress without completing when Next is clicked on sync consent', async () => {
+  it('advances to syncProgress when Sync is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
     expect(mockComplete).not.toHaveBeenCalled();
-    expect(screen.getByText(/sync progress/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/sync progress/i)).toBeInTheDocument());
   });
 
 
