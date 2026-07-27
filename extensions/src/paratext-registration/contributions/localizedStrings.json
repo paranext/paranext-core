@@ -65,25 +65,25 @@
     },
     "%settings_paratextRegistration_registration_internet_group_description%": {
       "deprecationInfo": {
-        "message": "The startup registration prompt settings group was removed. Registration is now handled by the first-run gating overlay.",
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
         "date": "2026-07-22"
       }
     },
     "%settings_paratextRegistration_registration_internet_group_label%": {
       "deprecationInfo": {
-        "message": "The startup registration prompt settings group was removed. Registration is now handled by the first-run gating overlay.",
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
         "date": "2026-07-22"
       }
     },
     "%settings_paratextRegistration_shouldShowOnStartup_description%": {
       "deprecationInfo": {
-        "message": "The paratextRegistration.shouldShowOnStartup setting was removed. The startup registration prompt it controlled is now handled by the first-run gating overlay.",
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
         "date": "2026-07-22"
       }
     },
     "%settings_paratextRegistration_shouldShowOnStartup_label%": {
       "deprecationInfo": {
-        "message": "The paratextRegistration.shouldShowOnStartup setting was removed. The startup registration prompt it controlled is now handled by the first-run gating overlay.",
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
         "date": "2026-07-22"
       }
     }
