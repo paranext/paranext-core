@@ -213,6 +213,10 @@ class ThemeDataProviderEngine
       'theme.service-host.allThemeFamiliesById',
       STARTUP_TIME_MS,
     );
+    // Real consumers await this via #getAllThemeFamiliesByIdResolved and get their own rejection;
+    // this no-op keeps a dispose-time (or timeout) rejection with no awaiter from surfacing as an
+    // unhandled rejection, which the renderer's global handler would log at error level.
+    this.#allThemeFamiliesByIdAsyncVariable.promise.catch(() => {});
 
     // Setup timeout to reset theme to default at end of startup if the current theme does not exist
     const resetThemeTimeout = setTimeout(async () => {
