@@ -251,7 +251,12 @@ describe('Simple-mode menu item filtering', () => {
         [EXTENSION_NAME]: {
           ...webViewMenus[EXTENSION_NAME],
           topMenu: {
-            ...webViewMenus[EXTENSION_NAME].topMenu,
+            // Spreading webViewMenus[EXTENSION_NAME].topMenu directly would make columns/groups
+            // optional in the result (it's typed MultiColumnMenu | undefined even though
+            // MOCK_MENU_DATA above always defines it), so reconstruct the required fields
+            // explicitly instead.
+            columns: webViewMenus[EXTENSION_NAME].topMenu?.columns ?? {},
+            groups: webViewMenus[EXTENSION_NAME].topMenu?.groups ?? {},
             items: [
               ...(webViewMenus[EXTENSION_NAME].topMenu?.items ?? []),
               {
@@ -265,7 +270,7 @@ describe('Simple-mode menu item filtering', () => {
             ],
           },
           contextMenu: {
-            ...webViewMenus[EXTENSION_NAME].contextMenu,
+            groups: webViewMenus[EXTENSION_NAME].contextMenu?.groups ?? {},
             items: [
               ...(webViewMenus[EXTENSION_NAME].contextMenu?.items ?? []),
               {

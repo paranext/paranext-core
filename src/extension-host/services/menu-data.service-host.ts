@@ -13,7 +13,6 @@ import {
   isPlatformError,
   PlatformMenus,
   MultiColumnMenu,
-  MenuItemBase,
   InterfaceMode,
   ReferencedItem,
   WebViewMenu,
@@ -24,8 +23,16 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
 
-/** Removes items whose `hiddenInterfaceModes` includes `currentMode` from a menu item list. */
-function filterItemsForInterfaceMode<TItem extends MenuItemBase>(
+/**
+ * Removes items whose `hiddenInterfaceModes` includes `currentMode` from a menu item list.
+ *
+ * Constrained to just the one field this needs, not the full `MenuItemBase` — `Localized<T>` widens
+ * `MenuItemBase`'s branded `ReferencedItem`/`LocalizeKey` string fields (e.g. `group`) to plain
+ * `string`, so a localized menu item no longer satisfies `MenuItemBase` itself, which would
+ * otherwise make `TItem` fail to infer as the caller's actual (localized or unlocalized) item
+ * type.
+ */
+function filterItemsForInterfaceMode<TItem extends { hiddenInterfaceModes?: InterfaceMode[] }>(
   items: TItem[],
   currentMode: InterfaceMode,
 ): TItem[] {
@@ -66,10 +73,8 @@ class MenuDataDataProviderEngine
 
   async getMainMenu(): Promise<Localized<MultiColumnMenu>> {
     if (!this.mainMenu) throw new Error('Missing/invalid main menu data');
-    return {
-      ...this.mainMenu,
-      items: filterItemsForInterfaceMode(this.mainMenu.items, this.currentMode),
-    };
+    const items = filterItemsForInterfaceMode(this.mainMenu.items, this.currentMode);
+    return { ...this.mainMenu, items };
   }
 
   // setMainMenu doesn't use instance state but cannot be static because it implements the
@@ -84,10 +89,8 @@ class MenuDataDataProviderEngine
     // subscribeCurrentMacosMenubar (platform-macos-menubar.util.ts) builds the native macOS
     // application menu from this data, registered unconditionally on darwin — it must apply the
     // same interface-mode filter as getMainMenu, or a hidden item would still appear there.
-    return {
-      ...this.unlocalizedMainMenu,
-      items: filterItemsForInterfaceMode(this.unlocalizedMainMenu.items, this.currentMode),
-    };
+    const items = filterItemsForInterfaceMode(this.unlocalizedMainMenu.items, this.currentMode);
+    return { ...this.unlocalizedMainMenu, items };
   }
 
   // setUnlocalizedMainMenu doesn't use instance state but cannot be static because it implements
@@ -103,21 +106,19 @@ class MenuDataDataProviderEngine
       logger.debug(`Missing/invalid web view menu data for web view ${webViewName}`);
       return { contextMenu: undefined, includeDefaults: false, topMenu: undefined };
     }
-    return {
-      ...webViewMenu,
-      topMenu: webViewMenu.topMenu
-        ? {
-            ...webViewMenu.topMenu,
-            items: filterItemsForInterfaceMode(webViewMenu.topMenu.items, this.currentMode),
-          }
-        : undefined,
-      contextMenu: webViewMenu.contextMenu
-        ? {
-            ...webViewMenu.contextMenu,
-            items: filterItemsForInterfaceMode(webViewMenu.contextMenu.items, this.currentMode),
-          }
-        : undefined,
-    };
+    const topMenu = webViewMenu.topMenu
+      ? {
+          ...webViewMenu.topMenu,
+          items: filterItemsForInterfaceMode(webViewMenu.topMenu.items, this.currentMode),
+        }
+      : undefined;
+    const contextMenu = webViewMenu.contextMenu
+      ? {
+          ...webViewMenu.contextMenu,
+          items: filterItemsForInterfaceMode(webViewMenu.contextMenu.items, this.currentMode),
+        }
+      : undefined;
+    return { ...webViewMenu, topMenu, contextMenu };
   }
 
   // setWebViewMenu doesn't use instance state but cannot be static because it implements the

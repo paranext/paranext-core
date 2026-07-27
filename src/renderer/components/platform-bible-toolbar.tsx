@@ -262,10 +262,19 @@ export function PlatformBibleToolbar() {
   // contributions resync (which also covers localized-string loading completing), so this always
   // reflects the current mode and current localization without needing to reopen the menu —
   // matching the pattern web-view.component.tsx already uses for WebViewMenu.
-  const [menuData] = useData(menuDataService.dataProviderName).MainMenu(
+  const [menuDataPossiblyError] = useData(menuDataService.dataProviderName).MainMenu(
     undefined,
     MAIN_MENU_DEFAULT,
   );
+  const menuData = useMemo(() => {
+    if (isPlatformError(menuDataPossiblyError)) {
+      logger.warn(
+        `Toolbar failed to get main menu data: ${getErrorMessage(menuDataPossiblyError)}`,
+      );
+      return MAIN_MENU_DEFAULT;
+    }
+    return menuDataPossiblyError;
+  }, [menuDataPossiblyError]);
 
   const [marketingVersion] = usePromise(
     useCallback(async () => {
