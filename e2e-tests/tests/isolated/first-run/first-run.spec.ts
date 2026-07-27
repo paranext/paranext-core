@@ -19,13 +19,16 @@ import { FirstRunPage } from './first-run.page';
 
 // Override dev-appdata so the wizard always shows, even after a developer has
 // run the app locally and persisted platform.firstRunComplete: true.
+// Per-test (beforeEach/afterEach) rather than per-suite: the "skip setup" test calls
+// completeFirstRun() which writes firstRunComplete:true back to the file, poisoning any
+// subsequent test that runs against the same settings.json within the same suite.
 let restoreSettings: (() => void) | undefined;
 
-test.beforeAll(() => {
+test.beforeEach(() => {
   restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': false });
 });
 
-test.afterAll(() => {
+test.afterEach(() => {
   restoreSettings?.();
 });
 

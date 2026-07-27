@@ -3,7 +3,7 @@ import { completeFirstRun } from '@renderer/services/first-run-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { Button, Spinner } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { ComponentType, useCallback, useMemo, useState } from 'react';
+import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguagePlaceholderStep } from './steps/language.placeholder.component';
 import { IdentifyPlaceholderStep } from './steps/identify.placeholder.component';
@@ -112,6 +112,17 @@ export function FirstRunShell({
     [step, runAction],
   );
 
+  const finishButtonRef = useRef<HTMLButtonElement>(null);
+  // Focus the Finish button the moment it becomes enabled on the last step. Without this, keyboard
+  // and screen-reader users on an interstitial (no Back, no other controls) have no signal that
+  // the only actionable control just became available.
+  const prevCanProceedRef = useRef(canProceed);
+  useEffect(() => {
+    const wasDisabled = !prevCanProceedRef.current;
+    prevCanProceedRef.current = canProceed;
+    if (isLastStep && canProceed && wasDisabled) finishButtonRef.current?.focus();
+  }, [canProceed, isLastStep]);
+
   const StepComponent = stepComponents[step];
   const nextLabel = isLastStep
     ? strings['%firstRun_button_finish%']
@@ -155,7 +166,7 @@ export function FirstRunShell({
             {strings['%firstRun_button_skip%']}
           </Button>
         )}
-        <Button onClick={onNext} disabled={!canProceed || isBusy}>
+        <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
           {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
               an async precondition (e.g. sync completing). If a future last step gates on user
               input rather than async work, this assumption should be revisited. */}
