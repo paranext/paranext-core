@@ -2,27 +2,26 @@ using PtxUtils;
 
 namespace Paranext.DataProvider.Services;
 
-internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSettings
+internal class PersistedPtxUtilsSettings : IPtxUtilsSettings
 {
-    public SerializableStringDictionary MementoData { get; set; } = GetMementoData(papiClient);
+    private readonly PapiClient _papiClient;
 
-    // A timeout here must not crash the whole data provider at startup, so this mirrors the
-    // try/catch SettingsService.Initialize already uses around its own GetSetting call.
-    private static SerializableStringDictionary GetMementoData(PapiClient papiClient)
+    // Set when the initial load fails (e.g. times out), so SafeSave doesn't overwrite the user's
+    // previously-persisted mementos with this instance's fallback-to-empty default.
+    private readonly bool _loadFailed;
+
+    public PersistedPtxUtilsSettings(PapiClient papiClient)
     {
-        try
-        {
-            return SettingsService.GetSetting<SerializableStringDictionary>(
-                    papiClient,
-                    Settings.PTX_UTILS_MEMENTO_DATA
-                ) ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error getting {Settings.PTX_UTILS_MEMENTO_DATA}: {ex}");
-            return [];
-        }
+        _papiClient = papiClient;
+        _loadFailed = !SettingsService.TryGetSetting(
+            papiClient,
+            Settings.PTX_UTILS_MEMENTO_DATA,
+            out SerializableStringDictionary? value
+        );
+        MementoData = value ?? [];
     }
+
+    public SerializableStringDictionary MementoData { get; set; }
 
     public bool UpgradeNeeded
     {
@@ -38,6 +37,9 @@ internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSetti
 
     public void SafeSave()
     {
-        SettingsService.SetSetting(papiClient, Settings.PTX_UTILS_MEMENTO_DATA, MementoData);
+        if (_loadFailed)
+            return;
+
+        SettingsService.SetSetting(_papiClient, Settings.PTX_UTILS_MEMENTO_DATA, MementoData);
     }
 }

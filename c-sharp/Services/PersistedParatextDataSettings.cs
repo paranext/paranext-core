@@ -3,37 +3,34 @@ using PtxUtils;
 
 namespace Paranext.DataProvider.Services;
 
-internal class PersistedParatextDataSettings(PapiClient papiClient) : IParatextDataSettings
+internal class PersistedParatextDataSettings : IParatextDataSettings
 {
-    public SerializableStringDictionary LastRegistryDataCachedTimes { get; set; } =
-        GetLastRegistryDataCachedTimes(papiClient);
+    private readonly PapiClient _papiClient;
 
-    // A timeout here must not crash the whole data provider at startup, so this mirrors the
-    // try/catch SettingsService.Initialize already uses around its own GetSetting call.
-    private static SerializableStringDictionary GetLastRegistryDataCachedTimes(
-        PapiClient papiClient
-    )
+    // Set when the initial load fails (e.g. times out), so SafeSave doesn't overwrite the
+    // previously-persisted value with this instance's fallback-to-empty default.
+    private readonly bool _loadFailed;
+
+    public PersistedParatextDataSettings(PapiClient papiClient)
     {
-        try
-        {
-            return SettingsService.GetSetting<SerializableStringDictionary>(
-                    papiClient,
-                    Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
-                ) ?? [];
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(
-                $"Error getting {Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES}: {ex}"
-            );
-            return [];
-        }
+        _papiClient = papiClient;
+        _loadFailed = !SettingsService.TryGetSetting(
+            papiClient,
+            Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+            out SerializableStringDictionary? value
+        );
+        LastRegistryDataCachedTimes = value ?? [];
     }
+
+    public SerializableStringDictionary LastRegistryDataCachedTimes { get; set; }
 
     public void SafeSave()
     {
+        if (_loadFailed)
+            return;
+
         SettingsService.SetSetting(
-            papiClient,
+            _papiClient,
             Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
             LastRegistryDataCachedTimes
         );
