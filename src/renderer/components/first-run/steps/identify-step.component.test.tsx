@@ -157,9 +157,9 @@ describe('IdentifyStep', () => {
     expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
   });
 
-  it('calls setCanProceed(null) on mount to suppress the shell Next button entirely', () => {
+  it('calls setCanProceed(undefined) on mount to suppress the shell Next button entirely', () => {
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
-    expect(setCanProceed).toHaveBeenCalledWith(null);
+    expect(setCanProceed).toHaveBeenCalledWith(undefined);
   });
 
   it('renders name and code inputs with accessible labels', () => {
