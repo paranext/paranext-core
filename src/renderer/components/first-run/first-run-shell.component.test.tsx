@@ -48,9 +48,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
       '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
+      '%product_name%': 'Platform.Bible',
     },
     false,
   ]),
+  useSetting: vi.fn(() => [['en'], vi.fn()]),
 }));
 // SyncProgressStep subscribes to network events via getNetworkEvent. Return a no-op subscriber so
 // the component mounts without crashing in jsdom (no real network layer available in tests).
@@ -240,6 +242,13 @@ describe('FirstRunShell', () => {
     expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
   });
 
+  it('shows an sr-only step indicator that updates with navigation', async () => {
+    render(<FirstRunShell entryStep="language" />);
+    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
+  });
+
 
   it('disables Next while a step reports it cannot proceed', async () => {
     function BlockingStep({ setCanProceed }: FirstRunStepProps) {
@@ -282,8 +291,10 @@ describe('FirstRunShell', () => {
   it('disables Next when navigating into a step that calls setCanProceed(false) on mount', async () => {
     // BlockingStep calls setCanProceed(false) in a mount effect — simulates a step that gates
     // on data loading or validation before the user may proceed.
-    function BlockingStep({ setCanProceed: setCP }: FirstRunStepProps) {
-      useEffect(() => setCP?.(false), [setCP]);
+    function BlockingStep({ setCanProceed: setProc }: FirstRunStepProps) {
+      useEffect(() => {
+        setProc?.(false);
+      }, [setProc]);
       return <p>blocking step</p>;
     }
     render(
