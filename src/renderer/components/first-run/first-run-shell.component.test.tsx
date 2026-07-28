@@ -7,11 +7,22 @@ import * as store from '@renderer/services/first-run-store';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.component';
 
+// Stubs call setCanProceed(true) so goToStep's canProceed-reset doesn't strand navigation
+// at a stub step that never re-enables Next.
+function LanguageStub({ setCanProceed }: FirstRunStepProps) {
+  useEffect(() => setCanProceed?.(true), [setCanProceed]);
+  return <p>language step</p>;
+}
+function IdentifyStub({ setCanProceed }: FirstRunStepProps) {
+  useEffect(() => setCanProceed?.(true), [setCanProceed]);
+  return <p>identify step</p>;
+}
+
 const STUB_STEPS = {
   ...DEFAULT_STEP_COMPONENTS,
-  language: () => <p>language step</p>,
+  language: LanguageStub,
   internetSettings: InternetSettingsPlaceholder,
-  identify: () => <p>identify step</p>,
+  identify: IdentifyStub,
 };
 
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
@@ -95,7 +106,8 @@ vi.mock('platform-bible-react', () => {
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
-function InternetSettingsPlaceholder() {
+function InternetSettingsPlaceholder({ setCanProceed }: FirstRunStepProps) {
+  useEffect(() => setCanProceed?.(true), [setCanProceed]);
   return <p>Internet settings placeholder</p>;
 }
 
@@ -267,16 +279,16 @@ describe('FirstRunShell', () => {
   });
 
   it('does not render the Back button on syncProgress even when reached from an earlier step', async () => {
-    // entryStep="syncConsent" sets entryIndex=2; navigating Next takes index to 3 (syncProgress).
-    // Without the interstitial guard, index(3) > entryIndex(2) would show Back — verify the guard fires.
+    // entryStep="syncConsent" sets entryIndex=3; navigating Next takes index to 4 (syncProgress).
+    // Without the interstitial guard, index(4) > entryIndex(3) would show Back — verify the guard fires.
     render(<FirstRunShell entryStep="syncConsent" />);
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
-  it('shows "Step 3 of 3" for syncConsent (syncProgress excluded from count)', () => {
+  it('shows "Step 4 of 4" for syncConsent (syncProgress excluded from count)', () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // formatReplacementString fills {stepNumber} → 3, {stepCount} → 3 (NUMBERED_STEPS.length).
-    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
+    // formatReplacementString fills {stepNumber} → 4, {stepCount} → 4 (NUMBERED_STEPS.length).
+    expect(screen.getByText('Step 4 of 4')).toBeInTheDocument();
   });
 });
