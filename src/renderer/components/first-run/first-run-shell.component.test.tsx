@@ -24,7 +24,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_internet_placeholder%': 'Internet settings (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },

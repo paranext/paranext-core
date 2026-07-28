@@ -101,7 +101,7 @@
     },
     "%internetSettings_webView_title%": {
       "deprecationInfo": {
-        "message": "Changed the title to \"Internet & Connectivity\". The new key is %internetSettings_webView_title_2%.",
+        "message": "Changed the title to \"Internet & connectivity\". The new key is %internetSettings_webView_title_2%.",
         "date": "2026-07-26"
       }
     },
@@ -113,7 +113,7 @@
     },
     "%paratextRegistration_alert_updatedInternetSettings%": {
       "deprecationInfo": {
-        "message": "Changed label to \"Internet and Connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_2%.",
+        "message": "Changed label to \"Internet & connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_2%.",
         "date": "2026-07-26"
       }
     },

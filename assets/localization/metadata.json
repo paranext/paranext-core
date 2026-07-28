@@ -161,7 +161,7 @@
   "%userProfile_networkSettings%": {
     "deprecationInfo": {
       "date": "2026-07-26",
-      "message": "Renamed to \"Internet and connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
+      "message": "Renamed to \"Internet & connectivity\" to match the internet settings panel. The new key is %userProfile_networkSettings_2%."
     }
   },
   "%yes%": {
