@@ -25,12 +25,9 @@ describe('UnsubscriberAsyncList', () => {
     // shutdown, so a single bad unsubscriber must not leak every subscription behind it
     const list = new UnsubscriberAsyncList('test');
     const afterTheThrower = vi.fn(async () => true);
-    list.add(
-      () => {
-        throw new Error('synchronous boom');
-      },
-      afterTheThrower,
-    );
+    list.add(() => {
+      throw new Error('synchronous boom');
+    }, afterTheThrower);
 
     const allSucceeded = await list.runAllUnsubscribers();
 
