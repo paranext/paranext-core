@@ -32,6 +32,10 @@ namespace TestParanextDataProvider.Projects.SendReceive
             SendReceiveWriteLock.ResetForTests();
             _service = new SendReceiveBlockNotifierService(Client);
             await _service.InitializeAsync();
+            // InitializeAsync emits the current gate snapshot once (the restart re-baseline emit —
+            // see the dedicated tests below); drain it so each test's event assertions see only the
+            // transitions that test drives.
+            _ = Client.NextSentEvent;
         }
 
         [TearDown]
@@ -90,6 +94,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
             {
                 Console.SetError(originalError);
             }
+            // Drain the init-time current-snapshot emit so the assertions below see only the
+            // transition push.
+            _ = client.NextSentEvent;
 
             Assert.Multiple(() =>
             {
@@ -142,6 +149,9 @@ namespace TestParanextDataProvider.Projects.SendReceive
             {
                 Console.SetError(originalError);
             }
+            // Drain the init-time current-snapshot emit so the assertions below see only the
+            // transition push.
+            _ = client.NextSentEvent;
 
             Assert.Multiple(() =>
             {
@@ -175,9 +185,69 @@ namespace TestParanextDataProvider.Projects.SendReceive
         }
 
         [Test]
+        public async Task InitializeAsync_EmitsTheCurrentSnapshotOnce()
+        {
+            // Restart re-baseline emit: after initialization the service pushes the gate's CURRENT
+            // snapshot once, so a subscriber that was already listening across a backend restart
+            // converges on the fresh process's state instead of keeping its stale last-seen state.
+            // Fresh gate + client so only the service under test here is subscribed (the base SetUp
+            // already initialized and drained its own init emit).
+            SendReceiveWriteLock.ResetForTests();
+            using var client = new DummyPapiClient();
+            var service = new SendReceiveBlockNotifierService(client);
+
+            await service.InitializeAsync();
+
+            Assert.That(
+                client.SentEventCount,
+                Is.EqualTo(1),
+                "InitializeAsync must emit the current snapshot exactly once"
+            );
+            var (eventType, payload) = client.NextSentEvent;
+            Assert.That(eventType, Is.EqualTo(BlockStateChangedEvent));
+            var state = (SendReceiveBlockState)payload!;
+            Assert.Multiple(() =>
+            {
+                Assert.That(
+                    state.IsBlocking,
+                    Is.False,
+                    "an idle gate re-baselines as not blocking"
+                );
+                Assert.That(state.ProjectIds, Is.Empty);
+            });
+        }
+
+        [Test]
+        public async Task InitializeAsync_GateAlreadyArmed_EmitsTheArmedSnapshot()
+        {
+            // The init emit is the gate's CURRENT snapshot, not a hard-coded not-blocking one: a
+            // service initializing while the gate is already armed must report the armed state.
+            SendReceiveWriteLock.ResetForTests();
+            SendReceiveWriteLock.SetSyncing(["projectA"]);
+            using var client = new DummyPapiClient();
+            var service = new SendReceiveBlockNotifierService(client);
+
+            await service.InitializeAsync();
+
+            Assert.That(client.SentEventCount, Is.EqualTo(1));
+            var (eventType, payload) = client.NextSentEvent;
+            Assert.That(eventType, Is.EqualTo(BlockStateChangedEvent));
+            var state = (SendReceiveBlockState)payload!;
+            Assert.Multiple(() =>
+            {
+                Assert.That(state.IsBlocking, Is.True);
+                Assert.That(state.ProjectIds, Is.EquivalentTo(new[] { "projectA" }));
+            });
+        }
+
+        [Test]
         public void GateArm_PushesOnSyncWriteLockChangedEventWithBlockingSnapshot()
         {
-            Assert.That(Client.SentEventCount, Is.Zero, "no events before any transition");
+            Assert.That(
+                Client.SentEventCount,
+                Is.Zero,
+                "no events before any transition (SetUp drained the init emit)"
+            );
 
             SendReceiveWriteLock.SetSyncing(["projectA", "projectB"]);
 

@@ -199,6 +199,22 @@ internal class LocalParatextProjects : IDisposable
     }
 
     /// <summary>
+    /// Refresh ParatextData's in-memory project list from disk
+    /// (<see cref="ScrTextCollection.RefreshScrTexts()"/>) and then ask project-list consumers to
+    /// refetch via <see cref="NotifyProjectsChanged"/>. For writers whose on-disk changes are
+    /// invisible to the project-directory watcher — the watcher is non-recursive, so an in-place
+    /// <c>Settings.xml</c> rewrite or a mid-clone state landing during a Send/Receive never
+    /// reaches it (see <see cref="StartWatchingProjectDirectory"/>) — and that therefore must both
+    /// re-read the project set and notify inline themselves. Virtual so tests can substitute the
+    /// ParatextData refresh.
+    /// </summary>
+    public virtual void RefreshAndNotifyProjectsChanged()
+    {
+        ScrTextCollection.RefreshScrTexts();
+        NotifyProjectsChanged();
+    }
+
+    /// <summary>
     /// Ask project-list consumers to refetch their cheap metadata by emitting
     /// <see cref="PROJECTS_CHANGED_EVENT_TYPE"/>. Call after a project is added/removed or after one
     /// of its display-backing settings changes. Debounced (see <see cref="s_notifyDebounce"/>) so a

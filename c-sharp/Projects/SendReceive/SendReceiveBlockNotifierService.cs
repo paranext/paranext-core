@@ -120,6 +120,11 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
                 result: ResultOf("object", "The write gate's current block-state snapshot")
             )
         );
+
+        // Emit the current gate snapshot once now that both surfaces are up, so a subscriber that
+        // was already listening across a backend restart converges on the fresh process's state
+        // instead of keeping whatever stale state it last saw.
+        OnBlockStateChanged(SendReceiveWriteLock.GetBlockState());
     }
 
     /// <summary>

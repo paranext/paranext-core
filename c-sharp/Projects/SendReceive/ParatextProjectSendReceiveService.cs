@@ -10,6 +10,14 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 // closed-source Paratext 10 Studio overlay patch binds them into properties, so the constructor
 // signature must keep them. Suppress the unread-parameter warning rather than removing the
 // parameters.
+//
+// paratextProjects in particular is here for the patch's shared sync wrapper (the single helper
+// both the manual and the scheduled sync command paths funnel through): core's project-directory
+// watcher is non-recursive and cannot see an in-place Settings.xml metadata rewrite
+// (name/language/editable) landing during a receive, so after a sync that can change the project
+// set or its display metadata the patch must call
+// paratextProjects.RefreshAndNotifyProjectsChanged() for Home / New Tab / the project picker to
+// refresh (see that method's doc).
 #pragma warning disable CS9113
 internal class ParatextProjectSendReceiveService(
     PapiClient papiClient,
@@ -19,6 +27,19 @@ internal class ParatextProjectSendReceiveService(
 )
 #pragma warning restore CS9113
 {
+    #region Constructors, consts, and fields
+
+    /// <summary>
+    /// Request timeout for the long-running Send/Receive commands: a Send/Receive is a multi-minute
+    /// server operation (clone/pull/push round-trips per project), so the papi request timeout must
+    /// outlive it — with the default 30s timeout the caller would give up while the operation is
+    /// still running (and succeeding) on the backend. Inert in plain Platform.Bible since the stub
+    /// bodies below throw immediately, but the registration already carries it so the Paratext 10
+    /// Studio patch (which fills in the real implementations) inherits the correct timeout.
+    /// </summary>
+    internal static readonly TimeSpan s_sendReceiveTimeout = TimeSpan.FromSeconds(0); // 0 = no timeout
+    #endregion
+
     #region Public properties and methods
 
     public async Task InitializeAsync()
@@ -46,7 +67,7 @@ internal class ParatextProjectSendReceiveService(
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.breakSyncLock",
                 BreakSyncLock,
-                null,
+                s_sendReceiveTimeout,
                 Create(
                     "Breaks (releases) the Send/Receive server-side repository lock for each given "
                         + "project and reports per-project success. Unrelated to the local "
@@ -119,11 +140,6 @@ internal class ParatextProjectSendReceiveService(
     /// </param>
     protected void SyncProjects(String[]? projectIds)
     {
-        // PT10 integration note: paranext-core's project-directory watcher is non-recursive and
-        // does NOT catch an in-place Settings.xml metadata rewrite (name/language/editable) landing
-        // during a Send/Receive receive. PT10's patched implementation of this method must call
-        // LocalParatextProjects.NotifyProjectsChanged() after a sync that can change the project set
-        // or display metadata, so Home / New Tab / the project picker refresh.
 #if DEBUG
         // Dev-only placeholder: paranext-core has no S/R impl. PT10 patches the whole method.
         NotificationService.Send(
