@@ -1,8 +1,8 @@
 import logo from '@assets/icon.png';
-import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
+  useData,
   useDialogCallback,
   useLocalizedStrings,
   useScrollGroupScrRef,
@@ -29,6 +29,7 @@ import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
@@ -63,6 +64,8 @@ import {
 import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
+
+const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
 // Heuristic delay before retrying the send/receive availability check on startup. The extension
 // host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
@@ -254,28 +257,24 @@ export function PlatformBibleToolbar() {
         }
       : undefined;
 
-  const [updateMenuData, setUpdateMenuData] = useState<boolean>(false);
-
-  const [menuData] = usePromise(
-    useCallback(async () => {
-      setUpdateMenuData(false);
-      const newMenuData = await provideMenuData(false);
-
-      if (
-        Object.values(newMenuData.columns).some(
-          (column) =>
-            typeof column === 'object' && 'label' in column && column.label.startsWith('%'),
-        )
-      ) {
-        setTimeout(() => setUpdateMenuData(true), 1000);
-      }
-
-      return newMenuData;
-      // updateMenuData needs to be included for the menu contents to reevaluate when menu is (re)opened
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [updateMenuData]),
-    { columns: {}, groups: {}, items: [] },
+  // Live-subscribed (not a one-shot fetch): the extension host calls notifyUpdate('*') on this
+  // data provider both when platform.interfaceMode changes (menu-data.service-host.ts) and when
+  // contributions resync (which also covers localized-string loading completing), so this always
+  // reflects the current mode and current localization without needing to reopen the menu —
+  // matching the pattern web-view.component.tsx already uses for WebViewMenu.
+  const [menuDataPossiblyError] = useData(menuDataService.dataProviderName).MainMenu(
+    undefined,
+    MAIN_MENU_DEFAULT,
   );
+  const menuData = useMemo(() => {
+    if (isPlatformError(menuDataPossiblyError)) {
+      logger.warn(
+        `Toolbar failed to get main menu data: ${getErrorMessage(menuDataPossiblyError)}`,
+      );
+      return MAIN_MENU_DEFAULT;
+    }
+    return menuDataPossiblyError;
+  }, [menuDataPossiblyError]);
 
   const [marketingVersion] = usePromise(
     useCallback(async () => {
@@ -339,13 +338,12 @@ export function PlatformBibleToolbar() {
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
         menuData={menuData}
-        onOpenChange={(isOpen: boolean) => {
-          setUpdateMenuData(isOpen);
-        }}
         onSelectMenuItem={handleMenuCommand}
         className={cn(
-          // If the toolbar height changes, the top inset for the workspace updating overlay will need to be updated too.
-          'tw:h-12 tw:bg-transparent',
+          // If the toolbar height changes, the top inset for the workspace updating overlay and
+          // getDockLayoutOuterInset (platform-dock-layout-positioning.util.ts) will need updating too.
+          isPowerMode ? 'tw:h-12' : 'tw:h-14',
+          'tw:bg-transparent',
           // Only reserve the static guess when there's no live measurement to reserve it above instead.
           !toolbarReservedSpaceStyle &&
             getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
@@ -429,29 +427,32 @@ export function PlatformBibleToolbar() {
           </>
         }
       >
-        <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="tw:h-8"
-                onClick={() => {
-                  // This command comes from an extension and is not typed in CommandHandlers.
-                  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                  (sendCommand as any)('platformGetResources.openHome');
-                }}
-              >
-                <HomeIcon />
-              </Button>
-            </TooltipTrigger>
-            {localizedStrings['%mainMenu_openHome%'] && (
-              <TooltipContent>
-                <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
+        {isPowerMode && (
+          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  data-testid="toolbar-home-button"
+                  variant="ghost"
+                  size="icon"
+                  className="tw:h-8"
+                  onClick={() => {
+                    // This command comes from an extension and is not typed in CommandHandlers.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                    (sendCommand as any)('platformGetResources.openHome');
+                  }}
+                >
+                  <HomeIcon />
+                </Button>
+              </TooltipTrigger>
+              {localizedStrings['%mainMenu_openHome%'] && (
+                <TooltipContent>
+                  <p className="tw:font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+        )}
         {!isPowerMode && (
           <Select
             value={currentProject?.id ?? ''}
@@ -466,7 +467,7 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48">
+            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
               <SelectValue
                 placeholder={
                   hasProjectPickerItems
@@ -514,7 +515,9 @@ export function PlatformBibleToolbar() {
           ref={registerTopBookChapterControl}
           scrRef={scrRef}
           handleSubmit={setScrRef}
-          className="tw:w-96"
+          className={isPowerMode ? 'tw:w-96' : 'tw:w-fit'}
+          triggerVariant={isPowerMode ? undefined : 'ghost'}
+          showTriggerChevron={!isPowerMode}
           disabled={isBookChapterControlDisabled}
           getActiveBookIds={getActiveBookIds}
           recentSearches={recentScriptureRefs}

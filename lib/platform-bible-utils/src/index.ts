@@ -174,6 +174,7 @@ export type {
   ReferencedItem,
   OrderedItem,
   OrderedExtensibleContainer,
+  InterfaceMode,
   MenuItemBase,
   MenuItemContainingSubmenu,
   MenuItemContainingCommand,

@@ -2,21 +2,18 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
-
-vi.mock('@renderer/components/platform-bible-menu.data', () => ({
-  provideMenuData: vi.fn(async () => ({ columns: {}, groups: {}, items: [] })),
-}));
 
 vi.mock('@renderer/components/user-profile-popover/user-profile-popover.component', () => ({
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
@@ -48,6 +45,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       { type: 'light', id: 'light', themeFamilyId: 'light', label: 'Light', cssVariables: {} },
       vi.fn(),
     ]),
+    MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
   useDialogCallback: vi.fn(() => vi.fn()),
@@ -153,12 +151,25 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     // Mirrors the real BookChapterControl's trigger (aria-label + disabled) so tests can assert on
     // the disabled state that platform-bible-toolbar.tsx wires up, without pulling in the real
     // component's Radix Popover/Command internals.
-    BookChapterControl: ({ disabled }: { disabled?: boolean }) => (
+    BookChapterControl: ({
+      disabled,
+      className,
+      triggerVariant,
+      showTriggerChevron,
+    }: {
+      disabled?: boolean;
+      className?: string;
+      triggerVariant?: string;
+      showTriggerChevron?: boolean;
+    }) => (
       <button
         type="button"
         aria-label="book-chapter-trigger"
         disabled={disabled}
         data-testid="book-chapter-control"
+        data-classname={className}
+        data-trigger-variant={triggerVariant}
+        data-show-chevron={showTriggerChevron}
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
@@ -167,7 +178,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         {children}
       </div>
     ),
-    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    SelectTrigger: ({
+      children,
+      className,
+    }: {
+      children?: React.ReactNode;
+      className?: string;
+    }) => <div data-select-trigger-classname={className}>{children}</div>,
     SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
       <div data-value={value}>{children}</div>
@@ -676,6 +693,86 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
 
     expect(result).toBe(false);
     expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlatformBibleToolbar — Home button visibility by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('hides the Home button when platform.interfaceMode is "simple"', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('toolbar-home-button')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the Home button when platform.interfaceMode is "power"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-home-button')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — top BCV and project selector styling by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('uses ghost variant, chevron, and fit-content width for the top BCV in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-trigger-variant', 'ghost');
+    expect(control).toHaveAttribute('data-show-chevron', 'true');
+    expect(control.getAttribute('data-classname')).toContain('tw:w-fit');
+  });
+
+  it('uses outline variant, no chevron, and the fixed width for the top BCV in power mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control.getAttribute('data-trigger-variant')).not.toBe('ghost');
+    expect(control).toHaveAttribute('data-show-chevron', 'false');
+    expect(control.getAttribute('data-classname')).toContain('tw:w-96');
+  });
+
+  it('applies ghost styling to the project picker Select in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+    });
+    expect(
+      document
+        .querySelector('[data-select-trigger-classname]')
+        ?.getAttribute('data-select-trigger-classname'),
+    ).toContain('tw:border-0');
+  });
+});
+
+describe('PlatformBibleToolbar — main menu data stays live', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('subscribes to MainMenu via useData instead of a one-shot fetch, so interface-mode and localization updates reach it without reopening the menu', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(useData).toHaveBeenCalledWith(menuDataService.dataProviderName);
+    });
+    const dataProviderHooks = vi.mocked(useData).mock.results.at(-1)?.value;
+    expect(dataProviderHooks.MainMenu).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ columns: {}, groups: {}, items: [] }),
+    );
   });
 });
 
