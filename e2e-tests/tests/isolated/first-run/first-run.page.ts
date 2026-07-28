@@ -8,9 +8,10 @@ import type { Locator, Page } from '@playwright/test';
  *
  * Button-label notes (from `assets/localization/en.json`):
  *
- * - Primary action: "Next" on steps 1–3, "Finish" on the last step (SyncProgress)
- * - "Back" — absent on the first step (Language)
+ * - Primary action: "Next" on steps 1–4, "Finish" on the last step (SyncProgress)
+ * - "Back" — absent on the first step (Language) and on the SyncProgress interstitial
  * - "Skip setup" — present only on the Sync consent step
+ * - "Save and restart" — the Identify step's own primary action (Next is hidden on that step)
  */
 export class FirstRunPage {
   /** Locator for the full-screen first-run dialog. */
@@ -44,13 +45,16 @@ export class FirstRunPage {
    * handles the brief disabled window that goToStep creates before each step's mount effect calls
    * setCanProceed(true).
    *
-   * Label is "Next" on steps 1–3 and "Finish" on the last step.
+   * Label is "Next" on steps 1–4 and "Finish" on the last step (SyncProgress).
+   *
+   * Note: the Identify step hides Next entirely and owns its own "Save and restart" primary action.
+   * Use {@link clickSaveAndRestart} to navigate through it.
    */
   async clickNext(): Promise<void> {
     await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click();
   }
 
-  /** Click the Back button (not present on the first step). */
+  /** Click the Back button (not present on the first step or on the SyncProgress interstitial). */
   async clickBack(): Promise<void> {
     await this.dialog.getByRole('button', { name: 'Back' }).click();
   }
@@ -58,5 +62,13 @@ export class FirstRunPage {
   /** Click "Skip setup" (present only on the Sync consent step). */
   async clickSkipSetup(): Promise<void> {
     await this.dialog.getByRole('button', { name: 'Skip setup' }).click();
+  }
+
+  /**
+   * Click the "Save and restart" button on the Identify step. In demo mode this calls onNext()
+   * directly without restarting; in production it saves registration data and restarts the app.
+   */
+  async clickSaveAndRestart(): Promise<void> {
+    await this.dialog.getByRole('button', { name: /save and restart/i }).click();
   }
 }
