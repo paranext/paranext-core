@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle, Button, Input, Spinner } from 'pla
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { AlertCircle, CircleCheck } from 'lucide-react';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
 // Copied from the paratext-registration extension — keep in sync if the extension changes.
@@ -67,7 +68,7 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  * re-showing this step.
  *
  * The shell's "Next" button is hidden (`setCanProceed(undefined)` on mount) — this step owns its
- * own explicit "Save and restart" footer action.
+ * own explicit "Save and restart" action via WizardStepForm's `primaryButton` slot.
  *
  * Eight localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
@@ -245,11 +246,14 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   }
 
   return (
-    <div className="tw:flex tw:flex-col tw:gap-4">
-      <h2 className="tw:m-0 tw:text-sm tw:font-normal">
-        {strings['%firstRun_step_identify_heading%']}
-      </h2>
-
+    <WizardStepForm
+      heading={strings['%firstRun_step_identify_heading%']}
+      primaryButton={
+        <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
+          {strings['%paratextRegistration_button_saveAndRestart%']}
+        </Button>
+      }
+    >
       <div className="tw:flex tw:flex-col tw:gap-3">
         <div className="tw:flex tw:flex-col tw:gap-1">
           <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">
@@ -278,56 +282,50 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
             </p>
           )}
         </div>
+
+        {isValidating && (
+          <div className="tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground">
+            <Spinner />
+            {strings['%firstRun_step_identify_validatingCode%']}
+          </div>
+        )}
+
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {strings['%firstRun_step_identify_registryHelp%']}{' '}
+          <a
+            href={PARATEXT_REGISTRY_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tw:underline"
+          >
+            {strings['%firstRun_step_identify_registryLink%']}
+          </a>
+        </p>
+
+        {!error && registrationIsValid && !isValidating && (
+          <Alert>
+            <CircleCheck className="tw:h-4 tw:w-4" />
+            <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert id="identify-code-error" variant="destructive">
+            <AlertCircle className="tw:h-4 tw:w-4" />
+            <AlertTitle>{error}</AlertTitle>
+            <AlertDescription>{errorDescription}</AlertDescription>
+          </Alert>
+        )}
+
+        {saveError && (
+          <Alert id="identify-save-error" variant="destructive">
+            <AlertCircle className="tw:h-4 tw:w-4" />
+            <AlertTitle>{saveError}</AlertTitle>
+            <AlertDescription>{saveErrorDescription}</AlertDescription>
+          </Alert>
+        )}
       </div>
-
-      {isValidating && (
-        <div className="tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground">
-          <Spinner />
-          {strings['%firstRun_step_identify_validatingCode%']}
-        </div>
-      )}
-
-      <p className="tw:text-sm tw:text-muted-foreground">
-        {strings['%firstRun_step_identify_registryHelp%']}{' '}
-        <a
-          href={PARATEXT_REGISTRY_LINK}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="tw:underline"
-        >
-          {strings['%firstRun_step_identify_registryLink%']}
-        </a>
-      </p>
-
-      {!error && registrationIsValid && !isValidating && (
-        <Alert>
-          <CircleCheck className="tw:h-4 tw:w-4" />
-          <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
-        </Alert>
-      )}
-
-      {error && (
-        <Alert id="identify-code-error" variant="destructive">
-          <AlertCircle className="tw:h-4 tw:w-4" />
-          <AlertTitle>{error}</AlertTitle>
-          <AlertDescription>{errorDescription}</AlertDescription>
-        </Alert>
-      )}
-
-      {saveError && (
-        <Alert id="identify-save-error" variant="destructive">
-          <AlertCircle className="tw:h-4 tw:w-4" />
-          <AlertTitle>{saveError}</AlertTitle>
-          <AlertDescription>{saveErrorDescription}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="tw:flex tw:justify-end">
-        <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
-          {strings['%paratextRegistration_button_saveAndRestart%']}
-        </Button>
-      </div>
-    </div>
+    </WizardStepForm>
   );
 }
 
