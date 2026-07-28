@@ -1,13 +1,17 @@
 import { ReactNode } from 'react';
 
 interface WizardStepFormProps {
+  /** Step heading rendered as an `<h2>`. */
   heading: ReactNode;
+  /** Step body content. Intentionally unstyled — each step owns its own text colors. */
   children: ReactNode;
+  /** Inline error message. When set, announced via `aria-live="assertive"`. */
   error?: string;
   /** Back button node, rendered on the left. Omit when no back navigation is available. */
   backButton?: ReactNode;
   /** Secondary action (e.g. "Skip automatic sync"), rendered to the left of the primary button. */
   secondaryButton?: ReactNode;
+  /** Primary action button, rendered on the right. */
   primaryButton: ReactNode;
 }
 
