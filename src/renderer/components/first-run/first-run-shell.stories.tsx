@@ -49,3 +49,12 @@ export const SyncProgress: Story = {
     },
   },
 };
+
+/**
+ * Full-viewport story that verifies the shell is vertically + horizontally centered in the modal.
+ * Use this story to confirm centering holds across all steps.
+ */
+export const CenteredInModal: Story = {
+  args: { entryStep: 'language' },
+  parameters: { layout: 'fullscreen' },
+};
