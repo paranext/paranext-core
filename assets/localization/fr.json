@@ -125,6 +125,7 @@
   "%Book.4BA%": "4 Baruch (reste de Baruch)",
   "%Book.LAO%": "Laodicéens",
   "%firstRun_button_back%": "Retour",
+  "%firstRun_button_finish%": "Terminer",
   "%firstRun_button_next%": "Suivant",
   "%firstRun_button_retry%": "Réessayer",
   "%firstRun_button_skip%": "Ignorer la configuration",
@@ -139,6 +140,11 @@
   "%firstRun_language_title%": "Choisissez votre langue",
   "%firstRun_loading%": "Démarrage de la configuration…",
   "%firstRun_loading_detail%": "Vérification de vos informations d'enregistrement. Cela peut prendre un moment.",
+  "%firstRun_step_identify_placeholder%": "Identify: name + registration code (coming soon)",
+  "%firstRun_step_internet_placeholder%": "Internet settings (coming soon)",
+  "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
+  "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",
+  "%firstRun_step_syncProgress_placeholder%": "Sync progress (coming soon)",
   "%firstRun_stepIndicator%": "Étape {stepNumber} sur {stepCount}",
   "%firstRun_title%": "Configurer Platform.Bible"
 }
