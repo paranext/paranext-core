@@ -1,11 +1,11 @@
-import { useLocalizedStrings, useSetting } from '@renderer/hooks/papi-hooks';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { usePrimaryInterfaceLanguage } from '@renderer/hooks/use-primary-interface-language.hook';
 import { completeFirstRun } from '@renderer/services/first-run-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { Button, Spinner, WizardStepper } from 'platform-bible-react';
 import {
   formatReplacementString,
   getErrorMessage,
-  isPlatformError,
   LocalizeKey,
   NumberFormat,
 } from 'platform-bible-utils';
@@ -52,9 +52,6 @@ const KEYS: LocalizeKey[] = [
   '%product_name%',
 ];
 
-// Stable reference avoids a new array allocation on every render (useSetting compares by ref).
-const DEFAULT_LOCALE: string[] = ['en'];
-
 /**
  * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
  * navigation. Steps that need a skip action call `setCanSkip(true)` to surface the shell's Skip
@@ -75,11 +72,9 @@ export function FirstRunShell({
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
-  const [interfaceLanguage] = useSetting('platform.interfaceLanguage', DEFAULT_LOCALE);
-  // Use || (not ??) so an empty-string element also falls back to 'en' — Intl.NumberFormat('')
-  // throws a RangeError in V8.
-  const locale = isPlatformError(interfaceLanguage) ? 'en' : interfaceLanguage[0] || 'en';
+  const locale = usePrimaryInterfaceLanguage();
   const fmt = useMemo(() => new NumberFormat(locale), [locale]);
+  const formatStep = useCallback((n: number) => fmt.format(n), [fmt]);
 
   const index = STEP_ORDER.indexOf(step);
   const isInterstitial = INTERSTITIAL_STEPS.has(step);
@@ -176,7 +171,7 @@ export function FirstRunShell({
             <WizardStepper
               currentStep={numberedIndex + 1}
               totalSteps={NUMBERED_STEPS.length}
-              locale={locale}
+              formatLabel={formatStep}
             />
           )}
         </div>

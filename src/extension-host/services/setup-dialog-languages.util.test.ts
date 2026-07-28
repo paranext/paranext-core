@@ -41,8 +41,8 @@ const englishData: LanguageStrings = {
 
 const langData: Record<string, LanguageStrings> = {
   en: englishData,
-  fr: withValues(REAL_KEYS), // 10/10 = 100% → qualifies
-  it: withValues(REAL_KEYS.slice(0, 8)), // 8/10 = 80% → excluded (below the 90% threshold)
+  fr: withValues(REAL_KEYS.slice(0, 9)), // 9/10 = 90% → qualifies (exact-tie boundary for >=)
+  it: withValues(REAL_KEYS.slice(0, 8)), // 8/10 = 80% → excluded (just below the boundary)
   es: withValues(REAL_KEYS.slice(0, 5)), // 5/10 = 50% → excluded
   de: withValues(REAL_KEYS), // 10/10 = 100%, no placeholder → proves the placeholder isn't counted
 };

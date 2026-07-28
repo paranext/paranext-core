@@ -15,9 +15,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...actual,
-    // Stub component must return null (not undefined) because React requires null for empty renders in JSX
-    // eslint-disable-next-line no-null/no-null
-    WizardStepper: () => null,
+    WizardStepper: () => <></>,
   };
 });
 vi.mock('@renderer/hooks/papi-hooks', () => ({
