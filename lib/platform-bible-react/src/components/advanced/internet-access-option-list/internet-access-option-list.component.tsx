@@ -79,7 +79,7 @@ export type InternetAccessOptionListProps = {
   /** The currently selected internet use value. */
   value: InternetUse;
   /** Called when the user selects an active (non-coming-soon) option. */
-  onChange: (v: InternetUse) => void;
+  onChange: (value: InternetUse) => void;
   /** When true, all rows are non-interactive (loading or saving in progress). */
   disabled: boolean;
 };

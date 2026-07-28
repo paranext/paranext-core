@@ -116,6 +116,12 @@
         "message": "Changed label to \"Internet and Connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_2%.",
         "date": "2026-07-26"
       }
+    },
+    "%mainMenu_openInternetSettings%": {
+      "deprecationInfo": {
+        "message": "Updated menu label to match the panel's new name. The new key is %mainMenu_openInternetSettings_2%.",
+        "date": "2026-07-27"
+      }
     }
   },
   "localizedStrings": {
@@ -125,7 +131,8 @@
       "%internetSettings_webView_title%": "Internet Settings",
       "%internetSettings_webView_title_2%": "Internet & connectivity",
       "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
-      "%mainMenu_openInternetSettings%": "Internet & connectivity",
+      "%mainMenu_openInternetSettings%": "Internet Settings...",
+      "%mainMenu_openInternetSettings_2%": "Internet & connectivity",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
       "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
@@ -204,7 +211,8 @@
       "%internetSettings_webView_title%": "Configuración de Internet",
       "%internetSettings_webView_title_2%": "Internet y conectividad",
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
-      "%mainMenu_openInternetSettings%": "Internet y conectividad",
+      "%mainMenu_openInternetSettings%": "Configuración de Internet...",
+      "%mainMenu_openInternetSettings_2%": "Internet y conectividad",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
       "%paratextRegistration_alert_invalidRegistration%": "Información de registro no encontrada",
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
