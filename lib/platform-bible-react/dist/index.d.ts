@@ -2506,6 +2506,24 @@ export type SpinnerProps = LucideProps;
  * The spinner rotates to indicate that a process is ongoing.
  */
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
+export interface WizardStepperProps {
+	/** 1-based index of the currently active step. */
+	currentStep: number;
+	/** Total number of numbered steps. */
+	totalSteps: number;
+	/**
+	 * BCP 47 locale tag for numeral formatting in the circle labels.
+	 * E.g. `'ar'` → ١٢٣٤. Defaults to `'en'`.
+	 */
+	locale?: string;
+}
+/**
+ * Displays a row of numbered step circles showing progress through a multi-step wizard.
+ * Purely presentational — owns no navigation state. All circles are `aria-hidden`; the
+ * consuming shell is responsible for a `sr-only` `aria-live` sibling that announces the
+ * current step to screen readers.
+ */
+export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
 	/** Optional unique identifier */
 	id?: string;
