@@ -11,12 +11,13 @@ const loadedLocales: Record<string, LanguageInfo> = {
   it: { autonym: 'Italiano' },
 };
 
-// The 9 real (non-placeholder) firstRun baseline keys as explicit literals — deliberately NOT
+// The 10 real (non-placeholder) firstRun baseline keys as explicit literals — deliberately NOT
 // derived from the implementation's own filter, so a broken placeholder-exclusion rule can't
 // silently shift the expected counts along with it.
 const REAL_KEYS = [
   '%firstRun_title%',
   '%firstRun_description%',
+  '%firstRun_button_finish%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
   '%firstRun_button_skip%',
@@ -30,7 +31,7 @@ function withValues(keys: string[]): LanguageStrings {
   return Object.fromEntries(keys.map((key) => [key, 'x']));
 }
 
-// English baseline: the 9 real keys + 1 placeholder (must be excluded from the denominator) + 1
+// English baseline: the 10 real keys + 1 placeholder (must be excluded from the denominator) + 1
 // non-firstRun key (must be ignored).
 const englishData: LanguageStrings = {
   ...withValues(REAL_KEYS),
@@ -40,10 +41,10 @@ const englishData: LanguageStrings = {
 
 const langData: Record<string, LanguageStrings> = {
   en: englishData,
-  fr: withValues(REAL_KEYS), // 9/9 = 100% → qualifies
-  it: withValues(REAL_KEYS.slice(0, 8)), // 8/9 ≈ 89% → excluded (below the 90% threshold)
-  es: withValues(REAL_KEYS.slice(0, 5)), // 5/9 ≈ 56% → excluded
-  de: withValues(REAL_KEYS), // 9/9 = 100%, no placeholder → proves the placeholder isn't counted
+  fr: withValues(REAL_KEYS), // 10/10 = 100% → qualifies
+  it: withValues(REAL_KEYS.slice(0, 8)), // 8/10 = 80% → excluded (below the 90% threshold)
+  es: withValues(REAL_KEYS.slice(0, 5)), // 5/10 = 50% → excluded
+  de: withValues(REAL_KEYS), // 10/10 = 100%, no placeholder → proves the placeholder isn't counted
 };
 
 describe('computeSetupDialogLanguages', () => {

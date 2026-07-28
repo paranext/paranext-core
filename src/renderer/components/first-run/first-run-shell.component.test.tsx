@@ -255,7 +255,6 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
   });
 
-
   it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {
     mockComplete.mockRejectedValue(new Error('could not finish'));
     render(
@@ -301,7 +300,6 @@ describe('FirstRunShell', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^sync$/i })); // → syncProgress
     expect(screen.queryByText(/step \d+ of \d+/i)).not.toBeInTheDocument();
   });
-
 
   it('disables Next while a step reports it cannot proceed', async () => {
     function BlockingStep({ setCanProceed }: FirstRunStepProps) {

@@ -123,6 +123,7 @@
   "%Book.4BA%": "巴路克四书（巴路克的其余部分）",
   "%Book.LAO%": "老底嘉书",
   "%firstRun_button_back%": "返回",
+  "%firstRun_button_finish%": "完成",
   "%firstRun_button_next%": "下一步",
   "%firstRun_button_retry%": "重试",
   "%firstRun_button_skip%": "跳过设置",
@@ -137,6 +138,11 @@
   "%firstRun_language_title%": "选择您的语言",
   "%firstRun_loading%": "正在启动设置…",
   "%firstRun_loading_detail%": "正在检查您的注册信息。这可能需要一点时间。",
+  "%firstRun_step_identify_placeholder%": "Identify: name + registration code (coming soon)",
+  "%firstRun_step_internet_placeholder%": "Internet settings (coming soon)",
+  "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
+  "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",
+  "%firstRun_step_syncProgress_placeholder%": "Sync progress (coming soon)",
   "%firstRun_stepIndicator%": "第 {stepNumber} 步，共 {stepCount} 步",
   "%firstRun_title%": "设置 Platform.Bible"
 }

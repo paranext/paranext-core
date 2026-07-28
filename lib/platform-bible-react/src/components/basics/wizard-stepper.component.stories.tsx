@@ -17,7 +17,7 @@ export const Step3of4: Story = { args: { currentStep: 3 } };
 export const Step4of4: Story = { args: { currentStep: 4 } };
 /** Verify Arabic-Indic numerals: circles should show ١ ٢ ٣ ٤ */
 export const ArabicNumerals: Story = { args: { currentStep: 2, locale: 'ar' } };
-/** currentStep > totalSteps: clamped to last step — step 4 renders as active, steps 1-3 as past. */
+/** CurrentStep > totalSteps: clamped to last step — step 4 renders as active, steps 1-3 as past. */
 export const OverflowClamped: Story = { args: { currentStep: 99 } };
-/** currentStep < 1: clamped to step 1 — step 1 renders as active, no steps shown as past. */
+/** CurrentStep < 1: clamped to step 1 — step 1 renders as active, no steps shown as past. */
 export const UnderflowClamped: Story = { args: { currentStep: 0 } };
