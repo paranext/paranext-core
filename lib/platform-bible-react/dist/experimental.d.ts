@@ -504,6 +504,17 @@ export type NavigationHistoryButtonsProps = {
 	className?: string;
 	/** Variant for the buttons. Defaults to "ghost" */
 	variant?: ButtonProps["variant"];
+	/**
+	 * Optional class name applied to the outer `ButtonGroup` wrapper (as opposed to `className`,
+	 * which applies to each individual button). Use for a pill-shaped container background, e.g.
+	 * `"tw:rounded-full tw:bg-muted/50 tw:p-0.5"`. Defaults to `undefined` (no wrapper styling).
+	 */
+	groupClassName?: string;
+	/**
+	 * Set to `true` to render a vertical `ButtonGroupSeparator` between the back and forward buttons.
+	 * Defaults to `false` (no divider) — the plain adjacent-buttons look most embeddings use today.
+	 */
+	showDivider?: boolean;
 };
 /**
  * Back/forward reference-history buttons merged into a single button group. Left-click navigates
@@ -511,7 +522,7 @@ export type NavigationHistoryButtonsProps = {
  * history entries in that direction, anchored below the button. In RTL the pair mirrors (order,
  * arrow icons, and tooltip shortcut hints), matching Paratext 9.
  */
-export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
+export declare function NavigationHistoryButtons({ canGoBack, canGoForward, backItems, forwardItems, onNavigate, localizedStrings, showKeyboardShortcuts, className, variant, groupClassName, showDivider, }: NavigationHistoryButtonsProps): import("react/jsx-runtime").JSX.Element;
 type InternetUse = "Enabled" | "VpnRequired" | "Disabled" | "ProxyOnly";
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const INTERNET_ACCESS_OPTION_LIST_STRING_KEYS: LocalizeKey[];
@@ -522,7 +533,7 @@ export type InternetAccessOptionListProps = {
 	/** The currently selected internet use value. */
 	value: InternetUse;
 	/** Called when the user selects an active (non-coming-soon) option. */
-	onChange: (v: InternetUse) => void;
+	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
 };
