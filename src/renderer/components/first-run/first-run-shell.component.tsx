@@ -153,62 +153,64 @@ export function FirstRunShell({
     : strings['%firstRun_button_next%'];
 
   return (
-    <div className="tw:mx-auto tw:flex tw:w-full tw:max-w-md tw:flex-col tw:gap-6 tw:p-8">
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <h1 className="tw:text-lg tw:font-medium">
-          {formatReplacementString(strings['%firstRun_title%'], strings)}
-        </h1>
-        {/* aria-live so screen readers announce numbered-step changes. Hidden for interstitials
-            (syncProgress): the step's own heading and role="status" provide the screen-reader context. */}
-        {!isInterstitial && (
-          <>
-            <p className="tw:sr-only" aria-live="polite">
-              {indicator}
-            </p>
-            <WizardStepper
-              currentStep={numberedIndex + 1}
-              totalSteps={NUMBERED_STEPS.length}
-              locale={locale}
-            />
-          </>
-        )}
-      </div>
-
-      <StepComponent
-        onNext={onNext}
-        onBack={onBack}
-        onSkip={onSkip}
-        setCanProceed={setCanProceed}
-        setCanSkip={setCanSkip}
-      />
-
-      {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
-
-      <div className="tw:flex tw:items-center tw:justify-between">
-        <div>
-          {onBack && (
-            <Button variant="outline" onClick={onBack} disabled={isBusy}>
-              {strings['%firstRun_button_back%']}
-            </Button>
+    <div className="tw:flex tw:min-h-screen tw:items-center tw:justify-center tw:py-8">
+      <div className="tw:mx-auto tw:flex tw:w-full tw:max-w-md tw:flex-col tw:gap-6 tw:p-8">
+        <div className="tw:flex tw:flex-col tw:gap-1">
+          <h1 className="tw:text-lg tw:font-medium">
+            {formatReplacementString(strings['%firstRun_title%'], strings)}
+          </h1>
+          {/* aria-live so screen readers announce numbered-step changes. Hidden for interstitials
+              (syncProgress): the step's own heading and role="status" provide the screen-reader context. */}
+          {!isInterstitial && (
+            <>
+              <p className="tw:sr-only" aria-live="polite">
+                {indicator}
+              </p>
+              <WizardStepper
+                currentStep={numberedIndex + 1}
+                totalSteps={NUMBERED_STEPS.length}
+                locale={locale}
+              />
+            </>
           )}
         </div>
-        <div className="tw:flex tw:gap-2">
-          {onSkip && (
-            // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
-            // reason, the shell will need to accept a skip-label callback from that step.
-            <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-              {strings['%firstRun_button_skipSync%']}
-            </Button>
-          )}
-          {canProceed !== undefined && (
-            <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
-              {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
-                  an async precondition (e.g. sync completing). If a future last step gates on user
-                  input rather than async work, this assumption should be revisited. */}
-              {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
-              {nextLabel}
-            </Button>
-          )}
+
+        <StepComponent
+          onNext={onNext}
+          onBack={onBack}
+          onSkip={onSkip}
+          setCanProceed={setCanProceed}
+          setCanSkip={setCanSkip}
+        />
+
+        {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
+
+        <div className="tw:flex tw:items-center tw:justify-between">
+          <div>
+            {onBack && (
+              <Button variant="outline" onClick={onBack} disabled={isBusy}>
+                {strings['%firstRun_button_back%']}
+              </Button>
+            )}
+          </div>
+          <div className="tw:flex tw:gap-2">
+            {onSkip && (
+              // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
+              // reason, the shell will need to accept a skip-label callback from that step.
+              <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
+                {strings['%firstRun_button_skipSync%']}
+              </Button>
+            )}
+            {canProceed !== undefined && (
+              <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
+                {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
+                    an async precondition (e.g. sync completing). If a future last step gates on user
+                    input rather than async work, this assumption should be revisited. */}
+                {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
+                {nextLabel}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
