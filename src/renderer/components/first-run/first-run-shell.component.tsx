@@ -87,8 +87,8 @@ export function FirstRunShell({
   const isLastStep = index === STEP_ORDER.length - 1;
   // Back floor is the resume entry step, not index 0: the startup reducer resumes a post-relaunch
   // user at `syncConsent`, and the already-completed language/internetSettings/identify steps
-  // behind it must not be reachable (the real Identify step saves registration + calls
-  // platform.restart, so backing into it risks re-triggering the relaunch/resume loop).
+  // behind it must not be reachable (the Identify step saves registration + calls platform.restart,
+  // so backing into it risks re-triggering the relaunch/resume loop).
   const entryIndex = STEP_ORDER.indexOf(entryStep);
 
   const runAction = useCallback(async (action: () => void | Promise<void>) => {
