@@ -1,7 +1,8 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
+import { ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
 
@@ -30,7 +31,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
       '%firstRun_button_skipSync%': 'Skip automatic sync',
-      '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
+      '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
+      '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
+      '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
       '%firstRun_language_title%': 'Choose your language',
       '%firstRun_language_instruction%': 'You can change it later.',
       '%firstRun_language_search_placeholder%': 'Search languages',
@@ -49,6 +53,72 @@ vi.mock('@shared/services/localization.service', () => ({
   localizationService: { dataProviderName: 'platform.localizationDataServiceDataProvider' },
 }));
 vi.mock('@shared/services/logger.service', () => ({ logger: { warn: vi.fn() } }));
+// SyncProgressStep (now wired into the shell) subscribes to network events. Return a no-op so the
+// component can mount without crashing in jsdom (no real network layer available in tests).
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: vi.fn(() => () => () => {}),
+}));
+// Mock platform-bible-react to avoid the React version conflict that arises when
+// lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
+// Dialog/DialogContent render children unconditionally; Button forwards click/disabled.
+vi.mock('platform-bible-react', () => {
+  function DialogStub({ children }: { children: ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function DialogContentStub({ children }: { children: ReactNode }) {
+    return <div>{children}</div>;
+  }
+  function DialogTitleStub({ children }: { children: ReactNode }) {
+    return <span>{children}</span>;
+  }
+  function DialogDescriptionStub({ children }: { children: ReactNode }) {
+    return <span>{children}</span>;
+  }
+  function ButtonStub({
+    children,
+    onClick,
+    disabled,
+  }: {
+    [key: string]: unknown;
+    children: ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) {
+    return (
+      <button type="button" onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
+  }
+  function InterfaceLanguagePickerStub() {
+    return <div data-testid="language-picker" />;
+  }
+  return {
+    Dialog: DialogStub,
+    DialogContent: DialogContentStub,
+    DialogTitle: DialogTitleStub,
+    DialogDescription: DialogDescriptionStub,
+    Button: ButtonStub,
+    InterfaceLanguagePicker: InterfaceLanguagePickerStub,
+    Progress: ({ value, 'aria-label': l }: { value?: number; 'aria-label'?: string }) => (
+      <div role="progressbar" aria-valuenow={value} aria-label={l} />
+    ),
+    Spinner: () => <span data-testid="spinner" />,
+    Z_INDEX_FIRST_RUN: 9000,
+    useEvent: (
+      event: ((handler: (detail: unknown) => void) => () => void) | undefined,
+      handler: (detail: unknown) => void,
+    ) => {
+      useEffect(() => {
+        if (!event) return () => {};
+        const unsubscribe = event(handler);
+        return () => {
+          unsubscribe();
+        };
+      }, [event, handler]);
+    },
+  };
+});
 const mockGetStatus = vi.mocked(store.getFirstRunStatus);
 
 // jsdom doesn't ship ResizeObserver or scrollIntoView; cmdk (used inside LanguageStep's
@@ -80,7 +150,10 @@ beforeAll(() => {
   }
 });
 
-afterEach(() => vi.clearAllMocks());
+// beforeEach (not afterEach) so mocks are clean even when a prior test throws mid-run.
+beforeEach(() => vi.clearAllMocks());
+// restoreAllMocks resets vi.spyOn implementations; clearAllMocks alone does not.
+afterEach(() => vi.restoreAllMocks());
 
 describe('FirstRunOverlay', () => {
   it('renders nothing when status is app', () => {

@@ -1,9 +1,11 @@
 /**
- * Props every first-run wizard step receives from the shell. By default, the shell owns the footer
- * buttons and step navigation; a step renders only its body and, if it needs to gate progress,
- * calls `setCanProceed(false)`. A step that wants to offer a Skip path calls `setCanSkip(true)` to
- * surface the shell's Skip button. Sibling step components implement real steps by swapping entries
- * in the shell's `stepComponents` map.
+ * Props every first-run wizard step receives from the shell. The shell owns the footer buttons and
+ * step navigation; a step renders only its body. Navigation always resets `canProceed` to `false` —
+ * a step that wants Next/Finish enabled immediately calls `setCanProceed(true)` in a mount effect;
+ * a step that gates on async work calls `setCanProceed(true)` only when the precondition is met. A
+ * step that wants to offer a Skip path calls `setCanSkip(true)` to surface the shell's Skip button.
+ * Sibling step components implement real steps by swapping entries in the shell's `stepComponents`
+ * map.
  */
 export interface FirstRunStepProps {
   /**
@@ -20,9 +22,10 @@ export interface FirstRunStepProps {
    */
   onSkip?: () => void;
   /**
-   * Report whether the shell's Next button should be enabled. Next defaults to enabled. Pass
-   * `false` to disable Next temporarily (e.g. while validating), or `undefined` to suppress it
-   * entirely for steps that own their own primary action.
+   * Report whether the shell's Next button should be enabled. If not called, the shell's prior
+   * state persists — which is disabled for any step reached via navigation (the shell resets to
+   * disabled on every step change), and enabled only for the initial entry step. Pass `undefined`
+   * to suppress the Next button entirely for steps that own their own primary action.
    */
   setCanProceed?: (canProceed: boolean | undefined) => void;
   /**

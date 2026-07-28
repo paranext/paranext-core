@@ -85,10 +85,9 @@ function stubMatchMedia() {
 
 describe('NotificationDisplay with real Sonner', () => {
   beforeEach(async () => {
-    // Fake timers prevent Sonner's auto-dismiss setTimeout (≥10 s) from entering the real
-    // Node.js event loop. Without this the timer fires after jsdom tears down and causes
-    // "window is not defined" because React's reconciler accesses window in its scheduler.
-    vi.useFakeTimers();
+    // Fake timers let afterEach drain Sonner's post-dismiss animation timeout before jsdom
+    // tears down. shouldAdvanceTime keeps real time flowing so findBy* polling still works.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     vi.resetModules();
     mockCurrentThemeType = 'light';
@@ -101,13 +100,13 @@ describe('NotificationDisplay with real Sonner', () => {
   });
 
   afterEach(() => {
-    // Belt-and-suspenders: explicitly dismiss toasts so Sonner's store is clean for the
-    // next test. The real guard against post-teardown timer fires is vi.useFakeTimers() in
-    // beforeEach; vi.useRealTimers() here discards all pending fake timers without running
-    // them, so the auto-dismiss setTimeout never reaches the real event loop.
+    // toast.dismiss() marks toasts as removed, but Sonner then schedules a new setTimeout for the
+    // exit animation that calls removeToast (which accesses window). vi.runAllTimers() flushes that
+    // timer now, while jsdom is still up.
     act(() => {
       toast.dismiss();
     });
+    vi.runAllTimers();
     vi.useRealTimers();
   });
 
