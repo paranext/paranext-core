@@ -52,10 +52,8 @@ const KEYS: LocalizeKey[] = [
 export interface IdentifyStepProps extends FirstRunStepProps {
   /**
    * Called after registration data is saved successfully. Defaults to `platform.restart`. When
-   * provided (e.g. for testing or a batched-restart flow), `platform.restart` is not called.
-   *
-   * Known gap: the `isRestarting` overlay still shows even when this prop does not trigger a real
-   * restart.
+   * provided (e.g. for testing or a batched-restart flow), `platform.restart` is not called. If it
+   * resolves without actually relaunching the app, the component resets the spinner overlay.
    */
   onRestartAfterSave?: () => void | Promise<void>;
 }
@@ -78,6 +76,11 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   useEffect(() => setCanProceed?.(undefined), [setCanProceed]);
 
   const [strings] = useLocalizedStrings(KEYS);
+  // Ref so debounce callbacks always read the latest strings even if PAPI delivers them mid-wait.
+  const stringsRef = useRef(strings);
+  useEffect(() => {
+    stringsRef.current = strings;
+  }, [strings]);
 
   const [name, setName] = useState('');
   const [registrationCode, setRegistrationCode] = useState('');
@@ -120,9 +123,11 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   const validateRegistration = (code: string, newName: string) => {
     if (validationTimeout.current) clearTimeout(validationTimeout.current);
     setRegistrationIsValid(false);
-    // Clear any stale error immediately so the alert doesn't linger while the user keeps typing.
+    // Clear any stale errors immediately so alerts don't linger while the user keeps typing.
     setError('');
     setErrorDescription('');
+    setSaveError('');
+    setSaveErrorDescription('');
     if (isDemoMode()) return;
     validationTimeout.current = setTimeout(async () => {
       // Claim a generation slot before any guard so stale in-flight responses see a mismatched
@@ -137,6 +142,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
         return;
       }
       setIsValidating(true);
+      // Read from ref so we always get the latest strings even if PAPI delivered them mid-wait.
+      const s = stringsRef.current;
       try {
         const isValid = await commandService.sendCommand(
           'paratextRegistration.validateParatextRegistrationData',
@@ -146,15 +153,13 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
         if (!isMounted.current || validationGeneration.current !== gen) return;
         setRegistrationIsValid(!!isValid);
         if (!isValid) {
-          setError(strings['%paratextRegistration_alert_invalidRegistration%']);
-          setErrorDescription(
-            strings['%paratextRegistration_alert_invalidRegistration_description%'],
-          );
+          setError(s['%paratextRegistration_alert_invalidRegistration%']);
+          setErrorDescription(s['%paratextRegistration_alert_invalidRegistration_description%']);
         }
       } catch (err) {
         if (isMounted.current && validationGeneration.current === gen) {
           setRegistrationIsValid(false);
-          setError(strings['%general_error_title%']);
+          setError(s['%general_error_title%']);
           setErrorDescription(getErrorMessage(err));
         }
       } finally {
@@ -220,9 +225,13 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       // The process terminates here; setIsRestarting(true) above keeps the button in "Restarting…"
       // until the app exits.
       await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
+      // In production, platform.restart relaunches the process and this line never runs.
+      // If the restart resolves without relaunching (e.g. a test stub), reset the spinner so the
+      // UI doesn't get stuck.
+      if (isMounted.current) setIsRestarting(false);
     } catch (err) {
       if (!isMounted.current) return;
-      setSaveError(strings['%general_error_title%']);
+      setSaveError(stringsRef.current['%general_error_title%']);
       setSaveErrorDescription(getErrorMessage(err));
       setIsRestarting(false);
     }

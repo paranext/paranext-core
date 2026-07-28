@@ -57,10 +57,11 @@ export function SyncConsentStep({
     setIsSyncing(true);
     try {
       await onSync();
+      // Reset spinner before navigating away so the state update runs while still mounted.
+      setIsSyncing(false);
       onNext();
     } catch (e) {
       setError(getErrorMessage(e));
-    } finally {
       setIsSyncing(false);
     }
   };

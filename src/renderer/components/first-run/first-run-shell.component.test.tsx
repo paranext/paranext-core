@@ -168,7 +168,7 @@ describe('FirstRunShell', () => {
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
     // A post-relaunch user resumes at syncConsent; the already-completed language/internetSettings/identify
     // steps behind it must be unreachable (backing into the Identify step would re-trigger the relaunch).
-    render(<FirstRunShell entryStep="syncConsent" />);
+    render(<FirstRunShell entryStep="syncConsent" stepComponents={DUMMY_STEPS} />);
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
@@ -241,7 +241,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, language: OwnsActionStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: OwnsActionStep }}
       />,
     );
     await waitFor(() =>
@@ -395,7 +395,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, language: BlockingStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: BlockingStep }}
       />,
     );
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
