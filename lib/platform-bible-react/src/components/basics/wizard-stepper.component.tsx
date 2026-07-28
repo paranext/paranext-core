@@ -1,4 +1,5 @@
-import { Fragment } from 'react';
+import { Fragment, useMemo } from 'react';
+import { NumberFormat } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 
 export interface WizardStepperProps {
@@ -20,16 +21,23 @@ export interface WizardStepperProps {
  * current step to screen readers.
  */
 export function WizardStepper({ currentStep, totalSteps, locale = 'en' }: WizardStepperProps) {
-  const fmt = new Intl.NumberFormat(locale);
+  const safeLocale = locale || 'en';
+  const fmt = useMemo(() => new NumberFormat(safeLocale), [safeLocale]);
+  // Clamp to [1, totalSteps] so out-of-range values produce a defined active step rather than
+  // rendering all circles in the same "not yet reached" style.
+  const clampedStep = Math.min(Math.max(currentStep, 1), totalSteps);
+  const stepNums = useMemo(
+    () => Array.from({ length: totalSteps }, (_, i) => i + 1),
+    [totalSteps],
+  );
   return (
     <div className="tw:flex tw:items-center" aria-hidden="true">
-      {Array.from({ length: totalSteps }, (_, i) => {
-        const stepNum = i + 1;
-        const isPast = stepNum < currentStep;
-        const isActive = stepNum === currentStep;
+      {stepNums.map((stepNum) => {
+        const isPast = stepNum < clampedStep;
+        const isActive = stepNum === clampedStep;
         return (
           <Fragment key={stepNum}>
-            {i > 0 && <div className="tw:h-px tw:flex-1 tw:bg-border" />}
+            {stepNum > 1 && <div className="tw:h-px tw:flex-1 tw:bg-border" />}
             <div
               className={cn(
                 'tw:flex tw:h-8 tw:w-8 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:text-sm tw:font-medium',

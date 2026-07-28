@@ -18,7 +18,7 @@ const SETUP_LANGUAGES: Record<string, LanguageInfo> = {
 const meta: Meta<typeof FirstRunShell> = {
   title: 'First run/FirstRunShell',
   component: FirstRunShell,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   beforeEach: () => {
     setFirstRunLanguageMock({
       interfaceLanguage: ['en'],

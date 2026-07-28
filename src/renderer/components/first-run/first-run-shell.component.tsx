@@ -7,6 +7,7 @@ import {
   getErrorMessage,
   isPlatformError,
   LocalizeKey,
+  NumberFormat,
 } from 'platform-bible-utils';
 import { ComponentType, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FirstRunStepProps } from './first-run-step-props.model';
@@ -51,6 +52,9 @@ const KEYS: LocalizeKey[] = [
   '%product_name%',
 ];
 
+// Stable reference avoids a new array allocation on every render (useSetting compares by ref).
+const DEFAULT_LOCALE: string[] = ['en'];
+
 /**
  * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
  * navigation. Steps that need a skip action call `setCanSkip(true)` to surface the shell's Skip
@@ -71,8 +75,11 @@ export function FirstRunShell({
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
-  const [interfaceLanguage] = useSetting('platform.interfaceLanguage', ['en']);
-  const locale = isPlatformError(interfaceLanguage) ? 'en' : (interfaceLanguage[0] ?? 'en');
+  const [interfaceLanguage] = useSetting('platform.interfaceLanguage', DEFAULT_LOCALE);
+  // Use || (not ??) so an empty-string element also falls back to 'en' — Intl.NumberFormat('')
+  // throws a RangeError in V8.
+  const locale = isPlatformError(interfaceLanguage) ? 'en' : interfaceLanguage[0] || 'en';
+  const fmt = useMemo(() => new NumberFormat(locale), [locale]);
 
   const index = STEP_ORDER.indexOf(step);
   const isInterstitial = INTERSTITIAL_STEPS.has(step);
@@ -109,12 +116,14 @@ export function FirstRunShell({
   }, []);
 
   const onNext = useCallback(() => {
+    // Guard against re-entrant calls (e.g. step calls onNext programmatically while busy).
+    if (isBusy) return;
     const next = STEP_ORDER[index + 1];
     // Synchronous step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
     // Only the final step calls completeFirstRun(), which is async and needs the busy state.
     if (next) goToStep(next);
     else runAction(() => completeFirstRun());
-  }, [index, runAction, goToStep]);
+  }, [index, isBusy, runAction, goToStep]);
 
   const onBack = useMemo(
     () =>
@@ -141,7 +150,6 @@ export function FirstRunShell({
   }, [canProceed, isLastStep]);
 
   const StepComponent = stepComponents[step];
-  const fmt = new Intl.NumberFormat(locale);
   const indicator = !isInterstitial
     ? formatReplacementString(strings['%firstRun_stepIndicator%'], {
         stepNumber: fmt.format(numberedIndex + 1),
@@ -159,19 +167,17 @@ export function FirstRunShell({
           <h1 className="tw:text-lg tw:font-medium">
             {formatReplacementString(strings['%firstRun_title%'], strings)}
           </h1>
-          {/* aria-live so screen readers announce numbered-step changes. Hidden for interstitials
-              (syncProgress): the step's own heading and role="status" provide the screen-reader context. */}
+          {/* Keep aria-live paragraph always mounted so screen readers don't lose the live region
+              when navigating to/from syncProgress. Content is empty ('') on syncProgress. */}
+          <p className="tw:sr-only" aria-live="polite">
+            {indicator}
+          </p>
           {!isInterstitial && (
-            <>
-              <p className="tw:sr-only" aria-live="polite">
-                {indicator}
-              </p>
-              <WizardStepper
-                currentStep={numberedIndex + 1}
-                totalSteps={NUMBERED_STEPS.length}
-                locale={locale}
-              />
-            </>
+            <WizardStepper
+              currentStep={numberedIndex + 1}
+              totalSteps={NUMBERED_STEPS.length}
+              locale={locale}
+            />
           )}
         </div>
 
