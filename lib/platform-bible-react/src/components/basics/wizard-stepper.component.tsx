@@ -46,7 +46,7 @@ export function WizardStepper({
   // Clamp to [1, totalSteps] so out-of-range values produce a defined active step rather than
   // rendering all circles in the same "not yet reached" style.
   const clampedStep = Math.min(Math.max(currentStep, 1), totalSteps);
-  const stepNums = useMemo(() => Array.from({ length: totalSteps }, (_, i) => i + 1), [totalSteps]);
+  const stepNums = Array.from({ length: totalSteps }, (_, i) => i + 1);
   return (
     <div className="tw:flex tw:items-center" aria-hidden="true">
       {stepNums.map((stepNum) => {
