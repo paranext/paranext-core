@@ -6,26 +6,12 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// <summary>
 /// Commands on the papi that handle Send/Receive-related operations
 /// </summary>
-// pdpFactory, appInfo, and paratextProjects are unread in this open-source implementation, but the
-// closed-source Paratext 10 Studio overlay patch binds them into properties, so the constructor
-// signature must keep them. Suppress the unread-parameter warning rather than removing the
-// parameters.
-//
-// paratextProjects in particular is here for the patch's shared sync wrapper (the single helper
-// both the manual and the scheduled sync command paths funnel through): core's project-directory
-// watcher is non-recursive and cannot see an in-place Settings.xml metadata rewrite
-// (name/language/editable) landing during a receive, so after a sync that can change the project
-// set or its display metadata the patch must call
-// paratextProjects.RefreshAndNotifyProjectsChanged() for Home / New Tab / the project picker to
-// refresh (see that method's doc).
-#pragma warning disable CS9113
 internal class ParatextProjectSendReceiveService(
     PapiClient papiClient,
     ParatextProjectDataProviderFactory pdpFactory,
     AppInfo appInfo,
     LocalParatextProjects paratextProjects
 )
-#pragma warning restore CS9113
 {
     #region Constructors, consts, and fields
 
@@ -92,7 +78,24 @@ internal class ParatextProjectSendReceiveService(
     #endregion
 
     #region Protected properties and methods
+
     protected PapiClient PapiClient { get; } = papiClient;
+
+    // The three properties below are read only by the closed-source Paratext 10 Studio patch,
+    // which replaces this class's stub bodies with real implementations. Do not remove them —
+    // removing them breaks the patch.
+    protected ParatextProjectDataProviderFactory PdpFactory { get; } = pdpFactory;
+
+    protected AppInfo AppInfo { get; } = appInfo;
+
+    // ParatextProjects in particular exists for the patch's shared sync wrapper (the single helper
+    // both the manual and the scheduled sync command paths funnel through): core's
+    // project-directory watcher is non-recursive and cannot see an in-place Settings.xml metadata
+    // rewrite (name/language/editable) landing during a receive, so after a sync that can change
+    // the project set or its display metadata the patch must call
+    // ParatextProjects.RefreshAndNotifyProjectsChanged() for Home / New Tab / the project picker
+    // to refresh (see that method's doc).
+    protected LocalParatextProjects ParatextProjects { get; } = paratextProjects;
 
     #endregion
 
