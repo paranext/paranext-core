@@ -286,7 +286,7 @@ describe('FirstRunShell', () => {
   });
 
   it('shows an sr-only step indicator that updates with navigation', async () => {
-    render(<FirstRunShell entryStep="language" />);
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
