@@ -165,31 +165,30 @@ const config: StorybookConfig = {
       };
     }
 
-    // Renderer app components (startup-wizard shell/steps, dialogs, overlays) import
-    // `useLocalizedStrings` from the `@renderer/hooks/papi-hooks` barrel. The real hook opens a PAPI
-    // WebSocket that has no backend in Storybook, rejecting unhandled after ~10s ("Timeout reached
-    // when waiting for websocket connected to settle") and crashing every startup-wizard story. The
-    // stub re-exports the real hooks and overrides only `useLocalizedStrings` to resolve strings
-    // without a connection.
+    // Renderer app components (startup-wizard shell/steps, dialogs, overlays) import hooks from
+    // `@renderer/hooks/papi-hooks`. The real hooks open a PAPI WebSocket that has no backend in
+    // Storybook, rejecting unhandled after ~10s ("Timeout reached when waiting for websocket
+    // connected to settle") and crashing every startup-wizard story.
+    //
+    // The mock re-exports all real hooks and overrides only the three the first-run language step
+    // needs; stories opt in to drive data via `setFirstRunLanguageMock(...)`.
     //
     // This MUST use NormalModuleReplacementPlugin, not `resolve.alias`: the base renderer webpack
     // config resolves `@renderer/*` via `TsconfigPathsPlugin` (webpack.config.base.ts), which wins
-    // over `resolve.alias`, so an alias entry is silently ignored (that is why the `@papi/*` aliases
-    // above work — `@papi` is not a tsconfig path — but a `@renderer/...` alias would not). The
-    // replacement rewrites the request in `beforeResolve`, before TsconfigPaths runs. The `$`-anchored
-    // regex matches only the exact barrel, so deep-path `@renderer/hooks/papi-hooks/*` imports (used
-    // by the stub itself to re-export the real hooks) still resolve normally.
+    // over `resolve.alias`, so an alias entry is silently ignored. The replacement rewrites the
+    // request in `beforeResolve`, before TsconfigPaths runs. The `$`-anchored regex matches only
+    // the exact barrel, so deep-path `@renderer/hooks/papi-hooks/*` imports (used by the mock
+    // itself to re-export the real hooks) still resolve normally.
     webpackConfig.plugins = webpackConfig.plugins ?? [];
     webpackConfig.plugins.push(
       new NormalModuleReplacementPlugin(
         /^@renderer\/hooks\/papi-hooks$/,
-        join(__dirname, 'papi-stubs/renderer-papi-hooks.ts'),
+        join(__dirname, 'mocks/renderer-papi-hooks.tsx'),
       ),
       // Stop `networkService.initialize()` from constructing a real renderer RpcClient, which tries
-      // to open a PAPI WebSocket that has no backend in Storybook and rejects unhandled after ~10s
-      // ("Timeout reached when waiting for websocket connected to settle"), crashing renderer
-      // stories via the dev overlay. The inert handler makes initialize() succeed with no socket, so
-      // no connection is attempted. Same reasoning as above re: replacement plugin vs `resolve.alias`
+      // to open a PAPI WebSocket that has no backend in Storybook and rejects unhandled after ~10s,
+      // crashing renderer stories via the dev overlay. The inert handler makes initialize() succeed
+      // with no socket. Same reasoning as above re: NormalModuleReplacementPlugin vs `resolve.alias`
       // (`@shared/*` is a TsconfigPathsPlugin path).
       new NormalModuleReplacementPlugin(
         /^@shared\/services\/rpc-handler\.factory$/,

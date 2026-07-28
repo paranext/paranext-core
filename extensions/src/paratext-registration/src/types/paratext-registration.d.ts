@@ -132,8 +132,8 @@ declare module 'papi-shared-types' {
 
   export interface SettingTypes {
     /**
-     * Whether to show the form to enter Paratext Registration information when the application
-     * starts if it has not been entered previously
+     * @deprecated 22 July 2026. The startup registration prompt this controlled was replaced by the
+     *   first-run gating overlay.
      */
     'paratextRegistration.shouldShowOnStartup': boolean;
   }
