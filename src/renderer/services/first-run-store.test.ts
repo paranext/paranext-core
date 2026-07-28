@@ -155,6 +155,8 @@ describe('resolveFirstRunState', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
+    // Cache cleared after success so subsequent startups skip the settings round-trip.
+    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('false');
   });
 
   it('does not re-persist platform.suppressStartupSync when the setting is already persisted', async () => {
@@ -169,6 +171,8 @@ describe('resolveFirstRunState', () => {
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
+    // Cache cleared even when no write was needed, to avoid future redundant reads.
+    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('false');
   });
 
   it('does not attempt platform.suppressStartupSync self-heal when cache says skip never happened', async () => {
@@ -252,6 +256,14 @@ describe('completeFirstRun', () => {
   it('does not write platform.suppressStartupSync when sync is not skipped', async () => {
     await completeFirstRun();
     expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
+  });
+
+  it('clears the suppressStartupSync hint when sync is not skipped', async () => {
+    // A stale hint (e.g. from devtools or a prior aborted skip flow) must not trigger the self-heal
+    // to set suppressStartupSync=true on a user who completed without skipping.
+    localStorage.setItem('platform-bible.suppressStartupSync', 'true');
+    await completeFirstRun();
+    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('false');
   });
 
   it('writes firstRunComplete before suppressStartupSync (crash-safe ordering)', async () => {

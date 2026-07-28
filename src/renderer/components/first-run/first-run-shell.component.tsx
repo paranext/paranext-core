@@ -97,14 +97,15 @@ export function FirstRunShell({
 
   const onSkip = useMemo(
     () =>
-      StepComponent.managesOwnFooter
+      StepComponent.managesSkip
         ? () => runAction(() => completeFirstRun({ syncSkipped: true }))
         : undefined,
     [StepComponent, runAction],
   );
 
   // Steps that declare managesOwnFooter render their own footer buttons (e.g. WizardStepForm);
-  // the shell suppresses its shared footer row for those steps.
+  // the shell suppresses its shared footer row for those steps. Separate from managesSkip so
+  // layout ownership and skip semantics can evolve independently.
   const stepManagesOwnFooter = !!StepComponent.managesOwnFooter;
   const indicator = formatReplacementString(strings['%firstRun_stepIndicator%'], {
     stepNumber: index + 1,

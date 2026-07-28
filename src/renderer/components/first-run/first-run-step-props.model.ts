@@ -19,21 +19,25 @@ export interface FirstRunStepProps {
   onBack?: () => void;
   /**
    * Skip the rest of setup and finish (persists `platform.suppressStartupSync = true`). Provided
-   * only to steps that declare {@link FirstRunStepComponent.managesOwnFooter}.
+   * only to steps that declare {@link FirstRunStepComponent.managesSkip}. The callback may be async;
+   * steps should `await` it to track in-flight state and prevent double-invocation.
    */
-  onSkip?: () => void;
+  onSkip?: () => void | Promise<void>;
   /** Report whether the shell's Next button should be enabled. Next defaults to enabled. */
   setCanProceed?: (canProceed: boolean) => void;
 }
 
 /**
- * A first-run wizard step component. Extends `ComponentType<FirstRunStepProps>` with an optional
- * static capability flag:
+ * A first-run wizard step component. Extends `ComponentType<FirstRunStepProps>` with optional
+ * static capability flags:
  *
  * - `managesOwnFooter`: when `true`, the step renders its own footer buttons (e.g. `WizardStepForm`)
- *   and the shell suppresses its shared footer row for that step. The shell also passes `onSkip`
- *   only to steps with this flag.
+ *   and the shell suppresses its shared footer row for that step.
+ * - `managesSkip`: when `true`, the shell passes `onSkip` to the step. Decoupled from
+ *   `managesOwnFooter` so future steps that own their footer for layout reasons don't inadvertently
+ *   receive a skip callback that permanently sets `suppressStartupSync`.
  */
 export type FirstRunStepComponent = ComponentType<FirstRunStepProps> & {
   managesOwnFooter?: boolean;
+  managesSkip?: boolean;
 };

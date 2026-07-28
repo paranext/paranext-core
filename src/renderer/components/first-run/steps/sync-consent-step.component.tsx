@@ -41,6 +41,7 @@ function SyncConsentStep({
 }: FirstRunStepProps & { onSync?: () => Promise<void> }) {
   const [strings] = useLocalizedStrings(KEYS);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState('');
 
   const handleSync = async () => {
@@ -56,26 +57,41 @@ function SyncConsentStep({
     }
   };
 
+  // Awaiting onSkip lets us gate the button while the shell's runAction is in flight,
+  // preventing a double-click from firing two concurrent completeFirstRun calls.
+  const handleSkip = onSkip
+    ? async () => {
+        setIsSkipping(true);
+        try {
+          await onSkip();
+        } finally {
+          setIsSkipping(false);
+        }
+      }
+    : undefined;
+
+  const isBusy = isSyncing || isSkipping;
+
   return (
     <WizardStepForm
       heading={strings['%firstRun_step_syncConsent_heading%']}
       error={error}
       backButton={
         onBack && (
-          <Button variant="outline" onClick={onBack} disabled={isSyncing}>
+          <Button variant="outline" onClick={onBack} disabled={isBusy}>
             {strings['%firstRun_button_back%']}
           </Button>
         )
       }
       secondaryButton={
-        !isSyncing && onSkip ? (
-          <Button variant="outline" onClick={onSkip}>
+        !isBusy && onSkip ? (
+          <Button variant="outline" onClick={handleSkip}>
             {strings['%firstRun_button_skipSync%']}
           </Button>
         ) : undefined
       }
       primaryButton={
-        <Button onClick={handleSync} disabled={isSyncing}>
+        <Button onClick={handleSync} disabled={isBusy}>
           {isSyncing && <Spinner />}
           {strings['%firstRun_button_sync%']}
         </Button>
@@ -86,11 +102,13 @@ function SyncConsentStep({
   );
 }
 
-/**
- * Declares that this step manages its own footer buttons. The shell reads this flag to suppress its
- * shared footer row and to pass `onSkip` to the step.
- */
+/** The step renders its own footer buttons; the shell suppresses its shared footer row. */
 SyncConsentStep.managesOwnFooter = true;
+/**
+ * The shell passes `onSkip` only to steps with this flag, keeping skip semantics out of
+ * `managesOwnFooter`.
+ */
+SyncConsentStep.managesSkip = true;
 
 export { SyncConsentStep };
 export default SyncConsentStep;
