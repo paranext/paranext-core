@@ -6,10 +6,8 @@ internal class PersistedPtxUtilsSettings : IPtxUtilsSettings
 {
     private readonly PapiClient _papiClient;
 
-    // True until the settings service is confirmed reachable, so SafeSave doesn't overwrite the
-    // user's previously-persisted mementos with this instance's fallback-to-empty default.
-    // Re-checked (not permanent) so a transient startup-race timeout doesn't block saving for the
-    // rest of the session once the service comes up.
+    // SetSetting is a blind overwrite, so SafeSave must not save the fallback-to-empty default over
+    // real data. Re-checked, not latched: one startup timeout shouldn't kill saving the session.
     private bool _loadUnconfirmed;
 
     public PersistedPtxUtilsSettings(PapiClient papiClient)
@@ -51,7 +49,7 @@ internal class PersistedPtxUtilsSettings : IPtxUtilsSettings
                 return;
             _loadUnconfirmed = false;
 
-            // The confirming read may have found mementos from before this session that our
+            // The confirming read may have found mementos from before this session that the
             // fallback-to-empty default never saw. Keep them, but let in-memory changes win.
             if (persistedValue != null)
                 foreach (var (key, value) in persistedValue)

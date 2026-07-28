@@ -28,8 +28,7 @@ public class PersistedPtxUtilsSettingsTests
     public void Constructor_SettingLookupFails_FallsBackToEmptyInsteadOfThrowing()
     {
         // No AddSettingValue call, so DummySettingsService's "get" handler throws, mirroring how
-        // a real timeout surfaces as a thrown exception from SettingsService.GetSetting. If
-        // construction throws, this test fails with that exception.
+        // a real timeout surfaces as a thrown exception from SettingsService.GetSetting.
         var settings = new PersistedPtxUtilsSettings(_client);
 
         Assert.That(settings.MementoData, Is.Empty);
