@@ -79,6 +79,19 @@ describe('SyncConsentStep', () => {
     expect(screen.queryByRole('button', { name: /skip automatic sync/i })).not.toBeInTheDocument();
   });
 
+  it('hides "Skip automatic sync" while skip is in flight (double-click guard)', async () => {
+    // onSkip never resolves so the component stays in the skipping state
+    const onSkip = vi.fn(() => new Promise<void>(() => {}));
+    render(<SyncConsentStep onNext={vi.fn()} onSkip={onSkip} onSync={makeOnSync()} />);
+    await userEvent.click(screen.getByRole('button', { name: /skip automatic sync/i }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('button', { name: /skip automatic sync/i }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(onSkip).toHaveBeenCalledOnce();
+  });
+
   it('shows an error and re-enables "Sync" when onSync throws', async () => {
     const onSync = makeOnSync(() => Promise.reject(new Error('network error')));
     render(<SyncConsentStep onNext={vi.fn()} onSync={onSync} />);
