@@ -1,10 +1,8 @@
-/** Steps 1-4 (navigable). 'syncProgress' is a post-consent interstitial, not a numbered step. */
-export type FirstRunStep =
-  | 'language'
-  | 'internetSettings'
-  | 'identify'
-  | 'syncConsent'
-  | 'syncProgress';
+/** The 4 navigable wizard steps shown in the step indicator. */
+export type NumberedStep = 'language' | 'internetSettings' | 'identify' | 'syncConsent';
+
+/** All wizard steps. 'syncProgress' is a post-consent interstitial — not in STEP_ORDER. */
+export type FirstRunStep = NumberedStep | 'syncProgress';
 
 /** Result of checking the user's Paratext registration. `unknown` = the backend hasn't answered. */
 export type RegistrationValidity = 'valid' | 'invalid' | 'unknown';
