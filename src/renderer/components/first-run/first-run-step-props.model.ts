@@ -16,7 +16,7 @@ export interface FirstRunStepProps {
   onNext: () => void;
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
-  /** Skip the rest of setup and finish. Present only on the syncConsent step. */
+  /** Skip the rest of setup and finish. Present when the current step has called `setCanSkip(true)`. */
   onSkip?: () => void;
   /**
    * Report whether the shell's Next button should be enabled. If not called, the shell's prior
