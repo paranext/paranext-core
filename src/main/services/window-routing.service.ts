@@ -47,8 +47,25 @@ class FocusedWindowDataProviderEngine
   /** Unsubscribes from the window we are currently relaying `onDidUpdate` from */
   #unsubscribeFromWindowUpdates: UnsubscriberAsync | undefined;
 
-  /** Window whose updates we are currently relaying, so we only re-subscribe when it changes */
-  #relayedWindowId: number | undefined;
+  /**
+   * Scoped service we are currently relaying from.
+   *
+   * Compared by identity rather than by window ID: a renderer that reloads registers a brand new
+   * provider under the same window ID, and the resolver's cache drops the old one on disposal, so
+   * an ID match would leave the relay bound to a dead provider that can never emit again.
+   */
+  #relayedWindowService: IWindowService | undefined;
+
+  /**
+   * Tail of the chain of relay re-points. Re-points are serialized rather than allowed to overlap,
+   * because each one both reads and replaces the subscription bookkeeping — two in flight together
+   * would each subscribe and only the last would be remembered, orphaning a live subscription that
+   * no disposal can reach.
+   */
+  #pendingRelay: Promise<void> = Promise.resolve();
+
+  /** Set by `dispose`, so a re-point that is mid-flight at that moment undoes itself */
+  #isDisposed = false;
 
   #unsubscribeFromFocusChanges: Unsubscriber;
 
@@ -70,63 +87,107 @@ class FocusedWindowDataProviderEngine
       this.#relayUpdatesFromFocusedWindow().catch((e) =>
         logger.warn(`Window routing could not follow the focus change: ${getErrorMessage(e)}`),
       );
-      this.notifyUpdate('Focus');
+      // This runs inside a synchronous emit on the window `closed` path, where `PlatformEventEmitter`
+      // does not isolate subscribers — letting a throw escape here would skip the rest of that
+      // window's teardown, so a routing fault stays a routing fault
+      try {
+        this.notifyUpdate('Focus');
+      } catch (e) {
+        logger.warn(
+          `Window routing could not notify subscribers of a focus change: ${getErrorMessage(e)}`,
+        );
+      }
     });
   }
 
-  async getFocus(): Promise<FocusSubject | undefined> {
-    return (await this.#getFocusedWindowService()).getFocus();
-  }
-
+  // The scoped provider emits its own update and the relay forwards it, so layering a second
+  // automatic emit on top of this one would notify every subscriber twice for one change. Doing it
+  // this way rather than returning a constant `false` keeps the scoped provider's real answer —
+  // which callers use to tell "focus moved" from "no such tab" — reaching the caller intact.
+  @dataProviderService.decorators.doNotNotify
   async setFocus(
     selectorOrSpecifier: SetFocusSpecifier | undefined,
     specifierIfSelectorProvided?: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
     const windowService = await this.#getFocusedWindowService();
     const focusSpecifier = selectorOrSpecifier ?? specifierIfSelectorProvided;
-    // The scoped provider notifies its own subscribers, and this engine relays that through
-    // `subscribeFocus` above, so returning false here avoids emitting the same update twice
-    await windowService.setFocus(undefined, focusSpecifier);
-    return false;
+    return windowService.setFocus(undefined, focusSpecifier);
+  }
+
+  async getFocus(): Promise<FocusSubject | undefined> {
+    return (await this.#getFocusedWindowService()).getFocus();
   }
 
   /** Drop both subscriptions. Called when the proxy provider itself is disposed */
   async dispose(): Promise<boolean> {
+    this.#isDisposed = true;
     this.#unsubscribeFromFocusChanges();
+    // Wait out any re-point already in flight; it checks `#isDisposed` after attaching and undoes
+    // itself, so nothing can be left subscribed to a window once this resolves
+    await this.#pendingRelay.catch(() => undefined);
     await this.#unsubscribeFromWindowUpdates?.();
     this.#unsubscribeFromWindowUpdates = undefined;
-    this.#relayedWindowId = undefined;
+    this.#relayedWindowService = undefined;
     return true;
   }
 
   /**
    * Point the `onDidUpdate` relay at the focused window, dropping the previous window's
-   * subscription. A window that has closed or has not registered yet simply leaves the relay idle;
-   * the next focus change tries again.
+   * subscription. Serialized behind any re-point already running, so concurrent callers queue
+   * instead of racing each other into duplicate subscriptions.
    */
   async #relayUpdatesFromFocusedWindow(): Promise<void> {
+    const repoint = this.#pendingRelay.catch(() => undefined).then(() => this.#repointRelay());
+    this.#pendingRelay = repoint;
+    await repoint;
+  }
+
+  /**
+   * The body of a single re-point. Only ever runs one at a time — see
+   * `#relayUpdatesFromFocusedWindow`, which serializes calls to this. A window that has closed or
+   * has not registered yet simply leaves the relay idle; the next focus change or read tries
+   * again.
+   *
+   * That idle window is observable when a window is first opened: Electron fires `focus` as soon as
+   * the window shows, well before its renderer registers a scoped provider, so the new window's own
+   * focus churn during startup is not pushed to subscribers of the generic name until something
+   * reads and re-arms the relay. Every read still answers correctly throughout — only the push is
+   * late. Closing that gap needs a re-point triggered by the scoped provider appearing rather than
+   * by focus alone.
+   */
+  async #repointRelay(): Promise<void> {
+    if (this.#isDisposed) return;
+
     const targetWindowId = getTargetWindowId();
-    if (targetWindowId === this.#relayedWindowId) return;
+    const windowService =
+      targetWindowId === undefined ? undefined : await this.#resolveWindowService(targetWindowId);
+    if (windowService === this.#relayedWindowService) return;
 
-    this.#unsubscribeFromWindowUpdates?.();
-    this.#unsubscribeFromWindowUpdates = undefined;
-    this.#relayedWindowId = undefined;
-    if (targetWindowId === undefined) return;
+    // Attach before detaching, so a focus change arriving in the newly focused window during the
+    // handover still reaches subscribers. A brief overlap costs at most one redundant notify, where
+    // the reverse order drops the update entirely.
+    const unsubscribeFromNewWindow = windowService
+      ? await windowService.subscribeFocus(undefined, () => this.notifyUpdate('Focus'), {
+          // The relay exists to forward later changes; a subscriber gets its initial value from its
+          // own retrieval, so replaying it here would just emit a duplicate
+          retrieveDataImmediately: false,
+        })
+      : undefined;
 
-    const windowService = await this.#resolveWindowService(targetWindowId);
-    if (!windowService) return;
+    const unsubscribeFromPreviousWindow = this.#unsubscribeFromWindowUpdates;
+    // Committed only now that the new subscription exists. If the subscribe above threw, the
+    // bookkeeping still points at the previous window, so the next attempt retries rather than
+    // short-circuiting on a relay it does not actually hold.
+    this.#relayedWindowService = windowService;
+    this.#unsubscribeFromWindowUpdates = unsubscribeFromNewWindow;
+    await unsubscribeFromPreviousWindow?.();
 
-    // Focus may have moved again while we were resolving; if so the later call owns the relay
-    if (getTargetWindowId() !== targetWindowId) return;
-
-    this.#relayedWindowId = targetWindowId;
-    this.#unsubscribeFromWindowUpdates = await windowService.subscribeFocus(
-      undefined,
-      () => this.notifyUpdate('Focus'),
-      // The relay exists to forward later changes; a subscriber gets its initial value from its own
-      // retrieval, so replaying it here would just emit a duplicate
-      { retrieveDataImmediately: false },
-    );
+    // Disposed while we were attaching: `dispose` has already run its own teardown, so undo ours
+    if (this.#isDisposed) {
+      this.#relayedWindowService = undefined;
+      this.#unsubscribeFromWindowUpdates = undefined;
+      await unsubscribeFromNewWindow?.();
+    }
   }
 
   /** Resolve the focused window's service, or explain why there isn't one */
@@ -140,8 +201,11 @@ class FocusedWindowDataProviderEngine
         `Window service for window ${targetWindowId} is not available. The renderer may not have started yet.`,
       );
     // Start relaying from this window if we aren't already — covers the case where the first call
-    // arrives before any focus change has happened
-    await this.#relayUpdatesFromFocusedWindow();
+    // arrives before any focus change has happened. Failing to set up the relay must not fail the
+    // read: the window answered, and the relay retries on the next call.
+    await this.#relayUpdatesFromFocusedWindow().catch((e) =>
+      logger.warn(`Window routing could not start relaying updates: ${getErrorMessage(e)}`),
+    );
     return windowService;
   }
 }
