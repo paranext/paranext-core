@@ -28,16 +28,25 @@ internal class PersistedParatextDataSettings : IParatextDataSettings
 
     public void SafeSave()
     {
-        if (
-            _loadUnconfirmed
-            && !SettingsService.TryGetSetting(
-                _papiClient,
-                Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
-                out SerializableStringDictionary? _
+        if (_loadUnconfirmed)
+        {
+            if (
+                !SettingsService.TryGetSetting(
+                    _papiClient,
+                    Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+                    out SerializableStringDictionary? persistedValue
+                )
             )
-        )
-            return;
-        _loadUnconfirmed = false;
+                return;
+            _loadUnconfirmed = false;
+
+            // The confirming read may have found entries from before this session that our
+            // fallback-to-empty default never saw. Keep them, but let in-memory changes win.
+            if (persistedValue != null)
+                foreach (var (key, value) in persistedValue)
+                    if (!LastRegistryDataCachedTimes.ContainsKey(key))
+                        LastRegistryDataCachedTimes[key] = value;
+        }
 
         SettingsService.SetSetting(
             _papiClient,
