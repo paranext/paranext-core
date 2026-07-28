@@ -72,7 +72,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%userProfile_interfaceMode_power_label%': 'Advanced UI',
       '%userProfile_interfaceMode_power_description%': 'All panels',
       '%userProfile_profileAndRegistration%': 'Profile and registration row',
-      '%userProfile_networkSettings%': 'Network settings row',
+      '%userProfile_networkSettings_2%': 'Internet and connectivity row',
       '%userProfile_language%': 'UI language',
       '%userProfile_appearance%': 'Appearance section',
       '%userProfile_appearance_light%': 'Light theme',

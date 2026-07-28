@@ -53,3 +53,13 @@ export {
   type NavigationHistoryButtonsLocalizedStrings,
   type NavigationHistoryItem,
 } from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
+export {
+  default as InternetAccessOptionList,
+  INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export {
+  default as DeveloperSection,
+  DEVELOPER_SECTION_STRING_KEYS,
+} from './components/advanced/developer-section/developer-section.component';
+export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';
