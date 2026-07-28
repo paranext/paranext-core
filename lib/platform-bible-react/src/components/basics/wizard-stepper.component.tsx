@@ -10,9 +10,15 @@ export interface WizardStepperProps {
   totalSteps: number;
   /**
    * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
-   * `'en'`.
+   * `'en'`. Ignored when {@link WizardStepperProps.formatLabel} is provided.
    */
   locale?: string;
+  /**
+   * Optional numeral formatter for step-circle labels. When supplied, the component skips its
+   * internal {@link NumberFormat} allocation and calls this function instead — useful when the
+   * caller already holds a formatter for the same locale. Takes precedence over `locale`.
+   */
+  formatLabel?: (n: number) => string;
 }
 
 /**
@@ -21,9 +27,22 @@ export interface WizardStepperProps {
  * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
  * readers.
  */
-export function WizardStepper({ currentStep, totalSteps, locale = 'en' }: WizardStepperProps) {
+export function WizardStepper({
+  currentStep,
+  totalSteps,
+  locale = 'en',
+  formatLabel,
+}: WizardStepperProps) {
   const safeLocale = locale || 'en';
-  const fmt = useMemo(() => new NumberFormat(safeLocale), [safeLocale]);
+  // When formatLabel is provided, skip the internal NumberFormat allocation entirely.
+  const format = useMemo<(n: number) => string>(
+    () => {
+      if (formatLabel !== undefined) return formatLabel;
+      const fmt = new NumberFormat(safeLocale);
+      return (n: number) => fmt.format(n);
+    },
+    [formatLabel, safeLocale],
+  );
   // Clamp to [1, totalSteps] so out-of-range values produce a defined active step rather than
   // rendering all circles in the same "not yet reached" style.
   const clampedStep = Math.min(Math.max(currentStep, 1), totalSteps);
@@ -46,7 +65,7 @@ export function WizardStepper({ currentStep, totalSteps, locale = 'en' }: Wizard
                   'tw:border tw:border-muted-foreground tw:text-muted-foreground',
               )}
             >
-              {fmt.format(stepNum)}
+              {format(stepNum)}
             </div>
           </Fragment>
         );

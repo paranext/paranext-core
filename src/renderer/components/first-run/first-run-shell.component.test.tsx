@@ -175,6 +175,17 @@ describe('FirstRunShell', () => {
     expect(mockComplete).toHaveBeenCalledWith({ skippedStep: 'syncConsent' });
   });
 
+  it('shows Skip only on syncConsent, not on other numbered steps', async () => {
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // identify → syncConsent
+    expect(await screen.findByRole('button', { name: /skip/i })).toBeInTheDocument();
+  });
+
   it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
     function SkippableStep({ setCanSkip }: FirstRunStepProps) {
       useEffect(() => setCanSkip?.(true), [setCanSkip]);
@@ -253,6 +264,15 @@ describe('FirstRunShell', () => {
     await userEvent.click(btn); // isBusy guard blocks second invocation
     done();
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it('disables the Skip button while an async action is in flight (isBusy guard)', async () => {
+    // Never-settling promise keeps isBusy=true indefinitely so the assertion doesn't race.
+    mockComplete.mockReturnValue(new Promise<void>(() => {}));
+    render(<FirstRunShell entryStep="syncConsent" />);
+    // SyncConsentStep calls setCanProceed(undefined) so Next is hidden; Skip is the only footer button.
+    await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /skip/i })).toBeDisabled());
   });
 
   it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {

@@ -2567,9 +2567,15 @@ export interface WizardStepperProps {
 	totalSteps: number;
 	/**
 	 * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
-	 * `'en'`.
+	 * `'en'`. Ignored when {@link WizardStepperProps.formatLabel} is provided.
 	 */
 	locale?: string;
+	/**
+	 * Optional numeral formatter for step-circle labels. When supplied, the component skips its
+	 * internal {@link NumberFormat} allocation and calls this function instead — useful when the
+	 * caller already holds a formatter for the same locale. Takes precedence over `locale`.
+	 */
+	formatLabel?: (n: number) => string;
 }
 /**
  * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
@@ -2577,7 +2583,7 @@ export interface WizardStepperProps {
  * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
  * readers.
  */
-export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
+export declare function WizardStepper({ currentStep, totalSteps, locale, formatLabel, }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 declare const alertVariants: (props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & ClassProp) | undefined) => string;
