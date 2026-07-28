@@ -181,8 +181,15 @@ describe('FirstRunShell', () => {
   });
 
   it('advances to syncProgress when Sync is clicked on sync consent', async () => {
-    render(<FirstRunShell entryStep="syncConsent" />);
-    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+    // Use SimpleSyncStep for syncProgress so the assertion targets stable stub text rather than
+    // the real SyncProgressStep's localized content (which doesn't contain "sync progress").
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^sync$/i }));
     expect(mockComplete).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText(/sync progress/i)).toBeInTheDocument());
   });
@@ -279,10 +286,16 @@ describe('FirstRunShell', () => {
   });
 
   it('does not render the Back button on syncProgress even when reached from an earlier step', async () => {
-    // entryStep="syncConsent" sets entryIndex=3; navigating Next takes index to 4 (syncProgress).
+    // entryStep="syncConsent" sets entryIndex=3; navigating to syncProgress takes index to 4.
     // Without the interstitial guard, index(4) > entryIndex(3) would show Back — verify the guard fires.
-    render(<FirstRunShell entryStep="syncConsent" />);
-    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    // SyncConsentStep hides the shell's Next (setCanProceed(undefined)) and owns its Sync button.
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^sync$/i }));
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
