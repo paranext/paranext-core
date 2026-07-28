@@ -145,7 +145,6 @@
   "%downloadUpdateProjectTab_title_downloadUpdate%": "Descargar/Actualizar Proyecto",
   "%extension_failed_to_start%": "No se pudo iniciar la extensión: {extensionName}",
   "%firstRun_button_back%": "Atrás",
-  "%firstRun_button_finish%": "Finalizar",
   "%firstRun_button_next%": "Siguiente",
   "%firstRun_button_retry%": "Reintentar",
   "%firstRun_button_skip%": "Omitir configuración",
