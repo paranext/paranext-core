@@ -148,6 +148,8 @@ export function FirstRunShell({
           </Button>
         )}
         {onSkip && (
+          // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
+          // reason, the shell will need to accept a skip-label callback from that step.
           <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
             {strings['%firstRun_button_skipSync%']}
           </Button>
