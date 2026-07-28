@@ -4,6 +4,7 @@
  */
 
 import { BrowserWindow } from 'electron';
+import { PlatformEventEmitter } from 'platform-bible-utils';
 
 // Keep a global reference of the window objects. If you don't, the windows will
 // be closed automatically when the JavaScript objects are garbage collected.
@@ -31,9 +32,22 @@ export function removeWindow(window: BrowserWindow): void {
   if (idx >= 0) windows.splice(idx, 1);
 }
 
+const onDidChangeFocusedWindowIdEmitter = new PlatformEventEmitter<number | undefined>();
+
+/**
+ * Event that fires when focus moves from one window to another.
+ *
+ * Routing proxies that forward to "the focused window" need this: it is the moment their answer
+ * changes without any window's own state having changed. Fires only on an actual change, so a
+ * repeated `setFocusedWindowId` with the same ID is quiet.
+ */
+export const onDidChangeFocusedWindowId = onDidChangeFocusedWindowIdEmitter.event;
+
 /** Set the focused window ID (called from BrowserWindow focus events) */
 export function setFocusedWindowId(windowId: number | undefined): void {
+  if (focusedWindowId === windowId) return;
   focusedWindowId = windowId;
+  onDidChangeFocusedWindowIdEmitter.emit(windowId);
 }
 
 /**

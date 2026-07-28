@@ -711,6 +711,24 @@ const scrollGroupService: IScrollGroupRemoteService = {
  *
  * The emitting window receives its own events too, which lands as a harmless re-apply of values it
  * just wrote.
+ *
+ * KNOWN DIVERGENCE — app-global here, per-window in the multi-monitor design. The secondary-window
+ * design calls for each window to have its own top-level scroll group so it can follow a different
+ * reference from the main window. This code deliberately does the opposite for now, because the
+ * cross-window coupling is older than multi-window support: `onDidUpdateScrRef` is a NETWORK event,
+ * so one window's navigation has always reached every other window's `useScrollGroupScrRef`
+ * subscribers. Before this, only the first window to start could emit, so the sync ran one way and
+ * the other windows' `*Sync` readers went stale — this made it coherent rather than making it
+ * happen. Going per-window is a change in the other direction, and needs all three of:
+ *
+ * - Scoping the `scrollGroup:*` events per window (or carrying a window id and filtering)
+ * - Scoping the `ScrollGroupService` network object, with a main-process routing proxy like
+ *   `web-view-routing.service.ts`
+ * - Moving `SCR_REFS_STORAGE_KEY` / `SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY` onto
+ *   `localWindowStorage`
+ *
+ * Removing only this mirroring would not get there — it would leave each window's UI still syncing
+ * from the network event while its `*Sync` readers disagreed.
  */
 function subscribeToRemoteScrollGroupUpdates(): void {
   onDidUpdateScrRef(({ scrollGroupId, scrRef, sourceProjectId }) => {
