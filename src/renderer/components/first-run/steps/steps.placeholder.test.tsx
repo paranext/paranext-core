@@ -17,4 +17,9 @@ describe('placeholder steps', () => {
     render(<SyncConsentPlaceholderStep onNext={vi.fn()} />);
     expect(screen.getByText(/sync consent/i)).toBeInTheDocument();
   });
+
+  it('sync progress placeholder renders its coming-soon text', () => {
+    render(<SyncProgressPlaceholderStep />);
+    expect(screen.getByText(/sync progress/i)).toBeInTheDocument();
+  });
 });
