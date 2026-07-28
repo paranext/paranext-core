@@ -15,6 +15,10 @@ interface WizardStepFormProps {
  * Shared presentational form layout for wizard steps (PT-4260). Renders a heading, body content,
  * optional error, and a standardised button row: Back on the left; secondary + primary together on
  * the right.
+ *
+ * The children wrapper is intentionally unstyled — each step controls its own text colors rather
+ * than inheriting from this component (e.g. form field labels need the default foreground color
+ * while body-only steps may want muted foreground).
  */
 export function WizardStepForm({
   heading,
@@ -27,7 +31,7 @@ export function WizardStepForm({
   return (
     <div className="tw:flex tw:flex-col tw:gap-3">
       <h2 className="tw:text-base tw:font-semibold">{heading}</h2>
-      <div className="tw:text-sm tw:text-muted-foreground">{children}</div>
+      <div>{children}</div>
       {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
       <div className="tw:flex tw:justify-between tw:gap-2">
         <div>{backButton}</div>
