@@ -29,6 +29,12 @@
       "message": "We made the internet settings its own page so the localized string needs to indicate that. The new localized string key is %data_loading_error_internetAccess_disabled%."
     }
   },
+  "%firstRun_button_skip%": {
+    "deprecationInfo": {
+      "date": "2026-07-27",
+      "message": "Replaced by %firstRun_button_skipSync% when the real sync-consent step was implemented in PT-4178."
+    }
+  },
   "%firstRun_step_language_placeholder%": {
     "deprecationInfo": {
       "date": "2026-07-20",

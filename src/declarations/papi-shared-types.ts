@@ -279,6 +279,13 @@ declare module 'papi-shared-types' {
      * finished and the wizard should gate the app on the next simple-mode startup.
      */
     'platform.firstRunComplete': boolean;
+    /**
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.syncOnStartup': boolean;
   }
 
   /**

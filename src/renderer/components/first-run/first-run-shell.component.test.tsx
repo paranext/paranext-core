@@ -15,6 +15,11 @@ const STUB_STEPS = {
 };
 
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
+// SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
+// shell tests exercise navigation wiring without a live PAPI backend.
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(() => Promise.resolve()),
+}));
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -22,9 +27,12 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
-      '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
+      '%firstRun_step_syncConsent_heading%': 'Sync your projects',
+      '%firstRun_step_syncConsent_body%':
+        'When working on shared projects, syncing updates your local copy and shares your changes with others.',
+      '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
     false,
@@ -77,9 +85,9 @@ describe('FirstRunShell', () => {
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // Skip is shown after SyncConsentPlaceholderStep's mount effect calls setCanSkip(true).
+    // SyncConsentStep calls setCanSkip(true) on mount; the shell renders its own Skip button.
     await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
-    expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
+    expect(mockComplete).toHaveBeenCalledWith({ skippedStep: 'syncConsent' });
   });
 
   it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
@@ -97,6 +105,13 @@ describe('FirstRunShell', () => {
     // Navigate away — shell must reset canSkip so the next step does not inherit it.
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
     expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+  });
+
+  it('advances to syncProgress when Sync is clicked on sync consent', async () => {
+    render(<FirstRunShell entryStep="syncConsent" />);
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+    expect(mockComplete).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText(/sync progress/i)).toBeInTheDocument());
   });
 
   it('completes when Finish is clicked on the last step', async () => {

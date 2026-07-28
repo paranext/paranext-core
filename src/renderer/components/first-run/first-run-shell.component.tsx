@@ -8,7 +8,7 @@ import { FirstRunStepProps } from './first-run-step-props.model';
 import { LanguageStep } from './steps/language.component';
 import { InternetSettingsStep } from './steps/internet-settings-step.component';
 import { IdentifyStep } from './steps/identify-step.component';
-import { SyncConsentPlaceholderStep } from './steps/sync-consent.placeholder.component';
+import { SyncConsentStep } from './steps/sync-consent-step.component';
 import { SyncProgressPlaceholderStep } from './steps/sync-progress.placeholder.component';
 
 /** Runtime order of the wizard steps. */
@@ -20,12 +20,12 @@ export const STEP_ORDER: FirstRunStep[] = [
   'syncProgress',
 ];
 
-/** Default step bodies. Sibling tickets replace individual entries with their real step. */
+/** Step components for the wizard; placeholder entries are replaced when their sibling tickets land. */
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
   language: LanguageStep,
   internetSettings: InternetSettingsStep,
   identify: IdentifyStep,
-  syncConsent: SyncConsentPlaceholderStep,
+  syncConsent: SyncConsentStep,
   syncProgress: SyncProgressPlaceholderStep,
 };
 
@@ -34,15 +34,16 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_stepIndicator%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
-  '%firstRun_button_skip%',
+  '%firstRun_button_skipSync%',
   '%firstRun_button_finish%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
 ];
 
 /**
- * Owns the wizard chrome (title, step indicator) and the footer (Back / Skip / Next), plus step
- * navigation. Runs ordinary forward/back navigation seeded from `entryStep` (the startup reducer
+ * Owns the wizard chrome (title, step indicator) and the shared footer (Back / Next), plus step
+ * navigation. Steps that need a skip action call `setCanSkip(true)` to surface the shell's Skip
+ * button. Runs ordinary forward/back navigation seeded from `entryStep` (the startup reducer
  * already chose where to start). Derives the Next busy state from the async action and surfaces a
  * thrown action as an inline error.
  */
@@ -104,8 +105,8 @@ export function FirstRunShell({
   );
 
   const onSkip = useMemo(
-    () => (canSkip ? () => runAction(() => completeFirstRun({ syncSkipped: true })) : undefined),
-    [canSkip, runAction],
+    () => (canSkip ? () => runAction(() => completeFirstRun({ skippedStep: step })) : undefined),
+    [canSkip, step, runAction],
   );
 
   const StepComponent = stepComponents[step];
@@ -147,8 +148,10 @@ export function FirstRunShell({
           </Button>
         )}
         {onSkip && (
+          // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
+          // reason, the shell will need to accept a skip-label callback from that step.
           <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skip%']}
+            {strings['%firstRun_button_skipSync%']}
           </Button>
         )}
         {canProceed !== undefined && (
