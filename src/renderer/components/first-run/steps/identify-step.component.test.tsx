@@ -31,7 +31,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     false,
   ]),
 }));
-vi.mock('@renderer/services/first-run-store', () => ({ isDemoMode: vi.fn(() => false) }));
+vi.mock('@renderer/services/first-run-store', () => ({
+  isDemoMode: vi.fn(() => false),
+  markJustRegistered: vi.fn(),
+}));
 
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);

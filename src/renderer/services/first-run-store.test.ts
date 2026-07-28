@@ -8,6 +8,7 @@ import {
   completeFirstRun,
   continueWithoutRegistration,
   getFirstRunStatus,
+  markJustRegistered,
   resetFirstRunStore,
   resolveFirstRunState,
   retryFirstRunResolution,
@@ -104,6 +105,28 @@ describe('resolveFirstRunState', () => {
     expect(mockSet).not.toHaveBeenCalled(); // not completed yet
   });
 
+  it('resumes at sync consent when the just-registered flag is set and validity returns invalid (transient failure guard)', async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid'); // transient backend failure after restart
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    // Flag must be consumed so it doesn't persist into a subsequent startup.
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+  });
+
+  it('still routes to the error screen when just-registered is set but validity returns unknown', async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown');
+    await resolveFirstRunState();
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+    // Flag is consumed regardless.
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+  });
+
   it('surfaces an error when registration validity cannot be resolved', async () => {
     stubSettings({ firstRunComplete: false });
     mockResolveReg.mockResolvedValue('unknown');
@@ -144,6 +167,13 @@ describe('resolveFirstRunState', () => {
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBe('true'); // not clobbered
     expect(mockResolveReg).not.toHaveBeenCalled(); // never routed back into the wizard
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
+  });
+});
+
+describe('markJustRegistered', () => {
+  it('writes the just-registered localStorage flag', () => {
+    markJustRegistered();
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('true');
   });
 });
 

@@ -77,8 +77,26 @@ describe('FirstRunShell', () => {
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    await userEvent.click(screen.getByRole('button', { name: /skip/i }));
+    // Skip is shown after SyncConsentPlaceholderStep's mount effect calls setCanSkip(true).
+    await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
     expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
+  });
+
+  it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
+    function SkippableStep({ setCanSkip }: FirstRunStepProps) {
+      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+      return <p>skippable</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...STUB_STEPS, language: SkippableStep }}
+      />,
+    );
+    await waitFor(() => screen.getByRole('button', { name: /skip/i }));
+    // Navigate away — shell must reset canSkip so the next step does not inherit it.
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
   it('completes when Finish is clicked on the last step', async () => {

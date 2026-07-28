@@ -1,6 +1,6 @@
 import * as commandService from '@shared/services/command.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { isDemoMode } from '@renderer/services/first-run-store';
+import { isDemoMode, markJustRegistered } from '@renderer/services/first-run-store';
 import { Alert, AlertDescription, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { AlertCircle, CircleCheck } from 'lucide-react';
@@ -66,8 +66,8 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  * relaunch, so the startup reducer routes to `syncConsent` on the next launch rather than
  * re-showing this step.
  *
- * The shell's "Next" button is permanently disabled (`setCanProceed(false)` on mount) — this step
- * owns its own explicit "Save and restart" footer action.
+ * The shell's "Next" button is hidden (`setCanProceed(undefined)` on mount) — this step owns its
+ * own explicit "Save and restart" footer action.
  *
  * Eight localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
@@ -90,10 +90,17 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   const [isRestarting, setIsRestarting] = useState(false);
 
   const isMounted = useRef(false);
+  const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Incremented each time a new validation request is dispatched; stale in-flight responses
+  // check their captured generation before writing state.
+  const validationGeneration = useRef(0);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
+      // Clear any pending validation timer on unmount so it doesn't fire against a dead component.
+      clearTimeout(validationTimeout.current);
     };
   }, []);
 
@@ -109,19 +116,6 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
     return () => clearTimeout(timeout);
   }, [registrationCode]);
 
-  const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  // Incremented each time a new validation request is dispatched; stale in-flight responses
-  // check their captured generation before writing state.
-  const validationGeneration = useRef(0);
-
-  // Clear any pending validation timer on unmount so it doesn't fire against a dead component.
-  useEffect(
-    () => () => {
-      clearTimeout(validationTimeout.current);
-    },
-    [],
-  );
-
   const validateRegistration = (code: string, newName: string) => {
     if (validationTimeout.current) clearTimeout(validationTimeout.current);
     setRegistrationIsValid(false);
@@ -130,11 +124,17 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
     setErrorDescription('');
     if (isDemoMode()) return;
     validationTimeout.current = setTimeout(async () => {
-      // Guard at the top so no state update (including setIsValidating) runs after unmount.
-      if (!isMounted.current || !code.match(REGISTRATION_CODE_REGEX_STRING) || !newName.trim())
-        return;
+      // Claim a generation slot before any guard so stale in-flight responses see a mismatched
+      // generation even when this call exits early (e.g. format check or empty name).
       validationGeneration.current += 1;
       const gen = validationGeneration.current;
+      // Unmount guard: no state writes at all after teardown.
+      if (!isMounted.current) return;
+      // Input guard: input is incomplete — clear any lingering spinner and bail.
+      if (!code.match(REGISTRATION_CODE_REGEX_STRING) || !newName.trim()) {
+        setIsValidating(false);
+        return;
+      }
       setIsValidating(true);
       try {
         const isValid = await commandService.sendCommand(
@@ -211,6 +211,10 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
         email: '',
         supporterName: '',
       });
+      // Signal the next startup to treat a transient 'invalid' from the registration backend as
+      // non-fatal: the user just registered successfully, so 'invalid' on the next launch is almost
+      // certainly a server fluke. The flag is consumed (cleared) on the next resolveInternal call.
+      markJustRegistered();
       // Restart immediately — the explicit "Save and restart" button already sets the expectation.
       // The process terminates here; setIsRestarting(true) above keeps the button in "Restarting…"
       // until the app exits.

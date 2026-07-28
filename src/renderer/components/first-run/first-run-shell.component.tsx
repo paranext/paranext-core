@@ -55,6 +55,7 @@ export function FirstRunShell({
 }) {
   const [step, setStep] = useState<FirstRunStep>(entryStep);
   const [canProceed, setCanProceed] = useState<boolean | undefined>(true);
+  const [canSkip, setCanSkip] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
@@ -80,11 +81,12 @@ export function FirstRunShell({
   }, []);
 
   // Reset per-step chrome as part of the navigation itself (same commit as setStep), so the
-  // incoming step's own setCanProceed(false) on mount is applied AFTER this and is not overridden.
+  // incoming step's own setCanProceed/setCanSkip on mount is applied AFTER this and is not overridden.
   const goToStep = useCallback((next: FirstRunStep) => {
     setError('');
     setIsBusy(false);
     setCanProceed(true);
+    setCanSkip(false);
     setStep(next);
   }, []);
 
@@ -102,11 +104,8 @@ export function FirstRunShell({
   );
 
   const onSkip = useMemo(
-    () =>
-      step === 'syncConsent'
-        ? () => runAction(() => completeFirstRun({ syncSkipped: true }))
-        : undefined,
-    [step, runAction],
+    () => (canSkip ? () => runAction(() => completeFirstRun({ syncSkipped: true })) : undefined),
+    [canSkip, runAction],
   );
 
   const StepComponent = stepComponents[step];
@@ -136,6 +135,7 @@ export function FirstRunShell({
         onBack={onBack}
         onSkip={onSkip}
         setCanProceed={setCanProceed}
+        setCanSkip={setCanSkip}
       />
 
       {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}

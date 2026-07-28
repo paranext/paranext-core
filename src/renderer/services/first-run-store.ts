@@ -29,6 +29,10 @@ const SYNC_SKIPPED_KEY = 'platform-bible.firstRunSyncSkipped';
 //   localStorage.setItem('platform-bible.firstRunDemoMode', 'true')
 // Never set in shipped builds; remove/gate before release along with the rest of PT-4219.
 const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
+// Written by the Identify step immediately before calling platform.restart(). On the next startup,
+// resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
+// registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
+const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
 
 function readBooleanFlag(key: string): boolean {
   try {
@@ -50,6 +54,16 @@ function writeBooleanFlag(key: string, value: boolean): void {
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {
   return readBooleanFlag(DEMO_MODE_KEY);
+}
+
+/**
+ * Records that the user just registered successfully and the app is about to restart. On the next
+ * startup, `resolveInternal` reads and clears this flag, using it to guard against a transient
+ * 'invalid' response from the registration backend that would otherwise mis-route the user back to
+ * the language step instead of resuming at sync consent.
+ */
+export function markJustRegistered(): void {
+  writeBooleanFlag(JUST_REGISTERED_KEY, true);
 }
 
 function computeInitialStatus(): FirstRunStatus {
@@ -186,11 +200,17 @@ async function resolveInternal(): Promise<void> {
     }
 
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
+    // Consume the just-registered flag before resolving validity: the user set it just before
+    // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
+    const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
+    if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
     const registrationValidity = await resolveRegistrationValidity();
+    const effectiveValidity =
+      justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
     const decision = decideFirstRun({
       firstRunComplete: false,
       wizardActive,
-      registrationValidity,
+      registrationValidity: effectiveValidity,
     });
 
     switch (decision.action) {
