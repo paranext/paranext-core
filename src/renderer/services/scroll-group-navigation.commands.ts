@@ -205,12 +205,12 @@ function writeNewRef(target: NavigationTarget, newRef: SerializedVerseRef): void
  * slow earlier run could write its stale result after a newer one, stepping backward. Running each
  * behind the previous one (the mutex is FIFO) makes N presses advance exactly N steps, in order.
  *
- * Per-renderer, so it serializes within a window, not across them. A scroll group is app-global, so
- * two windows driving the same group can still interleave — but that needs the user to switch focus
- * mid-navigation, rather than the key auto-repeat this exists to handle, and each window's own
- * presses stay correctly ordered. Serializing across windows would mean a lock in the main process
- * on the path of every navigation keystroke; do that only if the interleaving is actually
- * observed.
+ * Per-renderer, so it serializes within a window, not across them (tracked on the cross-window
+ * navigation-ordering ticket). A scroll group is app-global, so two windows driving the same group
+ * can still interleave — but that needs the user to switch focus mid-navigation, rather than the
+ * key auto-repeat this exists to handle, and each window's own presses stay correctly ordered.
+ * Serializing across windows would mean a lock in the main process on the path of every navigation
+ * keystroke; do that only if the interleaving is actually observed.
  */
 const navigationCommandMutex = new Mutex();
 
