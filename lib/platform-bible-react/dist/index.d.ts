@@ -3398,17 +3398,25 @@ export declare const useViewVisibility: () => boolean;
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
 	dark: string;
-	/** Light theme, tab selected (white). */
+	/**
+	 * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
+	 * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
+	 * would be invisible there. Kept in the type for a future host that does give the selected tab a
+	 * dark background and needs a contrasting icon.
+	 */
 	lightSelected: string;
-	/** Light theme, tab not selected (near-black). */
+	/** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
 	lightUnselected: string;
 	/** Light theme, selection unknown (mid-slate fallback). */
 	lightDefault: string;
 };
 /**
- * Picks the tab icon URL. In dark theme the icon is always the light variant. In light theme it
- * matches the tab text: near-black when unselected, white when selected, and a mid-slate fallback
- * when the selected state is unknown (`undefined`).
+ * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
+ * the near-black variant regardless of selection — every current host keeps the active tab's header
+ * on a plain light background rather than a dark/tinted one (see
+ * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
+ * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
+ * state is unknown (`undefined`).
  */
 export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
 /**

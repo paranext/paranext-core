@@ -20,8 +20,11 @@ describe('pickTabIconUrl', () => {
     expect(pickTabIconUrl(true, undefined, URLS)).toBe(URLS.dark);
   });
 
-  it('returns lightSelected/lightUnselected/lightDefault by selection state in light theme', () => {
-    expect(pickTabIconUrl(false, true, URLS)).toBe(URLS.lightSelected);
+  it('returns lightUnselected regardless of selection in light theme, and lightDefault when selection is unknown', () => {
+    // Selected and unselected tabs render identically in every current host (no host ever gives
+    // the active tab a dark/tinted background), so a "selected" tab must not switch to the white
+    // lightSelected variant — it would be invisible against the light background it actually gets.
+    expect(pickTabIconUrl(false, true, URLS)).toBe(URLS.lightUnselected);
     expect(pickTabIconUrl(false, false, URLS)).toBe(URLS.lightUnselected);
     expect(pickTabIconUrl(false, undefined, URLS)).toBe(URLS.lightDefault);
   });
@@ -67,13 +70,13 @@ describe('useTabIconSelection', () => {
     expect(result.current).toBe(URLS.lightUnselected);
   });
 
-  it('resolves to lightSelected once the tab becomes the active/visible one', () => {
+  it('stays on lightUnselected once the tab becomes the active/visible one', () => {
     const { result } = renderHook(() => useTabIconSelection(false, URLS));
     simulateSelectionChange(true);
-    expect(result.current).toBe(URLS.lightSelected);
+    expect(result.current).toBe(URLS.lightUnselected);
   });
 
-  it('resolves back to lightUnselected once the tab becomes inactive again', () => {
+  it('stays on lightUnselected after a selection change round-trip', () => {
     const { result } = renderHook(() => useTabIconSelection(false, URLS));
     simulateSelectionChange(true);
     simulateSelectionChange(false);
