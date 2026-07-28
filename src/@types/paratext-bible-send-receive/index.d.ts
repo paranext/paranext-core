@@ -9,6 +9,9 @@
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
+// Likewise for declarations that exist in BOTH copies: a re-sync must not downgrade a richer
+// declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
+// two, and upstream the improvement instead.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -437,8 +440,12 @@ declare module 'papi-shared-types' {
      * Note: this command is served from the dotnet process.
      *
      * @param projectIds Ids of the projects whose server lock to break. An empty array is a no-op:
-     *   it resolves to an empty map without contacting the server
-     * @returns Map of (upper-cased) project id → whether that project's lock was broken
+     *   it resolves to an empty map without contacting the server. Null/blank ids are skipped and
+     *   omitted from the result map
+     * @returns Map of project id → whether that project's lock was broken. Keys are upper-cased —
+     *   index the map with upper-cased ids. `false` means "not broken", not "attempt failed": an
+     *   attempt may not have been made at all (e.g. the request was refused while a sync was in
+     *   progress), and a later retry can succeed
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      * @experimental This command is unstable and may change or disappear without notice

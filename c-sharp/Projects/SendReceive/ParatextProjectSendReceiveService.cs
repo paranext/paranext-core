@@ -62,17 +62,16 @@ internal class ParatextProjectSendReceiveService(
                 "command:paratextBibleSendReceive.cancelSync",
                 CancelSync
             ),
-            // breakSyncLock is @experimental (see the TS declaration), so its registration also
-            // carries the x-experimental wire marker per the Experimental APIs standard.
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.breakSyncLock",
                 BreakSyncLock,
                 s_sendReceiveTimeout,
-                Create(
+                documentation: Create(
                     "Breaks (releases) the Send/Receive server-side repository lock for each given "
                         + "project and reports per-project success. Unrelated to the local "
                         + "in-process sync write gate reported by onSyncWriteLockChanged / "
-                        + "getAutoSyncBlocking.",
+                        + "getAutoSyncBlocking. Only implemented in Paratext 10 Studio; throws "
+                        + "PlatformUnimplementedException elsewhere.",
                     [
                         Param(
                             "projectIds",

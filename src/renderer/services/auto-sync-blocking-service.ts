@@ -4,10 +4,8 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import { getErrorMessage, isString } from 'platform-bible-utils';
 import { setBlockedProjects } from './auto-sync-blocking-store';
 
-// The `SyncWriteLockSnapshot` payload both signal surfaces below carry is declared in the
-// `paratext-bible-send-receive` type seam (`src/@types/paratext-bible-send-receive/index.d.ts`):
-// a backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits
-// on. `isBlocking` false always pairs with an empty `projectIds`.
+// Payload types (`SyncWriteLockSnapshot`) come from the `paratext-bible-send-receive` seam
+// declarations in `src/@types/paratext-bible-send-receive/index.d.ts`.
 
 // Backend-authoritative network event (declared in the seam's `NetworkEvents`): the C# write gate
 // emits a full snapshot on every arm/disarm, for ALL sync types (manual + scheduled + session).
@@ -75,6 +73,8 @@ export function initAutoSyncBlockingService(): () => void {
 
   const unsubscribe = getNetworkEvent(SYNC_WRITE_LOCK_CHANGED_EVENT)((event) => {
     hasReceivedEvent = true;
+    // `event` is typed by the seam declaration, but it is untrusted wire data — keep the runtime
+    // validation.
     setBlockedProjects(readBlockedProjectIds(event, `the ${SYNC_WRITE_LOCK_CHANGED_EVENT} event`));
   });
 
@@ -86,10 +86,15 @@ export function initAutoSyncBlockingService(): () => void {
   // on PT-4265; until that lands, this one-shot seed is the only recovery.
   (async () => {
     try {
+      // Plain `sendCommand` — with main's retry-on-timeout — is deliberate now that the command is
+      // declared in the seam; the `requestNoRetry` this call once used was only a workaround for
+      // the missing declaration.
       const snapshot = await sendCommand(GET_AUTO_SYNC_BLOCKING_COMMAND);
       // Only seed if nothing live has spoken: an event that arrived while the request was in flight
       // (either direction) supersedes this snapshot and must win, so we never clobber it here.
       if (!hasReceivedEvent && !isDisposed) {
+        // `snapshot` is typed by the seam declaration, but it is untrusted wire data — keep the
+        // runtime validation.
         const blockedProjectIds = readBlockedProjectIds(
           snapshot,
           `the ${GET_AUTO_SYNC_BLOCKING_COMMAND} init query`,

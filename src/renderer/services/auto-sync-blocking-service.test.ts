@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { SyncWriteLockSnapshot } from 'paratext-bible-send-receive';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { setBlockedProjects } from '@renderer/services/auto-sync-blocking-store';
@@ -152,7 +153,12 @@ describe('initAutoSyncBlockingService', () => {
     });
 
     it('seeds the blocked projects when the query reports an in-flight sync (reload mid-sync)', async () => {
-      vi.mocked(sendCommand).mockResolvedValue({ isBlocking: true, projectIds: ['p1'] });
+      // `satisfies` pins the well-formed mocks to the seam's wire shape, so a contract change
+      // breaks these tests at compile time (deliberately-malformed mocks stay untyped).
+      vi.mocked(sendCommand).mockResolvedValue({
+        isBlocking: true,
+        projectIds: ['p1'],
+      } satisfies SyncWriteLockSnapshot);
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).toHaveBeenCalledTimes(1);
@@ -160,7 +166,10 @@ describe('initAutoSyncBlockingService', () => {
     });
 
     it('does not seed when the query reports no sync in flight', async () => {
-      vi.mocked(sendCommand).mockResolvedValue({ isBlocking: false, projectIds: [] });
+      vi.mocked(sendCommand).mockResolvedValue({
+        isBlocking: false,
+        projectIds: [],
+      } satisfies SyncWriteLockSnapshot);
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
