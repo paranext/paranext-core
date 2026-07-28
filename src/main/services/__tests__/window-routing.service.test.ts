@@ -157,6 +157,33 @@ describe('window service routing proxy', () => {
     await expect(engine.getFocus()).rejects.toThrow('is not available');
   });
 
+  test('exposes exactly one matched get/set pair, which is what registration validates', () => {
+    // `buildDataProvider` classifies every visible function on an engine by prefix and rejects the
+    // engine if the get and set data types do not match. An injected dependency named `getX`, or a
+    // stray helper named `setX`, silently breaks registration at app startup rather than in a unit
+    // test — this asserts the visible surface stays exactly `getFocus` / `setFocus`.
+    const engine = new FocusedWindowDataProviderEngine(async () => undefined);
+
+    const visibleFunctionNames = new Set<string>();
+    for (
+      let target = engine;
+      target && target !== Object.prototype;
+      target = Object.getPrototypeOf(target)
+    ) {
+      Object.getOwnPropertyNames(target)
+        .filter(
+          (name) => typeof (engine as unknown as Record<string, unknown>)[name] === 'function',
+        )
+        .forEach((name) => visibleFunctionNames.add(name));
+    }
+
+    const getters = [...visibleFunctionNames].filter((name) => name.startsWith('get'));
+    const setters = [...visibleFunctionNames].filter((name) => name.startsWith('set'));
+
+    expect(getters).toEqual(['getFocus']);
+    expect(setters).toEqual(['setFocus']);
+  });
+
   test('drops both subscriptions when disposed', async () => {
     const only = windowService('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
