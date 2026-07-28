@@ -2,28 +2,11 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { ReactNode, useEffect } from 'react';
+import { ComponentType, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
+import { FirstRunStep } from '@renderer/services/first-run.model';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.component';
-
-// Stubs call setCanProceed(true) so goToStep's canProceed-reset doesn't strand navigation
-// at a stub step that never re-enables Next.
-function LanguageStub({ setCanProceed }: FirstRunStepProps) {
-  useEffect(() => setCanProceed?.(true), [setCanProceed]);
-  return <p>language step</p>;
-}
-function IdentifyStub({ setCanProceed }: FirstRunStepProps) {
-  useEffect(() => setCanProceed?.(true), [setCanProceed]);
-  return <p>identify step</p>;
-}
-
-const STUB_STEPS = {
-  ...DEFAULT_STEP_COMPONENTS,
-  language: LanguageStub,
-  internetSettings: InternetSettingsPlaceholder,
-  identify: IdentifyStub,
-};
 
 vi.mock('@renderer/services/first-run-store', () => ({
   completeFirstRun: vi.fn(),
@@ -114,10 +97,27 @@ vi.mock('platform-bible-react', () => {
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
-function InternetSettingsPlaceholder({ setCanProceed }: FirstRunStepProps) {
-  useEffect(() => setCanProceed?.(true), [setCanProceed]);
-  return <p>Internet settings placeholder</p>;
+// Dummy step components for shell tests — decouples navigation tests from real step content.
+// Each stub calls setCanProceed(true) so goToStep's canProceed-reset doesn't strand
+// navigation tests at a stub step that never re-enables Next.
+function makeDummyStep(label: string): ComponentType<FirstRunStepProps> {
+  function DummyStep({ setCanProceed }: FirstRunStepProps) {
+    useEffect(() => setCanProceed?.(true), [setCanProceed]);
+    return <p>{label}</p>;
+  }
+  return DummyStep;
 }
+
+const DUMMY_STEPS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
+  language: makeDummyStep('language-step'),
+  internetSettings: makeDummyStep('internet-settings-step'),
+  identify: makeDummyStep('identify-step'),
+  syncConsent: makeDummyStep('sync-consent-step'),
+  syncProgress: makeDummyStep('sync-progress-step'),
+};
+
+// Alias used by tests that were written against the older STUB_STEPS name.
+const STUB_STEPS = DUMMY_STEPS;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -146,23 +146,23 @@ describe('FirstRunShell', () => {
   }
 
   it('advances through steps with the shell Next button', async () => {
-    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
-    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    render(<FirstRunShell entryStep="language" stepComponents={DUMMY_STEPS} />);
+    expect(screen.getByText('language-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
+    expect(screen.getByText('identify-step')).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    render(<FirstRunShell entryStep="language" stepComponents={DUMMY_STEPS} />);
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
-    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify
-    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
+    expect(screen.getByText('identify-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.queryByText(/identify step/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    expect(screen.queryByText('identify-step')).not.toBeInTheDocument();
+    expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
@@ -198,7 +198,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...STUB_STEPS, language: SkippableStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: SkippableStep }}
       />,
     );
     await waitFor(() => screen.getByRole('button', { name: /skip/i }));
@@ -445,7 +445,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...STUB_STEPS, internetSettings: BlockingStep }}
+        stepComponents={{ ...DUMMY_STEPS, internetSettings: BlockingStep }}
       />,
     );
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
