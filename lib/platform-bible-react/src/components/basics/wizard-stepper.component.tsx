@@ -35,14 +35,11 @@ export function WizardStepper({
 }: WizardStepperProps) {
   const safeLocale = locale || 'en';
   // When formatLabel is provided, skip the internal NumberFormat allocation entirely.
-  const format = useMemo<(n: number) => string>(
-    () => {
-      if (formatLabel !== undefined) return formatLabel;
-      const fmt = new NumberFormat(safeLocale);
-      return (n: number) => fmt.format(n);
-    },
-    [formatLabel, safeLocale],
-  );
+  const format = useMemo<(n: number) => string>(() => {
+    if (formatLabel !== undefined) return formatLabel;
+    const fmt = new NumberFormat(safeLocale);
+    return (n: number) => fmt.format(n);
+  }, [formatLabel, safeLocale]);
   // Clamp to [1, totalSteps] so out-of-range values produce a defined active step rather than
   // rendering all circles in the same "not yet reached" style.
   const clampedStep = Math.min(Math.max(currentStep, 1), totalSteps);
