@@ -106,7 +106,11 @@ Render keyboard shortcut hints using the `Kbd` component, not plain text in pare
     Parentheses blend into prose and don't signal "keyboard shortcut" to the reader.
   </ExampleBlock>
 
-  <ExampleBlock variant="prefer" preview={<span>Undo <KbdGroup><Kbd>⌘</Kbd><Kbd>Z</Kbd></KbdGroup></span>} code="Undo <KbdGroup><Kbd>⌘</Kbd><Kbd>Z</Kbd></KbdGroup>">
+  <ExampleBlock
+    variant="prefer"
+    preview={<span>Undo <KbdGroup><Kbd>⌘</Kbd><Kbd>Z</Kbd></KbdGroup></span>}
+    code="Undo <KbdGroup><Kbd>⌘</Kbd><Kbd>Z</Kbd></KbdGroup>"
+  >
     The <code>Kbd</code> component provides visual distinction without extra punctuation.
   </ExampleBlock>
 </ExampleBlockGroup>
@@ -193,5 +197,5 @@ A link inside it cannot be reached by keyboard and is nearly unreachable by mous
 tooltip closes.
 
 A concrete example: an info icon next to "API key" could show a tooltip saying
-"Used to authenticate requests." But if the panel also includes a *Copy key* button,
+"Used to authenticate requests." But if the panel also includes a _Copy key_ button,
 that interaction belongs in a click-triggered popover, not a tooltip.
