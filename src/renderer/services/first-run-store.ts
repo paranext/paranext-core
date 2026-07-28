@@ -19,9 +19,9 @@ const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
 const WIZARD_ACTIVE_KEY = 'platform-bible.firstRunWizardActive';
 // Written when the user skips sync consent and cleared once the durable setting is confirmed.
 // The actual auto-sync gate lives in startup-tasks.ts (main process) and reads
-// platform.suppressStartupSync — see completeFirstRun and the self-heal block in resolveInternal.
+// platform.syncOnStartup — see completeFirstRun and the self-heal block in resolveInternal.
 // This localStorage cache is renderer-only; it is a one-time recovery hint, not the gate signal.
-const SUPPRESS_STARTUP_SYNC_CACHE_KEY = 'platform-bible.suppressStartupSync';
+const SYNC_ON_STARTUP_DISABLED_CACHE_KEY = 'platform-bible.syncOnStartupDisabled';
 // Demo/UX enablement only (PT-4219). When set, the wizard launches from the top without touching
 // the real registration backend or triggering a relaunch, and completion is NOT persisted so the
 // click-through re-runs on every launch. Toggle from devtools:
@@ -194,21 +194,19 @@ async function resolveInternal(): Promise<void> {
       }
     }
     if (firstRunComplete) {
-      // Self-heal: if the settings write for suppressStartupSync failed at wizard completion,
-      // re-attempt it so the next startup correctly suppresses auto-sync. Clear the hint once the
+      // Self-heal: if the settings write for syncOnStartup failed at wizard completion,
+      // re-attempt it so the next startup correctly skips auto-sync. Clear the hint once the
       // durable setting is confirmed (written or already there) so we don't pay a settings round-trip
       // on every subsequent startup. Don't clear on failure — retry next launch.
-      if (readBooleanFlag(SUPPRESS_STARTUP_SYNC_CACHE_KEY)) {
+      if (readBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY)) {
         try {
-          const syncSkipped = await settingsService.get('platform.suppressStartupSync');
-          if (isPlatformError(syncSkipped) || syncSkipped !== true) {
-            await settingsService.set('platform.suppressStartupSync', true);
+          const syncOnStartup = await settingsService.get('platform.syncOnStartup');
+          if (isPlatformError(syncOnStartup) || syncOnStartup !== false) {
+            await settingsService.set('platform.syncOnStartup', false);
           }
-          writeBooleanFlag(SUPPRESS_STARTUP_SYNC_CACHE_KEY, false);
+          writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, false);
         } catch (e) {
-          logger.warn(
-            `Self-heal write of platform.suppressStartupSync failed: ${getErrorMessage(e)}`,
-          );
+          logger.warn(`Self-heal write of platform.syncOnStartup failed: ${getErrorMessage(e)}`);
         }
       }
       setStatus({ kind: 'app' });
@@ -286,31 +284,31 @@ export async function resolveFirstRunState(): Promise<void> {
 /**
  * Finish the wizard: persist completion, clear the active marker, reveal the app.
  *
- * @param options.syncSkipped - When true, the user chose "Skip automatic sync" on the sync-consent
- *   step. Persists `platform.suppressStartupSync=true` so the main-process startup-tasks can
- *   suppress automatic sync on subsequent launches. Write is best-effort: a failure is logged but
- *   does not block wizard completion.
+ * @param options.skippedStep - The step that was skipped to end the wizard early (e.g.
+ *   `'syncConsent'`). The store persists any step-specific preference: for `syncConsent`, writes
+ *   `platform.syncOnStartup=false` so startup-tasks skips auto-sync on subsequent launches. Write
+ *   is best-effort: a failure is logged but does not block wizard completion.
  */
-export async function completeFirstRun(options?: { syncSkipped?: boolean }): Promise<void> {
+export async function completeFirstRun(options?: { skippedStep?: FirstRunStep }): Promise<void> {
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
   if (isDemoMode()) {
     setStatus({ kind: 'app' });
     return;
   }
   // Write firstRunComplete FIRST so a crash between the two writes leaves the wizard closed and
-  // sync enabled (safe fail) rather than sync permanently suppressed from an aborted session.
+  // sync enabled (safe fail) rather than sync permanently disabled from an aborted session.
   await markFirstRunComplete();
-  if (options?.syncSkipped) {
-    writeBooleanFlag(SUPPRESS_STARTUP_SYNC_CACHE_KEY, true);
+  if (options?.skippedStep === 'syncConsent') {
+    writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, true);
     // Persist durably as a platform setting so the main-process startup-tasks can read it.
     try {
-      await settingsService.set('platform.suppressStartupSync', true);
+      await settingsService.set('platform.syncOnStartup', false);
     } catch (e) {
-      logger.warn(`Failed to persist platform.suppressStartupSync: ${getErrorMessage(e)}`);
+      logger.warn(`Failed to persist platform.syncOnStartup: ${getErrorMessage(e)}`);
     }
   } else {
-    // Clear any stale hint so a future startup's self-heal can't incorrectly set suppressStartupSync.
-    writeBooleanFlag(SUPPRESS_STARTUP_SYNC_CACHE_KEY, false);
+    // Clear any stale hint so a future startup's self-heal can't incorrectly disable sync.
+    writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, false);
   }
   setStatus({ kind: 'app' });
 }

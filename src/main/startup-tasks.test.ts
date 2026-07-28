@@ -54,11 +54,11 @@ function requestTimedOutError() {
   );
 }
 
-function stubSettings({ mode = 'simple', firstRunComplete = true, syncSkipped = false } = {}) {
+function stubSettings({ mode = 'simple', firstRunComplete = true, syncOnStartup = true } = {}) {
   mockSettingsGet.mockImplementation(async (key: string) => {
     if (key === 'platform.interfaceMode') return mode;
     if (key === 'platform.firstRunComplete') return firstRunComplete;
-    if (key === 'platform.suppressStartupSync') return syncSkipped;
+    if (key === 'platform.syncOnStartup') return syncOnStartup;
     throw new Error(`Unexpected settings key in test stub: ${key}`);
   });
 }
@@ -120,22 +120,22 @@ describe('performStartupTasks', () => {
   });
 
   it('skips startup sync when user chose "Skip automatic sync" on sync consent step', async () => {
-    stubSettings({ mode: 'simple', firstRunComplete: true, syncSkipped: true });
+    stubSettings({ mode: 'simple', firstRunComplete: true, syncOnStartup: false });
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
     expect(mockLoggerDebug).toHaveBeenCalledWith(
-      expect.stringContaining('Startup sync skipped: platform.suppressStartupSync'),
+      expect.stringContaining('Startup sync skipped: platform.syncOnStartup'),
     );
   });
 
-  it('proceeds with startup sync when syncSkipped setting read throws (fail-open to sync)', async () => {
+  it('proceeds with startup sync when syncOnStartup setting read throws (fail-open to sync)', async () => {
     // If the setting read fails, default to proceeding with sync rather than silently skipping
     // a user who never actually chose to skip.
     mockSettingsGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.suppressStartupSync') throw new Error('read failed');
+      if (key === 'platform.syncOnStartup') throw new Error('read failed');
       throw new Error(`Unexpected settings key in test stub: ${key}`);
     });
     await performStartupTasks();
@@ -143,9 +143,7 @@ describe('performStartupTasks', () => {
       'paratextBibleSendReceive.syncProjects',
       undefined,
     );
-    expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining('platform.suppressStartupSync'),
-    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('platform.syncOnStartup'));
   });
 
   it('swallows sync failures without throwing', async () => {

@@ -169,40 +169,40 @@ describe('resolveFirstRunState', () => {
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true); // self-heal retry
   });
 
-  it('re-persists platform.suppressStartupSync when cache indicates a failed write', async () => {
-    // Reproduces the analogous failure for syncSkipped: the wizard wrote the localStorage cache but
-    // settingsService.set threw. A subsequent launch finds firstRunComplete=true but
-    // suppressStartupSync still false on disk — the self-heal must re-persist from the cache.
-    localStorage.setItem('platform-bible.suppressStartupSync', 'true');
-    stubSettings({ firstRunComplete: true }); // suppressStartupSync key not stubbed → returns undefined
+  it('re-persists platform.syncOnStartup when cache indicates a failed write', async () => {
+    // Reproduces the analogous failure for skipping sync: the wizard wrote the localStorage cache
+    // but settingsService.set threw. A subsequent launch finds firstRunComplete=true but
+    // syncOnStartup still true on disk — the self-heal must re-persist from the cache.
+    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
+    stubSettings({ firstRunComplete: true }); // syncOnStartup key not stubbed → returns undefined
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
+    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
     // Cache cleared after success so subsequent startups skip the settings round-trip.
-    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('false');
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
   });
 
-  it('does not re-persist platform.suppressStartupSync when the setting is already persisted', async () => {
-    localStorage.setItem('platform-bible.suppressStartupSync', 'true');
+  it('does not re-persist platform.syncOnStartup when the setting is already persisted', async () => {
+    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
     // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.firstRunComplete') return true;
-      if (key === 'platform.suppressStartupSync') return true;
+      if (key === 'platform.syncOnStartup') return false; // already persisted as false (skip)
       return undefined;
     });
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
     // Cache cleared even when no write was needed, to avoid future redundant reads.
-    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('false');
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
   });
 
-  it('does not attempt platform.suppressStartupSync self-heal when cache says skip never happened', async () => {
-    stubSettings({ firstRunComplete: true }); // no SYNC_SKIPPED_KEY in localStorage
+  it('does not attempt platform.syncOnStartup self-heal when cache says skip never happened', async () => {
+    stubSettings({ firstRunComplete: true }); // no SYNC_ON_STARTUP_DISABLED_CACHE_KEY in localStorage
     await resolveFirstRunState();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
-    expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
   });
 });
 
@@ -247,11 +247,11 @@ describe('demo mode (PT-4219)', () => {
   it('completion reveals the app but persists nothing, so the demo re-runs next launch', async () => {
     localStorage.setItem(DEMO_MODE_KEY, 'true');
     resetFirstRunStore();
-    await completeFirstRun({ syncSkipped: true });
+    await completeFirstRun({ skippedStep: 'syncConsent' });
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).not.toHaveBeenCalled();
     expect(localStorage.getItem('platform-bible.firstRunComplete')).toBeNull();
-    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBeNull();
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBeNull();
   });
 });
 
@@ -273,32 +273,32 @@ describe('completeFirstRun', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
 
-  it('records a sync-skipped hint when skipping', async () => {
-    await completeFirstRun({ syncSkipped: true });
-    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('true');
+  it('records a sync-disabled hint when skipping sync consent', async () => {
+    await completeFirstRun({ skippedStep: 'syncConsent' });
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('true');
   });
 
-  it('persists platform.suppressStartupSync when sync is skipped', async () => {
-    await completeFirstRun({ syncSkipped: true });
-    expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
+  it('persists platform.syncOnStartup=false when sync consent is skipped', async () => {
+    await completeFirstRun({ skippedStep: 'syncConsent' });
+    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
   });
 
-  it('does not write platform.suppressStartupSync when sync is not skipped', async () => {
+  it('does not write platform.syncOnStartup when no step was skipped', async () => {
     await completeFirstRun();
-    expect(mockSet).not.toHaveBeenCalledWith('platform.suppressStartupSync', expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith('platform.syncOnStartup', expect.anything());
   });
 
-  it('clears the suppressStartupSync hint when sync is not skipped', async () => {
+  it('clears the sync-disabled hint when no step was skipped', async () => {
     // A stale hint (e.g. from devtools or a prior aborted skip flow) must not trigger the self-heal
-    // to set suppressStartupSync=true on a user who completed without skipping.
-    localStorage.setItem('platform-bible.suppressStartupSync', 'true');
+    // to set syncOnStartup=false on a user who completed without skipping.
+    localStorage.setItem('platform-bible.syncOnStartupDisabled', 'true');
     await completeFirstRun();
-    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('false');
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
   });
 
-  it('writes firstRunComplete before suppressStartupSync (crash-safe ordering)', async () => {
+  it('writes firstRunComplete before syncOnStartup (crash-safe ordering)', async () => {
     // A crash between the two writes must leave the wizard closed and sync enabled.
-    // If the order were swapped, an aborted session would permanently suppress sync.
+    // If the order were swapped, an aborted session would permanently disable sync.
     const callOrder: string[] = [];
     // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
     mockSet.mockImplementation(async (key: string) => {
@@ -306,27 +306,27 @@ describe('completeFirstRun', () => {
       return undefined;
     });
 
-    await completeFirstRun({ syncSkipped: true });
+    await completeFirstRun({ skippedStep: 'syncConsent' });
 
     const completeIdx = callOrder.indexOf('platform.firstRunComplete');
-    const skippedIdx = callOrder.indexOf('platform.suppressStartupSync');
+    const skippedIdx = callOrder.indexOf('platform.syncOnStartup');
     expect(completeIdx).toBeGreaterThanOrEqual(0);
     expect(skippedIdx).toBeGreaterThanOrEqual(0);
     expect(completeIdx).toBeLessThan(skippedIdx);
   });
 
-  it('still completes first run even when persisting syncSkipped throws', async () => {
-    // Make the syncSkipped write fail, but the firstRunComplete write succeed
+  it('still completes first run even when persisting sync-disabled throws', async () => {
+    // Make the syncOnStartup write fail, but the firstRunComplete write succeed
     // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
     mockSet.mockImplementation(async (key: string) => {
-      if (key === 'platform.suppressStartupSync') throw new Error('write failed');
+      if (key === 'platform.syncOnStartup') throw new Error('write failed');
       return undefined;
     });
-    await completeFirstRun({ syncSkipped: true });
+    await completeFirstRun({ skippedStep: 'syncConsent' });
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockSet).toHaveBeenCalledWith('platform.firstRunComplete', true);
-    expect(mockSet).toHaveBeenCalledWith('platform.suppressStartupSync', true);
-    expect(localStorage.getItem('platform-bible.suppressStartupSync')).toBe('true');
+    expect(mockSet).toHaveBeenCalledWith('platform.syncOnStartup', false);
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('true');
   });
 });
 

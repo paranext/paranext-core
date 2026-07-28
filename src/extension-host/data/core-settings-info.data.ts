@@ -45,9 +45,9 @@ export const platformSettings: SettingsContribution = [
         default: false,
         isHidden: true,
       },
-      'platform.suppressStartupSync': {
-        label: '%settings_platform_suppressStartupSync_label%',
-        default: false,
+      'platform.syncOnStartup': {
+        label: '%settings_platform_syncOnStartup_label%',
+        default: true,
         isHidden: true,
       },
     },
@@ -77,7 +77,7 @@ const serializableStringDictionarySettingValidator: SettingValidator<
 };
 
 const booleanValidator: SettingValidator<
-  'platform.commentsEnabled' | 'platform.firstRunComplete' | 'platform.suppressStartupSync'
+  'platform.commentsEnabled' | 'platform.firstRunComplete' | 'platform.syncOnStartup'
 > = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
@@ -132,5 +132,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.zoomFactor': zoomFactorValidator,
   'platform.interfaceMode': interfaceModeValidator,
   'platform.firstRunComplete': booleanValidator,
-  'platform.suppressStartupSync': booleanValidator,
+  'platform.syncOnStartup': booleanValidator,
 };

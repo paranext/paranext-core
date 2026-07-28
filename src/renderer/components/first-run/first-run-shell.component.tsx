@@ -34,7 +34,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_stepIndicator%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
-  '%firstRun_button_skip%',
+  '%firstRun_button_skipSync%',
   '%firstRun_button_finish%',
   // Referenced via {%product_name%} in the title; formatReplacementString expands it.
   '%product_name%',
@@ -105,8 +105,8 @@ export function FirstRunShell({
   );
 
   const onSkip = useMemo(
-    () => (canSkip ? () => runAction(() => completeFirstRun({ syncSkipped: true })) : undefined),
-    [canSkip, runAction],
+    () => (canSkip ? () => runAction(() => completeFirstRun({ skippedStep: step })) : undefined),
+    [canSkip, step, runAction],
   );
 
   const StepComponent = stepComponents[step];
@@ -149,7 +149,7 @@ export function FirstRunShell({
         )}
         {onSkip && (
           <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skip%']}
+            {strings['%firstRun_button_skipSync%']}
           </Button>
         )}
         {canProceed !== undefined && (

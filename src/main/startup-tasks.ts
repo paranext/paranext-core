@@ -178,16 +178,16 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // Sync-consent gate: if the user chose "Skip automatic sync" on the sync-consent step, honor that
   // permanently. On an unreadable flag, default to syncing (consent-safe: the user likely never
   // explicitly skipped — a read failure here should not silently suppress a legitimate sync).
-  let syncSkipped = false;
+  let syncDisabled = false;
   try {
-    syncSkipped = (await settingsService.get('platform.suppressStartupSync')) === true;
+    syncDisabled = (await settingsService.get('platform.syncOnStartup')) === false;
   } catch (e) {
     logger.warn(
-      `Could not read platform.suppressStartupSync; proceeding with sync: ${getErrorMessage(e)}`,
+      `Could not read platform.syncOnStartup; proceeding with sync: ${getErrorMessage(e)}`,
     );
   }
-  if (syncSkipped) {
-    logger.debug('Startup sync skipped: platform.suppressStartupSync is true');
+  if (syncDisabled) {
+    logger.debug('Startup sync skipped: platform.syncOnStartup is false');
     return;
   }
 

@@ -4591,12 +4591,12 @@ declare module 'papi-shared-types' {
      */
     'platform.firstRunComplete': boolean;
     /**
-     * Whether the user chose "Skip automatic sync" on the sync-consent step of the simple-mode
-     * first-run wizard. Hidden; set once by the first-run store, read by startup-tasks to suppress
-     * the automatic startup sync on subsequent launches. Suppresses only the automatic startup
-     * sync; manual Send/Receive is unaffected. Never reset by core.
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
      */
-    'platform.suppressStartupSync': boolean;
+    'platform.syncOnStartup': boolean;
   }
   /**
    * Names for each user setting available on the papi.
