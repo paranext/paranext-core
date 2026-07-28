@@ -85,6 +85,10 @@ function stubMatchMedia() {
 
 describe('NotificationDisplay with real Sonner', () => {
   beforeEach(async () => {
+    // Fake timers prevent Sonner's auto-dismiss setTimeout (≥10 s) from entering the real
+    // Node.js event loop. Without this the timer fires after jsdom tears down and causes
+    // "window is not defined" because React's reconciler accesses window in its scheduler.
+    vi.useFakeTimers();
     vi.clearAllMocks();
     vi.resetModules();
     mockCurrentThemeType = 'light';
@@ -97,12 +101,14 @@ describe('NotificationDisplay with real Sonner', () => {
   });
 
   afterEach(() => {
-    // Sonner auto-dismiss timers fire after jsdom tears down if toasts are still alive,
-    // causing a "window is not defined" unhandled error. Dismissing all toasts here
-    // triggers Sonner's internal clearTimeout calls before the environment is torn down.
+    // Belt-and-suspenders: explicitly dismiss toasts so Sonner's store is clean for the
+    // next test. The real guard against post-teardown timer fires is vi.useFakeTimers() in
+    // beforeEach; vi.useRealTimers() here discards all pending fake timers without running
+    // them, so the auto-dismiss setTimeout never reaches the real event loop.
     act(() => {
       toast.dismiss();
     });
+    vi.useRealTimers();
   });
 
   it('sends the secondary command when the user clicks the rendered cancel-slot button', async () => {
@@ -118,6 +124,7 @@ describe('NotificationDisplay with real Sonner', () => {
     };
 
     const notificationId = await capturedService.send(notification);
+    vi.advanceTimersByTime(0);
 
     const cancelButton = await screen.findByRole('button', { name: 'Postpone' });
     fireEvent.click(cancelButton);
@@ -146,6 +153,7 @@ describe('NotificationDisplay with real Sonner', () => {
     };
 
     const notificationId = await capturedService.send(notification);
+    vi.advanceTimersByTime(0);
 
     const actionButton = await screen.findByRole('button', { name: 'Send/Receive now' });
     const cancelButton = await screen.findByRole('button', { name: 'Postpone until 3:24 PM' });
@@ -190,6 +198,7 @@ describe('NotificationDisplay with real Sonner', () => {
     };
 
     const notificationId = await capturedService.send(notification);
+    vi.advanceTimersByTime(0);
 
     const actionButton = await screen.findByRole('button', { name: 'Break lock and retry' });
     const title = await screen.findByText(/locked on the server/);
@@ -235,6 +244,7 @@ describe('NotificationDisplay with real Sonner', () => {
     };
 
     await capturedService.send(notification);
+    vi.advanceTimersByTime(0);
 
     const title = await screen.findByText('Time to sync');
     const toastRoot = document.querySelector('.notification-toast');
@@ -280,6 +290,7 @@ describe('NotificationDisplay with real Sonner', () => {
     };
 
     await capturedService.send(notification);
+    vi.advanceTimersByTime(0);
 
     const cancelButton = await screen.findByRole('button', { name: 'Postpone' });
     // A cancel-only toast now gets the two-row layout too (the `:has()` rule matches either button
@@ -298,6 +309,7 @@ describe('NotificationDisplay with real Sonner', () => {
     };
 
     await capturedService.send(notification);
+    vi.advanceTimersByTime(0);
 
     const title = await screen.findByText('Just an update');
     expect(title.closest('.notification-toast-content')).not.toBeNull();
@@ -314,6 +326,7 @@ describe('NotificationDisplay with real Sonner', () => {
     render(<NotificationDisplay />);
 
     await capturedService.send({ message: 'Dark toast', severity: 'info' });
+    vi.advanceTimersByTime(0);
     await screen.findByText('Dark toast');
 
     expect(document.querySelector('[data-sonner-toaster]')).toHaveAttribute('data-theme', 'dark');
@@ -324,6 +337,7 @@ describe('NotificationDisplay with real Sonner', () => {
     render(<NotificationDisplay />);
 
     await capturedService.send({ message: 'Custom-theme toast', severity: 'info' });
+    vi.advanceTimersByTime(0);
     await screen.findByText('Custom-theme toast');
 
     expect(document.querySelector('[data-sonner-toaster]')).toHaveAttribute('data-theme', 'light');
@@ -340,7 +354,9 @@ describe('NotificationDisplay with real Sonner', () => {
 
     // One default-position (bottom-right) toast and one top-center toast => two separate <ol> lists.
     await capturedService.send({ message: 'Bottom toast', severity: 'info' });
+    vi.advanceTimersByTime(0);
     await capturedService.send({ message: 'Top toast', severity: 'info', position: 'top-center' });
+    vi.advanceTimersByTime(0);
     await screen.findByText('Bottom toast');
     await screen.findByText('Top toast');
 
@@ -353,9 +369,8 @@ describe('NotificationDisplay with real Sonner', () => {
           new KeyboardEvent('keydown', { altKey: true, code: 'KeyT', bubbles: true }),
         );
         // Let the handler's queued macrotask (which does the actual focus move) run.
-        await new Promise((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        vi.advanceTimersByTime(0);
+        await Promise.resolve();
       });
       return document.activeElement;
     }

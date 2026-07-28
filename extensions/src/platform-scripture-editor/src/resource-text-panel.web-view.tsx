@@ -9,6 +9,7 @@ import {
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useSetting,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -21,6 +22,8 @@ import {
   Spinner,
   usePromise,
   useExtraValidMarkers,
+  useTabIconSelection,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -70,6 +73,20 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_commentaries_title%',
   '%webView_resourcePanel_commentaries_title_withResource%',
 ];
+
+const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/book-open-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/book-open-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/book-open-unselected.svg',
+};
+
+const COMMENTARIES_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/file-text.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/file-text-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
+};
 
 /** Returns the `id` field for reference types that have one, or `undefined` for others. */
 function getRefId(ref: EffectiveResourceReference): string | undefined {
@@ -153,6 +170,55 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'selectedResourceId',
     undefined,
   );
+
+  // #endregion
+
+  // #region Tab icon (Simple mode only — Power mode keeps this tab text-only, as today)
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) {
+      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
+      return false;
+    }
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
+
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const tabIconUrls =
+    resourceType === 'ScriptureResource' ? BIBLE_TEXTS_ICON_URLS : COMMENTARIES_ICON_URLS;
+  const tabIconUrl = useTabIconSelection(isDarkTheme, tabIconUrls);
+  useEffect(() => {
+    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
+    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
+    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
+    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
+    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
+    if (isPowerMode) {
+      updateWebViewDefinition({ iconUrl: undefined });
+      return;
+    }
+    updateWebViewDefinition({ iconUrl: tabIconUrl });
+  }, [isPowerMode, tabIconUrl, updateWebViewDefinition]);
 
   // #endregion
 
@@ -307,13 +373,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
     const baseTitle = localizedStrings[titleKey];
     if (!baseTitle) return;
     if (resourceShortName) {
+      const resolvedTitle = formatReplacementString(localizedStrings[titleWithResourceKey], {
+        textName: resourceShortName,
+      });
       updateWebViewDefinition({
-        title: formatReplacementString(localizedStrings[titleWithResourceKey], {
-          textName: resourceShortName,
-        }),
+        title: resolvedTitle,
+        tooltip: isPowerMode ? undefined : resolvedTitle,
       });
     } else {
-      updateWebViewDefinition({ title: baseTitle });
+      updateWebViewDefinition({ title: baseTitle, tooltip: isPowerMode ? undefined : baseTitle });
     }
   }, [
     resourceShortName,
@@ -321,6 +389,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     titleKey,
     titleWithResourceKey,
     updateWebViewDefinition,
+    isPowerMode,
   ]);
 
   // #endregion

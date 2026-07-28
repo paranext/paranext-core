@@ -10,6 +10,8 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 const STUB_STEPS = {
   ...DEFAULT_STEP_COMPONENTS,
   language: () => <p>language step</p>,
+  internet: () => <p>internet step</p>,
+  identify: () => <p>identify step</p>,
 };
 
 vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
@@ -22,7 +24,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_skip%': 'Skip',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_identify_placeholder%': 'Identify (coming soon)',
+      '%firstRun_step_internet_placeholder%': 'Internet settings (coming soon)',
       '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
@@ -47,34 +49,76 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     expect(screen.getByText(/language step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    expect(screen.getByText(/internet step/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
-    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language -> identify
-    expect(screen.getByText(/identify/i)).toBeInTheDocument();
+    render(
+      <FirstRunShell
+        entryStep="internet"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: () => <p>identify step</p> }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internet -> identify
+    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    expect(screen.queryByText(/identify step/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/internet settings \(coming soon\)/i)).toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
-    // A post-relaunch user resumes at syncConsent; the already-completed identify/language steps
-    // behind it must be unreachable (backing into Identify would re-trigger the relaunch).
+    // A post-relaunch user resumes at syncConsent; the already-completed language/internet/identify
+    // steps behind it must be unreachable (backing into the Identify step would re-trigger the relaunch).
     render(<FirstRunShell entryStep="syncConsent" />);
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    await userEvent.click(screen.getByRole('button', { name: /skip/i }));
+    // Skip is shown after SyncConsentPlaceholderStep's mount effect calls setCanSkip(true).
+    await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
     expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
+  });
+
+  it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
+    function SkippableStep({ setCanSkip }: FirstRunStepProps) {
+      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+      return <p>skippable</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...STUB_STEPS, language: SkippableStep }}
+      />,
+    );
+    await waitFor(() => screen.getByRole('button', { name: /skip/i }));
+    // Navigate away — shell must reset canSkip so the next step does not inherit it.
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
   it('completes when Finish is clicked on the last step', async () => {
     render(<FirstRunShell entryStep="syncProgress" />);
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     expect(mockComplete).toHaveBeenCalledWith();
+  });
+
+  it('hides Next when a step passes undefined to setCanProceed (step owns its own primary action)', async () => {
+    function OwnsActionStep({ setCanProceed }: FirstRunStepProps) {
+      useEffect(() => setCanProceed?.(undefined), [setCanProceed]);
+      return <p>own action</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, language: OwnsActionStep }}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
+    );
   });
 
   it('disables Next while a step reports it cannot proceed', async () => {
@@ -115,14 +159,11 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...STUB_STEPS, identify: BlockingStep }}
+        stepComponents={{ ...STUB_STEPS, internet: BlockingStep }}
       />,
     );
-    // Start on language (Next should be enabled)
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
-    // Navigate into identify (the blocking step)
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    // The blocking step's mount effect must win — Next must be disabled
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
   });
 });
