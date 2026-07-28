@@ -91,6 +91,7 @@ vi.mock('platform-bible-react', () => {
     Button: ButtonStub,
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
+    WizardStepper: () => null,
     useEvent: (
       event: ((handler: (detail: unknown) => void) => () => void) | undefined,
       handler: (detail: unknown) => void,
@@ -130,6 +131,15 @@ describe('FirstRunShell', () => {
   function SimpleSyncStep() {
     return <p>sync progress</p>;
   }
+
+  function SyncCompleter({ onNext: notifyDone }: FirstRunStepProps) {
+    return (
+      <button type="button" onClick={notifyDone}>
+        sync done
+      </button>
+    );
+  }
+
 
   it('advances through steps with the shell Next button', async () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
@@ -225,20 +235,13 @@ describe('FirstRunShell', () => {
   });
 
   it('does not call completeFirstRun twice if onNext fires again while already busy (syncProgress)', async () => {
-    let resolve!: () => void;
+    let done!: () => void;
     mockComplete.mockImplementation(
       () =>
-        new Promise<void>((r) => {
-          resolve = r;
+        new Promise<void>((resolve) => {
+          done = resolve;
         }),
     );
-    function SyncCompleter({ onNext: notifyDone }: FirstRunStepProps) {
-      return (
-        <button type="button" onClick={notifyDone}>
-          sync done
-        </button>
-      );
-    }
     render(
       <FirstRunShell
         entryStep="syncProgress"
@@ -248,20 +251,13 @@ describe('FirstRunShell', () => {
     const btn = screen.getByRole('button', { name: /sync done/i });
     await userEvent.click(btn); // fires first onNext — isBusy flips to true
     await userEvent.click(btn); // isBusy guard blocks second invocation
-    resolve();
+    done();
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
   });
 
 
   it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {
     mockComplete.mockRejectedValue(new Error('could not finish'));
-    function SyncCompleter({ onNext: notifyDone }: FirstRunStepProps) {
-      return (
-        <button type="button" onClick={notifyDone}>
-          sync done
-        </button>
-      );
-    }
     render(
       <FirstRunShell
         entryStep="syncProgress"
@@ -343,6 +339,14 @@ describe('FirstRunShell', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
     await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
+  });
+
+  it('goes back from internet to language (entry-floor: Back is gone on the first step)', async () => {
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
+    await userEvent.click(screen.getByRole('button', { name: /back/i })); // internet → language
+    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
   it('disables Next when navigating into a step that calls setCanProceed(false) on mount', async () => {

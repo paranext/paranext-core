@@ -16,10 +16,7 @@ export interface FirstRunStepProps {
   onNext: () => void;
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
-  /**
-   * Skip the rest of setup and finish. Present only when `setCanSkip(true)` has been called by the
-   * current step.
-   */
+  /** Skip the rest of setup and finish. Present only on the syncConsent step. */
   onSkip?: () => void;
   /**
    * Report whether the shell's Next button should be enabled. If not called, the shell's prior
@@ -29,9 +26,9 @@ export interface FirstRunStepProps {
    */
   setCanProceed?: (canProceed: boolean | undefined) => void;
   /**
-   * Declare whether the shell's Skip button should be shown. Skip is hidden by default; call
-   * `setCanSkip(true)` on mount to show it (e.g. on the Sync consent step). The shell resets this
-   * to `false` on every step transition.
+   * Request the shell to show (`true`) or hide (`false`) its Skip button. Call with `true` on mount
+   * to expose a step-specific skip path; call with `false` if the skip is no longer valid (e.g.
+   * after an async action starts).
    */
   setCanSkip?: (canSkip: boolean) => void;
 }

@@ -10,8 +10,7 @@ vi.mock('@renderer/services/first-run-store', async (importActual) => {
   const actual = await importActual<typeof store>();
   return { ...actual, getFirstRunStatus: vi.fn(), retryFirstRunResolution: vi.fn() };
 });
-// WizardStepper is not yet in the shared dist that the test environment resolves — stub it so
-// tests for overlay/shell navigation don't fail due to a missing component.
+// Stub WizardStepper to keep overlay tests focused on navigation state, not circle rendering.
 vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
