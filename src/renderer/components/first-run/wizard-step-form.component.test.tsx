@@ -6,7 +6,10 @@ import { WizardStepForm } from './wizard-step-form.component';
 describe('WizardStepForm', () => {
   it('renders the heading as an h2', () => {
     render(
-      <WizardStepForm heading="Enter your details" primaryButton={<button>Next</button>}>
+      <WizardStepForm
+        heading="Enter your details"
+        primaryButton={<button type="button">Next</button>}
+      >
         body
       </WizardStepForm>,
     );
@@ -15,7 +18,7 @@ describe('WizardStepForm', () => {
 
   it('renders children', () => {
     render(
-      <WizardStepForm heading="h" primaryButton={<button>Next</button>}>
+      <WizardStepForm heading="h" primaryButton={<button type="button">Next</button>}>
         body content
       </WizardStepForm>,
     );
@@ -24,7 +27,7 @@ describe('WizardStepForm', () => {
 
   it('renders the primaryButton', () => {
     render(
-      <WizardStepForm heading="h" primaryButton={<button>Submit</button>}>
+      <WizardStepForm heading="h" primaryButton={<button type="button">Submit</button>}>
         body
       </WizardStepForm>,
     );
@@ -33,7 +36,11 @@ describe('WizardStepForm', () => {
 
   it('renders error text when error prop is provided', () => {
     render(
-      <WizardStepForm heading="h" primaryButton={<button>OK</button>} error="Something failed">
+      <WizardStepForm
+        heading="h"
+        primaryButton={<button type="button">OK</button>}
+        error="Something failed"
+      >
         body
       </WizardStepForm>,
     );
@@ -42,7 +49,7 @@ describe('WizardStepForm', () => {
 
   it('does not render error text when error prop is omitted', () => {
     render(
-      <WizardStepForm heading="h" primaryButton={<button>OK</button>}>
+      <WizardStepForm heading="h" primaryButton={<button type="button">OK</button>}>
         body
       </WizardStepForm>,
     );
@@ -53,8 +60,8 @@ describe('WizardStepForm', () => {
     render(
       <WizardStepForm
         heading="h"
-        primaryButton={<button>Next</button>}
-        backButton={<button>Back</button>}
+        primaryButton={<button type="button">Next</button>}
+        backButton={<button type="button">Back</button>}
       >
         body
       </WizardStepForm>,
@@ -64,7 +71,7 @@ describe('WizardStepForm', () => {
 
   it('does not render backButton when omitted', () => {
     render(
-      <WizardStepForm heading="h" primaryButton={<button>Next</button>}>
+      <WizardStepForm heading="h" primaryButton={<button type="button">Next</button>}>
         body
       </WizardStepForm>,
     );
@@ -75,8 +82,8 @@ describe('WizardStepForm', () => {
     render(
       <WizardStepForm
         heading="h"
-        primaryButton={<button>Next</button>}
-        secondaryButton={<button>Skip</button>}
+        primaryButton={<button type="button">Next</button>}
+        secondaryButton={<button type="button">Skip</button>}
       >
         body
       </WizardStepForm>,
@@ -86,7 +93,7 @@ describe('WizardStepForm', () => {
 
   it('does not render secondaryButton when omitted', () => {
     render(
-      <WizardStepForm heading="h" primaryButton={<button>Next</button>}>
+      <WizardStepForm heading="h" primaryButton={<button type="button">Next</button>}>
         body
       </WizardStepForm>,
     );

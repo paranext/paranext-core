@@ -34,6 +34,7 @@ export function WizardStepForm({
       <div>{children}</div>
       {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
       <div className="tw:flex tw:justify-between tw:gap-2">
+        {/* Empty div when backButton is omitted — intentional justify-between spacer to keep secondary+primary right-aligned. */}
         <div>{backButton}</div>
         <div className="tw:flex tw:gap-2">
           {secondaryButton}
