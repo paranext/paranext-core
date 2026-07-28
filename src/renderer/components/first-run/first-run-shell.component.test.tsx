@@ -242,6 +242,10 @@ describe('FirstRunShell', () => {
     expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
   });
 
+  // Busy-state not tested for syncProgress: the footer is suppressed by the
+  // `step !== 'syncProgress'` guard, so no shell button exists to show a spinner
+  // or require busy-disabling during the completeFirstRun call.
+
   it('shows an sr-only step indicator that updates with navigation', async () => {
     render(<FirstRunShell entryStep="language" />);
     expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
