@@ -41,10 +41,17 @@ const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 
+// userEvent instance created once at module scope (before any fake-timer installation).
+// advanceTimers references vi.advanceTimersByTimeAsync by function reference — vitest replaces
+// setTimeout/clearTimeout with fakes in beforeEach and we advance manually in each test.
+const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync });
+
 beforeEach(() => {
-  vi.useFakeTimers();
   mockSendCommand.mockReset();
   mockIsDemoMode.mockReturnValue(false);
+  // shouldAdvanceTime: true lets userEvent's internal scheduler timers tick in real time
+  // while still allowing manual timer control for debounce assertions.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
 });
 
 afterEach(() => {
@@ -62,7 +69,6 @@ describe('IdentifyStep', () => {
   });
 
   it('Save button is disabled until both name and code fields are non-empty', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
@@ -78,7 +84,7 @@ describe('IdentifyStep', () => {
 
   it('submit calls validateParatextRegistrationData with the entered name and code', async () => {
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -95,7 +101,7 @@ describe('IdentifyStep', () => {
 
   it('shows inline error without advancing when validation fails', async () => {
     mockSendCommand.mockResolvedValueOnce(false);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -112,7 +118,7 @@ describe('IdentifyStep', () => {
       .mockResolvedValueOnce(true) // validateParatextRegistrationData
       .mockResolvedValueOnce(undefined) // setParatextRegistrationData
       .mockReturnValueOnce(new Promise(() => {})); // platform.restart — never settles
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -138,7 +144,7 @@ describe('IdentifyStep', () => {
       .mockResolvedValueOnce(true) // validateParatextRegistrationData
       .mockResolvedValueOnce(undefined); // setParatextRegistrationData
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(
       <IdentifyStep
         onNext={onNext}
@@ -179,7 +185,7 @@ describe('IdentifyStep', () => {
 
   it('shows valid registration alert when backend confirms the name+code', async () => {
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -190,7 +196,6 @@ describe('IdentifyStep', () => {
   });
 
   it('auto-inserts a dash after every 6th alphanumeric character typed', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     const codeInput = screen.getByLabelText(/registration code/i);
@@ -199,7 +204,6 @@ describe('IdentifyStep', () => {
   });
 
   it('removes the dash and the preceding character when backspacing over an auto-inserted dash', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     const codeInput = screen.getByLabelText(/registration code/i);
@@ -210,7 +214,6 @@ describe('IdentifyStep', () => {
   });
 
   it('shows format warning and sets aria-invalid after debounce when code has wrong format', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration code/i), 'ABC');
@@ -226,7 +229,7 @@ describe('IdentifyStep', () => {
 
   it('shows error and keeps Save disabled when validation request throws', async () => {
     mockSendCommand.mockRejectedValueOnce(new Error('Network error'));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -239,7 +242,7 @@ describe('IdentifyStep', () => {
 
   it('clears validation error immediately when user types again', async () => {
     mockSendCommand.mockResolvedValueOnce(false);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -254,7 +257,7 @@ describe('IdentifyStep', () => {
 
   it('validates with the correct name when code is entered before name', async () => {
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -271,7 +274,7 @@ describe('IdentifyStep', () => {
 
   it('re-disables Save immediately when a valid code is edited (synchronous state reset)', async () => {
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -287,7 +290,7 @@ describe('IdentifyStep', () => {
 
   it('shows error and re-enables Save when setParatextRegistrationData fails', async () => {
     mockSendCommand.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('Server error'));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -309,7 +312,6 @@ describe('IdentifyStep', () => {
     beforeEach(() => mockIsDemoMode.mockReturnValue(true));
 
     it('does not call validateParatextRegistrationData in demo mode', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
@@ -323,7 +325,6 @@ describe('IdentifyStep', () => {
     });
 
     it('enables Save and restart when name is non-empty (no code validation needed)', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
@@ -334,7 +335,6 @@ describe('IdentifyStep', () => {
     });
 
     it('calls onNext (not platform.restart) when Save and restart is clicked', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
