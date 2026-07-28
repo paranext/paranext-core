@@ -75,6 +75,9 @@ export function FirstRunShell({
   const locale = usePrimaryInterfaceLanguage();
   const fmt = useMemo(() => new NumberFormat(locale), [locale]);
   const formatStep = useCallback((n: number) => fmt.format(n), [fmt]);
+  // NUMBERED_STEPS.length is a module constant (always 4), so memoize its formatted form separately
+  // to avoid reformatting a fixed denominator on every step-navigation render.
+  const formattedStepCount = useMemo(() => fmt.format(NUMBERED_STEPS.length), [fmt]);
 
   const index = STEP_ORDER.indexOf(step);
   const isInterstitial = INTERSTITIAL_STEPS.has(step);
@@ -148,7 +151,7 @@ export function FirstRunShell({
   const indicator = !isInterstitial
     ? formatReplacementString(strings['%firstRun_stepIndicator%'], {
         stepNumber: fmt.format(numberedIndex + 1),
-        stepCount: fmt.format(NUMBERED_STEPS.length),
+        stepCount: formattedStepCount,
       })
     : '';
   const nextLabel = isLastStep
