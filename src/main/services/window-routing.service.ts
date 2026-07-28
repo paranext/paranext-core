@@ -52,8 +52,17 @@ class FocusedWindowDataProviderEngine
 
   #unsubscribeFromFocusChanges: Unsubscriber;
 
-  constructor(private readonly getWindowService: GetWindowService) {
+  /**
+   * Resolves a window's scoped service. Held in a `#`-private field on purpose: `buildDataProvider`
+   * classifies every visible function on an engine by prefix, so a normal `getWindowService`
+   * property would be read as a getter for a `WindowService` data type with no matching setter, and
+   * registration would fail the get/set matching check.
+   */
+  #resolveWindowService: GetWindowService;
+
+  constructor(resolveWindowService: GetWindowService) {
     super();
+    this.#resolveWindowService = resolveWindowService;
 
     // Focus moving from one window to another changes what `getFocus` answers even though no
     // window's own focus changed, so it has to reach subscribers as an update in its own right.
@@ -104,7 +113,7 @@ class FocusedWindowDataProviderEngine
     this.#relayedWindowId = undefined;
     if (targetWindowId === undefined) return;
 
-    const windowService = await this.getWindowService(targetWindowId);
+    const windowService = await this.#resolveWindowService(targetWindowId);
     if (!windowService) return;
 
     // Focus may have moved again while we were resolving; if so the later call owns the relay
@@ -125,7 +134,7 @@ class FocusedWindowDataProviderEngine
     const targetWindowId = getTargetWindowId();
     if (targetWindowId === undefined)
       throw new Error('No windows available to route window service call');
-    const windowService = await this.getWindowService(targetWindowId);
+    const windowService = await this.#resolveWindowService(targetWindowId);
     if (!windowService)
       throw new Error(
         `Window service for window ${targetWindowId} is not available. The renderer may not have started yet.`,
