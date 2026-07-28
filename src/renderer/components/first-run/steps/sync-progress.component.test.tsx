@@ -58,7 +58,7 @@ vi.mock('platform-bible-react', () => ({
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
-      '%firstRun_step_syncProgress_heading%': 'Syncing your data',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
       '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
@@ -123,7 +123,7 @@ describe('SyncProgressStep', () => {
 
   it('renders the syncing heading while sync is in progress', () => {
     render(<SyncProgressStep onNext={vi.fn()} />);
-    expect(screen.getByText(/syncing your data/i)).toBeInTheDocument();
+    expect(screen.getByText(/syncing your projects/i)).toBeInTheDocument();
     expect(screen.queryByText(/sync complete/i)).not.toBeInTheDocument();
   });
 
@@ -183,7 +183,7 @@ describe('SyncProgressStep', () => {
       emitSyncState(false);
     });
     expect(await screen.findByText(/sync complete/i)).toBeInTheDocument();
-    expect(screen.queryByText(/syncing your data/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/syncing your projects/i)).not.toBeInTheDocument();
   });
 
   it('syncing state has role="status" so screen readers see the initial heading', () => {
@@ -191,7 +191,7 @@ describe('SyncProgressStep', () => {
     // Both syncing and completion branches have role="status"; they are mutually exclusive —
     // only one is in the DOM at a time.
     const statusRegion = screen.getByRole('status');
-    expect(statusRegion).toHaveTextContent(/syncing your data/i);
+    expect(statusRegion).toHaveTextContent(/syncing your projects/i);
   });
 
   it('completion block has role="status" so screen readers announce the transition', async () => {

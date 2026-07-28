@@ -31,7 +31,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
       '%firstRun_button_skipSync%': 'Skip automatic sync',
-      '%firstRun_step_syncProgress_heading%': 'Syncing your data',
+      '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
       '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
@@ -90,12 +90,16 @@ vi.mock('platform-bible-react', () => {
       </button>
     );
   }
+  function InterfaceLanguagePickerStub() {
+    return <div data-testid="language-picker" />;
+  }
   return {
     Dialog: DialogStub,
     DialogContent: DialogContentStub,
     DialogTitle: DialogTitleStub,
     DialogDescription: DialogDescriptionStub,
     Button: ButtonStub,
+    InterfaceLanguagePicker: InterfaceLanguagePickerStub,
     Progress: ({ value, 'aria-label': l }: { value?: number; 'aria-label'?: string }) => (
       <div role="progressbar" aria-valuenow={value} aria-label={l} />
     ),
