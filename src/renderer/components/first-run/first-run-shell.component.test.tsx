@@ -204,6 +204,7 @@ describe('FirstRunShell', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
+    expect(mockComplete).toHaveBeenCalledTimes(1);
     expect(mockComplete).toHaveBeenCalledWith();
   });
 
@@ -222,6 +223,35 @@ describe('FirstRunShell', () => {
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
     );
   });
+
+  it('does not call completeFirstRun twice if onNext fires again while already busy (syncProgress)', async () => {
+    let resolve!: () => void;
+    mockComplete.mockImplementation(
+      () =>
+        new Promise<void>((r) => {
+          resolve = r;
+        }),
+    );
+    function SyncCompleter({ onNext: notifyDone }: FirstRunStepProps) {
+      return (
+        <button type="button" onClick={notifyDone}>
+          sync done
+        </button>
+      );
+    }
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SyncCompleter }}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /sync done/i });
+    await userEvent.click(btn); // fires first onNext — isBusy flips to true
+    await userEvent.click(btn); // isBusy guard blocks second invocation
+    resolve();
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+  });
+
 
   it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {
     mockComplete.mockRejectedValue(new Error('could not finish'));
@@ -242,15 +272,38 @@ describe('FirstRunShell', () => {
     expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
   });
 
-  // Busy-state not tested for syncProgress: the footer is suppressed by the
-  // `step !== 'syncProgress'` guard, so no shell button exists to show a spinner
-  // or require busy-disabling during the completeFirstRun call.
+  it('hides Back and Skip on syncProgress (interstitial — no footer navigation)', async () => {
+    // Navigate via SyncConsentStep's own Sync button (it hides the shell Next via setCanProceed(undefined)).
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^sync$/i })); // → syncProgress
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+  });
 
   it('shows an sr-only step indicator that updates with navigation', async () => {
     render(<FirstRunShell entryStep="language" />);
     expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
     expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
+  });
+
+  it('does not show a step indicator on syncProgress (live region stays mounted but empty)', async () => {
+    // Navigate via SyncConsentStep's own Sync button (it hides the shell Next via setCanProceed(undefined)).
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
+    // On syncConsent the indicator is "Step 4 of 4" (sr-only but in DOM)
+    expect(screen.getByText('Step 4 of 4')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /^sync$/i })); // → syncProgress
+    expect(screen.queryByText(/step \d+ of \d+/i)).not.toBeInTheDocument();
   });
 
 
