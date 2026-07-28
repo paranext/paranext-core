@@ -55,6 +55,8 @@ const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+/** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
+const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
 // #region Editor Selection Tracking
 
@@ -994,16 +996,29 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
+    // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
+    // LocalizeKey passed as `title`, so that half needs no resolution — but `tooltip` is a plain
+    // string, never auto-resolved, so it must already be localized text by the time it's set. Doing
+    // both here means the tab shows "Text Collection" and a working tooltip from its very first
+    // render, instead of depending on this tab's own (possibly backgrounded, and therefore
+    // unreliably-timed) web view to push the resolved strings back out via updateWebViewDefinition
+    // after mount.
+    const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+      localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    });
     return {
       ...savedWebView,
-      // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps
-      // this in sync). The initial empty title avoids flashing a label before the web view runs.
-      title: '',
-      tooltip: '%webView_scriptureTextGrid_title_multiple%',
-      // Part of the default Simple-mode layout and must always remain open, so the tab is
-      // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
-      // so this covers both close paths.
-      isClosable: false,
+      title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+      tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+      // This webview is dual-mode: in simple mode it's part of Column 3's fixed layout and must
+      // always remain open (the X-button is omitted and there is no keyboard close shortcut, so
+      // this covers both close paths), so it's non-closable there. Power mode allows closing
+      // freely, matching the other Column 3 providers (ScriptureEditorWebViewFactory,
+      // createResourceTextPanelProvider) — this also determines its rc-dock group (getTabGroup):
+      // isClosable === false routes it to TAB_GROUP_RESOURCES, which getGroups() only registers in
+      // Simple mode, so leaving this unconditionally false left the tab pointing at a group with no
+      // registered config in Power mode.
+      isClosable: interfaceMode === 'power',
       // No top toolbar in this view; the View Options icon button lives in the web view's header.
       shouldShowToolbar: false,
       projectId,
@@ -1037,6 +1052,7 @@ function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  defaultIconUrl: string,
 ): IWebViewProvider {
   return {
     async getWebView(
@@ -1054,17 +1070,21 @@ function createResourceTextPanelProvider(
         ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       currentResourceTextPanelProjectIds.delete(webViewType);
+      // Re-read every call so mode changes are picked up at open/replace/restore time.
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
       // commentaries are read-only reference panels that navigate independently; they are
       // not scroll-synced with the scripture editor in simple mode.
-      // Re-read every call so mode changes are picked up at open/replace/restore time.
-      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       return {
         ...savedWebView,
         title,
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
+        // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
+        // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
+        // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
+        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
         state: {
           ...savedWebView.state,
           resourceType,
@@ -1081,12 +1101,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
+  'papi-extension://platformScriptureEditor/assets/book-open.svg',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
+  'papi-extension://platformScriptureEditor/assets/file-text.svg',
 );
 
 async function openResourceText(

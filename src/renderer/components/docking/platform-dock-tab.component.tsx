@@ -1,6 +1,6 @@
 import { TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 
-import { TAB_GROUP } from './platform-dock-layout-positioning.util';
+import { getTabGroup } from './platform-dock-layout-positioning.util';
 import { PlatformPanel } from './platform-panel.component';
 import { PlatformTabTitle } from './platform-tab-title.component';
 import { RCDockTabInfo } from './docking-framework-internal.model';
@@ -47,7 +47,7 @@ export function createRCDockTabFromTabInfo(
       />
     ),
     content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,
-    group: TAB_GROUP,
+    group: getTabGroup(tabInfo),
     // Tabs are closable by default; a WebView can opt out by setting `isClosable: false` (e.g. the
     // fixed 3-column simple-mode layout's own webviews, which force this per interface mode so
     // floating dialogs like About/Settings stay closable in simple mode while the fixed columns

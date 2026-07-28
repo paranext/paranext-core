@@ -11,7 +11,9 @@ import {
   Sonner,
   sonner,
   usePromise,
+  useTabIconSelection,
   useViewVisibility,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -20,7 +22,12 @@ import {
   useProjectDataProvider,
   useWebViewController,
 } from '@papi/frontend/react';
-import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  LegacyCommentThread,
+  serialize,
+} from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
@@ -40,6 +47,13 @@ import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-block
 import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+const COMMENT_LIST_PANEL_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://legacyCommentManager/assets/message-square.svg',
+  dark: 'papi-extension://legacyCommentManager/assets/message-square-dark.svg',
+  lightSelected: 'papi-extension://legacyCommentManager/assets/message-square-selected.svg',
+  lightUnselected: 'papi-extension://legacyCommentManager/assets/message-square-unselected.svg',
+};
 
 /**
  * Wraps a PDP method call with a null check. If the PDP is not yet available, logs a debug message
@@ -68,6 +82,7 @@ global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
   projectId,
+  updateWebViewDefinition,
   webViewType,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
@@ -92,6 +107,42 @@ global.webViewComponent = function CommentListWebView({
   // this component, so its own `webViewType` prop distinguishes the panel — no extra state channel
   // needed (and nothing gets serialized into persisted layouts).
   const isCommentListPanel = webViewType === COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
+
+  // #region Tab icon (Comment List panel only, both Power and Simple mode — matching Text
+  // Collection's convention; per-product-decision this tab keeps its icon in Power mode too,
+  // unlike Bible Texts/Commentaries which stay Simple-mode-only. The non-panel comment-list web
+  // view type still keeps its tab/view text-only, as today.)
+
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const commentListPanelIconUrl = useTabIconSelection(isDarkTheme, COMMENT_LIST_PANEL_ICON_URLS);
+  useEffect(() => {
+    // `isCommentListPanel` is fixed for this component instance's whole lifetime (derived from the
+    // webViewType prop), so there's no icon to clear when it's false — this instance never set one.
+    if (!isCommentListPanel) return;
+    updateWebViewDefinition({ iconUrl: commentListPanelIconUrl });
+  }, [isCommentListPanel, commentListPanelIconUrl, updateWebViewDefinition]);
+
+  // #endregion
+
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
