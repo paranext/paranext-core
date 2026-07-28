@@ -40,6 +40,12 @@ const onDidChangeFocusedWindowIdEmitter = new PlatformEventEmitter<number | unde
  * Routing proxies that forward to "the focused window" need this: it is the moment their answer
  * changes without any window's own state having changed. Fires only on an actual change, so a
  * repeated `setFocusedWindowId` with the same ID is quiet.
+ *
+ * Tracks `focusedWindowId` specifically, NOT the routing target. `getTargetWindowId()` is the
+ * authority on where calls go, and it falls back to the first tracked window when nothing is
+ * focused — so while that fallback is in play, adding or removing a window changes the routing
+ * target without firing this event. Consumers should treat the payload as informational and read
+ * `getTargetWindowId()` for the value they actually route on.
  */
 export const onDidChangeFocusedWindowId = onDidChangeFocusedWindowIdEmitter.event;
 
