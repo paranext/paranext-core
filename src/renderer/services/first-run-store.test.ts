@@ -273,9 +273,11 @@ describe('completeFirstRun', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
 
-  it('records a sync-disabled hint when skipping sync consent', async () => {
+  it('clears the sync-disabled cache hint after a successful syncOnStartup write', async () => {
+    // The hint is set before the write (crash recovery) and cleared once the write is confirmed.
+    // A stale 'true' hint would trigger a redundant self-heal read on every subsequent launch.
     await completeFirstRun({ skippedStep: 'syncConsent' });
-    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('true');
+    expect(localStorage.getItem('platform-bible.syncOnStartupDisabled')).toBe('false');
   });
 
   it('persists platform.syncOnStartup=false when sync consent is skipped', async () => {

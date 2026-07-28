@@ -2,7 +2,7 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { sendCommand } from '@shared/services/command.service';
 import { Button, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
@@ -36,22 +36,26 @@ function SyncConsentStep({
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState('');
 
-  // Tell the shell to show a Skip button and hide its generic Next button.
+  // Tell the shell to show a Skip button. useEffect (async) is fine — a brief delay before Skip
+  // appears is harmless.
   useEffect(() => {
     setCanSkip?.(true);
   }, [setCanSkip]);
-  useEffect(() => {
+  // Hide the shell's generic Next button before the first paint so it never flashes visible.
+  useLayoutEffect(() => {
     setCanProceed?.(undefined);
   }, [setCanProceed]);
 
   const handleSync = async () => {
     setError('');
+    setCanSkip?.(false); // prevent Skip while sync is in-flight
     setIsSyncing(true);
     try {
       await onSync();
       onNext();
     } catch (e) {
       setError(getErrorMessage(e));
+      setCanSkip?.(true); // re-enable Skip so the user can still bail after a failed sync
     } finally {
       setIsSyncing(false);
     }

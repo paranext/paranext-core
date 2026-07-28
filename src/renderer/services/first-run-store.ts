@@ -303,6 +303,7 @@ export async function completeFirstRun(options?: { skippedStep?: FirstRunStep })
     // Persist durably as a platform setting so the main-process startup-tasks can read it.
     try {
       await settingsService.set('platform.syncOnStartup', false);
+      writeBooleanFlag(SYNC_ON_STARTUP_DISABLED_CACHE_KEY, false); // clear once confirmed
     } catch (e) {
       logger.warn(`Failed to persist platform.syncOnStartup: ${getErrorMessage(e)}`);
     }

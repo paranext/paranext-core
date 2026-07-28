@@ -60,6 +60,33 @@ describe('SyncConsentStep', () => {
     expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
   });
 
+  it('calls setCanSkip(false) when sync starts to prevent Skip while in-flight', async () => {
+    const setCanSkip = vi.fn();
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        setCanSkip={setCanSkip}
+        onSync={makeOnSync(() => new Promise(() => {}))}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+    expect(setCanSkip).toHaveBeenCalledWith(false);
+  });
+
+  it('calls setCanSkip(true) when sync throws so the user can still skip after a failed sync', async () => {
+    const setCanSkip = vi.fn();
+    render(
+      <SyncConsentStep
+        onNext={vi.fn()}
+        setCanSkip={setCanSkip}
+        onSync={makeOnSync(() => Promise.reject(new Error('network error')))}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^sync$/i }));
+    await screen.findByText(/network error/i);
+    expect(setCanSkip).toHaveBeenLastCalledWith(true);
+  });
+
   it('"Sync" button calls onSync then onNext', async () => {
     const onSync = makeOnSync();
     const onNext = vi.fn();
