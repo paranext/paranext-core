@@ -207,7 +207,11 @@ export function FirstRunShell({
           setManagesOwnFooter={setManagesOwnFooter}
         />
 
-        {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
+        {error && (
+          <p className="tw:text-sm tw:text-destructive" aria-live="assertive" role="alert">
+            {error}
+          </p>
+        )}
 
         {/* Steps that render their own footer (via WizardStepForm) set managesOwnFooter so the shell
             does not stack a second Back/Skip/Next row beneath the step's own. Back/Skip are still

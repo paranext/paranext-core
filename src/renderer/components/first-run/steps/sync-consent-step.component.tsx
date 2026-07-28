@@ -29,14 +29,16 @@ const defaultSyncFn = (): Promise<void> =>
  * and then advances via `onNext`. Sync runs to completion with a local button spinner; PT-4179 will
  * add a dedicated progress interstitial when it lands.
  *
- * "Skip automatic sync" calls `onSkip`, which marks `platform.suppressStartupSync = true` so the
- * main-process startup sync gate skips auto-sync permanently.
+ * "Skip automatic sync" calls `onSkip`, which writes `platform-bible.firstRunSyncSkipped = true`
+ * via `completeFirstRun({ syncSkipped: true })` so the main-process startup sync gate skips
+ * auto-sync permanently.
  *
  * `onSync` is injectable for Storybook and unit-test isolation.
  *
- * Known limitation: until PT-4257 implements `managesOwnFooter` support, the shell's generic footer
- * (Back/Skip/Next) is still rendered alongside this step's own WizardStepForm buttons.
- * `setCanProceed(false)` disables the shell's Next to prevent bypassing the sync decision.
+ * The shell suppresses its own footer (Back / Skip / Next) for this step via a `step !==
+ * 'syncConsent'` guard — the step manages its own navigation entirely via WizardStepForm.
+ * `setCanProceed(false)` is kept as a defensive fallback in case that guard is ever removed before
+ * PT-4179's generic prop-based opt-out lands.
  */
 export function SyncConsentStep({
   onNext,
@@ -45,7 +47,8 @@ export function SyncConsentStep({
   setCanProceed,
   onSync = defaultSyncFn,
 }: FirstRunStepProps & { onSync?: () => Promise<void> }) {
-  // Disable the shell's generic Next — this step manages its own navigation.
+  // Defensive: disable the shell's generic Next in case the step !== 'syncConsent' footer guard
+  // in the shell is removed before PT-4179 ships a generic prop-based opt-out.
   useEffect(() => setCanProceed?.(false), [setCanProceed]);
 
   const [strings] = useLocalizedStrings(KEYS);
