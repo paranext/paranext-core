@@ -39,16 +39,25 @@ internal class PersistedPtxUtilsSettings : IPtxUtilsSettings
 
     public void SafeSave()
     {
-        if (
-            _loadUnconfirmed
-            && !SettingsService.TryGetSetting(
-                _papiClient,
-                Settings.PTX_UTILS_MEMENTO_DATA,
-                out SerializableStringDictionary? _
+        if (_loadUnconfirmed)
+        {
+            if (
+                !SettingsService.TryGetSetting(
+                    _papiClient,
+                    Settings.PTX_UTILS_MEMENTO_DATA,
+                    out SerializableStringDictionary? persistedValue
+                )
             )
-        )
-            return;
-        _loadUnconfirmed = false;
+                return;
+            _loadUnconfirmed = false;
+
+            // The confirming read may have found mementos from before this session that our
+            // fallback-to-empty default never saw. Keep them, but let in-memory changes win.
+            if (persistedValue != null)
+                foreach (var (key, value) in persistedValue)
+                    if (!MementoData.ContainsKey(key))
+                        MementoData[key] = value;
+        }
 
         SettingsService.SetSetting(_papiClient, Settings.PTX_UTILS_MEMENTO_DATA, MementoData);
     }

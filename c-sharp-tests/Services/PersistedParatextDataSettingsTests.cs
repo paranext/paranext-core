@@ -68,26 +68,50 @@ public class PersistedParatextDataSettingsTests
     }
 
     [Test]
-    public void SafeSave_OnceReachableAfterAFailedLoad_PersistsAccumulatedChanges()
+    public void SafeSave_OnceReachableAfterAFailedLoad_MergesPersistedEntriesWithAccumulatedChanges()
     {
         // Initial load fails; changes accumulate in memory while the service is unreachable.
         var settings = new PersistedParatextDataSettings(_client);
-        settings.LastRegistryDataCachedTimes["someProject"] = "queued-before-service-available";
+        settings.LastRegistryDataCachedTimes["newProject"] = "queued-before-service-available";
         settings.SafeSave(); // still unreachable; skipped
 
-        // The service becomes reachable.
+        // The service becomes reachable, and it turns out it already had an entry from before
+        // this session that the failed initial load never got to see.
         _settingsService.AddSettingValue(
             Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
-            new SerializableStringDictionary()
+            new SerializableStringDictionary { ["existingProject"] = "2025-01-01" }
         );
 
-        settings.SafeSave(); // must retry, notice it's reachable now, and persist
+        settings.SafeSave(); // must retry, notice it's reachable now, merge, and persist
 
         var saved = (SerializableStringDictionary)
             _settingsService.GetSettingValue(
                 Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
             )!;
-        Assert.That(saved["someProject"], Is.EqualTo("queued-before-service-available"));
+        Assert.That(saved["newProject"], Is.EqualTo("queued-before-service-available"));
+        Assert.That(saved["existingProject"], Is.EqualTo("2025-01-01"));
+    }
+
+    [Test]
+    public void SafeSave_OnceReachableAfterAFailedLoad_InMemoryValueWinsOnConflict()
+    {
+        var settings = new PersistedParatextDataSettings(_client);
+        settings.LastRegistryDataCachedTimes["someProject"] = "in-memory-value";
+        settings.SafeSave(); // still unreachable; skipped
+
+        // The persisted value for the same key differs from the in-memory one.
+        _settingsService.AddSettingValue(
+            Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
+            new SerializableStringDictionary { ["someProject"] = "stale-persisted-value" }
+        );
+
+        settings.SafeSave();
+
+        var saved = (SerializableStringDictionary)
+            _settingsService.GetSettingValue(
+                Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
+            )!;
+        Assert.That(saved["someProject"], Is.EqualTo("in-memory-value"));
     }
 
     [Test]
