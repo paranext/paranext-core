@@ -455,7 +455,10 @@ declare module 'papi-shared-types' {
      * Note: this command is served from the dotnet process. Unlike most Send/Receive commands it is
      * registered by core's own `SendReceiveBlockNotifierService` rather than the extension, so it
      * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 Studio
-     * arms the gate). Older cores lack it entirely and requests reject.
+     * arms the gate). The realistic failure mode is a cold-start race: if the dotnet process has
+     * not registered the command within main's retry budget (~9s), the request rejects — callers
+     * should keep their fail-safe not-blocking default, and there is no re-query until PT-4265
+     * lands.
      *
      * @returns The write gate's current snapshot
      * @experimental This command is unstable and may change or disappear without notice

@@ -1,3 +1,4 @@
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
 
 namespace Paranext.DataProvider.Projects.SendReceive;
@@ -67,11 +68,39 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
     /// </summary>
     private const string RegisterEventMethod = "network:registerEvent";
 
+    /// <summary>
+    /// OpenRPC documentation sent along with the <see cref="BlockStateChangedEvent"/> registration
+    /// (the C# counterpart of the TypeScript <c>SingleNotificationDocumentation</c> second argument
+    /// to <c>network:registerEvent</c>). The event is @experimental (see the TS declaration), so
+    /// this carries the <c>x-experimental</c> wire marker.
+    /// </summary>
+    private static readonly OpenRpcSingleNotificationDocumentation s_blockStateChangedEventDocumentation =
+        new()
+        {
+            Notification = new()
+            {
+                Experimental = true,
+                Summary =
+                    "Emitted whenever the S/R write gate arms or disarms, carrying the gate's "
+                    + "full current block-state snapshot ({ isBlocking, projectIds }).",
+                Params =
+                [
+                    new()
+                    {
+                        Name = "state",
+                        Summary = "The write gate's current block-state snapshot",
+                        Required = true,
+                        Schema = new() { Type = "object" },
+                    },
+                ],
+            },
+        };
+
     private PapiClient PapiClient { get; } = papiClient;
 
     public async Task InitializeAsync()
     {
-        // Subscribe to the gate FIRST, before the registration round-trip below, so no transition
+        // Subscribe to the gate FIRST, before the registration round-trips below, so no transition
         // can slip through unsubscribed while the network:registerEvent request is in flight. A
         // transition that beats registration just announces unregistered (main logs its once-per-name
         // deprecation warning), which is the right trade for the single block-state signal — a missed
@@ -83,41 +112,48 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
         // Register the event with main's central event registry (best-effort — on rejection or
         // failure, log and continue; emitting unregistered still works, and startup must never break
         // over this). We accept that a transition arriving during this await may announce before the
-        // registration completes; see the subscribe-first rationale above.
-        try
+        // registration completes; see the subscribe-first rationale above. A local function so the
+        // try/catch travels with the request into the Task.WhenAll below.
+        async Task RegisterEventBestEffortAsync()
         {
-            bool accepted = await PapiClient.SendRequestAsync<bool>(
-                RegisterEventMethod,
-                [BlockStateChangedEvent]
-            );
-            if (!accepted)
-                Console.Error.WriteLine(
-                    $"Central registry rejected network event '{BlockStateChangedEvent}' (already "
-                        + "registered by another process?); announcements will warn as unregistered"
+            try
+            {
+                bool accepted = await PapiClient.SendRequestAsync<bool>(
+                    RegisterEventMethod,
+                    [BlockStateChangedEvent, s_blockStateChangedEventDocumentation]
                 );
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"Failed to register network event '{BlockStateChangedEvent}' with the central "
-                    + $"registry; announcements will warn as unregistered. {ex}"
-            );
+                if (!accepted)
+                    Console.Error.WriteLine(
+                        $"Central registry rejected network event '{BlockStateChangedEvent}' (already "
+                            + "registered by another process?); announcements will warn as unregistered"
+                    );
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    $"Failed to register network event '{BlockStateChangedEvent}' with the central "
+                        + $"registry; announcements will warn as unregistered. {ex}"
+                );
+            }
         }
 
-        // Register the pull command so a renderer can read the current snapshot on demand instead of
-        // waiting for the next transition. GetBlockState returns the snapshot the handler serializes
-        // straight back to the caller. The command is @experimental (see the TS declaration), so its
-        // registration also carries the x-experimental wire marker per the Experimental APIs
-        // standard.
-        await PapiClient.RegisterRequestHandlerAsync(
-            GetAutoSyncBlockingCommand,
-            SendReceiveWriteLock.GetBlockState,
-            null,
-            Create(
-                "Returns the S/R write gate's current block-state snapshot ({ isBlocking, "
-                    + "projectIds }) so a renderer can seed its blocking state on demand instead of "
-                    + "waiting for the next onSyncWriteLockChanged transition.",
-                result: ResultOf("object", "The write gate's current block-state snapshot")
+        // The command registration serves the pull surface: a renderer reads the current snapshot on
+        // demand instead of waiting for the next transition (GetBlockState returns the snapshot the
+        // handler serializes straight back to the caller). Run both registrations in parallel — each
+        // is an independent round-trip to main, and awaiting them serially would let one stalled
+        // response stack a second full request timeout onto the startup barrier.
+        await Task.WhenAll(
+            RegisterEventBestEffortAsync(),
+            PapiClient.RegisterRequestHandlerAsync(
+                GetAutoSyncBlockingCommand,
+                SendReceiveWriteLock.GetBlockState,
+                null,
+                Create(
+                    "Returns the S/R write gate's current block-state snapshot ({ isBlocking, "
+                        + "projectIds }) so a renderer can seed its blocking state on demand instead of "
+                        + "waiting for the next onSyncWriteLockChanged transition.",
+                    result: ResultOf("object", "The write gate's current block-state snapshot")
+                )
             )
         );
 

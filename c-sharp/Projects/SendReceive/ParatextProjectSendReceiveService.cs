@@ -143,7 +143,7 @@ internal class ParatextProjectSendReceiveService(
 #if DEBUG
         // Dev-only placeholder: paranext-core has no S/R impl. PT10 patches the whole method.
         NotificationService.Send(
-            papiClient,
+            PapiClient,
             new("Syncing projects… (dev placeholder)", NotificationSeverity.Info)
             {
                 Duration = 3000,
@@ -189,8 +189,13 @@ internal class ParatextProjectSendReceiveService(
     /// <returns>Map of (upper-cased) project id → whether that project's lock was broken.</returns>
     protected Task<Dictionary<string, bool>> BreakSyncLock(List<string> projectIds)
     {
-        throw new PlatformUnimplementedException(
-            $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+        // Deliver the fault through the returned task rather than throwing synchronously, so the
+        // stub's fault mode matches the async Paratext 10 Studio implementation that replaces this
+        // body (and the method stays async-free, avoiding CS1998).
+        return Task.FromException<Dictionary<string, bool>>(
+            new PlatformUnimplementedException(
+                $"Command '{nameof(BreakSyncLock)}' is not implemented in Platform.Bible. Must be running Paratext 10 Studio to use this command."
+            )
         );
     }
 

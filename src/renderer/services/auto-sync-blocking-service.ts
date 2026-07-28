@@ -19,9 +19,11 @@ const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockC
 /**
  * Command served by the C# backend (the emitter of {@link SYNC_WRITE_LOCK_CHANGED_EVENT}) returning
  * the current snapshot, so this service can seed the store on init instead of assuming unblocked.
- * Declared in the seam's `CommandHandlers`, so it is sent through the typed `sendCommand`. Served
- * on Paratext 10 Studio (returns not-blocking on plain Platform.Bible); older cores lack it
- * entirely and the request rejects, leaving the assume-unblocked default.
+ * Declared in the seam's `CommandHandlers`, so it is sent through the typed `sendCommand`. Core's
+ * own backend registers it, so it is answered on plain Platform.Bible too (always not-blocking
+ * there). The realistic failure is a cold-start race: the backend has not registered the command
+ * within main's retry budget (~9s), the request rejects, and the assume-unblocked default stands —
+ * with no re-query until PT-4265 lands.
  */
 const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
 
@@ -39,15 +41,15 @@ const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBloc
 export function initAutoSyncBlockingService(): () => void {
   let hasReceivedEvent = false;
   let isDisposed = false;
-  let hasWarnedMalformed = false;
+  const warnedMalformedSources = new Set<string>();
 
   /**
    * Extracts the project ids to block from an untrusted snapshot payload. A well-formed
    * not-blocking snapshot yields `[]`; a malformed/missing-field payload also yields `[]`
-   * (fail-safe assume-unblocked) and warns once per service lifetime, consistent with the
-   * assume-unblocked init philosophy — a broken signal must never leave the workspace blocked.
+   * (fail-safe assume-unblocked) and warns once per `source` per service lifetime, consistent with
+   * the assume-unblocked init philosophy — a broken signal must never leave the workspace blocked.
    */
-  const readBlockedProjectIds = (payload: unknown): string[] => {
+  const readBlockedProjectIds = (payload: unknown, source: string): string[] => {
     if (
       typeof payload === 'object' &&
       payload &&
@@ -55,15 +57,17 @@ export function initAutoSyncBlockingService(): () => void {
       'projectIds' in payload
     ) {
       const { isBlocking, projectIds } = payload;
-      if (typeof isBlocking === 'boolean' && Array.isArray(projectIds)) {
-        const stringIds = projectIds.filter(isString);
-        if (stringIds.length === projectIds.length) return isBlocking ? stringIds : [];
-      }
+      if (
+        typeof isBlocking === 'boolean' &&
+        Array.isArray(projectIds) &&
+        projectIds.every(isString)
+      )
+        return isBlocking ? projectIds : [];
     }
-    if (!hasWarnedMalformed) {
-      hasWarnedMalformed = true;
+    if (!warnedMalformedSources.has(source)) {
+      warnedMalformedSources.add(source);
       logger.warn(
-        `auto-sync blocking service received a malformed ${SYNC_WRITE_LOCK_CHANGED_EVENT} snapshot; assuming not blocking`,
+        `auto-sync blocking service received a malformed snapshot from ${source}; assuming not blocking`,
       );
     }
     return [];
@@ -71,7 +75,7 @@ export function initAutoSyncBlockingService(): () => void {
 
   const unsubscribe = getNetworkEvent(SYNC_WRITE_LOCK_CHANGED_EVENT)((event) => {
     hasReceivedEvent = true;
-    setBlockedProjects(readBlockedProjectIds(event));
+    setBlockedProjects(readBlockedProjectIds(event, `the ${SYNC_WRITE_LOCK_CHANGED_EVENT} event`));
   });
 
   // LIMITATION: this init consult is the only backend re-seed — there is no re-query on websocket
@@ -86,13 +90,19 @@ export function initAutoSyncBlockingService(): () => void {
       // Only seed if nothing live has spoken: an event that arrived while the request was in flight
       // (either direction) supersedes this snapshot and must win, so we never clobber it here.
       if (!hasReceivedEvent && !isDisposed) {
-        const blockedProjectIds = readBlockedProjectIds(snapshot);
+        const blockedProjectIds = readBlockedProjectIds(
+          snapshot,
+          `the ${GET_AUTO_SYNC_BLOCKING_COMMAND} init query`,
+        );
         if (blockedProjectIds.length > 0) setBlockedProjects(blockedProjectIds);
       }
     } catch (e) {
-      // Command not served (older core) or the extension is absent — keep the assume-unblocked
-      // default. Debug, not warn: this is the expected path on plain Platform.Bible and older cores.
-      logger.debug(
+      // The seam is in-repo-only (core's own backend registers the command and ships with this
+      // service), so any rejection here is anomalous — realistically the cold-start race: the
+      // backend had not registered the command within main's retry budget. Keep the
+      // assume-unblocked default, but warn: with no re-query until PT-4265, a lost seed is worth
+      // noticing.
+      logger.warn(
         `auto-sync blocking service could not read the initial blocking state: ${getErrorMessage(e)}`,
       );
     }

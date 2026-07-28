@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Projects.SendReceive;
 
 namespace TestParanextDataProvider.Projects.SendReceive
@@ -65,10 +66,39 @@ namespace TestParanextDataProvider.Projects.SendReceive
                 Assert.That(requestType, Is.EqualTo("network:registerEvent"));
                 Assert.That(
                     requestContents,
-                    Is.EqualTo(new object?[] { BlockStateChangedEvent }),
+                    Has.Count.EqualTo(2),
+                    "the registration must carry the event name and its documentation"
+                );
+                Assert.That(
+                    requestContents![0],
+                    Is.EqualTo(BlockStateChangedEvent),
                     "the registration must name the onSyncWriteLockChanged event"
                 );
+                Assert.That(
+                    requestContents[1],
+                    Is.InstanceOf<OpenRpcSingleNotificationDocumentation>(),
+                    "the second argument must be the notification documentation"
+                );
             });
+            // The event is @experimental (TS declaration), so its registration must carry the
+            // x-experimental wire marker for rpc.discover.
+            var documentation = (OpenRpcSingleNotificationDocumentation)requestContents![1]!;
+            Assert.That(
+                documentation.Notification.Experimental,
+                Is.True,
+                "the event documentation must carry the x-experimental wire marker"
+            );
+        }
+
+        [Test]
+        public void InitializeAsync_RegistersGetAutoSyncBlockingWithExperimentalDocs()
+        {
+            // The command is @experimental (TS declaration), so its registration must carry
+            // experimental OpenRPC documentation for rpc.discover (the same doc-assertion pattern as
+            // VersificationConversionServiceTests).
+            var docs = Client.GetDocumentationFor(GetAutoSyncBlockingCommand);
+            Assert.That(docs, Is.Not.Null, "command registered with OpenRPC documentation");
+            Assert.That(docs!.Method.Experimental, Is.True, "command marked experimental");
         }
 
         [Test]

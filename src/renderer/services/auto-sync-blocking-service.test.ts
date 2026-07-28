@@ -23,6 +23,7 @@ vi.mock('@shared/services/logger.service', () => ({
 
 const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
 const LEGACY_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlockingChanged';
+const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
 
 /** Flushes the service's fire-and-forget seeding chain (await + then-callbacks). */
 async function flushSeeding(): Promise<void> {
@@ -105,8 +106,30 @@ describe('initAutoSyncBlockingService', () => {
       expect(vi.mocked(setBlockedProjects)).toHaveBeenCalledTimes(2);
       expect(vi.mocked(setBlockedProjects)).toHaveBeenNthCalledWith(1, []);
       expect(vi.mocked(setBlockedProjects)).toHaveBeenNthCalledWith(2, []);
-      // Warn once per service lifetime, not once per malformed event.
+      // Warn once per source per service lifetime, not once per malformed event — and the message
+      // must name the source that produced the malformed payload.
       expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining(`the ${SYNC_WRITE_LOCK_CHANGED_EVENT} event`),
+      );
+    });
+
+    it('latches the malformed warning per source — init query and event each warn once', async () => {
+      vi.mocked(sendCommand).mockResolvedValue('malformed');
+      initAutoSyncBlockingService();
+      await flushSeeding(); // the malformed init-query snapshot warns, latching the query source
+      if (!capturedHandler) throw new Error('capturedHandler not set');
+      capturedHandler(undefined); // a malformed event still warns on its own latch
+      capturedHandler(undefined); // …but only once
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(logger.warn)).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining(`the ${GET_AUTO_SYNC_BLOCKING_COMMAND} init query`),
+      );
+      expect(vi.mocked(logger.warn)).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(`the ${SYNC_WRITE_LOCK_CHANGED_EVENT} event`),
+      );
     });
 
     it('fails safe to block-none when projectIds contains a non-string', () => {
@@ -143,18 +166,28 @@ describe('initAutoSyncBlockingService', () => {
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
     });
 
-    it('does not seed when the query result is malformed', async () => {
+    it('does not seed when the query result is malformed, and warns naming the query', async () => {
       vi.mocked(sendCommand).mockResolvedValue('yes');
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining(`the ${GET_AUTO_SYNC_BLOCKING_COMMAND} init query`),
+      );
     });
 
-    it('swallows a failed query and keeps the assume-unblocked default', async () => {
-      vi.mocked(sendCommand).mockRejectedValue(new Error('extension absent'));
+    it('swallows a failed query, keeps the assume-unblocked default, and warns', async () => {
+      vi.mocked(sendCommand).mockRejectedValue(new Error('backend not up yet'));
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
+      // Warn (not debug): the command is registered by core's own backend, so a rejection is
+      // anomalous — realistically the cold-start race — and there is no re-query until PT-4265.
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining('could not read the initial blocking state'),
+      );
     });
 
     it('lets a live event win over the snapshot — no seeding after an event arrived', async () => {
