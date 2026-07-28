@@ -10,14 +10,6 @@ vi.mock('@renderer/services/first-run-store', async (importActual) => {
   const actual = await importActual<typeof store>();
   return { ...actual, getFirstRunStatus: vi.fn(), retryFirstRunResolution: vi.fn() };
 });
-// Stub WizardStepper to keep overlay tests focused on navigation state, not circle rendering.
-vi.mock('platform-bible-react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('platform-bible-react')>();
-  return {
-    ...actual,
-    WizardStepper: () => <></>,
-  };
-});
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
@@ -107,6 +99,9 @@ vi.mock('platform-bible-react', () => {
     DialogDescription: DialogDescriptionStub,
     Button: ButtonStub,
     InterfaceLanguagePicker: InterfaceLanguagePickerStub,
+    // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
+    // eslint-disable-next-line no-null/no-null
+    WizardStepper: () => null,
     Progress: ({ value, 'aria-label': l }: { value?: number; 'aria-label'?: string }) => (
       <div role="progressbar" aria-valuenow={value} aria-label={l} />
     ),
