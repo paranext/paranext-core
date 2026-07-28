@@ -164,9 +164,12 @@ export function FirstRunShell({
         setCanSkip={setCanSkip}
       />
 
-      {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
+      {error && (
+        <p className="tw:text-sm tw:text-destructive" aria-live="assertive" role="alert">
+          {error}
+        </p>
+      )}
 
-<<<<<<< HEAD
       <div className="tw:flex tw:justify-end tw:gap-2">
         {onBack && (
           <Button variant="outline" onClick={onBack} disabled={isBusy}>
@@ -186,44 +189,10 @@ export function FirstRunShell({
                 an async precondition (e.g. sync completing). If a future last step gates on user
                 input rather than async work, this assumption should be revisited. */}
             {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
-||||||| parent of c1bc7fe7651 (test(pt9-css-converter): increase prettier-conformant test timeout to 30 s (PT-4260))
-      <div className="tw:flex tw:justify-end tw:gap-2">
-        {onBack && (
-          <Button variant="outline" onClick={onBack} disabled={isBusy}>
-            {strings['%firstRun_button_back%']}
-          </Button>
-        )}
-        {onSkip && (
-          <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-            {strings['%firstRun_button_skip%']}
-          </Button>
-        )}
-        {canProceed !== undefined && (
-          <Button onClick={onNext} disabled={!canProceed || isBusy}>
-            {isBusy && <Spinner />}
-=======
-      {/* syncConsent manages its own footer via WizardStepForm — suppress the shell footer to
-          avoid duplicate Back/Skip/Next buttons. Remove this guard when PT-4179 ships a
-          prop-based opt-out mechanism. */}
-      {step !== 'syncConsent' && (
-        <div className="tw:flex tw:justify-end tw:gap-2">
-          {onBack && (
-            <Button variant="outline" onClick={onBack} disabled={isBusy}>
-              {strings['%firstRun_button_back%']}
-            </Button>
-          )}
-          {canSkip && (
-            <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-              {strings['%firstRun_button_skip%']}
-            </Button>
-          )}
-          <Button onClick={onNext} disabled={!canProceed || isBusy}>
-            {isBusy && <Spinner />}
->>>>>>> c1bc7fe7651 (test(pt9-css-converter): increase prettier-conformant test timeout to 30 s (PT-4260))
             {nextLabel}
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

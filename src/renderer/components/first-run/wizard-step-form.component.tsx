@@ -32,7 +32,13 @@ export function WizardStepForm({
     <div className="tw:flex tw:flex-col tw:gap-3">
       <h2 className="tw:text-base tw:font-semibold">{heading}</h2>
       <div>{children}</div>
-      {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
+      {/* aria-live="assertive" so screen readers announce errors immediately — errors appear after an
+          async operation (e.g. sync failure) while focus stays on the primary button. */}
+      {error && (
+        <p className="tw:text-sm tw:text-destructive" aria-live="assertive" role="alert">
+          {error}
+        </p>
+      )}
       <div className="tw:flex tw:justify-between tw:gap-2">
         {/* Empty div when backButton is omitted — intentional justify-between spacer to keep secondary+primary right-aligned. */}
         <div>{backButton}</div>
