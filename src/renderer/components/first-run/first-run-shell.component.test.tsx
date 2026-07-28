@@ -81,9 +81,9 @@ describe('FirstRunShell', () => {
 
   it('completes with a sync-skipped hint when Skip is clicked on sync consent', async () => {
     render(<FirstRunShell entryStep="syncConsent" />);
-    // "Skip automatic sync" button is rendered by SyncConsentStep's own footer (WizardStepForm).
+    // SyncConsentStep calls setCanSkip(true) on mount; the shell renders its own Skip button.
     await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
-    expect(mockComplete).toHaveBeenCalledWith({ syncSkipped: true });
+    expect(mockComplete).toHaveBeenCalledWith({ skippedStep: 'syncConsent' });
   });
 
   it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
@@ -109,7 +109,6 @@ describe('FirstRunShell', () => {
     expect(mockComplete).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByText(/sync progress/i)).toBeInTheDocument());
   });
-
 
   it('completes when Finish is clicked on the last step', async () => {
     render(<FirstRunShell entryStep="syncProgress" />);
