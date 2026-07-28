@@ -91,6 +91,8 @@ vi.mock('platform-bible-react', () => {
     Button: ButtonStub,
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
+    // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
+    // eslint-disable-next-line no-null/no-null
     WizardStepper: () => null,
     useEvent: (
       event: ((handler: (detail: unknown) => void) => () => void) | undefined,
@@ -139,7 +141,6 @@ describe('FirstRunShell', () => {
       </button>
     );
   }
-
 
   it('advances through steps with the shell Next button', async () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
