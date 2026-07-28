@@ -34,6 +34,7 @@ import { startProjectLookupService } from '@main/services/project-lookup.service
 import { performShutdownTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationRoutingService } from '@main/services/notification-routing.service';
+import { startWindowRoutingService } from '@main/services/window-routing.service';
 import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
 import {
   addWindow,
@@ -270,6 +271,8 @@ async function main() {
   await startWebViewRoutingService();
   await startCommandRoutingService();
   await startNotificationRoutingService();
+  // Reuses the same per-window lookup the input handlers use, so both share one provider cache
+  await startWindowRoutingService(getWindowServiceForWindow);
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
