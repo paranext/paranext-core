@@ -28,7 +28,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
       '%firstRun_button_finish%': 'Finish',
-      '%firstRun_step_syncConsent_placeholder%': 'Sync consent (coming soon)',
+      '%firstRun_step_syncConsent_heading%': 'Sync your projects',
+      '%firstRun_step_syncConsent_body%':
+        'When working on shared projects, syncing updates your local copy and shares your changes with others.',
+      '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_syncProgress_placeholder%': 'Sync progress (coming soon)',
     },
     false,
