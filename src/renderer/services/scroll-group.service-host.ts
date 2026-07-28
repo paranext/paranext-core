@@ -717,9 +717,10 @@ const scrollGroupService: IScrollGroupRemoteService = {
  * reference from the main window. This code deliberately does the opposite for now, because the
  * cross-window coupling is older than multi-window support: `onDidUpdateScrRef` is a NETWORK event,
  * so one window's navigation has always reached every other window's `useScrollGroupScrRef`
- * subscribers. Before this, only the first window to start could emit, so the sync ran one way and
- * the other windows' `*Sync` readers went stale — this made it coherent rather than making it
- * happen. Going per-window is a change in the other direction, and needs all three of:
+ * subscribers. Single-source emitters meant only the first window to start could emit, so that sync
+ * ran one way while the other windows' `*Sync` readers went stale; letting every window emit makes
+ * the existing coupling coherent rather than introducing it. Going per-window is a change in the
+ * other direction, and needs all three of:
  *
  * - Scoping the `scrollGroup:*` events per window (or carrying a window id and filtering)
  * - Scoping the `ScrollGroupService` network object, with a main-process routing proxy like
