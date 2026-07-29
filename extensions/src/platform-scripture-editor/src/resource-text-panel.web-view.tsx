@@ -64,6 +64,9 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
   '%webView_resourcePanel_bibleTexts_title%',
@@ -525,6 +528,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Render
 
+  const [isBibleTextsMoreInfoOpen, setIsBibleTextsMoreInfoOpen] = useState(false);
+
   const emptyStatePromptKey =
     resourceType === 'ScriptureResource'
       ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
@@ -558,6 +563,24 @@ globalThis.webViewComponent = function ResourceTextPanel({
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
         <p>{localizedStrings[emptyStatePromptKey]}</p>
+        {resourceType === 'ScriptureResource' && (
+          <>
+            <button
+              type="button"
+              className="tw:text-sm tw:text-primary tw:underline tw:cursor-pointer"
+              onClick={() => setIsBibleTextsMoreInfoOpen((prev) => !prev)}
+            >
+              {isBibleTextsMoreInfoOpen
+                ? localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']
+                : localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
+            </button>
+            {isBibleTextsMoreInfoOpen && (
+              <p className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+                {localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
+              </p>
+            )}
+          </>
+        )}
         <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
       </div>
     );
