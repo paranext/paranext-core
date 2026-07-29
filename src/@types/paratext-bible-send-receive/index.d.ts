@@ -441,7 +441,8 @@ declare module 'papi-shared-types' {
      *
      * @param projectIds Ids of the projects whose server lock to break. An empty array is a no-op:
      *   it resolves to an empty map without contacting the server. Null/blank ids are skipped and
-     *   omitted from the result map
+     *   omitted from the result map. Ids are trimmed, and case-variant duplicates collapse to a
+     *   single upper-cased key (first occurrence wins)
      * @returns Map of project id → whether that project's lock was broken. Keys are upper-cased —
      *   index the map with upper-cased ids. `false` means "not broken", not "attempt failed": an
      *   attempt may not have been made at all (e.g. the request was refused while a sync was in
