@@ -212,6 +212,8 @@ internal class LocalParatextProjects : IDisposable
     /// re-read the project set and notify inline themselves. Also the funnel for the watcher path
     /// (<see cref="OnProjectDirectoriesChanged"/> delegates here). Best-effort: a refresh failure
     /// must not suppress the notify (a stale collection is better than a permanently stale list).
+    /// No-op until <see cref="Initialize"/> completes — refreshing an uninitialised
+    /// <see cref="ScrTextCollection"/> would broadcast a bogus project-list change.
     /// Virtual so tests can substitute the ParatextData refresh.
     /// </summary>
     public virtual void RefreshAndNotifyProjectsChanged()
@@ -221,6 +223,13 @@ internal class LocalParatextProjects : IDisposable
         // NotifyProjectsChanged (checked under _notifyLock), so a call racing Dispose past this
         // check is still safe.
         if (_disposed)
+            return;
+        // Pre-Initialize there is nothing to refresh yet: the ScrTextCollection is only set up
+        // once Initialize() runs (ParatextGlobals.Initialize), so a caller landing early (e.g. a
+        // sync completing before startup initialization finishes) would refresh an uninitialised
+        // collection and broadcast a bogus project-list change. Initialize's own scan supersedes
+        // any call skipped here. Lock-free read matches Initialize's own fast-path check.
+        if (!_isInitialized)
             return;
         try
         {
