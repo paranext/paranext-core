@@ -147,6 +147,12 @@ export type BookChapterControlProps = {
 	 */
 	triggerVariant?: ButtonProps["variant"];
 	/**
+	 * Set to `true` to render an up-down chevron indicator at the end of the trigger, signaling that
+	 * it opens a picker. Defaults to `false` (no chevron) — most existing embeddings show the current
+	 * reference alone and don't need one.
+	 */
+	showTriggerChevron?: boolean;
+	/**
 	 * Optional callback fired whenever the control's popover open state changes. Useful when the
 	 * parent needs to react to the picker opening or closing — e.g. dimming a sibling control while
 	 * this one is active. Internal back-navigation within the popover (verses → chapters → books)
@@ -198,7 +204,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -2028,6 +2034,42 @@ export type UiLanguageSelectorProps = {
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
+ * feed the result to the `localizedStrings` prop.
+ *
+ * @experimental
+ */
+export declare const INTERFACE_LANGUAGE_PICKER_STRING_KEYS: readonly [
+	"%firstRun_language_search_placeholder%",
+	"%firstRun_language_noResults%",
+	"%firstRun_language_selected%"
+];
+/** @experimental */
+export type InterfaceLanguagePickerLocalizedStrings = {
+	[K in (typeof INTERFACE_LANGUAGE_PICKER_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+/** @experimental */
+export type InterfaceLanguagePickerProps = {
+	/** Languages to offer, keyed by BCP-47 tag. Displayed by autonym (native script). */
+	languages: Record<string, LanguageInfo>;
+	/** Currently selected BCP-47 tag. */
+	value: string;
+	/** Called with the chosen BCP-47 tag. */
+	onChange: (tag: string) => void;
+	/** Localized strings (search placeholder, no-results, selected label). */
+	localizedStrings: InterfaceLanguagePickerLocalizedStrings;
+	className?: string;
+	id?: string;
+};
+/**
+ * Searchable, scrollable list for choosing the interface language. Each option is shown by its
+ * autonym (native script); search matches the autonym, names in other UI languages, and other known
+ * names (the latter for matching only — never displayed). Scales to hundreds of languages.
+ *
+ * @experimental
+ */
+export declare function InterfaceLanguagePicker({ languages, value, onChange, localizedStrings, className, id, }: InterfaceLanguagePickerProps): import("react/jsx-runtime").JSX.Element;
+/**
  * @deprecated 2026-06-08 Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the
  *   existing export for backward compatibility and will be removed in a future release.
  */
@@ -3397,6 +3439,54 @@ export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
  * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
  */
 export declare const useViewVisibility: () => boolean;
+/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+export type TabIconUrls = {
+	/** Dark theme (any selection). */
+	dark: string;
+	/**
+	 * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
+	 * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
+	 * would be invisible there. Kept in the type for a future host that does give the selected tab a
+	 * dark background and needs a contrasting icon.
+	 */
+	lightSelected: string;
+	/** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
+	lightUnselected: string;
+	/** Light theme, selection unknown (mid-slate fallback). */
+	lightDefault: string;
+};
+/**
+ * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
+ * the near-black variant regardless of selection — every current host keeps the active tab's header
+ * on a plain light background rather than a dark/tinted one (see
+ * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
+ * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
+ * state is unknown (`undefined`).
+ */
+export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
+/**
+ * Resolves which tab-icon variant a web view tab should show, given the current theme and this
+ * tab's live selected state.
+ *
+ * The tab icon is painted by the platform as a static CSS `background-image`, so a `currentColor`
+ * SVG can't follow the theme or selection state — callers must swap the actual icon URL. "Selected"
+ * here means this tab is the active one in its group: rc-dock renders exactly one tab's pane at a
+ * time, hiding the rest with `display: none`, so "my pane is currently visible" and "I'm the
+ * selected tab" are the same condition — this reuses `useViewVisibility`'s event-driven
+ * `IntersectionObserver` detection rather than polling `frameElement.offsetParent` on an interval.
+ * `pickTabIconUrl`'s `undefined` ("selection unknown") case is effectively unreachable through this
+ * call site, since `useViewVisibility` resolves synchronously on first render with no unknown
+ * window, but `pickTabIconUrl` keeps accepting it as a standalone, independently-testable
+ * function.
+ *
+ * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
+ * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
+ *
+ * @param isDarkTheme Whether the current theme is dark.
+ * @param tabIconUrls The four icon variant URLs for this tab.
+ * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.
+ */
+export declare function useTabIconSelection(isDarkTheme: boolean, tabIconUrls: TabIconUrls): string;
 /** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
 export type UseTruncationTooltipResult<T extends HTMLElement> = {
 	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
