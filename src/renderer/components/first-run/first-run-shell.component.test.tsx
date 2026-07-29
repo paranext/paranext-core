@@ -246,6 +246,33 @@ describe('FirstRunShell', () => {
     );
   });
 
+  it('renders no shell footer when a step manages its own footer (Back still handed to the step)', async () => {
+    let receivedOnBack: (() => void) | undefined;
+    function OwnsFooterStep({ setManagesOwnFooter, onBack }: FirstRunStepProps) {
+      useEffect(() => setManagesOwnFooter?.(true), [setManagesOwnFooter]);
+      receivedOnBack = onBack;
+      return <p>owns footer</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...STUB_STEPS, internetSettings: OwnsFooterStep }}
+      />,
+    );
+    // Navigate language → internetSettings (the footer-owning step); index 1 > entry floor 0, so
+    // the shell would normally offer Back here.
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText(/owns footer/i)).toBeInTheDocument();
+    // The shell renders none of its own footer buttons — the step owns the whole row.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    // But onBack is still supplied so the step can render Back within its own row.
+    expect(receivedOnBack).toBeTypeOf('function');
+  });
+
   it('does not call completeFirstRun twice if onNext fires again while already busy (syncProgress)', async () => {
     let done!: () => void;
     mockComplete.mockImplementation(
@@ -263,6 +290,41 @@ describe('FirstRunShell', () => {
     const btn = screen.getByRole('button', { name: /sync done/i });
     await userEvent.click(btn); // fires first onNext — isBusy flips to true
     await userEvent.click(btn); // isBusy guard blocks second invocation
+    done();
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not call completeFirstRun twice if onSkip fires twice in one tick (runAction guard)', async () => {
+    let done!: () => void;
+    mockComplete.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          done = resolve;
+        }),
+    );
+    // Fire onSkip twice synchronously from one handler — the runAction re-entrancy guard (shared
+    // with onNext) must block the second call, not just the footer button's disabled state.
+    function DoubleSkipStep({ onSkip, setCanSkip }: FirstRunStepProps) {
+      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            onSkip?.();
+            onSkip?.();
+          }}
+        >
+          double skip
+        </button>
+      );
+    }
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: DoubleSkipStep }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /double skip/i }));
     done();
     await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
   });
@@ -371,10 +433,10 @@ describe('FirstRunShell', () => {
   it('disables Next when navigating into a step that calls setCanProceed(false) on mount', async () => {
     // BlockingStep calls setCanProceed(false) in a mount effect — simulates a step that gates
     // on data loading or validation before the user may proceed.
-    function BlockingStep({ setCanProceed: setProc }: FirstRunStepProps) {
+    function BlockingStep({ setCanProceed: setCanProceedProp }: FirstRunStepProps) {
       useEffect(() => {
-        setProc?.(false);
-      }, [setProc]);
+        setCanProceedProp?.(false);
+      }, [setCanProceedProp]);
       return <p>blocking step</p>;
     }
     render(

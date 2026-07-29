@@ -138,11 +138,6 @@
   "%firstRun_language_title%": "選擇您的語言",
   "%firstRun_loading%": "正在啟動設定…",
   "%firstRun_loading_detail%": "正在檢查您的註冊資訊。這可能需要一點時間。",
-  "%firstRun_step_identify_placeholder%": "Identify: name + registration code (coming soon)",
-  "%firstRun_step_internet_placeholder%": "Internet settings (coming soon)",
-  "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
-  "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",
-  "%firstRun_step_syncProgress_placeholder%": "Sync progress (coming soon)",
   "%firstRun_stepIndicator%": "第 {stepNumber} 步，共 {stepCount} 步",
   "%firstRun_title%": "設定 Platform.Bible"
 }

@@ -10,16 +10,14 @@ export interface WizardStepperProps {
   totalSteps: number;
   /**
    * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
-   * `'en'`. Ignored when {@link WizardStepperProps.formatLabel} is provided.
+   * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a
+   * `RangeError` in V8).
    */
   locale?: string;
-  /**
-   * Optional numeral formatter for step-circle labels. When supplied, the component skips its
-   * internal {@link NumberFormat} allocation and calls this function instead — useful when the
-   * caller already holds a formatter for the same locale. Takes precedence over `locale`.
-   */
-  formatLabel?: (n: number) => string;
 }
+
+/** Progress state of a single step circle; also exposed as a `data-state` attribute for consumers. */
+type StepState = 'active' | 'complete' | 'upcoming';
 
 /**
  * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
@@ -27,19 +25,12 @@ export interface WizardStepperProps {
  * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
  * readers.
  */
-export function WizardStepper({
-  currentStep,
-  totalSteps,
-  locale = 'en',
-  formatLabel,
-}: WizardStepperProps) {
+export function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps) {
   const safeLocale = locale || 'en';
-  // When formatLabel is provided, skip the internal NumberFormat allocation entirely.
-  const format = useMemo<(n: number) => string>(() => {
-    if (formatLabel !== undefined) return formatLabel;
+  const format = useMemo(() => {
     const fmt = new NumberFormat(safeLocale);
     return (n: number) => fmt.format(n);
-  }, [formatLabel, safeLocale]);
+  }, [safeLocale]);
   // Clamp to [1, totalSteps] so out-of-range values produce a defined active step rather than
   // rendering all circles in the same "not yet reached" style.
   const clampedStep = Math.min(Math.max(currentStep, 1), totalSteps);
@@ -47,19 +38,19 @@ export function WizardStepper({
   return (
     <div className="tw:flex tw:items-center" aria-hidden="true">
       {stepNums.map((stepNum) => {
-        const isPast = stepNum < clampedStep;
-        const isActive = stepNum === clampedStep;
+        let state: StepState = 'upcoming';
+        if (stepNum === clampedStep) state = 'active';
+        else if (stepNum < clampedStep) state = 'complete';
         return (
           <Fragment key={stepNum}>
             {stepNum > 1 && <div className="tw:h-px tw:flex-1 tw:bg-border" />}
             <div
+              data-state={state}
               className={cn(
                 'tw:flex tw:h-8 tw:w-8 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-full tw:text-sm tw:font-medium',
-                isActive && 'tw:bg-primary tw:text-primary-foreground',
-                isPast && 'tw:bg-muted tw:text-muted-foreground',
-                !isActive &&
-                  !isPast &&
-                  'tw:border tw:border-muted-foreground tw:text-muted-foreground',
+                state === 'active' && 'tw:bg-primary tw:text-primary-foreground',
+                state === 'complete' && 'tw:bg-muted tw:text-muted-foreground',
+                state === 'upcoming' && 'tw:border tw:border-input tw:text-muted-foreground',
               )}
             >
               {format(stepNum)}

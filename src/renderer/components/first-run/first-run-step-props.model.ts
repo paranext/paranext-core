@@ -31,4 +31,13 @@ export interface FirstRunStepProps {
    * after an async action starts).
    */
   setCanSkip?: (canSkip: boolean) => void;
+  /**
+   * Call with `true` on mount when this step renders its own complete footer row (Back / secondary
+   * / primary, e.g. via `WizardStepForm`) rather than using the shell's footer. The shell then
+   * renders no footer of its own, so the two do not stack. `onBack`/`onSkip` are still supplied —
+   * the step decides where to place them in its own row. Steps that use the shell's Next/Finish
+   * button leave this unset. When set, `canProceed` is ignored (it only gates the shell's own Next
+   * button).
+   */
+  setManagesOwnFooter?: (managesOwnFooter: boolean) => void;
 }

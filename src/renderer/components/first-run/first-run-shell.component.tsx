@@ -1,7 +1,7 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { usePrimaryInterfaceLanguage } from '@renderer/hooks/use-primary-interface-language.hook';
 import { completeFirstRun } from '@renderer/services/first-run-store';
-import { FirstRunStep } from '@renderer/services/first-run.model';
+import { FirstRunStep, NumberedStep } from '@renderer/services/first-run.model';
 import { Button, Spinner, WizardStepper } from 'platform-bible-react';
 import {
   formatReplacementString,
@@ -17,20 +17,22 @@ import { IdentifyStep } from './steps/identify-step.component';
 import { SyncConsentStep } from './steps/sync-consent-step.component';
 import { SyncProgressStep } from './steps/sync-progress.component';
 
-/** Runtime order of the wizard steps. */
-export const STEP_ORDER: FirstRunStep[] = [
+/**
+ * Steps shown in the stepper, in order. Typed `NumberedStep[]` so the type stays load-bearing:
+ * adding an interstitial here is a compile error. Length drives the "of N" count.
+ */
+export const NUMBERED_STEPS: NumberedStep[] = [
   'language',
   'internetSettings',
   'identify',
   'syncConsent',
-  'syncProgress',
 ];
 
-/** Steps that are interstitials — shown after numbered steps, excluded from the stepper count. */
-export const INTERSTITIAL_STEPS = new Set<FirstRunStep>(['syncProgress']);
-
-/** Steps shown in the stepper (excludes interstitials). Length drives the "of N" count. */
-export const NUMBERED_STEPS = STEP_ORDER.filter((s) => !INTERSTITIAL_STEPS.has(s));
+/**
+ * Runtime order of all wizard steps. Numbered steps first, then the `syncProgress` interstitial
+ * last — so an interstitial is any step at or beyond `NUMBERED_STEPS.length` in this array.
+ */
+export const STEP_ORDER: FirstRunStep[] = [...NUMBERED_STEPS, 'syncProgress'];
 
 /** Step components for the wizard; placeholder entries are replaced when their sibling tickets land. */
 export const DEFAULT_STEP_COMPONENTS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
@@ -69,19 +71,21 @@ export function FirstRunShell({
   const [step, setStep] = useState<FirstRunStep>(entryStep);
   const [canProceed, setCanProceed] = useState<boolean | undefined>(true);
   const [canSkip, setCanSkip] = useState(false);
+  const [managesOwnFooter, setManagesOwnFooter] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
   const locale = usePrimaryInterfaceLanguage();
   const fmt = useMemo(() => new NumberFormat(locale), [locale]);
-  const formatStep = useCallback((n: number) => fmt.format(n), [fmt]);
   // NUMBERED_STEPS.length is a module constant (always 4), so memoize its formatted form separately
   // to avoid reformatting a fixed denominator on every step-navigation render.
   const formattedStepCount = useMemo(() => fmt.format(NUMBERED_STEPS.length), [fmt]);
 
   const index = STEP_ORDER.indexOf(step);
-  const isInterstitial = INTERSTITIAL_STEPS.has(step);
-  const numberedIndex = NUMBERED_STEPS.indexOf(step); // −1 for interstitials
+  // Numbered steps occupy the front of STEP_ORDER; anything at/after NUMBERED_STEPS.length is an
+  // interstitial. For a numbered step its STEP_ORDER index is also its index within NUMBERED_STEPS.
+  const isInterstitial = index >= NUMBERED_STEPS.length;
+  const numberedIndex = isInterstitial ? -1 : index;
   const isLastStep = index === STEP_ORDER.length - 1;
   // Back floor is the resume entry step, not index 0: the startup reducer resumes a post-relaunch
   // user at `syncConsent`, and the already-completed language/internetSettings/identify steps
@@ -89,14 +93,22 @@ export function FirstRunShell({
   // so backing into it risks re-triggering the relaunch/resume loop).
   const entryIndex = STEP_ORDER.indexOf(entryStep);
 
+  // Mirror of isBusy for the synchronous re-entrancy guard: React batches state, so two calls in the
+  // same tick both read the same stale `isBusy` from the render closure. The ref is updated
+  // synchronously here, so a second call sees the in-flight write. Guarding inside runAction covers
+  // every async entry point (both the final-step completeFirstRun path and onSkip) in one place.
+  const isBusyRef = useRef(false);
   const runAction = useCallback(async (action: () => void | Promise<void>) => {
+    if (isBusyRef.current) return;
     setError('');
+    isBusyRef.current = true;
     setIsBusy(true);
     try {
       await action();
     } catch (e) {
       setError(getErrorMessage(e));
     } finally {
+      isBusyRef.current = false;
       setIsBusy(false);
     }
   }, []);
@@ -107,21 +119,24 @@ export function FirstRunShell({
   // gate (e.g. syncProgress) call setCanProceed(false). This is fully step-agnostic.
   const goToStep = useCallback((next: FirstRunStep) => {
     setError('');
+    isBusyRef.current = false;
     setIsBusy(false);
     setCanProceed(false);
     setCanSkip(false);
+    setManagesOwnFooter(false);
     setStep(next);
   }, []);
 
   const onNext = useCallback(() => {
-    // Guard against re-entrant calls (e.g. step calls onNext programmatically while busy).
-    if (isBusy) return;
+    // Guard against re-entrant calls (e.g. step calls onNext programmatically while busy). Read the
+    // ref, not `isBusy` — two synchronous calls in one tick share a stale render-closure `isBusy`.
+    if (isBusyRef.current) return;
     const next = STEP_ORDER[index + 1];
     // Synchronous step advance: no async work, so skip runAction to avoid a spurious isBusy flash.
     // Only the final step calls completeFirstRun(), which is async and needs the busy state.
     if (next) goToStep(next);
     else runAction(() => completeFirstRun());
-  }, [index, isBusy, runAction, goToStep]);
+  }, [index, runAction, goToStep]);
 
   const onBack = useMemo(
     () =>
@@ -159,7 +174,7 @@ export function FirstRunShell({
     : strings['%firstRun_button_next%'];
 
   return (
-    <div className="tw:flex tw:min-h-screen tw:items-center tw:justify-center tw:py-8">
+    <div className="tw:flex tw:min-h-full tw:items-center tw:justify-center tw:py-8">
       <div className="tw:mx-auto tw:flex tw:w-full tw:max-w-md tw:flex-col tw:gap-6 tw:p-8">
         <div className="tw:flex tw:flex-col tw:gap-1">
           <h1 className="tw:text-lg tw:font-medium">
@@ -174,7 +189,7 @@ export function FirstRunShell({
             <WizardStepper
               currentStep={numberedIndex + 1}
               totalSteps={NUMBERED_STEPS.length}
-              formatLabel={formatStep}
+              locale={locale}
             />
           )}
         </div>
@@ -185,37 +200,43 @@ export function FirstRunShell({
           onSkip={onSkip}
           setCanProceed={setCanProceed}
           setCanSkip={setCanSkip}
+          setManagesOwnFooter={setManagesOwnFooter}
         />
 
         {error && <p className="tw:text-sm tw:text-destructive">{error}</p>}
 
-        <div className="tw:flex tw:items-center tw:justify-between">
-          <div>
-            {onBack && (
-              <Button variant="outline" onClick={onBack} disabled={isBusy}>
-                {strings['%firstRun_button_back%']}
-              </Button>
-            )}
+        {/* Steps that render their own footer (via WizardStepForm) set managesOwnFooter so the shell
+            does not stack a second Back/Skip/Next row beneath the step's own. Back/Skip are still
+            handed to the step through onBack/onSkip; the step places them in its own row. */}
+        {!managesOwnFooter && (
+          <div className="tw:flex tw:items-center tw:justify-between">
+            <div>
+              {onBack && (
+                <Button variant="outline" onClick={onBack} disabled={isBusy}>
+                  {strings['%firstRun_button_back%']}
+                </Button>
+              )}
+            </div>
+            <div className="tw:flex tw:gap-2">
+              {onSkip && (
+                // Label is sync-specific; if a future step also calls setCanSkip(true) for a
+                // different reason, the shell will need to accept a skip-label callback from it.
+                <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
+                  {strings['%firstRun_button_skipSync%']}
+                </Button>
+              )}
+              {canProceed !== undefined && (
+                <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
+                  {/* Spinner only while an async action (completeFirstRun) is in flight. A last step
+                      that gates on its own async precondition shows its own status in the step body
+                      (e.g. SyncProgressStep's progressbar), so the button does not double up. */}
+                  {isBusy && <Spinner />}
+                  {nextLabel}
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="tw:flex tw:gap-2">
-            {onSkip && (
-              // Label is sync-specific; if a future step also calls setCanSkip(true) for a different
-              // reason, the shell will need to accept a skip-label callback from that step.
-              <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
-                {strings['%firstRun_button_skipSync%']}
-              </Button>
-            )}
-            {canProceed !== undefined && (
-              <Button ref={finishButtonRef} onClick={onNext} disabled={!canProceed || isBusy}>
-                {/* Spinner while completeFirstRun() is in flight, or while the last step is waiting for
-                    an async precondition (e.g. sync completing). If a future last step gates on user
-                    input rather than async work, this assumption should be revisited. */}
-                {(isBusy || (isLastStep && !canProceed)) && <Spinner />}
-                {nextLabel}
-              </Button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

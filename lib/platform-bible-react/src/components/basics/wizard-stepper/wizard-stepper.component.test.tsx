@@ -5,6 +5,11 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { WizardStepper } from './wizard-stepper.component';
 
+/** The circle element for a given numeral, identified by its stable `data-state` hook. */
+function circleFor(numeral: string): HTMLElement | null {
+  return screen.getByText(numeral).closest('[data-state]');
+}
+
 describe('WizardStepper', () => {
   it('renders all step numerals', () => {
     render(<WizardStepper currentStep={2} totalSteps={4} />);
@@ -18,37 +23,34 @@ describe('WizardStepper', () => {
     // Exact numeral glyph output (e.g. Arabic-Indic ١٢٣) depends on ICU data availability in
     // the test runtime — verify only that the component renders correctly without crashing.
     const { container } = render(<WizardStepper currentStep={1} totalSteps={3} locale="ar" />);
-    const circles = container.querySelectorAll('.tw\\:rounded-full');
-    expect(circles).toHaveLength(3);
+    expect(container.querySelectorAll('[data-state]')).toHaveLength(3);
   });
 
-  it('marks the active step circle with primary background', () => {
+  it('marks the active step and leaves the others non-active', () => {
     render(<WizardStepper currentStep={2} totalSteps={4} />);
-    const step2 = screen.getByText('2').closest('.tw\\:rounded-full');
-    expect(step2).toHaveClass('tw:bg-primary');
-    expect(screen.getByText('1').closest('.tw\\:rounded-full')).not.toHaveClass('tw:bg-primary');
-    expect(screen.getByText('3').closest('.tw\\:rounded-full')).not.toHaveClass('tw:bg-primary');
+    expect(circleFor('2')).toHaveAttribute('data-state', 'active');
+    expect(circleFor('1')).not.toHaveAttribute('data-state', 'active');
+    expect(circleFor('3')).not.toHaveAttribute('data-state', 'active');
   });
 
-  it('marks past step circles with muted background', () => {
+  it('marks earlier steps complete and the active step active', () => {
     render(<WizardStepper currentStep={3} totalSteps={4} />);
-    expect(screen.getByText('1').closest('.tw\\:rounded-full')).toHaveClass('tw:bg-muted');
-    expect(screen.getByText('2').closest('.tw\\:rounded-full')).toHaveClass('tw:bg-muted');
-    expect(screen.getByText('3').closest('.tw\\:rounded-full')).toHaveClass('tw:bg-primary');
-    expect(screen.getByText('4').closest('.tw\\:rounded-full')).not.toHaveClass('tw:bg-muted');
-    expect(screen.getByText('4').closest('.tw\\:rounded-full')).not.toHaveClass('tw:bg-primary');
+    expect(circleFor('1')).toHaveAttribute('data-state', 'complete');
+    expect(circleFor('2')).toHaveAttribute('data-state', 'complete');
+    expect(circleFor('3')).toHaveAttribute('data-state', 'active');
+    expect(circleFor('4')).toHaveAttribute('data-state', 'upcoming');
   });
 
   it('clamps underflow: currentStep=0 shows step 1 as active', () => {
     render(<WizardStepper currentStep={0} totalSteps={4} />);
-    expect(screen.getByText('1').closest('.tw\\:rounded-full')).toHaveClass('tw:bg-primary');
-    expect(screen.getByText('2').closest('.tw\\:rounded-full')).not.toHaveClass('tw:bg-primary');
+    expect(circleFor('1')).toHaveAttribute('data-state', 'active');
+    expect(circleFor('2')).toHaveAttribute('data-state', 'upcoming');
   });
 
   it('clamps overflow: currentStep > totalSteps shows last step as active', () => {
     render(<WizardStepper currentStep={99} totalSteps={4} />);
-    expect(screen.getByText('4').closest('.tw\\:rounded-full')).toHaveClass('tw:bg-primary');
-    expect(screen.getByText('1').closest('.tw\\:rounded-full')).toHaveClass('tw:bg-muted');
+    expect(circleFor('4')).toHaveAttribute('data-state', 'active');
+    expect(circleFor('1')).toHaveAttribute('data-state', 'complete');
   });
 
   it('falls back to English numerals when locale is empty string', () => {
