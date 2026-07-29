@@ -61,6 +61,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
+  '%webView_modelTextPanel_emptyState_moreInfo%',
+  '%webView_modelTextPanel_emptyState_lessInfo%',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%',
 ] as const);
 
 type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
@@ -161,6 +164,7 @@ export function ModelTextPanel({
   } = useTruncationTooltip<HTMLDivElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
 
   // Auto-install a matched-but-uninstalled configured model text (shared with the resource panel);
   // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
@@ -381,6 +385,20 @@ export function ModelTextPanel({
         ) : (
           <>
             <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
+            <button
+              type="button"
+              className="tw:text-sm tw:text-primary tw:underline tw:cursor-pointer"
+              onClick={() => setIsMoreInfoOpen((prev) => !prev)}
+            >
+              {isMoreInfoOpen
+                ? localizedStrings['%webView_modelTextPanel_emptyState_lessInfo%']
+                : localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
+            </button>
+            {isMoreInfoOpen && (
+              <p className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+                {localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
+              </p>
+            )}
             <Button onClick={() => handlePickModelText()}>
               {localizedStrings['%webView_modelTextPanel_pickModelText%']}
             </Button>
