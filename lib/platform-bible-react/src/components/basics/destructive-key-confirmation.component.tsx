@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { formatReplacementStringToArray } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Kbd } from '@/components/shadcn-ui/kbd';
@@ -26,13 +26,40 @@ export type DestructiveKeyConfirmationProps = {
    * "Backspace").
    */
   confirmingKeyLabel: string;
-  /** Tooltip placement side. Defaults to `'bottom'`. */
-  side?: 'top' | 'right' | 'bottom' | 'left';
+  /**
+   * Tooltip placement side. Defaults to `'bottom'`.
+   *
+   * Only `'top'`/`'bottom'` are supported — the bordered arrow this component renders relies on
+   * clip-path/translate math in `tooltip.tsx` that has only been worked out for those two sides;
+   * the equivalent math for `'left'`/`'right'` was tried and found visibly broken (see
+   * tooltip.tsx), so those two values are omitted from this component's public API rather than
+   * silently degrading to a borderless arrow.
+   */
+  side?: 'top' | 'bottom';
   /** Tooltip placement alignment. Defaults to `'start'`. */
   align?: 'start' | 'center' | 'end';
   /** Whether to render the pointer arrow. Defaults to `true`. */
   showArrow?: boolean;
 };
+
+/**
+ * Returns `value` while `open` is true. Once `open` goes false, keeps returning whatever `value`
+ * was the moment `open` was last true, instead of tracking further changes to it.
+ *
+ * For a caller that resets its props to "closed" defaults in the very same render that `open` flips
+ * false (as `DestructiveKeyConfirmation`'s caller does), this lets consumers keep rendering the
+ * last real content instead of going blank while something else — e.g. Radix `Presence`,
+ * mid-exit-animation — keeps the element mounted a while longer.
+ */
+export function useFrozenWhileClosed<T>(open: boolean, value: T): T {
+  const [wasOpen, setWasOpen] = useState(open);
+  const [frozen, setFrozen] = useState(value);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setFrozen(value);
+  }
+  return open ? value : frozen;
+}
 
 /**
  * A destructive-styled "press again to confirm" hint, anchored to an arbitrary point (`anchorRect`)
@@ -49,8 +76,34 @@ export function DestructiveKeyConfirmation({
   align = 'start',
   showArrow = true,
 }: DestructiveKeyConfirmationProps) {
+  // The TooltipTrigger below is aria-hidden and never receives hover/focus (arming is driven by the
+  // caller's own DOM detection, not pointer/focus events), so the visual tooltip is invisible to
+  // assistive tech. Announce the same message through a separate visually-hidden live region: a
+  // plain-text render of `message` (the Kbd's styling doesn't matter for a screen reader) that
+  // becomes non-empty only while armed, so its change is what triggers the announcement.
+  const srMessage = open
+    ? formatReplacementStringToArray<string>(message, { key: confirmingKeyLabel }).join('')
+    : '';
+
+  // The caller typically flips anchorRect/message/confirmingKeyLabel/showArrow back to their
+  // "unarmed" values (e.g. an empty confirmingKeyLabel, a zeroed anchorRect) in the very same
+  // render that `open` goes false. TooltipContent, though, stays mounted for its Radix
+  // fade-out-0/zoom-out-95 exit animation (tooltip.tsx), so rendering directly off current props
+  // during that animation would shrink an already-empty, wrongly-positioned box. Freeze the last
+  // armed snapshot while `open` is true and keep rendering from it once `open` goes false, so the
+  // exit animation fades the real hint away instead of an empty box.
+  const {
+    anchorRect: displayAnchorRect,
+    message: displayMessage,
+    confirmingKeyLabel: displayConfirmingKeyLabel,
+    showArrow: displayShowArrow,
+  } = useFrozenWhileClosed(open, { anchorRect, message, confirmingKeyLabel, showArrow });
+
   return (
     <TooltipProvider>
+      <span role="status" className="tw:sr-only">
+        {srMessage}
+      </span>
       {/* onOpenChange no-op satisfies Radix's controlled-component contract and silences the dev warning */}
       <Tooltip open={open} onOpenChange={() => {}}>
         <TooltipTrigger
@@ -61,16 +114,16 @@ export function DestructiveKeyConfirmation({
             'tw:p-0 tw:border-0 tw:bg-transparent tw:cursor-default tw:min-w-0 tw:min-h-0',
           )}
           style={{
-            top: anchorRect.top,
-            left: anchorRect.left,
-            width: anchorRect.width,
-            height: anchorRect.height,
+            top: displayAnchorRect.top,
+            left: displayAnchorRect.left,
+            width: displayAnchorRect.width,
+            height: displayAnchorRect.height,
           }}
         />
         <TooltipContent
           side={side}
           align={align}
-          showArrow={showArrow}
+          showArrow={displayShowArrow}
           // Radix defaults arrowPadding to 0, letting the arrow slide all the way to a rounded
           // corner. The clip-path/border trick above assumes the arrow meets a *straight* stretch of
           // the content's border — right at a corner, the border curves away, so the straight-edged
@@ -96,52 +149,47 @@ export function DestructiveKeyConfirmation({
           // arrow (tooltip.tsx's side-aware clip-path/translate keeps only the outward-facing half
           // visible, so the un-clipped half's fill never gets a chance to mismatch the content box).
           //
-          // KNOWN LIMITATION: the border is only added for side="top"/"bottom" — verified correct
-          // (including the arrowPadding-vs-rounded-corner interaction above) via DOM measurement and
-          // visual inspection. side="left"/"right" use the exact same clip-path/translate-x
-          // mechanism in tooltip.tsx, but that math has NOT been gotten right yet (the arrow
-          // disconnects from the content edge) and needs its own investigation. Since this component
-          // always defaults to side="bottom" in production, left/right only come up via Storybook's
-          // `side` control, so — rather than ship a visibly broken border — fall back to the
-          // borderless, same-tint-fill look (identical to the default non-destructive arrow) for
-          // those two sides until the clip math is fixed.
-          arrowClassName={cn(
-            'tw:bg-[color-mix(in_oklab,var(--destructive)_10%,var(--background))] tw:fill-[color-mix(in_oklab,var(--destructive)_10%,var(--background))]',
-            (side === 'top' || side === 'bottom') && 'tw:border tw:border-destructive',
-          )}
+          // The border is unconditional here because `side` only ever admits 'top'/'bottom' (see the
+          // TSDoc on the `side` prop) — verified correct, including the arrowPadding-vs-rounded-corner
+          // interaction above, via DOM measurement and visual inspection.
+          arrowClassName="tw:bg-[color-mix(in_oklab,var(--destructive)_10%,var(--background))] tw:fill-[color-mix(in_oklab,var(--destructive)_10%,var(--background))] tw:border tw:border-destructive"
         >
-          {open ? (
-            <div className="tw:inline-flex tw:w-full tw:h-full tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-destructive/10 tw:px-3 tw:py-1.5">
-              {formatReplacementStringToArray(message, {
-                key: (
-                  <Kbd
-                    className={cn(
-                      // Kbd's base styling sets text-muted-foreground (unconditioned) plus
-                      // in-data-[slot=tooltip-content]:text-background (for the default dark
-                      // tooltip). Override both forms explicitly so tailwind-merge drops both base
-                      // rules instead of leaving the winner up to CSS cascade order.
-                      'tw:border tw:border-destructive tw:in-data-[slot=tooltip-content]:text-destructive',
-                      // Kbd's own tw:min-w-5 (20px) is smaller than a localized key label like
-                      // "Retroceso" can need, and that explicit min-width overrides the flex item's
-                      // content-based automatic minimum. Without shrink-0, once the sibling message
-                      // text item wraps and the row runs out of width, flexbox shrinks the Kbd down
-                      // toward that 20px floor instead of the message, clipping the key label. Pin
-                      // Kbd to its fit-content width and let the message text (which wraps freely)
-                      // absorb the shrink instead.
-                      'tw:shrink-0',
-                    )}
-                  >
-                    {confirmingKeyLabel}
-                  </Kbd>
-                ),
-              }).map((part, index) => (
-                // The array is static per render (one fixed localized string + one kbd), so index is
-                // a stable, safe key — mirrors the about-dialog.component.tsx precedent.
-                // eslint-disable-next-line react/no-array-index-key
-                <Fragment key={`key-${index}`}>{part}</Fragment>
-              ))}
-            </div>
-          ) : undefined}
+          {/* Rendered unconditionally (not gated on `open`) so the frozen armedSnapshot content
+              above stays mounted through Radix's exit animation instead of vanishing to an empty
+              box the instant `open` goes false — see the freezing comment above. Before the hint
+              is ever armed once, TooltipContent itself isn't in the DOM yet (Radix's Presence
+              doesn't mount it until the first `open`), so there's nothing to render prematurely. */}
+          <div className="tw:inline-flex tw:w-full tw:h-full tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-destructive/10 tw:px-3 tw:py-1.5">
+            {formatReplacementStringToArray(displayMessage, {
+              key: (
+                <Kbd
+                  className={cn(
+                    // Kbd's base styling sets text-muted-foreground (unconditioned) plus
+                    // in-data-[slot=tooltip-content]:text-background (for the default dark
+                    // tooltip). Override both forms explicitly so tailwind-merge drops both base
+                    // rules instead of leaving the winner up to CSS cascade order.
+                    'tw:border tw:border-destructive tw:in-data-[slot=tooltip-content]:text-destructive',
+                    // Kbd's own tw:min-w-5 (20px) is smaller than a localized key label like
+                    // "Retroceso" can need, and that explicit min-width overrides the flex item's
+                    // content-based automatic minimum. Without shrink-0, once the sibling message
+                    // text item wraps and the row runs out of width, flexbox shrinks the Kbd down
+                    // toward that 20px floor instead of the message, clipping the key label. Pin
+                    // Kbd to its fit-content width and let the message text (which wraps freely)
+                    // absorb the shrink instead.
+                    'tw:shrink-0',
+                  )}
+                >
+                  {displayConfirmingKeyLabel}
+                </Kbd>
+              ),
+            }).map((part, index) => (
+              // The array is static per render (one fixed localized string + one kbd), so index is
+              // a stable, safe key — same rationale as source-language-indexed-list.component.tsx's
+              // disable.
+              // eslint-disable-next-line react/no-array-index-key
+              <Fragment key={`key-${index}`}>{part}</Fragment>
+            ))}
+          </div>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

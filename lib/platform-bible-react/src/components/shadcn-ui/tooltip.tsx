@@ -103,9 +103,7 @@ function TooltipContent({
         {showArrow && (
           <TooltipPrimitive.Arrow
             // CUSTOM: Merge arrowClassName so it can override the default bg-foreground/fill-foreground.
-            // Also (a) nudge the rotated-square arrow flush against the content box (translate-y for a
-            // top/bottom content, translate-x for a left/right one — the old unconditional
-            // translate-y-only nudge only ever positioned the arrow correctly for side="bottom"), and
+            // Also (a) nudge the rotated-square arrow flush against the content box (translate-y), and
             // (b) clip it down to the triangular half that points away from the content box, so a
             // caller that adds a border via arrowClassName (e.g. the destructive confirmation hint)
             // doesn't get a doubled/crossing border line — or, without clipping the fill too, a
@@ -117,21 +115,21 @@ function TooltipContent({
             // side="bottom", NOT the mirrored values symmetry would suggest — this falls out of Radix
             // computing the arrow's base position from its declared height prop (5), while we override
             // the *rendered* height to 10 via CSS (tw:size-2.5), and that mismatch isn't direction-
-            // specific. All keyed off the ancestor Content's own data-side via in-data-*, since Radix
+            // specific. Keyed off the ancestor Content's own data-side via in-data-*, since Radix
             // doesn't put data-side on the Arrow itself. Clipping is a no-op for the default
             // borderless/same-fill arrow, so this is safe generally.
             //
-            // KNOWN LIMITATION: side="left"/"right" here mirror side="right"'s clip/translate by the
-            // same axis-not-direction logic as top/bottom, but visual testing found it to be very
-            // buggy with the arrow polygon positioned and clipped incorrectly. Do not treat these
-            // two as trustworthy; `destructive-key-confirmation.component.tsx` (the only bordered-
-            // arrow consumer today) deliberately skips adding a border for side="left"/"right" until this is fixed, which is
-            // why the wrong clip-path is currently harmless — flag this if you add a second bordered-
-            // arrow consumer that can render on the left/right.
+            // side="left"/"right" deliberately get NO translate-x/clip-path here: mirroring the
+            // top/bottom axis-not-direction logic for left/right was tried and found very buggy
+            // (arrow polygon positioned and clipped incorrectly), and no consumer today needs a
+            // bordered left/right arrow (`destructive-key-confirmation.component.tsx` only borders
+            // top/bottom). Left/right therefore keep the plain unclipped default diamond. Work out
+            // the correct left/right math and add the classes back if/when a bordered left/right
+            // arrow consumer shows up.
             className={cn(
               'tw:z-50 tw:size-2.5 tw:rotate-45 tw:rounded-xs tw:bg-foreground tw:fill-foreground',
-              'tw:in-data-[side=bottom]:translate-y-[calc(-50%-1px)] tw:in-data-[side=top]:translate-y-[calc(-50%-1px)] tw:in-data-[side=left]:translate-x-[calc(-50%-1px)] tw:in-data-[side=right]:translate-x-[calc(-50%-1px)]',
-              'tw:in-data-[side=bottom]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=top]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=left]:[clip-path:polygon(0_0,100%_0,100%_100%)] tw:in-data-[side=right]:[clip-path:polygon(0_0,100%_0,100%_100%)]',
+              'tw:in-data-[side=bottom]:translate-y-[calc(-50%-1px)] tw:in-data-[side=top]:translate-y-[calc(-50%-1px)]',
+              'tw:in-data-[side=bottom]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=top]:[clip-path:polygon(100%_0,100%_100%,0_100%)]',
               arrowClassName,
             )}
           />

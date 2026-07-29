@@ -4033,6 +4033,10 @@ export declare const MODIFIER_KEYS: Set<string>;
 /**
  * Physical keys (`KeyboardEvent.key` values) that {@link getLocalizeKeyForPhysicalKey} can name. Add
  * to this union as UI needs to display more key names.
+ *
+ * Adding a member here requires adding a matching `%physicalKey_<camelCaseName>%` entry to every
+ * locale file under `assets/localization/` (see `en.json`/`es.json`) — this union alone doesn't
+ * guarantee the translation exists.
  */
 export type NameablePhysicalKey = "Backspace" | "Delete";
 /**

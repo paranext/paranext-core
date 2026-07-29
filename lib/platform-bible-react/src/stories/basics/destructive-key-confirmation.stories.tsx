@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, waitFor, within } from 'storybook/test';
 import {
   DestructiveKeyConfirmation,
   type DestructiveKeyConfirmationProps,
@@ -67,9 +68,6 @@ function DestructiveKeyConfirmationDemo({
   const containerRef = useRef<HTMLDivElement>(null);
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
-  const markerRef = useRef<HTMLSpanElement>(null);
-  // The ref needs to start out with null for it to work as an element ref
-  // eslint-disable-next-line no-null/no-null
   const selectionRef = useRef<HTMLElement>(null);
   const [measuredRect, setMeasuredRect] = useState<AnchorRect>();
 
@@ -85,7 +83,7 @@ function DestructiveKeyConfirmationDemo({
       width: targetBox.width,
       height: targetBox.height,
     });
-  }, [selectionStart, selectionEnd]);
+  }, [selectionStart, selectionEnd, anchorPreview]);
 
   const effectiveAnchorRect =
     anchorPreview === 'selection' ? (measuredRect ?? anchorRect) : anchorRect;
@@ -123,7 +121,6 @@ function DestructiveKeyConfirmationDemo({
         // Placeholder standing in for the real anchor (a verse-number marker in the editor) so the
         // hint's position/arrow are visible in context.
         <span
-          ref={markerRef}
           className="tw:absolute tw:inline-flex tw:items-center tw:justify-center tw:rounded tw:bg-muted tw:font-mono tw:text-xs tw:text-muted-foreground"
           style={{
             top: anchorRect.top,
@@ -176,7 +173,8 @@ switcher yet, so this is simulated per-story).
     message: { control: 'text' },
     confirmingKeyLabel: { control: 'text' },
     side: {
-      options: ['top', 'right', 'bottom', 'left'],
+      // Only 'top'/'bottom' are supported — see the TSDoc on DestructiveKeyConfirmationProps['side'].
+      options: ['top', 'bottom'],
       control: { type: 'inline-radio' },
     },
     align: {
@@ -214,6 +212,22 @@ switcher yet, so this is simulated per-story).
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/**
+ * Radix renders the tooltip's visible content as a `[data-slot="tooltip-content"]` element (via
+ * `TooltipContent` in `tooltip.tsx`), portalled to `document.body` rather than under the story's
+ * canvas — so it's queried from the document directly rather than via `canvasElement`. Radix also
+ * nests a visually-hidden `role="tooltip"` duplicate of the same content inside it for screen
+ * readers, which is why `data-slot` (not `role`) is the selector: `getByRole('tooltip')` would
+ * match that inner duplicate instead of the outer, visible container.
+ */
+async function findTooltipContent(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const content = document.querySelector<HTMLElement>('[data-slot="tooltip-content"]');
+    if (!content) throw new Error('Tooltip content not found');
+    return content;
+  });
+}
+
 export const Default: Story = {
   args: {
     open: true,
@@ -223,6 +237,22 @@ export const Default: Story = {
     side: 'bottom',
     align: 'start',
     showArrow: true,
+  },
+  play: async ({ step }) => {
+    const tooltip = await findTooltipContent();
+
+    await step('Substitutes {key} with a Kbd showing the confirming key label', async () => {
+      expect(tooltip.getAttribute('data-state')).toMatch(/open/);
+      const kbd = tooltip.querySelector('kbd');
+      expect(kbd).not.toBeNull();
+      expect(kbd).toHaveTextContent('Backspace');
+      expect(tooltip).toHaveTextContent('Press');
+      expect(tooltip).toHaveTextContent('again to remove verse marker');
+    });
+
+    await step('Renders the pointer arrow by default', async () => {
+      expect(tooltip.querySelectorAll('svg')).toHaveLength(1);
+    });
   },
 };
 
@@ -249,6 +279,13 @@ export const NoArrow: Story = {
     ...Default.args,
     showArrow: false,
   },
+  play: async ({ step }) => {
+    const tooltip = await findTooltipContent();
+
+    await step('showArrow={false} removes the arrow element from the DOM', async () => {
+      expect(tooltip.querySelectorAll('svg')).toHaveLength(0);
+    });
+  },
 };
 
 export const Closed: Story = {
@@ -262,5 +299,16 @@ export const Closed: Story = {
         story: 'The disarmed state — `open={false}` hides the hint entirely.',
       },
     },
+  },
+  play: async ({ canvasElement, step }) => {
+    await step('open={false} keeps the tooltip content out of the DOM entirely', async () => {
+      expect(document.querySelector('[data-slot="tooltip-content"]')).not.toBeInTheDocument();
+    });
+
+    await step('The screen-reader live region stays empty while closed', async () => {
+      // The status span isn't portalled (unlike the tooltip content above), so it's queried via
+      // canvasElement/within rather than the global `screen`.
+      expect(within(canvasElement).getByRole('status')).toHaveTextContent('');
+    });
   },
 };
