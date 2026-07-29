@@ -78,3 +78,8 @@ e2e-tests/playwright-report
 .claude
 .context
 CLAUDE.md
+
+# AI session artifacts (gitignored; exempt from format/lint)
+.review
+.superpowers
+docs/superpowers
