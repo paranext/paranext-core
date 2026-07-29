@@ -36,6 +36,9 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
+  '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%': 'Detail text here.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -276,5 +279,20 @@ describe('ModelTextPanel', () => {
         "The model text couldn't be installed. Check your connection and try again.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows and hides the More info section when the toggle is clicked', () => {
+    render(<ModelTextPanel {...makeProps()} />);
+
+    // Starts collapsed.
+    expect(screen.queryByText('Detail text here.')).toBeNull();
+
+    // Click "More info" to expand.
+    fireEvent.click(screen.getByRole('button', { name: 'More info' }));
+    expect(screen.getByText('Detail text here.')).toBeInTheDocument();
+
+    // Click "Less info" to collapse.
+    fireEvent.click(screen.getByRole('button', { name: 'Less info' }));
+    expect(screen.queryByText('Detail text here.')).toBeNull();
   });
 });
