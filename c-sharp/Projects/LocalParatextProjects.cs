@@ -55,7 +55,11 @@ internal class LocalParatextProjects : IDisposable
 
     // Set first in Dispose (before the watcher/timer teardown it guards), so an in-flight
     // AttachContainerWatcher/event-handler thread racing the Dispose sees it and backs off instead
-    // of registering a watcher into (or touching a timer of) an already-disposed instance.
+    // of registering a watcher into (or touching a timer of) an already-disposed instance. The
+    // debounce-timer schedulers read it INSIDE their debounce lock — the same lock Dispose tears
+    // the timer down under — so check-then-schedule is atomic with the teardown; a bare read
+    // before the lock would leave a window to Change a disposed timer, or to construct a new
+    // timer after Dispose that nothing ever disposes.
     private volatile bool _disposed;
 
     private Timer? _projectChangeDebounceTimer;
@@ -212,9 +216,10 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     public virtual void RefreshAndNotifyProjectsChanged()
     {
-        // A racing post-Dispose call must not touch the notify debounce timer (same guard as
-        // NotifyProjectsChanged / ScheduleProjectDirectoriesChanged); skip the refresh too — there
-        // is no consumer left to serve.
+        // Post-Dispose there is no consumer left to serve, so skip the refresh. Best-effort
+        // early-out only: the notify debounce timer itself is guarded atomically inside
+        // NotifyProjectsChanged (checked under _notifyLock), so a call racing Dispose past this
+        // check is still safe.
         if (_disposed)
             return;
         try
@@ -243,12 +248,16 @@ internal class LocalParatextProjects : IDisposable
     {
         if (_papiClient == null)
             return;
-        // Symmetric with ScheduleProjectDirectoriesChanged: a racing post-Dispose call must not
-        // touch a debounce timer that may already be disposed.
-        if (_disposed)
-            return;
         lock (_notifyLock)
         {
+            // Read under the lock — Dispose tears the timer down under this same lock — so
+            // check-then-schedule is atomic with the teardown. Checked before the lock, a call
+            // racing Dispose could Change an already-disposed timer (ObjectDisposedException)
+            // or, if no notify had ever been scheduled, construct a brand-new timer AFTER
+            // Dispose that nothing ever disposes and that later emits against a disposing
+            // PapiClient.
+            if (_disposed)
+                return;
             _notifyDebounceTimer ??= new Timer(_ => EmitProjectsChanged());
             _notifyDebounceTimer.Change(s_notifyDebounce, Timeout.InfiniteTimeSpan);
         }
@@ -256,6 +265,11 @@ internal class LocalParatextProjects : IDisposable
 
     private void EmitProjectsChanged()
     {
+        // Second line of defence for a callback already in flight when Dispose ran —
+        // Timer.Dispose() does not wait for in-flight callbacks — so a dying timer does not
+        // emit against a disposing PapiClient.
+        if (_disposed)
+            return;
         if (_papiClient == null)
             return;
         ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
@@ -471,13 +485,14 @@ internal class LocalParatextProjects : IDisposable
 
     private void ScheduleProjectDirectoriesChanged()
     {
-        // A watcher event/error can race Dispose (see Dispose's comment); back off rather than
-        // touching a debounce timer that may already be disposed.
-        if (_disposed)
-            return;
         // Debounce: a clone/install fires a burst of events; collapse them into one refresh+notify.
         lock (_projectChangeLock)
         {
+            // A watcher event/error can race Dispose; read under the lock — Dispose tears this
+            // timer down under this same lock — so check-then-schedule is atomic with the
+            // teardown. Same shape and rationale as NotifyProjectsChanged.
+            if (_disposed)
+                return;
             _projectChangeDebounceTimer ??= new Timer(_ => OnProjectDirectoriesChanged());
             _projectChangeDebounceTimer.Change(s_projectChangeDebounce, Timeout.InfiniteTimeSpan);
         }
@@ -491,6 +506,13 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     protected virtual void OnProjectDirectoriesChanged() => RefreshAndNotifyProjectsChanged();
 
+    /// <summary>
+    /// Tear down the watchers and debounce timers. Safe to race with watcher events and notify
+    /// calls: <see cref="_disposed"/> is set first, and each debounce timer is disposed under the
+    /// same lock its scheduler checks <see cref="_disposed"/> under, so a racing scheduler either
+    /// backs off or completes its schedule entirely before the teardown — it can never Change a
+    /// disposed timer nor construct a new one after disposal.
+    /// </summary>
     public virtual void Dispose()
     {
         // Set first (before any teardown below) so a racing AttachContainerWatcher/Register or a
@@ -505,8 +527,15 @@ internal class LocalParatextProjects : IDisposable
             _watchers.Clear();
             _watchedContainerPaths.Clear();
         }
-        _projectChangeDebounceTimer?.Dispose();
-        _notifyDebounceTimer?.Dispose();
+        // Each timer's teardown happens under the same lock its scheduler checks _disposed under
+        // (see the summary above). Deadlock-free: no timer callback holds either lock while
+        // waiting on Dispose (EmitProjectsChanged takes no locks; OnProjectDirectoriesChanged only
+        // briefly re-takes _notifyLock inside NotifyProjectsChanged), and Timer.Dispose() does not
+        // block on in-flight callbacks.
+        lock (_projectChangeLock)
+            _projectChangeDebounceTimer?.Dispose();
+        lock (_notifyLock)
+            _notifyDebounceTimer?.Dispose();
         GC.SuppressFinalize(this);
     }
 
