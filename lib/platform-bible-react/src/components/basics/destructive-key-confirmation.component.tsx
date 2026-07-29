@@ -159,7 +159,17 @@ export function DestructiveKeyConfirmation({
               box the instant `open` goes false — see the freezing comment above. Before the hint
               is ever armed once, TooltipContent itself isn't in the DOM yet (Radix's Presence
               doesn't mount it until the first `open`), so there's nothing to render prematurely. */}
-          <div className="tw:inline-flex tw:w-full tw:h-full tw:items-center tw:gap-1.5 tw:rounded-md tw:bg-destructive/10 tw:px-3 tw:py-1.5">
+          {/* Plain block/inline flow, not flex: the message text and the Kbd need to share one
+              inline formatting context so wrapping behaves like ordinary text. With inline-flex,
+              each text chunk around {key} becomes its own flex item, and when the trailing chunk
+              wraps, its second line stays indented under wherever that flex item started (right
+              after the Kbd) instead of returning to this div's left edge. Plain flow treats the
+              Kbd as one atomic inline box inline with the surrounding text, so a wrapped line
+              re-wraps to the container edge like a normal paragraph. This relies on each localized
+              `message` having real whitespace around its `{key}` placeholder for the visual gap
+              (flex's artificial `gap` is gone), which is true of every string in
+              localizedStrings.json today. */}
+          <div className="tw:w-full tw:h-full tw:rounded-md tw:bg-destructive/10 tw:px-3 tw:py-1.5">
             {formatReplacementStringToArray(displayMessage, {
               key: (
                 <Kbd
@@ -169,14 +179,11 @@ export function DestructiveKeyConfirmation({
                     // tooltip). Override both forms explicitly so tailwind-merge drops both base
                     // rules instead of leaving the winner up to CSS cascade order.
                     'tw:border tw:border-destructive tw:in-data-[slot=tooltip-content]:text-destructive',
-                    // Kbd's own tw:min-w-5 (20px) is smaller than a localized key label like
-                    // "Retroceso" can need, and that explicit min-width overrides the flex item's
-                    // content-based automatic minimum. Without shrink-0, once the sibling message
-                    // text item wraps and the row runs out of width, flexbox shrinks the Kbd down
-                    // toward that 20px floor instead of the message, clipping the key label. Pin
-                    // Kbd to its fit-content width and let the message text (which wraps freely)
-                    // absorb the shrink instead.
-                    'tw:shrink-0',
+                    // Kbd is an inline-flex box, which defaults to vertical-align: baseline in
+                    // normal inline flow — that sits its bottom edge on the surrounding text's
+                    // baseline rather than centering it against the line. Align to the line's
+                    // midline instead.
+                    'tw:align-middle',
                   )}
                 >
                   {displayConfirmingKeyLabel}
