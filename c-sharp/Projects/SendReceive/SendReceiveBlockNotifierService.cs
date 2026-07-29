@@ -102,9 +102,19 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
     private PapiClient PapiClient { get; } = papiClient;
 
     /// <summary>
-    /// Registers both wire surfaces and then emits the gate's baseline snapshot, awaited, so once
-    /// the startup barrier (Program.cs's critical <c>Task.WhenAll</c>) completes, the baseline
-    /// emit is guaranteed to have gone out before any command-driven gate arm can emit.
+    /// Registers both wire surfaces and then emits the gate's baseline snapshot, awaited, so the
+    /// emit attempt completes before this method — and therefore before the startup barrier
+    /// (Program.cs's critical <c>Task.WhenAll</c>) — returns. That is deliberately NOT a
+    /// baseline-before-any-arm guarantee: the S/R command registrations are members of the SAME
+    /// barrier, and <c>Task.WhenAll</c> does not order its members, so a command dispatched
+    /// mid-barrier can arm the gate and emit before the baseline goes out. That ordering is safe
+    /// without being prevented, because the baseline is a LIVE read —
+    /// <see cref="SendReceiveWriteLock.GetBlockState"/> evaluated at emit time — so a baseline that
+    /// loses the race carries the armed state rather than overwriting it with a stale not-blocking
+    /// snapshot. What the await does buy: any arm AFTER the barrier emits strictly behind the
+    /// already-transmitted baseline (one connection, FIFO delivery) for every subscriber connected
+    /// throughout. A subscriber that connects later gets no replay either way — it seeds via
+    /// <c>getAutoSyncBlocking</c>.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -169,10 +179,13 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
         // was already listening across a backend restart converges on the fresh process's state
         // instead of keeping whatever stale state it last saw. AWAITED — unlike the event-driven
         // forwards through OnBlockStateChanged, which must never delay the gate's raise — so the
-        // startup barrier (see this method's doc) guarantees this baseline emit precedes any
-        // command-driven gate arm's event. Still best-effort like the registration above: a failed
-        // emit is logged, not thrown, because the next gate transition re-converges the subscriber
-        // and startup must never break over a notify.
+        // emit attempt completes before InitializeAsync (and so the startup barrier) returns, and
+        // any gate arm AFTER the barrier emits strictly behind it (one connection, FIFO). An arm
+        // DURING the barrier can still emit first — see this method's doc for why that ordering is
+        // safe (the GetBlockState() below is a live read at emit time, so a baseline that loses
+        // that race reports the armed state, not a stale not-blocking one). Still best-effort like
+        // the registration above: a failed emit is logged, not thrown, because the next gate
+        // transition re-converges the subscriber and startup must never break over a notify.
         try
         {
             await PapiClient.SendEventAsync(
