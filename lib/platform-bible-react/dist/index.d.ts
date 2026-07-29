@@ -2305,8 +2305,16 @@ export type DestructiveKeyConfirmationProps = {
 	 * "Backspace").
 	 */
 	confirmingKeyLabel: string;
-	/** Tooltip placement side. Defaults to `'bottom'`. */
-	side?: "top" | "right" | "bottom" | "left";
+	/**
+	 * Tooltip placement side. Defaults to `'bottom'`.
+	 *
+	 * Only `'top'`/`'bottom'` are supported — the bordered arrow this component renders relies on
+	 * clip-path/translate math in `tooltip.tsx` that has only been worked out for those two sides;
+	 * the equivalent math for `'left'`/`'right'` was tried and found visibly broken (see
+	 * tooltip.tsx), so those two values are omitted from this component's public API rather than
+	 * silently degrading to a borderless arrow.
+	 */
+	side?: "top" | "bottom";
 	/** Tooltip placement alignment. Defaults to `'start'`. */
 	align?: "start" | "center" | "end";
 	/** Whether to render the pointer arrow. Defaults to `true`. */

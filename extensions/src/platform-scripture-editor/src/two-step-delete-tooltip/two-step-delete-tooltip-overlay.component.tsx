@@ -14,7 +14,7 @@ import {
 } from './two-step-delete-tooltip.utils';
 
 const REMOVE_VERSE_MARKER_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_twoStepDelete_removeVerseMarker%';
+  '%webView_platformScriptureEditor_twoStepDelete_removeVerseNumber%';
 const DELETE_SELECTION_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_twoStepDelete_deleteSelection%';
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
@@ -54,6 +54,16 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
 
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
+  // Cross-view sync (see .claude/rules/cross-view-sync-hidden-views.md):
+  // - Live: the MutationObserver/scroll listener below react to the editor's
+  //   data-verse-delete-*/verse-selected DOM signals in real time to arm, disarm, and re-anchor the
+  //   hint while this tab is visible.
+  // - Hidden: intentionally not handled, because arming can't happen while hidden — the editor only
+  //   publishes an armed state in response to a Backspace/Delete keypress while it holds keyboard
+  //   focus, and rc-dock hides an inactive tab's pane via display:none, which force-blurs whatever
+  //   was focused inside it. So there's no armed state to catch up on when the tab is reactivated;
+  //   if arming happened and the tab is then hidden, that's the same focus loss the editor treats
+  //   as a cancel.
   useEffect(() => {
     const positionAnchor = positionAnchorRef.current;
     if (!positionAnchor) return undefined;
@@ -103,7 +113,6 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
   }, []); // refs are stable; empty deps is correct
 
   const messageKey = armed?.kind === 'selection' ? DELETE_SELECTION_KEY : REMOVE_VERSE_MARKER_KEY;
-  const showArrow = armed?.kind !== 'selection';
 
   return (
     <div ref={positionAnchorRef} className="tw:relative">
@@ -121,7 +130,6 @@ export function TwoStepDeleteTooltipOverlay({ children }: Props) {
               )
             : ''
         }
-        showArrow={showArrow}
       />
     </div>
   );
