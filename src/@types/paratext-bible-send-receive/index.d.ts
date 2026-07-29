@@ -481,8 +481,9 @@ declare module 'papi-shared-types' {
     /**
      * Emitted by the dotnet process whenever the S/R write gate arms or disarms, carrying the
      * gate's full current {@link SyncWriteLockSnapshot}. Fires for ALL sync types (manual +
-     * scheduled + session). Only fires in Paratext 10 Studio builds where the gate gets armed;
-     * plain Platform.Bible never emits it.
+     * scheduled + session). The gate only ever arms in Paratext 10 Studio builds — never in plain
+     * Platform.Bible, where the only emission is a single not-blocking baseline snapshot each time
+     * the backend (re)starts (every build emits that baseline).
      *
      * @experimental This event is unstable and may change or disappear without notice
      */

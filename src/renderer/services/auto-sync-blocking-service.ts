@@ -10,8 +10,9 @@ import { setBlockedProjects } from './auto-sync-blocking-store';
 // Backend-authoritative network event (declared in the seam's `NetworkEvents`): the C# write gate
 // emits a full snapshot on every arm/disarm, for ALL sync types (manual + scheduled + session).
 // This is the single signal source for blocking — the store never combines it with any other
-// opinion. Only fires in Paratext 10 Studio builds where the patch arms the gate; plain
-// Platform.Bible never emits it.
+// opinion. The gate only ever arms in Paratext 10 Studio builds (the patch arms it); in plain
+// Platform.Bible the only emission is a single not-blocking baseline snapshot each time the
+// backend (re)starts.
 const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
 
 /**

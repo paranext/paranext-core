@@ -205,12 +205,28 @@ internal class LocalParatextProjects : IDisposable
     /// invisible to the project-directory watcher — the watcher is non-recursive, so an in-place
     /// <c>Settings.xml</c> rewrite or a mid-clone state landing during a Send/Receive never
     /// reaches it (see <see cref="StartWatchingProjectDirectory"/>) — and that therefore must both
-    /// re-read the project set and notify inline themselves. Virtual so tests can substitute the
-    /// ParatextData refresh.
+    /// re-read the project set and notify inline themselves. Also the funnel for the watcher path
+    /// (<see cref="OnProjectDirectoriesChanged"/> delegates here). Best-effort: a refresh failure
+    /// must not suppress the notify (a stale collection is better than a permanently stale list).
+    /// Virtual so tests can substitute the ParatextData refresh.
     /// </summary>
     public virtual void RefreshAndNotifyProjectsChanged()
     {
-        ScrTextCollection.RefreshScrTexts();
+        // A racing post-Dispose call must not touch the notify debounce timer (same guard as
+        // NotifyProjectsChanged / ScheduleProjectDirectoriesChanged); skip the refresh too — there
+        // is no consumer left to serve.
+        if (_disposed)
+            return;
+        try
+        {
+            ScrTextCollection.RefreshScrTexts();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"RefreshScrTexts failed during a project-list refresh; notifying consumers anyway: {ex}"
+            );
+        }
         NotifyProjectsChanged();
     }
 
@@ -468,26 +484,12 @@ internal class LocalParatextProjects : IDisposable
     }
 
     /// <summary>
-    /// Run (debounced, on a timer thread) when a project was added/removed on disk. Refreshes
-    /// ParatextData's collection so the change is reflected, then notifies consumers. Best-effort: a
-    /// refresh failure must not suppress the notify (a stale collection is better than a permanently
-    /// stale list). Virtual so tests can observe firings without mutating the global
-    /// <c>ScrTextCollection</c>.
+    /// Run (debounced, on a timer thread) when a project was added/removed on disk. Delegates to
+    /// <see cref="RefreshAndNotifyProjectsChanged"/> — the shared refresh-then-notify funnel,
+    /// including its best-effort contract (a refresh failure must not suppress the notify). Virtual
+    /// so tests can observe firings without mutating the global <c>ScrTextCollection</c>.
     /// </summary>
-    protected virtual void OnProjectDirectoriesChanged()
-    {
-        try
-        {
-            ScrTextCollection.RefreshScrTexts();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"RefreshScrTexts failed after a project directory change: {ex}"
-            );
-        }
-        NotifyProjectsChanged();
-    }
+    protected virtual void OnProjectDirectoriesChanged() => RefreshAndNotifyProjectsChanged();
 
     public virtual void Dispose()
     {

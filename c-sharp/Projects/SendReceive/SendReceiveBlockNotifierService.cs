@@ -24,9 +24,12 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </list>
 /// </para>
 /// <para>
-/// <b>Inert in open-source Platform.Bible.</b> Nothing arms <see cref="SendReceiveWriteLock"/> in
-/// public core, so <see cref="SendReceiveWriteLock.BlockStateChanged"/> never fires and the command
-/// always returns a not-blocking snapshot. The service is truthful either way — it just has nothing
+/// <b>The gate never arms in open-source Platform.Bible.</b> Nothing arms
+/// <see cref="SendReceiveWriteLock"/> in public core, so
+/// <see cref="SendReceiveWriteLock.BlockStateChanged"/> never fires there and the command always
+/// returns a not-blocking snapshot. Every build — plain Platform.Bible included — still emits the
+/// event exactly once per backend (re)start: the not-blocking baseline snapshot at the end of
+/// <see cref="InitializeAsync"/>. The service is truthful either way — it just has nothing further
 /// to report until the Paratext 10 Studio patch brackets a sync with the gate (PT-4210).
 /// </para>
 /// <para>
@@ -98,6 +101,11 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
 
     private PapiClient PapiClient { get; } = papiClient;
 
+    /// <summary>
+    /// Registers both wire surfaces and then emits the gate's baseline snapshot, awaited, so once
+    /// the startup barrier (Program.cs's critical <c>Task.WhenAll</c>) completes, the baseline
+    /// emit is guaranteed to have gone out before any command-driven gate arm can emit.
+    /// </summary>
     public async Task InitializeAsync()
     {
         // Subscribe to the gate FIRST, before the registration round-trips below, so no transition
@@ -159,8 +167,25 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
 
         // Emit the current gate snapshot once now that both surfaces are up, so a subscriber that
         // was already listening across a backend restart converges on the fresh process's state
-        // instead of keeping whatever stale state it last saw.
-        OnBlockStateChanged(SendReceiveWriteLock.GetBlockState());
+        // instead of keeping whatever stale state it last saw. AWAITED — unlike the event-driven
+        // forwards through OnBlockStateChanged, which must never delay the gate's raise — so the
+        // startup barrier (see this method's doc) guarantees this baseline emit precedes any
+        // command-driven gate arm's event. Still best-effort like the registration above: a failed
+        // emit is logged, not thrown, because the next gate transition re-converges the subscriber
+        // and startup must never break over a notify.
+        try
+        {
+            await PapiClient.SendEventAsync(
+                BlockStateChangedEvent,
+                SendReceiveWriteLock.GetBlockState()
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"Failed to emit the baseline {BlockStateChangedEvent} snapshot: {ex}"
+            );
+        }
     }
 
     /// <summary>

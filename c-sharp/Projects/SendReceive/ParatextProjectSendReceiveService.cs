@@ -16,12 +16,17 @@ internal class ParatextProjectSendReceiveService(
     #region Constructors, consts, and fields
 
     /// <summary>
-    /// Request timeout for the long-running Send/Receive commands: a Send/Receive is a multi-minute
-    /// server operation (clone/pull/push round-trips per project), so the papi request timeout must
-    /// outlive it — with the default 30s timeout the caller would give up while the operation is
-    /// still running (and succeeding) on the backend. Inert in plain Platform.Bible since the stub
-    /// bodies below throw immediately, but the registration already carries it so the Paratext 10
-    /// Studio patch (which fills in the real implementations) inherits the correct timeout.
+    /// Request timeout for the long-running Send/Receive commands, carried on both the syncProjects
+    /// and breakSyncLock registrations: a whole-project sync is a multi-minute server operation
+    /// (clone/pull/push round-trips per project), and a lock break makes one potentially ~100s
+    /// server call per project (N projects in sequence), so either can outlive the default 30s papi
+    /// request timeout — with that default the caller would give up while the operation is still
+    /// running (and succeeding) on the backend. 0 = deliberately unbounded: no finite budget fits
+    /// every project count/size, and the only request a timeout would rescue is a lost response on
+    /// an otherwise-live socket — a risk every S/R command shares. Inert in plain Platform.Bible
+    /// since the stub bodies below throw immediately, but the registrations already carry it so the
+    /// Paratext 10 Studio patch (which fills in the real implementations) inherits the correct
+    /// timeout.
     /// </summary>
     internal static readonly TimeSpan s_sendReceiveTimeout = TimeSpan.FromSeconds(0); // 0 = no timeout
     #endregion
@@ -42,7 +47,8 @@ internal class ParatextProjectSendReceiveService(
             ),
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.syncProjects",
-                SyncProjects
+                SyncProjects,
+                s_sendReceiveTimeout
             ),
             PapiClient.RegisterRequestHandlerAsync(
                 "command:paratextBibleSendReceive.cancelSync",
