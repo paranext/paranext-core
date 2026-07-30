@@ -3520,15 +3520,15 @@ export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
- * Z-index for the one-shot onboarding tour spotlight. Sits above the dock/menubar
- * (Z_INDEX_ABOVE_DOCK=600) and tooltips (550) so it can spotlight toolbar buttons and columns, but
- * BELOW the first-run gate (Z_INDEX_FIRST_RUN=700) so the wizard always wins if both are mounted.
+ * Z-index for the one-shot onboarding tour spotlight. Sits above Z_INDEX_ABOVE_DOCK and
+ * Z_INDEX_TOOLTIP so it can spotlight toolbar buttons and columns, but below Z_INDEX_FIRST_RUN so
+ * the wizard always wins if both are mounted.
  */
 export declare const Z_INDEX_ONBOARDING_TOUR = 650;
 /**
- * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
- * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
- * startup and nothing behind it remains clickable or focusable.
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
+ * Z_INDEX_ABOVE_DOCK and Z_INDEX_TOOLTIP) so the wizard fully gates the app at startup and nothing
+ * behind it remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
 /** One stop in the guided tour. */
@@ -3541,7 +3541,8 @@ export interface TourStep {
 	description: string;
 	/**
 	 * Logical side of the target on which the card appears. `start`/`end` resolve to physical
-	 * left/right via `readDirection()`, so callers never branch on RTL.
+	 * left/right via `readDirection()`, so callers never branch on RTL. In LTR (default):
+	 * `start`=left, `end`=right; in RTL these are swapped.
 	 *
 	 * @default 'bottom'
 	 */
@@ -3557,6 +3558,11 @@ export interface TourProps {
 	onDone: () => void;
 	/** Called when the user dismisses the tour (Skip button or Escape). */
 	onSkip: () => void;
+	/**
+	 * Returns the step-counter string for the given 1-based step index and total step count. Used to
+	 * localize the "current / total" display. Falls back to `"{current} / {total}"` when omitted.
+	 */
+	stepCounter?: (current: number, total: number) => string;
 	/** @default 'Next' */
 	nextLabel?: string;
 	/** @default 'Back' */
@@ -3567,13 +3573,16 @@ export interface TourProps {
 	doneLabel?: string;
 }
 /**
- * Spotlight-overlay guided tour. Renders a full-viewport SVG mask that dims the page while cutting
- * out the current target element, and positions a step card beside it. Navigated with Back / Next /
- * Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target selector is not found in the
- * DOM when the tour opens are skipped, so an absent target degrades gracefully instead of killing
- * the overlay. Returns `null` when `open` is false or no step targets resolve.
+ * Spotlight-overlay guided tour. Renders a full-viewport SVG mask (white fill + black cutout = a
+ * transparent "hole" over the target) that dims the page except around the current target element,
+ * and positions a step card beside it.
+ *
+ * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
+ * selector is not found in the DOM when the tour opens are skipped, so an absent target degrades
+ * gracefully instead of killing the overlay. Returns `null` when `open` is false or no step targets
+ * resolve.
  */
-export declare function Tour({ steps, open, onDone, onSkip, nextLabel, backLabel, skipLabel, doneLabel, }: TourProps): import("react/jsx-runtime").JSX.Element | null;
+export declare function Tour({ steps, open, onDone, onSkip, stepCounter, nextLabel, backLabel, skipLabel, doneLabel, }: TourProps): import("react/jsx-runtime").JSX.Element | null;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
