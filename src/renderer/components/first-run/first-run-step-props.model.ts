@@ -16,10 +16,7 @@ export interface FirstRunStepProps {
   onNext: () => void;
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
-  /**
-   * Skip the rest of setup and finish. Present only when `setCanSkip(true)` has been called by the
-   * current step.
-   */
+  /** Skip the rest of setup and finish. Present when the current step has called `setCanSkip(true)`. */
   onSkip?: () => void;
   /**
    * Report whether the shell's Next button should be enabled. If not called, the shell's prior
@@ -29,9 +26,18 @@ export interface FirstRunStepProps {
    */
   setCanProceed?: (canProceed: boolean | undefined) => void;
   /**
-   * Declare whether the shell's Skip button should be shown. Skip is hidden by default; call
-   * `setCanSkip(true)` on mount to show it (e.g. on the Sync consent step). The shell resets this
-   * to `false` on every step transition.
+   * Request the shell to show (`true`) or hide (`false`) its Skip button. Call with `true` on mount
+   * to expose a step-specific skip path; call with `false` if the skip is no longer valid (e.g.
+   * after an async action starts).
    */
   setCanSkip?: (canSkip: boolean) => void;
+  /**
+   * Call with `true` on mount when this step renders its own complete footer row (Back / secondary
+   * / primary, e.g. via `WizardStepForm`) rather than using the shell's footer. The shell then
+   * renders no footer of its own, so the two do not stack. `onBack`/`onSkip` are still supplied —
+   * the step decides where to place them in its own row. Steps that use the shell's Next/Finish
+   * button leave this unset. When set, `canProceed` is ignored (it only gates the shell's own Next
+   * button).
+   */
+  setManagesOwnFooter?: (managesOwnFooter: boolean) => void;
 }

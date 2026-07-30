@@ -17,10 +17,10 @@ const loadedLocales: Record<string, LanguageInfo> = {
 const REAL_KEYS = [
   '%firstRun_title%',
   '%firstRun_description%',
+  '%firstRun_button_finish%',
   '%firstRun_button_next%',
   '%firstRun_button_back%',
-  '%firstRun_button_skip%',
-  '%firstRun_button_finish%',
+  '%firstRun_button_skipSync%',
   '%firstRun_button_retry%',
   '%firstRun_stepIndicator%',
   '%firstRun_loading%',

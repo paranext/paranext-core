@@ -25,7 +25,10 @@ const STUB_STEPS = {
   identify: IdentifyStub,
 };
 
-vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
+vi.mock('@renderer/services/first-run-store', () => ({
+  completeFirstRun: vi.fn(),
+  isDemoMode: vi.fn(() => false),
+}));
 // SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
 // shell tests exercise navigation wiring without a live PAPI backend.
 vi.mock('@shared/services/command.service', () => ({
@@ -38,19 +41,21 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
-      '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_syncConsent_heading%': 'Sync your projects',
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
+      '%firstRun_button_finish%': 'Finish',
       '%firstRun_button_skipSync%': 'Skip automatic sync',
       '%firstRun_step_syncProgress_heading%': 'Syncing your data',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
       '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
+      '%product_name%': 'Platform.Bible',
     },
     false,
   ]),
+  useSetting: vi.fn(() => [['en'], vi.fn()]),
 }));
 // SyncProgressStep subscribes to network events via getNetworkEvent. Return a no-op subscriber so
 // the component mounts without crashing in jsdom (no real network layer available in tests).
@@ -89,6 +94,9 @@ vi.mock('platform-bible-react', () => {
     Button: ButtonStub,
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
+    // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
+    // eslint-disable-next-line no-null/no-null
+    WizardStepper: () => null,
     useEvent: (
       event: ((handler: (detail: unknown) => void) => () => void) | undefined,
       handler: (detail: unknown) => void,
@@ -129,6 +137,14 @@ describe('FirstRunShell', () => {
     return <p>sync progress</p>;
   }
 
+  function SyncCompleter({ onNext: notifyDone }: FirstRunStepProps) {
+    return (
+      <button type="button" onClick={notifyDone}>
+        sync done
+      </button>
+    );
+  }
+
   it('advances through steps with the shell Next button', async () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     expect(screen.getByText(/language step/i)).toBeInTheDocument();
@@ -161,6 +177,17 @@ describe('FirstRunShell', () => {
     // SyncConsentStep calls setCanSkip(true) on mount; the shell renders its own Skip button.
     await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
     expect(mockComplete).toHaveBeenCalledWith({ skippedStep: 'syncConsent' });
+  });
+
+  it('shows Skip only on syncConsent, not on other numbered steps', async () => {
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // identify → syncConsent
+    expect(await screen.findByRole('button', { name: /skip/i })).toBeInTheDocument();
   });
 
   it('shows Skip when a step calls setCanSkip(true) and hides it after navigating away', async () => {
@@ -202,6 +229,7 @@ describe('FirstRunShell', () => {
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: /finish/i }));
+    expect(mockComplete).toHaveBeenCalledTimes(1);
     expect(mockComplete).toHaveBeenCalledWith();
   });
 
@@ -219,6 +247,144 @@ describe('FirstRunShell', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('renders no shell footer when a step manages its own footer (Back still handed to the step)', async () => {
+    let receivedOnBack: (() => void) | undefined;
+    function OwnsFooterStep({ setManagesOwnFooter, onBack }: FirstRunStepProps) {
+      useEffect(() => setManagesOwnFooter?.(true), [setManagesOwnFooter]);
+      receivedOnBack = onBack;
+      return <p>owns footer</p>;
+    }
+    render(
+      <FirstRunShell
+        entryStep="language"
+        stepComponents={{ ...STUB_STEPS, internetSettings: OwnsFooterStep }}
+      />,
+    );
+    // Navigate language → internetSettings (the footer-owning step); index 1 > entry floor 0, so
+    // the shell would normally offer Back here.
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText(/owns footer/i)).toBeInTheDocument();
+    // The shell renders none of its own footer buttons — the step owns the whole row.
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+    // But onBack is still supplied so the step can render Back within its own row.
+    expect(receivedOnBack).toBeTypeOf('function');
+  });
+
+  it('does not call completeFirstRun twice if onNext fires again while already busy (syncProgress)', async () => {
+    let done!: () => void;
+    mockComplete.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          done = resolve;
+        }),
+    );
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SyncCompleter }}
+      />,
+    );
+    const btn = screen.getByRole('button', { name: /sync done/i });
+    await userEvent.click(btn); // fires first onNext — isBusy flips to true
+    await userEvent.click(btn); // isBusy guard blocks second invocation
+    done();
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not call completeFirstRun twice if onSkip fires twice in one tick (runAction guard)', async () => {
+    let done!: () => void;
+    mockComplete.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          done = resolve;
+        }),
+    );
+    // Fire onSkip twice synchronously from one handler — the runAction re-entrancy guard (shared
+    // with onNext) must block the second call, not just the footer button's disabled state.
+    function DoubleSkipStep({ onSkip, setCanSkip }: FirstRunStepProps) {
+      useEffect(() => setCanSkip?.(true), [setCanSkip]);
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            onSkip?.();
+            onSkip?.();
+          }}
+        >
+          double skip
+        </button>
+      );
+    }
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncConsent: DoubleSkipStep }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /double skip/i }));
+    done();
+    await waitFor(() => expect(mockComplete).toHaveBeenCalledTimes(1));
+  });
+
+  it('disables the Skip button while an async action is in flight (isBusy guard)', async () => {
+    // Never-settling promise keeps isBusy=true indefinitely so the assertion doesn't race.
+    mockComplete.mockReturnValue(new Promise<void>(() => {}));
+    render(<FirstRunShell entryStep="syncConsent" />);
+    // SyncConsentStep calls setCanProceed(undefined) so Next is hidden; Skip is the only footer button.
+    await userEvent.click(await screen.findByRole('button', { name: /skip/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /skip/i })).toBeDisabled());
+  });
+
+  it('surfaces an error when completeFirstRun throws (syncProgress signals done)', async () => {
+    mockComplete.mockRejectedValue(new Error('could not finish'));
+    render(
+      <FirstRunShell
+        entryStep="syncProgress"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SyncCompleter }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /sync done/i }));
+    expect(await screen.findByText(/could not finish/i)).toBeInTheDocument();
+  });
+
+  it('hides Back and Skip on syncProgress (interstitial — no footer navigation)', async () => {
+    // Navigate via SyncConsentStep's own Sync button (it hides the shell Next via setCanProceed(undefined)).
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /^sync$/i })); // → syncProgress
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /skip/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a step indicator that updates with navigation', async () => {
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    expect(screen.getByText('Step 1 of 4')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /next/i }));
+    expect(screen.getByText('Step 2 of 4')).toBeInTheDocument();
+  });
+
+  it('does not show a step indicator on syncProgress (live region stays mounted but empty)', async () => {
+    // Navigate via SyncConsentStep's own Sync button (it hides the shell Next via setCanProceed(undefined)).
+    render(
+      <FirstRunShell
+        entryStep="syncConsent"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, syncProgress: SimpleSyncStep }}
+      />,
+    );
+    // On syncConsent the indicator is "Step 4 of 4" (sr-only but in DOM)
+    expect(screen.getByText('Step 4 of 4')).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /^sync$/i })); // → syncProgress
+    expect(screen.queryByText(/step \d+ of \d+/i)).not.toBeInTheDocument();
   });
 
   it('disables Next while a step reports it cannot proceed', async () => {
@@ -259,11 +425,21 @@ describe('FirstRunShell', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /finish/i })).toBeDisabled());
   });
 
+  it('goes back from internet to language (entry-floor: Back is gone on the first step)', async () => {
+    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
+    await userEvent.click(screen.getByRole('button', { name: /back/i })); // internet → language
+    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
+  });
+
   it('disables Next when navigating into a step that calls setCanProceed(false) on mount', async () => {
     // BlockingStep calls setCanProceed(false) in a mount effect — simulates a step that gates
     // on data loading or validation before the user may proceed.
-    function BlockingStep({ setCanProceed: setCP }: FirstRunStepProps) {
-      useEffect(() => setCP?.(false), [setCP]);
+    function BlockingStep({ setCanProceed: setCanProceedProp }: FirstRunStepProps) {
+      useEffect(() => {
+        setCanProceedProp?.(false);
+      }, [setCanProceedProp]);
       return <p>blocking step</p>;
     }
     render(

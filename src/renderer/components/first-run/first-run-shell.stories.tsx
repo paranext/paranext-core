@@ -18,7 +18,7 @@ const SETUP_LANGUAGES: Record<string, LanguageInfo> = {
 const meta: Meta<typeof FirstRunShell> = {
   title: 'First run/FirstRunShell',
   component: FirstRunShell,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   beforeEach: () => {
     setFirstRunLanguageMock({
       interfaceLanguage: ['en'],
@@ -48,4 +48,13 @@ export const SyncProgress: Story = {
       syncProgress: () => <p>Sync progress (no PAPI in Storybook — use the real app to preview)</p>,
     },
   },
+};
+
+/**
+ * Full-viewport story that verifies the shell is vertically + horizontally centered in the modal.
+ * Use this story to confirm centering holds across all steps.
+ */
+export const CenteredInModal: Story = {
+  args: { entryStep: 'language' },
+  parameters: { layout: 'fullscreen' },
 };
