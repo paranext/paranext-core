@@ -4,6 +4,7 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
 import type { TourProps, TourStep } from 'platform-bible-react';
+import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
 import { OnboardingTour } from './onboarding-tour.component';
 
 // jsdom does not implement window.matchMedia; theme.service-host.ts calls it at module init (via
@@ -67,16 +68,25 @@ vi.mock('platform-bible-react', () => ({
 
 const TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 
+// OnboardingTour polls for this element before it opens (the dock layout loads async, so the
+// panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
+let layoutPanelEl: HTMLElement;
+
 beforeEach(() => {
   mockStatus = { kind: 'app' };
   mockIsPowerMode = false;
   mockIsLocalizationLoading = false;
   localStorage.removeItem(TOUR_DONE_KEY);
+
+  layoutPanelEl = document.createElement('div');
+  layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
+  document.body.appendChild(layoutPanelEl);
 });
 
 afterEach(() => {
   cleanup();
   localStorage.removeItem(TOUR_DONE_KEY);
+  layoutPanelEl?.remove();
 });
 
 describe('OnboardingTour', () => {
