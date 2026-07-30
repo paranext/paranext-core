@@ -826,8 +826,8 @@ describe('useProjectPickerData', () => {
 
       // Gen A: manually controlled — we will resolve it late, after Gen B+ has been retrying.
       let resolveGenA: (v: never) => void = () => {};
-      const genAPromise = new Promise<never>((res) => {
-        resolveGenA = res;
+      const genAPromise = new Promise<never>((resolve) => {
+        resolveGenA = resolve;
       });
 
       let pdpfCallback: ((d: { objectType: string }) => void) | undefined;
@@ -865,6 +865,7 @@ describe('useProjectPickerData', () => {
         await act(async () => {
           await vi.runAllTimersAsync();
         });
+        // Same reason as above: sequential drain after each timer advance.
         // eslint-disable-next-line no-await-in-loop
         await settle(result);
       }
