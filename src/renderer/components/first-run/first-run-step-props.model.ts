@@ -17,10 +17,8 @@ export interface FirstRunStepProps {
   /** Return to the previous step. Absent on the first step (Language). */
   onBack?: () => void;
   /**
-   * Skip the rest of setup and finish, marking sync as skipped. The shell always passes a defined
-   * function; the type is optional to support standalone usage (Storybook, unit tests) where the
-   * shell is absent. `setCanSkip` controls whether the shell's own footer Skip button is shown;
-   * steps that manage their own footer (e.g. SyncConsentStep) call `onSkip` directly instead.
+   * Skip the rest of setup and finish. Present only when `setCanSkip(true)` has been called by the
+   * current step.
    */
   onSkip?: () => void;
   /**

@@ -1,10 +1,10 @@
 import * as commandService from '@shared/services/command.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { isDemoMode, markJustRegistered } from '@renderer/services/first-run-store';
-import { Alert, AlertDescription, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
+import { Alert, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { AlertCircle, CircleCheck } from 'lucide-react';
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { CircleCheck } from 'lucide-react';
+import { ChangeEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
@@ -72,8 +72,8 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
  */
 export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: IdentifyStepProps) {
-  // Suppress the shell's generic Next entirely — this step owns its own explicit restart action.
-  useEffect(() => setCanProceed?.(undefined), [setCanProceed]);
+  // Suppress the shell's generic Next before the first paint — matches SyncConsentStep's pattern.
+  useLayoutEffect(() => setCanProceed?.(undefined), [setCanProceed]);
 
   const [strings] = useLocalizedStrings(KEYS);
   // Ref so debounce callbacks always read the latest strings even if PAPI delivers them mid-wait.
@@ -143,7 +143,7 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       }
       setIsValidating(true);
       // Read from ref so we always get the latest strings even if PAPI delivered them mid-wait.
-      const s = stringsRef.current;
+      const latestStrings = stringsRef.current;
       try {
         const isValid = await commandService.sendCommand(
           'paratextRegistration.validateParatextRegistrationData',
@@ -153,13 +153,15 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
         if (!isMounted.current || validationGeneration.current !== gen) return;
         setRegistrationIsValid(!!isValid);
         if (!isValid) {
-          setError(s['%paratextRegistration_alert_invalidRegistration%']);
-          setErrorDescription(s['%paratextRegistration_alert_invalidRegistration_description%']);
+          setError(latestStrings['%paratextRegistration_alert_invalidRegistration%']);
+          setErrorDescription(
+            latestStrings['%paratextRegistration_alert_invalidRegistration_description%'],
+          );
         }
       } catch (err) {
         if (isMounted.current && validationGeneration.current === gen) {
           setRegistrationIsValid(false);
-          setError(s['%general_error_title%']);
+          setError(latestStrings['%general_error_title%']);
           setErrorDescription(getErrorMessage(err));
         }
       } finally {
@@ -222,16 +224,14 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       // certainly a server fluke. The flag is consumed (cleared) on the next resolveInternal call.
       markJustRegistered();
       // Restart immediately — the explicit "Save and restart" button already sets the expectation.
-      // The process terminates here; setIsRestarting(true) above keeps the button in "Restarting…"
-      // until the app exits.
       await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
-      // In production, platform.restart relaunches the process and this line never runs.
-      // If the restart resolves without relaunching (e.g. a test stub), reset the spinner so the
-      // UI doesn't get stuck.
-      if (isMounted.current) setIsRestarting(false);
+      // platform.restart resolves after invoking app.quit() but before the process actually
+      // terminates — the window may still be alive for a few frames. Gate the spinner reset on the
+      // injected path so production (where onRestartAfterSave is undefined) is unaffected.
+      if (onRestartAfterSave && isMounted.current) setIsRestarting(false);
     } catch (err) {
       if (!isMounted.current) return;
-      setSaveError(stringsRef.current['%general_error_title%']);
+      setSaveError(strings['%general_error_title%']);
       setSaveErrorDescription(getErrorMessage(err));
       setIsRestarting(false);
     }
@@ -242,6 +242,11 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   const isSaveDisabled = inDemoMode
     ? !name.trim()
     : !name.trim() || !registrationIsValid || isValidating;
+
+  // Validation error and save error are mutually exclusive: validateRegistration (called on every
+  // keystroke) clears both, and save can only be attempted after validation succeeds.
+  const activeError = error || saveError;
+  const activeErrorDescription = error ? errorDescription : saveErrorDescription;
 
   if (isRestarting) {
     return (
@@ -257,6 +262,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   return (
     <WizardStepForm
       heading={strings['%firstRun_step_identify_heading%']}
+      error={activeError}
+      errorDescription={activeErrorDescription}
       primaryButton={
         <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
           {strings['%paratextRegistration_button_saveAndRestart%']}
@@ -282,7 +289,7 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
             placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
             value={registrationCode}
             aria-invalid={showInvalidCode || (!!error && !isValidating)}
-            aria-describedby="identify-code-warning identify-code-error"
+            aria-describedby="identify-code-warning"
             onChange={onRegistrationCodeChange}
           />
           {showInvalidCode && (
@@ -315,22 +322,6 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
           <Alert>
             <CircleCheck className="tw:h-4 tw:w-4" />
             <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
-          </Alert>
-        )}
-
-        {error && (
-          <Alert id="identify-code-error" variant="destructive">
-            <AlertCircle className="tw:h-4 tw:w-4" />
-            <AlertTitle>{error}</AlertTitle>
-            <AlertDescription>{errorDescription}</AlertDescription>
-          </Alert>
-        )}
-
-        {saveError && (
-          <Alert id="identify-save-error" variant="destructive">
-            <AlertCircle className="tw:h-4 tw:w-4" />
-            <AlertTitle>{saveError}</AlertTitle>
-            <AlertDescription>{saveErrorDescription}</AlertDescription>
           </Alert>
         )}
       </div>

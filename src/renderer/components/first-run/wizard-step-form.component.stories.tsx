@@ -19,24 +19,18 @@ type Story = StoryObj<typeof WizardStepForm>;
 /** Minimum configuration: heading, children, and a primary button. */
 export const Default: Story = {};
 
-/** Back navigation available from a preceding step. */
-export const WithBack: Story = {
-  args: {
-    backButton: <Button variant="outline">Back</Button>,
-  },
-};
-
-/** Secondary "Skip" action alongside the primary button. */
-export const WithSecondary: Story = {
-  args: {
-    secondaryButton: <Button variant="outline">Skip</Button>,
-  },
-};
-
-/** Error string below the body content and above the button row. */
+/** Error alert below the body content and above the button row. */
 export const WithError: Story = {
   args: {
     error: 'Something went wrong. Please try again.',
+  },
+};
+
+/** Error alert with a description for additional context. */
+export const WithErrorDescription: Story = {
+  args: {
+    error: 'Connection failed',
+    errorDescription: 'Check your internet connection and try again.',
   },
 };
 
@@ -51,8 +45,7 @@ export const AllSlots: Story = {
       </p>
     ),
     error: 'Connection failed',
-    backButton: <Button variant="outline">Back</Button>,
-    secondaryButton: <Button variant="outline">Skip</Button>,
+    errorDescription: 'Check your internet connection and try again.',
     primaryButton: <Button>Sync</Button>,
   },
 };
