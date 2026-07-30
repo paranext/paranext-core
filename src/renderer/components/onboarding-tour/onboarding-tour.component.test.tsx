@@ -99,7 +99,7 @@ describe('OnboardingTour', () => {
     render(<OnboardingTour />);
     expect(screen.getByTestId('step-count').textContent).toBe('5');
     // Logical sides only — never physical left/right (Tour resolves those via readDirection).
-    expect(screen.getByTestId('step-sides').textContent).toBe('end,end,start,bottom,bottom');
+    expect(screen.getByTestId('step-sides').textContent).toBe('start,end,start,bottom,bottom');
   });
 
   it('sets the done flag and hides the tour when Done is clicked', () => {

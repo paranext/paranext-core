@@ -91,7 +91,7 @@ export function OnboardingTour() {
         target: `[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`,
         title: strings['%onboardingTour_step_project_title%'] ?? '',
         description: strings['%onboardingTour_step_project_description%'] ?? '',
-        side: 'end',
+        side: 'start',
       },
       {
         target: `[data-dockid="${SIMPLE_PANEL_ID_MODEL_TEXT}"]`,
