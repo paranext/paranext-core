@@ -160,6 +160,92 @@ describe('performShutdownTasks', () => {
     );
   });
 
+  it('syncs every distinct writable editor project when several windows are open', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    // The main-process WebView service proxy fans getAllOpenWebViewDefinitions out across every
+    // window and merges the results, so this one list represents two windows' editors.
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'window-1-project',
+        },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: true },
+          projectId: 'read-only-project',
+        },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'window-2-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    // Both windows' projects sync; the read-only one is still excluded.
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['window-1-project', 'window-2-project'],
+    );
+  });
+
+  it('sends a project shared by two windows only once', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'shared-project',
+        },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'shared-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['shared-project'],
+    );
+  });
+
+  it('ignores a writable editor with no project id', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
+        {
+          webViewType: 'platformScriptureEditor.react',
+          state: { isReadOnly: false },
+          projectId: 'real-project',
+        },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['real-project'],
+    );
+  });
+
+  it('skips S/R when every writable editor lacks a project id', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockNetworkObjectGet.mockResolvedValue(
+      makeWebViewService([
+        { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
+      ]),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+  });
+
   it('skips S/R when the WebView service is unavailable', async () => {
     mockSettingsGet.mockResolvedValue('simple');
     mockNetworkObjectGet.mockRejectedValue(new Error('service unavailable'));

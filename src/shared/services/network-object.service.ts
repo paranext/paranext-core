@@ -10,6 +10,7 @@ import {
   serialize,
   UnsubscriberAsync,
   getAllObjectFunctionNames,
+  getErrorMessage,
   isString,
   CanHaveOnDidDispose,
   MutexMap,
@@ -24,6 +25,7 @@ import {
 } from '@shared/models/network-object.model';
 import { logger } from '@shared/services/logger.service';
 import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
+import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 
 // #endregion
 
@@ -104,24 +106,26 @@ const initialize = (): Promise<void> => {
     // Subscribe to the dispose event to clean up local and remote network object registrations
     // eslint-disable-next-line @typescript-eslint/no-use-before-define
     onDidDisposeNetworkObject((id: string) => {
-      // networkObjectRegistrations is defined later in the module; safe at runtime since initialize runs after module eval.
+      // forgetRegistration is defined later in the module; safe at runtime since initialize runs
+      // after module eval.
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      const networkObjectRegistration = networkObjectRegistrations.get(id);
+      forgetRegistration(id);
+    });
 
-      if (networkObjectRegistration) {
-        // Alert users of this specific network object that it was disposed
-        networkObjectRegistration.onDidDisposeEmitter.emit();
-
-        // Dispose of the network object registration itself
-        networkObjectRegistration.onDidDisposeEmitter.dispose();
-
-        // Dispose of the proxy
-        networkObjectRegistration.revokeProxy();
-
-        // Dispose of the network object registration
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        networkObjectRegistrations.delete(id);
-      }
+    // A closing window takes its RPC connection down without disposing the objects it hosted, so no
+    // dispose event is ever emitted for them. Every process that had fetched one of those objects
+    // would otherwise keep serving the dead proxy forever, and — because a cached registration also
+    // makes `set` reject the name as taken — no surviving window could re-host it either. The main
+    // process announces the close; each process then drops what it can prove is gone.
+    networkService.getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
+      // forgetUnreachableRemoteObjects is defined later in the module; safe at runtime since this
+      // handler can only run after module evaluation.
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      forgetUnreachableRemoteObjects().catch((e) => {
+        logger.warn(
+          `Failed to clean up network objects after a window closed: ${getErrorMessage(e)}`,
+        );
+      });
     });
 
     isInitialized = true;
@@ -197,6 +201,33 @@ const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
 /**
+ * Drop this process's registration for a network object and tell everyone holding it that it is
+ * gone: run and tear down its `onDidDispose` event, revoke its proxy so later calls fail loudly
+ * instead of hanging, and free the ID for a future `set`.
+ *
+ * @param id ID of the network object to forget
+ * @returns Whether there was a registration to forget
+ */
+const forgetRegistration = (id: string): boolean => {
+  const networkObjectRegistration = networkObjectRegistrations.get(id);
+  if (!networkObjectRegistration) return false;
+
+  // Alert users of this specific network object that it was disposed
+  networkObjectRegistration.onDidDisposeEmitter.emit();
+
+  // Dispose of the network object registration itself
+  networkObjectRegistration.onDidDisposeEmitter.dispose();
+
+  // Dispose of the proxy
+  networkObjectRegistration.revokeProxy();
+
+  // Dispose of the network object registration
+  networkObjectRegistrations.delete(id);
+
+  return true;
+};
+
+/**
  * Emitter for when a network object is created. Includes the list of functions exposed by the
  * network object. Initialized inside `initialize()`.
  */
@@ -231,6 +262,55 @@ export const onDidDisposeNetworkObject = networkService.getNetworkEvent(
 // We need this to protect simultaneous calls to get and/or set the same network objects
 const getterMutexMap = new MutexMap();
 const setterMutexMap = new MutexMap();
+
+/**
+ * Drop every cached registration for a network object living in another process that can no longer
+ * be reached, as if that object had been disposed.
+ *
+ * Disposal is normally announced by the process that owns the object, but a process that goes away
+ * abruptly — most commonly a window the user closed — never gets to announce anything. Its
+ * registered methods are dropped from the central registry, yet every other process still holds a
+ * registration pointing at it. That cached registration is why the name looks taken to
+ * {@link set}/`registerEngine`, so app-global services hosted by one window can only be re-hosted
+ * elsewhere once it is cleared.
+ *
+ * Only remote registrations are considered, and only ones the network confirms are gone, so a call
+ * made while every object is still alive changes nothing. Runs under the same per-ID lock as
+ * {@link get} so a concurrent lookup cannot resurrect the registration mid-sweep.
+ *
+ * Reachability is decided with the same probe {@link get} uses, which retries a missing handler on
+ * the main process's registration-race cadence. Confirming a genuinely gone object therefore takes
+ * a few seconds — deliberately, since erring the other way would revoke a proxy that consumers are
+ * still legitimately using. Objects that are alive answer on the first attempt, so a sweep costs
+ * nothing when nothing has gone away.
+ *
+ * @returns IDs of the network objects that were forgotten
+ * @experimental
+ */
+export const forgetUnreachableRemoteObjects = async (): Promise<string[]> => {
+  await initialize();
+
+  const remoteIds = [...networkObjectRegistrations.entries()]
+    .filter(
+      ([, registration]) => registration.registrationType === NetworkObjectRegistrationType.Remote,
+    )
+    .map(([id]) => id);
+
+  const forgottenIds = await Promise.all(
+    remoteIds.map(async (id) => {
+      const lock = getterMutexMap.get(id);
+      return lock.runExclusive(async () => {
+        // Another sweep or a dispose event may have removed it while we waited for the lock
+        if (!networkObjectRegistrations.has(id)) return undefined;
+        if (await getRemoteNetworkObjectFunctions(id)) return undefined;
+        logger.info(`Forgetting network object '${id}'; it is no longer reachable on the network`);
+        return forgetRegistration(id) ? id : undefined;
+      });
+    }),
+  );
+
+  return forgottenIds.filter((id) => id !== undefined);
+};
 
 /** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (

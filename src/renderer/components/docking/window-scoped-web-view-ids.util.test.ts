@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
-import type { LayoutInfo } from '@shared/models/docking-framework.model';
-import withWindowScopedWebViewIds from '@renderer/components/docking/window-scoped-web-view-ids.util';
+import type { LayoutInfo, SavedTabInfo } from '@shared/models/docking-framework.model';
+import withWindowScopedWebViewIds, {
+  withWindowScopedWebViewIdInTab,
+} from '@renderer/components/docking/window-scoped-web-view-ids.util';
 
 // `LayoutInfo` is deliberately opaque in the shared model, so building a fixture and reading a tab
 // back out of a result both have to cross that boundary. Restructuring to avoid the assertions
@@ -138,5 +140,65 @@ describe('withWindowScopedWebViewIds', () => {
       dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
     };
     expect(base.dockbox.children[0].children[0].tabs[0].id).toBe('deep-1-w2');
+  });
+});
+
+/** Tab shaped like a default layout supplement entry's tab: id repeated inside `data` */
+function webViewTab(id: string): SavedTabInfo {
+  return {
+    id,
+    tabType: TAB_TYPE_WEBVIEW,
+    data: { id, webViewType: 'test.webView', state: {} },
+  } as unknown as SavedTabInfo;
+}
+
+/** Read a transformed tab back, crossing the same opaque-data boundary the fixture crossed */
+function readIds(tab: SavedTabInfo) {
+  const concrete = tab as unknown as { id: string; data?: { id: string } };
+  return { id: concrete.id, dataId: concrete.data?.id };
+}
+
+describe('withWindowScopedWebViewIdInTab', () => {
+  beforeEach(() => {
+    globalThis.windowId = '2';
+  });
+
+  test('scopes a supplement tab’s id, which is otherwise identical in every window', () => {
+    expect(readIds(withWindowScopedWebViewIdInTab(webViewTab('supplement-tab'))).id).toBe(
+      'supplement-tab-w2',
+    );
+  });
+
+  test('keeps the id repeated inside the tab data in agreement with the tab id', () => {
+    const scoped = readIds(withWindowScopedWebViewIdInTab(webViewTab('supplement-tab')));
+
+    expect(scoped.dataId).toBe(scoped.id);
+  });
+
+  test('replaces an existing window suffix rather than stacking another one', () => {
+    const scoped = withWindowScopedWebViewIdInTab(webViewTab('supplement-tab-w1'));
+
+    expect(readIds(scoped).id).toBe('supplement-tab-w2');
+  });
+
+  test('re-scoping is stable, so repeated loads do not drift the id', () => {
+    const once = withWindowScopedWebViewIdInTab(webViewTab('supplement-tab'));
+    const twice = withWindowScopedWebViewIdInTab(once);
+
+    expect(readIds(twice).id).toBe(readIds(once).id);
+  });
+
+  test('does not mutate the tab it is given, which comes from a module every load reads', () => {
+    const supplementTab = webViewTab('supplement-tab');
+
+    withWindowScopedWebViewIdInTab(supplementTab);
+
+    expect(readIds(supplementTab).id).toBe('supplement-tab');
+  });
+
+  test('leaves a tab that is not a web view alone', () => {
+    const toolTab = { id: 'some-tool', tabType: 'tool' } as unknown as SavedTabInfo;
+
+    expect(readIds(withWindowScopedWebViewIdInTab(toolTab)).id).toBe('some-tool');
   });
 });

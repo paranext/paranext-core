@@ -46,9 +46,9 @@ type BoundedSyncSettlement<T> =
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
  *
- * In Simple mode: cancels any in-progress sync, then S/Rs the open writable Scripture Editor's
- * project. All errors are swallowed — extension may not be installed, or may fail — shutdown must
- * never be permanently blocked.
+ * In Simple mode: cancels any in-progress sync, then S/Rs the projects of all open writable
+ * Scripture Editors across every window. All errors are swallowed — extension may not be installed,
+ * or may fail — shutdown must never be permanently blocked.
  *
  * In Power mode: S/Rs the projects scheduled "On startup/shutdown" via the S/R extension's
  * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
@@ -60,7 +60,7 @@ type BoundedSyncSettlement<T> =
  * If the interface-mode setting can't be read: skips the automatic shutdown S/R entirely and warns,
  * rather than falling through to Simple mode's open-editor S/R. The read can fail exactly when the
  * app is closing (the extension host may already be tearing down), and Simple mode would S/R
- * whichever writable editor happens to be open — for a Power user, possibly a project they
+ * whichever writable editors happen to be open — for a Power user, possibly projects they
  * deliberately excluded from their schedule. Symmetric with {@link performStartupTasks}.
  */
 export async function performShutdownTasks(): Promise<void> {
@@ -74,7 +74,7 @@ export async function performShutdownTasks(): Promise<void> {
 async function performShutdownTasksInternal(): Promise<void> {
   // An unreadable mode must NOT fall through to Simple mode's open-editor S/R (symmetric with
   // startup): the read can fail exactly when the app is closing, and Simple mode S/Rs whatever
-  // writable editor happens to be open — for a Power user, possibly a project they excluded from
+  // writable editors happen to be open — for a Power user, possibly projects they excluded from
   // their schedule. When we can't tell the mode, skip the automatic shutdown S/R and warn.
   let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
   try {
@@ -107,39 +107,43 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     /* no sync in progress, or extension unavailable */
   }
 
-  // S/R only the currently open writable Scripture Editor's project.
-  // If only a read-only Resource Viewer is open (no local changes possible), skip S/R.
-  let projectId: string | undefined;
+  // S/R the project of every open writable Scripture Editor.
+  // If only read-only Resource Viewers are open (no local changes possible), skip S/R.
+  let projectIds: string[] = [];
   try {
     const webViewService = await networkObjectService.get<WebViewServiceType>(
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     );
     const openDefs = await webViewService?.getAllOpenWebViewDefinitions();
     // Only genuine Simple mode reaches here — Power mode selects by schedule (see
-    // performPowerModeShutdownSync) and an unreadable mode now returns early above rather than
-    // falling through. Simple mode allows at most one writable Scripture Editor at a time, so find()
-    // is sufficient.
-    const activeEditor = openDefs?.find(
-      (def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly,
-    );
-    projectId = activeEditor?.projectId;
+    // performPowerModeShutdownSync) and an unreadable mode returns early above rather than falling
+    // through. The main-process WebView service fans this call out across every open window and
+    // merges the results, so more than one writable Scripture Editor can appear here even in Simple
+    // mode — one per window. Take them all: picking a single one would leave the other windows'
+    // edits unsynced. Deduplicate by project id, since two windows may have editors on the same
+    // project and `sendReceiveProjects` should not be asked to sync it twice.
+    const writableEditorProjectIds = openDefs
+      ?.filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly)
+      .map((def) => def.projectId)
+      .filter((id) => id !== undefined);
+    projectIds = [...new Set(writableEditorProjectIds)];
   } catch {
     /* WebView service unavailable */
   }
 
-  if (!projectId) return;
+  if (projectIds.length === 0) return;
 
-  logger.info('Syncing project on shutdown...');
-  // Copy to a const so TypeScript knows the type is string inside the bounded-wait callback.
-  const syncProjectId = projectId;
+  logger.info(`Syncing projects on shutdown: ${projectIds.join(', ')}`);
+  // `sendReceiveProjects` takes the whole list in one call, so every open editor's project goes out
+  // as a single S/R under one bounded wait rather than N serial syncs racing the shutdown timeout.
   const settlement = await runBoundedShutdownSync('shutdown sync', () =>
     networkService.requestNoRetry(
       serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
-      [syncProjectId],
+      projectIds,
     ),
   );
-  // Simple mode has no "skipped" state: reaching here means a writable project was selected, so a
-  // resolution is a completed S/R.
+  // Simple mode has no "skipped" state: reaching here means at least one writable project was
+  // selected, so a resolution is a completed S/R.
   let outcome: ShutdownSyncOutcome;
   if (settlement.status === 'timedOut') outcome = 'timed-out';
   else if (settlement.status === 'failed') outcome = 'unreachable';

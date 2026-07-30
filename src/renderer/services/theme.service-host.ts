@@ -35,6 +35,9 @@ import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.
 import { themeDataService } from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { getNetworkEvent } from '@shared/services/network.service';
+import { forgetUnreachableRemoteObjects } from '@shared/services/network-object.service';
+import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 
 /** Raw un-expanded themes that are built into the software */
 // We know this is the right data type because we write this data
@@ -585,6 +588,17 @@ let dataProvider: IThemeService;
  */
 let runInitialize: () => Promise<void>;
 
+/** Whether this window is the one currently hosting the theme engine */
+let isHostingThemeEngine = false;
+
+/** Re-arm {@link runInitialize} and run it, so this window re-enters the host-or-attach race. */
+function retryHostOrAttachToThemeEngine(): void {
+  runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
+  runInitialize().catch((e) => {
+    logger.warn(`Failed to re-host the theme service after its host closed: ${getErrorMessage(e)}`);
+  });
+}
+
 /**
  * Host the theme engine in this window, or attach to the window already hosting it.
  *
@@ -601,11 +615,13 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
       themeServiceEngine,
     );
     dataProvider = hostedEngine;
+    isHostingThemeEngine = true;
     // Only the hosting window watches the OS dark-mode preference, and only once it has actually
     // won the name. Listening before registering would leak a media-query listener in every window
     // that loses the race, since the unsubscribe below is only reached on the success path.
     const systemThemeChangesInfo = listenToSystemThemeChanges();
     hostedEngine.onDidDispose(() => {
+      isHostingThemeEngine = false;
       systemThemeChangesInfo.unsubscribe();
     });
     return;
@@ -621,15 +637,37 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
   // When the hosting window closes its provider goes with it, so re-arm and take over. Every
   // remaining window does this; the one that wins the re-registration becomes the new host and the
   // others attach to it on their own retry.
-  hostedProvider.onDidDispose(() => {
-    runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
-    runInitialize().catch((e) => {
-      logger.warn(
-        `Failed to re-host the theme service after its host closed: ${getErrorMessage(e)}`,
-      );
-    });
-  });
+  hostedProvider.onDidDispose(retryHostOrAttachToThemeEngine);
 }
+
+/**
+ * Take the theme engine over when the window hosting it closes.
+ *
+ * The `onDidDispose` hook above only covers a host that disposed its provider deliberately; a
+ * closing window never gets that far, so this close announcement from the main process is what
+ * actually drives the handover in practice. The provider this window attached to is dead but still
+ * cached locally, and a cached registration makes the engine's name look taken, so the stale
+ * registration has to go before re-registering can succeed.
+ *
+ * Skipped in the window that is already hosting: it has nothing to take over, and re-entering the
+ * race there would drop the engine it is serving to everyone else. Also skipped when the closed
+ * window turns out to have been hosting nothing this window was using — re-entering the race then
+ * would resolve the same live provider again and leave another dispose handler on it.
+ */
+async function takeOverThemeEngineAfterWindowClose(): Promise<void> {
+  if (isHostingThemeEngine) return;
+  const forgottenIds = await forgetUnreachableRemoteObjects();
+  if (forgottenIds.length === 0 && dataProvider) return;
+  retryHostOrAttachToThemeEngine();
+}
+
+getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
+  takeOverThemeEngineAfterWindowClose().catch((e) => {
+    logger.warn(
+      `Failed to take the theme service over after a window closed: ${getErrorMessage(e)}`,
+    );
+  });
+});
 
 runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
 

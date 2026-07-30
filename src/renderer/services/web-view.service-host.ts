@@ -92,7 +92,9 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import withWindowScopedWebViewIds from '@renderer/components/docking/window-scoped-web-view-ids.util';
+import withWindowScopedWebViewIds, {
+  withWindowScopedWebViewIdInTab,
+} from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -846,7 +848,15 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
       ? dockLayoutVar.simpleLayout
       : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout),
   );
-  const enabledEntries = await getEnabledSupplementEntries();
+  // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
+  // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
+  // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
+  // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
+  // the scoped copy already in a restored layout and the tab would be appended again on every load.
+  const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
+    ...entry,
+    tab: withWindowScopedWebViewIdInTab(entry.tab),
+  }));
   if (enabledEntries.length === 0) {
     // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
     dockLayoutVar.loadLayout(layoutToLoad);
