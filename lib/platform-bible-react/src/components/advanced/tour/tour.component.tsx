@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { readDirection } from '@/utils/dir-helper.util';
 import { Z_INDEX_ONBOARDING_TOUR } from '../../z-index';
 import { Button } from '../../shadcn-ui/button';
@@ -112,6 +112,9 @@ export function Tour({
   const [pos, setPos] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
   const primaryButtonRef = useRef<HTMLButtonElement>(null);
+  // Per-instance ids so the SVG mask stays unique and the dialog can describe its body text.
+  const maskId = useId();
+  const descId = useId();
 
   useEffect(() => {
     if (!open) return;
@@ -124,7 +127,12 @@ export function Tour({
   // Measure the current target; re-measure on resize.
   useEffect(() => {
     if (!open || !currentStep) return undefined;
-    const measure = () => setTargetRect(measureTarget(currentStep.target));
+    const measure = () => {
+      const r = measureTarget(currentStep.target);
+      // Keep last-known-good rect if the target momentarily can't be measured, so the overlay
+      // never blanks mid-tour while other steps remain viable.
+      if (r) setTargetRect(r);
+    };
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
@@ -175,6 +183,7 @@ export function Tour({
       role="dialog"
       aria-modal="true"
       aria-label={currentStep.title}
+      aria-describedby={descId}
       className="tw:fixed tw:inset-0"
       style={{ zIndex: Z_INDEX_ONBOARDING_TOUR }}
     >
@@ -184,12 +193,12 @@ export function Tour({
         style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
       >
         <defs>
-          <mask id="tour-spotlight-mask">
+          <mask id={maskId}>
             <rect width="100%" height="100%" fill="white" />
             <rect x={spotX} y={spotY} width={spotW} height={spotH} rx="6" fill="black" />
           </mask>
         </defs>
-        <rect width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask="url(#tour-spotlight-mask)" />
+        <rect width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask={`url(#${maskId})`} />
       </svg>
 
       {/* Step card — positioned adjacent to the spotlight target. */}
@@ -201,7 +210,9 @@ export function Tour({
           {pos + 1} / {visibleSteps.length}
         </p>
         <h3 className="tw:text-sm tw:font-semibold">{currentStep.title}</h3>
-        <p className="tw:text-sm tw:text-muted-foreground">{currentStep.description}</p>
+        <p id={descId} className="tw:text-sm tw:text-muted-foreground">
+          {currentStep.description}
+        </p>
 
         <div className="tw:flex tw:items-center tw:justify-between tw:pt-1">
           <Button variant="ghost" size="sm" onClick={onSkip}>
