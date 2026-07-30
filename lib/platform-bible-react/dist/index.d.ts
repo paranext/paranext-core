@@ -2567,8 +2567,8 @@ export interface WizardStepperProps {
 	totalSteps: number;
 	/**
 	 * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
-	 * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a `RangeError`
-	 * in V8).
+	 * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a
+	 * `RangeError` in V8).
 	 */
 	locale?: string;
 }
