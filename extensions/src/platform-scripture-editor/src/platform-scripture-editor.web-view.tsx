@@ -2075,18 +2075,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
+  // The chapter-data selector. Also passed to `useEditorPdpSync` as the document identity of
+  // whatever data this subscription delivers — keep it the SAME memoized object for both so the
+  // data/identity pairing can't drift.
+  const chapterUsjSelector = useMemo(() => {
+    return {
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      verseNum: 1,
+      versificationStr: scrRef.versificationStr,
+    };
+  }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
+
   const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(() => {
-      return {
-        book: scrRef.book,
-        chapterNum: scrRef.chapterNum,
-        verseNum: 1,
-        versificationStr: scrRef.versificationStr,
-      };
-    }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]),
+    chapterUsjSelector,
     defaultUsj,
     // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
@@ -2564,6 +2569,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
   useEditorPdpSync({
     usjFromPdp,
+    documentSelector: chapterUsjSelector,
     editorRef,
     usjSentToPdp,
     setEditorUsj,

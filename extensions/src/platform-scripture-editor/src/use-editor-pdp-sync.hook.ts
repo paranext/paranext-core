@@ -14,29 +14,25 @@ import { MutableRefObject, useEffect, useRef } from 'react';
 export const NON_CONVERGENCE_WARN_THRESHOLD = 25;
 
 /**
- * Identity of a USJ document — its book code and first chapter number — for telling a SAME-document
- * update (echo/refresh) apart from a DIFFERENT document arriving (book/chapter navigation).
- *
- * Identity is read from the document's OWN content, NOT from the selected `scrRef`, on purpose:
- * during navigation the incoming PDP data and the editor's displayed content each lag `scrRef`
- * independently — the PDP subscription re-delivers asynchronously, and the editor is only replaced
- * afterward — so `scrRef` would report a chapter that neither the incoming data nor the editor has
- * actually reached yet. The document's own `book`/`chapter` markers are the only ground truth for
- * which document a given USJ actually is.
- *
- * Returns `undefined` when the document has no book or chapter marker: it cannot be identified, so
- * callers must not treat two such documents as the same one.
+ * The identity of the chapter document a `ChapterUSJ` subscription serves — the fields of the data
+ * selector that determine WHICH document the data is (the selector's `verseNum` does not
+ * participate in identity; it never changes which chapter the subscription delivers).
  */
-function getUsjBookChapterIdentity(usj: Usj | undefined): string | undefined {
-  let book = '';
-  let chapter = '';
-  usj?.content?.forEach((entry) => {
-    if (typeof entry === 'string') return;
-    if (!book && entry.type === 'book') book = String(entry.code ?? '');
-    if (!chapter && entry.type === 'chapter') chapter = String(entry.number ?? '');
-  });
-  if (!book && !chapter) return undefined;
-  return `${book}|${chapter}`;
+export interface EditorDocumentSelector {
+  book: string;
+  chapterNum: number;
+  versificationStr?: string;
+}
+
+/** Whether two selectors identify the same chapter document (see {@link EditorDocumentSelector}). */
+function areSameDocumentSelectors(
+  a: EditorDocumentSelector | undefined,
+  b: EditorDocumentSelector | undefined,
+): boolean {
+  if (!a || !b) return false;
+  return (
+    a.book === b.book && a.chapterNum === b.chapterNum && a.versificationStr === b.versificationStr
+  );
 }
 
 /**
@@ -147,6 +143,7 @@ export const LOSSY_WARN_MEMORY_LIMIT = 32;
  */
 export function useEditorPdpSync({
   usjFromPdp,
+  documentSelector,
   editorRef,
   usjSentToPdp,
   setEditorUsj,
@@ -154,6 +151,17 @@ export function useEditorPdpSync({
   isEditingSessionActive,
 }: {
   usjFromPdp: Usj | undefined;
+  /**
+   * The identity fields of the SAME selector the `ChapterUSJ` subscription producing `usjFromPdp`
+   * uses. That pairing is what makes selector-based document identity sound: the platform's data
+   * hooks guarantee a delivered value comes from the subscription for the CURRENT selector (a
+   * superseded subscription's late emission is dropped), so `usjFromPdp` always belongs to this
+   * selector. Identity deliberately does NOT come from the USJ content itself — chapter USJ carries
+   * no book marker, so content-derived identity collapses to the chapter number alone and collides
+   * across books (navigating GEN 1 → EXO 1 while focused read as the SAME document, deferring the
+   * new book and saving GEN's content through EXO's selector).
+   */
+  documentSelector: EditorDocumentSelector;
   editorRef: MutableRefObject<EditorRef | null>;
   usjSentToPdp: MutableRefObject<Usj | undefined>;
   /** Stable ref whose `.current` is the function to call to update the editor's displayed content */
@@ -211,14 +219,22 @@ export function useEditorPdpSync({
   const warnedLossyDifferences = useRef<
     { sentEntry?: Usj['content'][number]; receivedEntry?: Usj['content'][number] }[]
   >([]);
+  // Identity of the document last APPLIED to the editor via setEditorUsj — i.e. what the editor is
+  // showing now. Local edits never change which document the editor shows, so this only moves when
+  // an update is applied. Compared against the current documentSelector to tell a same-document
+  // echo (defer while actively editing) from a different document arriving (navigation: always
+  // replace).
+  const lastAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
   useEffect(() => {
     if (!usjFromPdp) return;
     if (!editorRef.current) {
-      // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc)
+      // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc). The applied
+      // identity describes the CURRENT editor instance's content, so it resets with it.
       usjSentToPdp.current = undefined;
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
+      lastAppliedDocumentSelector.current = undefined;
       return;
     }
 
@@ -255,13 +271,14 @@ export function useEditorPdpSync({
         editorRef.current.isFocused() || (isEditingSessionActive?.() ?? false);
       if (isActivelyEditing) {
         const editorUsj = editorRef.current.getUsj();
-        // Same document only when BOTH are identifiable and their identities match. An
-        // unidentifiable document (no book/chapter) is never assumed to match another, so it
-        // replaces rather than deferring.
-        const incomingIdentity = getUsjBookChapterIdentity(usjFromPdp);
-        const editorIdentity = getUsjBookChapterIdentity(editorUsj);
-        const isSameDocument =
-          incomingIdentity !== undefined && incomingIdentity === editorIdentity;
+        // Same document when the incoming update's selector (== documentSelector, per the pairing
+        // invariant on that param) matches the selector whose data was last applied to the editor.
+        // A fresh editor with nothing applied yet is never "the same document", so it replaces
+        // rather than deferring.
+        const isSameDocument = areSameDocumentSelectors(
+          documentSelector,
+          lastAppliedDocumentSelector.current,
+        );
         if (isSameDocument) {
           if (areUsjContentsEqualExceptWhitespace(usjFromPdp, editorUsj)) {
             // The PDP now agrees with the editor — the round-trip converged.
@@ -383,6 +400,7 @@ export function useEditorPdpSync({
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
+      lastAppliedDocumentSelector.current = documentSelector;
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
@@ -398,9 +416,10 @@ export function useEditorPdpSync({
       saveUsjToPdpIfUpdated();
     }
   }, [
-    // usjFromPdp and saveUsjToPdpIfUpdated are the only deps that actually change and trigger
-    // re-runs. The refs below are stable (their identities never change), but are listed to
-    // satisfy the exhaustive-deps lint rule.
+    // usjFromPdp, documentSelector, and saveUsjToPdpIfUpdated are the only deps that actually
+    // change and trigger re-runs. The refs below are stable (their identities never change), but
+    // are listed to satisfy the exhaustive-deps lint rule.
+    documentSelector,
     editorRef,
     isEditingSessionActive,
     nonConvergingDeferralCount,

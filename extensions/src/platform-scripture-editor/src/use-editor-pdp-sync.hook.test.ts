@@ -3,15 +3,12 @@
 /**
  * Regression tests for useEditorPdpSync.
  *
- * Bug: After navigating through a non-existent book and back to a previously-visited chapter, the
- * editor showed "Enter some scripture…" (empty placeholder) instead of chapter content.
- *
- * Root cause: usjSentToPdp was not reset when the editor unmounted (editorRef.current === null). On
- * returning to the same chapter, usjFromPdp matched the stale usjSentToPdp value, so the equality
- * check skipped the setEditorUsj call and the fresh editor was never given its content.
- *
- * Fix: Reset usjSentToPdp to undefined when the editor is unmounted so the next PDP response always
- * triggers setEditorUsj, regardless of whether the chapter data has changed.
+ * Fixture shape matters here: real `ChapterUSJ` data starts at the chapter node and carries NO book
+ * marker (verified against a live `getChapterUSJ` response). Document identity therefore cannot be
+ * derived from the content — an earlier content-derived identity collapsed to the chapter number
+ * alone and collided across books (GEN 1 vs EXO 1). Identity now comes from the data selector
+ * paired with each delivery (`documentSelector`), which the platform's data hooks guarantee matches
+ * the delivered data.
  */
 
 import '@testing-library/jest-dom';
@@ -20,7 +17,11 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { useRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { NON_CONVERGENCE_WARN_THRESHOLD, useEditorPdpSync } from './use-editor-pdp-sync.hook';
+import {
+  EditorDocumentSelector,
+  NON_CONVERGENCE_WARN_THRESHOLD,
+  useEditorPdpSync,
+} from './use-editor-pdp-sync.hook';
 
 const { mockLoggerDebug, mockLoggerWarn } = vi.hoisted(() => ({
   mockLoggerDebug: vi.fn(),
@@ -38,20 +39,36 @@ beforeEach(() => {
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
 const emptyUsj: Usj = { type: 'USJ', version: '3.1', content: [] };
 
+/**
+ * A chapter document as the `ChapterUSJ` data type actually delivers it: content starts at the
+ * chapter node, with NO book marker.
+ */
+function makeChapterUsj(
+  chapterNumber: string,
+  text: string,
+  { paraMarker = 'p', verseNumber = '2' } = {},
+): Usj {
+  return {
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'chapter', marker: 'c', number: chapterNumber },
+      {
+        type: 'para',
+        marker: paraMarker,
+        content: [{ type: 'verse', marker: 'v', number: verseNumber }, text],
+      },
+    ],
+  };
+}
+
+const lev14Selector: EditorDocumentSelector = { book: 'LEV', chapterNum: 14 };
+const lev15Selector: EditorDocumentSelector = { book: 'LEV', chapterNum: 15 };
+const gen1Selector: EditorDocumentSelector = { book: 'GEN', chapterNum: 1 };
+const exo1Selector: EditorDocumentSelector = { book: 'EXO', chapterNum: 1 };
+
 // LEV chapter 14 with minimal content
-const levUsj: Usj = {
-  type: 'USJ',
-  version: '3.1',
-  content: [
-    { type: 'book', marker: 'id', code: 'LEV' },
-    { type: 'chapter', marker: 'c', number: '14' },
-    {
-      type: 'para',
-      marker: 'p',
-      content: [{ type: 'verse', marker: 'v', number: '2' }, 'This is the law of the leper.'],
-    },
-  ],
-};
+const levUsj = makeChapterUsj('14', 'This is the law of the leper.');
 
 describe('useEditorPdpSync', () => {
   it('calls setEditorUsj when PDP data first arrives', () => {
@@ -69,6 +86,7 @@ describe('useEditorPdpSync', () => {
       const setEditorUsj = useRef((usj: Usj) => setUsjSpy(usj));
       useEditorPdpSync({
         usjFromPdp: levUsj,
+        documentSelector: lev14Selector,
         editorRef,
         usjSentToPdp,
         setEditorUsj,
@@ -104,6 +122,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -132,41 +151,17 @@ describe('useEditorPdpSync', () => {
   // after the `\`). While actively editing, the editor owns the freshest content: differing
   // echoes defer to it (and push local content up); matching echoes are pure confirmations.
   it('does not replace the actively-edited editor with a differing echo; saves the newer local content', () => {
-    const normalizedEcho: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'p',
-          content: [
-            { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. \\q1',
-          ],
-        },
-      ],
-    };
-    const newerEditorContent: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'q1',
-          content: [
-            { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. typed more',
-          ],
-        },
-      ],
-    };
+    const normalizedEcho = makeChapterUsj('14', 'This is the law of the leper. \\q1');
+    const newerEditorContent = makeChapterUsj('14', 'This is the law of the leper. typed more', {
+      paraMarker: 'q1',
+    });
 
     // The user keeps typing across the round-trip, so the editor content advances between the
     // first push and the echo's arrival. `liveEditorUsj` models that live-changing content.
     const evenNewerEditorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'q1',
@@ -198,6 +193,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -235,23 +231,11 @@ describe('useEditorPdpSync', () => {
   });
 
   // Regression: chapter navigation while focus sits in the editor. The actively-editing
-  // deferral must apply ONLY to same-document updates - a DIFFERENT book/chapter arriving means
-  // navigation, and deferring would keep the editor on the old chapter forever (and save the old
-  // chapter's content through the new chapter's data selector).
+  // deferral must apply ONLY to same-document updates - a DIFFERENT chapter's selector arriving
+  // means navigation, and deferring would keep the editor on the old chapter forever (and save
+  // the old chapter's content through the new chapter's data selector).
   it('replaces the actively-edited editor when a DIFFERENT chapter arrives (navigation)', () => {
-    const lev15: Usj = {
-      type: 'USJ',
-      version: '3.1',
-      content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
-        { type: 'chapter', marker: 'c', number: '15' },
-        {
-          type: 'para',
-          marker: 'p',
-          content: [{ type: 'verse', marker: 'v', number: '1' }, 'Chapter fifteen text.'],
-        },
-      ],
-    };
+    const lev15 = makeChapterUsj('15', 'Chapter fifteen text.', { verseNumber: '1' });
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -269,44 +253,44 @@ describe('useEditorPdpSync', () => {
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
 
     const { rerender } = renderHook(
-      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+      ({
+        usjFromPdp,
+        documentSelector,
+      }: {
+        usjFromPdp: Usj;
+        documentSelector: EditorDocumentSelector;
+      }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: levUsj } },
+      { initialProps: { usjFromPdp: levUsj, documentSelector: lev14Selector } },
     );
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
 
     // The user picked LEV 15 in the BookChapter control; the new chapter's USJ arrives while
     // focus is still on the editor input.
-    act(() => rerender({ usjFromPdp: lev15 }));
+    act(() => rerender({ usjFromPdp: lev15, documentSelector: lev15Selector }));
 
     expect(setUsjSpy).toHaveBeenCalledOnce(); // editor navigates
     expect(setUsjSpy).toHaveBeenCalledWith(lev15);
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // no cross-chapter save-back
   });
 
-  // Defense-in-depth (Fix 3): a document is identified by the book code + chapter number in its own
-  // content. When a document has neither, it cannot be identified, so the hook must NOT assume an
-  // incoming update is the "same document" as what the editor shows — it replaces instead of
-  // deferring, so an unidentifiable update can never silently suppress a real change while typing.
-  it('replaces (does not defer) when neither the incoming update nor the editor content is identifiable', () => {
-    const identitylessEditor: Usj = {
-      type: 'USJ',
-      version: '3.1',
-      content: [{ type: 'para', marker: 'p', content: ['editor text with no book or chapter'] }],
-    };
-    const identitylessIncoming: Usj = {
-      type: 'USJ',
-      version: '3.1',
-      content: [{ type: 'para', marker: 'p', content: ['incoming text with no book or chapter'] }],
-    };
+  // Regression: cross-BOOK navigation to the SAME chapter number while focused. Chapter USJ
+  // carries no book marker, so a content-derived identity collapses to the chapter number alone
+  // — GEN 1 and EXO 1 read as the "same document", the new book's content was deferred, and
+  // GEN's content was saved through EXO's data selector. Selector-based identity must see the
+  // book change.
+  it('replaces the actively-edited editor when a different BOOK with the same chapter number arrives', () => {
+    const gen1 = makeChapterUsj('1', 'In the beginning...', { verseNumber: '1' });
+    const exo1 = makeChapterUsj('1', 'These are the names...', { verseNumber: '1' });
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -315,7 +299,7 @@ describe('useEditorPdpSync', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       current: {
         setUsj: setUsjSpy,
-        getUsj: () => identitylessEditor,
+        getUsj: () => gen1,
         isFocused: () => true,
       } as unknown as EditorRef,
     };
@@ -323,37 +307,71 @@ describe('useEditorPdpSync', () => {
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
 
     const { rerender } = renderHook(
-      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+      ({
+        usjFromPdp,
+        documentSelector,
+      }: {
+        usjFromPdp: Usj;
+        documentSelector: EditorDocumentSelector;
+      }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: levUsj } },
+      { initialProps: { usjFromPdp: gen1, documentSelector: gen1Selector } },
     );
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
 
-    act(() => rerender({ usjFromPdp: identitylessIncoming }));
+    // Navigate GEN 1 -> EXO 1 with the editor focused; EXO 1's USJ arrives.
+    act(() => rerender({ usjFromPdp: exo1, documentSelector: exo1Selector }));
 
-    expect(setUsjSpy).toHaveBeenCalledWith(identitylessIncoming); // replaced, not deferred
+    expect(setUsjSpy).toHaveBeenCalledOnce(); // editor navigates to EXO 1
+    expect(setUsjSpy).toHaveBeenCalledWith(exo1);
+    // The old book's content must NOT be pushed through the new book's selector.
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+  });
+
+  // Defense-in-depth: before anything has been applied to a (focused) editor, an incoming update
+  // can never be the "same document" as what the editor shows, so it replaces instead of
+  // deferring — a fresh editor must always receive its first content.
+  it('replaces (does not defer) the first arrival even while the editor reports focus', () => {
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => emptyUsj,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    renderHook(() => {
+      useEditorPdpSync({
+        usjFromPdp: levUsj,
+        documentSelector: lev14Selector,
+        editorRef,
+        usjSentToPdp,
+        setEditorUsj,
+        saveUsjToPdpIfUpdated,
+      });
+    });
+
+    expect(setUsjSpy).toHaveBeenCalledWith(levUsj); // replaced, not deferred
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
   });
 
   it('still replaces the editor for a content-different update that is not our own write echo', () => {
-    const externalChange: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'p',
-          content: [{ type: 'verse', marker: 'v', number: '2' }, 'Externally edited text.'],
-        },
-      ],
-    };
+    const externalChange = makeChapterUsj('14', 'Externally edited text.');
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -369,6 +387,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -393,41 +412,17 @@ describe('useEditorPdpSync', () => {
   //   (a) The editor reports focused but there is no matching `.editor-input` in the document — the
   //       old query returned null and wrongly concluded "not editing", clobbering the caret.
   it('defers to the editor when editorRef.isFocused() is true even with no .editor-input in the DOM', () => {
-    const normalizedEcho: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'p',
-          content: [
-            { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. \\q1',
-          ],
-        },
-      ],
-    };
-    const newerEditorContent: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'q1',
-          content: [
-            { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. typed more',
-          ],
-        },
-      ],
-    };
+    const normalizedEcho = makeChapterUsj('14', 'This is the law of the leper. \\q1');
+    const newerEditorContent = makeChapterUsj('14', 'This is the law of the leper. typed more', {
+      paraMarker: 'q1',
+    });
 
     // The user keeps typing across the round-trip, so the editor content advances between the
     // first push and the echo's arrival.
     const evenNewerEditorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'q1',
@@ -458,6 +453,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -482,40 +478,18 @@ describe('useEditorPdpSync', () => {
     // would regenerate every Lexical node key — killing the popover session mid-edit (its Save
     // then targets a dead key and silently no-ops). The session predicate extends the SAME
     // "the editor owns the freshest content" deferral that isFocused() drives for live typing.
-    const normalizedEcho: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'p',
-          content: [
-            { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. \\q1',
-          ],
-        },
-      ],
-    };
-    const newerEditorContent: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'q1',
-          content: [
-            { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. edited in popover',
-          ],
-        },
-      ],
-    };
+    const normalizedEcho = makeChapterUsj('14', 'This is the law of the leper. \\q1');
+    const newerEditorContent = makeChapterUsj(
+      '14',
+      'This is the law of the leper. edited in popover',
+      { paraMarker: 'q1' },
+    );
 
     // The popover edit advances the main editor's content across the round-trip.
     const evenNewerEditorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'q1',
@@ -546,6 +520,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -569,17 +544,7 @@ describe('useEditorPdpSync', () => {
   //       renders its own `.editor-input`). The old query grabbed the first `.editor-input` and saw
   //       it focused, wrongly treating THIS editor as actively edited and deferring a real change.
   it('replaces the editor when editorRef.isFocused() is false even if another .editor-input holds focus', () => {
-    const externalChange: Usj = {
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        {
-          type: 'para',
-          marker: 'p',
-          content: [{ type: 'verse', marker: 'v', number: '2' }, 'Externally edited text.'],
-        },
-      ],
-    };
+    const externalChange = makeChapterUsj('14', 'Externally edited text.');
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -607,6 +572,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -645,16 +611,23 @@ describe('useEditorPdpSync', () => {
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
 
     const { rerender } = renderHook(
-      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+      ({
+        usjFromPdp,
+        documentSelector,
+      }: {
+        usjFromPdp: Usj;
+        documentSelector: EditorDocumentSelector;
+      }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: levUsj } },
+      { initialProps: { usjFromPdp: levUsj, documentSelector: lev14Selector } },
     );
 
     // Step 1: LEV loads — editor receives its content
@@ -666,7 +639,7 @@ describe('useEditorPdpSync', () => {
     // usjFromPdp becomes emptyUsj (the "book doesn't exist" state)
     // eslint-disable-next-line no-null/no-null -- simulates React unmounting an element ref (which uses null)
     editorRef.current = null;
-    act(() => rerender({ usjFromPdp: emptyUsj }));
+    act(() => rerender({ usjFromPdp: emptyUsj, documentSelector: { book: '2KI', chapterNum: 1 } }));
 
     // usjSentToPdp must have been cleared so we know to re-initialize on next mount
     expect(usjSentToPdp.current).toBeUndefined();
@@ -675,7 +648,7 @@ describe('useEditorPdpSync', () => {
     // Step 3: Navigate back to LEV — same chapter data arrives and the editor remounts fresh
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     editorRef.current = { setUsj: setUsjSpy, isFocused: () => false } as unknown as EditorRef;
-    act(() => rerender({ usjFromPdp: levUsj }));
+    act(() => rerender({ usjFromPdp: levUsj, documentSelector: lev14Selector }));
 
     // The fresh (empty) editor must receive its content even though the data hasn't changed
     expect(setUsjSpy).toHaveBeenCalledOnce();
@@ -686,14 +659,8 @@ describe('useEditorPdpSync', () => {
   // deferral during active editing is almost always the editor's own USFM round-trip, so it is a
   // debug line, not a warning.
   it('logs a debug line (not a warning) when it defers a single incoming update during active editing', () => {
-    const editorContent: Usj = {
-      ...levUsj,
-      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'q1', content: ['newer'] }],
-    };
-    const differingEcho: Usj = {
-      ...levUsj,
-      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'p', content: ['echo'] }],
-    };
+    const editorContent = makeChapterUsj('14', 'newer', { paraMarker: 'q1' });
+    const differingEcho = makeChapterUsj('14', 'echo');
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -713,6 +680,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -731,15 +699,9 @@ describe('useEditorPdpSync', () => {
   });
 
   it('logs a debug line when an incoming update matches the editor content (confirmation echo)', () => {
-    const editorContent: Usj = {
-      ...levUsj,
-      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'p', content: ['match'] }],
-    };
-    const differentInitial: Usj = {
-      ...levUsj,
-      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'p', content: ['other'] }],
-    };
-    const confirmationEcho: Usj = { ...editorContent, content: [...editorContent.content] };
+    const editorContent = makeChapterUsj('14', 'match');
+    const differentInitial = makeChapterUsj('14', 'other');
+    const confirmationEcho = { ...editorContent, content: [...editorContent.content] };
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -759,6 +721,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -779,17 +742,8 @@ describe('useEditorPdpSync', () => {
   // Telemetry: if incoming Scripture keeps getting deferred without the round-trip ever converging,
   // that is worth a single warning (a non-idempotent round-trip or a concurrent external edit).
   it('logs a single warning once deferrals reach the non-convergence threshold', () => {
-    const editorContent: Usj = {
-      ...levUsj,
-      content: [...levUsj.content.slice(0, 2), { type: 'para', marker: 'q1', content: ['wins'] }],
-    };
-    const makeEcho = (i: number): Usj => ({
-      ...levUsj,
-      content: [
-        ...levUsj.content.slice(0, 2),
-        { type: 'para', marker: 'p', content: [`echo ${i}`] },
-      ],
-    });
+    const editorContent = makeChapterUsj('14', 'wins', { paraMarker: 'q1' });
+    const makeEcho = (i: number): Usj => makeChapterUsj('14', `echo ${i}`);
 
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
@@ -809,6 +763,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -818,9 +773,10 @@ describe('useEditorPdpSync', () => {
       { initialProps: { usjFromPdp: makeEcho(0) } },
     );
 
-    // The initial render is deferral #1; drive further distinct differing echoes past the
-    // threshold. The warning must fire exactly once (at the crossing), not once per update.
-    for (let i = 1; i <= NON_CONVERGENCE_WARN_THRESHOLD; i += 1) {
+    // The initial render applies echo 0 (nothing had been applied yet); each further distinct
+    // differing echo is a deferral. Drive deferrals past the threshold: the warning must fire
+    // exactly once (at the crossing), not once per update.
+    for (let i = 1; i <= NON_CONVERGENCE_WARN_THRESHOLD + 1; i += 1) {
       act(() => rerender({ usjFromPdp: makeEcho(i) }));
     }
 
@@ -841,7 +797,6 @@ describe('useEditorPdpSync', () => {
       type: 'USJ',
       version: '3.1',
       content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
         { type: 'chapter', marker: 'c', number: '14' },
         {
           type: 'para',
@@ -859,7 +814,6 @@ describe('useEditorPdpSync', () => {
       type: 'USJ',
       version: '3.1',
       content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
         { type: 'chapter', marker: 'c', number: '14' },
         {
           type: 'para',
@@ -902,16 +856,23 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: attributeAsProp } },
+      // Prime with the editor's own content so the hook records which document the editor is
+      // showing. Deferral governs SAME-document echoes, which requires a document to have been
+      // applied — a fresh editor with nothing applied yet always replaces instead.
+      { initialProps: { usjFromPdp: attributeAsContent } },
     );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
 
-    // The mount delivery is a deferral that pushes the editor's literal up exactly once.
+    // The first differing echo is a deferral that pushes the editor's literal up exactly once.
+    act(() => rerender({ usjFromPdp: attributeAsProp }));
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalledTimes(1);
 
     // Keep delivering echoes, but only while the previous echo actually caused a save (which is what
@@ -927,7 +888,7 @@ describe('useEditorPdpSync', () => {
     }
 
     expect(deliveries).toBeLessThan(MAX_DELIVERIES); // terminated, not a runaway loop
-    // One push at mount, then quiescence — the unchanged editor is never re-saved.
+    // One push on the first differing echo, then quiescence — the unchanged editor is never re-saved.
     expect(saveUsjToPdpIfUpdated.mock.calls.length).toBeLessThanOrEqual(2);
     // The incoming update is always deferred (never applied) — the editor is never clobbered, and
     // the convergence branch is never reached (that is the non-terminating condition the damping,
@@ -946,7 +907,6 @@ describe('useEditorPdpSync', () => {
       type: 'USJ',
       version: '3.1',
       content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
         { type: 'chapter', marker: 'c', number: '14' },
         {
           type: 'para',
@@ -963,7 +923,6 @@ describe('useEditorPdpSync', () => {
       type: 'USJ',
       version: '3.1',
       content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
         { type: 'chapter', marker: 'c', number: '14' },
         {
           type: 'para',
@@ -983,7 +942,6 @@ describe('useEditorPdpSync', () => {
       type: 'USJ',
       version: '3.1',
       content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
         { type: 'chapter', marker: 'c', number: '14' },
         {
           type: 'para',
@@ -1014,16 +972,23 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: normalizedEcho } },
+      // Prime with the editor's own content so the hook records which document the editor shows;
+      // the damping under test lives in the SAME-document deferral branch, which a fresh editor
+      // with nothing applied yet never takes.
+      { initialProps: { usjFromPdp: editorContent } },
     );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
 
-    // The mount echo is deferred and pushes the editor's content up once.
+    // The first echo is deferred and pushes the editor's content up once.
+    act(() => rerender({ usjFromPdp: normalizedEcho }));
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalledTimes(1);
     saveUsjToPdpIfUpdated.mockClear();
 
@@ -1048,7 +1013,7 @@ describe('useEditorPdpSync', () => {
     const editorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1062,7 +1027,7 @@ describe('useEditorPdpSync', () => {
     const lossyEcho: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1101,14 +1066,19 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: lossyEcho } },
+      // Prime with the editor's own content so the hook records which document the editor shows;
+      // the lossy-warn path lives in the SAME-document deferral branch, which a fresh editor with
+      // nothing applied yet never takes.
+      { initialProps: { usjFromPdp: editorContent } },
     );
+    setUsjSpy.mockClear();
     mockLoggerWarn.mockClear();
 
     // Re-deliver the SAME stable differing echo several times.
@@ -1134,7 +1104,7 @@ describe('useEditorPdpSync', () => {
     const editorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1148,7 +1118,7 @@ describe('useEditorPdpSync', () => {
     const whitespaceOnlyEcho: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1181,6 +1151,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -1202,7 +1173,7 @@ describe('useEditorPdpSync', () => {
     const editorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1215,7 +1186,7 @@ describe('useEditorPdpSync', () => {
     const externalWrite = (n: number): Usj => ({
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1244,6 +1215,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
@@ -1274,7 +1246,7 @@ describe('useEditorPdpSync', () => {
     const editorContent: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1286,7 +1258,7 @@ describe('useEditorPdpSync', () => {
     const echoA: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1303,7 +1275,7 @@ describe('useEditorPdpSync', () => {
     const echoB: Usj = {
       ...levUsj,
       content: [
-        ...levUsj.content.slice(0, 2),
+        ...levUsj.content.slice(0, 1),
         {
           type: 'para',
           marker: 'p',
@@ -1339,6 +1311,7 @@ describe('useEditorPdpSync', () => {
       ({ usjFromPdp }: { usjFromPdp: Usj }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
