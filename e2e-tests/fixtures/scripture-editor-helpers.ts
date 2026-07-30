@@ -15,6 +15,16 @@ export interface OpenScriptureEditorOptions {
 export const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
+/**
+ * Budget for anchors that gate on a cold app launch (extension host activation, Paratext PDP
+ * factory registration, dock layout render). On the coldest first Electron launch after a fresh
+ * dev-server start — ts-node transpiling the extension host, the C# data provider booting,
+ * extensions activating — the Paratext factory has been observed taking over 60s to appear in
+ * rpc.discover, so 60s budgets lose the race and fail runs that would have passed moments later.
+ * Pure patience: these are polling waits, so warm launches return in seconds and a generous
+ * budget costs green runs nothing.
+ */
+const LAUNCH_PHASE_TIMEOUT_MS = 120_000;
 
 /**
  * Poll until the ProjectLookupService advertises the bundled sample WEB project. The generic
@@ -23,7 +33,7 @@ const COMMAND_TIMEOUT_MS = 30_000;
  * registered or finished installing the sample project into an empty isolated root — observed as a
  * `-32601 'object:platform.Paratext-pdpf.…' not found` failure on cold first launches.
  */
-async function waitForSampleProjectMetadata(timeoutMs = 120_000): Promise<void> {
+async function waitForSampleProjectMetadata(timeoutMs = LAUNCH_PHASE_TIMEOUT_MS): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -60,7 +70,11 @@ export async function sendPapiCommandWhenRegistered(
 ): Promise<unknown> {
   // The extension host can still be activating extensions when the app shell renders; wait for
   // this exact command to be registered so the request cannot fail with method-not-found.
-  await waitForPapiMethodRegistered(`command:${commandName}`, WEBSOCKET_PORT, 60_000);
+  await waitForPapiMethodRegistered(
+    `command:${commandName}`,
+    WEBSOCKET_PORT,
+    LAUNCH_PHASE_TIMEOUT_MS,
+  );
   return sendPapiRequestOnce(`command:${commandName}`, args, WEBSOCKET_PORT, COMMAND_TIMEOUT_MS);
 }
 
@@ -74,15 +88,12 @@ export async function sendPapiCommandWhenRegistered(
  */
 export async function makeSampleProjectEditable(): Promise<void> {
   // Wait until the Paratext factory has registered AND the sample project is installed and
-  // advertised — see waitForSampleProjectMetadata for why a generic any-project wait is racy.
-  // 120s, not the usual 60s: on the coldest first Electron launch after a fresh dev-server start
-  // (ts-node transpiling the extension host, C# data provider booting, extensions activating),
-  // this factory has been observed taking over 60s to appear in rpc.discover. Pure patience —
-  // warm launches return in seconds and never wait this long.
+  // advertised — see waitForSampleProjectMetadata for why a generic any-project wait is racy, and
+  // LAUNCH_PHASE_TIMEOUT_MS for why this factory in particular needs the cold-boot budget.
   await waitForPapiMethodRegistered(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     WEBSOCKET_PORT,
-    120_000,
+    LAUNCH_PHASE_TIMEOUT_MS,
   );
   await waitForSampleProjectMetadata();
   const pdpId = await sendPapiRequestOnce<string>(
@@ -132,10 +143,17 @@ async function openEditorViaCommand(
   if (!options.skipInitialLayoutGuard) {
     // Wait for the dock layout's initial loadLayout() to complete (signalled by the first iframe —
     // the Home webview — appearing) so loadLayout can't wipe the newly added editor tab.
-    await page.waitForSelector('iframe', { state: 'attached', timeout: 30_000 });
+    await page.waitForSelector('iframe', {
+      state: 'attached',
+      timeout: LAUNCH_PHASE_TIMEOUT_MS,
+    });
   }
 
-  await waitForPapiMethodRegistered(`command:${commandName}`, WEBSOCKET_PORT, 60_000);
+  await waitForPapiMethodRegistered(
+    `command:${commandName}`,
+    WEBSOCKET_PORT,
+    LAUNCH_PHASE_TIMEOUT_MS,
+  );
 
   // Sequential retry loop: each attempt must await the PAPI response and iframe appearance before
   // deciding whether to retry (see openCommentList for the dock-layout race this covers).
@@ -201,7 +219,10 @@ export async function navigateToolbarBcv(mainPage: Page, reference: string): Pro
  * rendered, which DEV_NOISY=false launches depend on.)
  */
 export async function waitForHomeTab(mainPage: Page): Promise<void> {
-  await mainPage.locator('.dock-tab', { hasText: 'Home' }).first().waitFor({ timeout: 90_000 });
+  await mainPage
+    .locator('.dock-tab', { hasText: 'Home' })
+    .first()
+    .waitFor({ timeout: LAUNCH_PHASE_TIMEOUT_MS });
 }
 
 /**
