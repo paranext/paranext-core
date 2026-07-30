@@ -6,7 +6,11 @@ import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
-import { type ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
+import {
+  PDP_FACTORY_OBJECT_TYPE,
+  type ProjectMetadataFilterOptions,
+} from '@shared/models/project-data-provider-factory.interface';
+import { type NetworkObjectDetails } from '@shared/models/network-object.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -116,6 +120,23 @@ export function useProjectPickerData(): ProjectPickerData {
   // three sections refetch.
   const onDidChangeProjects = useMemo(() => getNetworkEvent('platform.onDidChangeProjects'), []);
   useEvent(onDidChangeProjects, refreshMetadata);
+  // Heal the project list when a PDP factory registers after the startup grace window expires
+  // (PT-4299). internalGetMetadataWithRetries only retries within 30 s of process start; if the
+  // USJ-providing layering PDPF (Scripture Extender) arrives after that window AND neither
+  // onDidReloadExtensions nor onDidChangeProjects fires, the picker stays empty until the user
+  // triggers an unrelated refresh. Subscribing here ensures a late-arriving PDPF always heals
+  // the list independent of the 30-second bound.
+  const onDidCreateNetworkObject = useMemo(
+    () => getNetworkEvent('object:onDidCreateNetworkObject'),
+    [],
+  );
+  const onPdpFactoryRegistered = useCallback(
+    ({ objectType }: NetworkObjectDetails) => {
+      if (objectType === PDP_FACTORY_OBJECT_TYPE) refreshMetadata();
+    },
+    [refreshMetadata],
+  );
+  useEvent(onDidCreateNetworkObject, onPdpFactoryRegistered);
 
   // Recent project IDs from the service — reactive, updates when user opens projects
   const [rawRecentIds, , isRecentIdsLoading] = useData(

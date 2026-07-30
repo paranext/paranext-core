@@ -584,5 +584,83 @@ describe('useProjectPickerData', () => {
 
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
   });
+
+  it('re-fetches metadata when a PDP factory registers via object:onDidCreateNetworkObject (PT-4299 healing)', async () => {
+    // Reproduces the PT-4299 race: the 30-second startup grace window in
+    // internalGetMetadataWithRetries expires before the USJ-providing layering PDPF
+    // (Scripture Extender) registers. The initial metadata fetch returns empty because no
+    // factory providing platformScripture.USJ_Chapter has registered yet. When the PDPF
+    // later registers, the network object service emits object:onDidCreateNetworkObject.
+    // The hook must subscribe to that event and refresh when the new object is a pdpFactory,
+    // so the project list heals without waiting for an unrelated extension reload or
+    // project-list change event.
+    const { getNetworkEvent, projectLookupService } = await importMocks();
+    let pdpfRegistrationCallback: ((details: { objectType: string }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: (details: { objectType: string }) => void) => {
+          if (eventName === 'object:onDidCreateNetworkObject') pdpfRegistrationCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+
+    // First fetch: grace window expired, USJ-providing layering PDPF not yet registered.
+    vi.mocked(projectLookupService.getMetadataForAllProjects)
+      .mockResolvedValueOnce([] as never)
+      // Second fetch after PDPF registers: project list now available.
+      .mockResolvedValue(
+        metadataList([
+          { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+        ]) as never,
+      );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    // Initial state: empty because the layering PDPF providing USJ_Chapter has not
+    // registered yet (grace window already expired).
+    expect(result.current.allProjects).toHaveLength(0);
+
+    // The USJ-providing layering PDPF registers after the grace window.
+    expect(pdpfRegistrationCallback).toBeDefined();
+    act(() => pdpfRegistrationCallback!({ objectType: 'pdpFactory' }));
+
+    await settle(result);
+    // The hook must detect the PDPF registration and re-fetch metadata so the list heals.
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+    expect(result.current.allProjects).toHaveLength(1);
+    expect(result.current.allProjects[0].id).toBe('p1');
+  });
+
+  it('does not re-fetch metadata when object:onDidCreateNetworkObject fires for a non-PDPF network object', async () => {
+    // Only PDP factory registrations should heal the project list. Registrations of other
+    // network object types (PDPs, services, etc.) must not trigger an unnecessary metadata
+    // fan-out, since those fan-outs are expensive (one PAPI round-trip per registered PDPF).
+    const { getNetworkEvent, projectLookupService } = await importMocks();
+    let networkObjectCallback: ((details: { objectType: string }) => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: (details: { objectType: string }) => void) => {
+          if (eventName === 'object:onDidCreateNetworkObject') networkObjectCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+
+    expect(networkObjectCallback).toBeDefined();
+    // A non-PDPF network object registers (e.g. a data provider or a service).
+    act(() => networkObjectCallback!({ objectType: 'networkObject' }));
+    await settle(result);
+
+    // Must NOT re-fetch: only PDPF registrations should invalidate the metadata cache.
+    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+  });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */
