@@ -3,7 +3,7 @@ import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { Tour, TourStep } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   SIMPLE_PANEL_ID_MODEL_TEXT,
   SIMPLE_PANEL_ID_PROJECT,
@@ -121,7 +121,31 @@ export function OnboardingTour() {
     [strings],
   );
 
-  const isOpen = !isPowerMode && firstRunStatus.kind === 'app' && !tourDone && !isLoading;
+  // The dock layout initializes asynchronously (loadLayout() is a PAPI round-trip that fires after
+  // mount). Poll for the project panel before opening the tour so Tour's step filter always runs
+  // with the layout already in the DOM — otherwise only the 2 always-present toolbar elements are
+  // found and the tour shows just 2 of its 5 steps.
+  const mightShow = !isPowerMode && firstRunStatus.kind === 'app' && !tourDone && !isLoading;
+  const [layoutReady, setLayoutReady] = useState(
+    () => !!document.querySelector(`[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`),
+  );
+  useEffect(() => {
+    if (!mightShow || layoutReady) return undefined;
+    let rafId: number | undefined;
+    const check = () => {
+      if (document.querySelector(`[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`)) {
+        setLayoutReady(true);
+        return;
+      }
+      rafId = requestAnimationFrame(check);
+    };
+    rafId = requestAnimationFrame(check);
+    return () => {
+      if (rafId !== undefined) cancelAnimationFrame(rafId);
+    };
+  }, [mightShow, layoutReady]);
+
+  const isOpen = mightShow && layoutReady;
 
   return (
     <Tour
