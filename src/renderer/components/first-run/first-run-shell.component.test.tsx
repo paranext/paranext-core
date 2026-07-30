@@ -25,7 +25,10 @@ const STUB_STEPS = {
   identify: IdentifyStub,
 };
 
-vi.mock('@renderer/services/first-run-store', () => ({ completeFirstRun: vi.fn() }));
+vi.mock('@renderer/services/first-run-store', () => ({
+  completeFirstRun: vi.fn(),
+  isDemoMode: vi.fn(() => false),
+}));
 // SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
 // shell tests exercise navigation wiring without a live PAPI backend.
 vi.mock('@shared/services/command.service', () => ({
