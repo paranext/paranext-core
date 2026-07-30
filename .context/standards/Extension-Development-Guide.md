@@ -100,6 +100,25 @@ export async function deactivate(): Promise<boolean> {
 
 Extensions cannot use static imports—code must be bundled with webpack.
 
+### Keep React-bundling value imports out of the main bundle
+
+A **value** import (as opposed to `import type`) from a library that bundles React — e.g.
+`@eten-tech-foundation/platform-editor`, `platform-bible-react` — must never be reachable from
+`main.ts`, even transitively through a shared utils module. Webpack drags the library's whole
+React-bundled output into the extension-host bundle, and `activate()` throws at load time because
+`react/jsx-runtime` is unreachable in the extension-host sandbox. The failure is silent until cold
+start: hot-reload QA sessions never re-run `activate()`, so a broken activation can survive many
+test passes unnoticed.
+
+The rules:
+
+- In any module `main.ts` can reach, use `import type` only for such libraries.
+- Put value imports (functions, constants) in a web-view-only module that no backend code imports
+  (see `platform-scripture-editor.web-view.utils.ts` for the pattern and its header comment).
+- After any change to the import graph of a module `main.ts` reaches, run a **cold-start
+  activation smoke test** (fully restart the app and confirm the extension activates) before
+  calling the change verified.
+
 ---
 
 ## PAPI (Platform API)

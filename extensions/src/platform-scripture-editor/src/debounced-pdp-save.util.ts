@@ -1,3 +1,26 @@
+/**
+ * The fire-time decision step of the editor's keystroke-driven save pipeline. The pipeline as a
+ * whole has four cooperating pieces, each with its own job:
+ *
+ * 1. A debounced trailing-edge save with lifecycle flushing (`flushable-debouncer.util.ts`) —
+ *    keystrokes schedule, a quiet period fires, and chapter changes/blur/pagehide/unmount flush so
+ *    the trailing window cannot lose the final edits.
+ * 2. THIS MODULE — the fire-time decision: save the CAPTURED content through the CAPTURED chapter's
+ *    save function when the user has navigated away (never read the editor, which now shows the new
+ *    chapter), settle pending mid-edit marker text first on same-chapter saves, and strip an
+ *    un-settled passive-palette literal from the saved copy.
+ * 3. A self-clearing write guard (`write-in-flight-guard.util.ts`) — serializes writes, with the
+ *    flag's lifecycle owned by the write promise itself.
+ * 4. Echo deferral (`use-editor-pdp-sync.hook.ts`) — an incoming same-document echo is not applied
+ *    while the user is actively editing; local content wins and is pushed back up.
+ *
+ * When is this much machinery warranted? Only when all three of these hold: writes are driven by
+ * every keystroke, the backend round-trips the payload through a normalizing format (so echoes come
+ * back content-different), and applying an echo can clobber live user state (caret/selection). Most
+ * PDP writes are none of these — a settings panel or a form-style editor should just await its set
+ * call and surface errors. This pipeline exists because scripture typing hits all three at once.
+ */
+
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 
