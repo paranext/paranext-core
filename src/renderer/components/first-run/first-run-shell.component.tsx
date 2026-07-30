@@ -180,9 +180,10 @@ export function FirstRunShell({
           <h1 className="tw:text-lg tw:font-medium">
             {formatReplacementString(strings['%firstRun_title%'], strings)}
           </h1>
-          {/* Keep aria-live paragraph always mounted so screen readers don't lose the live region
-              when navigating to/from syncProgress. Content is empty ('') on syncProgress. */}
-          <p className="tw:sr-only" aria-live="polite">
+          {/* Visible "Step X of N" count that doubles as the aria-live announcement. Kept always
+              mounted so screen readers don't lose the live region when navigating to/from
+              syncProgress; content is empty ('') on the interstitial. */}
+          <p className="tw:text-xs tw:text-muted-foreground" aria-live="polite">
             {indicator}
           </p>
           {!isInterstitial && (

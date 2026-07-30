@@ -1,4 +1,5 @@
 import { Fragment, useMemo } from 'react';
+import { Check } from 'lucide-react';
 import { NumberFormat } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 
@@ -53,7 +54,10 @@ export function WizardStepper({ currentStep, totalSteps, locale }: WizardStepper
                 state === 'upcoming' && 'tw:border tw:border-input tw:text-muted-foreground',
               )}
             >
-              {format(stepNum)}
+              {/* Completed steps show a check mark so "done" is distinguishable from "not yet
+                  reached" by shape, not color alone. The whole stepper is aria-hidden; the shell's
+                  sr-only live region carries progress for assistive tech. */}
+              {state === 'complete' ? <Check className="tw:h-4 tw:w-4" /> : format(stepNum)}
             </div>
           </Fragment>
         );
