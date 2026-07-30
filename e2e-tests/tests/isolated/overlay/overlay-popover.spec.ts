@@ -2,11 +2,6 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
-// The Hello Rock3 webview's dock tab is reachable in the simple-mode layout these flows were
-// authored against; under the power-mode default a card dock panel stacks over that tab strip
-// and intercepts the click.
-test.use({ interfaceMode: 'simple' });
-
 test('overlay popover rendering and interaction', async ({ mainPage }) => {
   await waitForAppReady(mainPage);
   const frame = await findHelloRock3Frame(mainPage);
