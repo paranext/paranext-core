@@ -56,6 +56,7 @@ import {
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
   handleMarkerPaletteSessionKeyDown,
+  markerMenuItemToPaletteItem,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
@@ -149,7 +150,6 @@ import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control
 import {
   generateInlineMarkerMenuListItems,
   isStandardViewEnterKeyEvent,
-  markerMenuItemToCommandPaletteItem,
   restoreSelectionIfLost,
   transientInputForPaletteSession,
 } from './platform-scripture-editor.web-view.utils';
@@ -1708,7 +1708,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       papi.overlays
         .showCommandPalette(
-          { items: items.map(markerMenuItemToCommandPaletteItem), anchor: ctx.anchorRect, passive },
+          { items: items.map(markerMenuItemToPaletteItem), anchor: ctx.anchorRect, passive },
           webViewId,
         )
         .then((id) => {
@@ -1773,7 +1773,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       papi.overlays
         .showCommandPalette(
           {
-            items: items.map(markerMenuItemToCommandPaletteItem),
+            items: items.map(markerMenuItemToPaletteItem),
             anchor: ctx.anchorRect,
             passive: false,
           },

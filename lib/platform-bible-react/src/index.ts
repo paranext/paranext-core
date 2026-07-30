@@ -78,7 +78,7 @@ export {
   default as FootnoteEditor,
   type FootnoteEditorProps,
   type FootnoteEditorMarkerPalette,
-  type PaletteItemLike,
+  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
 export {
   clearPaletteSessionIfCurrent,

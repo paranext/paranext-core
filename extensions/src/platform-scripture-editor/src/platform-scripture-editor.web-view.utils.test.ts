@@ -7,16 +7,10 @@
 // the same package.
 import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
-import type {
-  EditorRef,
-  MarkerMenuItem as EditorMarkerMenuItem,
-  SelectionRange,
-  StyleInfo,
-} from '@eten-tech-foundation/platform-editor';
+import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import {
   generateInlineMarkerMenuListItems,
   isStandardViewEnterKeyEvent,
-  markerMenuItemToCommandPaletteItem,
   restoreSelectionIfLost,
   transientInputForPaletteSession,
 } from './platform-scripture-editor.web-view.utils';
@@ -263,48 +257,6 @@ describe('restoreSelectionIfLost', () => {
     // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
     // eslint-disable-next-line no-null/no-null
     expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
-  });
-});
-
-describe('markerMenuItemToCommandPaletteItem', () => {
-  it('maps marker to id/label and passes the description through as plain strings', () => {
-    const item: EditorMarkerMenuItem = {
-      marker: 'q1',
-      kind: 'paragraph',
-      description: 'Poetry level 1 (basic)',
-      isBasic: true,
-    };
-
-    expect(markerMenuItemToCommandPaletteItem(item)).toEqual({
-      id: 'q1',
-      label: 'q1',
-      description: 'Poetry level 1 (basic)',
-      badge: undefined,
-      muted: false,
-    });
-  });
-
-  it('marks close-tag items with the "end" badge in place (no group key — PT9 ordering governs)', () => {
-    const closeTag: EditorMarkerMenuItem = { marker: '+wj*', kind: 'closeTag', isBasic: false };
-
-    const mapped = markerMenuItemToCommandPaletteItem(closeTag);
-
-    expect(mapped.badge).toBe('end');
-    expect(mapped.group).toBeUndefined();
-  });
-
-  it('does not badge non-close-tag items', () => {
-    const charItem: EditorMarkerMenuItem = { marker: 'nd', kind: 'character', isBasic: false };
-
-    expect(markerMenuItemToCommandPaletteItem(charItem).badge).toBeUndefined();
-  });
-
-  it('maps non-basic items to muted (PT9 grey cue) and basic items to unmuted', () => {
-    const nonBasic: EditorMarkerMenuItem = { marker: 'sig', kind: 'character', isBasic: false };
-    const basic: EditorMarkerMenuItem = { marker: 'f', kind: 'note', isBasic: true };
-
-    expect(markerMenuItemToCommandPaletteItem(nonBasic).muted).toBe(true);
-    expect(markerMenuItemToCommandPaletteItem(basic).muted).toBe(false);
   });
 });
 

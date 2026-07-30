@@ -33,6 +33,7 @@ import {
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
+import type { PaletteDriver, PaletteItem } from 'platform-bible-utils/experimental';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Tooltip,
@@ -92,52 +93,37 @@ export interface FootnoteEditorProps {
 }
 
 /**
- * Structural subset of the overlay service's `CommandPaletteItem` (`overlay.service-model.ts` in
- * the renderer) — defined locally because platform-bible-react must not import renderer or
- * extension types. Mirrors the extension's `markerMenuItemToCommandPaletteItem` mapping: close-tag
- * items get an `'end'` badge, non-basic items are muted.
- */
-export interface PaletteItemLike {
-  id: string;
-  label: string;
-  description?: string;
-  badge?: string;
-  muted?: boolean;
-  disabled?: boolean;
-}
-
-/**
  * Driver for the standard-view `\` marker palette (PT9 parity), supplied by a host that wires it to
  * its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by `webViewId` in
- * the platform-scripture-editor web view).
+ * the platform-scripture-editor web view). Extends the shared {@link PaletteDriver} contract
+ * (update/commit/dismiss) with the open step.
  */
-export interface FootnoteEditorMarkerPalette {
+export interface FootnoteEditorMarkerPalette extends PaletteDriver {
   /**
    * Shows the palette anchored at the given position. `passive` mirrors
    * `CommandPaletteRequest.passive` — when true, the palette never steals focus and its filter and
-   * highlighted selection are driven externally via {@link FootnoteEditorMarkerPalette.update}.
+   * highlighted selection are driven externally via the driver's `update`.
    *
    * @returns The selected item's `id`, or `undefined` if dismissed.
    */
   show(
-    items: PaletteItemLike[],
+    items: PaletteItem[],
     anchor: { x: number; y: number; width?: number; height?: number },
     passive: boolean,
   ): Promise<string | undefined>;
-  /** Updates the filter text and/or moves the highlighted selection of the active palette. */
-  update(update: { filterText?: string; moveSelection?: number }): Promise<void>;
-  /** Commits the currently highlighted item, resolving the `show` promise with its `id`. */
-  commit(): Promise<void>;
-  /** Dismisses the active palette, resolving the `show` promise with `undefined`. */
-  dismiss(): Promise<void>;
 }
 
 /**
- * Maps a library marker-menu item to this popover's palette-item shape. Mirrors the extension's
- * `markerMenuItemToCommandPaletteItem` exactly, redefined locally because platform-bible-react must
- * not import extension code.
+ * Maps a library marker-menu item to the shared palette-item shape — THE one converter for marker
+ * palettes (the platform-scripture-editor web view consumes it too).
+ *
+ * All strings are plain (never `LocalizeKey`s): passive palettes filter and commit on RAW `label`
+ * strings, and the badge shares that constraint by policy. Items are mapped in the library's
+ * PT9-derived order and never regrouped — a `group` key would visually pull close tags out of the
+ * PT9 basic-first interleaved ordering, so close tags are instead marked in place with an `'end'`
+ * badge, and PT9's grey cue for non-basic markers maps to `muted`.
  */
-export function markerMenuItemToPaletteItemLike(item: EditorMarkerMenuItem): PaletteItemLike {
+export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): PaletteItem {
   return {
     id: item.marker,
     label: item.marker,
@@ -682,7 +668,7 @@ export default function FootnoteEditor({
       };
 
       markerPalette
-        .show(items.map(markerMenuItemToPaletteItemLike), anchorRect, passive)
+        .show(items.map(markerMenuItemToPaletteItem), anchorRect, passive)
         .then((id) => {
           clearPaletteSessionIfCurrent(paletteSession, token);
           if (id !== undefined) {

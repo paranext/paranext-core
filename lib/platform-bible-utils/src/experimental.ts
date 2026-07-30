@@ -24,3 +24,4 @@ export {
   type ScriptureBounds,
 } from './scripture/scripture-navigation.util';
 export { resolveReferenceHistoryDirection } from './reference-history-direction.util';
+export type { PaletteDriver, PaletteItem } from './palette.types';

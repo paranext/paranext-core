@@ -16,14 +16,12 @@
  * package.
  */
 
-import type { CommandPaletteItem } from '@papi/core';
 import { isBlockMarker, isLocalizeKey, LanguageStrings } from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
 import {
   defaultStyleInfo,
   getMarkerMenuItems,
   type EditorRef,
-  type MarkerMenuItem as EditorMarkerMenuItem,
   type SelectionRange,
   type StyleInfo,
   type TransientInput,
@@ -152,26 +150,6 @@ export function restoreSelectionIfLost(
 ): void {
   if (!editor || editor.getSelection()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
-}
-
-/**
- * Maps a library marker-menu item to the overlay service's command-palette item shape (the
- * standard-view `\`/Enter palettes).
- *
- * All strings are plain (never `LocalizeKey`s): passive palettes filter and commit on RAW `label`
- * strings (see `filterPaletteItems`), and the badge shares that constraint by policy. Items are
- * mapped in the library's PT9-derived order and never regrouped — a `group` key would visually pull
- * close tags out of the PT9 basic-first interleaved ordering, so close tags are instead marked in
- * place with an `'end'` badge, and PT9's grey cue for non-basic markers maps to `muted`.
- */
-export function markerMenuItemToCommandPaletteItem(item: EditorMarkerMenuItem): CommandPaletteItem {
-  return {
-    id: item.marker,
-    label: item.marker,
-    description: item.description,
-    badge: item.kind === 'closeTag' ? 'end' : undefined,
-    muted: !item.isBasic,
-  };
 }
 
 /**

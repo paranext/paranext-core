@@ -31,6 +31,7 @@
  * palette was open).
  */
 
+import type { PaletteDriver } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
 
 export type MarkerPaletteSessionKind = 'backslash' | 'enter' | 'selection';
@@ -54,15 +55,11 @@ export interface MarkerPaletteSessionState {
   shouldSpaceCommit?: (filter: string) => boolean;
 }
 
-/** The palette operations the forwarding table drives (overlay service or host-supplied). */
-export interface MarkerPaletteSessionDriver {
-  /** Updates the filter text and/or moves the highlighted selection of the active palette. */
-  update(update: { filterText?: string; moveSelection?: number }): void;
-  /** Commits the currently highlighted palette item. */
-  commit(): void;
-  /** Dismisses the active palette without committing. */
-  dismiss(): void;
-}
+/**
+ * The palette operations the forwarding table drives (overlay service or host-supplied) — the
+ * shared `PaletteDriver` contract from `platform-bible-utils/experimental`.
+ */
+export type MarkerPaletteSessionDriver = PaletteDriver;
 
 /**
  * - `'passed'` — modifier-only or IME-composition keydown; nothing happened, the session stays open.

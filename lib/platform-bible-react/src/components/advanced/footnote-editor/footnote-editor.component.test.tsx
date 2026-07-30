@@ -13,7 +13,7 @@ import type {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import FootnoteEditor, {
   FootnoteEditorMarkerPalette,
-  markerMenuItemToPaletteItemLike,
+  markerMenuItemToPaletteItem,
 } from './footnote-editor.component';
 import {
   FOOTNOTE_EDITOR_STRING_KEYS,
@@ -291,7 +291,7 @@ describe('FootnoteEditor marker palette wiring', () => {
 
       expect(notPrevented).toBe(true);
       expect(show).toHaveBeenCalledWith(
-        [markerMenuItemToPaletteItemLike(makeItem())],
+        [markerMenuItemToPaletteItem(makeItem())],
         { x: 1, y: 2, width: 3, height: 4 },
         true,
       );
@@ -963,10 +963,10 @@ describe('close-and-save settle (abandonment window)', () => {
   });
 });
 
-describe('markerMenuItemToPaletteItemLike', () => {
+describe('markerMenuItemToPaletteItem', () => {
   it('maps id/label/description directly from the marker-menu item', () => {
     expect(
-      markerMenuItemToPaletteItemLike({
+      markerMenuItemToPaletteItem({
         marker: 'wj',
         kind: 'character',
         description: 'Words of Jesus',
@@ -983,22 +983,22 @@ describe('markerMenuItemToPaletteItemLike', () => {
 
   it('gives close-tag items an "end" badge', () => {
     expect(
-      markerMenuItemToPaletteItemLike({ marker: 'wj*', kind: 'closeTag', isBasic: true }).badge,
+      markerMenuItemToPaletteItem({ marker: 'wj*', kind: 'closeTag', isBasic: true }).badge,
     ).toBe('end');
   });
 
   it('does not badge non-close-tag items', () => {
     expect(
-      markerMenuItemToPaletteItemLike({ marker: 'zln', kind: 'character', isBasic: false }).badge,
+      markerMenuItemToPaletteItem({ marker: 'zln', kind: 'character', isBasic: false }).badge,
     ).toBeUndefined();
   });
 
   it('mutes non-basic items and leaves basic items unmuted', () => {
     expect(
-      markerMenuItemToPaletteItemLike({ marker: 'zln', kind: 'character', isBasic: false }).muted,
+      markerMenuItemToPaletteItem({ marker: 'zln', kind: 'character', isBasic: false }).muted,
     ).toBe(true);
     expect(
-      markerMenuItemToPaletteItemLike({ marker: 'wj', kind: 'character', isBasic: true }).muted,
+      markerMenuItemToPaletteItem({ marker: 'wj', kind: 'character', isBasic: true }).muted,
     ).toBe(false);
   });
 });
