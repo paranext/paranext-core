@@ -108,3 +108,58 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     expect(vi.mocked(networkObjectService.set).mock.calls[0][4]).toBe(documentation);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Runtime test: a failed registration settles its AsyncVariable
+// ---------------------------------------------------------------------------
+
+describe('dataProviderService.registerEngine — failure does not leak a pending variable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const disposable = { dispose: vi.fn(async () => true) };
+    // The mocks stand in for the full disposable/proxy types; cast the minimal test doubles.
+    /* eslint-disable no-type-assertion/no-type-assertion */
+    vi.mocked(networkObjectService.set).mockResolvedValue(disposable as never);
+    vi.mocked(networkObjectService.get).mockResolvedValue({ getData: vi.fn() } as never);
+    /* eslint-enable no-type-assertion/no-type-assertion */
+  });
+
+  it('rejects immediately rather than leaving a variable to time out unhandled', async () => {
+    // `buildDataProvider` creates an AsyncVariable with a long timeout BEFORE the awaits that can
+    // fail. A failure after that point used to leave it pending, so it rejected on its own timer
+    // long after the fact with nothing listening — an unhandled rejection pointing nowhere near the
+    // cause. This is reachable whenever a name is free but its update event is not, which is what a
+    // window taking over an app-global service hits.
+    vi.useFakeTimers();
+    const unhandled: unknown[] = [];
+    const recordUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', recordUnhandled);
+
+    try {
+      vi.mocked(networkService.createNetworkEventEmitterAsync).mockRejectedValue(
+        new Error('Event was rejected by the central registry'),
+      );
+      const engine = { getData: async () => 1, setData: async () => true };
+
+      await expect(
+        dataProviderService.registerEngine(
+          // The name/engine are generic in this test context; cast to satisfy the typed signature.
+          /* eslint-disable no-type-assertion/no-type-assertion */
+          'test.registrationFailure' as never,
+          engine as never,
+          /* eslint-enable no-type-assertion/no-type-assertion */
+        ),
+      ).rejects.toThrow('central registry');
+
+      // Run out the variable's own timeout. If registration left it pending, it rejects here with
+      // nobody listening.
+      await vi.advanceTimersByTimeAsync(60_000);
+      await Promise.resolve();
+    } finally {
+      process.off('unhandledRejection', recordUnhandled);
+      vi.useRealTimers();
+    }
+
+    expect(unhandled).toEqual([]);
+  });
+});
