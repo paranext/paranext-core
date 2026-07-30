@@ -1,8 +1,22 @@
 import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { OverlayCommandPalettePresentational } from './overlay-command-palette.component';
-import { CommandPaletteItem } from '../../services/overlays/overlay.service-model';
+import {
+  addOverlay,
+  clearAllOverlays,
+  getOverlayById,
+} from '../../services/overlays/overlay-store';
+import {
+  OverlayCommandPalette,
+  OverlayCommandPalettePresentational,
+} from './overlay-command-palette.component';
+import { CommandPaletteItem, OverlayEntry } from '../../services/overlays/overlay.service-model';
+
+// The store-connected component resolves LocalizeKeys via useLocalizedStrings; an empty map makes
+// every value fall back to its raw text, so tests assert against the literal item labels.
+vi.mock('@renderer/hooks/papi-hooks', () => ({
+  useLocalizedStrings: vi.fn(() => [{}, false]),
+}));
 
 beforeAll(() => {
   // Radix Popover uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
@@ -228,6 +242,52 @@ describe('OverlayCommandPalettePresentational', () => {
       fireEvent.keyDown(input, { key: 'Enter' });
 
       expect(onSelect).toHaveBeenCalledWith('save');
+    });
+  });
+
+  describe('active-palette auto-focus', () => {
+    it('should retry across animation frames until the search input holds focus', async () => {
+      // Simulate the palette losing the initial focus fight (an editor iframe re-grabbing focus
+      // after the palette opens): while focus() is a no-op, the mount-time attempt cannot stick,
+      // so the palette must keep retrying on animation frames.
+      const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).not.toHaveFocus();
+
+      // Focus can stick again — a later animation-frame retry must land it without a re-render
+      focusSpy.mockRestore();
+      await vi.waitFor(() => expect(input).toHaveFocus());
+    });
+
+    it('should not throw when the palette unmounts before focus ever sticks', async () => {
+      const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(() => {});
+
+      const { unmount } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+      unmount();
+      focusSpy.mockRestore();
+
+      // Let a couple of animation frames pass; unmount must have cancelled the retry loop, so no
+      // stray callback throws or focuses the removed input.
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(document.body).toHaveFocus();
     });
   });
 
@@ -710,5 +770,125 @@ describe('OverlayCommandPalettePresentational', () => {
 
       expect(onSelect).toHaveBeenCalledWith('non-basic');
     });
+  });
+});
+
+describe('OverlayCommandPalette (store-connected)', () => {
+  const paletteItems: CommandPaletteItem[] = [
+    { id: 'open', label: 'Open File' },
+    { id: 'save', label: 'Save File' },
+    { id: 'close', label: 'Close Tab' },
+  ];
+
+  type CommandPaletteEntry = Extract<OverlayEntry, { type: 'commandPalette' }>;
+
+  /** Builds a centered (no position) active-mode command palette entry backed by mock callbacks */
+  function createPaletteEntry(overrides?: Partial<CommandPaletteEntry>): CommandPaletteEntry {
+    return {
+      type: 'commandPalette',
+      id: 'palette-1',
+      webViewId: 'webview-1',
+      request: { items: paletteItems },
+      items: paletteItems,
+      selectedIndex: 0,
+      resolve: vi.fn(),
+      reject: vi.fn(),
+      ...overrides,
+    };
+  }
+
+  /** Reads the palette entry back from the real store, asserting it exists and has the right type */
+  function getStoredPalette(id: string): CommandPaletteEntry {
+    const overlay = getOverlayById(id);
+    expect(overlay?.type).toBe('commandPalette');
+    // Type is verified by the assertion above; TS can't narrow the OverlayEntry union
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return overlay as CommandPaletteEntry;
+  }
+
+  beforeEach(() => {
+    clearAllOverlays();
+  });
+
+  it('mirrors typed filter text into the store so a forwarded commit resolves against the displayed list', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Sa' } });
+
+    expect(getStoredPalette('palette-1').filterText).toBe('Sa');
+  });
+
+  it('clamps the stored selectedIndex with the FILTERED item count when typing narrows the list', () => {
+    // A filter matching nothing forces itemCount to 0 — the stale index 2 must clamp to 0. With an
+    // empty filtered list cmdk reports no highlight change, so only the filter-text mirroring path
+    // (its filterPaletteItems-derived itemCount) can produce the clamp.
+    const entry = createPaletteEntry({ selectedIndex: 2 });
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zz' } });
+
+    const stored = getStoredPalette('palette-1');
+    expect(stored.filterText).toBe('zz');
+    expect(stored.selectedIndex).toBe(0);
+  });
+
+  it('mirrors arrow-key highlight moves into the store as an absolute selectedIndex', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'ArrowDown' });
+
+    expect(getStoredPalette('palette-1').selectedIndex).toBe(1);
+  });
+
+  it('resolves the overlay with the clicked item id and removes it from the store', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.click(screen.getByText('Save File'));
+
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+    expect(entry.resolve).toHaveBeenCalledWith('save');
+    expect(getOverlayById('palette-1')).toBeUndefined();
+  });
+
+  it('resolves the overlay with undefined on Escape and removes it from the store', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+    expect(entry.resolve).toHaveBeenCalledWith(undefined);
+    expect(getOverlayById('palette-1')).toBeUndefined();
+  });
+
+  it('never settles the store again after the first resolve (later select/dismiss are no-ops)', () => {
+    const entry = createPaletteEntry();
+    addOverlay(entry);
+    render(<OverlayCommandPalette overlay={entry} />);
+
+    fireEvent.click(screen.getByText('Save File'));
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
+
+    // The store can later hold a different overlay under the same id; the already-settled (but
+    // still mounted) palette instance must never resolve or dismiss an entry it did not create.
+    // (Highlight/filter mirroring is intentionally not guarded — only settling is.)
+    const successor = createPaletteEntry();
+    addOverlay(successor);
+
+    fireEvent.click(screen.getByText('Open File'));
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(successor.resolve).not.toHaveBeenCalled();
+    expect(successor.reject).not.toHaveBeenCalled();
+    expect(getStoredPalette('palette-1')).toBeDefined();
+    expect(entry.resolve).toHaveBeenCalledTimes(1);
   });
 });

@@ -8,9 +8,11 @@ import {
 } from 'platform-bible-utils';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
+import { windowService } from '@shared/services/window.service';
 import { CommandPaletteRequest, PopoverContent, PopoverRequest } from './overlay.service-model';
-import { getOverlays, getOverlayById, clearAllOverlays } from './overlay-store';
+import { getOverlays, getOverlayById, clearAllOverlays, subscribe } from './overlay-store';
 import { isWebViewVisible } from './overlay-coordinates';
 
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
@@ -96,7 +98,12 @@ vi.mock('@shared/services/network.service', () => ({
 
 // Import the service after mocks are set up
 // eslint-disable-next-line import/first
-import { overlayService, resetDebounceState, showModalDialogOverlay } from './overlay.service-host';
+import {
+  overlayService,
+  resetDebounceState,
+  showModalDialogOverlay,
+  startOverlayService,
+} from './overlay.service-host';
 
 /** A minimal WebViewMenu with one context menu item, used across context menu tests */
 const DEFAULT_WEB_VIEW_MENU = {
@@ -770,6 +777,52 @@ describe('overlay.service-host', () => {
       await promise;
     });
 
+    it('should leave the palette open with its promise pending when committing a filter that matches nothing', async () => {
+      vi.mocked(logger.warn).mockClear();
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'zzz' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      // The palette must stay open so the user can correct the filter; committing nothing must not
+      // settle the requesting flow
+      expect(getOverlays()).toHaveLength(1);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('matches 0 of'));
+
+      let settled = false;
+      const settledProbe = promise.finally(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      getOverlays()[0].resolve(undefined);
+      await settledProbe;
+    });
+
+    it('should leave the store untouched when an update carries neither filterText nor moveSelection', async () => {
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      const listener = vi.fn();
+      const unsubscribe = subscribe(listener);
+      await overlayService.updateCommandPalette('test-webview', {});
+      unsubscribe();
+
+      // An empty update must not notify store subscribers or disturb the palette's state
+      expect(listener).not.toHaveBeenCalled();
+      const overlays = getOverlays();
+      // Only commandPalette overlays exist in this test
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      expect(palette.filterText).toBeUndefined();
+      expect(palette.selectedIndex).toBe(0);
+
+      palette.resolve(undefined);
+      await promise;
+    });
+
     it('should apply filterText updates to a non-passive (active) palette (forwarded driving)', async () => {
       // The extension forwards keystrokes via updateCommandPalette when the
       // cross-frame focus handoff loses; the active palette's controlled search input consumes
@@ -950,6 +1003,33 @@ describe('overlay.service-host', () => {
       await promise;
     });
 
+    it('should still open the palette with raw key text when localization fails at show time', async () => {
+      vi.mocked(localizationService.getLocalizedStrings).mockRejectedValue(
+        new Error('localization backend unavailable'),
+      );
+
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'ft', label: '%marker_ft_label%' },
+          { id: 'fig', label: '%marker_fig_label%' },
+        ],
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+
+      // A localization outage must degrade to raw key text, not block the palette from opening
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+
+      const overlays = getOverlays();
+      // Only commandPalette overlays exist in this test
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;
+      expect(palette.items[0].label).toBe('%marker_ft_label%');
+      expect(palette.items[1].label).toBe('%marker_fig_label%');
+
+      palette.resolve(undefined);
+      await promise;
+    });
+
     it('should pass plain-string items through untouched and create the overlay synchronously', () => {
       const request: CommandPaletteRequest = {
         items: [
@@ -1083,8 +1163,6 @@ describe('overlay.service-host', () => {
     it('should call registerAutoDismissListeners when startOverlayService is called', async () => {
       const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
 
-      // Import and call startOverlayService
-      const { startOverlayService } = await import('./overlay.service-host');
       await startOverlayService();
 
       // Should register scroll and blur listeners
@@ -1130,6 +1208,87 @@ describe('overlay.service-host', () => {
 
       const result = await promise;
       expect(result).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
+    /**
+     * Registers the auto-dismiss listeners and captures the focus-change callback the host handed
+     * to windowService.subscribeFocus, so tests can simulate focus moving between tabs/WebViews.
+     */
+    async function captureFocusChangeCallback() {
+      vi.mocked(windowService.subscribeFocus).mockClear();
+      await startOverlayService();
+      const subscribeCall = vi.mocked(windowService.subscribeFocus).mock.calls.at(-1);
+      expect(subscribeCall).toBeDefined();
+      return subscribeCall?.[1];
+    }
+
+    it('should not dismiss overlays when focus lands inside the overlay host or a Radix popper portal', async () => {
+      vi.useFakeTimers();
+      resetDebounceState();
+      const onFocusChange = await captureFocusChangeCallback();
+
+      const promise = overlayService.showCommandPalette(
+        { items: [{ id: 'ft', label: 'Footnote' }] },
+        'focus-guard-webview',
+      );
+      expect(getOverlays()).toHaveLength(1);
+
+      // Advance past the creation grace period so only the focus-location guard can keep it open
+      vi.advanceTimersByTime(350);
+
+      // Overlays render in the parent document, so focusing one is classified as leaving the
+      // WebView — the guard must recognize the active element sits inside the overlay host
+      // (e.g. clicking the palette's own search input) and not dismiss
+      const host = document.createElement('div');
+      host.setAttribute('data-overlay-host', '');
+      const hostButton = document.createElement('button');
+      host.appendChild(hostButton);
+      document.body.appendChild(host);
+      hostButton.focus();
+
+      onFocusChange?.({ focusType: 'webView', id: 'other-webview' });
+      expect(getOverlays()).toHaveLength(1);
+
+      // Anchored palettes render through a Radix popover portal directly under document.body,
+      // outside the overlay host div — focus inside that portal must not dismiss either
+      const popperPortal = document.createElement('div');
+      popperPortal.setAttribute('data-radix-popper-content-wrapper', '');
+      const popperButton = document.createElement('button');
+      popperPortal.appendChild(popperButton);
+      document.body.appendChild(popperPortal);
+      popperButton.focus();
+
+      onFocusChange?.({ focusType: 'webView', id: 'third-webview' });
+      expect(getOverlays()).toHaveLength(1);
+
+      host.remove();
+      popperPortal.remove();
+      getOverlays()[0].resolve(undefined);
+      vi.useRealTimers();
+      return promise;
+    });
+
+    it('should dismiss overlays when focus moves to another tab/webView outside any overlay', async () => {
+      vi.useFakeTimers();
+      resetDebounceState();
+      const onFocusChange = await captureFocusChangeCallback();
+
+      const promise = overlayService.showCommandPalette(
+        { items: [{ id: 'ft', label: 'Footnote' }] },
+        'focus-dismiss-webview',
+      );
+      expect(getOverlays()).toHaveLength(1);
+
+      vi.advanceTimersByTime(350);
+
+      // document.activeElement is the body here — outside the overlay host and any Radix portal —
+      // so a focus change to a different WebView means the user really left the overlay
+      onFocusChange?.({ focusType: 'webView', id: 'unrelated-webview' });
+
+      expect(getOverlays()).toHaveLength(0);
+      await expect(promise).resolves.toBeUndefined();
 
       vi.useRealTimers();
     });
@@ -1352,8 +1511,6 @@ describe('overlay.service-host', () => {
   describe('focus save/restore', () => {
     it('should save and restore focus when showing and resolving a modal dialog', async () => {
       // windowService.getFocus and setFocus are mocked at the top
-      const { windowService } = await import('@shared/services/window.service');
-
       const MockFocusComponent = vi.fn(
         // vi.fn mock must satisfy React component return type; `any` cast is the standard test pattern
         // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
