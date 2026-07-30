@@ -1,4 +1,4 @@
-/** The 4 navigable wizard steps shown in the step indicator (see `NUMBERED_STEPS`). */
+/** The navigable wizard steps shown in the step indicator (see `NUMBERED_STEPS`). */
 export type NumberedStep = 'language' | 'internetSettings' | 'identify' | 'syncConsent';
 
 /**

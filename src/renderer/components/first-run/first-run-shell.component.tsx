@@ -76,10 +76,13 @@ export function FirstRunShell({
   const [error, setError] = useState('');
   const [strings] = useLocalizedStrings(KEYS);
   const locale = usePrimaryInterfaceLanguage();
-  const fmt = useMemo(() => new NumberFormat(locale), [locale]);
+  const numberFormat = useMemo(() => new NumberFormat(locale), [locale]);
   // NUMBERED_STEPS.length is a module constant (always 4), so memoize its formatted form separately
   // to avoid reformatting a fixed denominator on every step-navigation render.
-  const formattedStepCount = useMemo(() => fmt.format(NUMBERED_STEPS.length), [fmt]);
+  const formattedStepCount = useMemo(
+    () => numberFormat.format(NUMBERED_STEPS.length),
+    [numberFormat],
+  );
 
   const index = STEP_ORDER.indexOf(step);
   // Numbered steps occupy the front of STEP_ORDER; anything at/after NUMBERED_STEPS.length is an
@@ -165,7 +168,7 @@ export function FirstRunShell({
   const StepComponent = stepComponents[step];
   const indicator = !isInterstitial
     ? formatReplacementString(strings['%firstRun_stepIndicator%'], {
-        stepNumber: fmt.format(numberedIndex + 1),
+        stepNumber: numberFormat.format(numberedIndex + 1),
         stepCount: formattedStepCount,
       })
     : '';

@@ -29,16 +29,16 @@ type StepState = 'active' | 'complete' | 'upcoming';
 export function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps) {
   const safeLocale = locale || 'en';
   const format = useMemo(() => {
-    const fmt = new NumberFormat(safeLocale);
-    return (n: number) => fmt.format(n);
+    const numberFormat = new NumberFormat(safeLocale);
+    return (n: number) => numberFormat.format(n);
   }, [safeLocale]);
   // Clamp to [1, totalSteps] so out-of-range values produce a defined active step rather than
   // rendering all circles in the same "not yet reached" style.
   const clampedStep = Math.min(Math.max(currentStep, 1), totalSteps);
-  const stepNums = Array.from({ length: totalSteps }, (_, i) => i + 1);
+  const stepNumbers = Array.from({ length: totalSteps }, (_, i) => i + 1);
   return (
     <div className="tw:flex tw:items-center" aria-hidden="true">
-      {stepNums.map((stepNum) => {
+      {stepNumbers.map((stepNum) => {
         let state: StepState = 'upcoming';
         if (stepNum === clampedStep) state = 'active';
         else if (stepNum < clampedStep) state = 'complete';
