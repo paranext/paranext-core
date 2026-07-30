@@ -34,7 +34,7 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -529,6 +529,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // #region Render
 
   const [isBibleTextsMoreInfoOpen, setIsBibleTextsMoreInfoOpen] = useState(false);
+  const bibleTextsMoreInfoBodyId = useId();
 
   const emptyStatePromptKey =
     resourceType === 'ScriptureResource'
@@ -568,6 +569,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
             <button
               type="button"
               className="tw:text-sm tw:text-primary tw:underline tw:cursor-pointer"
+              aria-expanded={isBibleTextsMoreInfoOpen}
+              aria-controls={bibleTextsMoreInfoBodyId}
               onClick={() => setIsBibleTextsMoreInfoOpen((prev) => !prev)}
             >
               {isBibleTextsMoreInfoOpen
@@ -575,7 +578,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
                 : localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
             </button>
             {isBibleTextsMoreInfoOpen && (
-              <p className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+              <p
+                id={bibleTextsMoreInfoBodyId}
+                className="tw:text-sm tw:text-muted-foreground tw:max-w-xs"
+              >
                 {localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
               </p>
             )}
