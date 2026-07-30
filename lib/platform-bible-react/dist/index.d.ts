@@ -10,7 +10,7 @@ import { LucideProps } from 'lucide-react';
 import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -946,7 +946,6 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
-	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%",
 	...`%${string}%`[],
@@ -1226,7 +1225,6 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
-	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%"
 ];
@@ -1264,26 +1262,6 @@ export interface MarkerMenuItem {
 	 * selected.
 	 */
 	isDisallowed?: boolean;
-	/**
-	 * How much of the consumer's current selection this marker covers: `'all'`, `'partial'`, or
-	 * `'none'`. Optional and additive — with no value, no selection affordance renders and no
-	 * `aria-checked` is set, which is how consumers that do not track a selection behave.
-	 *
-	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this affects
-	 * neither visibility nor selectability. It is display only.
-	 */
-	selectionState?: "all" | "partial" | "none";
-	/**
-	 * Whether the consumer currently has no operation for this row, so it must not be selectable.
-	 * Optional and additive — with no value the row is selectable exactly as it has always been.
-	 *
-	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
-	 * nothing about the marker itself and so renders no trailing label: those two describe a property
-	 * of the marker, while this describes the consumer's momentary inability to act on it. It also
-	 * does not affect visibility — the row stays listed, because a row that disappears reads as "this
-	 * marker does not exist here" rather than "you cannot do that to it right now."
-	 */
-	isDisabled?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
 }
@@ -2351,100 +2329,6 @@ export type CancelAcceptButtonsProps = {
  * Tooltip text defaults to the localization key if no localized strings are provided.
  */
 export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, acceptLabel, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
-/** Props for {@link DestructiveKeyConfirmation}. */
-export type DestructiveKeyConfirmationProps = {
-	/** Whether the confirmation hint is currently showing. */
-	open: boolean;
-	/**
-	 * Position and size of the invisible anchor, in the coordinates of the nearest `position:
-	 * relative` ancestor. Typically the bounding rect of the element the hint should point at (e.g. a
-	 * verse marker), recomputed by the caller as it moves/scrolls.
-	 */
-	anchorRect: {
-		top: number;
-		left: number;
-		width: number;
-		height: number;
-	};
-	/** Localized message to display. Include a `{key}` placeholder where the confirming key belongs. */
-	message: string;
-	/**
-	 * Localized/display label for the key that confirms the action on a second press (e.g.
-	 * "Backspace").
-	 */
-	confirmingKeyLabel: string;
-	/**
-	 * Tooltip placement side. Defaults to `'bottom'`.
-	 *
-	 * Only `'top'`/`'bottom'` are supported — the bordered arrow this component renders relies on
-	 * clip-path/translate math in `tooltip.tsx` that has only been worked out for those two sides;
-	 * the equivalent math for `'left'`/`'right'` was tried and found visibly broken (see
-	 * tooltip.tsx), so those two values are omitted from this component's public API rather than
-	 * silently degrading to a borderless arrow.
-	 */
-	side?: "top" | "bottom";
-	/** Tooltip placement alignment. Defaults to `'start'`. */
-	align?: "start" | "center" | "end";
-	/** Whether to render the pointer arrow. Defaults to `true`. */
-	showArrow?: boolean;
-};
-/**
- * A destructive-styled "press again to confirm" hint, anchored to an arbitrary point (`anchorRect`)
- * rather than a rendered trigger element. Built for two-step destructive actions (e.g. deleting a
- * verse marker on a second Backspace/Delete) where the caller owns detecting the "armed" state and
- * this component only renders the hint.
- */
-export declare function DestructiveKeyConfirmation({ open, anchorRect, message, confirmingKeyLabel, side, align, showArrow, }: DestructiveKeyConfirmationProps): import("react/jsx-runtime").JSX.Element;
-export type DisabledActionTooltipProps = {
-	/**
-	 * Whether the wrapped action(s) are currently disabled. While `true`, the wrapper becomes
-	 * focusable and labeled with `tooltipText` so the explanation stays reachable for keyboard and
-	 * screen-reader users.
-	 */
-	disabled: boolean;
-	/** Explanation shown in the tooltip, and used as the wrapper's `aria-label`, while `disabled`. */
-	tooltipText: string;
-	/** The action(s) to render — one or more buttons, a popover trigger, etc. */
-	children: React$1.ReactNode;
-	/** Optional class name for the focusable wrapper `div`. */
-	className?: string;
-};
-/**
- * Wraps one or more actions (buttons, a popover trigger, etc.) that may be disabled, surfacing a
- * tooltip explanation while they are, via {@link DisabledTooltipWrapper}. This is the convenience
- * shape for the common case of a single tooltip message driving both the wrapper's accessible name
- * and the tooltip body — use `DisabledTooltipWrapper` directly if the accessible name and the
- * tooltip content need to differ, or the `Tooltip` needs non-default props.
- */
-export declare function DisabledActionTooltip({ disabled, tooltipText, children, className, }: DisabledActionTooltipProps): import("react/jsx-runtime").JSX.Element;
-export type DisabledTooltipWrapperProps = Omit<React$1.ComponentPropsWithRef<"div">, "children" | "role" | "tabIndex" | "aria-label"> & {
-	/** The control to wrap — typically a button that is `disabled` for the same reason. */
-	children: React$1.ReactNode;
-	/** `true` while the wrapped control is disabled. Drives the focusability and the accessible name. */
-	isDisabled: boolean;
-	/**
-	 * The localized explanation of WHY the control is disabled. Becomes the wrapper's accessible name
-	 * while disabled, so it should be the same text the tooltip shows.
-	 */
-	disabledExplanation?: string;
-};
-/**
- * Focusable wrapper that lets a DISABLED control still host a tooltip.
- *
- * A disabled button is removed from the tab order and (in most browser/AT combinations) does not
- * fire the pointer and focus events Radix's `Tooltip` listens for — so the one moment the user most
- * needs the explanation ("why can't I use this?") is the one moment the button cannot deliver it.
- * Wrapping the control in a focusable, named element restores it: the wrapper takes the tooltip
- * trigger's place in the tab order and carries the explanation as its accessible name, so keyboard
- * and screen-reader users reach the same information pointer users get on hover. While the control
- * is ENABLED the wrapper is inert — no role, no tab stop, no name — leaving the button itself as
- * the single focusable, named thing.
- *
- * Render it as the `asChild` child of a `TooltipTrigger`; it forwards the trigger's props and ref
- * onto its `div`. `DisabledActionTooltip` composes this with the rest of the `Tooltip` shell for
- * the common case of one tooltip message driving both the accessible name and the tooltip body.
- */
-export declare function DisabledTooltipWrapper({ children, isDisabled, disabledExplanation, ...props }: DisabledTooltipWrapperProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -2635,26 +2519,6 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
-/** Props for the {@link WizardStepper} component. */
-export interface WizardStepperProps {
-	/** 1-based index of the currently active step. */
-	currentStep: number;
-	/** Total number of numbered steps. */
-	totalSteps: number;
-	/**
-	 * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
-	 * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a
-	 * `RangeError` in V8).
-	 */
-	locale?: string;
-}
-/**
- * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
- * presentational — owns no navigation state. All circles are `aria-hidden`; the consuming shell is
- * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
- * readers.
- */
-export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 declare const alertVariants: (props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & ClassProp) | undefined) => string;
@@ -3188,9 +3052,8 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, showArrow, arrowClassName, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
+export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
 	showArrow?: boolean;
-	arrowClassName?: string;
 }): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
@@ -3657,11 +3520,60 @@ export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
+ * Z-index for the one-shot onboarding tour spotlight. Sits above the dock/menubar
+ * (Z_INDEX_ABOVE_DOCK=600) and tooltips (550) so it can spotlight toolbar buttons and columns, but
+ * BELOW the first-run gate (Z_INDEX_FIRST_RUN=700) so the wizard always wins if both are mounted.
+ */
+export declare const Z_INDEX_ONBOARDING_TOUR = 650;
+/**
  * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
  * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
  * startup and nothing behind it remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
+/** One stop in the guided tour. */
+export interface TourStep {
+	/** CSS selector for the element to spotlight. A step whose target is absent is skipped. */
+	target: string;
+	/** Heading shown in the step card. */
+	title: string;
+	/** Body text shown in the step card. */
+	description: string;
+	/**
+	 * Logical side of the target on which the card appears. `start`/`end` resolve to physical
+	 * left/right via `readDirection()`, so callers never branch on RTL.
+	 *
+	 * @default 'bottom'
+	 */
+	side?: "top" | "bottom" | "start" | "end";
+}
+/** Props accepted by the {@link Tour} component. */
+export interface TourProps {
+	/** Ordered list of steps. Steps whose target selector is not found are skipped. */
+	steps: TourStep[];
+	/** Whether the tour overlay is visible. */
+	open: boolean;
+	/** Called when the user finishes the last step (Done). */
+	onDone: () => void;
+	/** Called when the user dismisses the tour (Skip button or Escape). */
+	onSkip: () => void;
+	/** @default 'Next' */
+	nextLabel?: string;
+	/** @default 'Back' */
+	backLabel?: string;
+	/** @default 'Skip' */
+	skipLabel?: string;
+	/** @default 'Done' */
+	doneLabel?: string;
+}
+/**
+ * Spotlight-overlay guided tour. Renders a full-viewport SVG mask that dims the page while cutting
+ * out the current target element, and positions a step card beside it. Navigated with Back / Next /
+ * Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target selector is not found in the
+ * DOM when the tour opens are skipped, so an absent target degrades gracefully instead of killing
+ * the overlay. Returns `null` when `open` is false or no step targets resolve.
+ */
+export declare function Tour({ steps, open, onDone, onSkip, nextLabel, backLabel, skipLabel, doneLabel, }: TourProps): import("react/jsx-runtime").JSX.Element | null;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
