@@ -1109,6 +1109,12 @@ E2E tests that verify user flows MUST interact through visible UI only:
 
 Note: `app.fixture` is retained for CI smoke tests only (launches standalone Electron).
 
+**Isolated-suite setup exception:** specs under `e2e-tests/tests/isolated/` run against a fresh
+temp profile with no projects and no project-open UI, so their *setup* necessarily goes through
+PAPI (`sendPapiCommandWhenRegistered` to open an editor, flip `platform.isEditable`, etc.). The
+rule still governs the behavior under test: once setup completes, the asserted user flow itself
+must be driven and observed through visible UI only.
+
 ### Opening a Project and Its Tool Menus (PT10 Navigation Pattern)
 
 Tools that need a project context (Markers Checklist, Markers Inventory, Checks side panel, etc.) are **NOT** exposed via the main app menu — they live in the **scripture editor's hamburger menu**. The main app menu (`%product_shortName%` — labeled "Platform") only hosts project-agnostic items (Open…, Settings, Exit, Help).
