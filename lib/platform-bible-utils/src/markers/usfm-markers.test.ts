@@ -71,9 +71,10 @@ describe('isCharacterMarker', () => {
 });
 
 describe('isCharacterMarker and isBlockMarker invariants', () => {
-  // Falsifiable against the numbering-marker exclusion specifically: remove it and `v` satisfies
-  // both predicates. This is NOT a proof that character markers are exempt from structure
-  // protection — that exemption comes from the character-marker menu never setting `isDisallowed`.
+  // Guards the numbering-marker exclusion: drop it and `v` satisfies both predicates, since
+  // `isBlockMarker` special-cases `v` as a block marker. Note what this does NOT establish —
+  // character markers being exempt from structure protection comes from the character-marker menu
+  // never setting `isDisallowed`, not from anything asserted here.
   it('never classifies a marker as both a character marker and a block marker', () => {
     const markersClassifiedAsBoth = Object.keys(usfmMarkers).filter(
       (marker) => isCharacterMarker(marker) && isBlockMarker(marker),
@@ -82,9 +83,9 @@ describe('isCharacterMarker and isBlockMarker invariants', () => {
     expect(markersClassifiedAsBoth).toEqual([]);
   });
 
-  // The upstream remove/replace/extend mutations all assume a character marker has a closing
-  // marker. Note that this invariant cannot replace the numbering-marker exclusion above: `va`,
-  // `vp`, and `ca` satisfy it too.
+  // Code that removes or replaces a character marker relies on it having a closing marker, so this
+  // holds the data to that shape. It is not a substitute for the numbering-marker exclusion above:
+  // `va`, `vp`, and `ca` have end markers too, so only their category rules them out.
   it('only accepts markers that have an end marker', () => {
     const markersWithoutEndMarker = Object.keys(usfmMarkers).filter(
       (marker) => isCharacterMarker(marker) && !usfmMarkers[marker].hasEndMarker,
