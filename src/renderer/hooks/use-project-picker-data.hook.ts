@@ -38,6 +38,8 @@ const METADATA_FETCH_RETRY_DELAY_MS = 5 * 1000;
  * reload or a PDPF registration).
  */
 export const MAX_METADATA_FETCH_RETRIES = 3;
+/** Debounce window that collapses rapid-fire PDPF registrations into a single metadata fan-out. */
+const PDPF_REGISTRATION_DEBOUNCE_MS = 200;
 
 const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
@@ -146,13 +148,21 @@ export function useProjectPickerData(): ProjectPickerData {
     () => getNetworkEvent('object:onDidCreateNetworkObject'),
     [],
   );
+  // Debounce to collapse N rapid-fire PDPF registrations (e.g. after extension reload) into a
+  // single getMetadataForAllProjects fan-out. Without debouncing, each registration arrives as a
+  // separate WebSocket message that React 18 cannot batch, producing N wasted fan-outs.
+  const pdpfRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const onPdpFactoryRegistered = useCallback(
     ({ objectType }: NetworkObjectDetails) => {
-      if (objectType === PDP_FACTORY_OBJECT_TYPE) refreshMetadata();
+      if (objectType !== PDP_FACTORY_OBJECT_TYPE) return;
+      clearTimeout(pdpfRefreshTimerRef.current);
+      pdpfRefreshTimerRef.current = setTimeout(refreshMetadata, PDPF_REGISTRATION_DEBOUNCE_MS);
     },
     [refreshMetadata],
   );
   useEvent(onDidCreateNetworkObject, onPdpFactoryRegistered);
+  // Cancel any pending debounced refresh on unmount to prevent state updates after teardown.
+  useEffect(() => () => clearTimeout(pdpfRefreshTimerRef.current), []);
   // After a failed metadata fetch, wait METADATA_FETCH_RETRY_DELAY_MS before trying again.
   // The timer is cancelled if the hook unmounts before it fires, preventing state updates on an
   // unmounted component and avoiding spurious fan-outs when the user closes the picker quickly.
@@ -193,23 +203,39 @@ export function useProjectPickerData(): ProjectPickerData {
       counter: metadataRefreshCounter,
       promise: projectLookupService.getMetadataForAllProjects(PICKER_METADATA_FILTER),
     };
-    // On success: reset the retry counter so a future transient failure gets its own retry budget.
-    // On failure (caught at the end of the chain): invalidate this generation's cache entry (so the
-    // next getAllMetadata call issues a fresh fetch rather than awaiting the poisoned promise), then
-    // schedule a retry if the budget allows.
+    // Attach success and failure handlers as the two arguments of .then() rather than as a
+    // .then().catch() chain. In the chained form, the .catch() sees both fetch rejections AND
+    // exceptions thrown by the success handler — silently mis-routing a future handler bug as a
+    // fetch failure. The two-argument form keeps the handlers independent: an exception in
+    // onFulfilled does not reach onRejected. The trailing .catch(() => undefined) satisfies the
+    // ESLint promise/catch-or-return rule (the plugin does not recognise the two-argument form
+    // as sufficient) and catches any exception from either handler; neither handler can throw in
+    // practice (ref reads + setState), so this is purely a safety net.
     entry.promise
-      .then(() => {
-        fetchRetryCountRef.current = 0;
-        return undefined;
-      })
-      .catch(() => {
-        if (metadataFetchRef.current === entry) {
-          metadataFetchRef.current = undefined;
-          if (fetchRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
-            setIsRetryPending(true);
+      .then(
+        () => {
+          // Guard: only reset retry state for the current generation so a stale in-flight promise
+          // that resolves late cannot corrupt the retry budget or spuriously cancel the timer of
+          // the generation currently in the cache.
+          if (metadataFetchRef.current === entry) {
+            fetchRetryCountRef.current = 0;
+            // Cancels any pending retry timer: setIsRetryPending(false) triggers the useEffect
+            // cleanup (clearTimeout) so the timer does not fire a redundant fan-out after healing.
+            setIsRetryPending(false);
           }
-        }
-      });
+          return undefined;
+        },
+        () => {
+          if (metadataFetchRef.current === entry) {
+            metadataFetchRef.current = undefined;
+            if (fetchRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
+              setIsRetryPending(true);
+            }
+          }
+          return undefined;
+        },
+      )
+      .catch(() => undefined);
     metadataFetchRef.current = entry;
     return entry.promise;
   }, [metadataRefreshCounter]);

@@ -597,42 +597,52 @@ describe('useProjectPickerData', () => {
     // later registers, the network object service emits object:onDidCreateNetworkObject.
     // The hook must subscribe to that event and refresh when the new object is a pdpFactory,
     // so the project list heals without waiting for an unrelated extension reload or
-    // project-list change event.
-    const { getNetworkEvent, projectLookupService } = await importMocks();
-    let pdpfRegistrationCallback: ((details: { objectType: string }) => void) | undefined;
-    vi.mocked(getNetworkEvent).mockImplementation(
-      (eventName: string) =>
-        vi.fn((cb: (details: { objectType: string }) => void) => {
-          if (eventName === 'object:onDidCreateNetworkObject') pdpfRegistrationCallback = cb;
-          return vi.fn();
-        }) as never,
-    );
-
-    // First fetch: grace window expired, USJ-providing layering PDPF not yet registered.
-    vi.mocked(projectLookupService.getMetadataForAllProjects)
-      .mockResolvedValueOnce([] as never)
-      // Second fetch after PDPF registers: project list now available.
-      .mockResolvedValue(
-        metadataList([
-          { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
-        ]) as never,
+    // project-list change event. The refresh fires after PDPF_REGISTRATION_DEBOUNCE_MS so
+    // that a burst of registrations collapses to a single fan-out; fake timers advance past it.
+    vi.useFakeTimers();
+    try {
+      const { getNetworkEvent, projectLookupService } = await importMocks();
+      let pdpfRegistrationCallback: ((details: { objectType: string }) => void) | undefined;
+      vi.mocked(getNetworkEvent).mockImplementation(
+        (eventName: string) =>
+          vi.fn((cb: (details: { objectType: string }) => void) => {
+            if (eventName === 'object:onDidCreateNetworkObject') pdpfRegistrationCallback = cb;
+            return vi.fn();
+          }) as never,
       );
 
-    const { result } = renderHook(() => useProjectPickerData());
-    await settle(result);
-    // Initial state: empty because the layering PDPF providing USJ_Chapter has not
-    // registered yet (grace window already expired).
-    expect(result.current.allProjects).toHaveLength(0);
+      // First fetch: grace window expired, USJ-providing layering PDPF not yet registered.
+      vi.mocked(projectLookupService.getMetadataForAllProjects)
+        .mockResolvedValueOnce([] as never)
+        // Second fetch after PDPF registers: project list now available.
+        .mockResolvedValue(
+          metadataList([
+            { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+          ]) as never,
+        );
 
-    // The USJ-providing layering PDPF registers after the grace window.
-    expect(pdpfRegistrationCallback).toBeDefined();
-    act(() => pdpfRegistrationCallback!({ objectType: 'pdpFactory' }));
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+      // Initial state: empty because the layering PDPF providing USJ_Chapter has not
+      // registered yet (grace window already expired).
+      expect(result.current.allProjects).toHaveLength(0);
 
-    await settle(result);
-    // The hook must detect the PDPF registration and re-fetch metadata so the list heals.
-    expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
-    expect(result.current.allProjects).toHaveLength(1);
-    expect(result.current.allProjects[0].id).toBe('p1');
+      // The USJ-providing layering PDPF registers after the grace window.
+      expect(pdpfRegistrationCallback).toBeDefined();
+      act(() => pdpfRegistrationCallback!({ objectType: 'pdpFactory' }));
+
+      // Advance past the debounce delay so the buffered refresh fires.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      await settle(result);
+      // The hook must detect the PDPF registration and re-fetch metadata so the list heals.
+      expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
+      expect(result.current.allProjects).toHaveLength(1);
+      expect(result.current.allProjects[0].id).toBe('p1');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('heals allProjects after a timed-out metadata fetch once the retry resolves (PT-4299 timeout recovery)', async () => {
@@ -747,6 +757,191 @@ describe('useProjectPickerData', () => {
 
     // Must NOT re-fetch: only PDPF registrations should invalidate the metadata cache.
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the pending retry timer when a concurrent refresh heals the list (PT-4299 spurious Fetch C)', async () => {
+    // Reproduces the race where Fetch A fails (isRetryPending=true, 5-second timer scheduled),
+    // then an external PDPF registration fires while the timer is still running. Fetch B (triggered
+    // by the PDPF) succeeds and heals the list. The timer must be cancelled so it does not fire a
+    // spurious Fetch C after healing — the fix is setIsRetryPending(false) in the success path of
+    // getAllMetadata, which triggers the useEffect cleanup that calls clearTimeout.
+    vi.useFakeTimers();
+    try {
+      const { projectLookupService, getNetworkEvent } = await importMocks();
+      let pdpfCallback: ((d: { objectType: string }) => void) | undefined;
+      vi.mocked(getNetworkEvent).mockImplementation(
+        (eventName: string) =>
+          vi.fn((cb: (d: { objectType: string }) => void) => {
+            if (eventName === 'object:onDidCreateNetworkObject') pdpfCallback = cb;
+            return vi.fn();
+          }) as never,
+      );
+      vi.mocked(projectLookupService.getMetadataForAllProjects)
+        .mockRejectedValueOnce(new Error('JSON-RPC timed out')) // Fetch A fails
+        .mockResolvedValue(
+          metadataList([
+            { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+          ]) as never,
+        ); // Fetch B+ succeeds
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+      // Fetch A failed; isRetryPending=true, 5-second timer scheduled.
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(1);
+      expect(result.current.allProjects).toHaveLength(0);
+
+      // PDPF registers → schedules debounced Fetch B. Advance past the debounce delay to fire it.
+      expect(pdpfCallback).toBeDefined();
+      act(() => pdpfCallback!({ objectType: 'pdpFactory' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      await settle(result);
+      // Fetch B healed the project list.
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(2);
+      expect(result.current.allProjects).toHaveLength(1);
+
+      // Advance remaining timers (retry timer from Fetch A should have been cancelled by Fetch B's
+      // success path setting isRetryPending=false).
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      await settle(result);
+
+      // No spurious Fetch C: the list healed in Fetch B; no unnecessary fan-out after.
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stale-generation success does not reset the retry budget for a newer failing generation (PT-4299 cap integrity)', async () => {
+    // Reproduces the race where a slow in-flight Gen A promise (up to 30 s in the service's
+    // startup retry loop) resolves after a newer Gen B+ has already exhausted part of its retry
+    // budget. Gen A's unguarded .then() must NOT reset fetchRetryCountRef.current, or subsequent
+    // Gen B+ failures get a fresh budget and can exceed MAX_METADATA_FETCH_RETRIES total retries.
+    vi.useFakeTimers();
+    try {
+      const { projectLookupService, getNetworkEvent } = await importMocks();
+
+      // Gen A: manually controlled — we will resolve it late, after Gen B+ has been retrying.
+      let resolveGenA: (v: never) => void = () => {};
+      const genAPromise = new Promise<never>((res) => {
+        resolveGenA = res;
+      });
+
+      let pdpfCallback: ((d: { objectType: string }) => void) | undefined;
+      vi.mocked(getNetworkEvent).mockImplementation(
+        (eventName: string) =>
+          vi.fn((cb: (d: { objectType: string }) => void) => {
+            if (eventName === 'object:onDidCreateNetworkObject') pdpfCallback = cb;
+            return vi.fn();
+          }) as never,
+      );
+
+      vi.mocked(projectLookupService.getMetadataForAllProjects)
+        .mockReturnValueOnce(genAPromise as never) // Gen A: in-flight, will resolve late
+        .mockRejectedValue(new Error('Timeout')); // All subsequent generations fail
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+      // Gen A is in-flight.
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(1);
+
+      // PDPF registers → schedules debounced Gen B. Advance past the debounce delay to fire it.
+      expect(pdpfCallback).toBeDefined();
+      act(() => pdpfCallback!({ objectType: 'pdpFactory' }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250);
+      });
+      await settle(result);
+      // Gen B started and failed; isRetryPending=true.
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(2);
+
+      // Advance through 2 retries (Gen C, Gen D) so the counter is partway through the budget.
+      for (let i = 0; i < 2; i += 1) {
+        // Sequential: advance timer then drain before the next retry cycle.
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          await vi.runAllTimersAsync();
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await settle(result);
+      }
+      // Calls so far: GenA(1) + GenB(1) + retry1(1) + retry2(1) = 4
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(4);
+
+      // Gen A resolves late (stale). Without the generation guard, its .then() resets the counter
+      // to 0, allowing more than MAX_METADATA_FETCH_RETRIES total retries. With the fix, the guard
+      // sees metadataFetchRef.current !== entry-A and skips the reset.
+      await act(async () => {
+        resolveGenA([] as never);
+      });
+      await settle(result);
+
+      // Advance through what should be the LAST retry (retry 3 = Gen E).
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      await settle(result);
+      // Calls: GenA + GenB + retry1 + retry2 + retry3(last) = 5
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(5);
+
+      // Budget exhausted — no more retries regardless of timer advances.
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      await settle(result);
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('multiple rapid PDPF registrations trigger only one getMetadataForAllProjects fan-out (PT-4299 debounce)', async () => {
+    // When PDPFs re-register after extension reload they arrive as separate WebSocket messages,
+    // so React cannot batch the resulting refreshMetadata() calls. Each would normally fan out
+    // getMetadataForAllProjects to every registered PDPF; the fix debounces the PDPF-registration
+    // listener so a burst collapses to a single re-fetch.
+    vi.useFakeTimers();
+    try {
+      const { projectLookupService, getNetworkEvent } = await importMocks();
+      let pdpfCallback: ((d: { objectType: string }) => void) | undefined;
+      vi.mocked(getNetworkEvent).mockImplementation(
+        (eventName: string) =>
+          vi.fn((cb: (d: { objectType: string }) => void) => {
+            if (eventName === 'object:onDidCreateNetworkObject') pdpfCallback = cb;
+            return vi.fn();
+          }) as never,
+      );
+      vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(1);
+
+      // Fire 3 PDPF registrations synchronously within one act. Each callback cancels the
+      // previous debounce timer and schedules a new one; only the last timer survives.
+      // Using a single act ensures no timer fires between callbacks (async act can advance
+      // fake timers between awaits, which would defeat the debounce).
+      expect(pdpfCallback).toBeDefined();
+      act(() => {
+        pdpfCallback!({ objectType: 'pdpFactory' });
+        pdpfCallback!({ objectType: 'pdpFactory' });
+        pdpfCallback!({ objectType: 'pdpFactory' });
+      });
+
+      // Advance timers to fire the single surviving debounced refresh.
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      await settle(result);
+
+      // With debouncing: initial(1) + debounced-refresh(1) = 2 total calls, not 4.
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 /* eslint-enable no-type-assertion/no-type-assertion */
