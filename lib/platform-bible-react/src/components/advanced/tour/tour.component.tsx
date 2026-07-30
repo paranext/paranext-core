@@ -52,9 +52,9 @@ const CARD_APPROX_HEIGHT_PX = 176;
 const CARD_GAP_PX = 12;
 const SPOTLIGHT_PADDING_PX = 6;
 
-function measureTarget(selector: string): TargetRect | null {
+function measureTarget(selector: string): TargetRect | undefined {
   const el = document.querySelector(selector);
-  if (!el) return null;
+  if (!el) return undefined;
   const r = el.getBoundingClientRect();
   return { top: r.top, left: r.left, width: r.width, height: r.height };
 }
@@ -74,13 +74,15 @@ function computeCardPosition(
   rect: TargetRect,
   physicalSide: 'top' | 'bottom' | 'left' | 'right',
 ): { top: number; left: number } {
-  const clampLeft = (l: number) =>
-    Math.max(8, Math.min(l, window.innerWidth - CARD_WIDTH_PX - 8));
+  const clampLeft = (l: number) => Math.max(8, Math.min(l, window.innerWidth - CARD_WIDTH_PX - 8));
   const clampTop = (t: number) =>
     Math.max(8, Math.min(t, window.innerHeight - CARD_APPROX_HEIGHT_PX - 8));
   switch (physicalSide) {
     case 'top':
-      return { top: clampTop(rect.top - CARD_GAP_PX - CARD_APPROX_HEIGHT_PX), left: clampLeft(rect.left) };
+      return {
+        top: clampTop(rect.top - CARD_GAP_PX - CARD_APPROX_HEIGHT_PX),
+        left: clampLeft(rect.left),
+      };
     case 'left':
       return { top: clampTop(rect.top), left: clampLeft(rect.left - CARD_WIDTH_PX - CARD_GAP_PX) };
     case 'right':
@@ -92,10 +94,10 @@ function computeCardPosition(
 
 /**
  * Spotlight-overlay guided tour. Renders a full-viewport SVG mask that dims the page while cutting
- * out the current target element, and positions a step card beside it. Navigated with
- * Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target selector is not
- * found in the DOM when the tour opens are skipped, so an absent target degrades gracefully instead
- * of killing the overlay. Returns `null` when `open` is false or no step targets resolve.
+ * out the current target element, and positions a step card beside it. Navigated with Back / Next /
+ * Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target selector is not found in the
+ * DOM when the tour opens are skipped, so an absent target degrades gracefully instead of killing
+ * the overlay. Returns `null` when `open` is false or no step targets resolve.
  */
 export function Tour({
   steps,
@@ -110,7 +112,9 @@ export function Tour({
   // Resolve which steps actually have a target in the DOM, computed when the tour opens.
   const [visibleSteps, setVisibleSteps] = useState<TourStep[]>([]);
   const [pos, setPos] = useState(0);
-  const [targetRect, setTargetRect] = useState<TargetRect | null>(null);
+  const [targetRect, setTargetRect] = useState<TargetRect | undefined>(undefined);
+  // React DOM refs require null as the initial value (standard React ref convention).
+  // eslint-disable-next-line no-null/no-null
   const primaryButtonRef = useRef<HTMLButtonElement>(null);
   // Per-instance ids so the SVG mask stays unique and the dialog can describe its body text.
   const maskId = useId();
@@ -168,6 +172,8 @@ export function Tour({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [open, onSkip]);
 
+  // React component must return null to render nothing.
+  // eslint-disable-next-line no-null/no-null
   if (!open || !currentStep || !targetRect) return null;
 
   const physicalSide = resolvePhysicalSide(currentStep.side ?? 'bottom');
@@ -190,7 +196,13 @@ export function Tour({
       {/* SVG spotlight mask — dims the page except around the target element. */}
       <svg
         aria-hidden="true"
-        style={{ position: 'fixed', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+        }}
       >
         <defs>
           <mask id={maskId}>
