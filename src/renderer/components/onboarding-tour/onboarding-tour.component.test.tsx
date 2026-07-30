@@ -6,9 +6,30 @@ import type { FirstRunStatus } from '@renderer/services/first-run-store';
 import type { TourProps, TourStep } from 'platform-bible-react';
 import { OnboardingTour } from './onboarding-tour.component';
 
+// jsdom does not implement window.matchMedia; theme.service-host.ts calls it at module init (via
+// papi-frontend.service.ts). vi.hoisted runs before any imports, so the stub is in place before
+// the module initialization chain reaches theme.service-host.ts.
+// Precedent: notification-display.test.tsx and share-layout.dialog.test.tsx use the same stub.
+vi.hoisted(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: undefined,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+});
+
 // Mutable knobs the mocks read, so each test can set the scenario before rendering.
 let mockStatus: FirstRunStatus = { kind: 'app' };
 let mockIsPowerMode = false;
+let mockIsLocalizationLoading = false;
 
 vi.mock('@renderer/services/first-run-store', () => ({
   getFirstRunStatus: () => mockStatus,
@@ -21,7 +42,10 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 
 // useLocalizedStrings returns [strings, isLoading] — mirror that shape; echo keys as values.
 vi.mock('@renderer/hooks/papi-hooks', () => ({
-  useLocalizedStrings: (keys: string[]) => [Object.fromEntries(keys.map((k) => [k, k])), false],
+  useLocalizedStrings: (keys: string[]) => [
+    Object.fromEntries(keys.map((k) => [k, k])),
+    mockIsLocalizationLoading,
+  ],
 }));
 
 // Mock Tour so we can assert what OnboardingTour hands it without a real DOM/spotlight.
@@ -46,6 +70,7 @@ const TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 beforeEach(() => {
   mockStatus = { kind: 'app' };
   mockIsPowerMode = false;
+  mockIsLocalizationLoading = false;
   localStorage.removeItem(TOUR_DONE_KEY);
 });
 
@@ -81,8 +106,26 @@ describe('OnboardingTour', () => {
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
+  it('does not render while strings are still loading (prevents raw-key flash)', () => {
+    mockIsLocalizationLoading = true;
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
   it('does not render while the app is still gated (wizard/loading)', () => {
     mockStatus = { kind: 'wizard', step: 'language' };
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render while first-run status is still loading', () => {
+    mockStatus = { kind: 'loading' };
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('does not render when first-run status is error', () => {
+    mockStatus = { kind: 'error' };
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
