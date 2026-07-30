@@ -23,7 +23,7 @@ import type {
   EffectiveResourceReferenceList,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ComponentProps, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import { isDblResourceReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
@@ -165,6 +165,7 @@ export function ModelTextPanel({
 
   const [isSelecting, setIsSelecting] = useState(false);
   const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
+  const moreInfoBodyId = useId();
 
   // Auto-install a matched-but-uninstalled configured model text (shared with the resource panel);
   // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
@@ -388,6 +389,8 @@ export function ModelTextPanel({
             <button
               type="button"
               className="tw:text-sm tw:text-primary tw:underline tw:cursor-pointer"
+              aria-expanded={isMoreInfoOpen}
+              aria-controls={moreInfoBodyId}
               onClick={() => setIsMoreInfoOpen((prev) => !prev)}
             >
               {isMoreInfoOpen
@@ -395,7 +398,7 @@ export function ModelTextPanel({
                 : localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
             </button>
             {isMoreInfoOpen && (
-              <p className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+              <p id={moreInfoBodyId} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
                 {localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
               </p>
             )}
