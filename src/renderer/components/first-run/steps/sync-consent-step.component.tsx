@@ -77,7 +77,9 @@ function SyncConsentStep({
         </Button>
       }
     >
-      <p>{strings['%firstRun_step_syncConsent_body%']}</p>
+      <p className="tw:text-sm tw:text-muted-foreground">
+        {strings['%firstRun_step_syncConsent_body%']}
+      </p>
     </WizardStepForm>
   );
 }

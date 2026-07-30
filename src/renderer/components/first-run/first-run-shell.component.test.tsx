@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { ComponentType, ReactNode, useEffect } from 'react';
+import { ChangeEvent, ComponentType, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { FirstRunStepProps } from './first-run-step-props.model';
@@ -10,7 +10,13 @@ import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.compon
 
 vi.mock('@renderer/services/first-run-store', () => ({
   completeFirstRun: vi.fn(),
+  // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
+  markJustRegistered: vi.fn(),
+}));
+vi.mock('lucide-react', () => ({
+  CircleCheck: () => null,
+  AlertCircle: () => null,
 }));
 // SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
 // shell tests exercise navigation wiring without a live PAPI backend.
@@ -35,6 +41,20 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
       '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
       '%product_name%': 'Platform.Bible',
+      // IdentifyStep strings (used by the entry-step handshake integration test)
+      '%firstRun_step_identify_heading%': 'Enter your registration information',
+      '%firstRun_step_identify_registryHelp%': "Can't find your registration code?",
+      '%firstRun_step_identify_registryLink%': 'Visit Paratext Registry',
+      '%firstRun_step_identify_validatingCode%': 'Checking your registration…',
+      '%paratextRegistration_label_registrationName%': 'Registration name',
+      '%paratextRegistration_label_registrationCode%': 'Registration code',
+      '%paratextRegistration_alert_validRegistration%': 'Registration accepted',
+      '%paratextRegistration_alert_invalidRegistration%': 'Not found',
+      '%paratextRegistration_alert_invalidRegistration_description%': 'Check name and code.',
+      '%paratextRegistration_button_saveAndRestart%': 'Save and restart',
+      '%paratextRegistration_button_restarting%': 'Restarting...',
+      '%paratextRegistration_warning_invalid_registration_length%': 'Code must be 30 hex chars.',
+      '%general_error_title%': 'Error',
     },
     false,
   ]),
@@ -48,6 +68,7 @@ vi.mock('@shared/services/network.service', () => ({
 // Mock platform-bible-react to avoid the React version conflict that arises when
 // lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
 // Button must forward onClick/disabled; useEvent must subscribe/unsubscribe via effects.
+// Alert/AlertTitle/AlertDescription/Input are also mocked for tests that render real step components.
 vi.mock('platform-bible-react', () => {
   function ButtonStub({
     children,
@@ -74,7 +95,25 @@ vi.mock('platform-bible-react', () => {
     return <div role="progressbar" aria-valuenow={value} aria-label={ariaLabel} />;
   }
   return {
+    Alert: ({ children, variant }: { children: ReactNode; variant?: string }) => (
+      <div role="alert" data-variant={variant}>
+        {children}
+      </div>
+    ),
+    AlertTitle: ({ children }: { children: ReactNode }) => <strong>{children}</strong>,
+    AlertDescription: ({ children }: { children: ReactNode }) => <span>{children}</span>,
     Button: ButtonStub,
+    Input: ({
+      id,
+      value,
+      onChange,
+      ...rest
+    }: {
+      id?: string;
+      value?: string;
+      onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+      [key: string]: unknown;
+    }) => <input id={id} value={value} onChange={onChange} {...rest} />,
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
     // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
@@ -479,5 +518,14 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="syncConsent" />);
     // formatReplacementString fills {stepNumber} → 4, {stepCount} → 4 (NUMBERED_STEPS.length).
     expect(screen.getByText('Step 4 of 4')).toBeInTheDocument();
+  });
+
+  it('hides shell Next when real IdentifyStep mounts at the entry step (setCanProceed handshake)', async () => {
+    // IdentifyStep calls setCanProceed(undefined) via useLayoutEffect — verifies the shell wires
+    // it correctly and that the real component's mount handshake suppresses Next.
+    render(<FirstRunShell entryStep="identify" stepComponents={DEFAULT_STEP_COMPONENTS} />);
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
+    );
   });
 });
