@@ -3,6 +3,11 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
 import { findHelloRock3Frame } from './overlay-helpers';
 
+// The Hello Rock3 webview's dock tab is reachable in the simple-mode layout these flows were
+// authored against; under the power-mode default a card dock panel stacks over that tab strip
+// and intercepts the click.
+test.use({ interfaceMode: 'simple' });
+
 /** Click the command palette trigger button and wait for the palette to appear in the parent doc. */
 async function openCommandPalette(mainPage: Page, frame: Frame) {
   const trigger = frame.locator('[data-testid="command-palette-trigger"]');
