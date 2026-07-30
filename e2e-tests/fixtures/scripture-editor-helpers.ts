@@ -205,12 +205,27 @@ export async function openEditableScriptureEditorForProject(
   );
 }
 
-/** Navigate the main toolbar's book-chapter-verse control (drives scroll group A). */
+/**
+ * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
+ *
+ * Commits with Enter only AFTER cmdk's highlighted (`data-selected`) item is the top match for the
+ * typed reference: cmdk moves its highlight asynchronously after the input changes, so an immediate
+ * Enter can race it and activate the previously-highlighted book instead (observed as "typed EXO
+ * 2:3, still on Genesis 1:1"). The `\b` anchor keeps a wrong-chapter highlight from false-matching
+ * (e.g. "MRK 4\b" accepts "MRK 4:1" but rejects "MRK 40:1").
+ */
 export async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
   await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
+  const highlightedTopMatch = mainPage.locator(
+    '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
+    { hasText: new RegExp(`${reference}\\b`, 'i') },
+  );
+  await highlightedTopMatch.waitFor({ timeout: 10_000 });
   await input.press('Enter');
+  // The popover closing confirms the commit was accepted before callers assert on the outcome.
+  await input.waitFor({ state: 'hidden', timeout: 10_000 });
 }
 
 /**

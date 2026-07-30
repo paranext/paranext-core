@@ -1,6 +1,9 @@
 import { test, expect } from '../../../fixtures/comment.fixture';
 import { waitForAppReady } from '../../../fixtures/helpers';
-import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
+import {
+  navigateToolbarBcv,
+  openScriptureEditorForProject,
+} from '../../../fixtures/scripture-editor-helpers';
 import {
   cleanupCommentTestProject,
   createCommentTestProject,
@@ -57,22 +60,15 @@ test.describe('verse navigation keyboard shortcuts', () => {
 
     // Navigate to a reference that is NOT the app default (GEN 1:1) first, so the assertion
     // proves the submit flow actually changes state — asserting only the default reference
-    // could pass even if submit silently broke.
-    await trigger.click();
-    let searchInput = mainPage.locator(BCV_SEARCH_INPUT);
-    await expect(searchInput).toBeVisible();
-    await searchInput.fill('EXO 2:3');
-    await mainPage.keyboard.press('Enter');
+    // could pass even if submit silently broke. The helper waits out cmdk's async highlight
+    // before committing (an immediate Enter activates the PREVIOUS highlight).
+    await navigateToolbarBcv(mainPage, 'EXO 2:3');
     await expect(trigger).toContainText('2:3');
     const exodusLabel = (await trigger.innerText()).trim();
 
     // Now navigate back to GEN 1:1 — a second real transition (book, chapter, and verse all
     // change), asserting both the chapter:verse tail and the Genesis book name
-    await trigger.click();
-    searchInput = mainPage.locator(BCV_SEARCH_INPUT);
-    await expect(searchInput).toBeVisible();
-    await searchInput.fill('GEN 1:1');
-    await mainPage.keyboard.press('Enter');
+    await navigateToolbarBcv(mainPage, 'GEN 1:1');
     await expect(trigger).toContainText('1:1');
     await expect(trigger).toContainText(/Genesis|GEN/);
     const genesisLabel = (await trigger.innerText()).trim();
@@ -103,11 +99,7 @@ test.describe('verse navigation keyboard shortcuts', () => {
     await expect(trigger).toBeEnabled({ timeout: 15_000 });
 
     // Normalize to a known reference via the UI so navigation targets are predictable
-    await trigger.click();
-    const searchInput = mainPage.locator(BCV_SEARCH_INPUT);
-    await expect(searchInput).toBeVisible();
-    await searchInput.fill('GEN 1:1');
-    await mainPage.keyboard.press('Enter');
+    await navigateToolbarBcv(mainPage, 'GEN 1:1');
     await expect(trigger).toContainText('1:1');
     const baseLabel = (await trigger.innerText()).trim();
 
