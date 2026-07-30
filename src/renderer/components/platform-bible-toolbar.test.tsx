@@ -230,13 +230,16 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('is in the DOM but hidden and non-interactive while isSendReceiveAvailable is loading', async () => {
+  it('is visible and interactive while isSendReceiveAvailable is unresolved (fail-open)', async () => {
+    // PT-4007: while the availability probe hasn't resolved — e.g. the extension host is
+    // busy/hung during a startup auto-sync — the Sync button must stay visible, since send/receive
+    // is available. Only a confirmed `false` hides it.
     vi.mocked(sendCommand).mockImplementation(
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       (async (commandName: string) => {
         if (commandName === 'platformGetResources.isSendReceiveAvailable')
-          return new Promise<never>(() => {}); // Never resolves — keeps component in loading state
+          return new Promise<never>(() => {}); // Never resolves — probe stays unknown
         if (commandName === 'platform.getOSPlatform') return 'win32';
         if (commandName === 'platform.isFullScreen') return false;
         return undefined;
@@ -245,13 +248,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
     render(<PlatformBibleToolbar />);
-    // Not reachable via accessibility tree (aria-hidden) or keyboard (tabIndex=-1)
-    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
-    // But physically present in the DOM, reserving layout space (tw:invisible)
-    const loadingBtn = document.querySelector('button[data-testid="toolbar-sync-button"]');
-    expect(loadingBtn).toBeInTheDocument();
-    expect(loadingBtn).toHaveAttribute('aria-hidden', 'true');
-    expect(loadingBtn).toHaveAttribute('tabIndex', '-1');
+    // Reachable via the accessibility tree and keyboard, and shows the idle label
+    const btn = screen.getByRole('button', { name: 'Sync' });
+    expect(btn).toBeInTheDocument();
+    expect(btn).not.toHaveAttribute('aria-hidden');
+    expect(btn).not.toHaveAttribute('tabIndex');
   });
 
   it('is rendered with correct text when isSendReceiveAvailable returns true', async () => {
