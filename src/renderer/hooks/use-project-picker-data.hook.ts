@@ -1,8 +1,9 @@
 import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
+import { setLastOpenedProject } from '@renderer/services/last-opened-project-cache';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
@@ -247,6 +248,15 @@ export function useProjectPickerData(): ProjectPickerData {
     }, [getAllMetadata]),
     [],
   );
+
+  // Cache the current Scripture editor's project so a future power → simple switch can show the
+  // overlay with the right name and build the simple layout without awaiting the recents provider
+  // + PDP chain. Best-effort: read by `handleSwitchToSimpleMode` in `web-view.service-host`.
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    const name = currentProject.fullName || currentProject.shortName || undefined;
+    setLastOpenedProject({ id: currentProject.id, name });
+  }, [currentProject?.id, currentProject?.fullName, currentProject?.shortName]);
 
   const recentIdSet = useMemo(
     () => new Set(safeRecentIds.map((id: string) => normalizeProjectId(id))),
