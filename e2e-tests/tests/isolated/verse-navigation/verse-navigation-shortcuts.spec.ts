@@ -19,6 +19,9 @@ import {
 // The top toolbar's BookChapterControl trigger is the first one in the DOM (the toolbar
 // renders above the dock layout)
 const BCV_TRIGGER = '[aria-label="book-chapter-trigger"]';
+// The control's search box is a plain input inside the Radix popper: the control renders cmdk
+// items for its grids but no cmdk input (its own unit test asserts `[cmdk-input]` is absent).
+const BCV_SEARCH_INPUT = '[data-radix-popper-content-wrapper] input';
 
 /** Chapter:verse tail of the trigger label, e.g. "GEN 5:3" -> { chapterNum: 5, verseNum: 3 } */
 function parseChapterVerse(label: string): { chapterNum: number; verseNum: number } {
@@ -56,7 +59,7 @@ test.describe('verse navigation keyboard shortcuts', () => {
     // proves the submit flow actually changes state — asserting only the default reference
     // could pass even if submit silently broke.
     await trigger.click();
-    let searchInput = mainPage.locator('[cmdk-input]');
+    let searchInput = mainPage.locator(BCV_SEARCH_INPUT);
     await expect(searchInput).toBeVisible();
     await searchInput.fill('EXO 2:3');
     await mainPage.keyboard.press('Enter');
@@ -66,7 +69,7 @@ test.describe('verse navigation keyboard shortcuts', () => {
     // Now navigate back to GEN 1:1 — a second real transition (book, chapter, and verse all
     // change), asserting both the chapter:verse tail and the Genesis book name
     await trigger.click();
-    searchInput = mainPage.locator('[cmdk-input]');
+    searchInput = mainPage.locator(BCV_SEARCH_INPUT);
     await expect(searchInput).toBeVisible();
     await searchInput.fill('GEN 1:1');
     await mainPage.keyboard.press('Enter');
@@ -101,7 +104,7 @@ test.describe('verse navigation keyboard shortcuts', () => {
 
     // Normalize to a known reference via the UI so navigation targets are predictable
     await trigger.click();
-    const searchInput = mainPage.locator('[cmdk-input]');
+    const searchInput = mainPage.locator(BCV_SEARCH_INPUT);
     await expect(searchInput).toBeVisible();
     await searchInput.fill('GEN 1:1');
     await mainPage.keyboard.press('Enter');
@@ -130,8 +133,8 @@ test.describe('verse navigation keyboard shortcuts', () => {
 
     // Ctrl+B opens the control with the search input focused
     await mainPage.keyboard.press('Control+b');
-    await expect(mainPage.locator('[cmdk-input]')).toBeVisible();
-    await expect(mainPage.locator('[cmdk-input]')).toBeFocused();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeVisible();
+    await expect(mainPage.locator(BCV_SEARCH_INPUT)).toBeFocused();
     await mainPage.keyboard.press('Escape');
   });
 });

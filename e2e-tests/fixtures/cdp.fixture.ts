@@ -146,15 +146,19 @@ export const test = base.extend<CdpFixtures>({
   // Playwright fixtures require destructured parameter even when no dependencies are needed
   // eslint-disable-next-line no-empty-pattern
   mainPage: async ({}, use) => {
+    // Deadline-based connect: a refused connection fails instantly, so a fixed attempt count
+    // gives only seconds of patience while the shared app can still be cold-booting (Electron +
+    // dotnet on a slow box takes ~90s). Keep retrying until the deadline instead.
+    const connectDeadline = Date.now() + 120_000;
     let browser;
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (;;) {
       try {
         // intentional retry loop
         // eslint-disable-next-line no-await-in-loop
         browser = await chromium.connectOverCDP(CDP_URL, { timeout: 30_000 });
         break;
       } catch (err) {
-        if (attempt === 3) throw err;
+        if (Date.now() >= connectDeadline) throw err;
         // intentional retry delay
         // eslint-disable-next-line no-await-in-loop
         await new Promise<void>((resolve) => {
@@ -162,7 +166,6 @@ export const test = base.extend<CdpFixtures>({
         });
       }
     }
-    if (!browser) throw new Error('Failed to connect to CDP after 3 attempts');
 
     // Find the renderer page (not devtools) — same logic as pw-server.mjs.
     // Filter out `devtools://` AND prefer `localhost:1212` (renderer dev server) over generic
