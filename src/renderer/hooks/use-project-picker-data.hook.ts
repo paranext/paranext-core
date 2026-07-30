@@ -1,6 +1,6 @@
 import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
@@ -30,6 +30,15 @@ import { type ProjectItem } from '@renderer/components/projects/project-picker.c
  * this interface via the Scripture Extender layering PDPF, so the current project and recent
  * projects (both always scripture or resource projects) resolve from the same filtered fetch.
  */
+/** How long to wait before retrying a failed metadata fetch. */
+const METADATA_FETCH_RETRY_DELAY_MS = 5 * 1000;
+/**
+ * Maximum number of consecutive metadata fetch failures before the hook stops retrying. After this
+ * many failures the picker stays empty until the next external refresh signal (e.g. an extension
+ * reload or a PDPF registration).
+ */
+export const MAX_METADATA_FETCH_RETRIES = 3;
+
 const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
   includeProjectInterfaces: [PICKER_PROJECT_INTERFACE],
@@ -102,6 +111,13 @@ export function useProjectPickerData(): ProjectPickerData {
   const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
   const refreshActiveEditor = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
+  // When getMetadataForAllProjects rejects (e.g. a PDPF's getAvailableProjects RPC times out
+  // during startup), isRetryPending becomes true and the effect below schedules a re-fetch after
+  // METADATA_FETCH_RETRY_DELAY_MS — by which time the extension host has typically drained its
+  // queue and responds quickly. fetchRetryCountRef caps consecutive retries so a permanently
+  // unavailable host does not loop forever.
+  const [isRetryPending, setIsRetryPending] = useState(false);
+  const fetchRetryCountRef = useRef(0);
 
   const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
   useEvent(onDidOpenWebView, refreshActiveEditor);
@@ -137,6 +153,18 @@ export function useProjectPickerData(): ProjectPickerData {
     [refreshMetadata],
   );
   useEvent(onDidCreateNetworkObject, onPdpFactoryRegistered);
+  // After a failed metadata fetch, wait METADATA_FETCH_RETRY_DELAY_MS before trying again.
+  // The timer is cancelled if the hook unmounts before it fires, preventing state updates on an
+  // unmounted component and avoiding spurious fan-outs when the user closes the picker quickly.
+  useEffect(() => {
+    if (!isRetryPending) return undefined;
+    const timeout = setTimeout(() => {
+      fetchRetryCountRef.current += 1;
+      setIsRetryPending(false);
+      refreshMetadata();
+    }, METADATA_FETCH_RETRY_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [isRetryPending, refreshMetadata]);
 
   // Recent project IDs from the service — reactive, updates when user opens projects
   const [rawRecentIds, , isRecentIdsLoading] = useData(
@@ -165,11 +193,23 @@ export function useProjectPickerData(): ProjectPickerData {
       counter: metadataRefreshCounter,
       promise: projectLookupService.getMetadataForAllProjects(PICKER_METADATA_FILTER),
     };
-    // Invalidate this generation if its fetch rejects, but only if it's still the current entry so
-    // a newer generation isn't clobbered.
-    entry.promise.catch(() => {
-      if (metadataFetchRef.current === entry) metadataFetchRef.current = undefined;
-    });
+    // On success: reset the retry counter so a future transient failure gets its own retry budget.
+    // On failure (caught at the end of the chain): invalidate this generation's cache entry (so the
+    // next getAllMetadata call issues a fresh fetch rather than awaiting the poisoned promise), then
+    // schedule a retry if the budget allows.
+    entry.promise
+      .then(() => {
+        fetchRetryCountRef.current = 0;
+        return undefined;
+      })
+      .catch(() => {
+        if (metadataFetchRef.current === entry) {
+          metadataFetchRef.current = undefined;
+          if (fetchRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
+            setIsRetryPending(true);
+          }
+        }
+      });
     metadataFetchRef.current = entry;
     return entry.promise;
   }, [metadataRefreshCounter]);

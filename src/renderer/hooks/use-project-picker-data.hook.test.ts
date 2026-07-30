@@ -2,7 +2,11 @@ import { renderHook, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { EVENT_NAME_ON_DID_UPDATE_WEB_VIEW } from '@shared/services/web-view.service-model';
-import { useProjectPickerData, type ProjectPickerData } from './use-project-picker-data.hook';
+import {
+  useProjectPickerData,
+  type ProjectPickerData,
+  MAX_METADATA_FETCH_RETRIES,
+} from './use-project-picker-data.hook';
 
 // --- Mocks ---
 
@@ -629,6 +633,88 @@ describe('useProjectPickerData', () => {
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
     expect(result.current.allProjects).toHaveLength(1);
     expect(result.current.allProjects[0].id).toBe('p1');
+  });
+
+  it('heals allProjects after a timed-out metadata fetch once the retry resolves (PT-4299 timeout recovery)', async () => {
+    // Reproduces the scenario observed in console logs where getAvailableProjects times out
+    // (JSON-RPC 30-second timeout) because the extension host is overloaded at startup. The
+    // late response is discarded ("Ignoring subsequent resolution"), leaving the picker empty.
+    // After METADATA_FETCH_RETRY_DELAY_MS the hook must issue a fresh fetch — by which time the
+    // extension host has drained its queue and responds quickly.
+    vi.useFakeTimers();
+    try {
+      const { projectLookupService } = await importMocks();
+      vi.mocked(projectLookupService.getMetadataForAllProjects)
+        .mockRejectedValueOnce(new Error('JSON-RPC Request timed out'))
+        .mockResolvedValue(
+          metadataList([
+            { id: 'p1', fullName: 'Full p1', name: 'Short p1', isEditable: true },
+          ]) as never,
+        );
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+
+      // First fetch timed out — picker is empty
+      expect(result.current.allProjects).toHaveLength(0);
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(1);
+
+      // Advance past the retry delay
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      await settle(result);
+
+      // Retry resolved — picker healed
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(2);
+      expect(result.current.allProjects).toHaveLength(1);
+      expect(result.current.allProjects[0].id).toBe('p1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops retrying metadata after MAX_METADATA_FETCH_RETRIES consecutive failures', async () => {
+    // Guards against an infinite retry loop when the extension host is permanently unavailable.
+    // After MAX_METADATA_FETCH_RETRIES failures the hook must stop scheduling retries.
+    vi.useFakeTimers();
+    try {
+      const { projectLookupService } = await importMocks();
+      vi.mocked(projectLookupService.getMetadataForAllProjects).mockRejectedValue(
+        new Error('Persistent failure'),
+      );
+
+      const { result } = renderHook(() => useProjectPickerData());
+      await settle(result);
+
+      // Drive through all allowed retries
+      for (let i = 0; i < MAX_METADATA_FETCH_RETRIES; i += 1) {
+        // Each iteration must be sequential: advance the timer first, then drain the resulting
+        // async work before the next retry cycle starts.
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          await vi.runAllTimersAsync();
+        });
+        // Same reason as above: sequential drain after each timer advance.
+        // eslint-disable-next-line no-await-in-loop
+        await settle(result);
+      }
+
+      const callCountAfterExhaustion = vi.mocked(projectLookupService.getMetadataForAllProjects)
+        .mock.calls.length;
+      expect(callCountAfterExhaustion).toBe(1 + MAX_METADATA_FETCH_RETRIES);
+
+      // One more timer advance must NOT trigger an additional fetch
+      await act(async () => {
+        await vi.runAllTimersAsync();
+      });
+      await settle(result);
+      expect(vi.mocked(projectLookupService.getMetadataForAllProjects)).toHaveBeenCalledTimes(
+        callCountAfterExhaustion,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not re-fetch metadata when object:onDidCreateNetworkObject fires for a non-PDPF network object', async () => {
