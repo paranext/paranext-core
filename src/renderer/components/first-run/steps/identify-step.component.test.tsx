@@ -61,13 +61,24 @@ vi.mock('platform-bible-react', () => ({
     id,
     value,
     onChange,
-    ...rest
+    'aria-invalid': ariaInvalid,
+    'aria-describedby': ariaDescribedBy,
   }: {
+    [key: string]: unknown;
     id?: string;
     value?: string;
     onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
-    [key: string]: unknown;
-  }) => <input id={id} value={value} onChange={onChange} {...rest} />,
+    'aria-invalid'?: boolean | 'false' | 'true' | 'grammar' | 'spelling';
+    'aria-describedby'?: string;
+  }) => (
+    <input
+      id={id}
+      value={value}
+      onChange={onChange}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+    />
+  ),
   Spinner: () => <span data-testid="spinner" />,
 }));
 vi.mock('lucide-react', () => ({

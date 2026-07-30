@@ -15,8 +15,8 @@ vi.mock('@renderer/services/first-run-store', () => ({
   markJustRegistered: vi.fn(),
 }));
 vi.mock('lucide-react', () => ({
-  CircleCheck: () => null,
-  AlertCircle: () => null,
+  CircleCheck: () => <span data-testid="circle-check-icon" />,
+  AlertCircle: () => <span data-testid="alert-circle-icon" />,
 }));
 // SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
 // shell tests exercise navigation wiring without a live PAPI backend.
@@ -105,13 +105,24 @@ vi.mock('platform-bible-react', () => {
       id,
       value,
       onChange,
-      ...rest
+      'aria-invalid': ariaInvalid,
+      'aria-describedby': ariaDescribedBy,
     }: {
+      [key: string]: unknown;
       id?: string;
       value?: string;
       onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
-      [key: string]: unknown;
-    }) => <input id={id} value={value} onChange={onChange} {...rest} />,
+      'aria-invalid'?: boolean | 'false' | 'true' | 'grammar' | 'spelling';
+      'aria-describedby'?: string;
+    }) => (
+      <input
+        id={id}
+        value={value}
+        onChange={onChange}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+      />
+    ),
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
     useEvent: (
