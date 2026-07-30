@@ -1,4 +1,5 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { isDemoMode } from '@renderer/services/first-run-store';
 import { sendCommand } from '@shared/services/command.service';
 import { Button, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
@@ -12,8 +13,12 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_button_sync%',
 ];
 
+// Demo/UX mode: resolve immediately without touching the real S/R backend so the wizard
+// is fully click-through-able end-to-end (see first-run-store.ts isDemoMode).
 const defaultSyncFn = (): Promise<void> =>
-  sendCommand('paratextBibleSendReceive.syncProjects', undefined);
+  isDemoMode()
+    ? Promise.resolve()
+    : sendCommand('paratextBibleSendReceive.syncProjects', undefined);
 
 /**
  * Sync consent wizard step. Presents "Sync" as the primary action; skip is surfaced by the shell
