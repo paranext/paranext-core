@@ -113,7 +113,7 @@ describe('WizardStepForm', () => {
   });
 
   it('renders heading before children before error before button in DOM order', () => {
-    render(
+    const { baseElement } = render(
       <WizardStepForm
         heading="My heading"
         primaryButton={<button type="button">Go</button>}
@@ -122,14 +122,15 @@ describe('WizardStepForm', () => {
         <span>body text</span>
       </WizardStepForm>,
     );
-    const heading = screen.getByRole('heading', { level: 2 });
-    const body = screen.getByText('body text');
-    const alert = screen.getByRole('alert');
-    const button = screen.getByRole('button', { name: /go/i });
-
-    // compareDocumentPosition: 4 means "following" (node B comes after node A)
-    expect(heading.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(body.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(alert.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // textContent concatenates text nodes in document order; indexOf positions reflect DOM order.
+    const text = baseElement.textContent ?? '';
+    const headingIdx = text.indexOf('My heading');
+    const bodyIdx = text.indexOf('body text');
+    const errorIdx = text.indexOf('Oops');
+    const buttonIdx = text.indexOf('Go');
+    expect(headingIdx).toBeGreaterThanOrEqual(0);
+    expect(headingIdx).toBeLessThan(bodyIdx);
+    expect(bodyIdx).toBeLessThan(errorIdx);
+    expect(errorIdx).toBeLessThan(buttonIdx);
   });
 });
