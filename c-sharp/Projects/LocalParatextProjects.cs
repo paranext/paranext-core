@@ -55,7 +55,11 @@ internal class LocalParatextProjects : IDisposable
 
     // Set first in Dispose (before the watcher/timer teardown it guards), so an in-flight
     // AttachContainerWatcher/event-handler thread racing the Dispose sees it and backs off instead
-    // of registering a watcher into (or touching a timer of) an already-disposed instance.
+    // of registering a watcher into (or touching a timer of) an already-disposed instance. The
+    // debounce-timer schedulers read it INSIDE their debounce lock — the same lock Dispose tears
+    // the timer down under — so check-then-schedule is atomic with the teardown; a bare read
+    // before the lock would leave a window to Change a disposed timer, or to construct a new
+    // timer after Dispose that nothing ever disposes.
     private volatile bool _disposed;
 
     private Timer? _projectChangeDebounceTimer;
@@ -199,6 +203,48 @@ internal class LocalParatextProjects : IDisposable
     }
 
     /// <summary>
+    /// Refresh ParatextData's in-memory project list from disk
+    /// (<see cref="ScrTextCollection.RefreshScrTexts()"/>) and then ask project-list consumers to
+    /// refetch via <see cref="NotifyProjectsChanged"/>. For writers whose on-disk changes are
+    /// invisible to the project-directory watcher — the watcher is non-recursive, so an in-place
+    /// <c>Settings.xml</c> rewrite or a mid-clone state landing during a Send/Receive never
+    /// reaches it (see <see cref="StartWatchingProjectDirectory"/>) — and that therefore must both
+    /// re-read the project set and notify inline themselves. Also the funnel for the watcher path
+    /// (<see cref="OnProjectDirectoriesChanged"/> delegates here). Best-effort: a refresh failure
+    /// must not suppress the notify (a stale collection is better than a permanently stale list).
+    /// No-op until <see cref="Initialize"/> completes — refreshing an uninitialised
+    /// <see cref="ScrTextCollection"/> would broadcast a bogus project-list change.
+    /// Virtual so tests can substitute the ParatextData refresh.
+    /// </summary>
+    public virtual void RefreshAndNotifyProjectsChanged()
+    {
+        // Post-Dispose there is no consumer left to serve, so skip the refresh. Best-effort
+        // early-out only: the notify debounce timer itself is guarded atomically inside
+        // NotifyProjectsChanged (checked under _notifyLock), so a call racing Dispose past this
+        // check is still safe.
+        if (_disposed)
+            return;
+        // Pre-Initialize there is nothing to refresh yet: the ScrTextCollection is only set up
+        // once Initialize() runs (ParatextGlobals.Initialize), so a caller landing early (e.g. a
+        // sync completing before startup initialization finishes) would refresh an uninitialised
+        // collection and broadcast a bogus project-list change. Initialize's own scan supersedes
+        // any call skipped here. Lock-free read matches Initialize's own fast-path check.
+        if (!_isInitialized)
+            return;
+        try
+        {
+            ScrTextCollection.RefreshScrTexts();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"RefreshScrTexts failed during a project-list refresh; notifying consumers anyway: {ex}"
+            );
+        }
+        NotifyProjectsChanged();
+    }
+
+    /// <summary>
     /// Ask project-list consumers to refetch their cheap metadata by emitting
     /// <see cref="PROJECTS_CHANGED_EVENT_TYPE"/>. Call after a project is added/removed or after one
     /// of its display-backing settings changes. Debounced (see <see cref="s_notifyDebounce"/>) so a
@@ -211,12 +257,16 @@ internal class LocalParatextProjects : IDisposable
     {
         if (_papiClient == null)
             return;
-        // Symmetric with ScheduleProjectDirectoriesChanged: a racing post-Dispose call must not
-        // touch a debounce timer that may already be disposed.
-        if (_disposed)
-            return;
         lock (_notifyLock)
         {
+            // Read under the lock — Dispose tears the timer down under this same lock — so
+            // check-then-schedule is atomic with the teardown. Checked before the lock, a call
+            // racing Dispose could Change an already-disposed timer (ObjectDisposedException)
+            // or, if no notify had ever been scheduled, construct a brand-new timer AFTER
+            // Dispose that nothing ever disposes and that later emits against a disposing
+            // PapiClient.
+            if (_disposed)
+                return;
             _notifyDebounceTimer ??= new Timer(_ => EmitProjectsChanged());
             _notifyDebounceTimer.Change(s_notifyDebounce, Timeout.InfiniteTimeSpan);
         }
@@ -224,6 +274,11 @@ internal class LocalParatextProjects : IDisposable
 
     private void EmitProjectsChanged()
     {
+        // Second line of defence for a callback already in flight when Dispose ran —
+        // Timer.Dispose() does not wait for in-flight callbacks — so a dying timer does not
+        // emit against a disposing PapiClient.
+        if (_disposed)
+            return;
         if (_papiClient == null)
             return;
         ThreadingUtils.ObserveTaskLoggingErrorsToStderr(
@@ -439,40 +494,34 @@ internal class LocalParatextProjects : IDisposable
 
     private void ScheduleProjectDirectoriesChanged()
     {
-        // A watcher event/error can race Dispose (see Dispose's comment); back off rather than
-        // touching a debounce timer that may already be disposed.
-        if (_disposed)
-            return;
         // Debounce: a clone/install fires a burst of events; collapse them into one refresh+notify.
         lock (_projectChangeLock)
         {
+            // A watcher event/error can race Dispose; read under the lock — Dispose tears this
+            // timer down under this same lock — so check-then-schedule is atomic with the
+            // teardown. Same shape and rationale as NotifyProjectsChanged.
+            if (_disposed)
+                return;
             _projectChangeDebounceTimer ??= new Timer(_ => OnProjectDirectoriesChanged());
             _projectChangeDebounceTimer.Change(s_projectChangeDebounce, Timeout.InfiniteTimeSpan);
         }
     }
 
     /// <summary>
-    /// Run (debounced, on a timer thread) when a project was added/removed on disk. Refreshes
-    /// ParatextData's collection so the change is reflected, then notifies consumers. Best-effort: a
-    /// refresh failure must not suppress the notify (a stale collection is better than a permanently
-    /// stale list). Virtual so tests can observe firings without mutating the global
-    /// <c>ScrTextCollection</c>.
+    /// Run (debounced, on a timer thread) when a project was added/removed on disk. Delegates to
+    /// <see cref="RefreshAndNotifyProjectsChanged"/> — the shared refresh-then-notify funnel,
+    /// including its best-effort contract (a refresh failure must not suppress the notify). Virtual
+    /// so tests can observe firings without mutating the global <c>ScrTextCollection</c>.
     /// </summary>
-    protected virtual void OnProjectDirectoriesChanged()
-    {
-        try
-        {
-            ScrTextCollection.RefreshScrTexts();
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"RefreshScrTexts failed after a project directory change: {ex}"
-            );
-        }
-        NotifyProjectsChanged();
-    }
+    protected virtual void OnProjectDirectoriesChanged() => RefreshAndNotifyProjectsChanged();
 
+    /// <summary>
+    /// Tear down the watchers and debounce timers. Safe to race with watcher events and notify
+    /// calls: <see cref="_disposed"/> is set first, and each debounce timer is disposed under the
+    /// same lock its scheduler checks <see cref="_disposed"/> under, so a racing scheduler either
+    /// backs off or completes its schedule entirely before the teardown — it can never Change a
+    /// disposed timer nor construct a new one after disposal.
+    /// </summary>
     public virtual void Dispose()
     {
         // Set first (before any teardown below) so a racing AttachContainerWatcher/Register or a
@@ -487,8 +536,15 @@ internal class LocalParatextProjects : IDisposable
             _watchers.Clear();
             _watchedContainerPaths.Clear();
         }
-        _projectChangeDebounceTimer?.Dispose();
-        _notifyDebounceTimer?.Dispose();
+        // Each timer's teardown happens under the same lock its scheduler checks _disposed under
+        // (see the summary above). Deadlock-free: no timer callback holds either lock while
+        // waiting on Dispose (EmitProjectsChanged takes no locks; OnProjectDirectoriesChanged only
+        // briefly re-takes _notifyLock inside NotifyProjectsChanged), and Timer.Dispose() does not
+        // block on in-flight callbacks.
+        lock (_projectChangeLock)
+            _projectChangeDebounceTimer?.Dispose();
+        lock (_notifyLock)
+            _notifyDebounceTimer?.Dispose();
         GC.SuppressFinalize(this);
     }
 

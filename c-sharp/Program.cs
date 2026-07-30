@@ -90,7 +90,8 @@ public static class Program
             var paratextSendReceiveService = new ParatextProjectSendReceiveService(
                 papi,
                 paratextFactory,
-                appInfo
+                appInfo,
+                paratextProjects
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);

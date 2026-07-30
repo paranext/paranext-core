@@ -1,3 +1,6 @@
+using Paranext.DataProvider.NetworkObjects.Documentation;
+using static Paranext.DataProvider.NetworkObjects.Documentation.ExperimentalMethodDocumentation;
+
 namespace Paranext.DataProvider.Projects.SendReceive;
 
 /// <summary>
@@ -21,9 +24,12 @@ namespace Paranext.DataProvider.Projects.SendReceive;
 /// </list>
 /// </para>
 /// <para>
-/// <b>Inert in open-source Platform.Bible.</b> Nothing arms <see cref="SendReceiveWriteLock"/> in
-/// public core, so <see cref="SendReceiveWriteLock.BlockStateChanged"/> never fires and the command
-/// always returns a not-blocking snapshot. The service is truthful either way — it just has nothing
+/// <b>The gate never arms in open-source Platform.Bible.</b> Nothing arms
+/// <see cref="SendReceiveWriteLock"/> in public core, so
+/// <see cref="SendReceiveWriteLock.BlockStateChanged"/> never fires there and the command always
+/// returns a not-blocking snapshot. Every build — plain Platform.Bible included — still emits the
+/// event exactly once per backend (re)start: the not-blocking baseline snapshot at the end of
+/// <see cref="InitializeAsync"/>. The service is truthful either way — it just has nothing further
 /// to report until the Paratext 10 Studio patch brackets a sync with the gate (PT-4210).
 /// </para>
 /// <para>
@@ -65,11 +71,54 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
     /// </summary>
     private const string RegisterEventMethod = "network:registerEvent";
 
+    /// <summary>
+    /// OpenRPC documentation sent along with the <see cref="BlockStateChangedEvent"/> registration
+    /// (the C# counterpart of the TypeScript <c>SingleNotificationDocumentation</c> second argument
+    /// to <c>network:registerEvent</c>). The event is @experimental (see the TS declaration), so
+    /// this carries the <c>x-experimental</c> wire marker.
+    /// </summary>
+    private static readonly OpenRpcSingleNotificationDocumentation s_blockStateChangedEventDocumentation =
+        new()
+        {
+            Notification = new()
+            {
+                Experimental = true,
+                Summary =
+                    "Emitted whenever the S/R write gate arms or disarms, carrying the gate's "
+                    + "full current block-state snapshot ({ isBlocking, projectIds }).",
+                Params =
+                [
+                    new()
+                    {
+                        Name = "state",
+                        Summary = "The write gate's current block-state snapshot",
+                        Required = true,
+                        Schema = new() { Type = "object" },
+                    },
+                ],
+            },
+        };
+
     private PapiClient PapiClient { get; } = papiClient;
 
+    /// <summary>
+    /// Registers both wire surfaces and then emits the gate's baseline snapshot, awaited, so the
+    /// emit attempt completes before this method — and therefore before the startup barrier
+    /// (Program.cs's critical <c>Task.WhenAll</c>) — returns. That is deliberately NOT a
+    /// baseline-before-any-arm guarantee: the S/R command registrations are members of the SAME
+    /// barrier, and <c>Task.WhenAll</c> does not order its members, so a command dispatched
+    /// mid-barrier can arm the gate and emit before the baseline goes out. That ordering is safe
+    /// without being prevented, because the baseline is a LIVE read —
+    /// <see cref="SendReceiveWriteLock.GetBlockState"/> evaluated at emit time — so a baseline that
+    /// loses the race carries the armed state rather than overwriting it with a stale not-blocking
+    /// snapshot. What the await does buy: any arm AFTER the barrier emits strictly behind the
+    /// already-transmitted baseline (one connection, FIFO delivery) for every subscriber connected
+    /// throughout. A subscriber that connects later gets no replay either way — it seeds via
+    /// <c>getAutoSyncBlocking</c>.
+    /// </summary>
     public async Task InitializeAsync()
     {
-        // Subscribe to the gate FIRST, before the registration round-trip below, so no transition
+        // Subscribe to the gate FIRST, before the registration round-trips below, so no transition
         // can slip through unsubscribed while the network:registerEvent request is in flight. A
         // transition that beats registration just announces unregistered (main logs its once-per-name
         // deprecation warning), which is the right trade for the single block-state signal — a missed
@@ -81,34 +130,75 @@ internal class SendReceiveBlockNotifierService(PapiClient papiClient)
         // Register the event with main's central event registry (best-effort — on rejection or
         // failure, log and continue; emitting unregistered still works, and startup must never break
         // over this). We accept that a transition arriving during this await may announce before the
-        // registration completes; see the subscribe-first rationale above.
+        // registration completes; see the subscribe-first rationale above. A local function so the
+        // try/catch travels with the request into the Task.WhenAll below.
+        async Task RegisterEventBestEffortAsync()
+        {
+            try
+            {
+                bool accepted = await PapiClient.SendRequestAsync<bool>(
+                    RegisterEventMethod,
+                    [BlockStateChangedEvent, s_blockStateChangedEventDocumentation]
+                );
+                if (!accepted)
+                    Console.Error.WriteLine(
+                        $"Central registry rejected network event '{BlockStateChangedEvent}' (already "
+                            + "registered by another process?); announcements will warn as unregistered"
+                    );
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine(
+                    $"Failed to register network event '{BlockStateChangedEvent}' with the central "
+                        + $"registry; announcements will warn as unregistered. {ex}"
+                );
+            }
+        }
+
+        // The command registration serves the pull surface: a renderer reads the current snapshot on
+        // demand instead of waiting for the next transition (GetBlockState returns the snapshot the
+        // handler serializes straight back to the caller). Run both registrations in parallel — each
+        // is an independent round-trip to main, and awaiting them serially would let one stalled
+        // response stack a second full request timeout onto the startup barrier.
+        await Task.WhenAll(
+            RegisterEventBestEffortAsync(),
+            PapiClient.RegisterRequestHandlerAsync(
+                GetAutoSyncBlockingCommand,
+                SendReceiveWriteLock.GetBlockState,
+                null,
+                Create(
+                    "Returns the S/R write gate's current block-state snapshot ({ isBlocking, "
+                        + "projectIds }) so a renderer can seed its blocking state on demand instead of "
+                        + "waiting for the next onSyncWriteLockChanged transition.",
+                    result: ResultOf("object", "The write gate's current block-state snapshot")
+                )
+            )
+        );
+
+        // Emit the current gate snapshot once now that both surfaces are up, so a subscriber that
+        // was already listening across a backend restart converges on the fresh process's state
+        // instead of keeping whatever stale state it last saw. AWAITED — unlike the event-driven
+        // forwards through OnBlockStateChanged, which must never delay the gate's raise — so the
+        // emit attempt completes before InitializeAsync (and so the startup barrier) returns, and
+        // any gate arm AFTER the barrier emits strictly behind it (one connection, FIFO). An arm
+        // DURING the barrier can still emit first — see this method's doc for why that ordering is
+        // safe (the GetBlockState() below is a live read at emit time, so a baseline that loses
+        // that race reports the armed state, not a stale not-blocking one). Still best-effort like
+        // the registration above: a failed emit is logged, not thrown, because the next gate
+        // transition re-converges the subscriber and startup must never break over a notify.
         try
         {
-            bool accepted = await PapiClient.SendRequestAsync<bool>(
-                RegisterEventMethod,
-                [BlockStateChangedEvent]
+            await PapiClient.SendEventAsync(
+                BlockStateChangedEvent,
+                SendReceiveWriteLock.GetBlockState()
             );
-            if (!accepted)
-                Console.Error.WriteLine(
-                    $"Central registry rejected network event '{BlockStateChangedEvent}' (already "
-                        + "registered by another process?); announcements will warn as unregistered"
-                );
         }
         catch (Exception ex)
         {
             Console.Error.WriteLine(
-                $"Failed to register network event '{BlockStateChangedEvent}' with the central "
-                    + $"registry; announcements will warn as unregistered. {ex}"
+                $"Failed to emit the baseline {BlockStateChangedEvent} snapshot: {ex}"
             );
         }
-
-        // Register the pull command so a renderer can read the current snapshot on demand instead of
-        // waiting for the next transition. GetBlockState returns the snapshot the handler serializes
-        // straight back to the caller.
-        await PapiClient.RegisterRequestHandlerAsync(
-            GetAutoSyncBlockingCommand,
-            SendReceiveWriteLock.GetBlockState
-        );
     }
 
     /// <summary>

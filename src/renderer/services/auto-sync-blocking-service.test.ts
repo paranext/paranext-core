@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getNetworkEvent, requestNoRetry } from '@shared/services/network.service';
+import type { SyncWriteLockSnapshot } from 'paratext-bible-send-receive';
+import { sendCommand } from '@shared/services/command.service';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { setBlockedProjects } from '@renderer/services/auto-sync-blocking-store';
 import { logger } from '@shared/services/logger.service';
 import { initAutoSyncBlockingService } from './auto-sync-blocking-service';
 
+vi.mock('@shared/services/command.service', () => ({
+  sendCommand: vi.fn(),
+}));
+
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(),
-  requestNoRetry: vi.fn(),
 }));
 
 vi.mock('@renderer/services/auto-sync-blocking-store', () => ({
@@ -19,6 +24,7 @@ vi.mock('@shared/services/logger.service', () => ({
 
 const SYNC_WRITE_LOCK_CHANGED_EVENT = 'paratextBibleSendReceive.onSyncWriteLockChanged';
 const LEGACY_BLOCKING_CHANGED_EVENT = 'paratextBibleSendReceive.onAutoSyncBlockingChanged';
+const GET_AUTO_SYNC_BLOCKING_COMMAND = 'paratextBibleSendReceive.getAutoSyncBlocking';
 
 /** Flushes the service's fire-and-forget seeding chain (await + then-callbacks). */
 async function flushSeeding(): Promise<void> {
@@ -57,7 +63,7 @@ describe('initAutoSyncBlockingService', () => {
     );
 
     // Default: no core serves the initial-state command (an older core / absent extension).
-    vi.mocked(requestNoRetry).mockRejectedValue(new Error('command not registered'));
+    vi.mocked(sendCommand).mockRejectedValue(new Error('command not registered'));
   });
 
   describe('event source', () => {
@@ -101,8 +107,30 @@ describe('initAutoSyncBlockingService', () => {
       expect(vi.mocked(setBlockedProjects)).toHaveBeenCalledTimes(2);
       expect(vi.mocked(setBlockedProjects)).toHaveBeenNthCalledWith(1, []);
       expect(vi.mocked(setBlockedProjects)).toHaveBeenNthCalledWith(2, []);
-      // Warn once per service lifetime, not once per malformed event.
+      // Warn once per source per service lifetime, not once per malformed event — and the message
+      // must name the source that produced the malformed payload.
       expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining(`the ${SYNC_WRITE_LOCK_CHANGED_EVENT} event`),
+      );
+    });
+
+    it('latches the malformed warning per source — init query and event each warn once', async () => {
+      vi.mocked(sendCommand).mockResolvedValue('malformed');
+      initAutoSyncBlockingService();
+      await flushSeeding(); // the malformed init-query snapshot warns, latching the query source
+      if (!capturedHandler) throw new Error('capturedHandler not set');
+      capturedHandler(undefined); // a malformed event still warns on its own latch
+      capturedHandler(undefined); // …but only once
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(logger.warn)).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining(`the ${GET_AUTO_SYNC_BLOCKING_COMMAND} init query`),
+      );
+      expect(vi.mocked(logger.warn)).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining(`the ${SYNC_WRITE_LOCK_CHANGED_EVENT} event`),
+      );
     });
 
     it('fails safe to block-none when projectIds contains a non-string', () => {
@@ -119,13 +147,18 @@ describe('initAutoSyncBlockingService', () => {
     it('queries the current blocking state on init', async () => {
       initAutoSyncBlockingService();
       await flushSeeding();
-      expect(vi.mocked(requestNoRetry)).toHaveBeenCalledWith(
-        'command:paratextBibleSendReceive.getAutoSyncBlocking',
+      expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.getAutoSyncBlocking',
       );
     });
 
     it('seeds the blocked projects when the query reports an in-flight sync (reload mid-sync)', async () => {
-      vi.mocked(requestNoRetry).mockResolvedValue({ isBlocking: true, projectIds: ['p1'] });
+      // `satisfies` pins the well-formed mocks to the seam's wire shape, so a contract change
+      // breaks these tests at compile time (deliberately-malformed mocks stay untyped).
+      vi.mocked(sendCommand).mockResolvedValue({
+        isBlocking: true,
+        projectIds: ['p1'],
+      } satisfies SyncWriteLockSnapshot);
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).toHaveBeenCalledTimes(1);
@@ -133,29 +166,42 @@ describe('initAutoSyncBlockingService', () => {
     });
 
     it('does not seed when the query reports no sync in flight', async () => {
-      vi.mocked(requestNoRetry).mockResolvedValue({ isBlocking: false, projectIds: [] });
+      vi.mocked(sendCommand).mockResolvedValue({
+        isBlocking: false,
+        projectIds: [],
+      } satisfies SyncWriteLockSnapshot);
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
     });
 
-    it('does not seed when the query result is malformed', async () => {
-      vi.mocked(requestNoRetry).mockResolvedValue('yes');
+    it('does not seed when the query result is malformed, and warns naming the query', async () => {
+      vi.mocked(sendCommand).mockResolvedValue('yes');
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining(`the ${GET_AUTO_SYNC_BLOCKING_COMMAND} init query`),
+      );
     });
 
-    it('swallows a failed query and keeps the assume-unblocked default', async () => {
-      vi.mocked(requestNoRetry).mockRejectedValue(new Error('extension absent'));
+    it('swallows a failed query, keeps the assume-unblocked default, and warns', async () => {
+      vi.mocked(sendCommand).mockRejectedValue(new Error('backend not up yet'));
       initAutoSyncBlockingService();
       await flushSeeding();
       expect(vi.mocked(setBlockedProjects)).not.toHaveBeenCalled();
+      // Warn (not debug): the command is registered by core's own backend, so a rejection is
+      // anomalous — realistically the cold-start race — and there is no re-query until PT-4265.
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining('could not read the initial blocking state'),
+      );
     });
 
     it('lets a live event win over the snapshot — no seeding after an event arrived', async () => {
       let resolveQuery: ((snapshot: unknown) => void) | undefined;
-      vi.mocked(requestNoRetry).mockImplementation(
+      vi.mocked(sendCommand).mockImplementation(
         async () =>
           new Promise((resolve) => {
             resolveQuery = resolve;
@@ -175,7 +221,7 @@ describe('initAutoSyncBlockingService', () => {
 
     it('does not seed after cleanup', async () => {
       let resolveQuery: ((snapshot: unknown) => void) | undefined;
-      vi.mocked(requestNoRetry).mockImplementation(
+      vi.mocked(sendCommand).mockImplementation(
         async () =>
           new Promise((resolve) => {
             resolveQuery = resolve;
