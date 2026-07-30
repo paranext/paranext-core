@@ -28,14 +28,17 @@ interface StuffSubscription {
 
 function createTestDataProviderHarness() {
   const subscriptions: StuffSubscription[] = [];
+  const setStuff = vi.fn(async () => true);
 
   // The hook only touches `subscribeStuff`/`setStuff`; the getter/dispose members complete the
   // shape. The cast avoids re-implementing the full network-object surface in a test double
-  // (structural typing rejects the narrower subscribe-callback parameter).
+  // (structural typing rejects the narrower subscribe-callback parameter). Typed as the loose
+  // base `IDataProvider` the generator's factory expects; the typed surface for tests is the
+  // `useTestData<TestDataProvider>()` proxy call.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const provider = {
     getStuff: vi.fn(async () => 'unused'),
-    setStuff: vi.fn(async () => true),
+    setStuff,
     subscribeStuff: vi.fn(
       (selector: TestSelector, callback: (data: string | PlatformError) => void) =>
         new Promise<UnsubscriberAsync>((resolve) => {
@@ -53,9 +56,9 @@ function createTestDataProviderHarness() {
         }),
     ),
     onDidDispose: () => () => true,
-  } as unknown as TestDataProvider;
+  } as unknown as IDataProvider;
 
-  return { provider, subscriptions };
+  return { provider, setStuff, subscriptions };
 }
 
 const selectorGen1: TestSelector = { book: 'GEN', chapterNum: 1 };
@@ -188,6 +191,6 @@ describe('createUseDataHook', () => {
       await result.current[1]?.('new text');
     });
 
-    expect(harness.provider.setStuff).toHaveBeenCalledExactlyOnceWith(selectorGen1, 'new text');
+    expect(harness.setStuff).toHaveBeenCalledExactlyOnceWith(selectorGen1, 'new text');
   });
 });
