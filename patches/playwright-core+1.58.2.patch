@@ -1,0 +1,50 @@
+diff --git a/node_modules/playwright-core/lib/server/utils/fileUtils.js b/node_modules/playwright-core/lib/server/utils/fileUtils.js
+index 1891d37..47e1491 100644
+--- a/node_modules/playwright-core/lib/server/utils/fileUtils.js
++++ b/node_modules/playwright-core/lib/server/utils/fileUtils.js
+@@ -48,9 +48,42 @@ async function mkdirIfNeeded(filePath) {
+   });
+ }
+ async function removeFolders(dirs) {
+-  return await Promise.all(dirs.map(
+-    (dir) => import_fs.default.promises.rm(dir, { recursive: true, force: true, maxRetries: 10 }).catch((e) => e)
+-  ));
++  return await Promise.all(dirs.map((dir) => removeFolderBounded(dir)));
++}
++async function removeFolderBounded(dir) {
++  // PATCH(paranext-core): node's recursive fs.rm retries "retryable" errors (EPERM,
++  // EBUSY, ENOTEMPTY, ...) at EVERY level of the tree it walks, so a non-zero
++  // `maxRetries` multiplies out to roughly retries^depth attempts with backoff.
++  //
++  // On Windows, Chromium leaves `Default/Shared Dictionary/cache` inside its temp
++  // profile with an AppContainer (LPAC) DACL that grants access only to a capability
++  // SID -- the owning user cannot even list it, so scandir on it always fails with
++  // EPERM and no amount of waiting will change that. With the original
++  // `maxRetries: 10` that turns cleanup into an effectively infinite retry loop:
++  // fs.rm never settles, its pending timers keep the event loop referenced, and the
++  // node process never exits. That is what hangs `vitest --project=storybook` (and
++  // therefore `npm test`) forever after every test has already passed.
++  //
++  // Use `maxRetries: 0` so node fails fast instead of recursing into that loop, and
++  // do our own bounded, linear retry to keep the resilience the original intended
++  // for genuinely transient locks (a browser process still releasing its handles).
++  // A permission denial is returned rather than retried -- it cannot become
++  // permitted by waiting, and callers already treat a returned Error as non-fatal.
++  const maxAttempts = 5;
++  const retryDelayMs = 150;
++  let lastError;
++  for (let attempt = 0; attempt < maxAttempts; attempt++) {
++    try {
++      await import_fs.default.promises.rm(dir, { recursive: true, force: true, maxRetries: 0 });
++      return void 0;
++    } catch (error) {
++      lastError = error;
++      if (error && (error.code === "EPERM" || error.code === "EACCES"))
++        return error;
++      await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
++    }
++  }
++  return lastError;
+ }
+ function canAccessFile(file) {
+   if (!file)
