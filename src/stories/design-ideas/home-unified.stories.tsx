@@ -355,6 +355,10 @@ type Story = StoryObj<typeof HomeUnified>;
 // "needs sync" state, and see the progressive-loading affordance kick in on scroll or filter.
 function InteractiveHarness(overrides?: Partial<HomeUnifiedProps>) {
   const catalog = overrides?.items ?? FULL_CATALOG;
+  // Simulates the fast count-only backend call the downloadMore variant expects: the caller
+  // knows the total DBL resource count without paging the full catalog into memory. Here it's
+  // derived once from the pre-generated mock catalog and passed straight through as a prop.
+  const dblCatalogCount = catalog.filter((item) => item.status === 'dblNotInstalled').length;
   return function InteractiveStory() {
     const [items, setItems] = useState<UnifiedItem[]>(() => catalog.slice(0, INITIAL_PAGE));
     const [inFlightIds, setInFlightIds] = useState<string[]>([]);
@@ -458,6 +462,7 @@ function InteractiveHarness(overrides?: Partial<HomeUnifiedProps>) {
         onFetchMore={handleFetchMore}
         isLoading={overrides?.isLoading}
         variant={overrides?.variant}
+        dblAvailableCount={overrides?.variant === 'downloadMore' ? dblCatalogCount : undefined}
         headerContent={
           overrides?.headerContent ?? (
             <div className="tw:flex tw:items-center tw:gap-2">
@@ -496,6 +501,41 @@ export const ButtonFiltersAndSrIntegration: Story = {
           'selected languages. Row names carry S/R-style status badges (Edited / Update / New / ' +
           'DBL), and Select All / None / Edited / New preselection buttons sit at the top-right ' +
           'of the table for quick multi-select from the send/receive dialog.',
+      },
+    },
+  },
+};
+
+export const DownloadMoreModal: Story = {
+  render: InteractiveHarness({ variant: 'downloadMore' }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'S/R integration variant + hidden DBL rows. The inline table shows only projects and ' +
+          'resources on the computer plus new-on-server projects — the definite catalog. A ' +
+          '"Download more resources" button sits below the list with a count of DBL items ' +
+          'matching the current search/filter; clicking it opens a near-full-screen modal that ' +
+          'browses the DBL catalog with independent search + type + language filters. The item ' +
+          'count summary switches to the definite `x of y (+z)` form, where y = on-computer and ' +
+          'z = new on the S/R server.',
+      },
+    },
+  },
+};
+
+export const DownloadMoreModalAlternatives: Story = {
+  render: InteractiveHarness({ variant: 'downloadMoreTabs' }),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Same as DownloadMoreModal outside the modal. A Tabs bar pinned above everything ' +
+          '(also above the modal backdrop) switches the modal’s per-row action UI between ' +
+          'three shapes: Open-primary (row button is always Open, state actions in the ' +
+          'ellipsis), Open-inline (state-based button on the right + a small Open next to the ' +
+          'short name for locally-available rows), and Action-inline (Open on the right, ' +
+          'state-based button replaces the badge next to the short name).',
       },
     },
   },
