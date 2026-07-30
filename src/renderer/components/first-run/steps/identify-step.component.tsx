@@ -42,6 +42,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_step_identify_registryHelp%',
   '%firstRun_step_identify_registryLink%',
   '%firstRun_step_identify_validatingCode%',
+  '%firstRun_button_back%',
   '%general_error_title%',
 ];
 
@@ -71,9 +72,19 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  * Eight localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
  */
-export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: IdentifyStepProps) {
-  // Suppress the shell's generic Next before the first paint — matches SyncConsentStep's pattern.
-  useLayoutEffect(() => setCanProceed?.(undefined), [setCanProceed]);
+export function IdentifyStep({
+  onNext,
+  onBack,
+  setCanProceed,
+  setManagesOwnFooter,
+  onRestartAfterSave,
+}: IdentifyStepProps) {
+  // Suppress the shell's generic Next/Finish and the shell footer before the first paint — this
+  // step owns its navigation entirely via WizardStepForm. onBack is rendered inside the form.
+  useLayoutEffect(() => {
+    setCanProceed?.(undefined);
+    setManagesOwnFooter?.(true);
+  }, [setCanProceed, setManagesOwnFooter]);
 
   const [strings] = useLocalizedStrings(KEYS);
   // Ref so debounce callbacks always read the latest strings even if PAPI delivers them mid-wait.
@@ -264,6 +275,13 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       heading={strings['%firstRun_step_identify_heading%']}
       error={activeError}
       errorDescription={activeErrorDescription}
+      backButton={
+        onBack && (
+          <Button variant="outline" onClick={onBack}>
+            {strings['%firstRun_button_back%']}
+          </Button>
+        )
+      }
       primaryButton={
         <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
           {strings['%paratextRegistration_button_saveAndRestart%']}

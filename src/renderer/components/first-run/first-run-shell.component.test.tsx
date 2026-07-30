@@ -158,11 +158,21 @@ function makeDummyStep(label: string): ComponentType<FirstRunStepProps> {
   return DummyStep;
 }
 
+// SyncConsent dummy also calls setCanSkip(true) — the real step does this, and shell tests that
+// navigate through STUB_STEPS to syncConsent verify the shell surfaces Skip only on that step.
+function SyncConsentDummy({ setCanProceed, setCanSkip }: FirstRunStepProps) {
+  useEffect(() => {
+    setCanProceed?.(true);
+    setCanSkip?.(true);
+  }, [setCanProceed, setCanSkip]);
+  return <p>sync-consent-step</p>;
+}
+
 const DUMMY_STEPS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
   language: makeDummyStep('language-step'),
   internetSettings: makeDummyStep('internet-settings-step'),
   identify: makeDummyStep('identify-step'),
-  syncConsent: makeDummyStep('sync-consent-step'),
+  syncConsent: SyncConsentDummy,
   syncProgress: makeDummyStep('sync-progress-step'),
 };
 
@@ -479,7 +489,7 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
     await userEvent.click(screen.getByRole('button', { name: /back/i })); // internet → language
-    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    expect(screen.getByText(/language-step/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 

@@ -25,9 +25,10 @@ const defaultSyncFn = (): Promise<void> =>
  * footer (signalled via `setCanSkip(true)`). Advancing via "Sync" runs
  * `paratextBibleSendReceive.syncProjects` then calls `onNext`.
  *
- * `setCanProceed(undefined)` hides the shell's generic Next button — this step owns its primary
- * action (Sync). `setCanSkip(true)` tells the shell to show a Skip button in its footer, which
- * calls `completeFirstRun({ skippedStep: 'syncConsent' })`.
+ * `setCanProceed(undefined)` hides the shell's generic Next/Finish button — this step owns its
+ * primary action (Sync). `setCanSkip(true)` tells the shell to show a Skip button in its footer,
+ * which calls `completeFirstRun({ skippedStep: 'syncConsent' })`. The shell's `isBusy` guard
+ * disables Skip while any async action (including the skip itself) is in flight.
  *
  * `onSync` is injectable for Storybook and unit-test isolation.
  */
@@ -46,7 +47,9 @@ function SyncConsentStep({
   useEffect(() => {
     setCanSkip?.(true);
   }, [setCanSkip]);
-  // Hide the shell's generic Next button before the first paint so it never flashes visible.
+  // Hide the shell's generic Next/Finish button — this step owns its primary action (Sync).
+  // The shell footer still renders, showing the Skip button (and Back if applicable) — the shell's
+  // isBusy guard is responsible for disabling Skip while an async action is in flight.
   useLayoutEffect(() => {
     setCanProceed?.(undefined);
   }, [setCanProceed]);
