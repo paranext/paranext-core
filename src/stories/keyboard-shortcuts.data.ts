@@ -400,4 +400,12 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
     ],
   },
+  {
+    id: 'tour-dismiss',
+    purpose: 'Dismiss the onboarding tour',
+    category: 'View',
+    context: 'Onboarding tour overlay',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['lib/platform-bible-react/src/components/advanced/tour/tour.component.tsx'],
+  },
 ];
