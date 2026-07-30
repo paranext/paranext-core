@@ -3529,6 +3529,12 @@ export declare function ToggleGroupItem({ className, children, variant, size, ..
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
  *
+ * Delivery is guarded per subscription: once the subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. an emitter walking a snapshot of its handler list — is ignored rather than delivered
+ * to `eventHandler`. An unsubscriber that throws during cleanup is logged as a warning rather than
+ * thrown, since nothing can catch an error thrown from an effect cleanup.
+ *
  * @param event The event to subscribe to.
  *
  *   - If event is a `PlatformEvent`, that event will be used
@@ -3545,6 +3551,14 @@ export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHan
  * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
  * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
  * this hook.
+ *
+ * Delivery is guarded per subscription: once a subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. one already in flight over the network — is ignored rather than delivered to
+ * `eventHandler`. If the subscribe promise resolves only after the subscription was already
+ * superseded, the resolved unsubscriber is invoked immediately so the subscription does not leak.
+ * Subscribe and unsubscribe failures are logged as warnings rather than thrown — neither has a
+ * caller that could catch them.
  *
  * @param event The asynchronously (un)subscribing event to subscribe to.
  *
