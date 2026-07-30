@@ -134,7 +134,6 @@ import {
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
   deepEqualAcrossIframes,
-  findNoteIndexByOps,
   formatEditorTitle,
   generateParagraphMenuListItems,
   getNextViewTypeInCycle,
@@ -843,7 +842,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       noteCallerOnClick:
         isReadOnly || isSyncBlocked
           ? undefined
-          : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+          : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps, getNoteIndex) => {
               // The caller-click flow has historically failed silently (dead click); keep the inputs
               // of every click diagnosable from a debug log.
               logger.debug(
@@ -873,14 +872,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 return;
 
               // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
-              // opening the popover, regardless of the auto-show setting.
+              // opening the popover, regardless of the auto-show setting. The pane addresses notes
+              // by document-order index, which the editor computes exactly at click time.
               if (decision.action === 'focus-pane') {
-                const noteOps = getNoteOps();
-                const index = noteOps ? findNoteIndexByOps(editorRef, noteOps) : undefined;
+                const index = getNoteIndex();
                 if (index !== undefined) setFootnotePaneFocusRequest({ index });
                 else
                   logger.warn(
-                    'noteCallerOnClick: note not found among editor notes; pane focus request dropped',
+                    'noteCallerOnClick: clicked note is no longer attached; pane focus request dropped',
                   );
                 return;
               }
