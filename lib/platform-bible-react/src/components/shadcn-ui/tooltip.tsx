@@ -70,11 +70,17 @@ function TooltipContent({
   // collision-avoidance shifts the content away from a very small or edge-positioned trigger).
   // showArrow={false} removes the element from the DOM so it can never appear.
   showArrow = true,
+  // CUSTOM: Added arrowClassName so callers that restyle TooltipContent's background/border (e.g.
+  // a destructive-themed tooltip) can restyle the arrow to match, instead of being stuck with the
+  // hardcoded bg-foreground/fill-foreground default.
+  arrowClassName,
   children,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & {
   // CUSTOM: showArrow prop — see comment above for full semantics
   showArrow?: boolean;
+  // CUSTOM: arrowClassName prop — see comment above for full semantics
+  arrowClassName?: string;
 }) {
   return (
     <TooltipPrimitive.Portal>
@@ -95,7 +101,38 @@ function TooltipContent({
         {children}
         {/* CUSTOM: Conditionally render arrow based on showArrow prop */}
         {showArrow && (
-          <TooltipPrimitive.Arrow className="tw:z-50 tw:size-2.5 tw:translate-y-[calc(-50%_-_2px)] tw:rotate-45 tw:rounded-[2px] tw:bg-foreground tw:fill-foreground" />
+          <TooltipPrimitive.Arrow
+            // CUSTOM: Merge arrowClassName so it can override the default bg-foreground/fill-foreground.
+            // Also (a) nudge the rotated-square arrow flush against the content box (translate-y), and
+            // (b) clip it down to the triangular half that points away from the content box, so a
+            // caller that adds a border via arrowClassName (e.g. the destructive confirmation hint)
+            // doesn't get a doubled/crossing border line — or, without clipping the fill too, a
+            // mismatched-color fill bleeding into the content — where the unclipped "back" half of the
+            // diamond overlaps the content's own border.
+            //
+            // Empirically (verified via getBoundingClientRect straddle measurements, not just visual
+            // inspection — see PT-4236 investigation) side="top" needs the exact same translate/clip as
+            // side="bottom", NOT the mirrored values symmetry would suggest — this falls out of Radix
+            // computing the arrow's base position from its declared height prop (5), while we override
+            // the *rendered* height to 10 via CSS (tw:size-2.5), and that mismatch isn't direction-
+            // specific. Keyed off the ancestor Content's own data-side via in-data-*, since Radix
+            // doesn't put data-side on the Arrow itself. Clipping is a no-op for the default
+            // borderless/same-fill arrow, so this is safe generally.
+            //
+            // side="left"/"right" deliberately get NO translate-x/clip-path here: mirroring the
+            // top/bottom axis-not-direction logic for left/right was tried and found very buggy
+            // (arrow polygon positioned and clipped incorrectly), and no consumer today needs a
+            // bordered left/right arrow (`destructive-key-confirmation.component.tsx` only borders
+            // top/bottom). Left/right therefore keep the plain unclipped default diamond. Work out
+            // the correct left/right math and add the classes back if/when a bordered left/right
+            // arrow consumer shows up.
+            className={cn(
+              'tw:z-50 tw:size-2.5 tw:rotate-45 tw:rounded-xs tw:bg-foreground tw:fill-foreground',
+              'tw:in-data-[side=bottom]:translate-y-[calc(-50%-1px)] tw:in-data-[side=top]:translate-y-[calc(-50%-1px)]',
+              'tw:in-data-[side=bottom]:[clip-path:polygon(100%_0,100%_100%,0_100%)] tw:in-data-[side=top]:[clip-path:polygon(100%_0,100%_100%,0_100%)]',
+              arrowClassName,
+            )}
+          />
         )}
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>

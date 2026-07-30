@@ -1,3 +1,5 @@
+import { getLocalizeKeyForPhysicalKey, LocalizeKey } from 'platform-bible-utils';
+
 /**
  * The armed two-step-delete state the editor publishes on its root element. The scripture editor
  * (shared-react's StructureKeyboardPlugin) never renders the hint itself; it sets
@@ -9,6 +11,15 @@ export type ArmedHint = {
   intent: 'deleteBackward' | 'deleteForward';
   kind: 'verse' | 'selection';
 };
+
+/**
+ * Localization keys naming the physical keys `confirmingKey` can return; callers need this list to
+ * fetch translations via `useLocalizedStrings`.
+ */
+export const CONFIRMING_KEY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  getLocalizeKeyForPhysicalKey('Backspace'),
+  getLocalizeKeyForPhysicalKey('Delete'),
+];
 
 /**
  * Reads the armed-delete hint the editor published on `root`, or undefined when nothing hint-worthy
@@ -48,7 +59,33 @@ export function computeAnchorRect(marker: HTMLElement, positionAnchor: HTMLEleme
   };
 }
 
-/** The physical key whose second press confirms the delete, for the given arming intent. */
-export function confirmingKey(intent: ArmedHint['intent']): 'Backspace' | 'Delete' {
-  return intent === 'deleteForward' ? 'Delete' : 'Backspace';
+/**
+ * Localization key naming the physical key whose second press confirms the delete, for the given
+ * arming intent. Returns a `LocalizeKey` (rather than the literal `'Backspace'`/`'Delete'`) so
+ * callers can look up the localized key name via `useLocalizedStrings`.
+ */
+export function confirmingKey(intent: ArmedHint['intent']): LocalizeKey {
+  return getLocalizeKeyForPhysicalKey(intent === 'deleteForward' ? 'Delete' : 'Backspace');
+}
+
+/**
+ * Platform symbol macOS uses for each confirming key, per the Keyboard shortcuts guideline's
+ * "Preferred representations by OS" table (Backspace `⌫`, Forward Delete `⌦`). These are OS
+ * symbols, not translated text, so they bypass localization entirely.
+ */
+const MAC_KEY_SYMBOLS: Record<ArmedHint['intent'], string> = {
+  deleteBackward: '⌫',
+  deleteForward: '⌦',
+};
+
+/**
+ * Display label for the confirming key, following each OS's own convention: macOS shows the
+ * platform symbol (`⌫`/`⌦`); other platforms show the localized word (e.g. "Backspace"/"Delete").
+ */
+export function getConfirmingKeyDisplayLabel(
+  intent: ArmedHint['intent'],
+  localizedWord: string,
+  isMac: boolean,
+): string {
+  return isMac ? MAC_KEY_SYMBOLS[intent] : localizedWord;
 }

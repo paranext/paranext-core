@@ -124,7 +124,7 @@ import {
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
-import { VerseDeleteTooltipOverlay } from './verse-delete-tooltip/verse-delete-tooltip-overlay.component';
+import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -1835,7 +1835,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <>
         {workaround}
         <ParagraphMarkerTooltipOverlay>
-          <VerseDeleteTooltipOverlay>
+          <TwoStepDeleteTooltipOverlay>
             <EditorKeyboardShortcuts editorRef={editorRef}>
               <Editorial
                 ref={editorRef}
@@ -1853,7 +1853,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 }}
               />
             </EditorKeyboardShortcuts>
-          </VerseDeleteTooltipOverlay>
+          </TwoStepDeleteTooltipOverlay>
         </ParagraphMarkerTooltipOverlay>
       </>
     );

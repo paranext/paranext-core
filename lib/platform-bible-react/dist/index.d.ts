@@ -2325,6 +2325,50 @@ export type CancelAcceptButtonsProps = {
  * Tooltip text defaults to the localization key if no localized strings are provided.
  */
 export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, acceptLabel, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
+/** Props for {@link DestructiveKeyConfirmation}. */
+export type DestructiveKeyConfirmationProps = {
+	/** Whether the confirmation hint is currently showing. */
+	open: boolean;
+	/**
+	 * Position and size of the invisible anchor, in the coordinates of the nearest `position:
+	 * relative` ancestor. Typically the bounding rect of the element the hint should point at (e.g. a
+	 * verse marker), recomputed by the caller as it moves/scrolls.
+	 */
+	anchorRect: {
+		top: number;
+		left: number;
+		width: number;
+		height: number;
+	};
+	/** Localized message to display. Include a `{key}` placeholder where the confirming key belongs. */
+	message: string;
+	/**
+	 * Localized/display label for the key that confirms the action on a second press (e.g.
+	 * "Backspace").
+	 */
+	confirmingKeyLabel: string;
+	/**
+	 * Tooltip placement side. Defaults to `'bottom'`.
+	 *
+	 * Only `'top'`/`'bottom'` are supported — the bordered arrow this component renders relies on
+	 * clip-path/translate math in `tooltip.tsx` that has only been worked out for those two sides;
+	 * the equivalent math for `'left'`/`'right'` was tried and found visibly broken (see
+	 * tooltip.tsx), so those two values are omitted from this component's public API rather than
+	 * silently degrading to a borderless arrow.
+	 */
+	side?: "top" | "bottom";
+	/** Tooltip placement alignment. Defaults to `'start'`. */
+	align?: "start" | "center" | "end";
+	/** Whether to render the pointer arrow. Defaults to `true`. */
+	showArrow?: boolean;
+};
+/**
+ * A destructive-styled "press again to confirm" hint, anchored to an arbitrary point (`anchorRect`)
+ * rather than a rendered trigger element. Built for two-step destructive actions (e.g. deleting a
+ * verse marker on a second Backspace/Delete) where the caller owns detecting the "armed" state and
+ * this component only renders the hint.
+ */
+export declare function DestructiveKeyConfirmation({ open, anchorRect, message, confirmingKeyLabel, side, align, showArrow, }: DestructiveKeyConfirmationProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -3048,8 +3092,9 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
+export declare function TooltipContent({ className, sideOffset, style, showArrow, arrowClassName, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
 	showArrow?: boolean;
+	arrowClassName?: string;
 }): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {

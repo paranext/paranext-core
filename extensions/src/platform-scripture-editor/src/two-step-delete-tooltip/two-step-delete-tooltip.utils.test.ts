@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeAnchorRect, confirmingKey, readArmedHint } from './verse-delete-tooltip.utils';
+import {
+  computeAnchorRect,
+  confirmingKey,
+  getConfirmingKeyDisplayLabel,
+  readArmedHint,
+} from './two-step-delete-tooltip.utils';
 
 // Mock element factory — avoids a jsdom dependency for pure-function tests. Only the two members
 // the utils touch (getAttribute, getBoundingClientRect) are implemented. A missing attribute
@@ -74,12 +79,27 @@ describe('readArmedHint', () => {
 });
 
 describe('confirmingKey', () => {
-  it('maps deleteBackward to Backspace', () => {
-    expect(confirmingKey('deleteBackward')).toBe('Backspace');
+  it('maps deleteBackward to the Backspace localization key', () => {
+    expect(confirmingKey('deleteBackward')).toBe('%physicalKey_backspace%');
   });
 
-  it('maps deleteForward to Delete', () => {
-    expect(confirmingKey('deleteForward')).toBe('Delete');
+  it('maps deleteForward to the Delete localization key', () => {
+    expect(confirmingKey('deleteForward')).toBe('%physicalKey_delete%');
+  });
+});
+
+describe('getConfirmingKeyDisplayLabel', () => {
+  it('uses the macOS Backspace symbol instead of the localized word on macOS', () => {
+    expect(getConfirmingKeyDisplayLabel('deleteBackward', 'Backspace', true)).toBe('⌫');
+  });
+
+  it('uses the macOS Forward Delete symbol instead of the localized word on macOS', () => {
+    expect(getConfirmingKeyDisplayLabel('deleteForward', 'Delete', true)).toBe('⌦');
+  });
+
+  it('uses the localized word on non-macOS platforms', () => {
+    expect(getConfirmingKeyDisplayLabel('deleteBackward', 'Retroceso', false)).toBe('Retroceso');
+    expect(getConfirmingKeyDisplayLabel('deleteForward', 'Supr', false)).toBe('Supr');
   });
 });
 

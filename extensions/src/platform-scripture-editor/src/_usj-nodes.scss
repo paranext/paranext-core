@@ -2310,9 +2310,6 @@
   }
 }
 
-/* The destructive "press again" hint is rendered by VerseDeleteTooltipOverlay as a ShadCN Tooltip
-   (localized, theme-styled) — no bespoke tooltip CSS lives here anymore. */
-
 span.unread img {
   background-color: #ffff99;
   position: relative;

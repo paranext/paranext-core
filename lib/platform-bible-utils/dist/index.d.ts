@@ -1106,9 +1106,10 @@ export type OrderedItem = {
 /**
  * An interface mode a menu item can be hidden in.
  *
- * Keep in sync with `SettingTypes['platform.interfaceMode']` in `src/declarations/papi-shared-types.ts`
- * — this package can't import that app-level type (dependency layering runs the other way), so this
- * is an independently declared, structurally identical union rather than a shared one.
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in
+ * `src/declarations/papi-shared-types.ts` — this package can't import that app-level type
+ * (dependency layering runs the other way), so this is an independently declared, structurally
+ * identical union rather than a shared one.
  */
 export type InterfaceMode = "simple" | "power";
 export type OrderedExtensibleContainer = OrderedItem & {
@@ -4051,6 +4052,22 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
+/**
+ * Physical keys (`KeyboardEvent.key` values) that {@link getLocalizeKeyForPhysicalKey} can name. Add
+ * to this union as UI needs to display more key names.
+ *
+ * Adding a member here requires adding a matching `%physicalKey_<camelCaseName>%` entry to every
+ * locale file under `assets/localization/` (see `en.json`/`es.json`) — this union alone doesn't
+ * guarantee the translation exists.
+ */
+export type NameablePhysicalKey = "Backspace" | "Delete";
+/**
+ * Gets the localized string key naming a physical keyboard key, for UI that needs to display a
+ * translated key name (e.g. a "press {key} again to confirm" hint). The platform's core
+ * localization assets (`assets/localization/*.json`) provide the translations, so any caller can
+ * use this without an extension having to declare its own copy of the string.
+ */
+export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
 /** Inputs to {@link computeEffectiveStructureProtection}. */
 export type EffectiveStructureProtectionInputs = {
 	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */
