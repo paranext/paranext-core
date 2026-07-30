@@ -3,6 +3,7 @@ using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
+using SIL.Scripture;
 
 namespace TestParanextDataProvider.Projects
 {
@@ -251,6 +252,85 @@ namespace TestParanextDataProvider.Projects
 
         [Test]
         [Description(
+            "TextType must serialize as the ScrTextType enum name minus its 'sc' prefix: 'v' "
+                + "(scVerseText in DummyScrStylesheet) -> \"VerseText\" and 'mt' (scTitle) -> "
+                + "\"Title\", asserted as literals so a change to the prefix-stripping or a "
+                + "renamed enum member fails loudly instead of silently shifting the wire value."
+        )]
+        public void GetStyleInfo_TextType_SerializesEnumNameWithoutScPrefix()
+        {
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Markers["v"].TextType, Is.EqualTo("VerseText"));
+                Assert.That(result.Markers["mt"].TextType, Is.EqualTo("Title"));
+            });
+        }
+
+        [Test]
+        [Description(
+            "A tag that never sets TextType keeps ScrTextType.scNotSpecified, which must "
+                + "surface as null on the model and be omitted entirely from the wire JSON "
+                + "(WhenWritingNull) — never serialized as \"NotSpecified\" or null."
+        )]
+        public void GetStyleInfo_TextTypeNotSpecified_IsNullAndOmittedFromWire()
+        {
+            AddStylesheetTag(new ScrTag("zst") { StyleType = ScrStyleType.scCharacterStyle });
+
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            var zst = result.Markers["zst"];
+            Assert.That(zst.TextType, Is.Null);
+
+            string json = JsonSerializer.Serialize(
+                zst,
+                SerializationOptions.CreateSerializationOptions()
+            );
+            Assert.That(json, Does.Not.Contain("textType"));
+        }
+
+        [Test]
+        [Description(
+            "Optional identity/typography properties the omitted-when-unset test only proves "
+                + "ABSENT must also surface when set: NotRepeatable and Superscript as true "
+                + "flags, Description and per-marker FontName as verbatim strings. Subscript "
+                + "gets its own tag because a real style is subscript or superscript, never "
+                + "both — which also proves the two flags don't bleed into each other."
+        )]
+        public void GetStyleInfo_SetOptionalProperties_SurfaceLiteralValues()
+        {
+            AddStylesheetTag(
+                new ScrTag("zst")
+                {
+                    StyleType = ScrStyleType.scCharacterStyle,
+                    NotRepeatable = true,
+                    Description = "Test-only deity name style",
+                    Fontname = "Charis SIL Test",
+                    Superscript = true,
+                }
+            );
+            AddStylesheetTag(
+                new ScrTag("zsb") { StyleType = ScrStyleType.scCharacterStyle, Subscript = true }
+            );
+
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            var zst = result.Markers["zst"];
+            Assert.Multiple(() =>
+            {
+                Assert.That(zst.NotRepeatable, Is.True);
+                Assert.That(zst.Description, Is.EqualTo("Test-only deity name style"));
+                Assert.That(zst.FontName, Is.EqualTo("Charis SIL Test"));
+                Assert.That(zst.Superscript, Is.True);
+                Assert.That(zst.Subscript, Is.Null);
+                Assert.That(result.Markers["zsb"].Subscript, Is.True);
+                Assert.That(result.Markers["zsb"].Superscript, Is.Null);
+            });
+        }
+
+        [Test]
+        [Description(
             "GetStyleInfo's default font/size read the exact ScrText accessors PT9's "
                 + "CSSCreator.CreateUsfmCss(ScrText, ...) reads — ScrText.Language.FontName / "
                 + "ScrText.Language.FontSize, which resolve to the project's DefaultFont / "
@@ -267,6 +347,78 @@ namespace TestParanextDataProvider.Projects
 
             Assert.That(result.DefaultFont, Is.EqualTo("Gentium Plus Test"));
             Assert.That(result.DefaultFontSize, Is.EqualTo(13));
+        }
+
+        /// <summary>
+        /// A <see cref="DummyScrText"/> whose <see cref="ScrText.DefaultStylesheet"/> can be
+        /// switched to null after setup. <c>ScrText.ScrStylesheet(bookNum)</c> returns
+        /// <c>DefaultStylesheet</c> directly for canonical books, so this is the narrowest way
+        /// to make it hand GetStyleInfo a null stylesheet. The switch is a flag (not an
+        /// unconditional override) because the ScrText constructor and project registration
+        /// must still see a real stylesheet.
+        /// </summary>
+        private sealed class NullStylesheetDummyScrText : DummyScrText
+        {
+            public bool ReturnNullDefaultStylesheet { get; set; }
+
+            public override ScrStylesheet DefaultStylesheet =>
+                ReturnNullDefaultStylesheet ? null! : base.DefaultStylesheet;
+        }
+
+        [Test]
+        [Description(
+            "When ScrText.ScrStylesheet(bookNum) yields null (no stylesheet available for the "
+                + "book), GetStyleInfo must throw InvalidDataException naming the book number "
+                + "instead of failing later with a NullReferenceException while enumerating "
+                + "tags."
+        )]
+        public void GetStyleInfo_NullStylesheet_ThrowsInvalidDataException()
+        {
+            using var scrText = new NullStylesheetDummyScrText();
+            var projectDetails = CreateProjectDetails(scrText);
+            ParatextProjects.FakeAddProject(projectDetails, scrText);
+            var provider = new DummyParatextProjectDataProvider(
+                "styleInfoNullStylesheetProject",
+                Client,
+                projectDetails,
+                ParatextProjects
+            );
+            scrText.ReturnNullDefaultStylesheet = true;
+
+            Assert.That(
+                () => provider.GetStyleInfo(GenesisBookNum),
+                Throws.TypeOf<InvalidDataException>().With.Message.Contains("book number '1'")
+            );
+        }
+
+        [Test]
+        [Description(
+            "GetStyleInfo(bookNum) must consult the PER-BOOK stylesheet, not always the "
+                + "default one: canonical books resolve to the default stylesheet while "
+                + "non-canonical books (front/back matter such as FRT) resolve to the "
+                + "front/back stylesheet. A marker registered on only one of the two sheets "
+                + "must appear only in the result for the matching book."
+        )]
+        public void GetStyleInfo_NonCanonicalBook_UsesFrontBackStylesheet()
+        {
+            int frontMatterBookNum = Canon.BookIdToNumber("FRT");
+            var frontBackStylesheet = new DummyScrStylesheet();
+            frontBackStylesheet.AddTag(
+                new ScrTag("zfrt") { StyleType = ScrStyleType.scParagraphStyle }
+            );
+            ((DummyScrText)_scrText).SetFrontBackStylesheet(frontBackStylesheet);
+            AddStylesheetTag(new ScrTag("zcan") { StyleType = ScrStyleType.scCharacterStyle });
+
+            var canonicalResult = _provider.GetStyleInfo(GenesisBookNum);
+            var frontMatterResult = _provider.GetStyleInfo(frontMatterBookNum);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(canonicalResult.Markers.ContainsKey("zcan"), Is.True);
+                Assert.That(canonicalResult.Markers.ContainsKey("zfrt"), Is.False);
+                Assert.That(frontMatterResult.Markers.ContainsKey("zfrt"), Is.True);
+                Assert.That(frontMatterResult.Markers.ContainsKey("zcan"), Is.False);
+            });
         }
 
         [Test]
@@ -309,6 +461,10 @@ namespace TestParanextDataProvider.Projects
                 // dictionary keys — markers are looked up verbatim TS-side).
                 Assert.That(json, Does.Contain("\"ip\":"));
                 Assert.That(json, Does.Not.Contain("\"Ip\""));
+
+                // Each marker's wire object also carries its own marker name — TS consumers
+                // can read it off the object without holding the dictionary key.
+                Assert.That(json, Does.Contain("\"marker\":\"ip\""));
             });
         }
 
