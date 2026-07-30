@@ -21,15 +21,6 @@ import { logger } from '@shared/services/logger.service';
 import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
-/**
- * `projectInterface` a project must support to belong in the picker: it can be opened in the
- * scripture editor. This filter is applied service-side so the service's retry-until-non-empty
- * startup grace period keeps retrying until a factory that provides this interface has registered
- * (a bare unfiltered fetch settles as soon as any project - possibly a non-scripture one - appears,
- * before the layering PDPF that provides this interface registers). Published resources also carry
- * this interface via the Scripture Extender layering PDPF, so the current project and recent
- * projects (both always scripture or resource projects) resolve from the same filtered fetch.
- */
 /** How long to wait before retrying a failed metadata fetch. */
 const METADATA_FETCH_RETRY_DELAY_MS = 5 * 1000;
 /**
@@ -41,6 +32,15 @@ export const MAX_METADATA_FETCH_RETRIES = 3;
 /** Debounce window that collapses rapid-fire PDPF registrations into a single metadata fan-out. */
 const PDPF_REGISTRATION_DEBOUNCE_MS = 200;
 
+/**
+ * `projectInterface` a project must support to belong in the picker: it can be opened in the
+ * scripture editor. This filter is applied service-side so the service's retry-until-non-empty
+ * startup grace period keeps retrying until a factory that provides this interface has registered
+ * (a bare unfiltered fetch settles as soon as any project - possibly a non-scripture one - appears,
+ * before the layering PDPF that provides this interface registers). Published resources also carry
+ * this interface via the Scripture Extender layering PDPF, so the current project and recent
+ * projects (both always scripture or resource projects) resolve from the same filtered fetch.
+ */
 const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {
   includeProjectInterfaces: [PICKER_PROJECT_INTERFACE],
