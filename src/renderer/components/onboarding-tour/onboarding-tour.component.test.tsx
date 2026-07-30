@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
+import type { TourProps, TourStep } from 'platform-bible-react';
+import { OnboardingTour } from './onboarding-tour.component';
 
 // Mutable knobs the mocks read, so each test can set the scenario before rendering.
 let mockStatus: FirstRunStatus = { kind: 'app' };
@@ -24,11 +26,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 
 // Mock Tour so we can assert what OnboardingTour hands it without a real DOM/spotlight.
 vi.mock('platform-bible-react', () => ({
-  Tour: ({ open, steps, onDone, onSkip }: any) =>
+  Tour: ({ open, steps, onDone, onSkip }: TourProps) =>
     open ? (
       <div data-testid="mock-tour">
         <span data-testid="step-count">{steps.length}</span>
-        <span data-testid="step-sides">{steps.map((s: any) => s.side).join(',')}</span>
+        <span data-testid="step-sides">{steps.map((s: TourStep) => s.side).join(',')}</span>
         <button type="button" onClick={onDone}>
           done
         </button>
@@ -36,10 +38,8 @@ vi.mock('platform-bible-react', () => ({
           skip
         </button>
       </div>
-    ) : null,
+    ) : undefined,
 }));
-
-import { OnboardingTour } from './onboarding-tour.component';
 
 const TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 

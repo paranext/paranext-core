@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { OnboardingTour } from './onboarding-tour.component';
 
 const meta: Meta<typeof OnboardingTour> = {
