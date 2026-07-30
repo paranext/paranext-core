@@ -1,11 +1,13 @@
 /**
  * Registers proxies under the generic request names that renderer-hosted commands and dialogs are
- * called by (e.g. "platform.openSettings", "dialog:showDialog") and forwards each call to the
- * focused window's scoped handler (e.g. "platform.openSettings-1"). This enables multi-window
- * support by ensuring that renderer-hosted work executes in the window the user is looking at.
+ * called by (e.g. "platform.openSettings", "dialog:showDialog") and forwards each call to a
+ * window's scoped handler (e.g. "platform.openSettings-1"). This enables multi-window support by
+ * ensuring that renderer-hosted work executes in the right window: the focused one for work that
+ * acts on the window the user is looking at, and the OWNING one for a call that names a web view
+ * (see {@link WEB_VIEW_ID_COMMAND_NAMES}).
  */
 
-import { getTargetWindowId } from '@main/services/window-state.service';
+import { getTargetWindowId, getWindows } from '@main/services/window-state.service';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -13,22 +15,105 @@ import {
   RENDERER_HOSTED_DIALOG_REQUEST_NAMES,
 } from '@shared/services/dialog.service-model';
 import {
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   RENDERER_HOSTED_COMMAND_DOCS,
   RENDERER_HOSTED_COMMAND_NAMES,
+  WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import * as networkService from '@shared/services/network.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { WebViewId } from '@shared/models/web-view.model';
 import { serializeRequestType } from '@shared/utils/util';
+import { getErrorMessage } from 'platform-bible-utils';
 
 /**
- * Register one proxy that forwards `category:name` to `category:name-{focusedWindowId}`.
+ * Renderer-hosted commands whose FIRST argument is a web view id, so a call naming a web view has
+ * to run in the window that owns it rather than the focused one — opening the settings for a web
+ * view in a background window must not open a settings tab in the window the user happens to be
+ * looking at (and would resolve the wrong project, since the owning window is the only one that can
+ * read the web view's definition).
+ *
+ * Only commands that declare a web view id parameter belong here (see `papi-shared-types`):
+ * `platform.openUserSettings` is deliberately absent — despite sharing a handler with
+ * `platform.openSettings`, it is declared to take no arguments, so it has no owner to route by and
+ * keeps following focus. Every other renderer-hosted command (about, Usersnap, the scripture
+ * navigation commands) acts on the window itself, not on a named web view.
+ */
+const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set([
+  'platform.openSettings',
+  'platform.openProjectSettings',
+]);
+
+/**
+ * Search all windows for the one whose scoped WebViewService knows the given web view id, the same
+ * way `web-view-routing.service.ts` finds a web view's owning service. Returns `undefined` when no
+ * window claims it (including when a window could not be reached — the caller falls back to the
+ * focused window, which is what a web view id that no longer exists anywhere would want anyway).
+ *
+ * @param webViewId Web view id the call named
+ * @param requestName Request being routed, for logging
+ */
+async function findWebViewOwnerWindowId(
+  webViewId: WebViewId,
+  requestName: string,
+): Promise<number | undefined> {
+  const ownerWindowIds = await Promise.all(
+    getWindows().map(async ({ id }) => {
+      try {
+        const service = await networkObjectService.get<WebViewServiceType>(
+          `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${id}`,
+        );
+        if (!service) return undefined;
+        return (await service.getOpenWebViewDefinition(webViewId)) ? id : undefined;
+      } catch (e) {
+        logger.warn(
+          `Failed to query web view ${webViewId} in window ${id} while routing ${requestName}: ${getErrorMessage(e)}`,
+        );
+        return undefined;
+      }
+    }),
+  );
+  return ownerWindowIds.find((id) => id !== undefined);
+}
+
+/**
+ * The window a call to `category:name` should run in: the window that owns the web view the call
+ * names (when the request takes a web view id and some window owns it), else the focused window.
+ *
+ * @throws If there is no window to route to
+ */
+async function resolveRoutingWindowId(
+  category: string,
+  name: string,
+  args: unknown[],
+): Promise<number> {
+  if (category === CATEGORY_COMMAND && WEB_VIEW_ID_COMMAND_NAMES.has(name)) {
+    const [webViewId] = args;
+    // The id is optional on some of these commands, and arguments arrive untyped over the network
+    if (typeof webViewId === 'string') {
+      const ownerWindowId = await findWebViewOwnerWindowId(webViewId, `${category}:${name}`);
+      if (ownerWindowId !== undefined) return ownerWindowId;
+    }
+  }
+
+  const targetWindowId = getTargetWindowId();
+  if (targetWindowId === undefined)
+    throw new Error(`No windows available to route ${category}:${name}`);
+  return targetWindowId;
+}
+
+/**
+ * Register one proxy that forwards `category:name` to the scoped `category:name-{windowId}` of the
+ * window that should handle it — the web view's owning window for the requests that name one, the
+ * focused window otherwise.
  *
  * @param category Request category the name belongs to
  * @param name Generic (unscoped) request name consumers call
  * @param docs OpenRPC documentation for the generic name, if it has any
  */
-async function registerFocusedWindowProxy(
+async function registerWindowRoutingProxy(
   category: string,
   name: string,
   docs?: SingleMethodDocumentation,
@@ -37,9 +122,7 @@ async function registerFocusedWindowProxy(
   await networkService.registerRequestHandler(
     serializeRequestType(category, name),
     async (...args: unknown[]) => {
-      const targetWindowId = getTargetWindowId();
-      if (targetWindowId === undefined)
-        throw new Error(`No windows available to route ${category}:${name}`);
+      const targetWindowId = await resolveRoutingWindowId(category, name, args);
       return networkService.request(
         serializeRequestType(category, `${name}-${targetWindowId}`),
         ...args,
@@ -54,13 +137,14 @@ async function registerFocusedWindowProxy(
 
 /**
  * Register proxies for everything the renderers host per window — the renderer-hosted commands and
- * the dialog requests. Each proxy forwards to the focused window's scoped handler. Must be called
- * during main process startup, before createWindow().
+ * the dialog requests. Each proxy forwards to a window's scoped handler (see
+ * {@link resolveRoutingWindowId}). Must be called during main process startup, before
+ * createWindow().
  */
 export async function startCommandRoutingService(): Promise<void> {
   await Promise.all([
     ...RENDERER_HOSTED_COMMAND_NAMES.map((commandName) =>
-      registerFocusedWindowProxy(
+      registerWindowRoutingProxy(
         CATEGORY_COMMAND,
         commandName,
         RENDERER_HOSTED_COMMAND_DOCS[commandName],
@@ -76,7 +160,7 @@ export async function startCommandRoutingService(): Promise<void> {
       // A dialog waits for the user, so the proxy must disable its timeout the same way the
       // renderer's registration does — otherwise the generic request gives up while the dialog is
       // still open.
-      registerFocusedWindowProxy(CATEGORY_DIALOG, requestName, undefined, {
+      registerWindowRoutingProxy(CATEGORY_DIALOG, requestName, undefined, {
         timeoutMilliseconds: 0,
       }),
     ),

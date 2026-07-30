@@ -4,12 +4,15 @@ import { startCommandRoutingService } from '@main/services/command-routing.servi
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
+  getWindows: vi.fn(),
   registerRequestHandler: vi.fn(),
   request: vi.fn(),
+  networkObjectGet: vi.fn(),
 }));
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
+  getWindows: mocks.getWindows,
 }));
 vi.mock('@shared/services/network.service', () => ({
   registerRequestHandler: mocks.registerRequestHandler,
@@ -18,6 +21,27 @@ vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: () => vi.fn(),
   createNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
 }));
+vi.mock('@shared/services/network-object.service', () => ({
+  networkObjectService: { get: mocks.networkObjectGet },
+}));
+
+/**
+ * Wire windows whose scoped WebViewServices own the given web view ids, so a command carrying a web
+ * view id can be routed by ownership.
+ */
+function withWindowsOwning(webViewIdsByWindowId: Record<number, string[]>) {
+  const windowIds = Object.keys(webViewIdsByWindowId).map(Number);
+  mocks.getWindows.mockReturnValue(windowIds.map((id) => ({ id })));
+  mocks.networkObjectGet.mockImplementation(async (name: string) => {
+    const windowId = Number(name.split('-').pop());
+    const ownedIds = webViewIdsByWindowId[windowId];
+    if (!ownedIds) return undefined;
+    return {
+      getOpenWebViewDefinition: async (webViewId: string) =>
+        ownedIds.includes(webViewId) ? { id: webViewId } : undefined,
+    };
+  });
+}
 
 /** Registrations the service made, keyed by the generic request type it claimed */
 function registrations() {
@@ -33,6 +57,8 @@ describe('renderer-hosted request routing proxies', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getWindows.mockReturnValue([]);
+    mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
     mocks.request.mockResolvedValue('result');
     await startCommandRoutingService();
@@ -87,5 +113,52 @@ describe('renderer-hosted request routing proxies', () => {
     const claimed = registrations();
     expect(claimed.has('command:platform.goToNextChapter')).toBe(true);
     expect(claimed.has('command:platform.openBookChapterControl')).toBe(true);
+  });
+
+  test('sends a command carrying a web view id to the window that owns that web view', async () => {
+    // Focus is on window 2, but window 3 is the one showing this web view — its settings must open
+    // there, where the web view (and so its project) actually is
+    withWindowsOwning({ 2: [], 3: ['owned-view'] });
+
+    await registrations().get('command:platform.openSettings')?.handler('owned-view');
+
+    expect(mocks.request).toHaveBeenCalledWith('command:platform.openSettings-3', 'owned-view');
+  });
+
+  test('routes the deprecated openProjectSettings by ownership too', async () => {
+    withWindowsOwning({ 2: [], 3: ['owned-view'] });
+
+    await registrations().get('command:platform.openProjectSettings')?.handler('owned-view');
+
+    expect(mocks.request).toHaveBeenCalledWith(
+      'command:platform.openProjectSettings-3',
+      'owned-view',
+    );
+  });
+
+  test('falls back to the focused window when no window owns the web view', async () => {
+    withWindowsOwning({ 2: [], 3: [] });
+
+    await registrations().get('command:platform.openSettings')?.handler('gone-view');
+
+    expect(mocks.request).toHaveBeenCalledWith('command:platform.openSettings-2', 'gone-view');
+  });
+
+  test('uses the focused window when the command carries no web view id', async () => {
+    withWindowsOwning({ 2: [], 3: ['owned-view'] });
+
+    await registrations().get('command:platform.openSettings')?.handler();
+
+    expect(mocks.request).toHaveBeenCalledWith('command:platform.openSettings-2');
+  });
+
+  test('does not look for an owner for commands that act on the window itself', async () => {
+    // Only the commands that take a web view id pay the ownership fan-out; the rest follow focus
+    withWindowsOwning({ 2: [], 3: ['owned-view'] });
+
+    await registrations().get('command:platform.goToNextChapter')?.handler('owned-view');
+
+    expect(mocks.networkObjectGet).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledWith('command:platform.goToNextChapter-2', 'owned-view');
   });
 });

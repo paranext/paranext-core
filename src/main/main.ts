@@ -35,6 +35,12 @@ import { performShutdownTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationRoutingService } from '@main/services/notification-routing.service';
 import { startWindowRoutingService } from '@main/services/window-routing.service';
+import {
+  isAppQuitRequested,
+  markQuitRequested,
+  resetShutdownLatchesForNewSession,
+  runShutdownTasksOnce,
+} from '@main/services/shutdown-latch.service';
 import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
 import {
   addWindow,
@@ -42,6 +48,7 @@ import {
   removeWindow,
   setFocusedWindowId,
   getTargetWindowId,
+  markWindowReady,
 } from '@main/services/window-state.service';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
@@ -61,11 +68,15 @@ import {
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
+import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidCreateNetworkObject,
+} from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
@@ -73,10 +84,11 @@ import { initialize as initializeSharedStoreService } from '@shared/services/sha
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
-import { CommandNames } from 'papi-shared-types';
+import { CommandNames, NetworkEventTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
+  PlatformEventEmitter,
   serialize,
   UnsubscriberAsyncList,
   wait,
@@ -86,6 +98,22 @@ import { themeService } from '@shared/services/theme.service';
 import { IWindowService, windowServiceProviderName } from '@shared/services/window.service-model';
 
 // #region Helper functions
+
+/**
+ * Pull the window ID out of a scoped window service's network object id, e.g.
+ * "platform.windowServiceDataProvider-2-data" gives 2. Returns undefined for anything else,
+ * including the generic name the main-process routing proxy publishes, whose remainder does not
+ * start with a number.
+ *
+ * @param networkObjectId Id of a network object that was just created
+ * @returns Window whose renderer registered it, or undefined if this is not a scoped window service
+ */
+function getWindowIdFromScopedWindowServiceId(networkObjectId: string): number | undefined {
+  const scopedPrefix = `${windowServiceProviderName}-`;
+  if (!networkObjectId.startsWith(scopedPrefix)) return undefined;
+  const windowId = Number.parseInt(networkObjectId.slice(scopedPrefix.length), 10);
+  return Number.isNaN(windowId) ? undefined : windowId;
+}
 
 /**
  * Get the zoom factor from settings or return the default value
@@ -274,6 +302,14 @@ async function main() {
   // Reuses the same per-window lookup the input handlers use, so both share one provider cache
   await startWindowRoutingService(getWindowServiceForWindow);
 
+  // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
+  // call until its renderer has registered. Its scoped window service appearing is that signal, and
+  // routing waits for it rather than following focus alone — see `getTargetWindowId`.
+  onDidCreateNetworkObject(({ id }) => {
+    const readyWindowId = getWindowIdFromScopedWindowServiceId(id);
+    if (readyWindowId !== undefined) markWindowReady(readyWindowId);
+  });
+
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
 
@@ -328,25 +364,48 @@ async function main() {
   // Live reference to the internal windows array — reflects current state, not a snapshot
   const windows = getWindows();
 
-  /**
-   * Whether the whole app is quitting, as opposed to a single window being closed. Set from
-   * `before-quit`, which fires ahead of every window's `close`, so a window's close handler can
-   * tell the two apart (see the `close` handler in `createWindow`).
-   *
-   * Distinct from the `isAppQuitting` guard on `will-quit` further below, which tracks whether that
-   * handler's graceful shutdown has already started.
-   */
-  let isAppQuitRequested = false;
-  app.on('before-quit', () => {
-    isAppQuitRequested = true;
-  });
+  // Announces a closed window to the whole app. Created once here rather than per window because an
+  // event type may only be claimed by one emitter, and the main process is the single source for it
+  // — it is the only process that knows when a window goes away. Services that a single window
+  // hosts on the whole app's behalf listen for this to hand hosting over to a surviving window.
+  //
+  // The name is intentionally NOT declared in the public `NetworkEvents` type — it is core plumbing
+  // between the main process and the renderer service hosts, not part of the `@papi/*` surface — so
+  // `EventType extends NetworkEventTypes` rejects the literal name. Cast the name past that
+  // constraint and recover the payload type on the result, the same escape hatch
+  // `scroll-group.service-host.ts` uses for its host-internal versification event. Registering
+  // centrally (rather than reaching for the deprecated sync factory, which does not) is what keeps
+  // the event out of the "announced but never registered" deprecation path.
+  /* eslint-disable no-type-assertion/no-type-assertion */
+  const onDidCloseWindowEmitter = (await networkService.createNetworkEventEmitterAsync(
+    EVENT_NAME_ON_DID_CLOSE_WINDOW as NetworkEventTypes,
+    {
+      notification: {
+        'x-experimental': true,
+        summary: 'Emitted when a window closes.',
+        params: [
+          {
+            name: 'windowId',
+            required: true,
+            summary: "The closed window's id.",
+            schema: { type: 'number' },
+          },
+        ],
+      },
+    },
+  )) as unknown as PlatformEventEmitter<number>;
+  /* eslint-enable no-type-assertion/no-type-assertion */
 
-  /** In-flight shutdown-task run, so a multi-window quit runs them once rather than once per window */
-  let shutdownTasksPromise: Promise<void> | undefined;
-  const runShutdownTasksOnce = (): Promise<void> => {
-    shutdownTasksPromise ??= performShutdownTasks();
-    return shutdownTasksPromise;
-  };
+  // `before-quit` fires ahead of every window's `close`, so recording it here is what lets a
+  // window's close handler tell a whole-app quit from a single window closing. Both this and the
+  // shared shutdown-task run live in `shutdown-latch.service` because they are per session rather
+  // than per process — see `resetShutdownLatchesForNewSession`, called from `createWindow`.
+  //
+  // Distinct from the `isAppQuitting` guard on `will-quit` further below, which tracks whether that
+  // handler's graceful shutdown has already started.
+  app.on('before-quit', () => {
+    markQuitRequested();
+  });
 
   // #region Set up the protocol client to receive navigation to this app's URI scheme
 
@@ -448,6 +507,12 @@ async function main() {
 
   /** Sets up the electron BrowserWindow renderer process */
   const createWindow = async () => {
+    // A window is being created, so the app is alive and whatever brought the last one down is
+    // finished. On macOS that is not the same as process start: closing the final window runs the
+    // shutdown tasks and leaves the app resident, and reactivating from the dock lands here — so
+    // without this the second and every later session would come down without syncing.
+    resetShutdownLatchesForNewSession();
+
     // Load the previous state with fallback to defaults.
     // Only use windowStateKeeper for the first window; subsequent windows let the OS stagger them.
     const isFirstWindow = windows.length === 0;
@@ -694,7 +759,7 @@ async function main() {
       // Checking the window count alone would therefore see 2 windows in BOTH handlers and skip
       // the shutdown sync entirely, which is exactly the data loss this bracket exists to prevent.
       // `isAppQuitRequested` is set from `before-quit`, which fires ahead of any `close`.
-      if (!isAppQuitRequested && windows.length > 1) return;
+      if (!isAppQuitRequested() && windows.length > 1) return;
 
       // A second close click while the first shutdown is still running falls through to Electron's
       // default close on purpose: with the shutdown sync's request timeout disabled by the
@@ -714,7 +779,7 @@ async function main() {
       try {
         // On a multi-window quit every window reaches this line, so the tasks are shared rather
         // than run once per window — each window waits on the same run before destroying itself.
-        await runShutdownTasksOnce();
+        await runShutdownTasksOnce(performShutdownTasks);
       } finally {
         // `event.preventDefault()` above suppresses Electron's default close; destroy() here
         // triggers the 'closed' event and allows the app to quit.
@@ -734,6 +799,13 @@ async function main() {
       } catch (e) {
         logger.warn(`Window ${windowId} close unsubscribers failed: ${getErrorMessage(e)}`);
       }
+
+      // Tell the rest of the app the window is gone. A closing renderer drops its RPC connection
+      // without disposing the network objects it hosted, so this is the only signal the surviving
+      // windows get that an app-global service they were consuming — the theme engine, the scroll
+      // group service — needs a new host. Emitted last so the bookkeeping above is settled before
+      // anyone reacts.
+      onDidCloseWindowEmitter.emit(windowId);
     });
 
     // This sets the menu on Windows and Linux

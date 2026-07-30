@@ -2009,6 +2009,23 @@ declare module 'shared/data/network-event-names' {
    * one.
    */
   export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string>;
+  /**
+   * Name of the platform-internal network event the main process emits when a window closes. The
+   * payload is the closed window's Electron window id.
+   *
+   * The main process owns window-lifecycle truth, so it is the only emitter — this is a single-source
+   * event and deliberately absent from {@link MULTI_SOURCE_EVENT_NAMES}. It is a plain string rather
+   * than a `NetworkEvents` declaration because it is core plumbing between the main process and the
+   * renderer service hosts, not part of the `@papi/*` surface.
+   *
+   * Renderers need this because a closing window tears its RPC connection down without disposing the
+   * network objects it hosted: nothing emits `object:onDidDisposeNetworkObject` on a socket close, so
+   * app-global services hosted by one window (the theme engine, the scroll group service) have no
+   * other signal that their host went away.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_CLOSE_WINDOW = 'platform:onDidCloseWindow';
 }
 declare module 'main/services/rpc-event-registry' {
   import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
@@ -2465,6 +2482,31 @@ declare module 'shared/services/network-object.service' {
   export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails>;
   /** Event that fires with a network object ID when that object is disposed locally or remotely */
   export const onDidDisposeNetworkObject: PlatformEvent<string>;
+  /**
+   * Drop every cached registration for a network object living in another process that can no longer
+   * be reached, as if that object had been disposed.
+   *
+   * Disposal is normally announced by the process that owns the object, but a process that goes away
+   * abruptly — most commonly a window the user closed — never gets to announce anything. Its
+   * registered methods are dropped from the central registry, yet every other process still holds a
+   * registration pointing at it. That cached registration is why the name looks taken to
+   * {@link set}/`registerEngine`, so app-global services hosted by one window can only be re-hosted
+   * elsewhere once it is cleared.
+   *
+   * Only remote registrations are considered, and only ones the network confirms are gone, so a call
+   * made while every object is still alive changes nothing. Runs under the same per-ID lock as
+   * {@link get} so a concurrent lookup cannot resurrect the registration mid-sweep.
+   *
+   * Reachability is decided with the same probe {@link get} uses, which retries a missing handler on
+   * the main process's registration-race cadence. Confirming a genuinely gone object therefore takes
+   * a few seconds — deliberately, since erring the other way would revoke a proxy that consumers are
+   * still legitimately using. Objects that are alive answer on the first attempt, so a sweep costs
+   * nothing when nothing has gone away.
+   *
+   * @returns IDs of the network objects that were forgotten
+   * @experimental
+   */
+  export const forgetUnreachableRemoteObjects: () => Promise<string[]>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }

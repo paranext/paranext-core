@@ -5,7 +5,10 @@ import {
 } from '@renderer/services/reference-history.util';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  forgetUnreachableRemoteObjects,
+  networkObjectService,
+} from '@shared/services/network-object.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import {
   createBufferedNetworkEventEmitter,
@@ -21,6 +24,7 @@ import {
   ReferenceHistoryUpdateInfo,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
+import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   compareScrRefs,
@@ -759,6 +763,40 @@ export async function startScrollGroupService(): Promise<void> {
   await hostOrAttachToScrollGroupService();
 }
 
+/** Whether this window is the one currently publishing the scroll group network object */
+let isPublishingScrollGroupService = false;
+
+/**
+ * Publish the scroll group network object from this window once the window that was publishing it
+ * closes.
+ *
+ * A closing renderer drops its RPC connection without disposing the objects it published, so there
+ * is no dispose event to react to — the main process's close announcement is the only signal. Every
+ * surviving window reacts; the one that wins the re-registration publishes and the rest go back to
+ * stepping aside, which is the same race that decided the original host.
+ *
+ * Skipped in the window that is already publishing: some other window closed, and re-entering the
+ * race there would drop the object it is serving to everyone else.
+ *
+ * A process that had fetched the old object still has it cached, and a cached registration makes
+ * the name look taken, so the stale registration has to be cleared before re-registering can
+ * succeed. That is also what lets `scrollGroupService` consumers in this process stop calling into
+ * the closed window.
+ */
+async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
+  if (isPublishingScrollGroupService) return;
+  await forgetUnreachableRemoteObjects();
+  await hostOrAttachToScrollGroupService();
+}
+
+getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
+  takeOverScrollGroupServiceAfterWindowClose().catch((e) => {
+    logger.warn(
+      `Failed to publish the scroll group service after a window closed: ${getErrorMessage(e)}`,
+    );
+  });
+});
+
 /**
  * Publish the scroll group network object from this window, or step aside for the window already
  * publishing it and take over when that window closes.
@@ -770,7 +808,8 @@ export async function startScrollGroupService(): Promise<void> {
  *
  * The takeover matters because that mirroring hides the failure: if the hosting window closed and
  * nothing re-published, every window would keep navigating correctly on screen while remote
- * `papi.scrollGroups` calls silently died for the rest of the session.
+ * `papi.scrollGroups` calls silently died for the rest of the session. See
+ * {@link takeOverScrollGroupServiceAfterWindowClose} for what drives that takeover.
  */
 async function hostOrAttachToScrollGroupService(): Promise<void> {
   try {
@@ -778,7 +817,7 @@ async function hostOrAttachToScrollGroupService(): Promise<void> {
     // via per-method `x-experimental` in documentation.methods[] — NOT the whole-object 5th-param
     // fanout, which would wrongly mark the stable getScrRef/setScrRef methods too. Mirrors the
     // `@experimental` TSDoc on these methods in IScrollGroupRemoteService.
-    await networkObjectService.set(
+    const publishedObject = await networkObjectService.set(
       NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
       scrollGroupService,
       'object',
@@ -824,6 +863,10 @@ async function hostOrAttachToScrollGroupService(): Promise<void> {
         ],
       },
     );
+    isPublishingScrollGroupService = true;
+    publishedObject.onDidDispose(() => {
+      isPublishingScrollGroupService = false;
+    });
   } catch (e) {
     logger.debug(
       `Another window is already publishing the scroll group service. ${getErrorMessage(e)}`,
