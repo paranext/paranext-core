@@ -423,6 +423,111 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
   });
 
+  // Partial identity: a document with a book marker but no chapter marker still has an identity
+  // ("LEV|"). Against a full identity ("LEV|14") the identities differ, so the documents are NOT
+  // treated as the same one: the incoming full-chapter update replaces the actively-edited
+  // chapter-less content instead of being deferred (and nothing is saved back through it).
+  it('replaces the actively-edited editor holding book-only content when a full book|chapter update arrives', () => {
+    const bookOnlyEditorContent: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'para', marker: 'p', content: ['intro text before any chapter marker'] },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => bookOnlyEditorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: bookOnlyEditorContent } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    act(() => rerender({ usjFromPdp: levUsj }));
+
+    expect(setUsjSpy).toHaveBeenCalledWith(levUsj); // "LEV|" !== "LEV|14" — replaced, not deferred
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // book-only content never saved back
+  });
+
+  // The partial identity is still an IDENTITY (not the unidentifiable case): two book-only
+  // documents with the same book both resolve to "LEV|", so a differing echo defers to the
+  // actively-edited editor exactly as full-identity same-document echoes do.
+  it('defers to the actively-edited editor when both documents have only a matching book marker', () => {
+    const bookOnlyEditorContent: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'para', marker: 'p', content: ['newer typing before any chapter marker'] },
+      ],
+    };
+    const bookOnlyEcho: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'para', marker: 'p', content: ['normalized echo before any chapter marker'] },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => bookOnlyEditorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: bookOnlyEditorContent } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    act(() => rerender({ usjFromPdp: bookOnlyEcho }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled(); // same "LEV|" identity — editor not clobbered
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local content pushed up instead
+  });
+
   it('still replaces the editor for a content-different update that is not our own write echo', () => {
     const externalChange = makeChapterUsj('14', 'Externally edited text.');
 
@@ -614,6 +719,8 @@ describe('useEditorPdpSync', () => {
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
 
     // A different editor's `.editor-input` (the footnote popover's own root) holds DOM focus.
+    // This focused DOM node exists to prove the hook does NOT consult the DOM: with a focused
+    // `.editor-input` present, only an editorRef.isFocused()-driven decision can still replace.
     const otherEditorInput = document.createElement('div');
     otherEditorInput.className = 'editor-input';
     otherEditorInput.tabIndex = 0;

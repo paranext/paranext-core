@@ -96,6 +96,29 @@ describe('withWriteInFlightGuard', () => {
       expect(neverSettlingOutcome).toBeInstanceOf(Promise);
     });
 
+    it('honors a non-default releaseAfterMs: still held 1 ms before it, released exactly at it', async () => {
+      const isWritingRef = { current: false };
+      const customReleaseAfterMs = 5_000;
+      const neverSettlingOutcome = withWriteInFlightGuard(
+        isWritingRef,
+        () => new Promise<boolean>(() => {}),
+        customReleaseAfterMs,
+      );
+      expect(isWritingRef.current).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(customReleaseAfterMs - 1);
+      expect(isWritingRef.current).toBe(true); // 1 ms shy of the override — still held
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(isWritingRef.current).toBe(false); // released at the override, not the 60s default
+      expect(mockLoggerWarn).toHaveBeenCalledOnce();
+      expect(mockLoggerWarn.mock.calls[0][0]).toMatch(/5000 ms/);
+
+      // Keep the never-settling promise referenced so it cannot be garbage-collected mid-test
+      expect(neverSettlingOutcome).toBeInstanceOf(Promise);
+    });
+
     it('never lets a zombie write that settles after release clear a successor write’s guard', async () => {
       const isWritingRef = { current: false };
       const zombie = deferred<boolean>();

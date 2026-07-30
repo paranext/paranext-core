@@ -297,6 +297,44 @@ describe('FootnoteEditor marker palette wiring', () => {
       );
     });
 
+    it('never shows a palette (and starts no session) when there are no marker menu items', () => {
+      // The library can legitimately offer nothing for the current context (e.g. an exhausted
+      // stylesheet subset). The `\` must then behave exactly like the no-palette degradation:
+      // the literal still lands (event not claimed) and no session is left behind to claim
+      // later keystrokes.
+      mockGetMarkerMenuItems.mockReturnValue([]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      const notPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+
+      expect(notPrevented).toBe(true); // the literal still lands
+      expect(markerPalette.show).not.toHaveBeenCalled();
+
+      // No session was started: a following keystroke is not forwarded into any palette.
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+      expect(markerPalette.update).not.toHaveBeenCalled();
+    });
+
     it('applies the resolved item and refocuses the editor when the palette resolves with an id', async () => {
       mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
       let resolveShow: (id: string | undefined) => void = () => {};
@@ -333,13 +371,15 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(editorRef.focus).toHaveBeenCalled();
     });
 
-    it('restores editor focus BEFORE applying the selection (a mouse commit blurs the editor)', async () => {
+    it('focuses the editor BEFORE applying a commit with no focus-out capture (last-resort selectNote path)', async () => {
       // Clicking a palette item moves focus out of the editor, which can null Lexical's live
       // selection — applying against a null selection lands the marker at the document tail
       // instead of the caret (observed live: an invalid `\fq` after the closing `\f*`). Lexical's
       // focus() synchronously restores the remembered selection, so the commit path must focus
       // FIRST and only then apply. This is a call-order contract, not just
-      // "both get called".
+      // "both get called". No focusout ever fires here, so the caret restore ahead of the focus
+      // is the last-resort selectNote(0) path; the focus-out capture-restore variant is covered
+      // in the commit-selection-restore suite below.
       mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'fq' })]);
       let resolveShow: (id: string | undefined) => void = () => {};
       const showPromise = new Promise<string | undefined>((resolve) => {
@@ -490,6 +530,85 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(Math.min(...mocks.selectNote.mock.invocationCallOrder)).toBeLessThan(
         mocks.apply.mock.invocationCallOrder[0],
       );
+    });
+  });
+
+  describe('editable marker mode with markerPalette, focused (selection-wrap) palette outcomes', () => {
+    // A selection-wrap `\` opens a FOCUSED palette: the palette's own search input takes focus,
+    // so every way the palette can end WITHOUT a commit must hand focus back to the editor —
+    // otherwise the user is left typing into a dead overlay.
+
+    function setUpFocusedPalette() {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'fq' })]);
+      let resolveShow: (id: string | undefined) => void = () => {};
+      let rejectShow: (reason?: unknown) => void = () => {};
+      const showPromise = new Promise<string | undefined>((resolve, reject) => {
+        resolveShow = resolve;
+        rejectShow = reject;
+      });
+      const markerPalette = makeMarkerPalette(vi.fn(() => showPromise));
+      const rendered = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(rendered.editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: true, // selection-wrap -> focused palette
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+      placeDomCaretInsideNote(rendered.editorInput);
+      rendered.editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // Every mocked EditorRef method is a `vi.fn()` (see `renderFootnoteEditor`); reaching
+      // `.mock` needs the same cast `mockMarkerMenuContext` uses.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const focusMock = rendered.editorRef.focus as ReturnType<typeof vi.fn>;
+      // Clear mount-time focus calls so the assertions isolate the palette-outcome path.
+      focusMock.mockClear();
+      return { ...rendered, markerPalette, focusMock, resolveShow, rejectShow, showPromise };
+    }
+
+    it('refocuses the editor and ends the session when the show promise REJECTS (overlay replaced)', async () => {
+      const { editorInput, editorRef, markerPalette, focusMock, rejectShow, showPromise } =
+        setUpFocusedPalette();
+
+      // The overlay service rejects a replaced `show` request with an ABORTED-coded error. The
+      // component's own catch must swallow it (an unhandled rejection would fail this test run)
+      // and treat it exactly like a dismissal.
+      rejectShow(new Error('ABORTED: replaced by a newer overlay request'));
+      await showPromise.catch(() => {});
+      // Flush the extra microtask hops the rejection takes through the `.then` before the
+      // `.catch` handler runs.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(focusMock).toHaveBeenCalled(); // focus handed back from the dead palette
+      expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
+
+      // The session ended: a following keystroke is no longer forwarded into the palette.
+      editorInput.ownerDocument.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+      expect(markerPalette.update).not.toHaveBeenCalled();
+    });
+
+    it('refocuses the editor when the palette resolves undefined (dismissed without a selection)', async () => {
+      const { editorRef, focusMock, resolveShow, showPromise } = setUpFocusedPalette();
+
+      resolveShow(undefined);
+      await showPromise;
+      // Flush the promise microtask queue so the `.then` handler runs.
+      await Promise.resolve();
+
+      expect(focusMock).toHaveBeenCalled(); // the palette's search input had focus — hand it back
+      expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
+      // A dismissal must not move the caret — only a commit restores/repositions it.
+      expect(editorRef.setSelection).not.toHaveBeenCalled();
+      expect(editorRef.selectNote).not.toHaveBeenCalled();
     });
   });
 

@@ -107,8 +107,9 @@ describe('generateInlineMarkerMenuListItems', () => {
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((i) => !i.isDisallowed)).toBe(true);
 
-    items[0].action?.();
-    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
+    items.forEach((item) => item.action?.());
+    expect(insertMarker).toHaveBeenCalledTimes(items.length);
+    items.forEach((item) => expect(insertMarker).toHaveBeenCalledWith(item.marker));
     expect(notify).not.toHaveBeenCalled();
   });
 
@@ -131,6 +132,48 @@ describe('generateInlineMarkerMenuListItems', () => {
 
     expect(items.find((i) => i.marker === 'f')?.title).toBe('A Footnote text item');
     expect(items.find((i) => i.marker === 'v')?.title).toBe('v');
+  });
+
+  it('localizes a description that is a localize key through localizedStrings', () => {
+    const { ref } = makeMockEditorRef();
+    const withLocalizeKeyDescription: StyleInfo = {
+      markers: {
+        ...BASE_STYLE_INFO.markers,
+        nd: { marker: 'nd', styleType: 'character', description: '%marker_nd_description%' },
+      },
+    };
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      { '%marker_nd_description%': 'For name of deity (localized)' },
+      false,
+      vi.fn(),
+      PARENT,
+      withLocalizeKeyDescription,
+    );
+
+    expect(items.find((i) => i.marker === 'nd')?.title).toBe('For name of deity (localized)');
+  });
+
+  it('falls back to the raw localize key when localizedStrings has no entry for it', () => {
+    const { ref } = makeMockEditorRef();
+    const withLocalizeKeyDescription: StyleInfo = {
+      markers: {
+        ...BASE_STYLE_INFO.markers,
+        nd: { marker: 'nd', styleType: 'character', description: '%marker_nd_description%' },
+      },
+    };
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      PARENT,
+      withLocalizeKeyDescription,
+    );
+
+    expect(items.find((i) => i.marker === 'nd')?.title).toBe('%marker_nd_description%');
   });
 
   it('omits a marker the supplied project stylesheet does not define (project-invalid)', () => {
