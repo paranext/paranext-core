@@ -359,7 +359,7 @@ export function PlatformBibleToolbar() {
         configAreaChildren={
           <>
             {isSendReceiveAvailable !== false && (
-              // PT-4007: fail open. Show the button whenever send/receive is available — including
+              // Fail open. Show the button whenever send/receive is available — including
               // while the availability probe is still unresolved (undefined), e.g. the extension
               // host is busy/hung during a startup auto-sync. Visibility must not hinge on that
               // probe resolving; only a confirmed `false` (extension genuinely absent) hides it.

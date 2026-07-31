@@ -231,7 +231,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
   });
 
   it('is visible and interactive while isSendReceiveAvailable is unresolved (fail-open)', async () => {
-    // PT-4007: while the availability probe hasn't resolved — e.g. the extension host is
+    // While the availability probe hasn't resolved — e.g. the extension host is
     // busy/hung during a startup auto-sync — the Sync button must stay visible, since send/receive
     // is available. Only a confirmed `false` hides it.
     vi.mocked(sendCommand).mockImplementation(
