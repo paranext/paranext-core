@@ -134,6 +134,7 @@
   "%firstRun_button_sync%": "Synchroniser",
   "%firstRun_description%": "Terminez la configuration initiale pour commencer à utiliser Platform.Bible.",
   "%firstRun_error_body%": "Nous n'avons pas pu joindre le service d'enregistrement. Vérifiez votre connexion et réessayez.",
+  "%firstRun_error_body_2%": "{%product_name%} n'a pas encore pu vérifier votre enregistrement. Son démarrage est peut-être encore en cours : réessayez dans un instant ou continuez sans terminer la configuration pour le moment.",
   "%firstRun_error_title%": "Impossible de vérifier votre enregistrement",
   "%firstRun_language_instruction%": "Ceci définit la langue de la configuration et de l'application. Vous pourrez la modifier plus tard.",
   "%firstRun_language_noResults%": "Aucune langue correspondante",
