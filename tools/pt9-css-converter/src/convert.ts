@@ -5,8 +5,9 @@
  * Pipeline ({@link convert}):
  *
  * 1. Parse the input CSS with PostCSS and strip `@font-face` at-rules (the editor handles fonts).
- * 2. Walk every rule. Selectors matching `.usfm_<marker>` are kept; table markers (`tr`, `tc1`, …) and
- *    any other selectors are skipped and recorded as warnings.
+ * 2. Walk every rule. Selectors matching `.usfm_<marker>` are kept, except the table-row marker `tr`
+ *    (skipped — its indent/margin would collapse real-table columns); non-marker selectors are
+ *    skipped too. All skips are recorded as warnings.
  * 3. For each kept marker, route its declarations into typography / non-directional / directional
  *    buckets via {@link classify}.
  * 4. Optionally diff against a base SCSS file to flag markers also styled there.
@@ -20,7 +21,11 @@
 import postcss from 'postcss';
 import { classify, mirrorRtl, type Declaration } from './classifier';
 
-const TABLE_MARKER_RE = /^(tr|tc\d+|th\d+|tcr\d+|tcc\d+|thr\d+|thc\d+)$/;
+// Only the table-row marker `\tr` is skipped: its PT9 rule is text-indent/-margin
+// (the indented-paragraph model), which would inherit into cells and collapse the
+// columns of the real <table> the editor now renders. Cell markers (tc*/th*/thc*/
+// tcc*/thr*/tcr*) ARE emitted — their font/alignment is correct on real <td>/<th>.
+const TABLE_MARKER_RE = /^tr$/;
 const MARKER_SELECTOR_RE = /^\s*\.usfm_([a-zA-Z][a-zA-Z0-9_-]*)\s*$/;
 const BASE_MARKER_RE = /\.usfm_([a-zA-Z][a-zA-Z0-9_-]*)/g;
 
@@ -56,7 +61,7 @@ export interface ConvertOptions {
 export interface ConvertWarnings {
   /** Properties outside the closed list, defaulted to typography. */
   unknownProperties: string[];
-  /** Table markers (`tr`, `tc1`, …) skipped because the editor doesn't render PT9's table model. */
+  /** Table-row marker `tr` skipped: its indent/margin would collapse real-table columns. */
   skippedTableMarkers: string[];
   /** Selectors that didn't match `.usfm_<marker>` and were skipped. */
   skippedSelectors: string[];
