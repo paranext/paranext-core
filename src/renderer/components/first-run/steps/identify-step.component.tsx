@@ -307,7 +307,9 @@ export function IdentifyStep({
             placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
             value={registrationCode}
             aria-invalid={showInvalidCode || (!!error && !isValidating)}
-            aria-describedby="identify-code-warning"
+            // Only link the description when the format-warning element is actually rendered; a
+            // backend error is announced via WizardStepForm's role="alert" Alert, not this field.
+            aria-describedby={showInvalidCode ? 'identify-code-warning' : undefined}
             onChange={onRegistrationCodeChange}
           />
           {showInvalidCode && (
