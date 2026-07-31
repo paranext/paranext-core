@@ -1,8 +1,13 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
+import {
+  getFirstRunStatus,
+  subscribeToFirstRun,
+  readTourDone,
+  writeTourDone,
+} from '@renderer/services/first-run-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { Tour, TourStep } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   SIMPLE_PANEL_ID_MODEL_TEXT,
@@ -17,8 +22,6 @@ import {
 // (status could not be determined). So this tour shows once to anyone in Simple mode who has not
 // yet seen it (new users after the wizard, existing users on their next launch), then never again
 // thanks to the localStorage flag. That is the intended behavior.
-
-const TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 
 const LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_project_title%',
@@ -38,22 +41,6 @@ const LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_stepCounter%',
 ];
 
-function readTourDoneFlag(): boolean {
-  try {
-    return localStorage.getItem(TOUR_DONE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function writeTourDoneFlag(): void {
-  try {
-    localStorage.setItem(TOUR_DONE_KEY, 'true');
-  } catch {
-    // Best-effort; a failed write just shows the tour again next launch.
-  }
-}
-
 /**
  * One-shot Simple-mode orientation tour. Shows five spotlight stops once per user (see the trigger
  * note above), then never shows again (persisted in localStorage). Renders nothing if:
@@ -68,20 +55,21 @@ function writeTourDoneFlag(): void {
 export function OnboardingTour() {
   const isPowerMode = useIsPowerMode();
   const firstRunStatus = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus);
-  const [tourDone, setTourDone] = useState(readTourDoneFlag);
+  const [tourDone, setTourDone] = useState(readTourDone);
 
   const [strings, isLoading] = useLocalizedStrings(LOCALIZE_KEYS);
 
   const handleFinish = useCallback(() => {
-    writeTourDoneFlag();
+    writeTourDone();
     setTourDone(true);
   }, []);
 
   const stepCounter = useCallback(
     (current: number, total: number) =>
-      strings['%onboardingTour_stepCounter%']
-        .replace('{current}', String(current))
-        .replace('{total}', String(total)),
+      formatReplacementString(strings['%onboardingTour_stepCounter%'] || '{current} / {total}', {
+        current: String(current),
+        total: String(total),
+      }),
     [strings],
   );
 
@@ -112,7 +100,7 @@ export function OnboardingTour() {
         spotlightPadding: 1,
       },
       {
-        target: '[data-testid="toolbar-sync-button"]',
+        target: '[data-testid="toolbar-sync-area"]',
         title: strings['%onboardingTour_step_sendReceive_title%'] ?? '',
         description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',
         side: 'bottom',
@@ -136,18 +124,33 @@ export function OnboardingTour() {
     () => !!document.querySelector(`[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`),
   );
   useEffect(() => {
+    if (!mightShow) setLayoutReady(false);
+  }, [mightShow]);
+  useEffect(() => {
     if (!mightShow || layoutReady) return undefined;
-    let rafId: number | undefined;
-    const check = () => {
-      if (document.querySelector(`[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`)) {
+    const selector = `[data-dockid="${SIMPLE_PANEL_ID_PROJECT}"]`;
+    if (document.querySelector(selector)) {
+      setLayoutReady(true);
+      return undefined;
+    }
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const observer = new MutationObserver(() => {
+      if (document.querySelector(selector)) {
+        observer.disconnect();
+        clearTimeout(timeoutId);
         setLayoutReady(true);
-        return;
       }
-      rafId = requestAnimationFrame(check);
-    };
-    rafId = requestAnimationFrame(check);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    // Safety timeout: if the panel never appears (e.g. layout load failure), open the
+    // tour anyway after 10 s rather than blocking it forever.
+    timeoutId = setTimeout(() => {
+      observer.disconnect();
+      setLayoutReady(true);
+    }, 10_000);
     return () => {
-      if (rafId !== undefined) cancelAnimationFrame(rafId);
+      observer.disconnect();
+      clearTimeout(timeoutId);
     };
   }, [mightShow, layoutReady]);
 

@@ -20,7 +20,7 @@ export const simpleLayout: LayoutBase = {
         size: 1,
         children: [
           {
-            id: 'simple-panel-model-text',
+            id: SIMPLE_PANEL_ID_MODEL_TEXT,
             group: HEADLESS_GROUP,
             panelLock: { minWidth: 300 },
             tabs: [
@@ -44,7 +44,7 @@ export const simpleLayout: LayoutBase = {
         size: 2,
         children: [
           {
-            id: 'simple-panel-project',
+            id: SIMPLE_PANEL_ID_PROJECT,
             group: HEADLESS_GROUP,
             panelLock: { minWidth: 300 },
             tabs: [
@@ -68,7 +68,7 @@ export const simpleLayout: LayoutBase = {
         size: 1,
         children: [
           {
-            id: 'simple-panel-resources',
+            id: SIMPLE_PANEL_ID_RESOURCES,
             group: TAB_GROUP_RESOURCES,
             panelLock: { minWidth: 300 },
             tabs: [

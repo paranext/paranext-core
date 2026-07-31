@@ -329,6 +329,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   let resourceProjectId: string | undefined;
   let dblMatch: (typeof dblResources)[number] | undefined;
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isBibleTextsMoreInfoOpen, setIsBibleTextsMoreInfoOpen] = useState(false);
+  const bibleTextsMoreInfoBodyId = useId();
 
   if (isDblResourceReference(selectedRef)) {
     dblMatch = findCachedDblResource(selectedRef, dblResources);
@@ -528,9 +530,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Render
 
-  const [isBibleTextsMoreInfoOpen, setIsBibleTextsMoreInfoOpen] = useState(false);
-  const bibleTextsMoreInfoBodyId = useId();
-
   const emptyStatePromptKey =
     resourceType === 'ScriptureResource'
       ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
@@ -577,14 +576,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
                 ? localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']
                 : localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
             </button>
-            {isBibleTextsMoreInfoOpen && (
-              <p
-                id={bibleTextsMoreInfoBodyId}
-                className="tw:text-sm tw:text-muted-foreground tw:max-w-xs"
-              >
-                {localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
-              </p>
-            )}
+            <p
+              id={bibleTextsMoreInfoBodyId}
+              hidden={!isBibleTextsMoreInfoOpen}
+              className="tw:text-sm tw:text-muted-foreground tw:max-w-xs"
+            >
+              {localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
+            </p>
           </>
         )}
         <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>

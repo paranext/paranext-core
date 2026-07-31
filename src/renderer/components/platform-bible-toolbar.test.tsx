@@ -219,14 +219,16 @@ describe('PlatformBibleToolbar — Sync button', () => {
     vi.useRealTimers();
   });
 
-  it('is not rendered when isSendReceiveAvailable returns false', async () => {
+  it('sync button is not rendered but toolbar-sync-area wrapper is always present when isSendReceiveAvailable returns false', async () => {
     mockSendCommand(false);
     render(<PlatformBibleToolbar />);
     await waitFor(() => {
-      // Verify absent from DOM entirely (not just hidden like the loading state)
+      // Verify button is absent from DOM entirely (not just hidden like the loading state)
       expect(
         document.querySelector('button[data-testid="toolbar-sync-button"]'),
       ).not.toBeInTheDocument();
+      // Wrapper must always be present so the onboarding tour has a stable anchor to spotlight.
+      expect(screen.getByTestId('toolbar-sync-area')).toBeInTheDocument();
     });
   });
 

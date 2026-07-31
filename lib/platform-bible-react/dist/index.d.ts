@@ -3543,6 +3543,15 @@ export interface TourStep {
 	 * @default 'bottom'
 	 */
 	side?: "top" | "bottom" | "start" | "end";
+	/**
+	 * Padding (px) added outside the target's bounding rect on all four sides to create the spotlight
+	 * cutout. Use a small positive value (e.g. 1) for column panels where the rc-dock divider
+	 * visually extends ~7 px into the panel — `spotlightPadding: 1` places the spotlight edge at the
+	 * divider's visual center so neither adjacent panel bleeds into the lit area.
+	 *
+	 * @default 6
+	 */
+	spotlightPadding?: number;
 }
 /** Props accepted by the {@link Tour} component. */
 export interface TourProps {

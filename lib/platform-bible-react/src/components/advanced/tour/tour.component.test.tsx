@@ -2,8 +2,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Tour, TourStep } from './tour.component';
 import { readDirection } from '@/utils/dir-helper.util';
+import { Tour, TourStep } from './tour.component';
 
 vi.mock('@/utils/dir-helper.util', () => ({
   readDirection: vi.fn(() => 'ltr'),
@@ -161,9 +161,48 @@ describe('Tour', () => {
 
   it('resolves logical sides correctly in RTL layout', () => {
     vi.mocked(readDirection).mockReturnValue('rtl');
-    // In RTL: 'start' → right, 'end' → left. Verify the component renders without error.
-    renderWithTargets([{ target: '#a', title: 'RTL Step', description: 'x', side: 'start' }], ['a']);
-    expect(screen.getByText('RTL Step')).toBeInTheDocument();
-    vi.mocked(readDirection).mockReturnValue('ltr');
+
+    // Give the target element a real bounding rect so computeCardPosition has non-zero geometry.
+    // jsdom always returns zeros from getBoundingClientRect, so we mock it on the element.
+    const TARGET_RECT = { left: 100, top: 50, width: 80, height: 40, right: 180, bottom: 90 };
+    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (this.id === 'a')
+        // The spread can't satisfy the full DOMRect interface (it has methods); this cast is the
+        // standard jsdom test workaround for mocking getBoundingClientRect return shapes.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return {
+          ...TARGET_RECT,
+          x: TARGET_RECT.left,
+          y: TARGET_RECT.top,
+          toJSON: () => ({}),
+        } as DOMRect;
+      return originalGetBoundingClientRect.call(this);
+    };
+
+    try {
+      renderWithTargets(
+        [{ target: '#a', title: 'RTL Step', description: 'x', side: 'start' }],
+        ['a'],
+      );
+      expect(screen.getByText('RTL Step')).toBeInTheDocument();
+
+      // In RTL, side='start' → physical 'right', so the card is placed to the right of the target.
+      // Expected card left = rect.left + rect.width + CARD_GAP_PX = 100 + 80 + 12 = 192.
+      // That is greater than the target's right edge (rect.left + rect.width = 180).
+      const titleEl = screen.getByText('RTL Step');
+      const card = titleEl.closest<HTMLElement>('div[style]');
+      expect(card).not.toBeNull();
+      // The preceding expect(card).not.toBeNull() confirms non-null; TypeScript cannot narrow
+      // through Vitest assertions, so the non-null assertion is unavoidable here.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const cardLeft = parseInt(card!.style.left, 10);
+      expect(cardLeft).toBeGreaterThan(TARGET_RECT.left + TARGET_RECT.width);
+    } finally {
+      // Restore prototype mocks regardless of assertion failures so subsequent tests are not
+      // contaminated by the overridden getBoundingClientRect.
+      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      vi.mocked(readDirection).mockReturnValue('ltr');
+    }
   });
 });
