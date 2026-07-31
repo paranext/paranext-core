@@ -20,10 +20,10 @@ export interface TourStep {
    */
   side?: 'top' | 'bottom' | 'start' | 'end';
   /**
-   * Padding (px) added outside the target's bounding rect on all four sides to create the
-   * spotlight cutout. Use a small positive value (e.g. 1) for column panels where the rc-dock
-   * divider visually extends ~7 px into the panel — `spotlightPadding: 1` places the spotlight
-   * edge at the divider's visual center so neither adjacent panel bleeds into the lit area.
+   * Padding (px) added outside the target's bounding rect on all four sides to create the spotlight
+   * cutout. Use a small positive value (e.g. 1) for column panels where the rc-dock divider
+   * visually extends ~7 px into the panel — `spotlightPadding: 1` places the spotlight edge at the
+   * divider's visual center so neither adjacent panel bleeds into the lit area.
    *
    * @default 6
    */
@@ -154,11 +154,19 @@ export function Tour({
   const maskId = useId();
   const descId = useId();
 
-  useEffect(() => {
-    if (!open) return;
+  useLayoutEffect(() => {
+    if (!open) {
+      setVisibleSteps([]);
+      setPos(0);
+      setTargetRect(undefined);
+      return;
+    }
     setVisibleSteps(steps.filter((step) => !!document.querySelector(step.target)));
     setPos(0);
-  }, [open, steps]);
+    // Snapshot steps once on open; intentionally excludes 'steps' from deps so mid-tour
+    // locale updates do not reset the user back to step 1.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const currentStep = visibleSteps[pos];
 
@@ -190,20 +198,25 @@ export function Tour({
     };
   }, [open, currentStep]);
 
-  // Measure real card height after every render so position math uses the actual size rather than
+  // Measure real card height after step changes so position math uses the actual size rather than
   // the approximation constant. The functional setter prevents re-render loops.
+  // Scoped to step changes only; card content is stable within a step.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const measured = cardRef.current?.offsetHeight;
     if (measured) setCardHeight((prev) => (prev !== measured ? measured : prev));
-  });
+  }, [open, pos]);
 
   // Save focus on open; restore it on close.
   useEffect(() => {
     if (open) {
       savedFocusRef.current = document.activeElement ?? undefined;
-    } else if (savedFocusRef.current instanceof HTMLElement) {
-      savedFocusRef.current.focus();
+    } else if (
+      savedFocusRef.current instanceof HTMLElement ||
+      savedFocusRef.current instanceof SVGElement
+    ) {
+      // Guard against the element being removed from the DOM while the tour was open.
+      if (savedFocusRef.current.isConnected) savedFocusRef.current.focus();
       savedFocusRef.current = undefined;
     }
   }, [open]);
@@ -239,6 +252,32 @@ export function Tour({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [open, onSkip]);
 
+  // Focus trap: cycle Tab/Shift+Tab among the card's buttons while the dialog is open.
+  useEffect(() => {
+    if (!open || !currentStep) return undefined;
+    // Query focusable elements once per step — card content is stable within a step.
+    const focusable = Array.from(
+      cardRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
+    );
+    const trapFocus = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    // Capture phase ensures stopPropagation inside card buttons cannot block the trap.
+    document.addEventListener('keydown', trapFocus, true);
+    return () => document.removeEventListener('keydown', trapFocus, true);
+  }, [open, currentStep]);
+
   // React component must return null to render nothing.
   // eslint-disable-next-line no-null/no-null
   if (!open || !currentStep || !targetRect) return null;
@@ -255,6 +294,7 @@ export function Tour({
   return (
     <div
       role="dialog"
+      aria-modal="true"
       aria-label={currentStep.title}
       aria-describedby={descId}
       className="tw:fixed tw:inset-0"

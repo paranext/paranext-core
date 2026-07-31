@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
+import { readTourDone, writeTourDone } from '@renderer/services/first-run-store';
 import type { TourProps, TourStep } from 'platform-bible-react';
 import { SIMPLE_PANEL_ID_PROJECT } from '@renderer/components/docking/simple-layout.data';
 import { OnboardingTour } from './onboarding-tour.component';
@@ -32,9 +33,15 @@ let mockStatus: FirstRunStatus = { kind: 'app' };
 let mockIsPowerMode = false;
 let mockIsLocalizationLoading = false;
 
+let mockTourDone = false;
+
 vi.mock('@renderer/services/first-run-store', () => ({
   getFirstRunStatus: () => mockStatus,
   subscribeToFirstRun: () => () => {},
+  readTourDone: () => mockTourDone,
+  writeTourDone: () => {
+    mockTourDone = true;
+  },
 }));
 
 vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
@@ -50,9 +57,17 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 }));
 
 // Mock Tour so we can assert what OnboardingTour hands it without a real DOM/spotlight.
-vi.mock('platform-bible-react', () => ({
-  Tour: ({ open, steps, onDone, onSkip }: TourProps) =>
-    open ? (
+// Spread the real module so other platform-bible-react imports in the tested component
+// (e.g. TourStep type, future hooks) don't silently become undefined.
+// NOTE: MockTour is defined inside the factory to avoid the vi.mock hoisting TDZ issue —
+// vi.mock() calls are hoisted before const declarations, so a top-level MockTour const would
+// be uninitialized when the factory runs.
+vi.mock('platform-bible-react', async (importOriginal) => {
+  // Function declaration required by react/function-component-definition; defined inside the
+  // factory to avoid the vi.mock hoisting TDZ issue (top-level const would be uninitialized).
+  function MockTourComponent({ open, steps, onDone, onSkip }: TourProps) {
+    if (!open) return undefined;
+    return (
       <div data-testid="mock-tour">
         <span data-testid="step-count">{steps.length}</span>
         <span data-testid="step-sides">{steps.map((s: TourStep) => s.side).join(',')}</span>
@@ -66,10 +81,13 @@ vi.mock('platform-bible-react', () => ({
           skip
         </button>
       </div>
-    ) : undefined,
-}));
-
-const TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
+    );
+  }
+  return {
+    ...(await importOriginal<typeof import('platform-bible-react')>()),
+    Tour: MockTourComponent,
+  };
+});
 
 // OnboardingTour polls for this element before it opens (the dock layout loads async, so the
 // panel divs are not present at startup; we add a stand-in so the layoutReady gate clears).
@@ -79,7 +97,7 @@ beforeEach(() => {
   mockStatus = { kind: 'app' };
   mockIsPowerMode = false;
   mockIsLocalizationLoading = false;
-  localStorage.removeItem(TOUR_DONE_KEY);
+  mockTourDone = false;
 
   layoutPanelEl = document.createElement('div');
   layoutPanelEl.setAttribute('data-dockid', SIMPLE_PANEL_ID_PROJECT);
@@ -88,7 +106,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  localStorage.removeItem(TOUR_DONE_KEY);
+  mockTourDone = false;
   layoutPanelEl?.remove();
 });
 
@@ -115,14 +133,14 @@ describe('OnboardingTour', () => {
   it('sets the done flag and hides the tour when Done is clicked', () => {
     render(<OnboardingTour />);
     fireEvent.click(screen.getByRole('button', { name: 'done' }));
-    expect(localStorage.getItem(TOUR_DONE_KEY)).toBe('true');
+    expect(readTourDone()).toBe(true);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
   it('sets the done flag and hides the tour when Skip is clicked', () => {
     render(<OnboardingTour />);
     fireEvent.click(screen.getByRole('button', { name: 'skip' }));
-    expect(localStorage.getItem(TOUR_DONE_KEY)).toBe('true');
+    expect(readTourDone()).toBe(true);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 
@@ -157,7 +175,7 @@ describe('OnboardingTour', () => {
   });
 
   it('does not render when the tour has already been completed', () => {
-    localStorage.setItem(TOUR_DONE_KEY, 'true');
+    writeTourDone();
     render(<OnboardingTour />);
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });

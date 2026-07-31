@@ -25,13 +25,12 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference } from './resource-reference.utils';
+import { isDblResourceReference, getRefLabel } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { scrollToVerse } from './editor-dom.util';
-import { getRefLabel } from './resource-reference.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -397,11 +396,13 @@ export function ModelTextPanel({
                 ? localizedStrings['%webView_modelTextPanel_emptyState_lessInfo%']
                 : localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
             </button>
-            {isMoreInfoOpen && (
-              <p id={moreInfoBodyId} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
-                {localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
-              </p>
-            )}
+            <p
+              id={moreInfoBodyId}
+              hidden={!isMoreInfoOpen}
+              className="tw:text-sm tw:text-muted-foreground tw:max-w-xs"
+            >
+              {localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
+            </p>
             <Button onClick={() => handlePickModelText()}>
               {localizedStrings['%webView_modelTextPanel_pickModelText%']}
             </Button>

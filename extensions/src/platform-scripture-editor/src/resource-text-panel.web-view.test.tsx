@@ -127,26 +127,31 @@ vi.mock('./scripture-text-grid/dbl-resource-lookup.utils', () => ({
 }));
 
 vi.mock('./install-state-views.component', () => ({
-  InstallFailedView: ({ message, retryLabel, onRetry }: Record<string, unknown>) =>
+  InstallFailedView: ({
+    message,
+    retryLabel,
+    onRetry,
+  }: {
+    message: string;
+    retryLabel: string;
+    onRetry: () => void;
+  }) =>
     React.createElement(
       'div',
-      null,
-      React.createElement('p', null, message as string),
-      React.createElement(
-        'button',
-        { type: 'button', onClick: onRetry as () => void },
-        retryLabel as string,
-      ),
+      {},
+      React.createElement('p', {}, message),
+      React.createElement('button', { type: 'button', onClick: onRetry }, retryLabel),
     ),
-  InstallingView: ({ label }: Record<string, unknown>) =>
-    React.createElement('p', null, label as string),
+  InstallingView: ({ label }: { label: string }) => React.createElement('p', {}, label),
 }));
 
 // ---------------------------------------------------------------------------
 // Import the component AFTER all mocks are set up.
 // The file assigns to globalThis.webViewComponent as its side effect.
 // ---------------------------------------------------------------------------
-// eslint-disable-next-line import/order
+// Must follow vi.mock() calls so the side effect runs against the mock boundaries above.
+// Vitest's hoisting ensures execution order is correct regardless of static position.
+// eslint-disable-next-line import/first
 import './resource-text-panel.web-view';
 
 // ---------------------------------------------------------------------------
@@ -154,14 +159,21 @@ import './resource-text-panel.web-view';
 // ---------------------------------------------------------------------------
 
 /** Minimal WebViewProps for zero-state renders (no resources, with projectId). */
-function makeProps(overrides: Partial<WebViewProps> = {}): WebViewProps {
+function makeProps(
+  overrides: Partial<WebViewProps> = {},
+  resourceType: 'ScriptureResource' | 'Commentary' = 'ScriptureResource',
+): WebViewProps {
+  // The object literal only provides the minimum props needed for testing — the double cast
+  // avoids satisfying every optional field of WebViewProps in each helper.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return {
     projectId: 'test-project-id',
     updateWebViewDefinition: vi.fn(),
     useWebViewState: vi.fn(
+      // useWebViewState is generic (key → TState) but mocks can't express that genericity.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (key: string, defaultValue: any): [any, (val: any) => void] => {
-        if (key === 'resourceType') return [defaultValue, vi.fn()];
+        if (key === 'resourceType') return [resourceType, vi.fn()];
         return [defaultValue, vi.fn()];
       },
     ),
@@ -175,6 +187,8 @@ function makeProps(overrides: Partial<WebViewProps> = {}): WebViewProps {
 
 /** Reads the component set by the web view file's side effect. */
 function getResourceTextPanel(): React.ComponentType<WebViewProps> {
+  // globalThis is a special interface; cast to Record<string, unknown> to access a property added at runtime.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   return (globalThis as Record<string, unknown>)
     .webViewComponent as React.ComponentType<WebViewProps>;
 }
@@ -189,6 +203,7 @@ function renderZeroState(resourceType: 'ScriptureResource' | 'Commentary' = 'Scr
 
   const props = makeProps({
     useWebViewState: vi.fn(
+      // useWebViewState is generic (key → TState) but mocks can't express that genericity.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (key: string, defaultValue: any): [any, (val: any) => void] => {
         if (key === 'resourceType') return [resourceType, vi.fn()];
@@ -230,13 +245,13 @@ describe('ResourceTextPanel — More info disclosure toggle', () => {
     renderZeroState('ScriptureResource');
     const btn = screen.getByRole('button', { name: 'More info' });
 
-    // Body hidden initially
-    expect(screen.queryByText('Bible texts detail here.')).not.toBeInTheDocument();
+    // Body hidden initially — element is in the DOM but hidden via the `hidden` attribute.
+    expect(screen.getByText('Bible texts detail here.')).not.toBeVisible();
 
     fireEvent.click(btn);
 
     // Body now visible; button label changed to "Less info"
-    expect(screen.getByText('Bible texts detail here.')).toBeInTheDocument();
+    expect(screen.getByText('Bible texts detail here.')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Less info' })).toHaveAttribute(
       'aria-expanded',
       'true',
@@ -248,11 +263,11 @@ describe('ResourceTextPanel — More info disclosure toggle', () => {
 
     // Expand first
     fireEvent.click(screen.getByRole('button', { name: 'More info' }));
-    expect(screen.getByText('Bible texts detail here.')).toBeInTheDocument();
+    expect(screen.getByText('Bible texts detail here.')).toBeVisible();
 
-    // Collapse
+    // Collapse — element stays in DOM but is hidden again via the `hidden` attribute.
     fireEvent.click(screen.getByRole('button', { name: 'Less info' }));
-    expect(screen.queryByText('Bible texts detail here.')).not.toBeInTheDocument();
+    expect(screen.getByText('Bible texts detail here.')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'More info' })).toHaveAttribute(
       'aria-expanded',
       'false',

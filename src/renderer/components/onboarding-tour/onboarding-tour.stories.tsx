@@ -4,7 +4,7 @@ import { OnboardingTour } from './onboarding-tour.component';
 const meta: Meta<typeof OnboardingTour> = {
   title: 'Advanced/OnboardingTour',
   component: OnboardingTour,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   parameters: {
     layout: 'fullscreen',
     docs: {
@@ -19,8 +19,9 @@ export default meta;
 
 type Story = StoryObj<typeof OnboardingTour>;
 
-// Storybook cannot fully replicate the real app's dock layout DOM, so the Tour's
-// target selectors won't find their targets in stories. The Tour component renders
-// null when no target is found, making this story primarily useful for
-// verifying that OnboardingTour mounts and conditionally renders.
+// OnboardingTour requires a live Simple-mode dock layout with real panel IDs in the DOM to show
+// tour steps. In Storybook, the dock panels are absent so the Tour's step-filter finds no targets
+// and the component renders null. This story is useful for verifying the component mounts without
+// crashing — use the live app with localStorage.removeItem('platform-bible.onboardingTourComplete')
+// to see the full tour.
 export const Default: Story = {};
