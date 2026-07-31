@@ -33,5 +33,8 @@ export default meta;
 type Story = StoryObj<typeof FirstRunGate>;
 
 export const Loading: Story = { args: { status: { kind: 'loading' } } };
+// slowRevealMs: 0 reveals the "taking longer" escape immediately so the slow-loading state is
+// visible in Storybook without waiting out the real ~15s threshold.
+export const SlowLoading: Story = { args: { status: { kind: 'loading' }, slowRevealMs: 0 } };
 export const ErrorState: Story = { args: { status: { kind: 'error' } } };
 export const WizardActive: Story = { args: { status: { kind: 'wizard', step: 'language' } } };
