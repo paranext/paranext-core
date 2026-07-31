@@ -61,6 +61,47 @@ export interface ElectronAppContext {
   preserveUserDataDir?: boolean;
 }
 
+/**
+ * Wait for the given port to stop accepting connections (i.e., be free). Used after teardown to
+ * ensure the previous Electron's extension-host WebSocket server has released port 8876 before the
+ * next test launches. On Windows, killing the Electron main process does not always kill the
+ * extension-host child process immediately; without this wait, the next `waitForWebSocketReady`
+ * connects to the dying extension host rather than the new one, causing "Settings service
+ * undefined" errors.
+ */
+async function waitForPortFree(port: number, timeout: number): Promise<void> {
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeout) {
+    // Sequential polling: each probe must finish before starting the next.
+    // eslint-disable-next-line no-await-in-loop
+    const isFree = await new Promise<boolean>((resolve) => {
+      const ws = new WebSocket(`ws://localhost:${port}`);
+      const timer = setTimeout(() => {
+        ws.close();
+        resolve(true); // Connection timed out → port is free (no one listening)
+      }, 500);
+      ws.on('open', () => {
+        clearTimeout(timer);
+        ws.close();
+        resolve(false); // Connection succeeded → port is still in use
+      });
+      ws.on('error', () => {
+        clearTimeout(timer);
+        resolve(true); // Connection refused → port is free
+      });
+    });
+    if (isFree) return;
+    // Sequential polling: each probe must complete before the next starts.
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 250);
+    });
+  }
+  // Do not throw — if the port is never freed within the window, log and proceed; the next
+  // launch will fail its own waitForWebSocketReady with a clearer error.
+  console.warn(`[teardown] Port ${port} still in use after ${timeout}ms — proceeding anyway`);
+}
+
 /** Wait for the WebSocket server to be ready on the specified port. */
 async function waitForWebSocketReady(port: number, timeout: number): Promise<void> {
   const startTime = Date.now();
@@ -316,6 +357,15 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   } else if (!electronProcess) {
     console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
   }
+
+  // Wait for the extension-host's WebSocket server (port 8876) to release the port before the next
+  // launch. On Windows, killing the Electron main process does not immediately kill child
+  // processes — the extension host can outlive the main process and keep port 8876 bound, causing
+  // the next test's waitForWebSocketReady to connect to the wrong (dying) server. Runs before the
+  // preserve-and-return path too, since a relaunch reuses the same fixed port 8876.
+  console.log('[teardown] Waiting for port 8876 to be free...');
+  await waitForPortFree(DEFAULT_WEBSOCKET_PORT, 15_000);
+  console.log('[teardown] Port 8876 is free');
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see
   // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
