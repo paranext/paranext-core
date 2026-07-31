@@ -28,7 +28,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_loading%',
   '%firstRun_loading_detail%',
   '%firstRun_error_title%',
-  '%firstRun_error_body%',
+  '%firstRun_error_body_2%',
   '%firstRun_button_retry%',
   '%firstRun_button_continueWithoutSetup%',
   // Referenced via {%product_name%} in the title/description/error body; formatReplacementString
@@ -106,7 +106,7 @@ export function FirstRunGate({
           >
             <h1 className="tw:text-lg tw:font-medium">{strings['%firstRun_error_title%']}</h1>
             <p className="tw:text-sm tw:text-muted-foreground">
-              {formatReplacementString(strings['%firstRun_error_body%'], strings)}
+              {formatReplacementString(strings['%firstRun_error_body_2%'], strings)}
             </p>
             <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
               <Button ref={retryButtonRef} onClick={() => retryFirstRunResolution()}>

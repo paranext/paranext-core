@@ -35,6 +35,7 @@
   "%firstRun_button_sync%": "Sync",
   "%firstRun_description%": "Complete the initial setup to start using {%product_name%}.",
   "%firstRun_error_body%": "{%product_name%} couldn't reach the registration service. Check your connection and try again, or continue without finishing setup for now.",
+  "%firstRun_error_body_2%": "{%product_name%} couldn't verify your registration yet. It may still be starting up — retry in a moment, or continue without finishing setup for now.",
   "%firstRun_error_title%": "Couldn't verify your registration",
   "%firstRun_language_instruction%": "This sets the language for setup and for the app. You can change it later.",
   "%firstRun_language_noResults%": "No matching languages",
