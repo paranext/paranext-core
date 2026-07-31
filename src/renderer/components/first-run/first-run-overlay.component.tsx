@@ -16,7 +16,7 @@ import {
   Z_INDEX_FIRST_RUN,
 } from 'platform-bible-react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import { ComponentType, useEffect, useRef, useSyncExternalStore } from 'react';
+import { ComponentType, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { VisuallyHidden } from 'radix-ui';
 import { FirstRunStep } from '@renderer/services/first-run.model';
 import { FirstRunShell } from './first-run-shell.component';
@@ -27,6 +27,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_description%',
   '%firstRun_loading%',
   '%firstRun_loading_detail%',
+  '%firstRun_loading_slow%',
   '%firstRun_error_title%',
   '%firstRun_error_body_2%',
   '%firstRun_button_retry%',
@@ -42,18 +43,43 @@ const FULL_SCREEN_CONTENT =
   'tw:fixed tw:inset-0 tw:top-0 tw:start-0 tw:block tw:h-screen tw:w-screen tw:max-w-none tw:sm:max-w-none tw:translate-x-0 tw:rtl:translate-x-0 tw:translate-y-0 tw:gap-0 tw:overflow-auto tw:rounded-none tw:bg-background tw:p-0 tw:ring-0';
 
 /**
+ * How long the gate can sit in `loading` before it reveals a "continue without setup" escape
+ * beneath the spinner. Registration probing retries a slow/starting provider for tens of seconds
+ * (see resolveRegistrationValidity), so without this the user has no way out until it finally
+ * fails. ~15 s ≈ one full probe attempt: long enough not to tempt a bail during the usual fast
+ * resolve, short enough that a genuinely-stuck startup isn't a dead end.
+ */
+const REGISTRATION_SLOW_REVEAL_MS = 15_000;
+
+/**
  * Inner gate component. Only mounts when the wizard is active, so the localization subscription
  * only runs while the gate is actually showing (not for the app's lifetime after onboarding).
  */
 export function FirstRunGate({
   status,
   stepComponents,
+  slowRevealMs = REGISTRATION_SLOW_REVEAL_MS,
 }: {
   status: Exclude<FirstRunStatus, { kind: 'app' }>;
   /** Optional step-body overrides forwarded to the shell (e.g. demo/testing screens). */
   stepComponents?: Record<FirstRunStep, ComponentType<FirstRunStepProps>>;
+  /** Delay before the loading state reveals the escape hatch. Overridable for tests/stories. */
+  slowRevealMs?: number;
 }) {
   const [strings] = useLocalizedStrings(KEYS);
+
+  // Reveal the escape hatch once loading has run long enough (see REGISTRATION_SLOW_REVEAL_MS).
+  // Re-armed per loading entry and torn down on unmount / when loading ends, so it never fires late
+  // against a stale state.
+  const [loadingIsSlow, setLoadingIsSlow] = useState(false);
+  useEffect(() => {
+    if (status.kind !== 'loading') {
+      setLoadingIsSlow(false);
+      return undefined;
+    }
+    const timer = setTimeout(() => setLoadingIsSlow(true), slowRevealMs);
+    return () => clearTimeout(timer);
+  }, [status.kind, slowRevealMs]);
 
   // The gate opens in `loading` (no focusable element), so Radix parks focus on the DialogContent
   // container and does NOT re-run mount-autofocus when status flips loading→error in the same open
@@ -87,15 +113,27 @@ export function FirstRunGate({
         </VisuallyHidden.Root>
 
         {status.kind === 'loading' && (
-          <div
-            role="status"
-            className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-3"
-          >
-            <Spinner />
-            <p className="tw:text-sm tw:font-medium">{strings['%firstRun_loading%']}</p>
-            <p className="tw:text-xs tw:text-muted-foreground">
-              {strings['%firstRun_loading_detail%']}
-            </p>
+          <div className="tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:gap-4">
+            <div role="status" className="tw:flex tw:flex-col tw:items-center tw:gap-3">
+              <Spinner />
+              <p className="tw:text-sm tw:font-medium">{strings['%firstRun_loading%']}</p>
+              <p className="tw:text-xs tw:text-muted-foreground">
+                {strings['%firstRun_loading_detail%']}
+              </p>
+            </div>
+            {/* Escape hatch once probing runs long (see REGISTRATION_SLOW_REVEAL_MS). Kept outside
+                the role="status" live region so it isn't re-announced. continueWithoutRegistration
+                supersedes the in-flight resolution so its late result can't reopen the gate. */}
+            {loadingIsSlow && (
+              <div className="tw:flex tw:max-w-md tw:flex-col tw:items-center tw:gap-2 tw:text-center">
+                <p className="tw:text-xs tw:text-muted-foreground">
+                  {strings['%firstRun_loading_slow%']}
+                </p>
+                <Button variant="ghost" onClick={() => continueWithoutRegistration()}>
+                  {strings['%firstRun_button_continueWithoutSetup%']}
+                </Button>
+              </div>
+            )}
           </div>
         )}
 

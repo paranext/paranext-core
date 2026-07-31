@@ -80,6 +80,10 @@ let status: FirstRunStatus = computeInitialStatus();
 // retryFirstRunResolution from starting a second run while one is already in flight.
 let resolvePromise: Promise<void> | undefined;
 let resolving = false;
+// Bumped when a resolution starts or a user action (continue-without-setup from the loading
+// watchdog) supersedes an in-flight one, so a late-settling resolveInternal can't clobber the
+// newer status. See applyStatus in resolveInternal.
+let resolutionGeneration = 0;
 
 const listeners = new Set<() => void>();
 
@@ -141,7 +145,13 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   }
 }
 
-async function resolveInternal(): Promise<void> {
+async function resolveInternal(generation: number): Promise<void> {
+  // Gate every status update on this run's generation: if a user action superseded it mid-flight
+  // (e.g. "continue without setup" from the loading watchdog while a slow probe was still awaiting),
+  // drop the late result rather than clobbering the user's choice.
+  const applyStatus = (next: FirstRunStatus): void => {
+    if (generation === resolutionGeneration) setStatus(next);
+  };
   try {
     // Demo/UX mode (PT-4219): bypass the real registration backend + relaunch entirely and drop the
     // user straight into the wizard from the top. Enablement only — never on in shipped builds.
@@ -149,7 +159,7 @@ async function resolveInternal(): Promise<void> {
     // WIZARD_ACTIVE_KEY, so leaving it unset keeps a later real first-run on the same profile from
     // wrongly resuming at the sync-consent step.
     if (isDemoMode()) {
-      setStatus({ kind: 'wizard', step: 'language' });
+      applyStatus({ kind: 'wizard', step: 'language' });
       return;
     }
 
@@ -163,7 +173,7 @@ async function resolveInternal(): Promise<void> {
       interfaceMode = readCachedInterfaceMode();
     }
     if (interfaceMode !== undefined && interfaceMode !== 'simple') {
-      setStatus({ kind: 'app' });
+      applyStatus({ kind: 'app' });
       return;
     }
 
@@ -209,7 +219,7 @@ async function resolveInternal(): Promise<void> {
           logger.warn(`Self-heal write of platform.syncOnStartup failed: ${getErrorMessage(e)}`);
         }
       }
-      setStatus({ kind: 'app' });
+      applyStatus({ kind: 'app' });
       return;
     }
 
@@ -230,10 +240,10 @@ async function resolveInternal(): Promise<void> {
     switch (decision.action) {
       case 'completeThenShowApp':
         await markFirstRunComplete();
-        setStatus({ kind: 'app' });
+        applyStatus({ kind: 'app' });
         break;
       case 'waitForRegistration':
-        setStatus({ kind: 'error' });
+        applyStatus({ kind: 'error' });
         break;
       case 'startWizard':
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
@@ -248,25 +258,27 @@ async function resolveInternal(): Promise<void> {
           await seedInterfaceLanguageFromOsLocale();
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
-        setStatus({ kind: 'wizard', step: decision.step });
+        applyStatus({ kind: 'wizard', step: decision.step });
         break;
       default:
         // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
         // checked and returned early). Defensive fallback.
-        setStatus({ kind: 'app' });
+        applyStatus({ kind: 'app' });
         break;
     }
   } catch (e) {
     logger.warn(`resolveFirstRunState failed: ${getErrorMessage(e)}`);
-    setStatus({ kind: 'error' });
+    applyStatus({ kind: 'error' });
   }
 }
 
 // Clears the `resolving` guard even if resolveInternal throws.
 async function runResolution(): Promise<void> {
   resolving = true;
+  resolutionGeneration += 1;
+  const generation = resolutionGeneration;
   try {
-    await resolveInternal();
+    await resolveInternal(generation);
   } finally {
     resolving = false;
   }
@@ -321,6 +333,9 @@ export async function completeFirstRun(options?: { skippedStep?: FirstRunStep })
  * then the user is in simple mode with no project and cannot open projects/resources.
  */
 export function continueWithoutRegistration(): void {
+  // Supersede any in-flight resolution (the user may reach this from the loading watchdog while a
+  // slow probe is still awaiting) so its late result can't override this choice.
+  resolutionGeneration += 1;
   setStatus({ kind: 'app' });
 }
 
