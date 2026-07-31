@@ -97,6 +97,11 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         },
       });
 
+      // Bind to loopback so only clients on this machine can reach the PAPI websocket. Connections
+      // are unauthenticated and every registered method is callable over them, so the server must
+      // never accept traffic arriving on a non-loopback interface. Bind by name rather than a
+      // literal address: clients connect to `localhost` too, so both ends resolve through the same
+      // resolver and agree on the IP version, whichever the host prefers.
       this.webSocketServer = new WebSocketServer({ host: 'localhost', port: WEBSOCKET_PORT });
       this.webSocketServer.addListener('connection', this.onClientConnect);
       this.webSocketServer.addListener('close', this.disconnect);
