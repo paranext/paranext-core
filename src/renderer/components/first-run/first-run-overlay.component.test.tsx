@@ -191,6 +191,10 @@ describe('FirstRunOverlay', () => {
   it('offers a retry on the error status', async () => {
     mockGetStatus.mockReturnValue({ kind: 'error' });
     render(<FirstRunOverlay />);
+    // Guard the %firstRun_error_body_2% key wiring: if the component reverts to the deprecated key
+    // or typos this one, formatReplacementString renders an empty body and this assertion fails —
+    // otherwise a blank error screen would ship with a green suite.
+    expect(screen.getByText(/it may still be starting up/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(store.retryFirstRunResolution).toHaveBeenCalledOnce();
   });
