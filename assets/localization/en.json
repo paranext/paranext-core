@@ -45,6 +45,7 @@
   "%firstRun_language_title%": "Choose your language",
   "%firstRun_loading%": "Starting setup…",
   "%firstRun_loading_detail%": "Checking your registration information. This may take a moment.",
+  "%firstRun_loading_slow%": "This is taking longer than expected. You can keep waiting, or continue without finishing setup.",
   "%firstRun_step_identify_dontShowAgain%": "Don't show this on startup again",
   "%firstRun_step_identify_heading%": "Enter your registration information",
   "%firstRun_step_identify_registryHelp%": "Can't find your registration code?",

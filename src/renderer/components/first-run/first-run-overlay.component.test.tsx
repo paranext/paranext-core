@@ -18,9 +18,11 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_loading%': 'Starting setup…',
       '%firstRun_loading_detail%':
         'Checking your registration information. This may take a moment.',
+      '%firstRun_loading_slow%': 'This is taking longer than expected.',
       '%firstRun_error_title%': "Couldn't verify your registration",
       '%firstRun_error_body_2%': 'It may still be starting up — retry in a moment.',
       '%firstRun_button_retry%': 'Retry',
+      '%firstRun_button_continueWithoutSetup%': 'Continue without setup',
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
@@ -154,8 +156,12 @@ beforeAll(() => {
 
 // beforeEach (not afterEach) so mocks are clean even when a prior test throws mid-run.
 beforeEach(() => vi.clearAllMocks());
-// restoreAllMocks resets vi.spyOn implementations; clearAllMocks alone does not.
-afterEach(() => vi.restoreAllMocks());
+// restoreAllMocks resets vi.spyOn implementations; clearAllMocks alone does not. useRealTimers
+// undoes any fake timers a test installed so it can't leak into the next test's userEvent.
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 
 describe('FirstRunOverlay', () => {
   it('renders nothing when status is app', () => {
@@ -203,6 +209,21 @@ describe('FirstRunOverlay', () => {
     mockGetStatus.mockReturnValue({ kind: 'loading' });
     render(<FirstRunOverlay />);
     expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('reveals a continue-without-setup escape after loading stays slow (PT-4302)', () => {
+    vi.useFakeTimers();
+    mockGetStatus.mockReturnValue({ kind: 'loading' });
+    render(<FirstRunOverlay />);
+    // Hidden while loading is still within the expected window, so a fast resolve never flashes it.
+    expect(
+      screen.queryByRole('button', { name: /continue without setup/i }),
+    ).not.toBeInTheDocument();
+    // Past the reveal threshold the escape appears so a stuck startup is never a dead end.
+    act(() => {
+      vi.advanceTimersByTime(15000);
+    });
+    expect(screen.getByRole('button', { name: /continue without setup/i })).toBeInTheDocument();
   });
 
   it('re-renders when the store emits a new status (subscription live-update)', () => {

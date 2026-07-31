@@ -142,6 +142,7 @@
   "%firstRun_language_title%": "選擇您的語言",
   "%firstRun_loading%": "正在啟動設定…",
   "%firstRun_loading_detail%": "正在檢查您的註冊資訊。這可能需要一點時間。",
+  "%firstRun_loading_slow%": "這比預期花費的時間更長。您可以繼續等待，或不完成設定繼續。",
   "%firstRun_step_identify_heading%": "輸入您的註冊資訊",
   "%firstRun_step_identify_registryHelp%": "找不到您的註冊碼？",
   "%firstRun_step_identify_registryLink%": "前往 Paratext 登錄中心",

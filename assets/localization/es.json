@@ -164,6 +164,7 @@
   "%firstRun_language_title%": "Elija su idioma",
   "%firstRun_loading%": "Iniciando la configuración…",
   "%firstRun_loading_detail%": "Comprobando su información de registro. Esto puede tardar un momento.",
+  "%firstRun_loading_slow%": "Esto está tardando más de lo esperado. Puede seguir esperando o continuar sin completar la configuración.",
   "%firstRun_stepIndicator%": "Paso {stepNumber} de {stepCount}",
   "%firstRun_step_identify_heading%": "Ingrese su información de registro",
   "%firstRun_step_identify_registryHelp%": "¿No puede encontrar su código de registro?",

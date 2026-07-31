@@ -144,6 +144,7 @@
   "%firstRun_language_title%": "Choisissez votre langue",
   "%firstRun_loading%": "Démarrage de la configuration…",
   "%firstRun_loading_detail%": "Vérification de vos informations d'enregistrement. Cela peut prendre un moment.",
+  "%firstRun_loading_slow%": "Cela prend plus de temps que prévu. Vous pouvez continuer à patienter ou poursuivre sans terminer la configuration.",
   "%firstRun_step_identify_heading%": "Saisissez vos informations d'enregistrement",
   "%firstRun_step_identify_registryHelp%": "Vous ne trouvez pas votre code d'enregistrement ?",
   "%firstRun_step_identify_registryLink%": "Visiter le registre Paratext",
