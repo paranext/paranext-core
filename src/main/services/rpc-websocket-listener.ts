@@ -97,7 +97,7 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
         },
       });
 
-      this.webSocketServer = new WebSocketServer({ port: WEBSOCKET_PORT });
+      this.webSocketServer = new WebSocketServer({ host: 'localhost', port: WEBSOCKET_PORT });
       this.webSocketServer.addListener('connection', this.onClientConnect);
       this.webSocketServer.addListener('close', this.disconnect);
 
