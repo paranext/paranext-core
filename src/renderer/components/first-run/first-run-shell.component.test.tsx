@@ -2,32 +2,21 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { ReactNode, useEffect } from 'react';
+import { ChangeEvent, ComponentType, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
+import { FirstRunStep } from '@renderer/services/first-run.model';
 import { FirstRunStepProps } from './first-run-step-props.model';
 import { DEFAULT_STEP_COMPONENTS, FirstRunShell } from './first-run-shell.component';
 
-// Stubs call setCanProceed(true) so goToStep's canProceed-reset doesn't strand navigation
-// at a stub step that never re-enables Next.
-function LanguageStub({ setCanProceed }: FirstRunStepProps) {
-  useEffect(() => setCanProceed?.(true), [setCanProceed]);
-  return <p>language step</p>;
-}
-function IdentifyStub({ setCanProceed }: FirstRunStepProps) {
-  useEffect(() => setCanProceed?.(true), [setCanProceed]);
-  return <p>identify step</p>;
-}
-
-const STUB_STEPS = {
-  ...DEFAULT_STEP_COMPONENTS,
-  language: LanguageStub,
-  internetSettings: InternetSettingsPlaceholder,
-  identify: IdentifyStub,
-};
-
 vi.mock('@renderer/services/first-run-store', () => ({
   completeFirstRun: vi.fn(),
+  // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
+  markJustRegistered: vi.fn(),
+}));
+vi.mock('lucide-react', () => ({
+  CircleCheck: () => <span data-testid="circle-check-icon" />,
+  AlertCircle: () => <span data-testid="alert-circle-icon" />,
 }));
 // SyncConsentStep calls paratextBibleSendReceive.syncProjects via sendCommand; mock it so the
 // shell tests exercise navigation wiring without a live PAPI backend.
@@ -52,6 +41,20 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
       '%firstRun_step_syncProgress_complete_body%': 'Your projects are ready.',
       '%product_name%': 'Platform.Bible',
+      // IdentifyStep strings (used by the entry-step handshake integration test)
+      '%firstRun_step_identify_heading%': 'Enter your registration information',
+      '%firstRun_step_identify_registryHelp%': "Can't find your registration code?",
+      '%firstRun_step_identify_registryLink%': 'Visit Paratext Registry',
+      '%firstRun_step_identify_validatingCode%': 'Checking your registration…',
+      '%paratextRegistration_label_registrationName%': 'Registration name',
+      '%paratextRegistration_label_registrationCode%': 'Registration code',
+      '%paratextRegistration_alert_validRegistration%': 'Registration accepted',
+      '%paratextRegistration_alert_invalidRegistration%': 'Not found',
+      '%paratextRegistration_alert_invalidRegistration_description%': 'Check name and code.',
+      '%paratextRegistration_button_saveAndRestart%': 'Save and restart',
+      '%paratextRegistration_button_restarting%': 'Restarting...',
+      '%paratextRegistration_warning_invalid_registration_length%': 'Code must be 30 hex chars.',
+      '%general_error_title%': 'Error',
     },
     false,
   ]),
@@ -65,6 +68,7 @@ vi.mock('@shared/services/network.service', () => ({
 // Mock platform-bible-react to avoid the React version conflict that arises when
 // lib/platform-bible-react/dist/index.js loads a different React instance via demo-first-run-setup.
 // Button must forward onClick/disabled; useEvent must subscribe/unsubscribe via effects.
+// Alert/AlertTitle/AlertDescription/Input are also mocked for tests that render real step components.
 vi.mock('platform-bible-react', () => {
   function ButtonStub({
     children,
@@ -91,7 +95,36 @@ vi.mock('platform-bible-react', () => {
     return <div role="progressbar" aria-valuenow={value} aria-label={ariaLabel} />;
   }
   return {
+    Alert: ({ children, variant }: { children: ReactNode; variant?: string }) => (
+      <div role="alert" data-variant={variant}>
+        {children}
+      </div>
+    ),
+    AlertTitle: ({ children }: { children: ReactNode }) => <strong>{children}</strong>,
+    AlertDescription: ({ children }: { children: ReactNode }) => <span>{children}</span>,
     Button: ButtonStub,
+    Input: ({
+      id,
+      value,
+      onChange,
+      'aria-invalid': ariaInvalid,
+      'aria-describedby': ariaDescribedBy,
+    }: {
+      [key: string]: unknown;
+      id?: string;
+      value?: string;
+      onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+      'aria-invalid'?: boolean | 'false' | 'true' | 'grammar' | 'spelling';
+      'aria-describedby'?: string;
+    }) => (
+      <input
+        id={id}
+        value={value}
+        onChange={onChange}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+      />
+    ),
     Progress: ProgressStub,
     Spinner: () => <span data-testid="spinner" />,
     // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
@@ -114,10 +147,37 @@ vi.mock('platform-bible-react', () => {
 
 const mockComplete = vi.mocked(store.completeFirstRun);
 
-function InternetSettingsPlaceholder({ setCanProceed }: FirstRunStepProps) {
-  useEffect(() => setCanProceed?.(true), [setCanProceed]);
-  return <p>Internet settings placeholder</p>;
+// Dummy step components for shell tests — decouples navigation tests from real step content.
+// Each stub calls setCanProceed(true) so goToStep's canProceed-reset doesn't strand
+// navigation tests at a stub step that never re-enables Next.
+function makeDummyStep(label: string): ComponentType<FirstRunStepProps> {
+  function DummyStep({ setCanProceed }: FirstRunStepProps) {
+    useEffect(() => setCanProceed?.(true), [setCanProceed]);
+    return <p>{label}</p>;
+  }
+  return DummyStep;
 }
+
+// SyncConsent dummy also calls setCanSkip(true) — the real step does this, and shell tests that
+// navigate through STUB_STEPS to syncConsent verify the shell surfaces Skip only on that step.
+function SyncConsentDummy({ setCanProceed, setCanSkip }: FirstRunStepProps) {
+  useEffect(() => {
+    setCanProceed?.(true);
+    setCanSkip?.(true);
+  }, [setCanProceed, setCanSkip]);
+  return <p>sync-consent-step</p>;
+}
+
+const DUMMY_STEPS: Record<FirstRunStep, ComponentType<FirstRunStepProps>> = {
+  language: makeDummyStep('language-step'),
+  internetSettings: makeDummyStep('internet-settings-step'),
+  identify: makeDummyStep('identify-step'),
+  syncConsent: SyncConsentDummy,
+  syncProgress: makeDummyStep('sync-progress-step'),
+};
+
+// Alias used by tests that were written against the older STUB_STEPS name.
+const STUB_STEPS = DUMMY_STEPS;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -146,29 +206,29 @@ describe('FirstRunShell', () => {
   }
 
   it('advances through steps with the shell Next button', async () => {
-    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
-    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    render(<FirstRunShell entryStep="language" stepComponents={DUMMY_STEPS} />);
+    expect(screen.getByText('language-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
+    expect(screen.getByText('identify-step')).toBeInTheDocument();
   });
 
   it('goes back to a step visited earlier this session', async () => {
-    render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
+    render(<FirstRunShell entryStep="language" stepComponents={DUMMY_STEPS} />);
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internetSettings
-    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // internetSettings → identify
-    expect(screen.getByText(/identify step/i)).toBeInTheDocument();
+    expect(screen.getByText('identify-step')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.queryByText(/identify step/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/internet settings placeholder/i)).toBeInTheDocument();
+    expect(screen.queryByText('identify-step')).not.toBeInTheDocument();
+    expect(screen.getByText('internet-settings-step')).toBeInTheDocument();
   });
 
   it('does not offer Back at the resume entry step (no walking into completed steps)', () => {
     // A post-relaunch user resumes at syncConsent; the already-completed language/internetSettings/identify
     // steps behind it must be unreachable (backing into the Identify step would re-trigger the relaunch).
-    render(<FirstRunShell entryStep="syncConsent" />);
+    render(<FirstRunShell entryStep="syncConsent" stepComponents={DUMMY_STEPS} />);
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
@@ -198,7 +258,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...STUB_STEPS, language: SkippableStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: SkippableStep }}
       />,
     );
     await waitFor(() => screen.getByRole('button', { name: /skip/i }));
@@ -241,7 +301,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, language: OwnsActionStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: OwnsActionStep }}
       />,
     );
     await waitFor(() =>
@@ -395,7 +455,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, language: BlockingStep }}
+        stepComponents={{ ...DUMMY_STEPS, language: BlockingStep }}
       />,
     );
     await waitFor(() => expect(screen.getByRole('button', { name: /next/i })).toBeDisabled());
@@ -429,7 +489,7 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="language" stepComponents={STUB_STEPS} />);
     await userEvent.click(screen.getByRole('button', { name: /next/i })); // language → internet
     await userEvent.click(screen.getByRole('button', { name: /back/i })); // internet → language
-    expect(screen.getByText(/language step/i)).toBeInTheDocument();
+    expect(screen.getByText(/language-step/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /back/i })).not.toBeInTheDocument();
   });
 
@@ -445,7 +505,7 @@ describe('FirstRunShell', () => {
     render(
       <FirstRunShell
         entryStep="language"
-        stepComponents={{ ...STUB_STEPS, internetSettings: BlockingStep }}
+        stepComponents={{ ...DUMMY_STEPS, internetSettings: BlockingStep }}
       />,
     );
     expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled();
@@ -479,5 +539,14 @@ describe('FirstRunShell', () => {
     render(<FirstRunShell entryStep="syncConsent" />);
     // formatReplacementString fills {stepNumber} → 4, {stepCount} → 4 (NUMBERED_STEPS.length).
     expect(screen.getByText('Step 4 of 4')).toBeInTheDocument();
+  });
+
+  it('hides shell Next when real IdentifyStep mounts at the entry step (setCanProceed handshake)', async () => {
+    // IdentifyStep calls setCanProceed(undefined) via useLayoutEffect — verifies the shell wires
+    // it correctly and that the real component's mount handshake suppresses Next.
+    render(<FirstRunShell entryStep="identify" stepComponents={DEFAULT_STEP_COMPONENTS} />);
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
+    );
   });
 });
