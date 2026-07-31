@@ -359,10 +359,10 @@ export function PlatformBibleToolbar() {
         configAreaChildren={
           <>
             {isSendReceiveAvailable !== false && (
-              // While loading (undefined), the button stays in the DOM so layout doesn't shift, but
-              // is hidden via tw:invisible (visual), aria-hidden (accessibility tree), and tabIndex=-1
-              // (keyboard navigation). All three are required: tw:invisible alone is still reachable
-              // by AT and keyboard; aria-hidden alone is still tab-focusable.
+              // Fail open. Show the button whenever send/receive is available — including
+              // while the availability probe is still unresolved (undefined), e.g. the extension
+              // host is busy/hung during a startup auto-sync. Visibility must not hinge on that
+              // probe resolving; only a confirmed `false` (extension genuinely absent) hides it.
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -370,13 +370,7 @@ export function PlatformBibleToolbar() {
                       data-testid="toolbar-sync-button"
                       variant="ghost"
                       size="sm"
-                      className={cn(
-                        'pr-twp tw:h-8 tw:shrink-0',
-                        isSendReceiveAvailable === undefined && 'tw:invisible',
-                      )}
-                      // || undefined removes the attribute entirely when visible; aria-hidden="false" has different semantics than omitting it
-                      aria-hidden={isSendReceiveAvailable === undefined || undefined}
-                      tabIndex={isSendReceiveAvailable === undefined ? -1 : undefined}
+                      className="pr-twp tw:h-8 tw:shrink-0"
                       onClick={() => {
                         sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
                           logger.warn(
