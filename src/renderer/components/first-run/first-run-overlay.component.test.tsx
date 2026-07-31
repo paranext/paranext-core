@@ -19,7 +19,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_loading_detail%':
         'Checking your registration information. This may take a moment.',
       '%firstRun_error_title%': "Couldn't verify your registration",
-      '%firstRun_error_body%': 'Check your connection and try again.',
+      '%firstRun_error_body_2%': 'It may still be starting up — retry in a moment.',
       '%firstRun_button_retry%': 'Retry',
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',

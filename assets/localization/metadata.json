@@ -35,6 +35,12 @@
       "message": "Replaced by %firstRun_button_skipSync% when the real sync-consent step was implemented in PT-4178."
     }
   },
+  "%firstRun_error_body%": {
+    "deprecationInfo": {
+      "date": "2026-07-30",
+      "message": "Reworded to stop blaming the network: the registration check is local, so an unresolved probe means the provider is still starting up, not that the connection is down (PT-4302). The new key is %firstRun_error_body_2%."
+    }
+  },
   "%firstRun_step_language_placeholder%": {
     "deprecationInfo": {
       "date": "2026-07-20",
