@@ -19,6 +19,15 @@ export interface TourStep {
    * @default 'bottom'
    */
   side?: 'top' | 'bottom' | 'start' | 'end';
+  /**
+   * Padding (px) added outside the target's bounding rect on all four sides to create the
+   * spotlight cutout. Use a small positive value (e.g. 1) for column panels where the rc-dock
+   * divider visually extends ~7 px into the panel — `spotlightPadding: 1` places the spotlight
+   * edge at the divider's visual center so neither adjacent panel bleeds into the lit area.
+   *
+   * @default 6
+   */
+  spotlightPadding?: number;
 }
 
 /** Props accepted by the {@link Tour} component. */
@@ -237,10 +246,11 @@ export function Tour({
   const physicalSide = resolvePhysicalSide(currentStep.side ?? 'bottom');
   const cardPos = computeCardPosition(targetRect, physicalSide, cardHeight);
 
-  const spotX = targetRect.left - SPOTLIGHT_PADDING_PX;
-  const spotY = targetRect.top - SPOTLIGHT_PADDING_PX;
-  const spotW = targetRect.width + SPOTLIGHT_PADDING_PX * 2;
-  const spotH = targetRect.height + SPOTLIGHT_PADDING_PX * 2;
+  const pad = currentStep.spotlightPadding ?? SPOTLIGHT_PADDING_PX;
+  const spotX = targetRect.left - pad;
+  const spotY = targetRect.top - pad;
+  const spotW = targetRect.width + pad * 2;
+  const spotH = targetRect.height + pad * 2;
 
   return (
     <div

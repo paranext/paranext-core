@@ -56,6 +56,9 @@ vi.mock('platform-bible-react', () => ({
       <div data-testid="mock-tour">
         <span data-testid="step-count">{steps.length}</span>
         <span data-testid="step-sides">{steps.map((s: TourStep) => s.side).join(',')}</span>
+        <span data-testid="step-padding">
+          {steps.map((s: TourStep) => s.spotlightPadding ?? '').join(',')}
+        </span>
         <button type="button" onClick={onDone}>
           done
         </button>
@@ -100,6 +103,13 @@ describe('OnboardingTour', () => {
     expect(screen.getByTestId('step-count').textContent).toBe('5');
     // Logical sides only — never physical left/right (Tour resolves those via readDirection).
     expect(screen.getByTestId('step-sides').textContent).toBe('start,end,start,bottom,bottom');
+  });
+
+  it('passes spotlightPadding:1 for the three column panel steps, none for toolbar steps', () => {
+    render(<OnboardingTour />);
+    // Column panels use padding 1 so the spotlight edge sits at the rc-dock divider visual center.
+    // Toolbar steps use the Tour default (omitted).
+    expect(screen.getByTestId('step-padding').textContent).toBe('1,1,1,,');
   });
 
   it('sets the done flag and hides the tour when Done is clicked', () => {

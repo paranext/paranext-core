@@ -92,18 +92,24 @@ export function OnboardingTour() {
         title: strings['%onboardingTour_step_project_title%'] ?? '',
         description: strings['%onboardingTour_step_project_description%'] ?? '',
         side: 'start',
+        // rc-dock dividers are 2 px wide but transform: scaleX(8) makes them visually 16 px —
+        // extending ~7 px into each adjacent panel. spotlightPadding: 1 places the spotlight edge
+        // at the divider's visual center so neither adjacent panel bleeds into the lit area.
+        spotlightPadding: 1,
       },
       {
         target: `[data-dockid="${SIMPLE_PANEL_ID_MODEL_TEXT}"]`,
         title: strings['%onboardingTour_step_modelText_title%'] ?? '',
         description: strings['%onboardingTour_step_modelText_description%'] ?? '',
         side: 'end',
+        spotlightPadding: 1,
       },
       {
         target: `[data-dockid="${SIMPLE_PANEL_ID_RESOURCES}"]`,
         title: strings['%onboardingTour_step_resources_title%'] ?? '',
         description: strings['%onboardingTour_step_resources_description%'] ?? '',
         side: 'start',
+        spotlightPadding: 1,
       },
       {
         target: '[data-testid="toolbar-sync-button"]',
