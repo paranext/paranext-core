@@ -138,8 +138,8 @@ export function useProjectPickerData(): ProjectPickerData {
   // three sections refetch.
   const onDidChangeProjects = useMemo(() => getNetworkEvent('platform.onDidChangeProjects'), []);
   useEvent(onDidChangeProjects, refreshMetadata);
-  // Heal the project list when a PDP factory registers after the startup grace window expires
-  // (PT-4299). internalGetMetadataWithRetries only retries within 30 s of process start; if the
+  // Heal the project list when a PDP factory registers after the startup grace window expires.
+  // internalGetMetadataWithRetries only retries within 30 s of process start; if the
   // USJ-providing layering PDPF (Scripture Extender) arrives after that window AND neither
   // onDidReloadExtensions nor onDidChangeProjects fires, the picker stays empty until the user
   // triggers an unrelated refresh. Subscribing here ensures a late-arriving PDPF always heals

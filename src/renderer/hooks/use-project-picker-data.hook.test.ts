@@ -589,8 +589,8 @@ describe('useProjectPickerData', () => {
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(2);
   });
 
-  it('re-fetches metadata when a PDP factory registers via object:onDidCreateNetworkObject (PT-4299 healing)', async () => {
-    // Reproduces the PT-4299 race: the 30-second startup grace window in
+  it('re-fetches metadata when a PDP factory registers via object:onDidCreateNetworkObject (healing)', async () => {
+    // Reproduces the race: the 30-second startup grace window in
     // internalGetMetadataWithRetries expires before the USJ-providing layering PDPF
     // (Scripture Extender) registers. The initial metadata fetch returns empty because no
     // factory providing platformScripture.USJ_Chapter has registered yet. When the PDPF
@@ -645,7 +645,7 @@ describe('useProjectPickerData', () => {
     }
   });
 
-  it('heals allProjects after a timed-out metadata fetch once the retry resolves (PT-4299 timeout recovery)', async () => {
+  it('heals allProjects after a timed-out metadata fetch once the retry resolves (timeout recovery)', async () => {
     // Reproduces the scenario observed in console logs where getAvailableProjects times out
     // (JSON-RPC 30-second timeout) because the extension host is overloaded at startup. The
     // late response is discarded ("Ignoring subsequent resolution"), leaving the picker empty.
@@ -759,7 +759,7 @@ describe('useProjectPickerData', () => {
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
   });
 
-  it('cancels the pending retry timer when a concurrent refresh heals the list (PT-4299 spurious Fetch C)', async () => {
+  it('cancels the pending retry timer when a concurrent refresh heals the list (spurious Fetch C)', async () => {
     // Reproduces the race where Fetch A fails (isRetryPending=true, 5-second timer scheduled),
     // then an external PDPF registration fires while the timer is still running. Fetch B (triggered
     // by the PDPF) succeeds and heals the list. The timer must be cancelled so it does not fire a
@@ -815,7 +815,7 @@ describe('useProjectPickerData', () => {
     }
   });
 
-  it('stale-generation success does not reset the retry budget for a newer failing generation (PT-4299 cap integrity)', async () => {
+  it('stale-generation success does not reset the retry budget for a newer failing generation (cap integrity)', async () => {
     // Reproduces the race where a slow in-flight Gen A promise (up to 30 s in the service's
     // startup retry loop) resolves after a newer Gen B+ has already exhausted part of its retry
     // budget. Gen A's unguarded .then() must NOT reset fetchRetryCountRef.current, or subsequent
@@ -899,7 +899,7 @@ describe('useProjectPickerData', () => {
     }
   });
 
-  it('multiple rapid PDPF registrations trigger only one getMetadataForAllProjects fan-out (PT-4299 debounce)', async () => {
+  it('multiple rapid PDPF registrations trigger only one getMetadataForAllProjects fan-out (debounce)', async () => {
     // When PDPFs re-register after extension reload they arrive as separate WebSocket messages,
     // so React cannot batch the resulting refreshMetadata() calls. Each would normally fan out
     // getMetadataForAllProjects to every registered PDPF; the fix debounces the PDPF-registration
