@@ -38,7 +38,10 @@ async function resolveRegistrationValidityOnce(timeoutMs: number): Promise<Regis
       // treating it as 'invalid' would wrongly re-onboard a registered user.
       return 'unknown';
     } catch (e) {
-      logger.warn(`Could not resolve registration validity: ${getErrorMessage(e)}`);
+      // Debug, not warn: a failed probe is the expected transient during a busy startup and is
+      // retried by resolveRegistrationValidity, which logs a single warning only if every attempt
+      // fails. Warning here would fire on the common retried-then-succeeded startup.
+      logger.debug(`Registration probe did not complete: ${getErrorMessage(e)}`);
       return 'unknown';
     }
   }, timeoutMs);
@@ -55,25 +58,30 @@ async function resolveRegistrationValidityOnce(timeoutMs: number): Promise<Regis
  * take a while to come up, so we retry rather than immediately stranding a registered, connected
  * user on the error screen (PT-4302). A definitive `'valid'`/`'invalid'` returns right away.
  *
- * Each probe also absorbs the command layer's own missing-handler retry (~10 s), so giving up can
- * take tens of seconds (up to ~`maxAttempts * timeoutMs` plus inter-probe delays); the gate shows
- * its loading spinner throughout.
+ * Giving up after all attempts takes tens of seconds: each probe ends either when the command layer
+ * abandons a missing handler (~10 s) or at `timeoutMs`, whichever comes first, repeated up to
+ * `maxAttempts` times plus the inter-probe backoffs. The gate shows its loading spinner
+ * throughout.
  */
 export async function resolveRegistrationValidity(
   timeoutMs = REGISTRATION_RESOLVE_TIMEOUT_MS,
   maxAttempts = REGISTRATION_RESOLVE_MAX_ATTEMPTS,
   retryDelayMs = REGISTRATION_RESOLVE_RETRY_DELAY_MS,
 ): Promise<RegistrationValidity> {
-  let validity: RegistrationValidity = 'unknown';
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    // Intentionally awaiting inside for loop so we probe once at a time, each attempt giving the
-    // provider more time to come up.
+  // Probe at least once even if a caller passes a non-positive maxAttempts (the default is 3).
+  const attempts = Math.max(1, maxAttempts);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    // Await inside the loop on purpose: probe one at a time so each retry gives the provider more
+    // time to come up.
     // eslint-disable-next-line no-await-in-loop
-    validity = await resolveRegistrationValidityOnce(timeoutMs);
-    if (validity !== 'unknown') break;
-    // Intentionally awaiting inside for loop so we back off before the next probe.
+    const validity = await resolveRegistrationValidityOnce(timeoutMs);
+    if (validity !== 'unknown') return validity;
+    // Await inside the loop on purpose: back off before the next probe (skipped after the last).
     // eslint-disable-next-line no-await-in-loop
-    if (attempt < maxAttempts) await wait(retryDelayMs);
+    if (attempt < attempts) await wait(retryDelayMs);
   }
-  return validity;
+  logger.warn(
+    `Could not resolve registration validity after ${attempts} attempt(s); the provider is likely still starting up.`,
+  );
+  return 'unknown';
 }

@@ -89,6 +89,14 @@ describe('resolveRegistrationValidity', () => {
     expect(mockSendCommand).toHaveBeenCalledTimes(3);
   });
 
+  it('still probes once when maxAttempts is non-positive (PT-4302)', async () => {
+    // Defensive clamp: a caller passing 0 (or a bad config-derived value) must not skip the probe
+    // and strand a registered user on the error screen without ever querying the provider.
+    mockSendCommand.mockResolvedValue(true);
+    await expect(resolveRegistrationValidity(1000, 0, 0)).resolves.toBe('valid');
+    expect(mockSendCommand).toHaveBeenCalledTimes(1);
+  });
+
   it('awaits the backoff between attempts and skips it after the last (PT-4302)', async () => {
     // Fake timers prove the delay is actually honored: with retryDelayMs: 0 elsewhere, a dropped
     // `await wait(...)` or a broken `attempt < maxAttempts` guard would be invisible.
