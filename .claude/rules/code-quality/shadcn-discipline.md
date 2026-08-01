@@ -1,3 +1,8 @@
+---
+paths:
+  - lib/platform-bible-react/src/components/shadcn-ui/**
+---
+
 ## shadcn/ui Edit Discipline
 
 Every change to any file in `lib/platform-bible-react/src/components/shadcn-ui/`

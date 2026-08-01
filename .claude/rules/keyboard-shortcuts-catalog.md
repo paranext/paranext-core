@@ -1,3 +1,12 @@
+---
+paths:
+  - src/main/**
+  - src/renderer/**
+  - src/stories/**
+  - extensions/src/**
+  - lib/platform-bible-react/src/**
+---
+
 ## Keep the Keyboard Shortcuts Catalog Current
 
 Platform.Bible documents every keyboard shortcut used anywhere in the application — main process,
