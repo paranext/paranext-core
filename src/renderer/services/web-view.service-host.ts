@@ -50,6 +50,7 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-store';
 import {
   getLastOpenedProject,
@@ -1030,18 +1031,24 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * layout — same code path power mode uses on restore — and renders project content immediately,
  * with no empty-placeholder → reload round-trip.
  *
- * Fast path: `getLastOpenedProject` returns the cached id (populated reactively from
+ * Fast path: `getLastOpenedProject` returns the cached id + editability (populated reactively from
  * `useProjectPickerData`), and no `await` precedes the layout swap.
  *
- * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup.
+ * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup, plus one
+ * more await to resolve the resolved project's real editability (see `resolveProjectIsEditable`).
  *
  * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
  * let the picker do the slow legacy path.
+ *
+ * Both paths resolve real editability rather than assuming the target project is editable: the
+ * cached/most-recent project can be a read-only Resource Viewer, or a project whose editability
+ * changed since it was cached (e.g. a Send/Receive that revoked edit permission). See
+ * {@link buildSimpleLayoutForProject}'s `isReadOnly` param.
  */
-async function handleSwitchToSimpleMode(): Promise<void> {
+export async function handleSwitchToSimpleMode(): Promise<void> {
   const cached = getLastOpenedProject();
   if (cached) {
-    await runProjectBoundSimpleSwitch(cached.id);
+    await runProjectBoundSimpleSwitch(cached.id, cached.isEditable === false);
     return;
   }
 
@@ -1052,9 +1059,29 @@ async function handleSwitchToSimpleMode(): Promise<void> {
     return;
   }
 
+  const isEditable = await resolveProjectIsEditable(resolvedId);
   // Populate the cache so the next switch can take the fast path.
-  setLastOpenedProject({ id: resolvedId });
-  await runProjectBoundSimpleSwitch(resolvedId);
+  setLastOpenedProject({ id: resolvedId, isEditable });
+  await runProjectBoundSimpleSwitch(resolvedId, !isEditable);
+}
+
+/**
+ * Resolves whether a project's Scripture text is editable, for baking the correct `isReadOnly` into
+ * the simple-mode layout. Mirrors the "missing means editable" default used elsewhere for
+ * `ProjectMetadata.isEditable` (see `use-project-picker-data.hook.ts`); a lookup failure is treated
+ * the same way, since falling back to editable (rather than blocking the switch) matches how this
+ * function is only ever used on the already-slow cold-start path.
+ */
+export async function resolveProjectIsEditable(projectId: string): Promise<boolean> {
+  try {
+    const metadata = await projectLookupService.getMetadataForProject(projectId);
+    return metadata.isEditable !== false;
+  } catch (err) {
+    logger.warn(
+      `Could not resolve editability for project ${projectId} while switching to Simple mode, defaulting to editable: ${getErrorMessage(err)}`,
+    );
+    return true;
+  }
 }
 
 /**
@@ -1070,7 +1097,7 @@ async function loadLayoutWithWarning(): Promise<void> {
   }
 }
 
-async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
+async function runProjectBoundSimpleSwitch(projectId: string, isReadOnly: boolean): Promise<void> {
   // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
   // the default-project picker never fires `openScriptureEditor` and the extension's
   // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
@@ -1091,13 +1118,15 @@ async function runProjectBoundSimpleSwitch(projectId: string): Promise<void> {
   });
 
   try {
-    const projectBoundLayout = buildSimpleLayoutForProject(projectId);
+    const projectBoundLayout = buildSimpleLayoutForProject(projectId, isReadOnly);
     await loadLayout(projectBoundLayout);
     // Wait for every simple-layout tab's webview to fire its open/update event, which is when
     // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
     await tabsResolved.promise;
   } catch (err) {
-    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    logger.warn(
+      `Dock layout failed to load project-bound Simple-mode layout for project ${projectId}: ${err}`,
+    );
     tabsResolved.dispose();
   } finally {
     // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean

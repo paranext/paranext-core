@@ -52,6 +52,10 @@ vi.mock('@shared/services/project-data-provider.service', () => ({
   },
 }));
 
+vi.mock('@renderer/services/last-opened-project-cache', () => ({
+  setLastOpenedProject: vi.fn(),
+}));
+
 // --- Helpers ---
 
 const EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
@@ -102,12 +106,14 @@ async function importMocks() {
     '@shared/services/project-data-provider.service'
   );
   const { useData } = await import('@renderer/hooks/papi-hooks');
+  const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
   return {
     getNetworkEvent,
     webViews,
     projectLookupService,
     papiFrontendProjectDataProviderService,
     useData,
+    setLastOpenedProject,
   };
 }
 
@@ -196,6 +202,37 @@ describe('useProjectPickerData', () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.currentProject?.fullName).toBe('Genesis Project');
     expect(result.current.currentProject?.id).toBe('proj-abc');
+  });
+
+  it('caches the current project id, name, and isEditable when it resolves', async () => {
+    // The cache-writing effect is the sole write path that seeds the fast-path cache
+    // `handleSwitchToSimpleMode` (web-view.service-host.ts) reads to bake `isReadOnly` into the
+    // Simple-mode layout. Assert its happy-path payload directly, not just the error-guard case
+    // covered by the adjacent 'does not overwrite...' test.
+    const { webViews, projectLookupService, setLastOpenedProject } = await importMocks();
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-resource' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        {
+          id: 'proj-resource',
+          fullName: 'A Resource',
+          name: 'Resource',
+          isEditable: false,
+        },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    expect(result.current.currentProject?.isEditable).toBe(false);
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenCalledWith({
+      id: 'proj-resource',
+      name: 'A Resource',
+      isEditable: false,
+    });
   });
 
   it('returns allProjects from projectLookupService metadata, without opening any project data provider', async () => {
@@ -493,6 +530,57 @@ describe('useProjectPickerData', () => {
     expect(result.current.currentProject?.id).toBe('proj-stuck');
     expect(result.current.currentProject?.fullName).toBe('Recovered Project');
     expect(result.current.currentProjectError).toBeUndefined();
+  });
+
+  it('does not overwrite the cached isEditable when a later metadata fetch fails', async () => {
+    // A transient metadata-fetch failure resolves currentProject to a degraded placeholder with no
+    // `isEditable` field (the `currentProject` promise's catch branch in the hook). Without the
+    // currentProjectError guard on the cache-writing effect, this would overwrite a previously-cached
+    // `isEditable: false` (e.g. for a Resource Viewer) with "no info" - which
+    // `handleSwitchToSimpleMode` in `web-view.service-host` treats as editable, reintroducing the
+    // read-only-baked-as-editable bug.
+    const { getNetworkEvent, webViews, projectLookupService, setLastOpenedProject } =
+      await importMocks();
+    let webViewCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-resource' },
+    ] as never);
+    // Absent from the filtered snapshot, so the hook falls back to the direct per-id lookup.
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+    vi.mocked(projectLookupService.getMetadataForProject)
+      .mockResolvedValueOnce(
+        metadata({
+          id: 'proj-resource',
+          fullName: 'A Resource',
+          name: 'Resource',
+          isEditable: false,
+        }) as never,
+      )
+      .mockRejectedValueOnce(new Error('transient PDP error'));
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(result.current.currentProject?.isEditable).toBe(false);
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'proj-resource', isEditable: false }),
+    );
+
+    // A later refresh (web view event) hits the transient failure, degrading currentProject to the
+    // error placeholder.
+    act(() => webViewCallback!());
+    await settle(result);
+    expect(result.current.currentProjectError).toBe('Unable to load current project details');
+
+    // The cache write must be skipped entirely, not overwritten with `isEditable: undefined`.
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenCalledTimes(1);
   });
 
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {

@@ -76,6 +76,27 @@ describe('last-opened-project-cache', () => {
       });
       expect(getLastOpenedProject()).toBeUndefined();
     });
+
+    it('returns isEditable: false when stored as false', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', isEditable: false }));
+      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', isEditable: false });
+    });
+
+    it('returns isEditable: true when stored as true', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', isEditable: true }));
+      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', isEditable: true });
+    });
+
+    it('omits isEditable when missing', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1' }));
+      expect(getLastOpenedProject()).toEqual({ id: 'proj-1' });
+      expect(getLastOpenedProject()).not.toHaveProperty('isEditable');
+    });
+
+    it('omits isEditable when not a boolean', () => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', isEditable: 'yes' }));
+      expect(getLastOpenedProject()).not.toHaveProperty('isEditable');
+    });
   });
 
   describe('setLastOpenedProject', () => {
@@ -104,6 +125,12 @@ describe('last-opened-project-cache', () => {
       });
       expect(() => setLastOpenedProject({ id: 'proj-1', name: 'My Project' })).not.toThrow();
     });
+
+    it('writes isEditable: false to storage when provided', () => {
+      setLastOpenedProject({ id: 'proj-1', isEditable: false });
+      const raw = localStorage.getItem(STORAGE_KEY);
+      expect(JSON.parse(raw ?? '{}')).toEqual({ id: 'proj-1', isEditable: false });
+    });
   });
 
   describe('round-trip', () => {
@@ -115,6 +142,11 @@ describe('last-opened-project-cache', () => {
     it('set with only id → get returns { id, name: undefined }', () => {
       setLastOpenedProject({ id: 'proj-1' });
       expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: undefined });
+    });
+
+    it('set → get round-trips isEditable: false', () => {
+      setLastOpenedProject({ id: 'proj-1', isEditable: false });
+      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', isEditable: false });
     });
   });
 });
