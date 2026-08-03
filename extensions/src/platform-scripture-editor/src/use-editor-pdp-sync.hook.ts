@@ -82,11 +82,21 @@ export function useEditorPdpSync({
   // round-trip converging (the editor's content matching the echo). Reset whenever an update is
   // actually applied or the round-trip converges; drives the non-convergence warning.
   const nonConvergingDeferralCount = useRef(0);
+  // The editor USJ most recently pushed back to the PDP from the deferral branch below. A
+  // non-idempotent USFM round-trip (e.g. a typed attribute literal the PDP parses into a
+  // different-but-equivalent shape) can NEVER converge, and — because the subscription is
+  // whichUpdates '*' — every save re-delivers, re-defers, and re-saves the SAME editor bytes
+  // forever. Remembering what we last pushed lets us skip re-pushing unchanged editor content, so
+  // a non-convergent round-trip degrades to a single push plus quiescence instead of an infinite
+  // save/echo loop. Reset (below) wherever the editor's content is replaced or the round-trip
+  // converges, so a genuinely new divergence always gets pushed once.
+  const lastEditorUsjPushedWhileDeferring = useRef<Usj | undefined>(undefined);
   useEffect(() => {
     if (!usjFromPdp) return;
     if (!editorRef.current) {
       // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc)
       usjSentToPdp.current = undefined;
+      lastEditorUsjPushedWhileDeferring.current = undefined;
       return;
     }
 
@@ -133,6 +143,7 @@ export function useEditorPdpSync({
           if (areUsjContentsEqualExceptWhitespace(usjFromPdp, editorUsj)) {
             // The PDP now agrees with the editor — the round-trip converged.
             nonConvergingDeferralCount.current = 0;
+            lastEditorUsjPushedWhileDeferring.current = undefined;
             logger.debug(
               'useEditorPdpSync: incoming PDP update matches the editor content; nothing to apply.',
             );
@@ -157,13 +168,29 @@ export function useEditorPdpSync({
                 'keeping local edits and pushing them up.',
             );
           }
-          saveUsjToPdpIfUpdated();
+          // Idempotency damping: only push the editor's content up when it actually changed since
+          // our last deferral push. An unchanged editor means we already sent exactly these bytes,
+          // so re-saving would only feed the whichUpdates '*' echo back into this same deferral —
+          // the infinite save/echo loop a non-idempotent round-trip (e.g. a typed
+          // `\nd text|x="y"\nd*` literal that never round-trips to itself) would otherwise sustain.
+          // Genuine continued typing changes the editor content, so real edits are still pushed;
+          // deferring the APPLY of the incoming update (not clobbering the caret) is unchanged.
+          if (
+            !areUsjContentsEqualExceptWhitespace(
+              editorUsj,
+              lastEditorUsjPushedWhileDeferring.current,
+            )
+          ) {
+            lastEditorUsjPushedWhileDeferring.current = editorUsj;
+            saveUsjToPdpIfUpdated();
+          }
           return;
         }
       }
       // The update is being applied to the editor (navigation, external change, or an idle editor),
       // so the round-trip is no longer diverging.
       nonConvergingDeferralCount.current = 0;
+      lastEditorUsjPushedWhileDeferring.current = undefined;
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP

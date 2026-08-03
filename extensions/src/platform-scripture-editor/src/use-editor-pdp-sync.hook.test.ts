@@ -161,6 +161,24 @@ describe('useEditorPdpSync', () => {
       ],
     };
 
+    // The user keeps typing across the round-trip, so the editor content advances between the
+    // first push and the echo's arrival. `liveEditorUsj` models that live-changing content.
+    const evenNewerEditorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'q1',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. typed even more',
+          ],
+        },
+      ],
+    };
+    let liveEditorUsj: Usj = newerEditorContent;
+
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
     // The user is actively editing: the editor instance reports its own root holds focus.
@@ -169,7 +187,7 @@ describe('useEditorPdpSync', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       current: {
         setUsj: setUsjSpy,
-        getUsj: () => newerEditorContent,
+        getUsj: () => liveEditorUsj,
         isFocused: () => true,
       } as unknown as EditorRef,
     };
@@ -192,6 +210,7 @@ describe('useEditorPdpSync', () => {
     saveUsjToPdpIfUpdated.mockClear();
 
     // A (PDP-normalized, content-different) echo arrives while the editor holds newer typing.
+    liveEditorUsj = evenNewerEditorContent;
     act(() => rerender({ usjFromPdp: normalizedEcho }));
 
     expect(setUsjSpy).not.toHaveBeenCalled(); // editor NOT clobbered mid-typing
@@ -396,6 +415,24 @@ describe('useEditorPdpSync', () => {
       ],
     };
 
+    // The user keeps typing across the round-trip, so the editor content advances between the
+    // first push and the echo's arrival.
+    const evenNewerEditorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'q1',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. typed even more',
+          ],
+        },
+      ],
+    };
+    let liveEditorUsj: Usj = newerEditorContent;
+
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
     const editorRef: { current: EditorRef | null } = {
@@ -403,7 +440,7 @@ describe('useEditorPdpSync', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       current: {
         setUsj: setUsjSpy,
-        getUsj: () => newerEditorContent,
+        getUsj: () => liveEditorUsj,
         isFocused: () => true,
       } as unknown as EditorRef,
     };
@@ -425,6 +462,7 @@ describe('useEditorPdpSync', () => {
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
 
+    liveEditorUsj = evenNewerEditorContent;
     act(() => rerender({ usjFromPdp: normalizedEcho }));
 
     expect(setUsjSpy).not.toHaveBeenCalled(); // editor NOT clobbered — decided by isFocused()
@@ -466,6 +504,23 @@ describe('useEditorPdpSync', () => {
       ],
     };
 
+    // The popover edit advances the main editor's content across the round-trip.
+    const evenNewerEditorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'q1',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'This is the law of the leper. edited more in popover',
+          ],
+        },
+      ],
+    };
+    let liveEditorUsj: Usj = newerEditorContent;
+
     const setUsjSpy = vi.fn();
     const saveUsjToPdpIfUpdated = vi.fn();
     const editorRef: { current: EditorRef | null } = {
@@ -473,7 +528,7 @@ describe('useEditorPdpSync', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       current: {
         setUsj: setUsjSpy,
-        getUsj: () => newerEditorContent,
+        getUsj: () => liveEditorUsj,
         isFocused: () => false, // main editor blurred — focus is in the popover
       } as unknown as EditorRef,
     };
@@ -496,6 +551,7 @@ describe('useEditorPdpSync', () => {
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
 
+    liveEditorUsj = evenNewerEditorContent;
     act(() => rerender({ usjFromPdp: normalizedEcho }));
 
     expect(setUsjSpy).not.toHaveBeenCalled(); // popover session survives — no key regeneration
@@ -762,5 +818,113 @@ describe('useEditorPdpSync', () => {
     }
 
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+  });
+
+  // Item 5 (the typed-attribute non-convergence loop). The editor holds the literal
+  // `\nd ...|stuff="thing"\nd*` bytes as content; the PDP parses those bytes so its echo carries a
+  // real char node instead. The two USJ shapes are content-different for the same book/chapter, so
+  // the convergence branch can NEVER be reached and every echo is deferred. Before the damping
+  // guard, each deferral re-saved the identical editor bytes and — because the subscription is
+  // whichUpdates '*' — that save re-delivered as the next echo, deferred, re-saved, forever. With
+  // the guard, the unchanged editor is pushed exactly once; the next identical echo produces no
+  // save, so no further echo is generated and the loop terminates.
+  it('damps the non-idempotent typed-attribute round-trip to a single save instead of looping forever', () => {
+    // What the editor holds: the attribute as literal content bytes.
+    const attributeAsContent: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'chapter', marker: 'c', number: '14' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'holy \\nd word|stuff="thing"\\nd* text',
+          ],
+        },
+      ],
+    };
+    // What the PDP echoes: the same bytes parsed into a char node — content-different, same
+    // book/chapter, so it can never equal the editor's content (non-idempotent round-trip).
+    const attributeAsProp: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'chapter', marker: 'c', number: '14' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'holy ',
+            { type: 'char', marker: 'nd', content: ['word'] },
+            ' text',
+          ],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    // Faithful save mock: a real save records the editor's own USJ as the new PDP baseline (exactly
+    // as saveUsjToPdpInternal sets usjSentToPdp.current = newUsj). Without modeling that, the echo
+    // comparison could not reproduce the loop shape at all.
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => attributeAsContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const saveUsjToPdpIfUpdated = vi.fn(() => {
+      usjSentToPdp.current = editorRef.current?.getUsj();
+    });
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    // The PDP re-delivers under whichUpdates '*': a fresh object with identical content each time.
+    // A delivery only happens in the app BECAUSE a save wrote to the PDP, so the echo dries up once
+    // a delivery causes no save.
+    const freshEcho = (): Usj => ({ ...attributeAsProp, content: [...attributeAsProp.content] });
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: attributeAsProp } },
+    );
+
+    // The mount delivery is a deferral that pushes the editor's literal up exactly once.
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalledTimes(1);
+
+    // Keep delivering echoes, but only while the previous echo actually caused a save (which is what
+    // re-arms the subscription in the app). A terminating loop stops on its own; a runaway one would
+    // save on every delivery and never break, exhausting the cap.
+    const deliverEcho = () => act(() => rerender({ usjFromPdp: freshEcho() }));
+    const MAX_DELIVERIES = 100;
+    let deliveries = 0;
+    for (; deliveries < MAX_DELIVERIES; deliveries += 1) {
+      const savesBefore = saveUsjToPdpIfUpdated.mock.calls.length;
+      deliverEcho();
+      if (saveUsjToPdpIfUpdated.mock.calls.length === savesBefore) break; // echo dried up
+    }
+
+    expect(deliveries).toBeLessThan(MAX_DELIVERIES); // terminated, not a runaway loop
+    // One push at mount, then quiescence — the unchanged editor is never re-saved.
+    expect(saveUsjToPdpIfUpdated.mock.calls.length).toBeLessThanOrEqual(2);
+    // The incoming update is always deferred (never applied) — the editor is never clobbered, and
+    // the convergence branch is never reached (that is the non-terminating condition the damping,
+    // not convergence, resolves).
+    expect(setUsjSpy).not.toHaveBeenCalled();
   });
 });
