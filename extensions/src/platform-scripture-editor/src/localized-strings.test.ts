@@ -37,3 +37,26 @@ describe('character marker menu remove row label', () => {
     );
   });
 });
+
+const CHARACTER_MARKER_CONTROL_KEYS = [
+  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%',
+  '%webView_platformScriptureEditor_characterMarkerControl_mixed%',
+  '%webView_platformScriptureEditor_characterMarkerControl_none%',
+  '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%',
+  '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%',
+];
+
+// Same guard as above, for the control's own strings: nothing in the build enforces en/es parity.
+describe.each(CHARACTER_MARKER_CONTROL_KEYS)('character marker control label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
