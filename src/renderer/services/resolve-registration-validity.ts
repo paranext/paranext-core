@@ -1,6 +1,7 @@
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, wait, waitForDuration } from 'platform-bible-utils';
+import { getErrorMessage, waitForDuration } from 'platform-bible-utils';
+import { retryUntil } from '@shared/utils/retry.util';
 import { RegistrationValidity } from './first-run.model';
 
 /**
@@ -68,20 +69,17 @@ export async function resolveRegistrationValidity(
   maxAttempts = REGISTRATION_RESOLVE_MAX_ATTEMPTS,
   retryDelayMs = REGISTRATION_RESOLVE_RETRY_DELAY_MS,
 ): Promise<RegistrationValidity> {
-  // Probe at least once even if a caller passes a non-positive maxAttempts (the default is 3).
-  const attempts = Math.max(1, maxAttempts);
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    // Await inside the loop on purpose: probe one at a time so each retry gives the provider more
-    // time to come up.
-    // eslint-disable-next-line no-await-in-loop
-    const validity = await resolveRegistrationValidityOnce(timeoutMs);
-    if (validity !== 'unknown') return validity;
-    // Await inside the loop on purpose: back off before the next probe (skipped after the last).
-    // eslint-disable-next-line no-await-in-loop
-    if (attempt < attempts) await wait(retryDelayMs);
-  }
-  logger.warn(
-    `Could not resolve registration validity after ${attempts} attempt(s); the provider is likely still starting up.`,
+  // Retry a transient 'unknown'; a definitive 'valid'/'invalid' stops immediately. retryUntil
+  // clamps maxAttempts to at least 1 and skips the backoff after the final probe.
+  const validity = await retryUntil(
+    () => resolveRegistrationValidityOnce(timeoutMs),
+    (result) => result !== 'unknown',
+    { maxAttempts, delayMs: retryDelayMs },
   );
-  return 'unknown';
+  if (validity === 'unknown') {
+    logger.warn(
+      `Could not resolve registration validity after ${Math.max(1, maxAttempts)} attempt(s); the provider is likely still starting up.`,
+    );
+  }
+  return validity;
 }

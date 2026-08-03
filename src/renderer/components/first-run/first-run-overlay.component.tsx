@@ -31,7 +31,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_error_title%',
   '%firstRun_error_body_2%',
   '%firstRun_button_retry%',
-  '%firstRun_button_continueWithoutSetup%',
+  '%firstRun_button_continueWithoutFinishingSetup%',
   // Referenced via {%product_name%} in the title/description/error body; formatReplacementString
   // expands it so the app name lives in one place (and swaps cleanly for P10 Studio).
   '%product_name%',
@@ -130,7 +130,7 @@ export function FirstRunGate({
                   {strings['%firstRun_loading_slow%']}
                 </p>
                 <Button variant="ghost" onClick={() => continueWithoutRegistration()}>
-                  {strings['%firstRun_button_continueWithoutSetup%']}
+                  {strings['%firstRun_button_continueWithoutFinishingSetup%']}
                 </Button>
               </div>
             )}
@@ -153,7 +153,7 @@ export function FirstRunGate({
               {/* Escape hatch: enter the app without registration so a down backend can't fully lock
                   the user out. Persists no completion, so the wizard returns next launch. */}
               <Button variant="ghost" onClick={() => continueWithoutRegistration()}>
-                {strings['%firstRun_button_continueWithoutSetup%']}
+                {strings['%firstRun_button_continueWithoutFinishingSetup%']}
               </Button>
             </div>
           </div>

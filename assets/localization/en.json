@@ -25,6 +25,7 @@
   "%downloadUpdateProjectTab_title_downloadUpdate%": "Download/Update Project",
   "%extension_failed_to_start%": "Extension failed to start: {extensionName}",
   "%firstRun_button_back%": "Back",
+  "%firstRun_button_continueWithoutFinishingSetup%": "Continue without finishing setup",
   "%firstRun_button_continueWithoutSetup%": "Continue without setup",
   "%firstRun_button_finish%": "Finish",
   "%firstRun_button_next%": "Next",
