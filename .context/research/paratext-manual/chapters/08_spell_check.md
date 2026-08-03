@@ -60,9 +60,9 @@ In the Wordlist
   2. If the word is **incorrect**, but Paratext 9 has **suggested** the correct word, then click the **blue link** for the correct word.
   3. If the word is **incorrect**, and Paratext 9 **hasn’t suggested** the correct word, click on the red checkbox and correct the word. (See 8.1)
 
-![](../images/converted_08_spell_check_010.png)
+*[image — see the upstream manual]*
 
-![](../images/converted_08_spell_check_011.png)
+*[image — see the upstream manual]*
 
 ### Check similarly spelled words[​](#1fdc348be8334ff6841f08689c4aaae5 "Direct link to Check similarly spelled words")
 
@@ -100,7 +100,7 @@ In Paratext
 2. Either type the correction in the box or select the correct word from the list
 3. Click **OK**
 
-![](../images/08_spell_check_17581594-26d59afc4fd84aa21efb15b3a697ae8f.png)
+*[image — see the upstream manual]*
 
 > **Tip:** When possible, it is better to use the spelling check even when making minor corrections as Paratext 9 will remember the correction, and you can apply the correction if it happens again.
 
@@ -122,7 +122,7 @@ Choose as appropriate:
 3. Click **More items available** to see additional words.
 4. Continue as needed.
 
-![](../images/08_spell_check_1361730274-42410b80bc5d2a7c5bdb9fa6a9004a07.png)
+*[image — see the upstream manual]*
 
 ## 8.4 Spell checking – from the wordlist[​](#5de76f0b6fe1460ea6c8a341b2fff194 "Direct link to 8.4 Spell checking – from the wordlist")
 
@@ -139,11 +139,11 @@ In the Wordlist
 5. Continue as needed.
 6. When you have finished the list, a message is displayed
 
-   ![](../images/08_spell_check_2079233153-fa96b7129d6604f5c40be87529685dd4.png)
+   *[image — see the upstream manual]*
 
 7. Click **Yes**.
 
-![](../images/08_spell_check_347463901-4faa02c4cf89709bdd93860b849c7bfb.png)
+*[image — see the upstream manual]*
 
 ### All checks[​](#039b8b6f676f4a8fbe3e75ec8918ecb6 "Direct link to All checks")
 
@@ -153,10 +153,10 @@ This runs all the checks. This is very useful as it will find all types of error
 
 1. A list of words is displayed which have capitalised forms but are not always capitalised (that is both forms are used). The list shows the word with a lower case, then the capitalised form below it, which has a blue link to the word
 
-   ![](../images/08_spell_check_992623483-18466b970b6d261cbae00adc266e7fb5.png)
+   *[image — see the upstream manual]*
 2. Click the blue link to the capitalised form
 
-   ![](../images/08_spell_check_1609819113-a215e99c0215c21e19e1a052996ec409.png)
+   *[image — see the upstream manual]*
 3. Click the appropriate blue link.
 4. *Show incorrect* (to see the verses)
 5. *The two forms are acceptable* (to accept both forms)
@@ -188,13 +188,13 @@ In the Wordlist (**≡ Tab**, under **Tools** – Wordlist)
 
 - **≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**
 
-  ![](../images/08_spell_check_1090617082-4e3682024603c2188a15f401f9922210.png)
+  *[image — see the upstream manual]*
 - Type in any punctuation which can be in the middle of a word e.g. - '
 - Click **OK**
 
   - *A list of words is displayed with similar words grouped together.*
 
-    ![](../images/08_spell_check_2145931087-85f8c3c8b387e768601c9fda607c1b4c.png)
+    *[image — see the upstream manual]*
 
 ### Correct a word which was incorrectly marked[​](#db3081f9aaa14b6299225b8af9fb3be0 "Direct link to Correct a word which was incorrectly marked")
 
@@ -208,6 +208,6 @@ In the Wordlist (**≡ Tab**, under **Tools** – Wordlist)
 
 1. Double-click on the note icon (in the first column)
 
-   ![](../images/08_spell_check_1113992993-dc65d1ab41d9cd72acbbbd23a18b3e1a.png)
+   *[image — see the upstream manual]*
 2. Type in the note
 3. Assign the note as necessary, and click **OK**.

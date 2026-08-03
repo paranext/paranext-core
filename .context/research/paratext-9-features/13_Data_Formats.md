@@ -57,7 +57,7 @@ Data Formats features define how Scripture and project data is stored, structure
 
 **UI Entry Points**:
 - **≡ Tab** > **View** > Standard/Unformatted/Preview (Ctrl+E to toggle)
-  - Manual: `chapters/04_keyboarding.md`, lines 55-56
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, lines 55-56
   - Quote: "**Ctrl** + **E** -or-" / "**≡ Tab** under **View** menu, choose the view (usually Standard)."
 - **Insert** menu > USFM markers (via backslash key)
   - HelpData ID: `9b81209d-eb15-44d7-b646-44a837c03c54`
@@ -593,7 +593,7 @@ Data Formats features define how Scripture and project data is stored, structure
 | Menu Structure | Menu: `Paratext > Advanced > Restore project from file`; Handler: `restoreFromFileToolStripMenuItem_Click` in `MainForm.cs`, line 1027 | `[MS]` |
 | Menu Structure | Menu: `Project > Advanced > Backup project to file`; Handler: `backupProjectToFileToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 1114 | `[MS]` |
 | Form Relationships | Opens: `BackupForm` from `MainForm.cs`, line 1023; Opens: `RestoreForm` from `MainForm.cs`, line 1029 | `[FR]` |
-| Manual | `chapters/admin/ma_03_project_sharing.md`: Backup section | `[M]` |
+| Manual | `../paratext-manual/chapters/admin/ma_03_project_sharing.md`: Backup section | `[M]` |
 | HelpData | Keyword: `ComponentBackupProject`; 9 items; Dialogs: `BackupForm`, `RestoreForm` | `[H]` |
 
 **Implementation**:
@@ -728,25 +728,3 @@ Data Formats features define how Scripture and project data is stored, structure
 - Versification differences cause significant complexity in project setup
 - Stylesheets control rendering but are separate from USFM semantic markup
 - Project structure is implemented through the ScrText class which coordinates file access, settings, and permissions
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|----|
-| 2026-01-21 | Full AGENTS.md v7.2 compliance update: Added Menu Structure [MS] sources to all 9 features; completed STUB features 13.8 (Manage Books) and 13.9 (Backup/Restore) with full Evidence Chains from ParatextWindowWithMenus.cs handlers through form dialogs to ScrText and related classes; added Form Relationships with dialog navigation; updated Validation Status table to include Menu Structure column; verified paths (43 valid, 6 external/manual references); fixed feature numbering in notes (11.x → 13.x) | Claude |
-| 2026-01-20 | Features 13.5-13.6: Added Evidence Chain implementation tables; 13.5 traced from ProjectPropertiesForm.cs through ScrText.Settings.Versification and ParatextVersificationTable to ScrTextCollection at D2; 13.6 traced from ImportBooksForm.cs through ImportSfmText and ScrText to SourceAndDestFileInfo and PtwFileInfo at D2; updated validation markers to [C] status | Claude |
-| 2026-01-20 | Features 13.3-13.4: Added Evidence Chain implementation tables; 13.3 traced from ScriptureBurritoCreationForm.cs through SBMetadata, BurritoUtensils, FoodInspector to ProjectSettings and Languages at D2; 13.4 traced from ScrText.cs through ProjectFileManager, ProjectSettings, PermissionManager to Terms, Encodings, Languages, StudyBible at D2; updated validation markers to [C] status | Claude |
-| 2026-01-20 | Features 13.3-13.7: Updated to comply with rules 6-20; added proper Sources tables with exact quotes; added Key Quotes from Requirements; updated UI Entry Points with HelpData IDs, dialogs, and keywords; added HelpData Items sections with full citations; noted Implementation sections intentionally omitted; updated validation markers to reflect actual verification status; queried HelpData for versification (5 items), stylesheet (6 items), import (8 items), burrito (0 items) | Claude |
-| 2026-01-20 | Feature 13.2: Rebuilt with Evidence Chain format; verified dialog `ExportUsxForm` leads to `Paratext/ToolsMenu/ExportUsxForm.cs`; traced D1 files `UsfmToUsx.cs` (line 75), `UsxImporter.cs`, `ImportBooksForm.cs`; traced D2 files `UsfmToken.cs` (line 34), `UsxFragmenter.cs` (line 47), `UsxValidator.cs`; documented Not Found items; added HelpData IDs with keywords | Claude |
-| 2026-01-19 | Feature 13.1: Updated Evidence Chain with verified line numbers from UsfmParser.cs; verified Manual citations in appendix_c_usfm.md (line 11-12) and 04_keyboarding.md (lines 55-56); verified HelpData IDs and added keywords; added note about core data layer component | Claude |
-| 2026-01-14 | Initial v2 documentation | Claude |
-| 2026-01-21 | Added 13.10 Project Conversion (Convert project from Project > Advanced) | Claude |
-| 2026-01-22 | Expanded 13.10 Project Conversion from stub: added full Sub-Features (6 operations), Form Relationships [FR], HelpData [H] with 9 items, Dialog Navigation, Use Cases; updated validation markers | Claude |
-
----
-
-**Document Version**: 2.8
-**Based on v1**: 04_Data_Format_Features.md
-**Last Updated**: 2026-01-22

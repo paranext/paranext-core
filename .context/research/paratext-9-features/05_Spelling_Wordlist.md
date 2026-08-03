@@ -34,7 +34,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Requirements | Section: "Lexical Analysis" | `[R]` |
-| Manual | `chapters/08_spell_check.md`, line 30: "**≡ Tab**, under **Tools** > **Wordlist**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 30: "**≡ Tab**, under **Tools** > **Wordlist**" | `[M]` |
 | Menu Structure | `ParatextWindowWithMenus`: Tools > Wordlist | `[MS]` |
 | Form Relationships | `WordListForm` opens 7 dialogs | `[FR]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling`; Dialog: `WordListForm`; 45 items | `[H]` |
@@ -70,7 +70,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
   - Form: `ParatextWindowWithMenus`
   - Handler: `wordListSpellCheckToolStripMenuItem_Click` at line 372
   - Opens: `WordListForm` via `DependencyLookup.Get<IParatextAccess>().DisplayWordlistWindow()`
-  - Manual: `chapters/08_spell_check.md`, line 30
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 30
   - Quote: "**≡ Tab**, under **Tools** > **Wordlist**"
   - HelpData ID: `6423df0e-0858-4b78-804a-3e16c09e811e`
   - Question: "How do I create a Wordlist?"
@@ -101,7 +101,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Requirements | Section: "Lexical Analysis" | `[R]` |
-| Manual | `chapters/08_spell_check.md`, line 93: "**≡ Tab**, under **View** > **Display spelling**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 93: "**≡ Tab**, under **View** > **Display spelling**" | `[M]` |
 | Menu Structure | `TextForm`: View > Display spelling errors, Tools > Spell check current book | `[MS]` |
 | HelpData | Keyword: `ComponentSpellChecking`; 2 items | `[H]` |
 
@@ -127,16 +127,16 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
   - Form: `TextForm`
   - Handler: `displaySpellingMenuItem_Click` at line 2186
   - Behavior: Line 2188: `ToggleSpellingErrors()`
-  - Manual: `chapters/08_spell_check.md`, line 93
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 93
   - Quote: "**≡ Tab**, under **View** > **Display spelling**"
 - ≡ Tab > Tools > Spell Check Current Book `[MS]`
   - Form: `TextForm`
   - Handler: `spellCheckCurrentBookToolStripMenuItem_Click` at line 2172
   - Behavior: Opens `WordListForm` filtered to current book with spelling issues
-  - Manual: `chapters/08_spell_check.md`, line 125
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 125
   - Quote: "**≡ Tab**, under **Tools** > **Spell Check Current Book**"
 - Right-click underlined word
-  - Manual: `chapters/08_spell_check.md`, line 107
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 107
   - Quote: "Right-click a word which is underlined in either red or grey"
   - HelpData ID: `c5d7a608-a767-4404-a6a5-22d09c8f440f`
   - Question: "How do I do spell checking while editing text?"
@@ -164,7 +164,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `chapters/08_spell_check.md`, line 33: "**≡ Tab**, under **Tools** > **Approve spelling of common words**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 33: "**≡ Tab**, under **Tools** > **Approve spelling of common words**" | `[M]` |
 | Menu Structure | `WordListForm`: Edit > Set spelling status (3 items), Tools > Approve spelling of common words | `[MS]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling` | `[H]` |
 
@@ -189,7 +189,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 - WordListForm > Tools > Approve spelling of common words `[MS]`
   - Form: `WordListForm`
   - Handler: `uiToolsCommonWords_Click` at line 1560
-  - Manual: `chapters/08_spell_check.md`, line 33
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 33
   - Quote: "**≡ Tab**, under **Tools** > **Approve spelling of common words**"
   - HelpData ID: `4f2747e0-0c89-48eb-8c65-ea47a8adc0dd`
   - Question: "How do I approve spelling of common or frequent words?"
@@ -225,7 +225,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `chapters/08_spell_check.md`, line 80: "**≡ Tab**, under **Tools** > **Find Similar Words**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 80: "**≡ Tab**, under **Tools** > **Find Similar Words**" | `[M]` |
 | Menu Structure | `WordListForm`: Tools > Find similar words | `[MS]` |
 | Form Relationships | `WordListForm` → `SimilarWordsSetupForm` | `[FR]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling`; Dialog: `SimilarWordsSetupForm` | `[H]` |
@@ -249,7 +249,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
   - Handler: `uiToolsSimilarWords_Click` at line 1475
   - Opens: `SimilarWordsSetupForm` (line 1477)
   - Behavior: Line 1479-1480: If dialog OK, calls `Setup(frm.WordListSource, true)`
-  - Manual: `chapters/08_spell_check.md`, line 80
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 80
   - Quote: "**≡ Tab**, under **Tools** > **Find Similar Words**"
   - HelpData ID: `a4276519-e642-4e2c-82ea-4124937e4abe`
   - Question: "How do I find words containing common typing mistakes?"
@@ -277,7 +277,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `chapters/08_spell_check.md`, line 190: "**≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 190: "**≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**" | `[M]` |
 | Menu Structure | `WordListForm`: Tools > Find incorrectly joined or split words | `[MS]` |
 | Form Relationships | `WordListForm` → `SimilarJoinedWordsSetupForm` | `[FR]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling`; Dialog: `SimilarJoinedWordsSetupForm` | `[H]` |
@@ -300,7 +300,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
   - Handler: `findSimilarJoinedWordsToolStripMenuItem_Click` at line 1666
   - Opens: `SimilarJoinedWordsSetupForm` (line 1668)
   - Behavior: Line 1670-1671: If dialog OK, sets up word list with joined/split results
-  - Manual: `chapters/08_spell_check.md`, line 190
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 190
   - Quote: "**≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**"
   - HelpData ID: `ef51de0e-ec53-4de4-8598-b05941b25357`
   - Question: "Guide: Tools > Wordlist: Tools > Find incorrectly joined or split words"
@@ -328,7 +328,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Requirements | Section: "Lexical Analysis" | `[R]` |
-| Manual | `chapters/08_spell_check.md`: References hyphenation in wordlist context | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: References hyphenation in wordlist context | `[M]` |
 | Menu Structure | `WordListForm`: Edit > Approve/Edit hyphenation, View > Show hyphenation, Tools > Proper name hyphenation | `[MS]` |
 | Form Relationships | `WordListForm` → `ProperNameHyphenationForm` | `[FR]` |
 | HelpData | Keyword: `ComponentHyphenation`; Dialog: `EditHyphenationForm` | `[H]` |
@@ -402,7 +402,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `chapters/08_spell_check.md`, line 17: "Add a spelling discussion note to words that need further discussion" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 17: "Add a spelling discussion note to words that need further discussion" | `[M]` |
 | Menu Structure | `WordListForm`: View > Show base text spelling discussion notes | `[MS]` |
 | HelpData | Keyword: `ComponentNotesOther` | `[H]` |
 
@@ -419,7 +419,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
   - Form: `WordListForm`
   - Handler: `uiViewShowBaseSpellingNotes_Click` at line 1183
   - Behavior: Line 1185: `RefreshItems()` - toggles visibility of spelling notes column
-  - Manual: `chapters/08_spell_check.md`, line 17
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 17
   - Quote: "Add a spelling discussion note to words that need further discussion"
   - HelpData ID: `918205ea-bf04-4824-a8b2-d4468ba83af7`
   - Question: "How do I see spelling discussion notes in my project?"
@@ -448,7 +448,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `chapters/08_spell_check.md`, line 134: "**≡ Tab**, under **Tools**> **Spell check >**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 134: "**≡ Tab**, under **Tools**> **Spell check >**" | `[M]` |
 | Menu Structure | `WordListForm`: Tools > Spell check > (7 submenu items) | `[MS]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling` | `[H]` |
 
@@ -471,7 +471,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
   - Form: `WordListForm`
   - Handler: `allChecksMenuItem_Click` at line 1709
   - Behavior: Line 1711: `Setup(new SpellingWordListSource(), true)`
-  - Manual: `chapters/08_spell_check.md`, line 134
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 134
   - Quote: "**≡ Tab**, under **Tools**> **Spell check >**"
   - HelpData ID: `100b2fb6-c4b8-4f36-bc35-5adc9d364da2`
   - Question: "How do I check text for specific spelling issues?"
@@ -523,7 +523,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `chapters/08_spell_check.md`: References morphology in wordlist context | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: References morphology in wordlist context | `[M]` |
 | Menu Structure | `WordListForm`: View > Show morphology, Edit > Approve/Edit morphology, Tools > Spell check by morphology | `[MS]` |
 | HelpData | Keyword: `Morphology` | `[H]` |
 
@@ -614,35 +614,6 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 | 5.10 [REMOVED] | - | - | - | - | - | - | 2026-01-21 |
 
 **Legend**: R=Requirements, M=Manual, MS=Menu Structure, FR=Form Relationships, H=HelpData, C=Code
-
----
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-15 | HelpData queries for wordlist, spelling (45+ items) | Claude |
-| 2026-01-15 | Evidence chain tracing for WordListForm | Claude |
-| 2026-01-15 | Updated to FEATURE_TEMPLATE_v2.md v5.0 | Claude |
-| 2026-01-16 | Updated to AGENTS.md v6.4 compliance | Claude |
-| 2026-01-16 | Added proper Manual citations with line numbers | Claude |
-| 2026-01-16 | Added proper HelpData citations with IDs and Dialogs | Claude |
-| 2026-01-16 | Updated to FEATURE_TEMPLATE_v2.md v5.2 | Claude |
-| 2026-01-16 | Code access verified - built Evidence Chain with line numbers | Claude |
-| 2026-01-16 | Traced Depth 0-2 dependencies from WordListForm.cs | Claude |
-| 2026-01-21 | Session 1: Updated 5.1 Wordlist Tool with [MS] and [FR] sources | Claude |
-| 2026-01-21 | Session 1: Updated 5.2 Spell Checking with [MS] source (TextForm handlers) | Claude |
-| 2026-01-21 | Updated Validation Summary with MS/FR columns | Claude |
-| 2026-01-21 | Session 2: Updated 5.3 Word Approval Status with [MS] source (6 handlers) | Claude |
-| 2026-01-21 | Session 2: Updated 5.4 Find Similar Words with [MS] and [FR] sources | Claude |
-| 2026-01-21 | Session 3: Updated 5.5 Find Joined/Split with [MS] and [FR] sources | Claude |
-| 2026-01-21 | Session 3: Updated 5.6 Hyphenation with [MS] (6 handlers) and [FR] sources | Claude |
-| 2026-01-21 | Session 4: Updated 5.7 Spelling Notes - verified MS handler exists | Claude |
-| 2026-01-21 | Session 4: Updated 5.8 Spell Check Tools with [MS] (7 handlers) and Evidence Chain | Claude |
-| 2026-01-21 | Session 5: Updated 5.9 Word Morphology with [MS] (4 handlers) | Claude |
-| 2026-01-21 | Session 5: Removed 5.10 - fabricated handler; feature belongs to 04_Biblical_Terms.md | Claude |
-| 2026-01-21 | Updated Validation Summary to reflect completed review | Claude |
-
----
 ## Notes
 
 - WordList has dedicated directory (`Paratext/WordList/`) with multiple source files
@@ -658,6 +629,3 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 ---
 
-**Document Version**: 5.2  
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1  
-**Compliance**: AGENTS.md v7.2

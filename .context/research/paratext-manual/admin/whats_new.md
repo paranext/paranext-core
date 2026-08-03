@@ -19,7 +19,7 @@ Highlights
   - Note: The whole team needs to update to 9.5
   - Administrator enables it on by clicking the dropdown on the paragraph icon
 
-    ![](../images/whats_new_1023111266-6892435248c8e0969ef747b68b6e9f09.png)
+    *[image — see the upstream manual]*
 - Available in
 
   - Text editor, wordlist, results list, scripture reference settings and number settings
@@ -36,28 +36,28 @@ Highlights
   - Dock Inventory panels
   - Inventory panels now consistent appearance and behaviour to Wordlist.
 
-    ![](../images/whats_new_1112693466-3af53a352117a4bd590c33d9d77c96dc.png)
+    *[image — see the upstream manual]*
   - Approval is managed based on location - verse text, non-verse text, or study content within SBA.
   - Filtering to help find and organize inventory items.
 - Additional improvements
 
   - Display **multiple gloss languages** in Biblical terms (Major Biblical Terms)
 
-    ![](../images/whats_new_1665268168-d323dc5cb93130134f61ec4410831ba9.png)
+    *[image — see the upstream manual]*
   - Filter buttons to the Download/Install resources window
 
-    ![](../images/whats_new_1707327688-02a5d410ac5dabb54d349e48dcb4d137.png)
+    *[image — see the upstream manual]*
   - Simplified creating and editing Interlinearizer settings.
 
     - Choose from existing or click **Create New**
 
-      ![](../images/whats_new_1194429716-e8935af3fb282f3920a026b34bcbf2e7.png)
+      *[image — see the upstream manual]*
     - Choose the model text, click **save**
 
-      ![](../images/whats_new_297274585-2598629cc5c1f9ec8ffdc0d2b25b0dbb.png)
+      *[image — see the upstream manual]*
   - Project notes list - “unread and unresolved” filter
 
-    ![](../images/whats_new_195867166-67c934a862003fd18f87d087cf9c1eb5.png)
+    *[image — see the upstream manual]*
 
 ### Additional Improvements[​](#1ba598a5fd40807f8592f94edb9bef69 "Direct link to Additional Improvements")
 
@@ -87,14 +87,14 @@ Highlights
 
 - **Notification of updates for projects on the user’s computer:** A green dot on the project menu. Settings for checking for updates are available in the **Send/Receive projects** window. [Main menu video demo](https://paratext.org/features/whats-new/whats-new-in-paratext-9-4-beta/?vimeography_gallery=157&vimeography_video=857678678)
 
-  ![](../images/whats_new_339463073-bf942ee2e042f26cb31351af17c9fbb1.png)
+  *[image — see the upstream manual]*
 - **Notification of updates for installed resources.** A green dot in the main menu can also indicate updates to resource texts on the local computer. Access to the settings for this feature is in the **Download/Install resources**
 - **Improved Right-to-Left interface.** Paratext now correctly displays right-to-left user interfaces (like Arabic). [RTL video demo](https://paratext.org/features/whats-new/whats-new-in-paratext-9-4-beta/?vimeography_gallery=157&vimeography_video=858761461)
 
-  ![](../images/whats_new_1222641753-f280ee6c7ddad5d74941948489148c94.png)
+  *[image — see the upstream manual]*
 - **Option to hide project notes.** Access from the **View menu > Show Project Notes**. [Project menu video demo](https://paratext.org/features/whats-new/whats-new-in-paratext-9-4-beta/?vimeography_gallery=157&vimeography_video=857939433)
 
-  ![](../images/whats_new_179350404-cfc01d32dc6806dfec37af1bfc897cc3.png)
+  *[image — see the upstream manual]*
 - **Improved quotation checking.** The new “Quotation Types” Basic Check knows where quotations should occur in the text based on [Glyssen](https://software.sil.org/glyssen/) data and can ensure that they are all marked appropriately. [Quotation types video demo](https://paratext.org/features/whats-new/whats-new-in-paratext-9-4-beta/?vimeography_gallery=157&vimeography_video=859138745)
 - **Added video to Enhanced Resources.** Now the Media tab for Enhanced Resources contains video clips from [LUMO](https://lumoproject.com/) and UBS’s “Bible Lands as Classroom” series. [Enhanced resources videos – video demo](https://paratext.org/features/whats-new/whats-new-in-paratext-9-4-beta/?vimeography_gallery=157&vimeography_video=858761461)
 - **Import/Export Biblical terms lists.** Allows users to create and exchange the Biblical Terms lists as the project progresses. [Biblical terms video demo](https://paratext.org/features/whats-new/whats-new-in-paratext-9-4-beta/?vimeography_gallery=157&vimeography_video=858020833)
@@ -137,7 +137,7 @@ In Paratext 9.3 you can copy and paste a scripture reference into the navigation
 2. Click in the **book name** in the navigation bar
 3. Paste using **Ctrl+V**
 
-   ![](../images/whats_new_1158626626-3b865c74de813755412654769dda8ff9.png)
+   *[image — see the upstream manual]*
 
 The reference should be in a format that matches the interface language.
 
@@ -159,7 +159,7 @@ For example,
 - The colours have changed from **green** to **grey (and back to green in 9.4)**
 - You can reduce or expand the Greek / Hebrew by clicking the little arrow.
 
-![](../images/whats_new_1036502882-67785cba35a1de82e19a22278edc2181.png)
+*[image — see the upstream manual]*
 
 ## Open a text collection[​](#fd1736d1bd07444fb6902b8dccf951dc "Direct link to Open a text collection")
 
@@ -170,7 +170,7 @@ There is a new menu item on the **main menu**
 
    - *This window looks like what was used in earlier versions of Paratext*.
 
-     ![](../images/whats_new_839941766-c7eb9eb000a77f0ea62e2debef8eea15.png)
+     *[image — see the upstream manual]*
 3. Open a previously **saved text collection** from the bottom left
 4. You can still open a text collection from the **Open** window as well.
 
@@ -185,13 +185,13 @@ There is a new menu item on the **main menu**
 > > ℹ️ **Note**
 > > Remember to save your layout!
 
-![](../images/whats_new_1620979427-cf2078b54e77ecddc93f6e745e4ad436.png)
+*[image — see the upstream manual]*
 
 ## Floating Windows[​](#493f51aae2f5480893f25897c408c26c "Direct link to Floating Windows")
 
 - Dropdown to change the active project
 
-  ![](../images/whats_new_807351003-1518809ba9ef7b5bf22c0597b7238d84.png)
+  *[image — see the upstream manual]*
 
 ### Other new/changed[​](#4796465de7ac4f3190c47faa4b9750b8 "Direct link to Other new/changed")
 

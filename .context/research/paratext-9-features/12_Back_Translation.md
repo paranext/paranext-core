@@ -37,7 +37,7 @@ Back Translation and Adaptation features support creating derived projects from 
 | Menu Structure | *No direct menu entry* - Back translation projects created via New Project dialog | `-` |
 | Form Relationships | `ProjectPropertiesForm` opens `ScrTextListSelectionForm` (line 2459) | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation > Interlinear View" | `[R]` |
-| Manual | `chapters/16_back_translation_1.md`, line 9: "In preparing for a consultant check, the consultant will need one or more versions of your text in a language they understand" | `[M]` |
+| Manual | `../paratext-manual/chapters/16_back_translation_1.md`, line 9: "In preparing for a consultant check, the consultant will need one or more versions of your text in a language they understand" | `[M]` |
 | HelpData | Keyword: `ComponentBackTranslation`; Dialogs: `ProjectPropertiesForm_tabGeneral`, `ProjectUsersForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -64,16 +64,16 @@ Back Translation and Adaptation features support creating derived projects from 
 
 **UI Entry Points**:
 - ≡ Paratext > New Project (Type: Back Translation)
-  - Manual: `chapters/16_back_translation_1.md`, line 35
+  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`, line 35
   - Quote: "**≡ Paratext** under **Paratext** > **New Project**"
   - HelpData ID: `64ae1a22-ef68-4b9f-8136-d628b9dc11c9`
   - Dialog: `ProjectPropertiesForm_tabGeneral`
   - Question: "How do I create a back translation project?"
 - ≡ Project > Open base project
-  - Manual: `chapters/16_back_translation_1.md`, line 29
+  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`, line 29
   - Quote: "you can now open your project from the back translation (**≡ Project** choose **Open base project …**)"
 - Status checkbox toolbar dropdown > Mark All Verses in Chapter as Finished
-  - Manual: `chapters/16_back_translation_1.md`, line 68
+  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`, line 68
   - Quote: "Choose **Mark All Verses in Chapter as Finished**"
 
 **HelpData Items**:
@@ -112,7 +112,7 @@ Back Translation and Adaptation features support creating derived projects from 
 | Menu Structure | Menu: `Tools > Interlinearizer`; Handler: `uiFileOpenInterlinear_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 408; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
 | Form Relationships | `InterlinearForm` opens `InterlinearSetupForm` (line 160), `CopyGlossesForm` via menu | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation > Interlinear View" | `[R]` |
-| Manual | `chapters/17_back_translation_2.md`, line 7: "There is another type of back translation...a word-for-word style back translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/17_back_translation_2.md`, line 7: "There is another type of back translation...a word-for-word style back translation" | `[M]` |
 | HelpData | Keyword: `ComponentInterlinearizer`; Dialogs: `InterlinearSetupForm_uiBasicTab`, `CopyGlossesForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -144,15 +144,15 @@ Back Translation and Adaptation features support creating derived projects from 
 - ≡ Tab > Tools > Interlinearizer
   - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`, line 408
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
-  - Manual: `chapters/17_back_translation_2.md`, line 24
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 24
   - Quote: "**≡ Tab**, under **Tools** > **Interlinearizer**"
   - HelpData ID: `6aa250fe-c02d-450c-b49e-b9aff98fc833`
   - Dialog: `InterlinearSetupForm_uiBasicTab`
 - Output glosses to project checkbox
-  - Manual: `chapters/17_back_translation_2.md`, line 35
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 35
   - Quote: "Click the checkbox to output glosses to the project"
 - Approve glosses button
-  - Manual: `chapters/17_back_translation_2.md`, line 75
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 75
   - Quote: "Click **Approve glosses**"
 
 **HelpData Items**:
@@ -310,7 +310,7 @@ Back Translation and Adaptation features support creating derived projects from 
 | Menu Structure | Multiple menu items (see UI Entry Points below) | `[MS]` |
 | Form Relationships | `StudyBibleForm` opens `BookChooserForm` (line 418); `StudyBibleMergeProjectForm` opens `ProjectPropertiesForm` (line 126) | `[FR]` |
 | Requirements | *Not explicitly covered - newer feature* | `-` |
-| Manual | `chapters/25_study_bibles.md`, line 29: "With Paratext 9.2 (and above) you can create a study Bible based on your translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/25_study_bibles.md`, line 29: "With Paratext 9.2 (and above) you can create a study Bible based on your translation" | `[M]` |
 | HelpData | Keywords: `ComponentStudyBibleGeneral`, `ComponentStudyBibleAdditions`; Dialogs: `StudyBibleForm`, `EditStudyBibleCategoriesForm`, `ProjectPropertiesForm_tabStudyBible` | `[H]` |
 
 **Key Quote** (from Manual, `25_study_bibles.md`, line 29):
@@ -341,7 +341,7 @@ Back Translation and Adaptation features support creating derived projects from 
 
 **UI Entry Points**:
 - ≡ Paratext > New Project (Type: Study Bible Additions)
-  - Manual: `chapters/25_study_bibles.md`, line 52
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 52
   - Quote: "Use the **Paratext menu** to create a **new project**. Set the **type** of project to **Study Bible Additions**"
   - HelpData ID: `43e83c1a-358b-4fb4-a3e8-09ba395549d1`
   - Question: "How do I create a Study Bible Additions project?"
@@ -371,19 +371,19 @@ Back Translation and Adaptation features support creating derived projects from 
   - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedMigrateToStudyBibleAdditions2FileFormat_Click`, line 678
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Add + button on SBA toolbar (introductions)
-  - Manual: `chapters/25_study_bibles.md`, line 64
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 64
   - Quote: "Click **Add +** on the toolbar"
 - \esb button on toolbar (sidebars)
-  - Manual: `chapters/25_study_bibles.md`, line 71
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 71
   - Quote: "click **\\esb** on the toolbar"
 - \ex button on toolbar (extended cross-references)
-  - Manual: `chapters/25_study_bibles.md`, line 80
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 80
   - Quote: "click **\\ex** on the toolbar"
 - \ef button on toolbar (extended footnotes)
-  - Manual: `chapters/25_study_bibles.md`, line 87
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 87
   - Quote: "click **\\ef** on the toolbar"
 - Hide button on toolbar
-  - Manual: `chapters/25_study_bibles.md`, line 94
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 94
   - Quote: "Click **Hide** on the toolbar"
 
 **HelpData Items**:
@@ -425,25 +425,6 @@ Back Translation and Adaptation features support creating derived projects from 
 | 12.3 Adaptation Projects | ✓ | ✓ | ✓ | - | ✓ | ✓ | 2026-01-21 |
 | 12.4 Daughter Translations | - | ✓ | ✓ | - | ✓ | ✓ | 2026-01-21 |
 | 12.5 Study Bible | ✓ | ✓ | ✓ | ✓ | - | ✓ | 2026-01-21 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-18 | HelpData queries for BackTranslation, StudyBible, Adaptation, Daughter | Claude |
-| 2026-01-18 | Manual chapters 16, 17, 25 read for citations | Claude |
-| 2026-01-18 | Evidence chain tracing from HelpData dialogs | Claude |
-| 2026-01-18 | Code file searches: ProjectPropertiesForm, InterlinearSetupForm, StudyBibleForm, DerivedTranslation | Claude |
-| 2026-01-21 | Reorganized: Category 10 renumbered to 12; feature numbers updated | Claude |
-| 2026-01-21 | Menu Structure queries: "back", "interlinear", "study", "adapt" | Claude |
-| 2026-01-21 | Added [MS] sources: 12.2/12.3 (Interlinearizer), 12.5 (Study Bible menus) | Claude |
-| 2026-01-21 | Added [FR] Form Relationships and Dialog Navigation for all features | Claude |
-| 2026-01-21 | Updated Validation Summary table to include MS, FR columns per FEATURE_TEMPLATE_v2.md v6.1 | Claude |
-
----
-
 ## Notes
 
 - Back translations are critical for consultant checks
@@ -454,6 +435,3 @@ Back Translation and Adaptation features support creating derived projects from 
 
 ---
 
-**Document Version**: 5.0
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1
-**AGENTS.md Version**: 7.2

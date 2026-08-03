@@ -56,7 +56,7 @@ Individual features below list only their Depth 0 handler line.
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Verse text`; Handler: `checklistsVerseTextToolStripMenuItem_Click`; Line 2408 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
@@ -92,7 +92,7 @@ Individual features below list only their Depth 0 handler line.
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Word or phrase`; Handler: `wordsOrPhrasesToolStripMenuItem_Click`; Line 2413 | `[MS]` |
-| Manual | `chapters/11_compare_word.md`, line 28: "From the **≡ Tab**, under **Tools**, point to **Checklists**, and select **Word or Phrase**." | `[M]` |
+| Manual | `../paratext-manual/chapters/11_compare_word.md`, line 28: "From the **≡ Tab**, under **Tools**, point to **Checklists**, and select **Word or Phrase**." | `[M]` |
 | HelpData | ID: `6d859b66-7171-4ae8-8f69-0d0b9cafc167` - "How do I compare a word or phrase in different projects?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Quote** (from Manual):
@@ -130,7 +130,7 @@ Individual features below list only their Depth 0 handler line.
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Section headings`; Handler: `checklistsSectionHeadingsToolStripMenuItem_Click`; Line 2418 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 47: "**≡ Tab**, under > **Tools** > **Checklists** > **Section Headings**" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 47: "**≡ Tab**, under > **Tools** > **Checklists** > **Section Headings**" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Quote** (from Manual, lines 49-54):
@@ -173,7 +173,7 @@ Review all section headings (\s, \s1, \s2, etc.) to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Book titles`; Handler: `checklistsBookTitlesToolStripMenuItem_Click`; Line 2423 | `[MS]` |
-| Manual | `chapters/24_finalizing.md`, line 176: "**≡ Tab**, under **Tools** > **Checklists** > **Book titles**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 176: "**≡ Tab**, under **Tools** > **Checklists** > **Book titles**" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
@@ -208,7 +208,7 @@ Review all section headings (\s, \s1, \s2, etc.) to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > References`; Handler: `checklistsCrossReferencesToolStripMenuItem_Click`; Line 2428 | `[MS]` |
-| Manual | `chapters/24_finalizing.md`, line 177: "**≡ Tab**, under **Tools** > **Checklists** > **References**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 177: "**≡ Tab**, under **Tools** > **Checklists** > **References**" | `[M]` |
 | HelpData | ID: `7890fe77-bfb7-4f4c-9e60-c226a24eb8c7` - "How do the References check and the References checklist differ?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Distinction** (from HelpData ID `7890fe77-bfb7-4f4c-9e60-c226a24eb8c7`):
@@ -252,7 +252,7 @@ Review all cross-references to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Footnotes`; Handler: `checklistsFootnotesToolStripMenuItem_Click`; Line 2438 | `[MS]` |
-| Manual | `chapters/24_finalizing.md`, line 178: "**≡ Tab**, under **Tools** > **Checklists > Footnotes**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 178: "**≡ Tab**, under **Tools** > **Checklists > Footnotes**" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Use Case**:
@@ -293,7 +293,7 @@ Review all footnotes to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Markers`; Handler: `checklistsMarkersToolStripMenuItem_Click`; Line 2433 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 58: "**≡ Tab**, under > **Tools** > **Checklists** > **Markers**" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 58: "**≡ Tab**, under > **Tools** > **Checklists** > **Markers**" | `[M]` |
 | HelpData | ID: `85361367-ead8-4c8c-b99f-3cfb2882ef30` - "Guide: Tools > Checklists > Markers: Settings"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Quote** (from Manual, lines 59-63):
@@ -331,7 +331,7 @@ Review all footnotes to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Quotation marks`; Handler: `quotationMarksToolStripMenuItem_Click`; Line 2262 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `11cd7b0b-a7b6-4860-893b-48e94510344e` - "How do I find where quote marks differ in two projects?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
@@ -365,7 +365,7 @@ Review all footnotes to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Punctuation`; Handler: `punctuationToolStripMenuItem_Click`; Line 2463 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `733bda25-6b26-4f4c-a661-a9bc1de871cd` - "How do I find where punctuation marks differ in two projects?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
@@ -399,7 +399,7 @@ Review all footnotes to ensure:
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Relatively long verses`; Handler: `checklistsRelativelyLongVersesToolStripMenuItem_Click`; Line 2443 | `[MS]` |
-| Manual | `chapters/24_finalizing.md`, line 173: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 173: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Quote** (from HelpData):
@@ -442,7 +442,7 @@ Find verses that are unusually long compared to the project average, which may i
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Relatively short verses`; Handler: `checklistsRelativelyShortVersesToolStripMenuItem_Click`; Line 2448 | `[MS]` |
-| Manual | `chapters/24_finalizing.md`, line 173: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 173: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Use Case**:
@@ -481,7 +481,7 @@ Find verses that are unusually short compared to the project average, which may 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Long sentences`; Handler: `checklistsLongSentencesToolStripMenuItem_Click`; Line 2453 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
@@ -514,7 +514,7 @@ Find verses that are unusually short compared to the project average, which may 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checklists > Long paragraphs`; Handler: `checklistsLongParagraphsToolStripMenuItem_Click`; Line 2458 | `[MS]` |
-| Manual | `chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
@@ -613,25 +613,6 @@ public enum ChecklistType
 | `6d859b66-7171-4ae8-8f69-0d0b9cafc167` | How do I compare a word or phrase in different projects? | help |
 | `733bda25-6b26-4f4c-a661-a9bc1de871cd` | How do I find where punctuation marks differ in two projects? | help |
 | `85361367-ead8-4c8c-b99f-3cfb2882ef30` | Guide: Tools > Checklists > Markers: Settings | guide |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-16 | Original stub documentation in 06_Basic_Quality_Checks.md | Claude |
-| 2026-01-20 | Split into 06C_Checklists.md with expanded sub-features | Claude |
-| 2026-01-20 | Added all 13 checklist types from menu structure analysis | Claude |
-| 2026-01-21 | Reorganized: 06C promoted to 08; feature numbers updated | Claude |
-| 2026-01-21 | Session 6: Expanded to one feature per checklist (8.1-8.13) | Claude |
-| 2026-01-21 | Added handler line numbers from TextForm.cs; Extended evidence chain to Depth 2 | Claude |
-| 2026-01-21 | Added HelpData IDs and Manual line numbers with exact quotes | Claude |
-| 2026-01-21 | Documented common implementation architecture | Claude |
-| 2026-01-21 | Added Legacy Paratext 6 Checklists note | Claude |
-
----
-
 ## Legacy Paratext 6 Checklists
 
 Several checklists from Paratext 6 have been improved and built into Paratext's standard checking features (Categories 06-08). The original Paratext 6 checklists remain available for backward compatibility via:
@@ -647,6 +628,4 @@ For most use cases, the modern equivalents in Categories 06 (Checking Inventorie
 
 ---
 
-**Document Version**: 4.1
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1
 **Last Updated**: 2026-01-21

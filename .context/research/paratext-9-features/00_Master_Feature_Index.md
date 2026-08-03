@@ -15,7 +15,7 @@
 | **FR** | Form Relationships | Verified in `form_relationships_20260120_134725.json` - UI forms and dialog relationships |
 | **R** | Requirements | Documented in `BT Drafting Tool Requirements v2.docx` - original requirements specification |
 | **M** | Manual | Documented in Paratext User Manual (markdown) - user-facing documentation |
-| **H** | HelpData | Verified in `HelpData.xml` (6,565 help items) - context-sensitive help system |
+| **H** | HelpData | Verified in `HelpData.xml` (6,565 help items) - context-sensitive help system. Not included in this repo; `[H]` rows are provenance markers, not resolvable references |
 | **C** | Code | Verified in Paratext source code - implementation confirmed |
 
 **Validation Levels**:
@@ -562,5 +562,4 @@
 
 ---
 
-**Document Version**: 3.7
 **Last Updated**: January 22, 2026

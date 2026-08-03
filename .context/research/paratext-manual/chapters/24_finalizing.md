@@ -47,7 +47,7 @@ When your images are indexed, you can try different searches.
 
 1. Open this new folder in the **File Explorer**.
 
-   ![](../images/24_finalizing_1562812922-89ce01f8a42a16349c095ce902f996c2.png)
+   *[image — see the upstream manual]*
 2. Type in the search field:
 3. **A search word**, like cross, sheep, house, etc.
 4. **A Bible reference**, like MAT27, ACT03, etc. (using at least 2 digits for the chapter).
@@ -58,7 +58,7 @@ When your images are indexed, you can try different searches.
 1. In your project, navigate to the desired verse.
 2. From the **Insert** menu, choose **Figure**
 
-   ![](../images/24_finalizing_1502129098-28dec9276889c222c949e6ca7ab2a60a.png)
+   *[image — see the upstream manual]*
 3. Enter a **caption** to be printed with the image (in your language)[1].
 4. Enter a **description** to be printed with the image (in your language) [2].
 5. Indicate if the image should fill the width of a column or a page. [3]
@@ -73,7 +73,7 @@ When your images are indexed, you can try different searches.
    - *A dialog box is displayed*.
 2. In the dialog, select the **Pictures - Illustrations - English** folder on the left
 
-   ![](../images/24_finalizing_1785863083-8c8142c86853ecdad3119f8b8ceb9036.png)
+   *[image — see the upstream manual]*
 3. Click in the **Search** field (top right) and type to filter the images (as above)
 4. Click on the desired image and click on the **Open** button.
 5. Click on **OK**.
@@ -189,7 +189,7 @@ What about entries in the glossary that are not on the Biblical Terms list? For 
 
    1. The dialog box is displayed.
 
-      ![](../images/24_finalizing_940359974-73c67db354e55bcf045c829d659e50f1.png)
+      *[image — see the upstream manual]*
 4. Choose **First occurrence in every section**.
 
    - *Paratext will search through the text and add \w … \w\* markers. Then displays a results list of verses changed.*

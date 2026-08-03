@@ -35,7 +35,7 @@ Project Planning features help teams organize, track, and manage their translati
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Assignments and progress`; Handler: `assignmentsAndProgressToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1021; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Assign Tasks" | `[R]` |
-| Manual | `chapters/03_project_plan_1.md`, line 7: "You use the Assignments and Progress to help organise your work" | `[M]` |
+| Manual | `../paratext-manual/chapters/03_project_plan_1.md`, line 7: "You use the Assignments and Progress to help organise your work" | `[M]` |
 | HelpData | Keyword: `ComponentAssignmentsAndProgress`; Dialog: `LocationFilterForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -56,16 +56,16 @@ Project Planning features help teams organize, track, and manage their translati
 
 **UI Entry Points**:
 - Assignments and Progress button (blue button)
-  - Manual: `chapters/03_project_plan_1.md`, line 25
+  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`, line 25
   - Quote: "In your project, click **Assignments and Progress** button"
 - ≡ Tab > Project > Assignments and progress
-  - Manual: `chapters/03_project_plan_1.md`, line 29
+  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`, line 29
   - Quote: "**≡ Tab** under **Project** menu, select **Assignments and progress**"
   - HelpData ID: `4dd7cba4-bdaa-4576-917d-f9270c7463d1`
   - Dialog: `LocationFilterForm`
   - Question: "How do I mark progress on tasks or checks assigned to me?"
 - Ctrl+s (save after marking progress)
-  - Manual: `chapters/03_project_plan_1.md`, line 77
+  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`, line 77
   - Quote: "**≡ Paratext** under **Paratext** > **Save all** (or **Ctrl**+**s**)"
 
 **HelpData Items**:
@@ -217,7 +217,7 @@ Project Planning features help teams organize, track, and manage their translati
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Progress charts`; Handler: `teamProgressChartsToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1030; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Project Progress" | `[R]` |
-| Manual | `chapters/06_project_plan_2.md`, line 7: "you will learn how to update your progress by marking tasks as completed" | `[M]` |
+| Manual | `../paratext-manual/chapters/06_project_plan_2.md`, line 7: "you will learn how to update your progress by marking tasks as completed" | `[M]` |
 | HelpData | Keyword: `ComponentProjectProgress`; Keywords: `ContentProgressCharts` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -235,13 +235,13 @@ Project Planning features help teams organize, track, and manage their translati
 
 **UI Entry Points**:
 - Assignments and Progress → various views
-  - Manual: `chapters/06_project_plan_2.md`, line 18
+  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`, line 18
   - Quote: "Open the Assignments and Progress (the blue button)"
   - HelpData ID: `4ebd7160-4b37-4ace-95ba-2a06db90c57a`
   - Dialog: `ProjectProgressForm`
   - Question: "How do I view or mark project progress?"
 - ≡ Tab > Project > Progress charts
-  - Manual: `chapters/06_project_plan_2.md`, line 33
+  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`, line 33
   - Quote: "From the **≡ Tab**, under **Project** menu, select **Progress charts…**"
   - HelpData ID: `1dc48021-ac51-48bb-bbbd-88c21d055970`
   - Question: "How do I see if the translation team is progressing as expected?"
@@ -276,7 +276,7 @@ Project Planning features help teams organize, track, and manage their translati
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Progress charts`; Handler: `teamProgressChartsToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1030; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Project Progress" | `[R]` |
-| Manual | `chapters/21_progress_report.md`, line 7: "In this module you will create a progress report" | `[M]` |
+| Manual | `../paratext-manual/chapters/21_progress_report.md`, line 7: "In this module you will create a progress report" | `[M]` |
 | HelpData | Keyword: `ContentProgressCharts`; Keyword: `ContentProjectHealthReport` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -295,12 +295,12 @@ Project Planning features help teams organize, track, and manage their translati
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project Health Report
-  - Manual: `chapters/06_project_plan_2.md`, line 24
+  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`, line 24
   - Quote: "From the **Project** menu, select **Project Health Report…**"
   - HelpData ID: `bdab5668-955a-46e3-a0c0-4603f1bc7490`
   - Question: "How do I generate a project health report?"
 - ≡ Tab > Project > Progress charts (print)
-  - Manual: `chapters/21_progress_report.md`, line 27
+  - Manual: `../paratext-manual/chapters/21_progress_report.md`, line 27
   - Quote: "From the **Tab** menu, under **Project** choose **Progress charts**"
   - HelpData ID: `1dc48021-ac51-48bb-bbbd-88c21d055970`
   - Question: "How do I see if the translation team is progressing as expected?"
@@ -548,26 +548,6 @@ Project Planning features help teams organize, track, and manage their translati
 | 11.7 Bulk Progress Mode | ✓ | - | - | ✓ | - | - | 2026-01-21 |
 | 11.8 Copy Assignments | ✓ | - | - | ✓ | ✓ | - | 2026-01-21 |
 | 11.9 Translation Priorities | ✓ | - | - | ✓ | - | - | 2026-01-22 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-18 | HelpData queries for ComponentAssignmentsAndProgress, ComponentProjectPlan, ComponentProjectProgress, ComponentUserPermissions | Claude |
-| 2026-01-18 | Evidence chain tracing from HelpData dialogs to source files | Claude |
-| 2026-01-18 | Manual citation verification for chapters 03, 06, 21, admin/ma_07 | Claude |
-| 2026-01-18 | Updated all features to FEATURE_TEMPLATE_v2.md v5.2 format | Claude |
-| 2026-01-21 | Reorganized: Category 09 renumbered to 11; feature numbers updated | Claude |
-| 2026-01-21 | Added [MS] Menu Structure sources to all 8 features via query_menu_structure.py | Claude |
-| 2026-01-21 | Added [FR] Form Relationships for 11.2, 11.6, 11.8 from form_relationships JSON | Claude |
-| 2026-01-21 | Updated Evidence Chain tables with Menu Structure handler entry points | Claude |
-| 2026-01-21 | Verified all HelpData IDs and keywords via query_helpdata.py; fixed ContentAssign→ContentAssignmentsAndProgress in 11.3 | Claude |
-| 2026-01-22 | Added 11.9 Translation Priorities: new feature based on HelpData coverage audit identifying 8 unreferenced ComponentTranslationPriorities items; added Menu Structure [MS], HelpData [H], Use Cases | Claude |
-
----
-
 ## Notes
 
 - Assignments and Progress (LocationFilterForm) is the central UI for task management
@@ -580,7 +560,4 @@ Project Planning features help teams organize, track, and manage their translati
 
 ---
 
-**Document Version**: 5.1
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1
-**AGENTS.md Version**: 7.2
 **Based on v1**: 05_Workflow_Features.md Sections 4-7

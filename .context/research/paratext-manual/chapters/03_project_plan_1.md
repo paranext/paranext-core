@@ -22,7 +22,7 @@ On this page
 
 - In your project, click **Assignments and Progress** button
 
-![](../images/converted_03_project_plan_1_003.png)
+*[image — see the upstream manual]*
 
 OR
 
@@ -31,7 +31,7 @@ OR
 - From the first dropdown menu, choose either **My tasks** or **All tasks**
   - *A list of the various tasks and checks are displayed.*
 
-![](../images/03_project_plan_1_1194388438-d6fcd894552b02197ae5e83551f3cb76.png)
+*[image — see the upstream manual]*
 
 > **Tip:** You can see more details on any task by clicking on the name of the task.
 
@@ -52,20 +52,20 @@ The list of tasks shows the uncompleted tasks, each with a colored bar beside it
 - Click on the checkmark to the left of the status.
   - *It should turn solid to show it is completed.*
 
-![](../images/converted_03_project_plan_1_004.png)
+*[image — see the upstream manual]*
 
 ### Mark a chapter task as completed[​](#dabedb60bf4143888eb08c8f457c7598 "Direct link to Mark a chapter task as completed")
 
-![](../images/03_project_plan_1_498799590-c42d6b1b35cc74236d35f87cd176c2d4.png)
+*[image — see the upstream manual]*
 
 1. Click **+** to mark the next chapter as complete
 2. To mark other chapters as complete you can click on the word **Completed [2]**
 
-   ![](../images/converted_03_project_plan_1_005.png)
+   *[image — see the upstream manual]*
 
    - *A dialog box is displayed with a list of the chapters*.
 
-     ![](../images/03_project_plan_1_2100928914-c58e714f2870cdeaca7e36b0c8800435.png)
+     *[image — see the upstream manual]*
 3. Click the numbers of the chapters that have been completed [3].
 4. Click **OK**
 

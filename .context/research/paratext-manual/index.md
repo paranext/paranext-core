@@ -121,3 +121,67 @@ Generated: 2026-01-14 15:13
 - **File:** `chapters/25_study_bibles.md`
 - **Overview:** With Paratext 9.2 (and above) you can create a study Bible based on your translation by adding introductory paragraphs, sidebars and detailed footnotes and additional cross-references to help your user have a deeper understanding of the Bible text.
 
+---
+
+## Stage overviews
+
+### Stage 1: Drafting
+- **File:** `stages/stage_1.md`
+
+### Stage 2: Team Check
+- **File:** `stages/stage_2.md`
+
+### Stage 3: Prepare for Consultant
+- **File:** `stages/stage_3.md`
+
+### Stage 4: Consultant Check
+- **File:** `stages/stage_4.md`
+
+### Stage 5: Community Review
+- **File:** `stages/stage_5.md`
+
+### Stage 6: Finalising for Publication
+- **File:** `stages/stage_6.md`
+
+## Appendices
+
+### Appendix A: Special Text
+- **File:** `appendices/appendix_a_special_text.md`
+
+### Appendix B: Three Letter Abbreviations
+- **File:** `appendices/appendix_b_abbreviations.md`
+
+### Appendix C: USFM Markers
+- **File:** `appendices/appendix_c_usfm.md`
+
+## Administrator's manual
+
+### MA 1. Introduction to Administrator's Manual
+- **File:** `admin/ma_01_introduction.md`
+
+### MA 2. Data Management
+- **File:** `admin/ma_02_data_management.md`
+
+### MA 3. Registration
+- **File:** `admin/ma_03_registration.md`
+
+### MA 4. Creating Projects
+- **File:** `admin/ma_04_creating_projects.md`
+
+### MA 5. Installing Resources
+- **File:** `admin/ma_05_installing_resources.md`
+
+### MA 6. Send/Receive
+- **File:** `admin/ma_06_send_receive.md`
+
+### MA 7. Project Plan
+- **File:** `admin/ma_07_project_plan.md`
+
+### MA 8. Checking Permissions
+- **File:** `admin/ma_08_checking_permissions.md`
+
+### MA 9. Custom Roles
+- **File:** `admin/ma_09_custom_roles.md`
+
+### What's New
+- **File:** `admin/whats_new.md`

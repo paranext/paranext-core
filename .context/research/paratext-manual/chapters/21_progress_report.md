@@ -35,7 +35,7 @@ Your administrators and funders need accurate reports of your progress.
 1. From the **Tab** menu, under **Project** choose **Progress charts**
 2. Click on the dropdown list in the top left.
 
-   ![](../images/21_progress_report_277798433-16187a9bc1754aecfa9ab85cad052f21.png)
+   *[image — see the upstream manual]*
 3. Choose as appropriate (e.g. Forecast Line Chart).
 
    - *A window appears with the graphic*

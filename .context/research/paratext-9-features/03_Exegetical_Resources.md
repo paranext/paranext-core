@@ -472,25 +472,6 @@ Logos integration is via external communication, not dedicated code files.
 | 3.6 Text Collection | ✓ | ✓ | - | ✓ | ✓ | 2026-01-20 |
 | 3.7 Resource Browser | ✓ | ✓ | ✓ | ✓ | ✓ | 2026-01-20 |
 | 3.8 Logos Integration | ✓ | - | ✓ | ✓ | - | 2026-01-20 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-15 | HelpData queries for resources, enhanced, text collection | Claude |
-| 2026-01-15 | Evidence chain tracing for Marble, TextCollection, InstallResources | Claude |
-| 2026-01-15 | Updated to FEATURE_TEMPLATE_v2.md v5.0 | Claude |
-| 2026-01-16 | Updated all UI Entry Points to comply with AGENTS.md v6.4 Rule 18 | Claude |
-| 2026-01-16 | Updated to FEATURE_TEMPLATE_v2.md v5.2 | Claude |
-| 2026-01-20 | Queried Menu Structure and Form Relationships for all features | Claude |
-| 2026-01-20 | Added MS/FR sources and Dialog Navigation to all features | Claude |
-| 2026-01-20 | Updated Validation Summary with MS/FR columns | Claude |
-| 2026-01-20 | Updated to FEATURE_TEMPLATE_v2.md v6.1, AGENTS.md v7.2 | Claude |
-
----
-
 ## Notes
 
 - Enhanced Resources (Marble) has rich codebase under `Paratext/Marble/` directory
@@ -499,6 +480,3 @@ Logos integration is via external communication, not dedicated code files.
 - DBL integration handles both downloading resources and uploading completed projects
 
 ---
-
-**Document Version**: 4.0  
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1

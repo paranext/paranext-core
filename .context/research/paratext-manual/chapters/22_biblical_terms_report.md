@@ -44,7 +44,7 @@ In the Biblical terms tool, you will filter on the book(s) that you want to incl
 
 - Click on the flag icon (first column heading) to sort on Rendering discussion notes.
 
-![](../images/converted_22_biblical_terms_report_031.png)
+*[image — see the upstream manual]*
 
 **Find terms with specific text in the** **rendering description**
 

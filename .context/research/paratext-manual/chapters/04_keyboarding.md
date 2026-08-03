@@ -22,7 +22,7 @@ On this page
 
 - Using the icons on the toolbar, change the project, book, chapter and verse as needed.
 
-  ![](../images/04_keyboarding_1219353893-787a6974a794da94bfb2d2dc90e08744.png)
+  *[image — see the upstream manual]*
 
 > ℹ️ **Note**
 > > ℹ️ **Note**
@@ -39,7 +39,7 @@ Look at the titlebar of your project.
 
 - *The titlebar should have the word (****Editable****).*
 
-  ![](../images/converted_04_keyboarding_006.png)
+  *[image — see the upstream manual]*
 
 1. If it is not editable, try changing the view (see below).
 2. If the book is still not editable, and you need to edit it, you should talk with your project administrator.
@@ -131,7 +131,7 @@ _(An illustrative screenshot from the source page was not captured in this scrap
    - *A set of footnote markers is added in the box below the text*
 2. Type the text after the \ft
 
-![](../images/04_keyboarding_329882331-0a102cc84a50efd97280c8a3e3e6a877.png)
+*[image — see the upstream manual]*
 
 > **Tip:** If you hover your mouse over the superscript letter, the text of the footnote will be displayed in a tip box.
 > > 
@@ -165,7 +165,7 @@ _(An illustrative screenshot from the source page was not captured in this scrap
 > > 
 > > For more details watch [What's new main menu](https://vimeo.com/857678678).
 > > 
-> > ![](../images/04_keyboarding_1522442846-ca7ba009776afc147980ff2e99ab26e9.png)
+> > *[image — see the upstream manual]*
 
 ### Send/receive to the Internet[​](#eeef5150739042cebaf6ba88512fe809 "Direct link to Send/receive to the Internet")
 
@@ -189,7 +189,7 @@ It is essential to have a second copy of your translation. If you don't have acc
 
    - *The computer will make a copy of your files. A progress meter will be displayed. A message box will only appear if there are any problems.*
 
-![](../images/04_keyboarding_901394458-1c4242af3041eb5b2a02ef8da3240a68.png)
+*[image — see the upstream manual]*
 
 ### Send/Receive Again[​](#19ba693a99554a0eb9ffcd86a15367c2 "Direct link to Send/Receive Again")
 
@@ -200,7 +200,7 @@ It is essential to have a second copy of your translation. If you don't have acc
 - Click the Send/Receive icon
   - *Paratext will immediately Send/Receive.*
 
-![](../images/converted_04_keyboarding_007.png)
+*[image — see the upstream manual]*
 
 ## 4.10 Moving your cursor efficiently[​](#f79550c3c28c4ac6a277a839e6c8546d "Direct link to 4.10 Moving your cursor efficiently")
 

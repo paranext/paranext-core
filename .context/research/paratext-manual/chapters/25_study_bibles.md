@@ -69,7 +69,7 @@ or
 
   - A notice is displayed explaining how to migrate your project.
 
-    ![](../images/25_study_bibles_928165823-d5c79382df06adbd302654dfa1a97fad.png)
+    *[image — see the upstream manual]*
 
 ## To Create a new Study Bible Additions project[​](#7ed7e93951db49deaf2c5cf7d4d15d70 "Direct link to To Create a new Study Bible Additions project")
 
@@ -79,7 +79,7 @@ or
 4. You will need to **register** the new project.
    - *A grey-out read-only copy of your project is displayed, with a toolbar at the top.*
 
-![](../images/converted_25_study_bibles_034.png)
+*[image — see the upstream manual]*
 
 ## Add the additional material[​](#e7a1b3e1b97b4eed9be5b9f1c2ed0dcd "Direct link to Add the additional material")
 
@@ -130,7 +130,7 @@ To publish the study Bible, you need to create a publication project.
 1. Click the Project menu of the Study Bible Additions project
 2. Choose “Create merged publication project”
 
-   ![](../images/25_study_bibles_2123925445-0987ac1fed08a2d5daaa62ae9b4a5b0f.png)
+   *[image — see the upstream manual]*
 3. Click the dropdown list “**Merged publication project**”.
 4. Create a new project or choose a previous project
 5. Click **Create**

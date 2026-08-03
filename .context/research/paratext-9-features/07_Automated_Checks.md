@@ -36,7 +36,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks`; Dialog: `RunBasicChecksForm` | `[H]` |
-| Manual | `chapters/12_basic_checks_2.md`, line 158: "The capitalization check looks for several types of capitalization problems." | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`, line 158: "The capitalization check looks for several types of capitalization problems." | `[M]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
 
 **Key Quote** (from Manual):
@@ -84,7 +84,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentQuotationRules`; Dialog: `QuotationRulesForm_tabQuoteMarks` | `[H]` |
-| Manual | `chapters/19_basic_checks_3.md`, line 99: "The quotations check ensures you have been consistent in marking the direct speech correctly." | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 99: "The quotations check ensures you have been consistent in marking the direct speech correctly." | `[M]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
 
 **Key Quote** (from Requirements):
@@ -140,7 +140,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentNumberSettings`; Dialog: `NumberSettingsForm` | `[H]` |
-| Manual | `chapters/19_basic_checks_3.md`, line 77: "19.3 Numbers check" | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 77: "19.3 Numbers check" | `[M]` |
 
 **Implementation**:
 
@@ -187,7 +187,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentScriptureReferenceSettings`; Dialog: `ScriptureReferenceSettingsForm_tabOriginOptions` | `[H]` |
-| Manual | `chapters/19_basic_checks_3.md`, line 44: "19.2 References" | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 44: "19.2 References" | `[M]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
 
 **Key Quote** (from Requirements):
@@ -238,7 +238,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks`; Dialog: `RunBasicChecksForm` | `[H]` |
-| Manual | `chapters/05_basic_checks_1.md`, line 17: "It is important to run the chapter/verse check first because all the other checks depend on it." | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`, line 17: "It is important to run the chapter/verse check first because all the other checks depend on it." | `[M]` |
 
 **Key Quote** (from Manual):
 > "It is important to run the chapter/verse check first because all the other checks depend on it."
@@ -283,7 +283,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks` | `[H]` |
-| Manual | `chapters/05_basic_checks_1.md`, line 84: "Markers check" | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`, line 84: "Markers check" | `[M]` |
 
 **Key Quote** (from Manual):
 > "What to look for. Markers that only occur a few times. Similar markers \q and \q1. Markers that appear together but do not have the same count (e.g. \f and \f\*)"
@@ -335,7 +335,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326); `RunBasicChecksForm` → `BookChooserForm` (line 158) | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks`; Dialog: `RunBasicChecksForm`; 13 items | `[H]` |
-| Manual | `chapters/05_basic_checks_1.md`, line 23: "It is easier to run the checks from the Assignments and Progress." | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`, line 23: "It is easier to run the checks from the Assignments and Progress." | `[M]` |
 
 **Key Quote** (from Manual):
 > "It is easier to run the checks from the Assignments and Progress."
@@ -390,7 +390,7 @@ Automated Checks run validation rules against project text to find errors. They 
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks` | `[H]` |
-| Manual | `chapters/19_basic_checks_3.md`, line 129: "The Footnote quotes check (previously Quoted text) looks at text in a footnote..." | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 129: "The Footnote quotes check (previously Quoted text) looks at text in a footnote..." | `[M]` |
 
 **Key Quote** (from Manual):
 > "The Footnote quotes check (previously Quoted text) looks at text in a footnote (after the \fk or the \fq marker) or in a cross-reference (after the \xk or the \xq marker) to make sure it matches text in the verse."
@@ -474,20 +474,3 @@ The Basic Checks infrastructure is organized as:
 | 7.6 Markers Check | ✓ | ✓ | ✓ | ✓ | - | ✓ | 2026-01-21 |
 | 7.7 Run Basic Checks | ✓ | ✓ | ✓ | ✓ | - | ✓ | 2026-01-21 |
 | 7.8 Footnote Quotes Check | ✓ | ✓ | ✓ | ✓ | - | ✓ | 2026-01-21 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-16 | Original documentation in 06_Basic_Quality_Checks.md | Claude |
-| 2026-01-20 | Split into 06B_Automated_Checks.md | Claude |
-| 2026-01-21 | Reorganized: 06B promoted to 07; feature numbers updated | Claude |
-| 2026-01-21 | Added [MS] sources, [FR] for all features; Evidence Chain tables for all 8 features; updated Validation Summary | Claude |
-
----
-
-**Document Version**: 2.0  
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1  
-**Last Updated**: 2026-01-21

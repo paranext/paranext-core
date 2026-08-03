@@ -43,9 +43,9 @@ The menus changed in Paratext 9.0. To see the menu, you now need to click on the
 
 The main Paratext menu is on the title bar. Each window (or tab) has its own menu.
 
-![](../images/converted_02_organizing_desktop_001.png)
+*[image — see the upstream manual]*
 
-![](../images/converted_02_organizing_desktop_002.png)
+*[image — see the upstream manual]*
 
 When you click on one of these menu icons all the menus are displayed, and you just need to click on the command.
 
@@ -57,7 +57,7 @@ When you click on one of these menu icons all the menus are displayed, and you j
 
 1. Double-click on Paratext 9 icon on the **desktop**
 
-   ![](../images/02_organizing_desktop_2005584883-24790e876c8fc41865bd148bc053cdc1.png)
+   *[image — see the upstream manual]*
 
    - **OR**
 2. (From the **Start** menu, choose **Paratext 9**)
@@ -78,7 +78,7 @@ When you click on one of these menu icons all the menus are displayed, and you j
 
    - *Your screen should look something like the picture below (if not, see below).*
 
-     ![](../images/02_organizing_desktop_411099537-96a761cb71835ec89728aff27b0c3c7a.png)
+     *[image — see the upstream manual]*
 
 ## 2.3 Create a new text layout[​](#71e308de0d1f4c71b54acfb4d760fae8 "Direct link to 2.3 Create a new text layout")
 
@@ -157,7 +157,7 @@ With Paratext, it is possible to have several project/resources open at the same
 
 ### New method - Open directly from Paratext menu[​](#72a473aaf424486aaa027854c81aa784 "Direct link to New method - Open directly from Paratext menu")
 
-![](../images/02_organizing_desktop_271795348-ffd5611ee7b7a9135f7021f392c4b2dc.png)
+*[image — see the upstream manual]*
 
 1. **≡ Paratext** menu, under **Paratext** > **Open text collection**
 2. Select several resources using the Ctrl key as you click on the resource.
@@ -175,7 +175,7 @@ Save the collection
 
 ### Previous method - Open dialog[​](#4ce29225a23d4f53998f378f3d1f993f "Direct link to Previous method - Open dialog")
 
-![](../images/02_organizing_desktop_1897518088-bcafd9c2ce50eeb961d33631f6b673f7.png)
+*[image — see the upstream manual]*
 
 1. **≡ Paratext** menu, under **Paratext** > **Open**
 2. Click on the Resources button (at the top).
@@ -191,7 +191,7 @@ There are several ways to change the order of texts in the collection
 
 1. **≡ Tab**, **Modify text collection**
 
-![](../images/02_organizing_desktop_1854772482-2f24fa0991d7a4b8c1ff0f5572934d33.png)
+*[image — see the upstream manual]*
 
 **From the Select Texts dialog**
 
@@ -199,7 +199,7 @@ There are several ways to change the order of texts in the collection
 2. Make any other changes
 3. Click **OK**
 
-![](../images/02_organizing_desktop_22876174-593eaefa51836bf80f1cf960831a3777.png)
+*[image — see the upstream manual]*
 
 > **Tip:** You can change the text in the second pane by clicking on the blue link of the abbreviation for the text. You can also use the **≡ Tab** under **View** menu to change the view (preview, unformatted or standard).
 
@@ -208,7 +208,7 @@ There are several ways to change the order of texts in the collection
 1. **≡ Paratext** menu, under **Paratext** > **Open**
 2. Click on **Enhanced Resources**
 
-![](../images/02_organizing_desktop_1623023997-14a67900e70b8ce553ae741b9dd0fc8f.png)
+*[image — see the upstream manual]*
 
 > **Tip:** Enhanced resources also contain a dictionary, images, maps, **videos,** etc. When you open an Enhanced Resource, a guide opens as well.
 
@@ -229,7 +229,7 @@ There are several ways to change the order of texts in the collection
 4. Click **OK**
 5. **View** > choose a language (e.g. **French**)
 
-![](../images/02_organizing_desktop_1549567692-2e81822c0dce5588e7974bd5841930e8.png)
+*[image — see the upstream manual]*
 
 > **Tip:** It is useful to add dictionary windows to the autohide, (right-click on the tab name, choose move to autohide).
 
@@ -247,7 +247,7 @@ You can open the source language text with glosses in an alternative language th
 3. Choose HEB/GRK
 4. Click **OK.**
 
-![](../images/02_organizing_desktop_1885351119-5e20046d1b3040df8d17d561097cdef1.png)
+*[image — see the upstream manual]*
 
 If you have downloaded the special gloss resource, you can load them as follows
 

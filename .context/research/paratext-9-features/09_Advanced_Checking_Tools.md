@@ -38,7 +38,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 | Menu Structure | Menu: `Tools > Interlinearizer`; Handler: `uiFileOpenInterlinear_Click`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Form Relationships | `InterlinearForm` opens `InterlinearSetupForm`, `CopyGlossesForm` | `[FR]` |
 | HelpData | Keyword: `ComponentInterlinearizer`; Dialog: `InterlinearSetupForm` | `[H]` |
-| Manual | `chapters/17_back_translation_2.md`: "you can use Paratext's project Interlinearizer function" | `[M]` |
+| Manual | `../paratext-manual/chapters/17_back_translation_2.md`: "you can use Paratext's project Interlinearizer function" | `[M]` |
 | Requirements | Section: "Quality Checking/Validation > Interlinear View" | `[R]` |
 
 **Key Quote** (from Requirements):
@@ -68,7 +68,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
   - Menu Structure: `InterlinearForm`, handler `displaySettingsToolStripMenuItem_Click`, line 800
   - File: `Paratext/Interlinear/InterlinearForm.cs`
 - Also documented in:
-  - Manual: `chapters/17_back_translation_2.md`, line 35
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 35
   - Quote: "**≡ Tab**, under **Tools** > **Interlinearizer**"
   - HelpData ID: `b1107d4d-2bed-4d4b-a1c5-664edc3e0b5b`
 
@@ -103,7 +103,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 | Menu Structure | Menu: `Tools > Parallel Passages`; Handler: `parallelPassagesToolStripMenuItem_Click`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Form Relationships | `ParallelPassagesTool` opens `ScrTextListSelectionForm`, `BookChooserForm` | `[FR]` |
 | HelpData | Keyword: `ComponentParallelPassages`; Dialog: `ParallelPassagesTool` | `[H]` |
-| Manual | `chapters/23_parallel_passages.md`: "thousands of passages in the NT where either the same event is being described" | `[M]` |
+| Manual | `../paratext-manual/chapters/23_parallel_passages.md`: "thousands of passages in the NT where either the same event is being described" | `[M]` |
 | Requirements | Section: "Quality Checking/Validation > Parallel Passages" | `[R]` |
 
 **Key Quote** (from Requirements):
@@ -139,7 +139,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
   - Menu Structure: `ParallelPassagesTool`, handler `approveByRowToolStripMenuItem_Click`, line 867
   - File: `Paratext/ParallelPassages/ParallelPassagesTool.cs`
 - Also documented in:
-  - Manual: `chapters/23_parallel_passages.md`, line 36
+  - Manual: `../paratext-manual/chapters/23_parallel_passages.md`, line 36
   - Quote: "**≡ Tab**, under **Tools** > **Parallel passages**"
   - HelpData ID: `94b5036c-42df-413c-ad2a-e0cadc790cfd`
 
@@ -174,7 +174,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 | Menu Structure | Menu: `Project > Compare versions`; Handler: `uiToolsCompareTexts_Click`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Form Relationships | `DifferencesToolForm` opens `CommitChangesForm` | `[FR]` |
 | HelpData | Keyword: `ComponentCompareVersions`; Dialog: `CommitChangesForm` | `[H]` |
-| Manual | `chapters/18_compare_text.md`: "you will learn how to save your text at various points and review them later" | `[M]` |
+| Manual | `../paratext-manual/chapters/18_compare_text.md`: "you will learn how to save your text at various points and review them later" | `[M]` |
 | Requirements | *Not explicitly mentioned* | `-` |
 
 **Key Quote** (from Manual):
@@ -200,9 +200,9 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
   - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsCompareTexts_Click`, line 531
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Also documented in:
-  - Manual: `chapters/18_compare_text.md`, line 24
+  - Manual: `../paratext-manual/chapters/18_compare_text.md`, line 24
   - Quote: "**≡ Tab** under **Project** > **Mark a point in project history**"
-  - Manual: `chapters/18_compare_text.md`, line 32
+  - Manual: `../paratext-manual/chapters/18_compare_text.md`, line 32
   - Quote: "**≡ Tab** expand the menus then under **Project** > **Compare Versions**"
   - HelpData ID: `dbbd1298-e40d-44ea-b55a-9a9068ed4bfe`
 
@@ -239,7 +239,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 | Menu Structure | Menu: `Tools > Checklists > Word or phrase`; Handler: `wordsOrPhrasesToolStripMenuItem_Click`; Owner: `TextForm` | `[MS]` |
 | Form Relationships | `ChecklistsTool` opens multiple dialogs | `[FR]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` *(general checklist component)* | `[H]` |
-| Manual | `chapters/11_compare_word.md`: "search for a word or phrase in a project and compare it with the translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/11_compare_word.md`: "search for a word or phrase in a project and compare it with the translation" | `[M]` |
 | Requirements | *Not explicitly mentioned* | `-` |
 
 **Key Quote** (from Manual):
@@ -266,10 +266,10 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
   - Menu Structure: `TextForm`, handler `wordsOrPhrasesToolStripMenuItem_Click`, line 2413
   - File: `Paratext/TextForm.cs`
 - Also documented in:
-  - Manual: `chapters/11_compare_word.md`, line 22
+  - Manual: `../paratext-manual/chapters/11_compare_word.md`, line 22
   - Quote: "From the **≡ Tab**, under **Tools**, point to **Checklists**, and select **Word or Phrase**"
 - Biblical Terms tool > tool icon (for term comparison)
-  - Manual: `chapters/11_compare_word.md`, line 52
+  - Manual: `../paratext-manual/chapters/11_compare_word.md`, line 52
   - Quote: "Choose a term which has a rendering... Click on the tool icon"
 
 **HelpData Items**:
@@ -434,24 +434,6 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 | 9.4 Compare Word/Phrase | ✓ | ✓ | ✓ | ✓ | - | ✓ | 2026-01-21 |
 | 9.5 Guess Translations | ✓ | ✓ | ✓ | - | - | ✓ | 2026-01-21 |
 | 9.6 Concordance Builder | ✓ | ✓ | ✓ | - | - | ✓ | 2026-01-21 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-21 | Added Menu Structure [MS] sources for all 6 features; added Form Relationships [FR] sources; updated Evidence Chain tables with verified entry points from Menu Structure; updated Validation Summary table format | Claude |
-| 2026-01-21 | Fully documented 9.5 Guess Translations and 9.6 Concordance Builder (previously stubs) | Claude |
-| 2026-01-21 | Reorganized: Category 07 renumbered to 09; feature numbers updated | Claude |
-| 2026-01-16 | Updated 9.4 Compare Word/Phrase: Added Evidence Chain table, corrected UI entry points, documented missing HelpData | Claude |
-| 2026-01-16 | Updated 9.3 Compare Text: Added Evidence Chain table, corrected HelpData keyword, Manual citations with line numbers | Claude |
-| 2026-01-16 | Updated 9.2 Parallel Passages: Added Evidence Chain table, HelpData citations with IDs, Manual citations with line numbers | Claude |
-| 2026-01-16 | Updated 9.1 Interlinear Tool: Added Evidence Chain table, HelpData citations with IDs, Manual citations with line numbers | Claude |
-| 2026-01-14 | Initial document creation | Claude |
-
----
-
 ## Notes
 
 - Interlinear has 31 HelpData items, indicating major complexity
@@ -461,6 +443,4 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 ---
 
-**Document Version**: 4.0
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1
 **Last Updated**: 2026-01-21

@@ -39,14 +39,14 @@ Normally you would make the comparisons after you have translated the passage be
 
 1. Click the dropdown arrow beside the source text options
 
-   ![](../images/converted_23_parallel_passages_032.png)
+   *[image — see the upstream manual]*
 2. Choose as appropriate
 
    - *The display changes to show the source language text at the top of the table.*
 
 > **Tip:** In Paratext 9.3 you can reduce or expand the Greek / Hebrew by clicking the little arrow.
 
-![](../images/23_parallel_passages_406509394-67785cba35a1de82e19a22278edc2181.png)
+*[image — see the upstream manual]*
 
 ### 23.3 Select comparative texts[​](#2341540c08b34e67b22aa556a7a3d12d "Direct link to 23.3 Select comparative texts")
 
@@ -136,7 +136,7 @@ Identify the passages which have been changed since they were marked as finished
 2. Change the passage filter to **Changed Text**
 3. Click **ab** icon under the passage reference.
 
-   ![](../images/converted_23_parallel_passages_033.png)
+   *[image — see the upstream manual]*
 
    - *A comparison window is displayed in Paratext.*
 4. Change the text as necessary.
@@ -156,4 +156,4 @@ Identify the passages which have been changed since they were marked as finished
 2. Change the scroll group from **[A]** to **None**.
 3. Change the reference to the other passage.
 
-![](../images/23_parallel_passages_1458375744-9c6c92f4c2e5ea2e0f1f0b3afdcb3430.png)
+*[image — see the upstream manual]*

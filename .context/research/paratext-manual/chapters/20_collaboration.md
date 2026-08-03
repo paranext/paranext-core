@@ -72,7 +72,7 @@ If all users are using 9.2 or above
 
   - *A dialog box is displayed*
 
-    ![](../images/20_collaboration_918960374-467956d9219b8a5577820016558aa32b.png)
+    *[image — see the upstream manual]*
 - Click either "Wait to join" or "Start session" (to be the host) as appropriate.
 
   - *A dialog box may be displayed*
@@ -84,7 +84,7 @@ If not,
 
   - *A dialog box is displayed showing the five options.*
 
-    ![](../images/20_collaboration_564161900-840bc02505fe6e7a0d0a8a05ac0572d5.png)
+    *[image — see the upstream manual]*
 
 **Which one do you choose?**
 
@@ -107,7 +107,7 @@ All scripture text is shared in Paratext Live. However, changes made with variou
 
 - Click the Paratext Live button on the toolbar,
 
-![](../images/20_collaboration_419095099-1c3a400da0dc55159ab33f1301b02ed6.png)
+*[image — see the upstream manual]*
 
 - Click “**Exchange all files**”
   - *All of the users then receive updates to these files.*

@@ -33,7 +33,7 @@ The Translation Workspace encompasses the core features users interact with dail
 | Menu Structure | Form: `TextForm`; Menus: Edit, View, Insert, Tools | `[MS]` |
 | Form Relationships | `TextForm` inherits from `ParatextWindowWithMenus` | `[FR]` |
 | Requirements | Section: "Drafting Support > Text Editing" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "Paratext 9 has five views" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Paratext 9 has five views" | `[M]` |
 | HelpData | Keyword: `ComponentEditing/ListWindow`; Dialog: `OptionsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -52,10 +52,10 @@ The Translation Workspace encompasses the core features users interact with dail
 
 **UI Entry Points**:
 - Double-click Paratext 9 icon on desktop
-  - Manual: `chapters/02_organizing_desktop.md`, line 66
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 66
   - Quote: "Double-click on Paratext 9 icon on the **desktop**"
 - ≡ Paratext > Paratext > Open > Projects
-  - Manual: `chapters/02_organizing_desktop.md`, line 82
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 82
   - Quote: "**≡ Paratext** menu under **Paratext** > **Open**, Projects"
 
 **HelpData Items**:
@@ -126,7 +126,7 @@ The Translation Workspace encompasses the core features users interact with dail
 |--------|-----------|--------|
 | Menu Structure | Menu: `View > Switch Scripture view`; Handler: `nextViewToolStripMenuItem_Click`; Owner: `TextForm` | `[MS]` |
 | Requirements | Section: "Drafting Support > Text Editing" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "Ctrl + E... choose the view" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Ctrl + E... choose the view" | `[M]` |
 | HelpData | ID: `bc18cda9-d8bc-4ee8-bdd3-3d7825314107`; Question: "What is the difference between the Preview, Basic, Formatted, Unformatted, and Standard view in Paratext?" | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -146,10 +146,10 @@ The Translation Workspace encompasses the core features users interact with dail
   - Menu Structure: `TextForm`, handler `nextViewToolStripMenuItem_Click`, line 1933
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > View > [click "v" icon for expanded menu] > Select specific view
-  - Manual: `chapters/04_keyboarding.md`, line 52
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 52
   - Quote: "**≡ Tab** under **View** menu, choose the view (usually Standard)."
 - Ctrl+E (toggle view)
-  - Manual: `chapters/04_keyboarding.md`, line 51
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 51
   - HelpData ID: `9b81209d-eb15-44d7-b646-44a837c03c54`
   - Question: "How do I insert markers in my project text?"
 
@@ -180,7 +180,7 @@ The Translation Workspace encompasses the core features users interact with dail
 |--------|-----------|--------|
 | Menu Structure | No dedicated menu item found; navigation is toolbar-based | - |
 | Requirements | Section: "Drafting Support > Navigation" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "move your cursor to the correct book, chapter and verse" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "move your cursor to the correct book, chapter and verse" | `[M]` |
 | HelpData | Keyword: `ComponentNavigation`; 3 items | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -201,19 +201,19 @@ The Translation Workspace encompasses the core features users interact with dail
 
 **UI Entry Points**:
 - Navigation toolbar icons (book, chapter, verse)
-  - Manual: `chapters/04_keyboarding.md`, line 31
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 31
   - Quote: "Using the icons on the toolbar, change the project, book, chapter and verse as needed."
 - Ctrl+B (go to navigation area)
-  - Manual: `chapters/04_keyboarding.md`, line 137
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 137
   - Quote: "Ctrl + B = go to the navigation area of the toolbar."
   - HelpData ID: `3b10f808-04bc-4276-a7cf-d8bc1791312f`
   - Dialog: `OptionsForm`
   - Question: "How do I go to a Bible reference?"
 - F8 / Ctrl+F8 (next/prev chapter)
-  - Manual: `chapters/04_keyboarding.md`, line 135
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 135
   - Quote: "F8 = Next Chapter (Ctrl + F8 for previous chapter)"
 - F9 / Ctrl+F9 (next/prev book)
-  - Manual: `chapters/04_keyboarding.md`, line 136
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 136
   - Quote: "F9 = Next Book (Ctrl + F9 for previous book)"
 
 **HelpData Items**:
@@ -241,7 +241,7 @@ The Translation Workspace encompasses the core features users interact with dail
 |--------|-----------|--------|
 | Menu Structure | No dedicated menu item found; automatic behavior | - |
 | Requirements | Section: "Drafting Support > Navigation" | `[R]` |
-| Manual | `chapters/02_organizing_desktop.md`: Video 0.2.3a reference | `[M]` |
+| Manual | `../paratext-manual/chapters/02_organizing_desktop.md`: Video 0.2.3a reference | `[M]` |
 | HelpData | Keyword: `ComponentSynchronizedScrolling`; 4 items | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -288,7 +288,7 @@ The Translation Workspace encompasses the core features users interact with dail
 |--------|-----------|--------|
 | Menu Structure | No dedicated menu item found; managed via title bar context menu | - |
 | Requirements | Section: "Drafting Support > Navigation" | `[R]` |
-| Manual | `chapters/02_organizing_desktop.md`: Video 0.2.3a | `[M]` |
+| Manual | `../paratext-manual/chapters/02_organizing_desktop.md`: Video 0.2.3a | `[M]` |
 | HelpData | Text search "scroll group": 30 items | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -338,7 +338,7 @@ The Translation Workspace encompasses the core features users interact with dail
 | Menu Structure | Menu: `Layout > Manage layouts`; Handler: `manageLayoutsToolStripMenuItem_Click`; Owner: `MainForm` | `[MS]` |
 | Form Relationships | Opens: `SaveTextCombinationsForm` from layout save | `[FR]` |
 | Requirements | Section: "Drafting Support > Workspace Management" | `[R]` |
-| Manual | `chapters/02_organizing_desktop.md`: "Save current layout" | `[M]` |
+| Manual | `../paratext-manual/chapters/02_organizing_desktop.md`: "Save current layout" | `[M]` |
 | HelpData | Keywords: `ComponentWindows/Panels/Tabs`, `ComponentSavedLayouts`; Dialog: `SaveTextCombinationsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -470,7 +470,7 @@ shortcut, or drag gesture that enters autohide:
 - ≡ Paratext > Layout > Save current layout
   - Menu Structure: `MainForm`, handler `saveTextCombinationToolStripMenuItem_Click`, line 1357
   - File: `Paratext/MainForm.cs`
-  - Manual: `chapters/02_organizing_desktop.md`, line 113
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 113
   - Quote: "**≡ Paratext**, under **Layout** > **Save current layout**"
   - HelpData ID: `aad37193-723a-4ffc-9026-7e42c8f82590`
   - Dialog: `SaveTextCombinationsForm`
@@ -479,7 +479,7 @@ shortcut, or drag gesture that enters autohide:
   - Menu Structure: `MainForm`, handler `manageLayoutsToolStripMenuItem_Click`, line 1370
   - File: `Paratext/MainForm.cs`
 - ≡ Paratext > Window > Arrange into columns/rows
-  - Manual: `chapters/02_organizing_desktop.md`, line 93
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 93
   - Quote: "you can use the main Paratext menu to arrange windows by **rows** and **columns**"
   - HelpData ID: `bb04b325-539c-48b3-ad53-313a339203be`
   - Dialog: `SaveTextCombinationsForm`
@@ -518,7 +518,7 @@ shortcut, or drag gesture that enters autohide:
 | Menu Structure | Menu: `Edit > Replace`; Handler: `replaceToolStripMenuItem_Click`; Owner: `TextForm` | `[MS]` |
 | Form Relationships | Opens: `FindReplaceForm` from TextForm | `[FR]` |
 | Requirements | Section: "Drafting Support > Text Editing" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "use the **Find** feature to look for a word" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "use the **Find** feature to look for a word" | `[M]` |
 | HelpData | Keyword: `ComponentFind/Replace`; Dialog: `FindReplaceForm_tabBasic` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -548,7 +548,7 @@ shortcut, or drag gesture that enters autohide:
 - ≡ Tab > Edit > Find (Ctrl+F)
   - Menu Structure: `TextForm`, handler `findToolStripMenuItem_Click`, line 1631
   - File: `Paratext/TextForm.cs`
-  - Manual: `chapters/04_keyboarding.md`, line 44
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 44
   - Quote: "you could use the **Find** feature to look for a word that occurs in the verse you are looking for. Ctrl+F."
   - HelpData ID: `fd1874e8-271b-43b8-b8c7-8eda5fead261`
   - Dialog: `FindReplaceForm_tabBasic`
@@ -688,7 +688,7 @@ investigation):
 |--------|-----------|--------|
 | Menu Structure | Menu: `Insert > Figure`; Handler: `figureToolStripMenuItem_Click`; Owner: `TextForm` | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
-| Manual | `chapters/24_finalizing.md`, line 55: "From the **Insert** menu, choose **Figure**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 55: "From the **Insert** menu, choose **Figure**" | `[M]` |
 | HelpData | Keyword: `ComponentInsertFigure`; Dialog: `FigurePropertiesForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -704,7 +704,7 @@ investigation):
 - ≡ Tab > Insert > Figure
   - Menu Structure: `TextForm`, handler `figureToolStripMenuItem_Click`, line 1808
   - File: `Paratext/TextForm.cs`
-  - Manual: `chapters/24_finalizing.md`, line 55
+  - Manual: `../paratext-manual/chapters/24_finalizing.md`, line 55
   - Quote: "From the **Insert** menu, choose **Figure**"
 
 **Validation**: [MS] - [R] [M] [H] [C] — Last verified: 2026-01-20
@@ -768,7 +768,7 @@ investigation):
 | Menu Structure | Menu: `Insert > Extended footnote`; Handler: `InsertEfMarkerButtonOnClick`; Owner: `TextForm` | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
 | HelpData | Keyword: `ComponentFootnotes`; Dialog: `FootnotePropertiesForm` | `[H]` |
-| Manual | `chapters/04_keyboarding.md`: Insert menu | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: Insert menu | `[M]` |
 
 **Key Quote** (from Requirements):
 > "USFM supports not only verse text, but many supporting elements as well, including but not limited to introductory material, sidebars, footnotes, cross references, end notes, figures, and tables."
@@ -827,7 +827,7 @@ investigation):
 | Menu Structure | Menu: `Project > Advanced > Insert missing origin references`; Handler: `insertMissingOriginReferencesToolStripMenuItem_Click`; Line: 566; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
 | HelpData | Keyword: `ContentInsertCrossReference`; Dialog: `CrossReferencePropertiesForm` | `[H]` |
-| Manual | `chapters/04_keyboarding.md`: Insert menu | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: Insert menu | `[M]` |
 
 **Key Quote** (from Requirements):
 > "USFM supports not only verse text, but many supporting elements as well, including but not limited to introductory material, sidebars, footnotes, cross references, end notes, figures, and tables."
@@ -1076,8 +1076,8 @@ investigation):
 | HelpData | ID: `333a9610-21c9-4d5d-a7c1-bc97fe66eecc`; Section "More on the reference icon"; Keywords: `ComponentScriptureReferenceSettings` | `[H]` |
 | HelpData | ID: `cace882a-69cb-4325-8068-fc34a708e2ee`; Question: "Why do some markers display in red?" | `[H]` |
 | HelpData | ID: `50553df7-ae46-4a16-bc91-56265604a27a`; Question: "How do I highlight invalid or unknown characters in my text?" | `[H]` |
-| Manual | `chapters/04_keyboarding.md`, line 63: "You can use ≡ Tab under View > Highlight Invalid Characters" | `[M]` |
-| Manual | `chapters/08_spell_check.md`, line 21: "Work through your text with red squiggly lines" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`, line 63: "You can use ≡ Tab under View > Highlight Invalid Characters" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 21: "Work through your text with red squiggly lines" | `[M]` |
 
 **Key Quote** (from HelpData ID: `333a9610-21c9-4d5d-a7c1-bc97fe66eecc`):
 > "Wherever references occur, a reference icon shows whether the reference is valid or invalid... If a reference is invalid, the reference icon has a red X. If a reference is valid, the reference icon is entirely black and you can click the reference icon to open a Quick Reference window."
@@ -1103,7 +1103,7 @@ investigation):
 - ≡ Tab > View > Display spelling errors
   - Menu Structure: `TextForm`, handler `displaySpellingMenuItem_Click`, line 2186
   - File: `Paratext/TextForm.cs`
-  - Manual: `chapters/08_spell_check.md`, line 21
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 21
 - ≡ Tab > View > Highlight biblical term renderings
   - Menu Structure: `TextForm`, handler `highlightBiblicalTermsToolStripMenuItem_Click`, line 2095
   - File: `Paratext/TextForm.cs`
@@ -1175,41 +1175,6 @@ investigation):
 | 1.15 Autocorrect | ✓ | - | - | - | ✓ | ✓ | 2026-01-20 |
 | 1.16 Text Normalization | ✓ | - | - | - | - | ✓ | 2026-01-21 |
 | 1.17 Editor Real-time Validation | ✓ | - | - | ✓ | ✓ | ✓ | 2026-01-22 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-15 | HelpData queries for all features | Claude |
-| 2026-01-15 | Evidence chain tracing for Find/Replace | Claude |
-| 2026-01-15 | Updated to FEATURE_TEMPLATE_v2.md v5.0 | Claude |
-| 2026-01-16 | Updated UI Entry Points with proper citations per AGENTS.md v6.4 | Claude |
-| 2026-01-16 | Added HelpData IDs, Dialogs, and Questions per FEATURE_TEMPLATE_v2.md v5.2 | Claude |
-| 2026-01-20 | Reworked 1.2 from "Marker View" to "Editor Views" covering all 5 views | Claude |
-| 2026-01-20 | Added 1.11 Insert Footnotes, 1.12 Insert Cross-refs, 1.13 Insert Verse Nums | Claude |
-| 2026-01-20 | **Major update aligned with AGENTS.md v7.2 / FEATURE_TEMPLATE_v2.md v6.1** | Claude |
-| 2026-01-20 | Added Menu Structure `[MS]` sources with handler names, files, line numbers | Claude |
-| 2026-01-20 | Added Form Relationships `[FR]` sources where applicable | Claude |
-| 2026-01-20 | Updated Sources tables to 6-source format | Claude |
-| 2026-01-20 | Updated UI Entry Points with `ownerForm` per menu inheritance model | Claude |
-| 2026-01-20 | Added Validation Summary columns for MS and FR | Claude |
-| 2026-01-20 | Renamed 1.11 Autocorrect to 1.15; added 1.14 Insert Project Notes | Claude |
-| 2026-01-20 | Added Dialog Navigation section to Find/Replace feature | Claude |
-| 2026-01-20 | **Deep Review Session 2**: Added Requirements [R] to 1.9, 1.10 with USFM quote | Claude |
-| 2026-01-20 | Added Manual [M] reference to 1.9 Insert Figure from chapter 24 | Claude |
-| 2026-01-20 | **Deep Review Session 3**: Completed 1.15 Autocorrect stub with full implementation | Claude |
-| 2026-01-20 | Fixed Validation Summary: Added [R] to 1.11, 1.12 (footnotes, cross-refs) | Claude |
-| 2026-01-20 | Added Requirements [R] to 1.14 Insert Notes with Project Comments quote | Claude |
-| 2026-01-20 | 1.15: Found Menu Structure entry via `quotationRulesToolStripMenuItem_Click` | Claude |
-| 2026-01-20 | 1.15: Added QuotationRulesForm.cs evidence chain with AutoReplace imports | Claude |
-| 2026-01-21 | Added 1.16 Text Normalization Utilities (whitespace cleanup tools from Project > Advanced) | Claude |
-| 2026-01-21 | Expanded 1.12 from "Insert Cross-references" to "Cross-Reference Tools" with batch operations from Project > Advanced | Claude |
-| 2026-01-22 | Added 1.17 Editor Real-time Validation (reference icons, invalid marker highlighting, character highlighting, spelling display, biblical term highlighting) | Claude |
-
----
-
 ## Notes
 
 - FormattedEditor is at repo root (`FormattedEditor/`), not under `Paratext/`
@@ -1217,12 +1182,8 @@ investigation):
 - Quick Reference menu item is in `ParatextWindowWithMenus` (base class), inherited by all windows
 - Find/Replace has richest evidence chain showing UI → Logic → Data layers
 - **Autocorrect**: Accessed via Project > Project settings > Quotation rules (not a dedicated menu item). Also uses autocorrect.txt file in project folder for custom replacements.
-- All UI Entry Points now include `ownerForm` specification per AGENTS.md v7.2 menu inheritance model
+- All UI Entry Points now include `ownerForm` specification (menu inheritance: each menu item records its owning form)
 - TextForm menus are owned by TextForm; ParatextWindowWithMenus menus are owned by that base class
 - The distinction between ownerForm is critical: menus with same path from different forms are DIFFERENT menus
 
 ---
-
-**Document Version**: 6.1  
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1  
-**Guidelines Version**: AGENTS.md v7.2

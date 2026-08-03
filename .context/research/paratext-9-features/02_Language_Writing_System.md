@@ -34,7 +34,7 @@ Language and writing system features enable Paratext to support the world's lang
 | Menu Structure | Menu: `Project > Project settings > Keyboard`; Handler: `keyboardToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | Opens: `KeyboardSelectionForm` via `IParatextAccess.CreateKeyboardSelectionWindow` | `[FR]` |
 | Requirements | Section: "Drafting Support > Language Support" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "Setting up the keyboard" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Setting up the keyboard" | `[M]` |
 | HelpData | Keyword: `ContentKeyboard`; Dialog: `KeyboardSelectionForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -58,7 +58,7 @@ Language and writing system features enable Paratext to support the world's lang
   - Menu Structure: `ParatextWindowWithMenus`, handler `keyboardToolStripMenuItem_Click`, line 893
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Alt+Shift (system shortcut to switch keyboards)
-  - Manual: `chapters/04_keyboarding.md`, line 60
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 60
   - Quote: "Change your keyboard system as needed on your computer."
 
 **HelpData Items**:
@@ -87,7 +87,7 @@ Language and writing system features enable Paratext to support the world's lang
 | Menu Structure | (Accessed via 2.1 Keyboard settings) | `-` |
 | Form Relationships | (External application) | `-` |
 | Requirements | Section: "Drafting Support > Language Support" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "If you are using Keyman" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "If you are using Keyman" | `[M]` |
 | HelpData | Keyword: `Keyman`; 2 items | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -107,7 +107,7 @@ Language and writing system features enable Paratext to support the world's lang
 - Keyman tray icon (system)
   - External: Keyman application
 - Choose keyboard in project settings
-  - Manual: `chapters/04_keyboarding.md`, line 61
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 61
   - Quote: "If you are using Keyman then choose your keyboard (e.g. Tchad Unicode)"
   - Related: See 2.1 Keyboard Switching for menu entry
 
@@ -139,7 +139,7 @@ Language and writing system features enable Paratext to support the world's lang
 | Menu Structure | Menu: `Project > Project settings > Language settings`; Handler: `languageSettingsToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | `LanguageSettingsForm` opens `ConfigFontFeaturesForm` (line 391) | `[FR]` |
 | Requirements | Section: "Drafting Support > Language Support" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "Font settings" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Font settings" | `[M]` |
 | HelpData | Keyword: `ComponentLanguageSettings`; Dialogs: `LanguageSettingsForm_tabFont`, `LanguageSettingsForm_tabGraphite` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -318,7 +318,7 @@ Language and writing system features enable Paratext to support the world's lang
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Project settings > Language settings`; Handler: `languageSettingsToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | (Tabs within LanguageSettingsForm, no sub-dialogs) | `-` |
-| Manual | `chapters/04_keyboarding.md`: "Highlight Invalid Characters" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Highlight Invalid Characters" | `[M]` |
 | HelpData | Keyword: `ComponentLanguageSettings`; Dialog: `InventoryForm.Character` | `[H]` |
 
 **Implementation**:
@@ -339,7 +339,7 @@ Language and writing system features enable Paratext to support the world's lang
   - Dialog: `LanguageSettingsForm_tabAlphabetic`
   - Question: "How do I set up my language in Paratext?"
 - View > Highlight Invalid Characters (in text window)
-  - Manual: `chapters/04_keyboarding.md`, line 65
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 65
   - Quote: "You can use **≡ Tab** under **View** > **Highlight Invalid Characters**"
 
 **HelpData Items**:
@@ -368,7 +368,7 @@ Language and writing system features enable Paratext to support the world's lang
 | Menu Structure | (Automatic behavior based on project language; no dedicated menu) | `-` |
 | Form Relationships | (Framework-level, no dedicated dialogs) | `-` |
 | Requirements | Section: "Internationalization/Localization" | `[R]` |
-| Manual | `chapters/04_keyboarding.md`: "Right-to-left languages" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Right-to-left languages" | `[M]` |
 | HelpData | Keyword: `ComponentHebrew/Greek` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -633,26 +633,6 @@ body {
 | 2.8 Ruby Glossing | - | - | - | - | ✓ | - | 2026-01-20 |
 | 2.9 Encoding Converter | - | ✓ | - | - | ✓ | - | 2026-01-22 |
 | 2.10 Vertical Script Support | - | - | - | - | - | ✓ | 2026-01-22 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-15 | HelpData queries for keyboard, font, language | Claude |
-| 2026-01-15 | Evidence chain tracing for all features | Claude |
-| 2026-01-15 | Updated to FEATURE_TEMPLATE_v2.md v5.0 | Claude |
-| 2026-01-16 | Updated UI Entry Points with proper citations per AGENTS.md v6.4 | Claude |
-| 2026-01-16 | Added HelpData IDs, Dialogs, and Questions per FEATURE_TEMPLATE_v2.md v5.2 | Claude |
-| 2026-01-20 | Deep review per AGENTS.md v7.2 / TEMPLATE v6.1 | Claude |
-| 2026-01-20 | Added Menu Structure [MS] and Form Relationships [FR] sources | Claude |
-| 2026-01-20 | Completed Ruby Glossing (2.8) from STUB | Claude |
-| 2026-01-22 | Added 2.9 Encoding Converter: new feature based on HelpData coverage audit identifying 5 unreferenced ComponentEncodingConverter items; added Form Relationships [FR], HelpData [H], Use Cases, External Dependencies | Claude |
-| 2026-01-22 | Added 2.10 Vertical Script Support: new feature based on source code analysis; found ProjectSettings.Vertical property, CSSCreator.cs writing-mode support, font mappings for Mongolian script; no HelpData or UI documentation exists | Claude |
-
----
-
 ## Notes
 
 - LanguageSettingsForm.cs is the central UI for most language configuration (font, characters, etc.)
@@ -665,7 +645,3 @@ body {
 - All UI Entry Points now include verifiable citations with file:line + quote (Manual) or ID/Dialog/Keyword (HelpData)
 
 ---
-
-**Document Version**: 5.2
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1
-**Guidelines Version**: AGENTS.md v7.2

@@ -54,9 +54,9 @@ If the term you have used is not on the list, you can add it:
 4. Paste (**Ctrl**+**V**) the rendering in the dialog box.
 5. Click **OK**.
 
-![](../images/10_biblical_terms_1672904695-b77552a59a4d7c6fd54863a6cd31f4a3.png)
+*[image — see the upstream manual]*
 
-![](../images/10_biblical_terms_639973745-76bf3b6a4c9dbfcec6a8390b8b24e0d5.png)
+*[image — see the upstream manual]*
 
 ### Find other verses in the current book with the same Biblical term[​](#bbdc4762638048adb945ccfff0f3c9e3 "Direct link to Find other verses in the current book with the same Biblical term")
 
@@ -68,7 +68,7 @@ In the Biblical Terms rendering window
 2. From the second filter button choose **current book**
 3. Add renderings for the term in the verses until you have identified the terms in all those verses (see below).
 
-![](../images/10_biblical_terms_1161726349-4d8d38bd9a64952e539f785cd46f36e5.png)
+*[image — see the upstream manual]*
 
 ### Add renderings from the other verses[​](#a5212cc460da4fabb7cb3db81d405280 "Direct link to Add renderings from the other verses")
 
@@ -83,9 +83,9 @@ In the Biblical Terms rendering window
 - Click the red cross to the left of the verse reference link
   - *The red cross turns into a green tick with a small red x*
 
-![](../images/converted_10_biblical_terms_012.png)
+*[image — see the upstream manual]*
 
-![](../images/converted_10_biblical_terms_013.png)
+*[image — see the upstream manual]*
 
 > **Warning:** If you click on the cross by mistake, click the green tick and it will return to the red cross.
 
@@ -95,7 +95,7 @@ In the Biblical Terms rendering window
 
    - *The edit rendering dialog is displayed listing all the renderings you added.*
 
-     ![](../images/10_biblical_terms_342466808-d2d3858609d276ace47bb8453437841f.png)
+     *[image — see the upstream manual]*
 2. Decide on the best rendering
 3. Select, then Cut (**Ctrl**+**x**) and paste (**Ctrl**+**v**) it to the top of the dialogue box
 4. Add **\*** as necessary to combine similar renderings
@@ -110,12 +110,12 @@ In the Biblical Terms rendering window
 
 - Click on the **History** button
 
-![](../images/converted_10_biblical_terms_014.png)
+*[image — see the upstream manual]*
 
 - Type in the reason why you rejected the others and why the first was the best.
 - Click **OK**
 
-![](../images/10_biblical_terms_584885271-7cd299c598cbffdf33baa9dd3e9a73ea.png)
+*[image — see the upstream manual]*
 
 ### If you need more than one rendering[​](#7efa68af7a544631bf7f24302fa0449e "Direct link to If you need more than one rendering")
 
@@ -135,7 +135,7 @@ In the Biblical Terms rendering window
 
 1. Double-click on the note icon (in the second column)
 
-   ![](../images/10_biblical_terms_2144703883-ab5267a77c31c641f6d652ddabb5bd5c.png)
+   *[image — see the upstream manual]*
 2. Type in the note
 3. Assign the note as necessary.
 4. Click **OK**.
@@ -146,7 +146,7 @@ In the Biblical Terms rendering window
 2. Type the agreed-on rendering in the description field
 3. Click **OK**
 
-![](../images/10_biblical_terms_1762468210-808d0f758be080fd657a701550585422.png)
+*[image — see the upstream manual]*
 
 ## 10.6 Add a term – from the source language text[​](#1ec5422db83c4bdeb51842a53f7df352 "Direct link to 10.6 Add a term – from the source language text")
 
@@ -154,7 +154,7 @@ In the Biblical Terms rendering window
 
 1. Click in the window with the Source text.
 
-   ![](../images/10_biblical_terms_2023112015-0ba0446a6e9f59e15baa56415d1e807c.png)
+   *[image — see the upstream manual]*
 2. Right-click on a lemma (blue word) in the source language text window
 3. Choose **Add to project biblical terms for**
 4. Then choose your project
@@ -185,7 +185,7 @@ From the list of results
 4. Type in a name for the term
 5. Click **OK**
 
-![](../images/10_biblical_terms_1036705643-c9928c6caf706329b82e2bb54dd83119.png)
+*[image — see the upstream manual]*
 
 ## 10.8 Share a Biblical Terms List (optional)[​](#b6ca108e1c374004b5acb581e61ebecc "Direct link to 10.8 Share a Biblical Terms List (optional)")
 

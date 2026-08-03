@@ -25,7 +25,7 @@ On this page
 1. Click in your project
 2. **≡ Tab**, under **Tools** > **Interlinearizer**
 
-   ![](../images/17_back_translation_2_1905854111-6aa0abebb2bca9e6149d246ffcbec19c.png)
+   *[image — see the upstream manual]*
 3. Click to drop down the list [1].
 4. Choose to create glosses based on a model text. This is usually your reference text or your free back translation project [2].
 
@@ -34,11 +34,11 @@ On this page
 1. If necessary, click the lock icon [3] to unlock the settings.
 2. Choose your model text [4].
 
-   ![](../images/17_back_translation_2_1443407551-240901ab1e77cf37fc8f920f393415d4.png)
+   *[image — see the upstream manual]*
 3. Click the checkbox to output glosses to the project that the administrator created
 4. Choose the output project created by your administrator
 
-   ![](../images/17_back_translation_2_310119566-3f01c95daa09b4cd1fed527b0f3a7d72.png)
+   *[image — see the upstream manual]*
 5. Click **OK**
 
 ## 17.2 Correct the interlinearized text[​](#5692bdbcfc5e493e9eaca52bf0dbcaa0 "Direct link to 17.2 Correct the interlinearized text")
@@ -58,7 +58,7 @@ To correct glosses
 3. Click the red line
 4. Type the gloss
 
-![](../images/converted_17_back_translation_2_030.png)
+*[image — see the upstream manual]*
 
 ## 17.4 Add extra words[​](#397336e9e1e34f43953ba179210b763c "Direct link to 17.4 Add extra words")
 

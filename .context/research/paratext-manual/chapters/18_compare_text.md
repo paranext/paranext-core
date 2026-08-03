@@ -36,11 +36,11 @@ On this page
 - Click on the base version dropdown list
   - *A list of versions is displayed*.
 
-![](../images/18_compare_text_9214547-ba6777fec229b8f59645067f9dcc3005.png)
+*[image — see the upstream manual]*
 
 - Choose the desired point in the history
   - *The screen shows the differences*.
 
-![](../images/18_compare_text_1950342118-5552d0e83d14ab18cc73eb5711848659.png)
+*[image — see the upstream manual]*
 
-![](../images/18_compare_text_621740961-edde586a376aaccb34835b99a249830b.png)
+*[image — see the upstream manual]*

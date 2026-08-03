@@ -211,7 +211,7 @@ Infrastructure features provide the foundational support that enables all other 
 - Items linked to specific dialogs
 
 **Key Files**:
-- `primary_documentation/HelpData.xml` - Help content database
+- `primary_documentation/HelpData.xml` - Help content database (not included in this repo)
 
 **Validation**: [MS] [H] [R] — Last verified: 2026-01-21
 
@@ -486,7 +486,7 @@ Infrastructure features provide the foundational support that enables all other 
 |--------|-----------|--------|
 | Menu Structure | Menu: `Help > Keyboard shortcuts`; Handler: `keyboardToolStripMenuItem_Click` | `[MS]` |
 | HelpData | ID: `158bf6c0-5879-4797-9f20-817376ef3790`; Question: "What keyboard shortcuts are available in Paratext?" | `[H]` |
-| Manual | `chapters/04_keyboarding.md`: Keyboard shortcuts section | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: Keyboard shortcuts section | `[M]` |
 
 **Implementation**:
 
@@ -538,18 +538,6 @@ Infrastructure features provide the foundational support that enables all other 
 | 16.9 Diagnostic Tools | ✓ | - | ✓ | - | - | - | 2026-01-21 |
 | 16.10 Give Feedback | ✓ | ✓ | ✓ | - | - | - | 2026-01-21 |
 | 16.11 Keyboard Shortcuts | ✓ | - | ✓ | ✓ | - | - | 2026-01-21 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-21 | Full AGENTS.md v7.2 update: Added [MS] sources for 9 features, evidence chains, HelpData items | Claude |
-| 2026-01-14 | Initial v2.0 document created | Claude |
-
----
-
 ## Notes
 
 - 33+ UI languages makes Paratext globally accessible
@@ -561,5 +549,4 @@ Infrastructure features provide the foundational support that enables all other 
 
 ---
 
-**Document Version**: 2.1
 **Based on v1**: 08_Infrastructure_Features.md

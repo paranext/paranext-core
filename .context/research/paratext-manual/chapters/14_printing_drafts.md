@@ -29,7 +29,7 @@ On this page
 > > 
 > > If it is not installed, it will ask you to download and install it first. PTXPrint is very powerful and has many options. We recommend that you select a language and then use **Mini View**.
 > > 
-> > ![](../images/14_printing_drafts_1156349448-6aec0183f8004e73f04b6dfb7ce78b3c.png)
+> > *[image — see the upstream manual]*
 
 ## 14.1 Create your first PDF file[​](#f6c39f92a81d44aead7aa92c0f6bb317 "Direct link to 14.1 Create your first PDF file")
 

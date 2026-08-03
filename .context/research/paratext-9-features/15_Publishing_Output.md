@@ -35,7 +35,7 @@ Publishing and Output features prepare translations for distribution. This inclu
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Export draft PDF (PTXprint)`; Handler: `printDraftToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1059 | `[MS]` |
 | HelpData | Keyword: `ContentPrintDraft`; Dialog: `PrintDraftForm` | `[H]` |
-| Manual | `chapters/14_printing_drafts.md`, lines 26-27: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
+| Manual | `../paratext-manual/chapters/14_printing_drafts.md`, lines 26-27: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
 | Requirements | Section: "People-Centric View > Typesetter" | `[R]` |
 
 **Key Quote** (Manual):
@@ -52,7 +52,7 @@ Publishing and Output features prepare translations for distribution. This inclu
   - Menu Structure: `ParatextWindowWithMenus`, handler `printDraftToolStripMenuItem_Click`, line 1059
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Also documented in:
-  - Manual: `chapters/14_printing_drafts.md`, line 38
+  - Manual: `../paratext-manual/chapters/14_printing_drafts.md`, line 38
   - Quote: "**≡ Tab**, under **Project** > **Export Draft PDF** **(PTX Print)**"
   - HelpData ID: `fba9c421-0fe3-45c7-8932-425e03ba4602`
 
@@ -83,7 +83,7 @@ Publishing and Output features prepare translations for distribution. This inclu
 |--------|-----------|--------|
 | Menu Structure | Not found in current menu structure | `-` |
 | HelpData | Not found as separate component | `-` |
-| Manual | `chapters/14_printing_drafts.md`, line 27: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
+| Manual | `../paratext-manual/chapters/14_printing_drafts.md`, line 27: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
 | Requirements | Section: "People-Centric View > Typesetter"; Quote: "Integration with PublishingAssistant or PTXPrint" | `[R]` |
 
 **Key Quote** (Requirements):
@@ -281,7 +281,7 @@ Publishing and Output features prepare translations for distribution. This inclu
 | Menu Structure | Menu: `List > Print texts in list`; Handler: `printTextsInListToolStripMenuItem_Click`; File: `Paratext/EditMenu/ListForm.cs`, line 602 | `[MS]` |
 | Menu Structure | Menu: `Progress Viewer > Print`; Handler: `Print_Click`; File: `Paratext/ProjectProgress/ProgressViewsForm.cs`, line 919 | `[MS]` |
 | HelpData | ID: `240f3226-c197-425a-8415-22856f96a8c5` - "How do I print a list of words to review?" | `[H]` |
-| Manual | `chapters/14_printing_drafts.md`, line 13: "In this module you will learn how to print a draft of your translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/14_printing_drafts.md`, line 13: "In this module you will learn how to print a draft of your translation" | `[M]` |
 
 **Implementation**:
 
@@ -562,24 +562,6 @@ Publishing and Output features prepare translations for distribution. This inclu
 | 15.10 Scripture Burrito | ✓ | - | - | - | - | - | 2026-01-21 |
 | 15.11 Export to HTML | ✓ | - | ✓ | - | - | - | 2026-01-21 |
 | 15.12 Bible Module Export | ✓ | ✓ | - | - | ✓ | - | 2026-01-21 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-21 | Menu Structure verification complete | Claude |
-| 2026-01-21 | Form Relationships verification for DBL and Backup | Claude |
-| 2026-01-21 | HelpData cross-reference complete | Claude |
-| 2026-01-21 | Evidence chain tracing to Depth 2 | Claude |
-| 2026-01-21 | Added features 15.8-15.10 from Menu Structure | Claude |
-| 2026-01-21 | Added 15.11 Export to HTML (Project > Advanced) | Claude |
-| 2026-01-21 | Added 15.12 Bible Module Export (Project > Advanced) | Claude |
-| 2026-01-21 | Enhanced 15.12 with FR (CreateBibleModuleForm), H (2 help items), second menu entry (View > Reload) | Claude |
-
----
-
 ## Notes
 
 - PTXPrint is the current recommended publishing tool, replacing PublishingAssistant
@@ -590,5 +572,3 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 ---
 
-**Document Version**: 3.1
-**Based on**: v2.0 base + AGENTS.md v7.2 compliance update

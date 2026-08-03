@@ -40,7 +40,7 @@ Collaboration features enable distributed translation teams to work together on 
 | Form Relationships | `MainForm` opens `SendReceiveProjectsForm` (line 3395) | `[FR]` |
 | Requirements | Section: "Workflow Management > Cloud Synchronization" | `[R]` |
 | Manual | `admin/ma_06_send_receive.md`: Setup guide | `[M]` |
-| Manual | `chapters/04_keyboarding.md`, line 163: "Send/receive this project to the Internet" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`, line 163: "Send/receive this project to the Internet" | `[M]` |
 | HelpData | Keyword: `ComponentSend/ReceiveGeneral`; Dialog: `SendReceiveProjectsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -154,13 +154,13 @@ Collaboration features enable distributed translation teams to work together on 
 | Form Relationships | `PTLiveDedicatedServerForm` at `Paratext/PTLive/PTLiveDedicatedServerForm.cs` | `[FR]` |
 | Form Relationships | `SelectServerForm` at `Paratext/PTLive/SelectServerForm.cs` | `[FR]` |
 | Requirements | Section: "Real-time Collaborative Editing" | `[R]` |
-| Manual | `chapters/20_collaboration.md`, line 1: "In this module you will use Paratext Live as a way that the team can collaborate together" | `[M]` |
+| Manual | `../paratext-manual/chapters/20_collaboration.md`, line 1: "In this module you will use Paratext Live as a way that the team can collaborate together" | `[M]` |
 | HelpData | Keyword: `ComponentPTLive`; Dialog: `PTLiveTag` | `[H]` |
 
 **Key Quote** (from Requirements):
 > "Paratext currently supports RCE, but only within the same geographic location"
 
-**Key Quote** (from Manual, `chapters/20_collaboration.md`, line 5):
+**Key Quote** (from Manual, `../paratext-manual/chapters/20_collaboration.md`, line 5):
 > "Paratext Live allows everyone to look at the text on their own computer and see the changes in real time"
 
 **Implementation**:
@@ -185,7 +185,7 @@ Collaboration features enable distributed translation teams to work together on 
   - Menu Structure: `ParatextWindowWithMenus`, handler `paratextLiveToolStripMenuItem_Click`, line 1151
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Toolbar Paratext Live button
-  - Manual: `chapters/20_collaboration.md`, line 50
+  - Manual: `../paratext-manual/chapters/20_collaboration.md`, line 50
   - Quote: "Or use the icon on the toolbar"
   - HelpData ID: `6ad6852b-3df8-441a-9bac-bdd40c3acac9`
   - Dialog: `PTLiveTag`
@@ -230,7 +230,7 @@ Collaboration features enable distributed translation teams to work together on 
 | Menu Structure | Menu: `View > Show project notes`; Handler: `showProjectNotesToolStripMenuItemClicked` | `[MS]` |
 | Form Relationships | `CommentListForm` at `Paratext/ProjectComments/CommentListForm.cs` | `[FR]` |
 | Requirements | Section: "Workflow Management > Project Comments" | `[R]` |
-| Manual | `chapters/15_using_notes.md`, line 1: "As you are translating and checking you may want to make comments on various errors or issues" | `[M]` |
+| Manual | `../paratext-manual/chapters/15_using_notes.md`, line 1: "As you are translating and checking you may want to make comments on various errors or issues" | `[M]` |
 | HelpData | Keyword: `ComponentProjectNotes`; Dialog: `CreateCommentReportForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -264,7 +264,7 @@ Collaboration features enable distributed translation teams to work together on 
   - Menu Structure: `TextForm`, handler `showProjectNotesToolStripMenuItemClicked`, line 2154
   - File: `Paratext/TextForm.cs`
 - Click note icon in text
-  - Manual: `chapters/15_using_notes.md`, line 96
+  - Manual: `../paratext-manual/chapters/15_using_notes.md`, line 96
   - Quote: "Click the icon in the text"
 
 **HelpData Items**:
@@ -377,7 +377,7 @@ Collaboration features enable distributed translation teams to work together on 
 | Menu Structure | Menu: `Project > Compare versions`; Handler: `uiToolsCompareTexts_Click` | `[MS]` |
 | Form Relationships | `CommitChangesForm` at `Paratext/Repository/CommitChangesForm.cs` | `[FR]` |
 | Requirements | Section: "Workflow Management > Version Control" | `[R]` |
-| Manual | `chapters/18_compare_text.md`, line 1: "In this module, you will learn how to save your text at various points and review them later" | `[M]` |
+| Manual | `../paratext-manual/chapters/18_compare_text.md`, line 1: "In this module, you will learn how to save your text at various points and review them later" | `[M]` |
 | HelpData | Keyword: `ComponentProjectHistory`; Dialog: `CommitChangesForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -451,13 +451,13 @@ Collaboration features enable distributed translation teams to work together on 
 | Menu Structure | Menu: `Paratext > Support and development > Delete all conflict notes`; Handler: `deleteAllConflictsToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | Uses `SendReceiveProjectsForm` for conflict detection | `[FR]` |
 | Requirements | Section: "Workflow Management > Cloud Synchronization" | `[R]` |
-| Manual | `chapters/15_using_notes.md`, line 43: Conflict icon description | `[M]` |
+| Manual | `../paratext-manual/chapters/15_using_notes.md`, line 43: Conflict icon description | `[M]` |
 | HelpData | Keyword: `ComponentMergeConflict`; Dialog: `SendReceiveProjectsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
 > "Given that this is an asynchronous method of collaboration there is the possibility of a merge conflict. In most cases merge conflicts can be resolved quickly and easily"
 
-**Key Quote** (from Manual, `chapters/15_using_notes.md`, line 43):
+**Key Quote** (from Manual, `../paratext-manual/chapters/15_using_notes.md`, line 43):
 > "Icon is a **black exclamation point !** within a **red triangle.** There is a Send/Receive merge conflict because two users have made different changes to the same verse."
 
 **Implementation**:
@@ -484,7 +484,7 @@ Collaboration features enable distributed translation teams to work together on 
   - Menu Structure: `MainForm`, handler `deleteAllConflictsToolStripMenuItem_Click`, line 1655
   - File: `Paratext/MainForm.cs`
 - Conflict note icon in text (appears automatically after Send/Receive with conflict)
-  - Manual: `chapters/15_using_notes.md`, line 43 (icon description)
+  - Manual: `../paratext-manual/chapters/15_using_notes.md`, line 43 (icon description)
   - HelpData ID: `b847ea4c-bdc9-43df-820b-e59e1a797cbc`
   - Question: "What is a Send/Receive merge conflict?"
 
@@ -530,26 +530,6 @@ Collaboration features enable distributed translation teams to work together on 
 | 10.7 Merge Conflicts | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 2026-01-21 |
 
 **Overall**: 6/7 in Menu Structure, 6/7 in Form Relationships, 6/7 in Requirements, 6/7 in Manual, 7/7 in HelpData, 7/7 Code verified
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-14 | Initial v2 document created | Claude |
-| 2026-01-17 | HelpData queries for all features | Claude |
-| 2026-01-17 | Manual citations with line numbers added | Claude |
-| 2026-01-17 | Code tracing - Evidence Chains completed for all 7 features | Claude |
-| 2026-01-17 | Updated to AGENTS.md v6.4 / FEATURE_TEMPLATE v5.2 compliance | Claude |
-| 2026-01-21 | Reorganized: Category 08 renumbered to 10; feature numbers updated | Claude |
-| 2026-01-21 | Added Menu Structure [MS] sources for all 7 features | Claude |
-| 2026-01-21 | Added Form Relationships [FR] sources and Dialog Navigation sections | Claude |
-| 2026-01-21 | Updated Evidence Chain tables with Menu Structure entry points | Claude |
-| 2026-01-21 | Updated Validation Summary table with MS and FR columns | Claude |
-
----
-
 ## Notes
 
 - Send/Receive uses Mercurial (Hg) for version control backend
@@ -561,6 +541,4 @@ Collaboration features enable distributed translation teams to work together on 
 
 ---
 
-**Document Version**: 5.0
 **Based on v1**: 05_Workflow_Features.md Sections 1-3
-**Compliance**: AGENTS.md v7.2, FEATURE_TEMPLATE_v2.md v6.1

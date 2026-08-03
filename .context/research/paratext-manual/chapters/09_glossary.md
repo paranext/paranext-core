@@ -26,7 +26,7 @@ There are four training videos available on [adding](https://vimeo.com/manage/vi
 2. Right-click and choose **View Biblical Terms**, then **Current Verse(s)**
 3. Check that you have the correct list open (e.g. your project list or the NT Key Biblical Terms [SIL])
 
-   ![](../images/09_glossary_536721521-fdca293482c7d1ff4a2ad0beb4e7387a.png)
+   *[image — see the upstream manual]*
 4. To change the list, from the **≡ Tab**, under **Biblical terms** menu choose **Select Biblical terms list.**
 
 > ℹ️ **Note**
@@ -46,7 +46,7 @@ There are four training videos available on [adding](https://vimeo.com/manage/vi
 
    - *The word(s) and the definition will be added to the glossary in alphabetical order.*
 
-![](../images/09_glossary_1986832627-6be3c59cd0a5c940fcc7edf00c762663.png)
+*[image — see the upstream manual]*
 
 ## 9.3 Link an existing entry[​](#b9f4ff025225434cbba15665f0894328 "Direct link to 9.3 Link an existing entry")
 
@@ -72,7 +72,7 @@ In Paratext
 1. Use the navigation bar to change the book
 2. Choose the **GLO** book
 
-![](../images/09_glossary_1353885956-18a12d05afcc09dfdf4b8c7458248d0c.png)
+*[image — see the upstream manual]*
 
 ## 9.5 Edit an entry – in the GLO book[​](#059626f045a34c24bcdd466553c8e18a "Direct link to 9.5 Edit an entry – in the GLO book")
 

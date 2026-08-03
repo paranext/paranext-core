@@ -52,7 +52,7 @@ On this page
 
    - *The sample will be updated on the right.*
 
-![](../images/19_basic_checks_3_1019021315-ab8af230820477ea4a8d5040a48f01c7.png)
+*[image — see the upstream manual]*
 
 Book names
 
@@ -63,7 +63,7 @@ Book names
 
    - *Paratext will update the \toc fields in the text.*
 
-![](../images/19_basic_checks_3_1209414794-a367343228dec6cccd156313f12b08fc.png)
+*[image — see the upstream manual]*
 
 > **Warning:** Paratext will inform you if there are any inconsistencies between these book name settings and the \toc lines and will advise you to Resolve conflicts. This needs to be done by the Administrator.
 
@@ -84,7 +84,7 @@ Book names
 2. Fill in the dialog box with the correct information.
 3. Click **OK.**
 
-![](../images/19_basic_checks_3_11100284-395100a8e366dc6d7d1d03e4b9023903.png)
+*[image — see the upstream manual]*
 
 > **Warning:** You may need to remove unneeded items.
 

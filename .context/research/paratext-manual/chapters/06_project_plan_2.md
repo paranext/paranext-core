@@ -42,7 +42,7 @@ On this page
 
 - From the **≡ Tab**, under **Project** menu, select **Progress charts…**
 
-  ![](../images/06_project_plan_2_1163930921-2b9e2bc4de1e6bc5111340b253b14161.png)
+  *[image — see the upstream manual]*
 
 1. Use the first dropdown box to choose the type of chart
 2. Choose the books as necessary.

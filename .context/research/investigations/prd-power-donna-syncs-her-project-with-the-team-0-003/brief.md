@@ -1,5 +1,8 @@
 # Donna syncs her project with the team (core Send/Receive): investigation
 
+> **Note**: this brief predates the current 7-section brief template — it has no §3
+> confirm-intent or §7 engineering-decisions section, and its open questions live in §5.
+
 > PRD: `PRD-Power-Donna syncs her project with the team_0-003.md` (v0-003, owner Vladimir).
 > Shakedown run of `/investigate-prd`, 2026-07-02. No Jira tickets existed for this PRD when this
 > ran; work items below are what the investigation proposes for the state of the code today.
@@ -52,7 +55,7 @@ investigation found the prior discovery for this PRD reflected in ADR-0002, and 
   registration/auth extension. Project-menu trigger ships (NN-1, menu half).
 - **Genuine gaps (deterministic sweeps):** `F9` has zero hits in all four repos (NN-1's F9 half
   unwired; ADR-0002 already prescribes the fix). A cancelled sync renders as an empty success
-  (`Cancelled` flag ignored — known Studio #150). There is no transfer *resume* anywhere —
+  (`Cancelled` flag ignored — a known bug in the studio transport layer). There is no transfer *resume* anywhere —
   resilience is reconnect-retry + per-project atomic transactions, i.e. "fail cleanly".
 
 ## 3. Proposed work items

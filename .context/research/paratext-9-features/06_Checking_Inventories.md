@@ -43,7 +43,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Characters inventory`; Handler: `characterInventoryToolStripMenuItem1_Click`; Line: 2191 | `[MS]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.4 Characters" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.4 Characters" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists`; Dialog: `InventoryForm.Character` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -93,7 +93,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Punctuation inventory`; Handler: `punctuationInventoryToolStripMenuItem_Click`; Line: 2199 | `[MS]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.5 Punctuation" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.5 Punctuation" | `[M]` |
 | HelpData | Keyword: `ContentPunctuationInventory`; Dialog: `InventoryForm.Punctuation` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -143,7 +143,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Markers inventory`; Handler: `markerInventoryToolStripMenuItem_Click`; Line: 2206 | `[MS]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
-| Manual | `chapters/05_basic_checks_1.md`: "Markers check" | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`: "Markers check" | `[M]` |
 | HelpData | Keyword: `ContentMarkersinventory`; Dialog: `InventoryForm.Marker` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -193,7 +193,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Unmatched pairs of punctuation`; Handler: `matchedPairsInventoryToolStripMenuItem_Click`; Line: 2214 | `[MS]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.6 Matched Pairs" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.6 Matched Pairs" | `[M]` |
 | HelpData | Keyword: `ContentUnmatchedPunctuation`; Dialog: `InventoryForm.Matched_Pair_Punctuation_Errors` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -241,7 +241,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Repeated words`; Handler: `repeatedWordsInventoryToolStripMenuItem_Click`; Line: 2222 | `[MS]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.7 Repeated words" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.7 Repeated words" | `[M]` |
 | HelpData | Keyword: `ContentRepeatedWords`; Dialog: `InventoryForm.Repeated_Words` | `[H]` |
 
 **Key Quote** (from Manual):
@@ -283,7 +283,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Markers followed by lowercase`; Handler: `uncapitalizedStylesInventoryToolStripMenuItem_Click`; Line: 2230 | `[MS]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.8 Capitalization" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.8 Capitalization" | `[M]` |
 | HelpData | Dialog: `InventoryForm.No_Capital_after_Style` | `[H]` |
 
 **Key Quote** (from Manual):
@@ -363,7 +363,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Punctuation followed by lowercase`; Handler: `sentenceFinalPunctCapitalizationInventoryToolStripMenuItem_Click`; Line: 2246 | `[MS]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.8 Capitalization" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.8 Capitalization" | `[M]` |
 | HelpData | Dialog: `InventoryForm.No_Capital_after_Punctuation` | `[H]` |
 
 **Implementation**:
@@ -402,7 +402,7 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Checking inventories > Mixed capitalization`; Handler: `mixedCapitalizationInventoryToolStripMenuItem_Click`; Line: 2254 | `[MS]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
-| Manual | `chapters/12_basic_checks_2.md`: "12.8 Capitalization" | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "12.8 Capitalization" | `[M]` |
 | HelpData | Keyword: `ContentMixedCapitalization`; Dialog: `InventoryForm.Mixed_Capitalization` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -464,25 +464,3 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 | 6.7 Markers Missing Final Punct. | ✓ | - | - | ✓ | ✓ | 2026-01-21 |
 | 6.8 Punctuation Followed by Lowercase | ✓ | - | ✓ | ✓ | ✓ | 2026-01-21 |
 | 6.9 Mixed Capitalization Inventory | ✓ | ✓ | ✓ | ✓ | ✓ | 2026-01-21 |
-
----
-
-## Verification Log
-
-| Date | Action | By |
-|------|--------|-----|
-| 2026-01-16 | Original documentation in 06_Basic_Quality_Checks.md | Claude |
-| 2026-01-20 | Split into 06A_Checking_Inventories.md | Claude |
-| 2026-01-20 | Added 6.6, 6.7, 6.8 from menu structure analysis | Claude |
-| 2026-01-21 | Reorganized: 06A promoted to 06; feature numbers updated | Claude |
-| 2026-01-21 | Session 1: Added [MS] sources and Evidence Chains for 6.1, 6.2 | Claude |
-| 2026-01-21 | Session 2: Added [MS] sources and Evidence Chains for 6.3, 6.4 | Claude |
-| 2026-01-21 | Session 3: Added [MS] sources and Evidence Chains for 6.5, 6.6 | Claude |
-| 2026-01-21 | Session 4: Added [MS] sources and Evidence Chains for 6.7, 6.8 | Claude |
-| 2026-01-21 | Session 5: Added [MS] sources and Evidence Chains for 6.9 | Claude |
-
----
-
-**Document Version**: 2.5  
-**Template Version**: FEATURE_TEMPLATE_v2.md v6.1  
-**Last Updated**: 2026-01-21

@@ -63,7 +63,7 @@ Check that
 5. Click **OK**.
 6. Make any corrections by clicking on the blue **Edit** link.
 
-![](../images/13_formatting_checks_1428959575-608b8dfa4975c54fd5609fc1ed63813e.png)
+*[image — see the upstream manual]*
 
 OR
 
@@ -82,7 +82,7 @@ OR
 - Look for passages that have been formatted with different markers such as q1 and q2
 - Make any necessary changes (see below).
 
-![](../images/13_formatting_checks_1300191702-7b7b381d89a81d6ca82e09d1492fae15.png)
+*[image — see the upstream manual]*
 
 ## 13.5 Add USFMs to format special text[​](#2fed410218164e21834d0949e5ab3c07 "Direct link to 13.5 Add USFMs to format special text")
 

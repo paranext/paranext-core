@@ -39,7 +39,7 @@ Before you can run these other basic checks, someone must set them up. Some chec
 > > 
 > > - Click on the Inventory menu and choose “Set verse and non-verse status separately”.
 > > 
-> > ![](../images/12_basic_checks_2_531516689-5e2ee97f49d858103b64ce76b6796dad.png)
+> > *[image — see the upstream manual]*
 
 - there are an undo and redo icons (top right)
 - **filtering** to help users easily find and organize inventory items.
@@ -96,7 +96,7 @@ Once you have finished the inventory, you will be ready to check.
 
      - choose **Valid** or **Non valid** or leave as **Unknown**
 
-     ![](../images/12_basic_checks_2_207545146-bcbc1ddfd4c555547fa815af7638674e.png)
+     *[image — see the upstream manual]*
 3. When finished click **OK**.
 4. **≡ Tab**, under **Tools** > **Checking inventories** > **Markers Missing Final Sentence Punctuation**
 5. For each item, choose **Valid** or **Invalid**.

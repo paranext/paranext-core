@@ -84,7 +84,7 @@ When you have finished the chapter
 
 - On the toolbar at the top of your back translation window, click on the arrow beside the check mark.
 
-  ![](../images/converted_16_back_translation_1_025.png)
+  *[image — see the upstream manual]*
 - Choose **Mark All Verses in Chapter as Finished**.
 
   - *All the checkboxes for the chapter are marked with green checks.*
@@ -93,7 +93,7 @@ When you have finished the chapter
 
 Paratext will detect any saved changes to your text and will change the back translation checkbox to a red question mark and add issues to the back translation status in Assignments and Progress.
 
-![](../images/converted_16_back_translation_1_026.png)
+*[image — see the upstream manual]*
 
 1. Click in a verse with the red question mark.
 2. Review and correct the back translation.
@@ -116,27 +116,27 @@ Paratext will detect any saved changes to your text and will change the back tra
 
   - *A comparison window is displayed*.
 
-    ![](../images/16_back_translation_1_1718777957-01920d2a0bdc7f53b9fe32ba97ab24a0.png)
+    *[image — see the upstream manual]*
 
-![](../images/converted_16_back_translation_1_027.png)
+*[image — see the upstream manual]*
 
 ### **Move to the next differences**[​](#b59e604df6cc42b7b68abda3173fde99 "Direct link to b59e604df6cc42b7b68abda3173fde99")
 
 - Click on the up and down arrows to move to the previous or next differences.
 
-  ![](../images/16_back_translation_1_907576153-dfe5870047315364960d2924c4ac9aa8.png)
+  *[image — see the upstream manual]*
 
 ## 16.5 Check your **Assignments and Progress**[​](#860fd280ce5d4bb2bed1d1e4fb5d878c "Direct link to 860fd280ce5d4bb2bed1d1e4fb5d878c")
 
 - Click the Assignments and Progress icon
 
-![](../images/converted_16_back_translation_1_028.png)
+*[image — see the upstream manual]*
 
 - Expand Stage 3, the back translation checks are at the end
 
   - *The number of unapproved or changed verses (if any) are listed as* *issues*
 
-    ![](../images/converted_16_back_translation_1_029.png)
+    *[image — see the upstream manual]*
 
 ### 16.6 Back translation verse check in Assignments and Progress[​](#e861e8ecf8a142e99d31c5630c1f21a4 "Direct link to 16.6 Back translation verse check in Assignments and Progress")
 
@@ -153,7 +153,7 @@ Paratext will detect any saved changes to your text and will change the back tra
 
 The checkboxes in a back translation can have a number of different symbols.
 
-![](../images/16_back_translation_1_967840981-77adff1dc0fd766bbc7106b5951e70a8.png)
+*[image — see the upstream manual]*
 
 | 1 | Inconsistent verse number |
 | --- | --- |

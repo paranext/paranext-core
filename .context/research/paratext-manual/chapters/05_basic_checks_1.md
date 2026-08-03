@@ -26,11 +26,11 @@ It is easier to run the checks from the Assignments and Progress.
 
 1. View the Assignments and Progress by clicking on the **blue icon** (at the top right of your project window).
 
-![](../images/converted_05_basic_checks_1_008.png)
+*[image — see the upstream manual]*
 
 1. If there are any "issues" (errors), click the blue link to the right
 
-   ![](../images/converted_05_basic_checks_1_009.png)
+   *[image — see the upstream manual]*
 
    - *A window appears with a list of the errors*.
 2. Double-click a line in the list.

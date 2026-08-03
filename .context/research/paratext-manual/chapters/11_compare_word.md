@@ -30,13 +30,13 @@ You will
 
    - *The Settings dialog is displayed*.
 
-![](../images/11_compare_word_1531789001-538545b6dcc4d74d70eb76209d91c88c.png)
+*[image — see the upstream manual]*
 
 4. Click **OK**
 
    - *A window is displayed*.
 
-![](../images/11_compare_word_6425422-85f8f760ad81d29c136f61d2f33f149b.png)
+*[image — see the upstream manual]*
 
 ### Choose the texts to compare[​](#1b10fbeee1314150907b71b710e97dbd "Direct link to Choose the texts to compare")
 
@@ -45,7 +45,7 @@ You will
 
    - *The* ***Settings*** *dialogue is displayed.*
 
-![](../images/11_compare_word_809248301-be0e707e1890d794f90ec0ee256f604e.png)
+*[image — see the upstream manual]*
 
 ### Type the word or phrase to compare[​](#ed9ce5e42eee4988945547297f12b1e0 "Direct link to Type the word or phrase to compare")
 
@@ -55,7 +55,7 @@ You will
 
    - *A window is displayed with a button* ***Hide matches*** *on the toolbar.*
 
-![](../images/converted_11_compare_word_015.png)
+*[image — see the upstream manual]*
 
 > **Tip:** You can use the **Hide matches** button to show only those references where there are differences. The word or phrase is highlighted in light blue.
 
@@ -73,8 +73,8 @@ You will
 
 4. Click **OK**
 
-![](../images/11_compare_word_1761925957-fc386a006ad49f5c43dbebd104bf7908.png)
+*[image — see the upstream manual]*
 
-![](../images/11_compare_word_1598107093-24f9ac876283cfd50a1ca52093e67935.png)
+*[image — see the upstream manual]*
 
 > **Tip:** If you want to compare more than one word or phrase at a time, type **Enter** after each word or phrase so that they are on separate lines.

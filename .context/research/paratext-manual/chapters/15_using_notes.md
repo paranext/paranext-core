@@ -40,13 +40,13 @@ You will:
 
 You can choose from many different icons for your project notes in Paratext 9:
 
-![](../images/15_using_notes_1972403766-e1085b17d4aecbbf94be6c64636b906f.png)
+*[image — see the upstream manual]*
 
 > **Tip:** Don't have too many icons!
 
 **An icon can have four different colours or shapes**
 
-![](../images/15_using_notes_1253787065-9fd5e76464a2a5ff9adff054bb89ac45.png)
+*[image — see the upstream manual]*
 
 | Description | Meaning |
 | --- | --- |
@@ -89,7 +89,7 @@ You can choose from many different icons for your project notes in Paratext 9:
 
 .
 
-![](../images/converted_15_using_notes_016.png)
+*[image — see the upstream manual]*
 
 ### **Add comments to an existing note**[​](#958963568fb4491bb7fedc24d80585bb "Direct link to 958963568fb4491bb7fedc24d80585bb")
 
@@ -97,9 +97,9 @@ You can choose from many different icons for your project notes in Paratext 9:
 
   - *The note opens*.
 
-    ![](../images/15_using_notes_304274842-f3443502a2ce41fd08c28a7411882b0f.png)
+    *[image — see the upstream manual]*
 
-![](../images/converted_15_using_notes_017.png)
+*[image — see the upstream manual]*
 
 - Type a note
 - Click **OK**
@@ -108,7 +108,7 @@ You can choose from many different icons for your project notes in Paratext 9:
 
 1. Click the icon in the text.
 
-![](../images/converted_15_using_notes_018.png)
+*[image — see the upstream manual]*
 
 1. Type your comments
 2. Click **Assign to**
@@ -127,11 +127,11 @@ You can choose from many different icons for your project notes in Paratext 9:
 
 - Click the note icon in the text to open the note.
 
-  ![](../images/15_using_notes_2079935766-74ab16d78dabf8f8e86b4281e735d65f.png)
+  *[image — see the upstream manual]*
 
 - Click the Reattach Note button (on the toolbar)
 
-![](../images/converted_15_using_notes_019.png)
+*[image — see the upstream manual]*
 
 - Select the word(s) to attach it to.
 - Click **OK**.
@@ -144,11 +144,11 @@ You can choose from many different icons for your project notes in Paratext 9:
 3. Click the **Resolve** button
 4. Click **OK**
 
-![](../images/converted_15_using_notes_020.png)
+*[image — see the upstream manual]*
 
 .
 
-![](../images/converted_15_using_notes_021.png)
+*[image — see the upstream manual]*
 
 ### **Delete notes**[​](#2f83955761a8491fb260cae2b8a7515e "Direct link to 2f83955761a8491fb260cae2b8a7515e")
 
@@ -159,7 +159,7 @@ You can choose from many different icons for your project notes in Paratext 9:
 
 .
 
-![](../images/converted_15_using_notes_022.png)
+*[image — see the upstream manual]*
 
 > **Tip:** You can only delete your own comments if they are the last in the list.
 
@@ -183,7 +183,7 @@ When reviewing notes, it is often helpful to see them in a list.
 
 ### **Notes list toolbar**[​](#16ec056e5f1a44c18f715698dcfd0baa "Direct link to 16ec056e5f1a44c18f715698dcfd0baa")
 
-![](../images/15_using_notes_515412195-37311819633f5a48b3c61b3ef3790cba.png)
+*[image — see the upstream manual]*
 
 There are four dropdown boxes on the toolbar
 
@@ -211,7 +211,7 @@ There are four dropdown boxes on the toolbar
 - Choose the status, tag, person and date as desired.
 - Click **OK**
 
-![](../images/15_using_notes_1637824621-a1692a5785a51f62bea3366d7f18b3ad.png)
+*[image — see the upstream manual]*
 
 ### **Save a filter**[​](#c943f2ad210e4b65b07b60a324e4331b "Direct link to c943f2ad210e4b65b07b60a324e4331b")
 
@@ -220,18 +220,18 @@ There are four dropdown boxes on the toolbar
 3. Type a name for the filter
 4. Click the save icon (2).
 
-![](../images/converted_15_using_notes_023.png)
+*[image — see the upstream manual]*
 
 ## 15.4 Add comments in the notes list[​](#229174addf7e4280a3da1b08d9b11d7c "Direct link to 15.4 Add comments in the notes list")
 
 - Click the arrow to expand the note
   - *The note opens*
 
-![](../images/converted_15_using_notes_024.png)
+*[image — see the upstream manual]*
 
 - Type your comments in the textbox.
 
-  ![](../images/15_using_notes_1983448934-1bc724ed4bdc8ff5c1c5dd1f778f48d2.png)
+  *[image — see the upstream manual]*
 - Resolve or assign the note as needed.
 - Click the arrow to collapse the note.
 
