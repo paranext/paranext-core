@@ -125,6 +125,7 @@
   "%Book.4BA%": "4 Baruch (reste de Baruch)",
   "%Book.LAO%": "Laodicéens",
   "%firstRun_button_back%": "Retour",
+  "%firstRun_button_continueWithoutFinishingSetup%": "Continuer sans terminer la configuration",
   "%firstRun_button_continueWithoutSetup%": "Continuer sans configuration",
   "%firstRun_button_finish%": "Terminer",
   "%firstRun_button_next%": "Suivant",

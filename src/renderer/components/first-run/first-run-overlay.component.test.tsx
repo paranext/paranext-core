@@ -22,7 +22,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_error_title%': "Couldn't verify your registration",
       '%firstRun_error_body_2%': 'It may still be starting up — retry in a moment.',
       '%firstRun_button_retry%': 'Retry',
-      '%firstRun_button_continueWithoutSetup%': 'Continue without setup',
+      '%firstRun_button_continueWithoutFinishingSetup%': 'Continue without finishing setup',
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
@@ -217,13 +217,15 @@ describe('FirstRunOverlay', () => {
     render(<FirstRunOverlay />);
     // Hidden while loading is still within the expected window, so a fast resolve never flashes it.
     expect(
-      screen.queryByRole('button', { name: /continue without setup/i }),
+      screen.queryByRole('button', { name: /continue without finishing setup/i }),
     ).not.toBeInTheDocument();
     // Past the reveal threshold the escape appears so a stuck startup is never a dead end.
     act(() => {
       vi.advanceTimersByTime(15000);
     });
-    expect(screen.getByRole('button', { name: /continue without setup/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /continue without finishing setup/i }),
+    ).toBeInTheDocument();
   });
 
   it('re-renders when the store emits a new status (subscription live-update)', () => {

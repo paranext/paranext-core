@@ -358,6 +358,9 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
  *   is best-effort: a failure is logged but does not block wizard completion.
  */
 export async function completeFirstRun(options?: { skippedStep?: FirstRunStep }): Promise<void> {
+  // Unlike continueWithoutRegistration, this doesn't bump resolutionGeneration: completeFirstRun is
+  // only reachable from the wizard UI, which renders after resolveInternal already set 'wizard' and
+  // returned — so no resolution is in flight whose late result could clobber this status.
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
   if (isDemoMode()) {
     setStatus({ kind: 'app' });
