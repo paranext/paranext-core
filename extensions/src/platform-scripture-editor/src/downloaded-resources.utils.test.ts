@@ -10,8 +10,12 @@ vi.mock('@papi/frontend', () => ({
   logger: { warn: vi.fn() },
 }));
 
+// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
+// rule cannot model this Vitest-specific hoisting requirement.
 // eslint-disable-next-line import/first
 import papi, { logger } from '@papi/frontend';
+// vi.mock must appear before the imports it mocks so Vitest can hoist it; eslint's import/first
+// rule cannot model this Vitest-specific hoisting requirement.
 // eslint-disable-next-line import/first
 import {
   matchesDownloaded,
@@ -20,7 +24,7 @@ import {
   type DownloadedResource,
 } from './downloaded-resources.utils';
 
-const dl = (over: Partial<DownloadedResource> = {}): DownloadedResource => ({
+const downloaded = (over: Partial<DownloadedResource> = {}): DownloadedResource => ({
   projectId: 'proj-web',
   name: 'WEB',
   fullName: 'World English Bible',
@@ -31,7 +35,7 @@ const dl = (over: Partial<DownloadedResource> = {}): DownloadedResource => ({
 describe('matchesDownloaded', () => {
   it('matches a ProjectReference by exact project id', () => {
     expect(
-      matchesDownloaded(dl({ projectId: 'proj-web' }), {
+      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
         type: 'project',
         name: 'WEB',
         id: 'proj-web',
@@ -41,7 +45,7 @@ describe('matchesDownloaded', () => {
 
   it('matches a DblResourceReference when the project id starts with the dblEntryUid', () => {
     expect(
-      matchesDownloaded(dl({ projectId: 'abc123def-extra' }), {
+      matchesDownloaded(downloaded({ projectId: 'abc123def-extra' }), {
         type: 'dblResource',
         name: 'X',
         id: 'abc123def',
@@ -51,7 +55,7 @@ describe('matchesDownloaded', () => {
 
   it('does not match unrelated ids', () => {
     expect(
-      matchesDownloaded(dl({ projectId: 'proj-web' }), {
+      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
         type: 'project',
         name: 'KJN',
         id: 'proj-kjn',
@@ -83,7 +87,11 @@ describe('buildPickerResources', () => {
   });
 
   it('appends downloaded projects not already referenced as scripture ProjectReferences', () => {
-    const rows = buildPickerResources(effective, [dl({ projectId: 'proj-kjn', name: 'KJN' })], []);
+    const rows = buildPickerResources(
+      effective,
+      [downloaded({ projectId: 'proj-kjn', name: 'KJN' })],
+      [],
+    );
     expect(rows).toHaveLength(2);
     expect(rows[1]).toMatchObject({
       source: 'downloaded',
@@ -94,7 +102,7 @@ describe('buildPickerResources', () => {
   });
 
   it('does NOT duplicate a downloaded project already in the referenced list', () => {
-    const rows = buildPickerResources(effective, [dl({ projectId: 'proj-web' })], []);
+    const rows = buildPickerResources(effective, [downloaded({ projectId: 'proj-web' })], []);
     expect(rows).toHaveLength(1);
     expect(rows[0].source).toBe('admin');
   });
@@ -128,7 +136,11 @@ describe('buildPickerResources', () => {
         projectId: 'uid-comm-proj',
       },
     ];
-    const rows = buildPickerResources([], [dl({ projectId: 'uid-comm-proj' })], dblResources);
+    const rows = buildPickerResources(
+      [],
+      [downloaded({ projectId: 'uid-comm-proj' })],
+      dblResources,
+    );
     expect(rows[0]).toMatchObject({
       source: 'downloaded',
       type: 'CommentaryResource',
@@ -142,6 +154,8 @@ describe('fetchDownloadedResources', () => {
 
   it('resolves names via the platform.base PDP for each USJ_Chapter project', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
+      // `as never` is required because mockResolvedValue expects the full ProjectMetadata shape;
+      // a minimal stub suffices for this test and refactoring to match the full type adds no value.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       { id: 'proj-kjn', projectInterfaces: [] } as never,
     ]);
@@ -153,6 +167,8 @@ describe('fetchDownloadedResources', () => {
           'platform.language': 'English',
         })[key],
     );
+    // `as never` is required because mockResolvedValue expects the full IProjectDataProvider shape;
+    // a minimal stub with just getSetting suffices for this test.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     vi.mocked(papi.projectDataProviders.get).mockResolvedValue({ getSetting } as never);
 
@@ -173,8 +189,12 @@ describe('fetchDownloadedResources', () => {
 
   it('keeps successful projects and warns when one PDP getSetting rejects', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
+      // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
+      // minimal stub suffices for this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       { id: 'proj-bad', projectInterfaces: [] } as never,
+      // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
+      // minimal stub suffices for this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       { id: 'proj-ok', projectInterfaces: [] } as never,
     ]);
@@ -190,9 +210,13 @@ describe('fetchDownloadedResources', () => {
 
     vi.mocked(papi.projectDataProviders.get).mockImplementation(async (_type, projectId) => {
       if (projectId === 'proj-bad') {
+        // `as never` is required: the mock implementation returns a partial stub rather than the
+        // full IProjectDataProvider shape; the stub is sufficient for this error-path test.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         return { getSetting: vi.fn().mockRejectedValue(new Error('PDP failure')) } as never;
       }
+      // `as never` is required: mock returns a partial stub rather than the full
+      // IProjectDataProvider shape; the stub is sufficient for the success-path.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       return { getSetting: getSettingOk } as never;
     });

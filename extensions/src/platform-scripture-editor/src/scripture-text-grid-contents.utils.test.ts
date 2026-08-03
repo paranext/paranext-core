@@ -450,6 +450,23 @@ describe('getViewOptionsTexts', () => {
     const allForWeb = [...top, ...bottom].filter((r) => r.reference.id === 'proj-web');
     expect(allForWeb).toHaveLength(1);
   });
+
+  it('does not append a downloaded project whose ID starts with an existing DblResourceReference ID', () => {
+    const sources = makeSources({
+      adminReferenced: list([dbl('dbl-uid-123', { isResourceShownByDefault: true })]),
+    });
+    const downloaded: DownloadedResource[] = [
+      {
+        projectId: 'dbl-uid-123extra',
+        name: 'DBL Resource',
+        fullName: 'DBL Resource Full',
+        language: 'English',
+      },
+    ];
+    const { top, bottom } = getViewOptionsTexts(sources, { downloaded });
+    const duplicate = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
+    expect(duplicate).toHaveLength(0);
+  });
 });
 
 describe('setUserDisplay', () => {

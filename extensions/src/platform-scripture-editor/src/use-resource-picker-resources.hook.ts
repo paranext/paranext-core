@@ -24,10 +24,10 @@ export function useResourcePickerResources(
     'platformScripture.referencedProjectsAndResources',
   );
 
-  const [downloaded, setDownloaded] = useState<DownloadedResource[] | undefined>(
-    includeDownloaded ? undefined : [],
-  );
+  const [downloaded, setDownloaded] = useState<DownloadedResource[]>([]);
 
+  // TODO(PT-4059): papi.projectLookup has no onDidChange event yet; the downloaded list will be
+  // stale if a project is installed while this panel is open. Re-fetch when that event exists.
   useEffect(() => {
     if (!includeDownloaded) {
       setDownloaded([]);
@@ -48,11 +48,11 @@ export function useResourcePickerResources(
   }, [includeDownloaded]);
 
   const rows = useMemo(() => {
-    if (!effectiveResources || downloaded === undefined) return undefined;
+    if (!effectiveResources) return undefined;
     const built = buildPickerResources(effectiveResources.items, downloaded, dblResources);
     if (!adminLockedFirst) return built;
     return [...built].sort((a, b) => Number(b.isAdminLocked) - Number(a.isAdminLocked));
   }, [effectiveResources, downloaded, dblResources, adminLockedFirst]);
 
-  return [rows, isEffectiveLoading || downloaded === undefined];
+  return [rows, isEffectiveLoading];
 }

@@ -20,6 +20,10 @@ export type DownloadedResource = {
 /** A single row the picker can render. `reference` is the storage-shaped reference. */
 export type PickerResource = {
   reference: ResourceReference;
+  /**
+   * `'admin'` and `'user'` are copied from `EffectiveResourceReference.source`; `'downloaded'` is
+   * synthetic for projects not in any referenced list.
+   */
   source: 'admin' | 'user' | 'downloaded';
   isAdminLocked: boolean;
   type: ResourceType;
@@ -27,7 +31,13 @@ export type PickerResource = {
   projectId: string | undefined;
 };
 
-/** Enumerate every installed scripture project and resolve its display metadata. */
+/**
+ * Enumerate every installed scripture project and resolve its display metadata.
+ *
+ * Note: the renderer uses a similar enumerate-and-resolve pattern in
+ * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
+ * because extensions run in the extension-host process and cannot import from `src/renderer/`.
+ */
 export async function fetchDownloadedResources(): Promise<DownloadedResource[]> {
   try {
     const metadata = await papi.projectLookup.getMetadataForAllProjects({
@@ -94,13 +104,14 @@ function resolveReferenced(
     };
   }
   // ProjectReference (and any other known reference) renders as scripture.
+  const isProject = isProjectReference(item);
   return {
     reference: item,
     source: item.source,
     isAdminLocked,
     type: 'ScriptureResource',
-    installed: isProjectReference(item),
-    projectId: isProjectReference(item) ? item.id : undefined,
+    installed: isProject,
+    projectId: isProject ? item.id : undefined,
   };
 }
 
