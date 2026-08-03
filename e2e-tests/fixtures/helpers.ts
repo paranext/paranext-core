@@ -600,6 +600,14 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
   // Services like settings and theme finish async work after dock-layout mounts and platform.about
   // registers, so the overlay can outlast both earlier signals.
   await waitForOverlayGone(page, remaining2);
+  // Dismiss the onboarding tour if it is showing. In Simple mode with a fresh profile the tour
+  // opens automatically after first-run completes, and its full-screen overlay blocks all pointer
+  // events — without this, any subsequent click in the test hits the tour instead of the app.
+  const tourDialog = page.locator('[role="dialog"][aria-modal="true"]');
+  if (await tourDialog.isVisible()) {
+    await page.keyboard.press('Escape');
+    await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
+  }
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */
