@@ -150,11 +150,14 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
 }
 
 async function resolveInternal(generation: number): Promise<void> {
-  // Gate every status update on this run's generation: if a user action superseded it mid-flight
-  // (e.g. "continue without setup" from the loading watchdog while a slow probe was still awaiting),
-  // drop the late result rather than clobbering the user's choice.
+  // True once a user action superseded this run mid-flight (e.g. "continue without setup" from the
+  // loading watchdog while a slow probe was still awaiting). Gates both the in-memory status update
+  // AND the durable writes below, so a late-settling run can neither clobber the user's status nor
+  // leave persisted state (WIZARD_ACTIVE_KEY, the interface-language seed, firstRunComplete) that
+  // would resume the wizard at the wrong step on the next launch.
+  const isSuperseded = (): boolean => generation !== resolutionGeneration;
   const applyStatus = (next: FirstRunStatus): void => {
-    if (generation === resolutionGeneration) setStatus(next);
+    if (!isSuperseded()) setStatus(next);
   };
   try {
     // Demo/UX mode (PT-4219): bypass the real registration backend + relaunch entirely and drop the
@@ -244,6 +247,13 @@ async function resolveInternal(generation: number): Promise<void> {
       registrationValidity: effectiveValidity,
     });
 
+    // The registration probe above is the long await where the watchdog reveals the escape hatch, so
+    // it's where a "continue without setup" bail most likely lands. If that superseded us, the user
+    // is already in the app — skip the switch entirely so none of its persisted writes run. (Every
+    // durable write below sits in this switch; the reads/writes before the probe complete before the
+    // watchdog's reveal threshold, so they aren't reachable after a bail.)
+    if (isSuperseded()) return;
+
     switch (decision.action) {
       case 'completeThenShowApp':
         await markFirstRunComplete();
@@ -263,6 +273,9 @@ async function resolveInternal(generation: number): Promise<void> {
         // introduces no new flash.)
         if (!wizardActive && decision.step === 'language') {
           await seedInterfaceLanguageFromOsLocale();
+          // seedInterfaceLanguageFromOsLocale is another await a bail could land across; re-check so
+          // WIZARD_ACTIVE_KEY isn't persisted for a run the user already superseded.
+          if (isSuperseded()) return;
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
         applyStatus({ kind: 'wizard', step: decision.step });
