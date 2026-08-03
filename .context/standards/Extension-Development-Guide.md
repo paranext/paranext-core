@@ -59,16 +59,20 @@ all data flows in via props, and all platform wiring (data fetching, settings, t
 point or web view provider. This keeps components reusable, Storybook-renderable, and
 unit-testable without a running app.
 
-The rule is grep-enforceable — none of the following should match in any
-`*.component.tsx` file:
+A grep helps audit this — run it scoped to component files and **review each hit**:
 
 ```bash
-grep -rnE "@papi/frontend|useData\b|useDataProvider\b|useSetting\b|papi\.|globalThis\.webViewComponent" \
-  extensions/src/{ext}/src/components/
+grep -rnE "useData\b|useDataProvider\b|useSetting\b|papi\.|globalThis\.webViewComponent" \
+  --include='*.component.tsx' extensions/src/{ext}/src/components/
 ```
 
-Any hit is a coupling leak: move it into the web view entry point/provider and pass the
-result down as a prop.
+Two categories are deliberately **not** counted as coupling: `useLocalizedStrings` from
+`@papi/frontend/react` (the documented extension localization pattern — see
+`Localization-Guide.md`) and logger imports. A data-fetching or settings hit is a coupling
+leak: move it into the web view entry point/provider and pass the result down as a prop.
+A handful of shipped components predate this rule and still carry hits (e.g.
+`registration-form`, `track-project-dropdown`, `scripture-pane`, `footnotes-pane` in
+`platform-scripture`) — treat those as legacy, not as license to add more.
 
 ---
 

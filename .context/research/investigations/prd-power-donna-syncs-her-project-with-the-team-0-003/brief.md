@@ -62,7 +62,7 @@ investigation found the prior discovery for this PRD reflected in ADR-0002, and 
 
 | #    | Work item                                                    | Repo                                | Complexity | Depends on | Covers            |
 | ---- | ------------------------------------------------------------ | ----------------------------------- | ---------- | ---------- | ----------------- |
-| WI-1 | Wire F9 to open Send/Receive (ADR-0002)                       | paranext-core                       | Simple     | —          | NN-1              |
+| WI-1 | Wire a free key (F6 — F9 is taken by PT10 book navigation) to open Send/Receive (ADR-0002) | paranext-core                       | Simple     | —          | NN-1              |
 | WI-2 | Show cancelled syncs as cancelled, not empty success          | paratext-bible-internal-extensions  | Simple     | —          | NN-5, NTH-3       |
 | WI-3 | Verify each non-negotiable against the shipped feature        | all (verification)                  | Moderate   | —          | NN-2…NN-6 (evidence) |
 

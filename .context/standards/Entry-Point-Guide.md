@@ -107,10 +107,14 @@ For each entry point, add to `extensions/src/{ext}/contributions/menus.json`:
 
 ### Menu Availability: Menus Stay Always-Available
 
-paranext-core has **no predicate-gated menu visibility** — the menu contribution system does not
-support evaluating arbitrary conditions before a menu item renders, so there is no
-`enabledWhen`/`visibleWhen` equivalent. Don't try to add a "should this menu item show?" backend
-command or conditionally suppress the contribution.
+paranext-core has **no arbitrary predicate/expression gating** of menu visibility — there is no
+`enabledWhen`/`visibleWhen` equivalent, and the contribution schema cannot evaluate conditions
+before a menu item renders. The one supported declarative axis is
+`MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/menus.model.ts`, enforced in
+`src/shared/services/menu-data.service-host.ts`, used in production by
+`platform-scripture-editor/contributions/menus.json`), which hides an item in named interface
+modes. Beyond that, don't try to add a "should this menu item show?" backend command or
+conditionally suppress the contribution.
 
 Instead, leave menu items **always-available** and enforce permission/state at the point of action:
 the command handler (or its C# backend) checks whether the operation is allowed at submission time

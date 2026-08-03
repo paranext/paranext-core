@@ -238,6 +238,8 @@ A DataProvider notifies its own subscribers from inside its `Set*` methods (see 
 _pdpFactory.GetExistingProjectDataProvider(projectId)?.SendFullProjectUpdateEvent();
 ```
 
+The mutation that precedes this notification is itself subject to the mandatory Send/Receive write gate — the entry point must open with `SendReceiveWriteLock.EnterWrite` (see **Project write-locking** under Multi-threaded/Concurrent Code for the gate vs. `WriteLockManager` distinction).
+
 The null-conditional `?.` handles the case where no PDP is currently active for that project. Discipline for *which* project(s) to notify:
 
 - **Create / delete / import (own-project mutation):** notify the target project.
@@ -362,14 +364,16 @@ const summary = await pdp?.getBookSummary(bookNum);
 
 A `projectInterface` (the capability names a project advertises, registered as above) answers "what can this project do?" — and that is the question UI variant and visibility logic should ask. Do NOT reintroduce a PT9-style `ProjectKind` typology ("standard" / "resource" / "note-type") that asks "what category is this project in?"; PT10's extensibility model is interface-based, so a global `ProjectKind` enum would have to be updated every time an extension adds a new project type.
 
-Instead, read the `projectInterfaces: string[]` from project metadata (e.g. `papi.projectLookup.getMetadataForProject(projectId)`) and apply capability predicates directly:
+Instead, read the `projectInterfaces: string[]` from project metadata (e.g. `papi.projectLookup.getMetadataForProject(projectId)`) and check for the capability by name with `.includes(...)` against a named interface constant — the shipped idiom:
 
 ```typescript
-projectInterfaces.some(isScriptureInterface); // can this project edit scripture?
-projectInterfaces.some(isCommentsInterface); //  does it have a comments surface?
+// e.g. src/shared/services/project-data-provider.service.ts:114
+projectInterfaces.includes(PROJECT_INTERFACE_PLATFORM_BASE);
+// or against a specific capability such as 'platformScripture.USFM_BookChapterVerse'
+projectInterfaces.includes(scriptureInterfaceName);
 ```
 
-The predicate is the single place to encode the interface-name convention. This keeps an extension's new project type working with zero changes to a central enum, and avoids a wrong-shape "fetch a project-type setting" lookup. Each PT9 project variant maps cleanly onto a combination of interface predicates.
+(`src/shared/models/project-lookup.service-model.ts` uses the same `.includes(...)` check when matching PDP factories and enriching metadata.) Keep the interface-name constant in one shared place so the name convention is encoded once. This keeps an extension's new project type working with zero changes to a central enum, and avoids a wrong-shape "fetch a project-type setting" lookup. Each PT9 project variant maps cleanly onto a combination of interface checks.
 
 ### Test Infrastructure
 
@@ -554,7 +558,7 @@ public static JsonSerializerOptions CreateSerializationOptions()
 
 ### Writing ParatextData files (Settings.xml / project files)
 
-When a feature writes files that ParatextData must later read back (`Settings.xml`, project metadata, config files), `XmlSerializer`'s default output diverges from PT9's hand-written format in ways that make ParatextData silently skip the project or crash on load. Match PT9's conventions exactly:
+When a feature writes files that ParatextData must later read back (`Settings.xml`, project metadata, config files), `XmlSerializer`'s default output diverges from PT9's hand-written format in ways that make ParatextData silently skip the project or crash on load. These writes are project-data mutations, so the entry point performing them must open with the mandatory `SendReceiveWriteLock.EnterWrite` gate (see **Project write-locking** under Multi-threaded/Concurrent Code). Match PT9's conventions exactly:
 
 - **Booleans** serialize as `true`/`false`, but PT9 expects `T`/`F`.
 - **Enums** serialize as their member *names*, but PT9 expects the numeric values.
@@ -709,6 +713,8 @@ WriteLock writeLock = WriteLockManager.Default.ObtainLock(WriteScope.EntireProje
 ```
 
 `ObtainLock` **returns null** when the lock is unavailable (it does not throw); callers convert that null — or an inactive lock — into a `LockNotObtainedException` (or a `PlatformError`) and handle it as a failed precondition, not a crash. `LockNotObtainedException` itself is thrown by higher-level ParatextData helpers (`ScrText`, `ScrTextCollection`) and by paranext-core's own null checks. When porting PT9 code that uses this lock, the lock logic and `LockNotObtainedException` port across without rewrite.
+
+**`WriteLockManager` does not replace the mandatory Send/Receive write gate.** Independently of any `WriteLockManager` lock, every C# entry point that mutates project data (books, settings, extension data) must open with `using var _ = SendReceiveWriteLock.EnterWrite(projectId);` — the in-process gate required by CLAUDE.md's "Send/Receive Write Gate" section (`c-sharp/Projects/SendReceive/SendReceiveWriteLock.cs`; `ParatextProjectDataProvider` applies it via its `EnterSyncWriteScope()` helper, e.g. `c-sharp/Projects/ParatextProjectDataProvider.cs:347`, directly above the `RunWithinLock` usage referenced above). The two locks answer different questions: `SendReceiveWriteLock` fences mutations against an in-flight Send/Receive, while `WriteLockManager` protects a multi-step mutation against other writers — a gated entry point may still need a `WriteLockManager` lock inside it, and vice versa never substitutes. `SendReceiveWriteLockCoverageTests` fails the build on any ungated write site.
 
 ### PAPI Event/Request Registration
 

@@ -53,7 +53,7 @@ Terse decisions (choice → what to avoid → one-line why). Add only the net-ne
 
 - **`useWebViewState<T>(key, default)` is scoped per-`webViewId`.** `openWebView` mints a new id on each call, so closing and reopening a web view starts with empty slots unless the tool deterministically reuses its id.
   - Avoid: assuming `useWebViewState` survives close/reopen; reaching for `papi.settings` (user-scoped) when you only meant per-instance state.
-  - Why: id reuse is what makes state durable across reopen — the Find tool reuses the same id for the same project (see "Single-instance web views" above, the `existingId: '?'` detect-and-reuse path). Use `papi.settings` only when the state is genuinely per-user, not per-web-view. See [Component-Builder-Patterns.md](../../../.context/standards/Component-Builder-Patterns.md).
+  - Why: `existingId: '?'` matches on `webViewType` only and resolves against the **live** layout, so it dedupes open instances (see "Single-instance web views" above) but cannot revive a closed one — after a close, `useWebViewState` slots are gone. For state that must survive close/reopen, use user-scoped `papi.settings`; keep `useWebViewState` for genuinely per-instance state. See [Component-Builder-Patterns.md](../../../.context/standards/Component-Builder-Patterns.md).
 
 ### Decoupling from unmerged lib work
 

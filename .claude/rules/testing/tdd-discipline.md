@@ -21,7 +21,7 @@ TDD is required for logic/behavior changes; pure-UI work may use a component-fir
 
 ### C# RED phase
 
-A C# RED commit cannot be test-only. C# tests won't compile without the types they reference, and the pre-commit hook runs `dotnet build c-sharp/ParanextDataProvider.sln` (which includes the test project) — so a commit of failing-but-uncompilable tests is blocked.
+A C# RED commit cannot be test-only. C# tests won't compile without the types they reference — the compile requirement itself is what forces skeleton stubs alongside failing tests. (On `ai/*` branches with C# changes staged, the pre-commit hook additionally runs `dotnet build c-sharp/ParanextDataProvider.sln`, which includes the test project, blocking uncompilable commits at commit time; on other branches the same failure surfaces in CI instead.)
 
 Commit minimal skeleton type stubs alongside the failing tests so the build passes while the tests still fail at runtime. Keep the skeletons shape-only (no constructors, attributes, validation, or constant values) so the implementer fills in exactly the behavior the RED tests exercise. Do NOT use `--no-verify` to bypass the hook — fix the underlying compile issue with stubs instead.
 

@@ -34,7 +34,7 @@ Test-Driven Development is the recommended default for non-trivial backend logic
 | **GREEN**    | Write MINIMUM code to pass      |
 | **REFACTOR** | Clean up while tests stay green |
 
-**C# RED phase**: A C# RED commit cannot be test-only — tests won't compile without the types they reference, and the pre-commit hook runs `dotnet build` (including the test project). Commit minimal skeleton type stubs (shape only — no constructors, validation, or constant values) alongside the failing tests so the build passes while the tests fail at runtime. Never reach for `--no-verify`.
+**C# RED phase**: A C# RED commit cannot be test-only — tests won't compile without the types they reference (and on `ai/*` branches with C# changes staged, the pre-commit hook also runs `dotnet build` including the test project; elsewhere the failure surfaces in CI). Commit minimal skeleton type stubs (shape only — no constructors, validation, or constant values) alongside the failing tests so the build passes while the tests fail at runtime. Never reach for `--no-verify`.
 
 ### Verifying Tests Can Fail
 

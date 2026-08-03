@@ -21,7 +21,7 @@ last_updated: 2026-06-18
 | Filter + List | ComboBox, DataTable/ResultsCard | `checks-side-panel.web-view.tsx` |
 | **Pick a project** | **ProjectSelector** (NOT ComboBox/Select) | `manage-books-sidebar.component.tsx`, `checklist.web-view.tsx` |
 | Data Grid | DataTable, Inventory | `inventory.web-view.tsx` |
-| **Book/file comparison grid** | **BookGridSelector** (NOT a parallel table) | `manage-books-dialog/book-grid.component.tsx` |
+| **Book/file comparison grid** | copy the Manage Books grid's approach (not a from-scratch table) | `manage-books-dialog/book-grid.component.tsx` |
 | Settings Form | Input, Select, Checkbox, Card | `project-settings.web-view.tsx` |
 | Scripture Selection | BookChapterControl, ScopeSelector | (multiple extensions) |
 | Comments/Notes | CommentList, CommentThread | `comment-manager.web-view.tsx` |
@@ -125,15 +125,15 @@ List entries and table rows may use context menus and Ellipsis button for more o
 
 ## Book/file comparison grids
 
-**Decision: reuse Manage Books' `BookGridSelector` for any per-row book/file comparison grid** rather than building a parallel comparison table.
+**Decision: copy the Manage Books grid's approach for any per-row book/file comparison grid** rather than inventing a new comparison-table design.
 
-`BookGridSelector` (exported from `extensions/src/platform-scripture/src/manage-books-dialog/book-grid.component.tsx`) is the canonical multi-column pill grid for showing per-row comparison states (e.g. source-is-newer / files-are-same / destination-is-higher-version / destination-does-not-exist). It already handles tone/status grouping, per-row tooltips, pill colors, and badges.
+`BookGridSelector` (`extensions/src/platform-scripture/src/manage-books-dialog/book-grid.component.tsx`) is the reference multi-column pill grid for per-row comparison states (e.g. source-is-newer / files-are-same / destination-is-higher-version / destination-does-not-exist) — tone/status grouping, per-row tooltips, pill colors, and badges. Note it lives inside the `platform-scripture` extension, not `lib/platform-bible-react`, so other extensions cannot import it directly today; match its approach (and consider promoting it to the shared library once a second consumer exists — `react-patterns.md` requires a multi-consumer story for promotion).
 
 Avoid:
 
-- building a feature-local `*-book-comparison-table` / `*-file-comparison-table` component that duplicates the grid
+- inventing a visually divergent `*-book-comparison-table` / `*-file-comparison-table` design when the Manage Books grid's approach fits
 
-*Why*: state usage, tooltip content, and styling (pill colors, badges) get fixed once in the Manage Books grid and apply everywhere — duplicating the grid means re-fixing each copy. (Note: this is the file/book-level grid. Verse-level USFM diff for a single selected file is a separate surface — see the `DifferencesToolView` shared diff surface.)
+*Why*: one consistent comparison-grid design across features. (Note: this is the file/book-level grid. Verse-level USFM diff for a single selected file is a separate surface — see the `DifferencesToolView` shared diff surface.)
 
 ## Icons
 
@@ -410,4 +410,4 @@ Example: A `CheckCard` that combines Badge + Tooltip + ResultsCard with check-sp
 | 1.0.0   | 2026-03-04 | Initial version |
 | 1.1.0   | 2026-04-23 | Added "View" toggle button pattern for the TabToolbar: view options (especially boolean toggles like `showVerseText`, `hideMatches`) belong under a single "View" dropdown button, not as individual toolbar buttons. Driven by Sebastian's markers-checklist review feedback. |
 | 1.2.0   | 2026-06-17 | Added Project Picking section: use `ProjectSelector` for ALL project-picking UI (not ComboBox/Select), plus the read-only (`IsEditable`) handling. Added Alerts & Confirmations section: reuse the registered `platform.alert` dialog for blocking alerts/confirms (no new Radix AlertDialog; inline field validation stays inline). Routed the Common Patterns table and User Input/Overlays decision trees accordingly. |
-| 1.3.0   | 2026-06-18 | Added Book/file comparison grids section: reuse Manage Books' `BookGridSelector` for per-row comparison grids instead of a parallel table. Added "Driving variant/visibility from project capability" note under Project Picking: drive variant/visibility off `projectInterfaces` predicates, not a `ProjectKind` enum (xref Paranext-Core-Patterns.md). |
+| 1.3.0   | 2026-06-18 | Added Book/file comparison grids section: copy the Manage Books grid's approach for per-row comparison grids instead of inventing a new design. Added "Driving variant/visibility from project capability" note under Project Picking: drive variant/visibility off `projectInterfaces` predicates, not a `ProjectKind` enum (xref Paranext-Core-Patterns.md). |

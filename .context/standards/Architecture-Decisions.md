@@ -65,11 +65,14 @@ step, no automation. Just a record.
   keybinding/accelerator contribution API** — the menu-item contribution schema even rejects an
   `accelerator` field (`unevaluatedProperties: false`). The only existing app-global keyboard
   handling is the Electron main-process `before-input-event` handler in `src/main/main.ts`
-  (~lines 606-679: F12, zoom, Ctrl+Tab), which already imports `commandService` and calls
-  `commandService.sendCommand`.
+  (~lines 663-798: F12, Ctrl+Tab, tab-group navigation, zoom), which already imports
+  `commandService` and calls `commandService.sendCommand`.
 - **Decision:** Add new app-global keyboard shortcuts as branches in that `before-input-event`
-  handler, each invoking the target PAPI command (e.g. F9 → `command:paratextBibleSendReceive.openSendReceive`).
-  Do **not** build a general declarative keybinding API for a single shortcut.
+  handler, each invoking the target PAPI command (e.g. F6 → `command:paratextBibleSendReceive.openSendReceive`;
+  pick a key that is genuinely free — F8/F9 are taken by chapter/book navigation in
+  `src/main/verse-navigation-shortcuts.util.ts`). Do **not** build a general declarative keybinding
+  API for a single shortcut. Every added branch also requires a matching `KeyboardShortcutEntry` in
+  `src/stories/keyboard-shortcuts.data.ts` (mandated by `.claude/rules/keyboard-shortcuts-catalog.md`).
 - **Alternatives:** (a) renderer-level global `keydown` — rejected: web-view iframes are
   `about:srcdoc`, so their key events don't bubble to the top renderer; coverage gaps unless
   duplicated into every web-view. (b) Build a declarative keybinding-contribution API — **deferred**:
@@ -86,8 +89,11 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
-  (permission checks, project-state guards). paranext-core's menu system has **no predicate-gated
-  menu visibility** — the menu-item contribution schema cannot express "show only if X." (b) When a
+  (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
+  predicate/expression gating** of menu visibility — the one supported declarative axis is
+  `MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/menus.model.ts`, enforced in
+  `src/shared/services/menu-data.service-host.ts`), which hides an item per interface mode; beyond
+  that the schema cannot express "show only if X." (b) When a
   C# layer mutates shared state that DataProvider subscribers observe (via `useProjectSetting` and
   similar), where the mutation lives determines whether external PAPI callers stay in sync. A
   `NetworkObject` method is a publicly callable mutation with **no subscribable surface** — any
