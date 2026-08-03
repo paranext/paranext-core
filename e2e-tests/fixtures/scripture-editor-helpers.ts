@@ -23,7 +23,7 @@ const COMMAND_TIMEOUT_MS = 30_000;
  * registered or finished installing the sample project into an empty isolated root — observed as a
  * `-32601 'object:platform.Paratext-pdpf.…' not found` failure on cold first launches.
  */
-async function waitForSampleProjectMetadata(timeoutMs = 60_000): Promise<void> {
+async function waitForSampleProjectMetadata(timeoutMs = 120_000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -75,10 +75,14 @@ export async function sendPapiCommandWhenRegistered(
 export async function makeSampleProjectEditable(): Promise<void> {
   // Wait until the Paratext factory has registered AND the sample project is installed and
   // advertised — see waitForSampleProjectMetadata for why a generic any-project wait is racy.
+  // 120s, not the usual 60s: on the coldest first Electron launch after a fresh dev-server start
+  // (ts-node transpiling the extension host, C# data provider booting, extensions activating),
+  // this factory has been observed taking over 60s to appear in rpc.discover. Pure patience —
+  // warm launches return in seconds and never wait this long.
   await waitForPapiMethodRegistered(
     'object:platform.Paratext-pdpf.getProjectDataProviderId',
     WEBSOCKET_PORT,
-    60_000,
+    120_000,
   );
   await waitForSampleProjectMetadata();
   const pdpId = await sendPapiRequestOnce<string>(
