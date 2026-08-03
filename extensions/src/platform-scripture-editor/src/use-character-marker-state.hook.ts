@@ -13,7 +13,14 @@ import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 export type UseCharacterMarkerStateOptions = {
   /** The editor, used to insert markers and to read USJ when the menu opens. */
   editorRef: MutableRefObject<EditorRef | null>;
-  /** The current selection. Read on demand rather than passed as state, so it is never stale. */
+  /**
+   * The current selection. Read on demand rather than passed as state, so it is never stale. The
+   * caller must also cause a re-render whenever the selection changes — `isMixed` is computed
+   * inline on every render (not memoized) precisely so that a fresh render is what keeps the
+   * trigger label current. A getter that only reads a ref, with nothing that changes on selection
+   * change to trigger a re-render, will show a stale `(mixed)`/label until the next unrelated
+   * render.
+   */
   getSelection: () => CharacterMarkerSelection | undefined;
   /** The editor's `blockMarker` — the block containing the selection. Scopes which markers apply. */
   blockMarker?: string;
@@ -58,7 +65,17 @@ export function useCharacterMarkerState({
       setCoverage(undefined);
       return;
     }
-    setCoverage(computeCharacterMarkerCoverage(correctEditorUsjVersion(editorUsj), selection));
+    const computed = computeCharacterMarkerCoverage(correctEditorUsjVersion(editorUsj), selection);
+    // Empty `markerStates` together with `hasUncovered === false` is the pure function's
+    // "no information" result — it also occurs when the selection's json paths do not resolve
+    // against this USJ (e.g. drift between the editor's USJ and its selection after an edit). A
+    // genuinely unmarked selection always has `hasUncovered === true` (a collapsed caret included),
+    // so this combination is unambiguous. Store `undefined` so the hook degrades exactly as it does
+    // with no selection or no USJ — falling back to `contextMarker` — rather than confidently
+    // reporting "nothing applied" here.
+    const isUnresolvable =
+      Object.keys(computed.markerStates).length === 0 && !computed.hasUncovered;
+    setCoverage(isUnresolvable ? undefined : computed);
   }, [editorRef, getSelection]);
 
   const onClose = useCallback(() => {
@@ -84,17 +101,20 @@ export function useCharacterMarkerState({
     return localizedStrings[description] ?? description;
   }, [currentMarker, localizedStrings]);
 
-  const isMixed = useMemo(() => {
-    if (coverage) {
-      // More than one covering marker, or a mix of covered and uncovered text.
-      return coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered);
-    }
+  // Computed inline, not memoized: its inputs include calling `getSelection()`, whose identity
+  // does not change when the selection does (the caller only writes a ref) — a `useMemo` here
+  // would key the value to a dependency that isn't the real source of freshness. The cheap-check
+  // half is O(1) by design, so recomputing every render costs nothing and buys correctness.
+  let isMixed: boolean;
+  if (coverage) {
+    // More than one covering marker, or a mix of covered and uncovered text.
+    isMixed = coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered);
+  } else {
     // O(1) fallback while the menu is closed. It over-reports — a selection spanning two adjacent
     // same-marker nodes has two paths — which is corrected the moment coverage arrives.
     const selection = getSelection();
-    if (!selection?.end) return false;
-    return selection.start.jsonPath !== selection.end.jsonPath;
-  }, [coverage, coveringMarkers, getSelection]);
+    isMixed = !!selection?.end && selection.start.jsonPath !== selection.end.jsonPath;
+  }
 
   const markerMenuItems = useMemo(() => {
     const items = generateCharacterMarkerMenuListItems(
@@ -107,17 +127,17 @@ export function useCharacterMarkerState({
       { currentCharacterMarker: currentMarker, changeCharacterMarker, removeCharacterMarker },
     );
     if (!coverage) return items;
-    return items.map((item) => ({
-      ...item,
-      selectionState: item.marker
-        ? (coverage.markerStates[item.marker] ?? 'none')
-        : // The remove row: 'all' when nothing is marked, 'partial' when some of the selection is
-          // unmarked, 'none' when every character carries a marker.
-          ((): 'all' | 'partial' | 'none' => {
-            if (coveringMarkers.length === 0) return 'all';
-            return coverage.hasUncovered ? 'partial' : 'none';
-          })(),
-    }));
+    return items.map((item) => {
+      let selectionState: 'all' | 'partial' | 'none';
+      if (item.marker) selectionState = coverage.markerStates[item.marker] ?? 'none';
+      // The remove row: 'partial' when some of the selection is unmarked, 'none' when every
+      // character carries a marker. The `coveringMarkers.length === 0` ('all') case cannot arise
+      // here: the remove row is only emitted when `currentCharacterMarker` is set (see
+      // `character-marker-menu.utils.ts`), and this hook only sets `currentMarker` when exactly one
+      // marker covers the selection.
+      else selectionState = coverage.hasUncovered ? 'partial' : 'none';
+      return { ...item, selectionState };
+    });
   }, [
     editorRef,
     localizedStrings,
@@ -126,7 +146,6 @@ export function useCharacterMarkerState({
     changeCharacterMarker,
     removeCharacterMarker,
     coverage,
-    coveringMarkers,
   ]);
 
   return { currentMarker, currentMarkerLabel, isMixed, markerMenuItems, onOpen, onClose };

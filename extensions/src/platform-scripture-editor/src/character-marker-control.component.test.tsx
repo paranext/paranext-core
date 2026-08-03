@@ -103,6 +103,14 @@ describe('CharacterMarkerControl — trigger label', () => {
     renderControl();
     expect(screen.getByRole('button')).toHaveTextContent('(none)');
   });
+
+  it('includes the current label in the accessible name, not just the static description', () => {
+    // The visible label is the control's only readout of the current marker, so the accessible
+    // name must include it too (WCAG 2.5.3, label-in-name) — a screen-reader user must hear
+    // "Character marker: bd - Bold", not just "Character marker".
+    renderControl({ currentMarker: 'bd', currentMarkerLabel: 'Bold' });
+    expect(screen.getByRole('button', { name: 'Character marker: bd - Bold' })).toBeInTheDocument();
+  });
 });
 
 describe('CharacterMarkerControl — disabled states', () => {
@@ -119,13 +127,6 @@ describe('CharacterMarkerControl — disabled states', () => {
 
     expect(screen.getByRole('button')).toBeDisabled();
     expect(screen.getByLabelText('No character markers are available here.')).toBeInTheDocument();
-  });
-
-  it('stays enabled when structure protection is on — there is no prop for it', () => {
-    // Character markers are deliberately exempt from structure protection. This test exists so the
-    // exemption cannot be lost silently: the control takes no isStructureProtected input at all.
-    renderControl();
-    expect(screen.getByRole('button')).toBeEnabled();
   });
 });
 

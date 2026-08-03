@@ -52,7 +52,7 @@ const USJ_NESTED: Usj = {
 // `text\f + \ft note\ft*\f* more` — a footnote whose content marker `ft` IS a character marker.
 // Paths:
 //   $.content[2].content[1]                        → 'text'
-//   $.content[2].content[2].content[1].content[0]  → 'note' (inside \ft inside the note)
+//   $.content[2].content[2].content[0].content[0]  → 'note' (inside \ft inside the note)
 //   $.content[2].content[3]                        → ' more'
 const USJ_WITH_NOTE: Usj = {
   type: 'USJ',

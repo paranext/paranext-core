@@ -117,13 +117,66 @@ describe('useCharacterMarkerState — trigger label inputs', () => {
   });
 
   it('prefers coverage over the cheap check once the menu opens', () => {
-    // Two json paths but one covering marker: the cheap check over-reports, coverage corrects it.
+    // `\bd Mu\bd*\bd lu\bd*` — two adjacent sibling char nodes carrying the SAME marker, so the two
+    // ends have different json paths. The cheap check over-reports `isMixed` before the menu opens;
+    // coverage corrects it once `onOpen` runs. This is the only test standing behind the spec's
+    // §4.1 guarantee that the trigger and the open menu never contradict each other.
+    const usjSiblingSameMarker: Usj = {
+      type: 'USJ',
+      version: '3.0',
+      content: [
+        { type: 'book', marker: 'id', code: 'GEN', content: ['GEN - Genesis'] },
+        { type: 'chapter', marker: 'c', number: '1', sid: 'GEN 1' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '1', sid: 'GEN 1:1' },
+            { type: 'char', marker: 'bd', content: ['Mu'] },
+            { type: 'char', marker: 'bd', content: ['lu'] },
+          ],
+        },
+      ],
+    };
     const { result } = renderHook(() =>
       useCharacterMarkerState(
         options({
+          editorRef: makeEditorRef(usjSiblingSameMarker),
           getSelection: () => ({
-            start: { jsonPath: MULU, offset: 0 },
-            end: { jsonPath: MULU, offset: 4 },
+            start: { jsonPath: '$.content[2].content[1].content[0]', offset: 0 },
+            end: { jsonPath: '$.content[2].content[2].content[0]', offset: 2 },
+          }),
+        }),
+      ),
+    );
+
+    // Before the menu opens: the cheap check sees two different json paths and over-reports mixed.
+    expect(result.current.isMixed).toBe(true);
+
+    act(() => result.current.onOpen());
+
+    // After the menu opens: coverage corrects it, since one marker ('bd') covers the whole
+    // selection.
+    expect(result.current.isMixed).toBe(false);
+    expect(result.current.currentMarker).toBe('bd');
+  });
+});
+
+describe('useCharacterMarkerState — unresolvable selection', () => {
+  it('falls back to contextMarker when the selection cannot be resolved against the USJ', () => {
+    // A jsonPath that does not exist in USJ_PARTIAL_BD: `computeCharacterMarkerCoverage` returns
+    // the pure function's "no information" result (empty markerStates, hasUncovered === false),
+    // which is indistinguishable from a genuinely unmarked selection only by checking hasUncovered
+    // — a real unmarked selection always has hasUncovered === true. The hook must treat this as "no
+    // coverage" rather than "nothing applied", falling back to contextMarker exactly as it does
+    // with no selection or no USJ.
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(
+        options({
+          contextMarker: 'bd',
+          getSelection: () => ({
+            start: { jsonPath: '$.content[99].content[99]', offset: 0 },
+            end: { jsonPath: '$.content[99].content[99]', offset: 4 },
           }),
         }),
       ),
@@ -131,8 +184,10 @@ describe('useCharacterMarkerState — trigger label inputs', () => {
 
     act(() => result.current.onOpen());
 
-    expect(result.current.isMixed).toBe(false);
     expect(result.current.currentMarker).toBe('bd');
+    result.current.markerMenuItems.forEach((item) => {
+      expect(item.selectionState).toBeUndefined();
+    });
   });
 });
 

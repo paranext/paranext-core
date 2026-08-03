@@ -78,7 +78,11 @@ export type CharacterMarkerControlProps = {
  * Placement-agnostic by construction — it takes state and callbacks as props and renders no
  * positioning of its own, so the same component serves every placement wrapper. It is also
  * structure-protection-agnostic: character markers are deliberately exempt, so there is no input
- * that could disable it for that reason.
+ * that could disable it for that reason. The real guarantee is the ABSENCE of any
+ * `isStructureProtected` prop or import on this component — verified by grep (`grep -n
+ * "isStructureProtected" character-marker-control.component.tsx`) rather than by a runtime test,
+ * since there is no prop to flip and a test asserting "stays enabled" would only cover the same
+ * default-enabled path the other tests here already exercise.
  */
 export function CharacterMarkerControl({
   currentMarker,
@@ -142,7 +146,10 @@ export function CharacterMarkerControl({
               <PopoverTrigger asChild>
                 <Button
                   className={className}
-                  aria-label={localize(localizedStrings, ARIA_LABEL_KEY)}
+                  // The accessible name includes the current value — a static "Character marker"
+                  // would override the visible label and never let a screen-reader user hear it
+                  // (WCAG 2.5.3, label-in-name); this is the control's only readout of the value.
+                  aria-label={`${localize(localizedStrings, ARIA_LABEL_KEY)}: ${label}`}
                   disabled={isDisabled}
                   variant="outline"
                 >
@@ -197,7 +204,9 @@ export function CharacterMarkerToolbar({ children, className }: CharacterMarkerT
 
   return (
     <div
-      className={`tw:flex tw:flex-row tw:flex-nowrap tw:items-center tw:gap-1 ${className ?? ''}`}
+      className={['tw:flex tw:flex-row tw:flex-nowrap tw:items-center tw:gap-1', className]
+        .filter(Boolean)
+        .join(' ')}
     >
       {children}
     </div>

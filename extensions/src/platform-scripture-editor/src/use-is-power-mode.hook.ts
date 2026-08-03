@@ -4,7 +4,7 @@ import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { useMemo } from 'react';
 
 /**
- * Whether the app is in Power interface mode.
+ * Whether the app is in 10 Power interface mode.
  *
  * Reads `platform.interfaceMode` and re-renders when it changes, so a live mode toggle takes effect
  * without a restart. A failed read logs a warning and reports Simple — the same fallback the editor
