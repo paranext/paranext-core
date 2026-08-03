@@ -33,9 +33,9 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Export draft PDF (PTXprint)`; Handler: `printDraftToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1059 | `[MS]` |
+| Menu Structure | Menu: `Project > Export draft PDF (PTXprint)`; Handler: `printDraftToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
 | HelpData | Keyword: `ContentPrintDraft`; Dialog: `PrintDraftForm` | `[H]` |
-| Manual | `../paratext-manual/chapters/14_printing_drafts.md`, lines 26-27: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
+| Manual | `../paratext-manual/chapters/14_printing_drafts.md`: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
 | Requirements | Section: "People-Centric View > Typesetter" | `[R]` |
 
 **Key Quote** (Manual):
@@ -45,14 +45,14 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `printDraftToolStripMenuItem_Click` at line 1059 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `printDraftToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - Project > Export draft PDF (PTXprint)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `printDraftToolStripMenuItem_Click`, line 1059
+  - Menu Structure: `ParatextWindowWithMenus`, handler `printDraftToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Also documented in:
-  - Manual: `../paratext-manual/chapters/14_printing_drafts.md`, line 38
+  - Manual: `../paratext-manual/chapters/14_printing_drafts.md`
   - Quote: "**≡ Tab**, under **Project** > **Export Draft PDF** **(PTX Print)**"
   - HelpData ID: `fba9c421-0fe3-45c7-8932-425e03ba4602`
 
@@ -83,7 +83,7 @@ Publishing and Output features prepare translations for distribution. This inclu
 |--------|-----------|--------|
 | Menu Structure | Not found in current menu structure | `-` |
 | HelpData | Not found as separate component | `-` |
-| Manual | `../paratext-manual/chapters/14_printing_drafts.md`, line 27: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
+| Manual | `../paratext-manual/chapters/14_printing_drafts.md`: "PTXPrint has replaced the old Print Draft PDF" | `[M]` |
 | Requirements | Section: "People-Centric View > Typesetter"; Quote: "Integration with PublishingAssistant or PTXPrint" | `[R]` |
 
 **Key Quote** (Requirements):
@@ -148,11 +148,11 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Advanced > Create DBL text bundle`; Handler: `uiCreateUSXTextBundle_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 380 | `[MS]` |
-| Menu Structure | Menu: `Project > Advanced > Create DBL Paratext resource bundle`; Handler: `uiCreateDBLResourceBundle_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 386 | `[MS]` |
-| Menu Structure | Menu: `Paratext > Advanced > Enable DBL column in Send/Receive dialog`; Handler: `uiEnableDBLColumnSR_Click`; File: `Paratext/MainForm.cs`, line 1078 | `[MS]` |
-| Form Relationships | `CreateTextBundleForm` → `ResolveDBLEntryMismatchDialog` (line 750) | `[FR]` |
-| Form Relationships | `CreateTextBundleForm` → `DblAuthorizationForm` (line 1721) | `[FR]` |
+| Menu Structure | Menu: `Project > Advanced > Create DBL text bundle`; Handler: `uiCreateUSXTextBundle_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Advanced > Create DBL Paratext resource bundle`; Handler: `uiCreateDBLResourceBundle_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Paratext > Advanced > Enable DBL column in Send/Receive dialog`; Handler: `uiEnableDBLColumnSR_Click`; File: `Paratext/MainForm.cs` | `[MS]` |
+| Form Relationships | `CreateTextBundleForm` → `ResolveDBLEntryMismatchDialog` | `[FR]` |
+| Form Relationships | `CreateTextBundleForm` → `DblAuthorizationForm` | `[FR]` |
 | HelpData | ID: `58d88da1-a5b6-447e-a788-224fc884a974` - "What is the Digital Bible Library (DBL)?" | `[H]` |
 | Requirements | Section: "People-Centric View > Archivist" | `[R]` |
 
@@ -163,25 +163,25 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiCreateUSXTextBundle_Click` at line 380 |
-| 0 | `Paratext/Archiving/CreateTextBundleForm.cs` | Form Relationships | line 44 (form definition) |
-| 1 | `Paratext/Archiving/ResolveDBLEntryMismatchDialog.cs` | Opens dialog in D0 | Line 750: `using (var dlg = new ResolveDBLEntryMismatchDialog(...)` |
-| 1 | `DblUploader/DblAuthorizationForm.cs` | Opens dialog in D0 | Line 1721: `using (var form = new DblAuthorizationForm())` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiCreateUSXTextBundle_Click` |
+| 0 | `Paratext/Archiving/CreateTextBundleForm.cs` | Form Relationships | (form definition) |
+| 1 | `Paratext/Archiving/ResolveDBLEntryMismatchDialog.cs` | Opens dialog in D0 | `using (var dlg = new ResolveDBLEntryMismatchDialog(...)` |
+| 1 | `DblUploader/DblAuthorizationForm.cs` | Opens dialog in D0 | `using (var form = new DblAuthorizationForm())` |
 
 **Dialog Navigation**:
-- `CreateTextBundleForm` → `ResolveDBLEntryMismatchDialog` (line 750)
-- `CreateTextBundleForm` → `DblAuthorizationForm` (line 1721)
-- `SendReceiveProjectsForm` → `CreateTextBundleForm` (line 701)
+- `CreateTextBundleForm` → `ResolveDBLEntryMismatchDialog`
+- `CreateTextBundleForm` → `DblAuthorizationForm`
+- `SendReceiveProjectsForm` → `CreateTextBundleForm`
 
 **UI Entry Points**:
 - Project > Advanced > Create DBL text bundle
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiCreateUSXTextBundle_Click`, line 380
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiCreateUSXTextBundle_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Project > Advanced > Create DBL Paratext resource bundle
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiCreateDBLResourceBundle_Click`, line 386
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiCreateDBLResourceBundle_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Paratext > Advanced > Enable DBL column in Send/Receive dialog
-  - Menu Structure: `MainForm`, handler `uiEnableDBLColumnSR_Click`, line 1078
+  - Menu Structure: `MainForm`, handler `uiEnableDBLColumnSR_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -209,12 +209,12 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Paratext > Advanced > Backup project to file`; Handler: `backupToFileToolStripMenuItem_Click`; File: `Paratext/MainForm.cs`, line 1017 | `[MS]` |
-| Menu Structure | Menu: `Project > Advanced > Backup project to file`; Handler: `backupProjectToFileToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1114 | `[MS]` |
-| Menu Structure | Menu: `Paratext > Advanced > Restore project from file`; Handler: `restoreFromFileToolStripMenuItem_Click`; File: `Paratext/MainForm.cs`, line 1027 | `[MS]` |
-| Menu Structure | Menu: `Paratext > Advanced > View backup log`; Handler: `viewBackupLogToolStripMenuItem_Click`; File: `Paratext/MainForm.cs`, line 1048 | `[MS]` |
-| Form Relationships | `MainForm` → `BackupForm` (line 1023) | `[FR]` |
-| Form Relationships | `MainForm` → `RestoreForm` (line 1029) | `[FR]` |
+| Menu Structure | Menu: `Paratext > Advanced > Backup project to file`; Handler: `backupToFileToolStripMenuItem_Click`; File: `Paratext/MainForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Advanced > Backup project to file`; Handler: `backupProjectToFileToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Paratext > Advanced > Restore project from file`; Handler: `restoreFromFileToolStripMenuItem_Click`; File: `Paratext/MainForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Paratext > Advanced > View backup log`; Handler: `viewBackupLogToolStripMenuItem_Click`; File: `Paratext/MainForm.cs` | `[MS]` |
+| Form Relationships | `MainForm` → `BackupForm` | `[FR]` |
+| Form Relationships | `MainForm` → `RestoreForm` | `[FR]` |
 | HelpData | Keyword: `ComponentBackupProject`; Dialog: `BackupForm` | `[H]` |
 | Requirements | Section: "People-Centric View > Archivist" | `[R]` |
 
@@ -225,29 +225,29 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `backupToFileToolStripMenuItem_Click` at line 1017 |
-| 0 | `Paratext/BackupRestore/BackupForm.cs` | Form Relationships | line 24 (form definition) |
-| 0 | `Paratext/BackupRestore/RestoreForm.cs` | Form Relationships | line 26 (form definition) |
-| 1 | `ParatextBase/CommonForms/BookChooserForm.cs` | Opens dialog in BackupForm | Line 86: `using (BookChooserForm frm = new BookChooserForm(...)` |
-| 1 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | Opens dialog in RestoreForm | Line 155: `using (ProjectPropertiesForm form = new ProjectPropertiesForm(...)` |
-| 1 | `Paratext/ToolsMenu/DifferencesToolForm.cs` | Opens dialog in RestoreForm | Line 685: `using (DifferencesToolForm form = new DifferencesToolForm(...)` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `backupToFileToolStripMenuItem_Click` |
+| 0 | `Paratext/BackupRestore/BackupForm.cs` | Form Relationships | (form definition) |
+| 0 | `Paratext/BackupRestore/RestoreForm.cs` | Form Relationships | (form definition) |
+| 1 | `ParatextBase/CommonForms/BookChooserForm.cs` | Opens dialog in BackupForm | `using (BookChooserForm frm = new BookChooserForm(...)` |
+| 1 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | Opens dialog in RestoreForm | `using (ProjectPropertiesForm form = new ProjectPropertiesForm(...)` |
+| 1 | `Paratext/ToolsMenu/DifferencesToolForm.cs` | Opens dialog in RestoreForm | `using (DifferencesToolForm form = new DifferencesToolForm(...)` |
 
 **Dialog Navigation**:
-- `MainForm` → `BackupForm` (line 1023)
-- `MainForm` → `RestoreForm` (line 1029)
-- `BackupForm` → `BookChooserForm` (line 86)
-- `RestoreForm` → `ProjectPropertiesForm` (line 155)
-- `RestoreForm` → `DifferencesToolForm` (line 685)
+- `MainForm` → `BackupForm`
+- `MainForm` → `RestoreForm`
+- `BackupForm` → `BookChooserForm`
+- `RestoreForm` → `ProjectPropertiesForm`
+- `RestoreForm` → `DifferencesToolForm`
 
 **UI Entry Points**:
 - Paratext > Advanced > Backup project to file
-  - Menu Structure: `MainForm`, handler `backupToFileToolStripMenuItem_Click`, line 1017
+  - Menu Structure: `MainForm`, handler `backupToFileToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Project > Advanced > Backup project to file
-  - Menu Structure: `ParatextWindowWithMenus`, handler `backupProjectToFileToolStripMenuItem_Click`, line 1114
+  - Menu Structure: `ParatextWindowWithMenus`, handler `backupProjectToFileToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Paratext > Advanced > Restore project from file
-  - Menu Structure: `MainForm`, handler `restoreFromFileToolStripMenuItem_Click`, line 1027
+  - Menu Structure: `MainForm`, handler `restoreFromFileToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -275,38 +275,38 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Print`; Handler: `printToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1074 | `[MS]` |
-| Menu Structure | Menu: `Project > Print` (BiblicalTermsForm); Handler: `printStripMenuItem_Click`; File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`, line 861 | `[MS]` |
-| Menu Structure | Menu: `List > Print list`; Handler: `printListToolStripMenuItem_Click`; File: `Paratext/EditMenu/ListForm.cs`, line 549 | `[MS]` |
-| Menu Structure | Menu: `List > Print texts in list`; Handler: `printTextsInListToolStripMenuItem_Click`; File: `Paratext/EditMenu/ListForm.cs`, line 602 | `[MS]` |
-| Menu Structure | Menu: `Progress Viewer > Print`; Handler: `Print_Click`; File: `Paratext/ProjectProgress/ProgressViewsForm.cs`, line 919 | `[MS]` |
+| Menu Structure | Menu: `Project > Print`; Handler: `printToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Print` (BiblicalTermsForm); Handler: `printStripMenuItem_Click`; File: `BiblicalTerms/Internal/BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `List > Print list`; Handler: `printListToolStripMenuItem_Click`; File: `Paratext/EditMenu/ListForm.cs` | `[MS]` |
+| Menu Structure | Menu: `List > Print texts in list`; Handler: `printTextsInListToolStripMenuItem_Click`; File: `Paratext/EditMenu/ListForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Progress Viewer > Print`; Handler: `Print_Click`; File: `Paratext/ProjectProgress/ProgressViewsForm.cs` | `[MS]` |
 | HelpData | ID: `240f3226-c197-425a-8415-22856f96a8c5` - "How do I print a list of words to review?" | `[H]` |
-| Manual | `../paratext-manual/chapters/14_printing_drafts.md`, line 13: "In this module you will learn how to print a draft of your translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/14_printing_drafts.md`: "In this module you will learn how to print a draft of your translation" | `[M]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `printToolStripMenuItem_Click` at line 1074 |
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `printStripMenuItem_Click` at line 861 |
-| 0 | `Paratext/EditMenu/ListForm.cs` | Menu Structure | handler `printListToolStripMenuItem_Click` at line 549 |
-| 0 | `Paratext/ProjectProgress/ProgressViewsForm.cs` | Menu Structure | handler `Print_Click` at line 919 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `printToolStripMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `printStripMenuItem_Click` |
+| 0 | `Paratext/EditMenu/ListForm.cs` | Menu Structure | handler `printListToolStripMenuItem_Click` |
+| 0 | `Paratext/ProjectProgress/ProgressViewsForm.cs` | Menu Structure | handler `Print_Click` |
 
 **UI Entry Points**:
 - Project > Print
-  - Menu Structure: `ParatextWindowWithMenus`, handler `printToolStripMenuItem_Click`, line 1074
+  - Menu Structure: `ParatextWindowWithMenus`, handler `printToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Project > Print (BiblicalTermsForm)
-  - Menu Structure: `BiblicalTermsForm`, handler `printStripMenuItem_Click`, line 861
+  - Menu Structure: `BiblicalTermsForm`, handler `printStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - List > Print list
-  - Menu Structure: `ListForm`, handler `printListToolStripMenuItem_Click`, line 549
+  - Menu Structure: `ListForm`, handler `printListToolStripMenuItem_Click`
   - File: `Paratext/EditMenu/ListForm.cs`
 - List > Print texts in list
-  - Menu Structure: `ListForm`, handler `printTextsInListToolStripMenuItem_Click`, line 602
+  - Menu Structure: `ListForm`, handler `printTextsInListToolStripMenuItem_Click`
   - File: `Paratext/EditMenu/ListForm.cs`
 - Progress Viewer > Print
-  - Menu Structure: `ProgressViewsForm`, handler `Print_Click`, line 919
+  - Menu Structure: `ProgressViewsForm`, handler `Print_Click`
   - File: `Paratext/ProjectProgress/ProgressViewsForm.cs`
 
 **HelpData Items**:
@@ -333,8 +333,8 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Create merged publication project`; Handler: `createMergedPublicationProject_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1093 | `[MS]` |
-| Menu Structure | Menu: `Project > Advanced > Merge Study Bible projects`; Handler: `mergeStudyBibleProjectsToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 630 | `[MS]` |
+| Menu Structure | Menu: `Project > Create merged publication project`; Handler: `createMergedPublicationProject_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Advanced > Merge Study Bible projects`; Handler: `mergeStudyBibleProjectsToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
 | HelpData | ID: `88d9ad33-b234-4662-b19b-d5f95b89ad41` - "How do I merge Study Bible Additions to a Study Bible Publication project?" | `[H]` |
 
 **Key Quote** (HelpData text search):
@@ -344,15 +344,15 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `createMergedPublicationProject_Click` at line 1093 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `mergeStudyBibleProjectsToolStripMenuItem_Click` at line 630 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `createMergedPublicationProject_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `mergeStudyBibleProjectsToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - Project > Create merged publication project
-  - Menu Structure: `ParatextWindowWithMenus`, handler `createMergedPublicationProject_Click`, line 1093
+  - Menu Structure: `ParatextWindowWithMenus`, handler `createMergedPublicationProject_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Project > Advanced > Merge Study Bible projects
-  - Menu Structure: `ParatextWindowWithMenus`, handler `mergeStudyBibleProjectsToolStripMenuItem_Click`, line 630
+  - Menu Structure: `ParatextWindowWithMenus`, handler `mergeStudyBibleProjectsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **HelpData Items**:
@@ -373,14 +373,14 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Export to RTF`; Handler: `uiFileSaveRTF_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1080 | `[MS]` |
+| Menu Structure | Menu: `Project > Export to RTF`; Handler: `uiFileSaveRTF_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
 | HelpData | ID: `757c2ae4-f6e5-4b4b-b7d4-83ab7d1f35ab` - "How do I save project text in Rich Text Format (RTF)?"; Dialog: `RtfExportForm` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileSaveRTF_Click` at line 1080 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileSaveRTF_Click` |
 
 **Validation**: [MS] - [H] - - - — Last verified: 2026-01-21
 
@@ -394,14 +394,14 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Advanced > Export project to USX`; Handler: `exportProjectToUSXToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 692 | `[MS]` |
+| Menu Structure | Menu: `Project > Advanced > Export project to USX`; Handler: `exportProjectToUSXToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
 | HelpData | ID: `f308b39b-81d5-4101-8257-48098a64c38a` - "How do I export project text from Paratext?"; Dialog: `ExportUsxForm` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `exportProjectToUSXToolStripMenuItem_Click` at line 692 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `exportProjectToUSXToolStripMenuItem_Click` |
 
 **Validation**: [MS] - [H] - - - — Last verified: 2026-01-21
 
@@ -415,13 +415,13 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Advanced > Wrap (export) project in a Scripture Burrito`; Handler: `wrapProjectInAScriptureBurritoToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1126 | `[MS]` |
+| Menu Structure | Menu: `Project > Advanced > Wrap (export) project in a Scripture Burrito`; Handler: `wrapProjectInAScriptureBurritoToolStripMenuItem_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | `[MS]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `wrapProjectInAScriptureBurritoToolStripMenuItem_Click` at line 1126 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `wrapProjectInAScriptureBurritoToolStripMenuItem_Click` |
 
 **Validation**: [MS] - - - - - — Last verified: 2026-01-21
 
@@ -447,11 +447,11 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `uiExportToHtml_Click` at line 1551 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `uiExportToHtml_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Project > Advanced > Export Project to HTML
-  - Menu Structure: `TextForm`, handler `uiExportToHtml_Click`, line 1551
+  - Menu Structure: `TextForm`, handler `uiExportToHtml_Click`
   - File: `Paratext/TextForm.cs`
 
 **Use Cases**:
@@ -484,7 +484,7 @@ Publishing and Output features prepare translations for distribution. This inclu
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Advanced > Bible module`; Handler: `openBibleModuleToolStripMenuItem_Click`; Line: 431; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Menu Structure | Menu: `View > Reload Bible module`; Handler: `reloadModuleToolStripMenuItem_Click`; Line: 1879; Owner: `TextForm`; Shortcut: F5 | `[MS]` |
-| Form Relationships | `CreateBibleModuleForm` at `Paratext/ToolsMenu/CreateBibleModuleForm.cs` line 23; Opens from ParatextWindowWithMenus | `[FR]` |
+| Form Relationships | `CreateBibleModuleForm` at `Paratext/ToolsMenu/CreateBibleModuleForm.cs`; Opens from ParatextWindowWithMenus | `[FR]` |
 | HelpData | ID: `0e264a9d-c781-426e-9b90-4fc8e237346c` - "How do I open a Bible module?"; Dialog: `CreateBibleModuleForm` | `[H]` |
 | HelpData | ID: `52e2d0f8-61d3-48b1-9a3f-02a262c37743` - "How do I edit the specification for a Bible module?" | `[H]` |
 | HelpData | Keywords: `ContentOpenBibleModule ComponentBibleModule` | `[H]` |
@@ -493,20 +493,20 @@ Publishing and Output features prepare translations for distribution. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `openBibleModuleToolStripMenuItem_Click` at line 431 |
-| 1 | `Paratext/ToolsMenu/CreateBibleModuleForm.cs` | Form Relationships | form class at line 23, implements `IModalWindow` |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `reloadModuleToolStripMenuItem_Click` at line 1879 (for reload) |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `openBibleModuleToolStripMenuItem_Click` |
+| 1 | `Paratext/ToolsMenu/CreateBibleModuleForm.cs` | Form Relationships | form class, implements `IModalWindow` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `reloadModuleToolStripMenuItem_Click` (for reload) |
 
 **Dialog Navigation**:
 - `ParatextWindowWithMenus` → `CreateBibleModuleForm` (via `openBibleModuleToolStripMenuItem_Click`)
 
 **UI Entry Points**:
 - ≡ Tab > Project > Advanced > Bible module...
-  - Menu Structure: `ParatextWindowWithMenus`, handler `openBibleModuleToolStripMenuItem_Click`, line 431
+  - Menu Structure: `ParatextWindowWithMenus`, handler `openBibleModuleToolStripMenuItem_Click`
   - Opens: `CreateBibleModuleForm` dialog
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > View > Reload Bible module (F5)
-  - Menu Structure: `TextForm`, handler `reloadModuleToolStripMenuItem_Click`, line 1879
+  - Menu Structure: `TextForm`, handler `reloadModuleToolStripMenuItem_Click`
   - Available when Bible module is open in Extra book
   - File: `Paratext/TextForm.cs`
 

@@ -1,6 +1,8 @@
 # PRD Tooling Feedback Round 2 — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Frozen record** — this plan was executed 2026-07-10 and its changes shipped in PR #2438. Do
+> not re-execute it; the worker instructions and checkboxes below are preserved as history.
+> Follow the current command/agent files, not this document.
 
 **Goal:** Implement the eight changes in `.context/designs/2026-07-10-prd-tooling-feedback-round-2-design.md` — question routing, scout completeness, PT9-divergence audit, the `/refine-prd` coach, completeness critic, audience tags, CLARIFICATION routing, and the inventory correction loop.
 

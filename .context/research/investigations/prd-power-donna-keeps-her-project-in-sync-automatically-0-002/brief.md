@@ -1,5 +1,10 @@
 # Donna keeps her project in sync automatically: investigation
 
+> **Frozen record** — investigation as run 2026-07-10; kept as the format exemplar for
+> `/investigate-prd` briefs. The gap analysis and work items below were subsequently delivered by
+> the auto-sync epic (PT-4158, shipped 2026-07-24), so treat the content as a worked example, not
+> a live backlog — follow the current code, not this document.
+
 > PRD: `PRD-Power-Donna keeps her project in sync automatically_0-002.md` (v0-002, owner
 > Vladimir). Validation run of the revised `/investigate-prd`, 2026-07-10. Product questions were
 > carried with the interpreter's suggested assumptions (marked); engineering questions were

@@ -53,24 +53,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `characterInventoryToolStripMenuItem1_Click` at line 2191 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2196: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new CharactersCheck())` |
-| 1 | `ParatextChecks/Checks/CharactersCheck.cs` | Instantiated in D0 | Line 20: `public class CharactersCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `characterInventoryToolStripMenuItem1_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new CharactersCheck())` |
+| 1 | `ParatextChecks/Checks/CharactersCheck.cs` | Instantiated in D0 | `public class CharactersCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Characters inventory
-  - Menu Structure: `TextForm`, handler `characterInventoryToolStripMenuItem1_Click`, line 2191
+  - Menu Structure: `TextForm`, handler `characterInventoryToolStripMenuItem1_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `251a5ee7-26a8-42bf-8d1c-5ca17f7ddd05`
   - Dialog: `InventoryForm.Character`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] [R] [M] [H] [C] — Last verified: 2026-01-21
 
@@ -103,24 +103,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `punctuationInventoryToolStripMenuItem_Click` at line 2199 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2203: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new PunctuationCheck())` |
-| 1 | `ParatextChecks/Checks/PunctuationCheck.cs` | Instantiated in D0 | Line 25: `public class PunctuationCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `punctuationInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new PunctuationCheck())` |
+| 1 | `ParatextChecks/Checks/PunctuationCheck.cs` | Instantiated in D0 | `public class PunctuationCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Punctuation inventory
-  - Menu Structure: `TextForm`, handler `punctuationInventoryToolStripMenuItem_Click`, line 2199
+  - Menu Structure: `TextForm`, handler `punctuationInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `22835d9f-2118-499e-a7db-69f9c2df53e8`
   - Dialog: `InventoryForm.Punctuation`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] [R] [M] [H] [C] — Last verified: 2026-01-21
 
@@ -153,25 +153,25 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `markerInventoryToolStripMenuItem_Click` at line 2206 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2210: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new MarkerCheck())` |
-| 1 | `ParatextChecks/Checks/MarkerCheck.cs` | Instantiated in D0 | Line 22: `public class MarkerCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `markerInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new MarkerCheck())` |
+| 1 | `ParatextChecks/Checks/MarkerCheck.cs` | Instantiated in D0 | `public class MarkerCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Markers inventory
-  - Menu Structure: `TextForm`, handler `markerInventoryToolStripMenuItem_Click`, line 2206
+  - Menu Structure: `TextForm`, handler `markerInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `09da90ce-b3c6-450a-a026-ffd53ab7af4a`
   - Dialog: `InventoryForm.Marker`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Report deprecated markers in Markers check (`reportDeprecatedMarkersAsErrors_Clicked`, line 2138)
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Report deprecated markers in Markers check (`reportDeprecatedMarkersAsErrors_Clicked`)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] [R] [M] [H] [C] — Last verified: 2026-01-21
 
@@ -203,24 +203,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `matchedPairsInventoryToolStripMenuItem_Click` at line 2214 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2218: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new MatchedPairsCheck())` |
-| 1 | `ParatextChecks/Checks/MatchedPairsCheck.cs` | Instantiated in D0 | Line 24: `public class MatchedPairsCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `matchedPairsInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new MatchedPairsCheck())` |
+| 1 | `ParatextChecks/Checks/MatchedPairsCheck.cs` | Instantiated in D0 | `public class MatchedPairsCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Unmatched pairs of punctuation
-  - Menu Structure: `TextForm`, handler `matchedPairsInventoryToolStripMenuItem_Click`, line 2214
+  - Menu Structure: `TextForm`, handler `matchedPairsInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `fad08af2-41bf-48bb-98d6-aa440092f2ed`
   - Dialog: `InventoryForm.Matched_Pair_Punctuation_Errors`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] [R] [M] [H] [C] — Last verified: 2026-01-21
 
@@ -251,24 +251,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `repeatedWordsInventoryToolStripMenuItem_Click` at line 2222 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2226: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new RepeatedWordsCheck())` |
-| 1 | `ParatextChecks/Checks/RepeatedWordsCheck.cs` | Instantiated in D0 | Line 11: `public class RepeatedWordsCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `repeatedWordsInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new RepeatedWordsCheck())` |
+| 1 | `ParatextChecks/Checks/RepeatedWordsCheck.cs` | Instantiated in D0 | `public class RepeatedWordsCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Repeated words
-  - Menu Structure: `TextForm`, handler `repeatedWordsInventoryToolStripMenuItem_Click`, line 2222
+  - Menu Structure: `TextForm`, handler `repeatedWordsInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `72308466-5e47-429d-a126-a836598e33c2`
   - Dialog: `InventoryForm.Repeated_Words`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] - [M] [H] [C] — Last verified: 2026-01-21
 
@@ -293,24 +293,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `uncapitalizedStylesInventoryToolStripMenuItem_Click` at line 2230 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2234: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new UncapitalizedStylesCheck())` |
-| 1 | `ParatextChecks/Checks/UncapitalizedStylesCheck.cs` | Instantiated in D0 | Line 14: `public class UncapitalizedStylesCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `uncapitalizedStylesInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new UncapitalizedStylesCheck())` |
+| 1 | `ParatextChecks/Checks/UncapitalizedStylesCheck.cs` | Instantiated in D0 | `public class UncapitalizedStylesCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Markers followed by lowercase
-  - Menu Structure: `TextForm`, handler `uncapitalizedStylesInventoryToolStripMenuItem_Click`, line 2230
+  - Menu Structure: `TextForm`, handler `uncapitalizedStylesInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `c1b6a966-0922-441a-a56b-925b25c5d5e0`
   - Dialog: `InventoryForm.No_Capital_after_Style`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] - [M] [H] [C] — Last verified: 2026-01-21
 
@@ -331,24 +331,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `markersMissingFinalPunctuationToolStripMenuItem_Click` at line 2238 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2242: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new ParagraphFinalPunctuationCheck())` |
-| 1 | `ParatextChecks/Checks/ParagraphFinalPunctuationCheck.cs` | Instantiated in D0 | Line 27: `public class ParagraphFinalPunctuationCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `markersMissingFinalPunctuationToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new ParagraphFinalPunctuationCheck())` |
+| 1 | `ParatextChecks/Checks/ParagraphFinalPunctuationCheck.cs` | Instantiated in D0 | `public class ParagraphFinalPunctuationCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Markers missing final punctuation
-  - Menu Structure: `TextForm`, handler `markersMissingFinalPunctuationToolStripMenuItem_Click`, line 2238
+  - Menu Structure: `TextForm`, handler `markersMissingFinalPunctuationToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `9978a4f0-fa33-4fd1-b803-32b4f48e6a37`
   - Dialog: `InventoryForm.Markers_Missing_Final_Sentence_Punctuation`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] - - [H] [C] — Last verified: 2026-01-21
 
@@ -370,23 +370,23 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `sentenceFinalPunctCapitalizationInventoryToolStripMenuItem_Click` at line 2246 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2250: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new SentenceFinalPunctCapitalizationCheck())` |
-| 1 | `ParatextChecks/Checks/SentenceFinalPunctCapitalizationCheck.cs` | Instantiated in D0 | Line 19: `public class SentenceFinalPunctCapitalizationCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `sentenceFinalPunctCapitalizationInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new SentenceFinalPunctCapitalizationCheck())` |
+| 1 | `ParatextChecks/Checks/SentenceFinalPunctCapitalizationCheck.cs` | Instantiated in D0 | `public class SentenceFinalPunctCapitalizationCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Punctuation followed by lowercase
-  - Menu Structure: `TextForm`, handler `sentenceFinalPunctCapitalizationInventoryToolStripMenuItem_Click`, line 2246
+  - Menu Structure: `TextForm`, handler `sentenceFinalPunctCapitalizationInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - Dialog: `InventoryForm.No_Capital_after_Punctuation`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] - [M] [H] [C] — Last verified: 2026-01-21
 
@@ -412,24 +412,24 @@ Checking Inventories analyze the text to build a comprehensive list of all occur
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `mixedCapitalizationInventoryToolStripMenuItem_Click` at line 2254 |
-| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | Line 2259: `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new MixedCapitalizationCheck())` |
-| 1 | `ParatextChecks/Checks/MixedCapitalizationCheck.cs` | Instantiated in D0 | Line 17: `public class MixedCapitalizationCheck : ScriptureInventoryBase` |
-| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | Line 1128 (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | Line 19: `public class ChecksDataSource` |
-| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | Line 15: `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `mixedCapitalizationInventoryToolStripMenuItem_Click` |
+| 1 | `Paratext/WindowCollection.cs` | Method call in D0 | `MainForm.Current.Windows.FindOrCreateInventoryForm(ScriptureText, new MixedCapitalizationCheck())` |
+| 1 | `ParatextChecks/Checks/MixedCapitalizationCheck.cs` | Instantiated in D0 | `public class MixedCapitalizationCheck : ScriptureInventoryBase` |
+| 1 | `Paratext/Checking/InventoryForm.cs` | Created in D1 | (WindowCollection): `new InventoryForm(scrText, checksDataSource, inventory)` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Parameter in D1 | `public class ChecksDataSource` |
+| 2 | `ParatextChecks/ScriptureInventoryBase.cs` | Base class in D1 | `public abstract class ScriptureInventoryBase : ScriptureCheckBase` |
 
 **UI Entry Points**:
 - Tools > Checking inventories > Mixed capitalization
-  - Menu Structure: `TextForm`, handler `mixedCapitalizationInventoryToolStripMenuItem_Click`, line 2254
+  - Menu Structure: `TextForm`, handler `mixedCapitalizationInventoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
   - HelpData ID: `97bfddd5-8255-494a-a931-e425eaf919b6`
   - Dialog: `InventoryForm.Mixed_Capitalization`
 
 **InventoryForm Menus** (owned by InventoryForm):
-- Project > Edit inventory options (`cmdOptions_Click`, line 374)
-- Project > Refresh (`cmdRefresh_Click`, line 861)
+- Project > Edit inventory options (`cmdOptions_Click`)
+- Project > Refresh (`cmdRefresh_Click`)
 
 **Validation**: [MS] [R] [M] [H] [C] — Last verified: 2026-01-21
 

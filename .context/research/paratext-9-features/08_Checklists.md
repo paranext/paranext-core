@@ -25,10 +25,10 @@ All checklists follow this evidence chain:
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/TextForm.cs` | Menu Structure | handler at line NN (varies per feature) |
-| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Base class | Line 1209: `internal void ShowChecklists(ChecklistType ctype)` |
-| 1 | `Paratext/Checklists/ChecklistsTool.cs` | Called from D0 via DI | Line 41: `public partial class ChecklistsTool : ParatextSnappingForm, IChecklistsTool` |
-| 2 | `Paratext/Checklists/CLData.cs` | Field in D1 | ChecklistsTool.cs line 53: `private CLData checklistData;` |
-| 2 | `SubsystemInterfaces/IChecklistsTool.cs` | Interface in D1 | Line 7: `public enum ChecklistType` |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Base class | `internal void ShowChecklists(ChecklistType ctype)` |
+| 1 | `Paratext/Checklists/ChecklistsTool.cs` | Called from D0 via DI | `public partial class ChecklistsTool : ParatextSnappingForm, IChecklistsTool` |
+| 2 | `Paratext/Checklists/CLData.cs` | Field in D1 | ChecklistsTool.cs: `private CLData checklistData;` |
+| 2 | `SubsystemInterfaces/IChecklistsTool.cs` | Interface in D1 | `public enum ChecklistType` |
 
 Individual features below list only their Depth 0 handler line.
 
@@ -55,19 +55,19 @@ Individual features below list only their Depth 0 handler line.
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Verse text`; Handler: `checklistsVerseTextToolStripMenuItem_Click`; Line 2408 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Verse text`; Handler: `checklistsVerseTextToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsVerseTextToolStripMenuItem_Click` at line 2408 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsVerseTextToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Verse text
-  - Menu Structure: `TextForm`, handler `checklistsVerseTextToolStripMenuItem_Click`, line 2408
+  - Menu Structure: `TextForm`, handler `checklistsVerseTextToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -91,8 +91,8 @@ Individual features below list only their Depth 0 handler line.
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Word or phrase`; Handler: `wordsOrPhrasesToolStripMenuItem_Click`; Line 2413 | `[MS]` |
-| Manual | `../paratext-manual/chapters/11_compare_word.md`, line 28: "From the **≡ Tab**, under **Tools**, point to **Checklists**, and select **Word or Phrase**." | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Word or phrase`; Handler: `wordsOrPhrasesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/11_compare_word.md`: "From the **≡ Tab**, under **Tools**, point to **Checklists**, and select **Word or Phrase**." | `[M]` |
 | HelpData | ID: `6d859b66-7171-4ae8-8f69-0d0b9cafc167` - "How do I compare a word or phrase in different projects?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Quote** (from Manual):
@@ -102,11 +102,11 @@ Individual features below list only their Depth 0 handler line.
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `wordsOrPhrasesToolStripMenuItem_Click` at line 2413 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `wordsOrPhrasesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Word or phrase
-  - Menu Structure: `TextForm`, handler `wordsOrPhrasesToolStripMenuItem_Click`, line 2413
+  - Menu Structure: `TextForm`, handler `wordsOrPhrasesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -129,11 +129,11 @@ Individual features below list only their Depth 0 handler line.
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Section headings`; Handler: `checklistsSectionHeadingsToolStripMenuItem_Click`; Line 2418 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 47: "**≡ Tab**, under > **Tools** > **Checklists** > **Section Headings**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Section headings`; Handler: `checklistsSectionHeadingsToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under > **Tools** > **Checklists** > **Section Headings**" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` | `[H]` |
 
-**Key Quote** (from Manual, lines 49-54):
+**Key Quote** (from Manual):
 > "Check that: the headings are consistent with your reference text (length, grammar, style), all headings start with a capital, there is no punctuation at the end, they are not too long"
 
 **Use Case**:
@@ -146,11 +146,11 @@ Review all section headings (\s, \s1, \s2, etc.) to ensure:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsSectionHeadingsToolStripMenuItem_Click` at line 2418 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsSectionHeadingsToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Section headings
-  - Menu Structure: `TextForm`, handler `checklistsSectionHeadingsToolStripMenuItem_Click`, line 2418
+  - Menu Structure: `TextForm`, handler `checklistsSectionHeadingsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -172,19 +172,19 @@ Review all section headings (\s, \s1, \s2, etc.) to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Book titles`; Handler: `checklistsBookTitlesToolStripMenuItem_Click`; Line 2423 | `[MS]` |
-| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 176: "**≡ Tab**, under **Tools** > **Checklists** > **Book titles**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Book titles`; Handler: `checklistsBookTitlesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`: "**≡ Tab**, under **Tools** > **Checklists** > **Book titles**" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsBookTitlesToolStripMenuItem_Click` at line 2423 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsBookTitlesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Book titles
-  - Menu Structure: `TextForm`, handler `checklistsBookTitlesToolStripMenuItem_Click`, line 2423
+  - Menu Structure: `TextForm`, handler `checklistsBookTitlesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -207,8 +207,8 @@ Review all section headings (\s, \s1, \s2, etc.) to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > References`; Handler: `checklistsCrossReferencesToolStripMenuItem_Click`; Line 2428 | `[MS]` |
-| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 177: "**≡ Tab**, under **Tools** > **Checklists** > **References**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > References`; Handler: `checklistsCrossReferencesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`: "**≡ Tab**, under **Tools** > **Checklists** > **References**" | `[M]` |
 | HelpData | ID: `7890fe77-bfb7-4f4c-9e60-c226a24eb8c7` - "How do the References check and the References checklist differ?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Distinction** (from HelpData ID `7890fe77-bfb7-4f4c-9e60-c226a24eb8c7`):
@@ -224,11 +224,11 @@ Review all cross-references to ensure:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsCrossReferencesToolStripMenuItem_Click` at line 2428 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsCrossReferencesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > References
-  - Menu Structure: `TextForm`, handler `checklistsCrossReferencesToolStripMenuItem_Click`, line 2428
+  - Menu Structure: `TextForm`, handler `checklistsCrossReferencesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -251,8 +251,8 @@ Review all cross-references to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Footnotes`; Handler: `checklistsFootnotesToolStripMenuItem_Click`; Line 2438 | `[MS]` |
-| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 178: "**≡ Tab**, under **Tools** > **Checklists > Footnotes**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Footnotes`; Handler: `checklistsFootnotesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`: "**≡ Tab**, under **Tools** > **Checklists > Footnotes**" | `[M]` |
 | HelpData | Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Use Case**:
@@ -265,11 +265,11 @@ Review all footnotes to ensure:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsFootnotesToolStripMenuItem_Click` at line 2438 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsFootnotesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Footnotes
-  - Menu Structure: `TextForm`, handler `checklistsFootnotesToolStripMenuItem_Click`, line 2438
+  - Menu Structure: `TextForm`, handler `checklistsFootnotesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -292,22 +292,22 @@ Review all footnotes to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Markers`; Handler: `checklistsMarkersToolStripMenuItem_Click`; Line 2433 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 58: "**≡ Tab**, under > **Tools** > **Checklists** > **Markers**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Markers`; Handler: `checklistsMarkersToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under > **Tools** > **Checklists** > **Markers**" | `[M]` |
 | HelpData | ID: `85361367-ead8-4c8c-b99f-3cfb2882ef30` - "Guide: Tools > Checklists > Markers: Settings"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
-**Key Quote** (from Manual, lines 59-63):
+**Key Quote** (from Manual):
 > "Choose your reference text as the comparative text. Click Settings. Type the paragraph makers to be displayed (e.g. p m). Click OK."
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsMarkersToolStripMenuItem_Click` at line 2433 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsMarkersToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Markers
-  - Menu Structure: `TextForm`, handler `checklistsMarkersToolStripMenuItem_Click`, line 2433
+  - Menu Structure: `TextForm`, handler `checklistsMarkersToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -330,19 +330,19 @@ Review all footnotes to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Quotation marks`; Handler: `quotationMarksToolStripMenuItem_Click`; Line 2262 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Quotation marks`; Handler: `quotationMarksToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `11cd7b0b-a7b6-4860-893b-48e94510344e` - "How do I find where quote marks differ in two projects?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `quotationMarksToolStripMenuItem_Click` at line 2262 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `quotationMarksToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Quotation marks
-  - Menu Structure: `TextForm`, handler `quotationMarksToolStripMenuItem_Click`, line 2262
+  - Menu Structure: `TextForm`, handler `quotationMarksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -364,19 +364,19 @@ Review all footnotes to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Punctuation`; Handler: `punctuationToolStripMenuItem_Click`; Line 2463 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Punctuation`; Handler: `punctuationToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `733bda25-6b26-4f4c-a661-a9bc1de871cd` - "How do I find where punctuation marks differ in two projects?"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `punctuationToolStripMenuItem_Click` at line 2463 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `punctuationToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Punctuation
-  - Menu Structure: `TextForm`, handler `punctuationToolStripMenuItem_Click`, line 2463
+  - Menu Structure: `TextForm`, handler `punctuationToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -398,8 +398,8 @@ Review all footnotes to ensure:
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Relatively long verses`; Handler: `checklistsRelativelyLongVersesToolStripMenuItem_Click`; Line 2443 | `[MS]` |
-| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 173: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Relatively long verses`; Handler: `checklistsRelativelyLongVersesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Key Quote** (from HelpData):
@@ -415,11 +415,11 @@ Find verses that are unusually long compared to the project average, which may i
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsRelativelyLongVersesToolStripMenuItem_Click` at line 2443 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsRelativelyLongVersesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Relatively long verses
-  - Menu Structure: `TextForm`, handler `checklistsRelativelyLongVersesToolStripMenuItem_Click`, line 2443
+  - Menu Structure: `TextForm`, handler `checklistsRelativelyLongVersesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -441,8 +441,8 @@ Find verses that are unusually long compared to the project average, which may i
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Relatively short verses`; Handler: `checklistsRelativelyShortVersesToolStripMenuItem_Click`; Line 2448 | `[MS]` |
-| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 173: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Relatively short verses`; Handler: `checklistsRelativelyShortVersesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`: "**≡ Tab**, under **Tools** > **Checklists** > **Long/short verses**" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Use Case**:
@@ -455,11 +455,11 @@ Find verses that are unusually short compared to the project average, which may 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsRelativelyShortVersesToolStripMenuItem_Click` at line 2448 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsRelativelyShortVersesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Relatively short verses
-  - Menu Structure: `TextForm`, handler `checklistsRelativelyShortVersesToolStripMenuItem_Click`, line 2448
+  - Menu Structure: `TextForm`, handler `checklistsRelativelyShortVersesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -480,19 +480,19 @@ Find verses that are unusually short compared to the project average, which may 
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Long sentences`; Handler: `checklistsLongSentencesToolStripMenuItem_Click`; Line 2453 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Long sentences`; Handler: `checklistsLongSentencesToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsLongSentencesToolStripMenuItem_Click` at line 2453 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsLongSentencesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Long sentences
-  - Menu Structure: `TextForm`, handler `checklistsLongSentencesToolStripMenuItem_Click`, line 2453
+  - Menu Structure: `TextForm`, handler `checklistsLongSentencesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -513,19 +513,19 @@ Find verses that are unusually short compared to the project average, which may 
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Checklists > Long paragraphs`; Handler: `checklistsLongParagraphsToolStripMenuItem_Click`; Line 2458 | `[MS]` |
-| Manual | `../paratext-manual/chapters/13_formatting_checks.md`, line 32: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
+| Menu Structure | Menu: `Tools > Checklists > Long paragraphs`; Handler: `checklistsLongParagraphsToolStripMenuItem_Click` | `[MS]` |
+| Manual | `../paratext-manual/chapters/13_formatting_checks.md`: "**≡ Tab**, under **Tools** > **Checklists** > choose the desired list" | `[M]` |
 | HelpData | ID: `1ba0f687-fb3e-4c07-aba1-32420859bdf0` - "Introduction to Checklists"; Keyword: `ComponentInventories/Checklists` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsLongParagraphsToolStripMenuItem_Click` at line 2458 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `checklistsLongParagraphsToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Checklists > Long paragraphs
-  - Menu Structure: `TextForm`, handler `checklistsLongParagraphsToolStripMenuItem_Click`, line 2458
+  - Menu Structure: `TextForm`, handler `checklistsLongParagraphsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] [M] [H] [C] — Last verified: 2026-01-21
@@ -556,22 +556,22 @@ All 13 checklists share the following implementation pattern:
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/TextForm.cs` | Menu Structure | Menu handlers call `ShowChecklists(ChecklistType.XXX)` |
-| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Base class of TextForm | Line 1209: `internal void ShowChecklists(ChecklistType ctype)` |
-| 1 | `Paratext/Checklists/ChecklistsTool.cs` | Created via DI in D1 | Line 41: implements `IChecklistsTool` interface |
-| 2 | `Paratext/Checklists/CLData.cs` | Field in D1 | Line 48: `public class CLData` - data model for checklist display |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Base class of TextForm | `internal void ShowChecklists(ChecklistType ctype)` |
+| 1 | `Paratext/Checklists/ChecklistsTool.cs` | Created via DI in D1 | implements `IChecklistsTool` interface |
+| 2 | `Paratext/Checklists/CLData.cs` | Field in D1 | `public class CLData` - data model for checklist display |
 | 2 | `Paratext/Checklists/CLDataSource.cs` | Used in D1 | Generates checklist data from project text |
-| 2 | `SubsystemInterfaces/IChecklistsTool.cs` | Interface in D1 | Line 7: `public enum ChecklistType` defines all checklist types |
+| 2 | `SubsystemInterfaces/IChecklistsTool.cs` | Interface in D1 | `public enum ChecklistType` defines all checklist types |
 
 **Key Files in Checklists Folder**:
-- `ChecklistsTool.cs` - Main form for displaying checklists (line 41)
-- `CLData.cs` - Data model for checklist rows and cells (line 48)
+- `ChecklistsTool.cs` - Main form for displaying checklists
+- `CLData.cs` - Data model for checklist rows and cells
 - `CLDataSource.cs` - Base class for data generation
 - `WordOrPhraseSettingsForm.cs` - Settings for Word/Phrase checklist
 - `MarkerSettingsForm.cs` - Settings for Markers checklist
 - `PunctuationSettingsForm.cs` - Settings for Punctuation checklist
 - `VerseSettingsForm.cs` - Settings for Verse text checklist
 
-**ChecklistType Enum Values** (from `SubsystemInterfaces/IChecklistsTool.cs`, lines 7-12):
+**ChecklistType Enum Values** (from `SubsystemInterfaces/IChecklistsTool.cs`):
 ```csharp
 public enum ChecklistType
 {

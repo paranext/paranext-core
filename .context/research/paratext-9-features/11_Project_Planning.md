@@ -33,9 +33,9 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Assignments and progress`; Handler: `assignmentsAndProgressToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1021; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Assignments and progress`; Handler: `assignmentsAndProgressToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Assign Tasks" | `[R]` |
-| Manual | `../paratext-manual/chapters/03_project_plan_1.md`, line 7: "You use the Assignments and Progress to help organise your work" | `[M]` |
+| Manual | `../paratext-manual/chapters/03_project_plan_1.md`: "You use the Assignments and Progress to help organise your work" | `[M]` |
 | HelpData | Keyword: `ComponentAssignmentsAndProgress`; Dialog: `LocationFilterForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -45,27 +45,27 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `assignmentsAndProgressToolStripMenuItem_Click` at line 1021 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `assignmentsAndProgressToolStripMenuItem_Click` |
 | 0 | `ParatextBase/Filters/LocationFilterForm.cs` | HelpData dialog | `LocationFilterForm` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 25: `private readonly ScrText scrText` |
-| 1 | `Paratext.Data.Filters` (namespace) | Import in D0 | Line 9: `using Paratext.Data.Filters` |
-| 1 | `Paratext.Base.ProjectProgress` (namespace) | Import in D0 | Line 7: `using Paratext.Base.ProjectProgress` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private readonly ScrText scrText` |
+| 1 | `Paratext.Data.Filters` (namespace) | Import in D0 | `using Paratext.Data.Filters` |
+| 1 | `Paratext.Base.ProjectProgress` (namespace) | Import in D0 | `using Paratext.Base.ProjectProgress` |
 
 **Not Found**:
 - `AssignmentsProgressForm.cs` (search: "AssignmentsProgressForm" - LocationFilterForm is the actual entry point per HelpData)
 
 **UI Entry Points**:
 - Assignments and Progress button (blue button)
-  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`, line 25
+  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`
   - Quote: "In your project, click **Assignments and Progress** button"
 - ≡ Tab > Project > Assignments and progress
-  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`, line 29
+  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`
   - Quote: "**≡ Tab** under **Project** menu, select **Assignments and progress**"
   - HelpData ID: `4dd7cba4-bdaa-4576-917d-f9270c7463d1`
   - Dialog: `LocationFilterForm`
   - Question: "How do I mark progress on tasks or checks assigned to me?"
 - Ctrl+s (save after marking progress)
-  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`, line 77
+  - Manual: `../paratext-manual/chapters/03_project_plan_1.md`
   - Quote: "**≡ Paratext** under **Paratext** > **Save all** (or **Ctrl**+**s**)"
 
 **HelpData Items**:
@@ -96,9 +96,9 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Project settings > Project plan`; Handler: `projectProgresStageEditorToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 999; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Project settings > Project plan`; Handler: `projectProgresStageEditorToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Project Plans" | `[R]` |
-| Manual | `admin/ma_07_project_plan.md`, line 7: "Progress tracking based on a Project Plan and Assignments and Progress" | `[M]` |
+| Manual | `admin/ma_07_project_plan.md`: "Progress tracking based on a Project Plan and Assignments and Progress" | `[M]` |
 | HelpData | Keyword: `ComponentProjectPlan`; Dialog: `ProgressPlanEditorForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -108,30 +108,30 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `projectProgresStageEditorToolStripMenuItem_Click` at line 999 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `projectProgresStageEditorToolStripMenuItem_Click` |
 | 0 | `Paratext/ProjectProgress/ProgressPlanEditorForm.cs` | HelpData dialog | `ProgressPlanEditorForm` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 56: `private readonly ScrText scrText` |
-| 1 | `ParatextData/ProjectProgress/ProgressInfo.cs` | Field in D0 | Line 57: `private readonly ProgressInfo progress` |
-| 1 | `Paratext.Data.ProjectProgress` (namespace) | Import in D0 | Line 17: `using Paratext.Data.ProjectProgress` |
-| 2 | `ParatextData/ProjectProgress/Stage.cs` | Type in D0 | Line 75: `Dictionary<ComboBoxValue, Stage> assignedRequiredStages` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private readonly ScrText scrText` |
+| 1 | `ParatextData/ProjectProgress/ProgressInfo.cs` | Field in D0 | `private readonly ProgressInfo progress` |
+| 1 | `Paratext.Data.ProjectProgress` (namespace) | Import in D0 | `using Paratext.Data.ProjectProgress` |
+| 2 | `ParatextData/ProjectProgress/Stage.cs` | Type in D0 | `Dictionary<ComboBoxValue, Stage> assignedRequiredStages` |
 
 **Dialog Navigation** `[FR]`:
-- `ProgressPlanEditorForm` → `ManageProgressPlansForm` (line 425)
-- `ProgressPlanEditorForm` → `CopyTaskEffortForm` (line 529)
-- `ProgressPlanEditorForm` → `BookChooserForm` (line 1637)
+- `ProgressPlanEditorForm` → `ManageProgressPlansForm`
+- `ProgressPlanEditorForm` → `CopyTaskEffortForm`
+- `ProgressPlanEditorForm` → `BookChooserForm`
 
 **Not Found**:
 - `ProjectPlanForm.cs` (search: "ProjectPlanForm" - ProgressPlanEditorForm is the entry point per HelpData)
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > Project plan
-  - Manual: `admin/ma_07_project_plan.md`, line 31
+  - Manual: `admin/ma_07_project_plan.md`
   - Quote: "**≡ Tab**, under Project > **Project settings** choose **Project plan**"
   - HelpData ID: `c7276a1e-07f3-4b5c-ba7b-78a29ce65229`
   - Dialog: `ProgressPlanEditorForm`
   - Question: "Guide: Project > Project settings > Project plan"
 - Manage plans button
-  - Manual: `admin/ma_07_project_plan.md`, line 32
+  - Manual: `admin/ma_07_project_plan.md`
   - Quote: "Click **Manage plans**"
 
 **HelpData Items**:
@@ -161,9 +161,9 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Assignments and progress`; Handler: `assignmentsAndProgressToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1021; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Assignments and progress`; Handler: `assignmentsAndProgressToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Assign Tasks" | `[R]` |
-| Manual | `admin/ma_07_project_plan.md`, line 122: "Tasks can either be assigned individually or in bulk" | `[M]` |
+| Manual | `admin/ma_07_project_plan.md`: "Tasks can either be assigned individually or in bulk" | `[M]` |
 | HelpData | Keyword: `ComponentAssignmentsAndProgress`; Keyword: `ContentAssignmentsAndProgress` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -173,20 +173,20 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `assignmentsAndProgressToolStripMenuItem_Click` at line 1021 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `assignmentsAndProgressToolStripMenuItem_Click` |
 | 0 | `ParatextBase/Filters/LocationFilterForm.cs` | HelpData dialog | `LocationFilterForm` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 25: `private readonly ScrText scrText` |
-| 1 | `Paratext.Data.Filters` (namespace) | Import in D0 | Line 9: `using Paratext.Data.Filters` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private readonly ScrText scrText` |
+| 1 | `Paratext.Data.Filters` (namespace) | Import in D0 | `using Paratext.Data.Filters` |
 
 **UI Entry Points**:
 - ≡ Tab > Project > Assignments and Progress → dropdown → Assign
-  - Manual: `admin/ma_07_project_plan.md`, line 127
+  - Manual: `admin/ma_07_project_plan.md`
   - Quote: "For the task to assign, click the dropdown menu and choose the team member"
   - HelpData ID: `5955484a-bc72-4b28-b7a0-cd9a890118e5`
   - Dialog: `LocationFilterForm`
   - Question: "How do I assign tasks and checks to project members?"
 - Bulk assign: Tasks Table → Assign tasks button
-  - Manual: `admin/ma_07_project_plan.md`, line 132
+  - Manual: `admin/ma_07_project_plan.md`
   - Quote: "Choose **Tasks Table**... Below the task, click **Assign tasks**"
 
 **HelpData Items**:
@@ -215,9 +215,9 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Progress charts`; Handler: `teamProgressChartsToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1030; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Progress charts`; Handler: `teamProgressChartsToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Project Progress" | `[R]` |
-| Manual | `../paratext-manual/chapters/06_project_plan_2.md`, line 7: "you will learn how to update your progress by marking tasks as completed" | `[M]` |
+| Manual | `../paratext-manual/chapters/06_project_plan_2.md`: "you will learn how to update your progress by marking tasks as completed" | `[M]` |
 | HelpData | Keyword: `ComponentProjectProgress`; Keywords: `ContentProgressCharts` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -227,21 +227,21 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `teamProgressChartsToolStripMenuItem_Click` at line 1030 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `teamProgressChartsToolStripMenuItem_Click` |
 | 0 | `Paratext/ProjectProgress/UpdateProjectProgressForm.cs` | HelpData dialog search | `UpdateProjectProgressForm` |
 | 1 | `ParatextData/ProjectProgress/ProgressInfo.cs` | Type in namespace | `Paratext.Data.ProjectProgress` |
-| 1 | `ParatextData/ScrText.cs` | Common field | Line 56 (ProgressPlanEditorForm reference) |
+| 1 | `ParatextData/ScrText.cs` | Common field | (ProgressPlanEditorForm reference) |
 | 2 | `ParatextData/ProjectProgress/ProjectProgressInfo.cs` | Namespace search | `ParatextData/ProjectProgress` |
 
 **UI Entry Points**:
 - Assignments and Progress → various views
-  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`, line 18
+  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`
   - Quote: "Open the Assignments and Progress (the blue button)"
   - HelpData ID: `4ebd7160-4b37-4ace-95ba-2a06db90c57a`
   - Dialog: `ProjectProgressForm`
   - Question: "How do I view or mark project progress?"
 - ≡ Tab > Project > Progress charts
-  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`, line 33
+  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`
   - Quote: "From the **≡ Tab**, under **Project** menu, select **Progress charts…**"
   - HelpData ID: `1dc48021-ac51-48bb-bbbd-88c21d055970`
   - Question: "How do I see if the translation team is progressing as expected?"
@@ -274,9 +274,9 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Progress charts`; Handler: `teamProgressChartsToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 1030; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Progress charts`; Handler: `teamProgressChartsToolStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Project Progress" | `[R]` |
-| Manual | `../paratext-manual/chapters/21_progress_report.md`, line 7: "In this module you will create a progress report" | `[M]` |
+| Manual | `../paratext-manual/chapters/21_progress_report.md`: "In this module you will create a progress report" | `[M]` |
 | HelpData | Keyword: `ContentProgressCharts`; Keyword: `ContentProjectHealthReport` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -286,7 +286,7 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `teamProgressChartsToolStripMenuItem_Click` at line 1030 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `teamProgressChartsToolStripMenuItem_Click` |
 | 0 | `Paratext/ProjectProgress/UpdateProjectProgressForm.cs` | HelpData dialog search | Related to `ProjectProgressForm` |
 | 1 | `ParatextData/ProjectProgress/ProgressInfo.cs` | Type in namespace | `Paratext.Data.ProjectProgress` |
 
@@ -295,12 +295,12 @@ Project Planning features help teams organize, track, and manage their translati
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project Health Report
-  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`, line 24
+  - Manual: `../paratext-manual/chapters/06_project_plan_2.md`
   - Quote: "From the **Project** menu, select **Project Health Report…**"
   - HelpData ID: `bdab5668-955a-46e3-a0c0-4603f1bc7490`
   - Question: "How do I generate a project health report?"
 - ≡ Tab > Project > Progress charts (print)
-  - Manual: `../paratext-manual/chapters/21_progress_report.md`, line 27
+  - Manual: `../paratext-manual/chapters/21_progress_report.md`
   - Quote: "From the **Tab** menu, under **Project** choose **Progress charts**"
   - HelpData ID: `1dc48021-ac51-48bb-bbbd-88c21d055970`
   - Question: "How do I see if the translation team is progressing as expected?"
@@ -334,9 +334,9 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Project settings > User permissions`; Handler: `uiProjectUsersMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 861; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Project settings > User permissions`; Handler: `uiProjectUsersMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | Requirements | Section: "Workflow Management > Assign Tasks" | `[R]` |
-| Manual | `admin/ma_07_project_plan.md`, line 93: "Check the settings for a task... do you need editing permission" | `[M]` |
+| Manual | `admin/ma_07_project_plan.md`: "Check the settings for a task... do you need editing permission" | `[M]` |
 | HelpData | Keyword: `ComponentUserPermissions`; Dialog: `ProjectUsersForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -346,17 +346,17 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `uiProjectUsersMenuItem_Click` at line 861 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler `uiProjectUsersMenuItem_Click` |
 | 0 | `Paratext/Permissions/ProjectUsersForm.cs` | HelpData dialog | `ProjectUsersForm` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 39: `private readonly ScrText scrText` |
-| 1 | `ParatextData/Users/ProjectPermissionManager.cs` | Field in D0 | Line 40: `private readonly ProjectPermissionManager permissionMgr` |
-| 2 | `ParatextData/Users` (namespace) | Import in D0 | Line 20: `using Paratext.Data.Users` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private readonly ScrText scrText` |
+| 1 | `ParatextData/Users/ProjectPermissionManager.cs` | Field in D0 | `private readonly ProjectPermissionManager permissionMgr` |
+| 2 | `ParatextData/Users` (namespace) | Import in D0 | `using Paratext.Data.Users` |
 
 **Dialog Navigation** `[FR]`:
-- `ProjectUsersForm` → `ProjectUsersSetupForm` (line 106)
-- `ProjectUsersForm` → `AddGuestUserForm` (line 355)
-- `ProjectUsersForm` → `BookPermissionsForm` (line 368)
-- `ProjectUsersForm` → `OtherPermissionsForm` (line 381)
+- `ProjectUsersForm` → `ProjectUsersSetupForm`
+- `ProjectUsersForm` → `AddGuestUserForm`
+- `ProjectUsersForm` → `BookPermissionsForm`
+- `ProjectUsersForm` → `OtherPermissionsForm`
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > User permissions
@@ -393,18 +393,18 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Bulk progress mode`; Handler: `BulkProgressToolStripMenuItem_Click` in `Paratext/ProjectProgress/ProgressViewsForm.cs`, line 930; Owner: `ProgressViewsForm` | `[MS]` |
+| Menu Structure | Menu: `Project > Bulk progress mode`; Handler: `BulkProgressToolStripMenuItem_Click` in `Paratext/ProjectProgress/ProgressViewsForm.cs`; Owner: `ProgressViewsForm` | `[MS]` |
 | HelpData | Keyword: `ComponentAssignmentsAndProgress` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/ProjectProgress/ProgressViewsForm.cs` | Menu Structure | Handler `BulkProgressToolStripMenuItem_Click` at line 930 |
+| 0 | `Paratext/ProjectProgress/ProgressViewsForm.cs` | Menu Structure | Handler `BulkProgressToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Project > Bulk progress mode (within ProgressViewsForm)
-  - Menu Structure: `ProgressViewsForm`, handler `BulkProgressToolStripMenuItem_Click`, line 930
+  - Menu Structure: `ProgressViewsForm`, handler `BulkProgressToolStripMenuItem_Click`
   - File: `Paratext/ProjectProgress/ProgressViewsForm.cs`
 
 **Validation**: [MS] - [H] - — Last verified: 2026-01-21
@@ -424,24 +424,24 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Copy assignments`; Handler: `copyAssignmentsToolStripMenuItem_Click` in `Paratext/ProjectProgress/ProgressViewsForm.cs`, line 1024; Owner: `ProgressViewsForm` | `[MS]` |
+| Menu Structure | Menu: `Project > Copy assignments`; Handler: `copyAssignmentsToolStripMenuItem_Click` in `Paratext/ProjectProgress/ProgressViewsForm.cs`; Owner: `ProgressViewsForm` | `[MS]` |
 | HelpData | Keyword: `ComponentAssignmentsAndProgress` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/ProjectProgress/ProgressViewsForm.cs` | Menu Structure | Handler `copyAssignmentsToolStripMenuItem_Click` at line 1024 |
-| 1 | `Paratext/ProjectProgress/CopyAssignmentsForm.cs` | Form Relationships | Line 1026: `new CopyAssignmentsForm(...)` |
+| 0 | `Paratext/ProjectProgress/ProgressViewsForm.cs` | Menu Structure | Handler `copyAssignmentsToolStripMenuItem_Click` |
+| 1 | `Paratext/ProjectProgress/CopyAssignmentsForm.cs` | Form Relationships | `new CopyAssignmentsForm(...)` |
 
 **Dialog Navigation** `[FR]`:
-- `ProgressViewsForm` → `CopyAssignmentsForm` (line 1026)
-- `CopyAssignmentsForm` → `BookChooserForm` (line 81)
-- `CopyAssignmentsForm` → `ChooseCopyAssignmentsActionForm` (line 234)
+- `ProgressViewsForm` → `CopyAssignmentsForm`
+- `CopyAssignmentsForm` → `BookChooserForm`
+- `CopyAssignmentsForm` → `ChooseCopyAssignmentsActionForm`
 
 **UI Entry Points**:
 - ≡ Tab > Project > Copy assignments (within ProgressViewsForm)
-  - Menu Structure: `ProgressViewsForm`, handler `copyAssignmentsToolStripMenuItem_Click`, line 1024
+  - Menu Structure: `ProgressViewsForm`, handler `copyAssignmentsToolStripMenuItem_Click`
   - File: `Paratext/ProjectProgress/ProgressViewsForm.cs`
 
 **Validation**: [MS] [FR] [H] - — Last verified: 2026-01-21
@@ -466,18 +466,18 @@ Project Planning features help teams organize, track, and manage their translati
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Project settings > Define priorities`; Handler: `uiDefinePrioritiesStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 854; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Menu Structure | Menu: `Project > Project settings > Define priorities`; Handler: `uiDefinePrioritiesStripMenuItem_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
 | HelpData | Keyword: `ComponentTranslationPriorities`; 8 items | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiDefinePrioritiesStripMenuItem_Click` at line 854 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiDefinePrioritiesStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > Define priorities
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiDefinePrioritiesStripMenuItem_Click`, line 854
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiDefinePrioritiesStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `9d8f9b7f-7855-4e3c-9d5e-ce69cbe68965`
   - Keyword: `ComponentTranslationPriorities`

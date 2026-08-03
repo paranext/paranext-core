@@ -34,7 +34,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Requirements | Section: "Lexical Analysis" | `[R]` |
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 30: "**≡ Tab**, under **Tools** > **Wordlist**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "**≡ Tab**, under **Tools** > **Wordlist**" | `[M]` |
 | Menu Structure | `ParatextWindowWithMenus`: Tools > Wordlist | `[MS]` |
 | Form Relationships | `WordListForm` opens 7 dialogs | `[FR]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling`; Dialog: `WordListForm`; 45 items | `[H]` |
@@ -46,31 +46,31 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Line 372: `wordListSpellCheckToolStripMenuItem_Click` |
-| 0 | `Paratext/WordList/WordListForm.cs` | DependencyLookup in D0 | Line 375: `DisplayWordlistWindow(ScriptureText, Reference, ScrollingGroup)` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | `wordListSpellCheckToolStripMenuItem_Click` |
+| 0 | `Paratext/WordList/WordListForm.cs` | DependencyLookup in D0 | `DisplayWordlistWindow(ScriptureText, Reference, ScrollingGroup)` |
 | 1 | `Paratext/WordList/WordListSource.cs` | Same directory | Base class for word list data sources |
-| 1 | `Paratext/WordList/Filters/OccurrencesFilters.cs` | Import in D0 | Line 15: `using Paratext.WordList.Filters;` |
-| 1 | `Paratext/Checking/Spelling/SpellingEngine.cs` | Import in D0 | Line 17: `using Paratext.Checking.Spelling;` |
-| 1 | `Paratext/Linguistics/` | Import in D0 | Line 18: `using Paratext.Linguistics;` |
-| 1 | `ParatextData/Checking/Spelling/SpellingStatus.cs` | Import in D0 | Line 40: `using Paratext.Data.Checking.Spelling;` |
-| 1 | `ParatextData/Words/WordOccurrences.cs` | Import in D0 | Line 51: `using Paratext.Data.Words;` |
-| 2 | `ParatextData/ScrText.cs` | Parameter in D1 | WordListSource.cs line 27: `ScrText scrText` |
+| 1 | `Paratext/WordList/Filters/OccurrencesFilters.cs` | Import in D0 | `using Paratext.WordList.Filters;` |
+| 1 | `Paratext/Checking/Spelling/SpellingEngine.cs` | Import in D0 | `using Paratext.Checking.Spelling;` |
+| 1 | `Paratext/Linguistics/` | Import in D0 | `using Paratext.Linguistics;` |
+| 1 | `ParatextData/Checking/Spelling/SpellingStatus.cs` | Import in D0 | `using Paratext.Data.Checking.Spelling;` |
+| 1 | `ParatextData/Words/WordOccurrences.cs` | Import in D0 | `using Paratext.Data.Words;` |
+| 2 | `ParatextData/ScrText.cs` | Parameter in D1 | WordListSource.cs: `ScrText scrText` |
 
 **Dialog Navigation** `[FR]`:
-- `WordListForm` → `WordlistPrintForm` (line 659)
-- `WordListForm` → `WordlistFindForm` (line 1438)
-- `WordListForm` → `SimilarWordsSetupForm` (line 1477)
-- `WordListForm` → `EditScrTextForm` (line 1516)
-- `WordListForm` → `SimilarJoinedWordsSetupForm` (line 1668)
-- `WordListForm` → `ProperNameHyphenationForm` (line 1689)
-- `WordListForm` → `SpellingCorrectionForm` (line 2612)
+- `WordListForm` → `WordlistPrintForm`
+- `WordListForm` → `WordlistFindForm`
+- `WordListForm` → `SimilarWordsSetupForm`
+- `WordListForm` → `EditScrTextForm`
+- `WordListForm` → `SimilarJoinedWordsSetupForm`
+- `WordListForm` → `ProperNameHyphenationForm`
+- `WordListForm` → `SpellingCorrectionForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Wordlist `[MS]`
   - Form: `ParatextWindowWithMenus`
-  - Handler: `wordListSpellCheckToolStripMenuItem_Click` at line 372
+  - Handler: `wordListSpellCheckToolStripMenuItem_Click`
   - Opens: `WordListForm` via `DependencyLookup.Get<IParatextAccess>().DisplayWordlistWindow()`
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 30
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **Tools** > **Wordlist**"
   - HelpData ID: `6423df0e-0858-4b78-804a-3e16c09e811e`
   - Question: "How do I create a Wordlist?"
@@ -101,7 +101,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Requirements | Section: "Lexical Analysis" | `[R]` |
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 93: "**≡ Tab**, under **View** > **Display spelling**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "**≡ Tab**, under **View** > **Display spelling**" | `[M]` |
 | Menu Structure | `TextForm`: View > Display spelling errors, Tools > Spell check current book | `[MS]` |
 | HelpData | Keyword: `ComponentSpellChecking`; 2 items | `[H]` |
 
@@ -112,7 +112,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | Line 2186: `displaySpellingMenuItem_Click`, Line 2172: `spellCheckCurrentBookToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | `displaySpellingMenuItem_Click`, `spellCheckCurrentBookToolStripMenuItem_Click` |
 | 0 | `Paratext/Checking/Spelling/SpellingEngine.cs` | HelpData keyword | `ComponentSpellChecking` |
 | 0 | `Paratext/Checking/Spelling/SpellingAnnotationSource.cs` | Same directory | In-editor annotation support |
 | 0 | `Paratext/Checking/Spelling/SpellingCorrectionForm.cs` | Same directory | Correction dialog |
@@ -125,18 +125,18 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 **UI Entry Points**:
 - ≡ Tab > View > Display spelling errors `[MS]`
   - Form: `TextForm`
-  - Handler: `displaySpellingMenuItem_Click` at line 2186
-  - Behavior: Line 2188: `ToggleSpellingErrors()`
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 93
+  - Handler: `displaySpellingMenuItem_Click`
+  - Behavior: `ToggleSpellingErrors()`
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **View** > **Display spelling**"
 - ≡ Tab > Tools > Spell Check Current Book `[MS]`
   - Form: `TextForm`
-  - Handler: `spellCheckCurrentBookToolStripMenuItem_Click` at line 2172
+  - Handler: `spellCheckCurrentBookToolStripMenuItem_Click`
   - Behavior: Opens `WordListForm` filtered to current book with spelling issues
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 125
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **Tools** > **Spell Check Current Book**"
 - Right-click underlined word
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 107
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "Right-click a word which is underlined in either red or grey"
   - HelpData ID: `c5d7a608-a767-4404-a6a5-22d09c8f440f`
   - Question: "How do I do spell checking while editing text?"
@@ -164,7 +164,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 33: "**≡ Tab**, under **Tools** > **Approve spelling of common words**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "**≡ Tab**, under **Tools** > **Approve spelling of common words**" | `[M]` |
 | Menu Structure | `WordListForm`: Edit > Set spelling status (3 items), Tools > Approve spelling of common words | `[MS]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling` | `[H]` |
 
@@ -172,33 +172,33 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1199: `setStatusCorrectToolStripMenuItem_Click`, Line 1225: `setStatusIncorrectToolStripMenuItem_Click`, Line 1262: `setStatusUndecidedToolStripMenuItem_Click`, Line 1560: `uiToolsCommonWords_Click` |
-| 1 | `ParatextData/Checking/Spelling/SpellingStatus.cs` | Import in D0 | Line 40: `using Paratext.Data.Checking.Spelling;` |
-| 1 | `ParatextData/Words/WordOccurrences.cs` | Import in D0 | Line 51: `using Paratext.Data.Words;` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `setStatusCorrectToolStripMenuItem_Click`, `setStatusIncorrectToolStripMenuItem_Click`, `setStatusUndecidedToolStripMenuItem_Click`, `uiToolsCommonWords_Click` |
+| 1 | `ParatextData/Checking/Spelling/SpellingStatus.cs` | Import in D0 | `using Paratext.Data.Checking.Spelling;` |
+| 1 | `ParatextData/Words/WordOccurrences.cs` | Import in D0 | `using Paratext.Data.Words;` |
 
 **UI Entry Points**:
 - WordListForm > Edit > Set spelling status - Correct `[MS]`
   - Form: `WordListForm`
-  - Handler: `setStatusCorrectToolStripMenuItem_Click` at line 1199
+  - Handler: `setStatusCorrectToolStripMenuItem_Click`
 - WordListForm > Edit > Set spelling status - Incorrect `[MS]`
   - Form: `WordListForm`
-  - Handler: `setStatusIncorrectToolStripMenuItem_Click` at line 1225
+  - Handler: `setStatusIncorrectToolStripMenuItem_Click`
 - WordListForm > Edit > Set spelling status - Undecided `[MS]`
   - Form: `WordListForm`
-  - Handler: `setStatusUndecidedToolStripMenuItem_Click` at line 1262
+  - Handler: `setStatusUndecidedToolStripMenuItem_Click`
 - WordListForm > Tools > Approve spelling of common words `[MS]`
   - Form: `WordListForm`
-  - Handler: `uiToolsCommonWords_Click` at line 1560
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 33
+  - Handler: `uiToolsCommonWords_Click`
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **Tools** > **Approve spelling of common words**"
   - HelpData ID: `4f2747e0-0c89-48eb-8c65-ea47a8adc0dd`
   - Question: "How do I approve spelling of common or frequent words?"
 - WordListForm > Project > Export to XML `[MS]`
   - Form: `WordListForm`
-  - Handler: `exportWordlistToolStripMenuItem_Click` at line 1443
+  - Handler: `exportWordlistToolStripMenuItem_Click`
 - WordListForm > Project > Import from XML `[MS]`
   - Form: `WordListForm`
-  - Handler: `importFromXMLToolStripMenuItem_Click` at line 1626
+  - Handler: `importFromXMLToolStripMenuItem_Click`
   - HelpData ID: `c1ce89cc-8acb-4f4f-bcd3-802c0178d179`
   - Question: "How do I import a list of correctly spelled words into the Wordlist?"
 
@@ -225,7 +225,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 80: "**≡ Tab**, under **Tools** > **Find Similar Words**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "**≡ Tab**, under **Tools** > **Find Similar Words**" | `[M]` |
 | Menu Structure | `WordListForm`: Tools > Find similar words | `[MS]` |
 | Form Relationships | `WordListForm` → `SimilarWordsSetupForm` | `[FR]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling`; Dialog: `SimilarWordsSetupForm` | `[H]` |
@@ -234,22 +234,22 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1475: `uiToolsSimilarWords_Click` |
-| 0 | `Paratext/WordList/SimilarWordsSetupForm.cs` | Form Relationships | Line 1477: `new SimilarWordsSetupForm(scrText)` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `uiToolsSimilarWords_Click` |
+| 0 | `Paratext/WordList/SimilarWordsSetupForm.cs` | Form Relationships | `new SimilarWordsSetupForm(scrText)` |
 | 1 | `Paratext/WordList/WordListSource.cs` | Import in D0 | `SimilarWordListSource` class |
 | 1 | `Paratext/Checking/Spelling/EditDistanceHeuristic.cs` | Related functionality | Similar word detection algorithm |
 | 1 | `Paratext/Checking/Spelling/LetterNgramHeuristic.cs` | Same directory | N-gram based similarity |
 
 **Dialog Navigation** `[FR]`:
-- `WordListForm` → `SimilarWordsSetupForm` (line 1477)
+- `WordListForm` → `SimilarWordsSetupForm`
 
 **UI Entry Points**:
 - WordListForm > Tools > Find similar words `[MS]`
   - Form: `WordListForm`
-  - Handler: `uiToolsSimilarWords_Click` at line 1475
-  - Opens: `SimilarWordsSetupForm` (line 1477)
-  - Behavior: Line 1479-1480: If dialog OK, calls `Setup(frm.WordListSource, true)`
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 80
+  - Handler: `uiToolsSimilarWords_Click`
+  - Opens: `SimilarWordsSetupForm`
+  - Behavior: If dialog OK, calls `Setup(frm.WordListSource, true)`
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **Tools** > **Find Similar Words**"
   - HelpData ID: `a4276519-e642-4e2c-82ea-4124937e4abe`
   - Question: "How do I find words containing common typing mistakes?"
@@ -277,7 +277,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 190: "**≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "**≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**" | `[M]` |
 | Menu Structure | `WordListForm`: Tools > Find incorrectly joined or split words | `[MS]` |
 | Form Relationships | `WordListForm` → `SimilarJoinedWordsSetupForm` | `[FR]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling`; Dialog: `SimilarJoinedWordsSetupForm` | `[H]` |
@@ -286,21 +286,21 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1666: `findSimilarJoinedWordsToolStripMenuItem_Click` |
-| 0 | `Paratext/WordList/SimilarJoinedWordsSetupForm.cs` | Form Relationships | Line 1668: `new SimilarJoinedWordsSetupForm(scrText)` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `findSimilarJoinedWordsToolStripMenuItem_Click` |
+| 0 | `Paratext/WordList/SimilarJoinedWordsSetupForm.cs` | Form Relationships | `new SimilarJoinedWordsSetupForm(scrText)` |
 | 1 | `Paratext/WordList/SimilarJoinedWordsWordlistSource.cs` | Same directory | `SimilarJoinedWordsSetupForm` uses this source |
 | 1 | `Paratext/WordList/WordListSource.cs` | Base class | `SimilarJoinedWordsWordlistSource` extends `WordListSource` |
 
 **Dialog Navigation** `[FR]`:
-- `WordListForm` → `SimilarJoinedWordsSetupForm` (line 1668)
+- `WordListForm` → `SimilarJoinedWordsSetupForm`
 
 **UI Entry Points**:
 - WordListForm > Tools > Find incorrectly joined or split words `[MS]`
   - Form: `WordListForm`
-  - Handler: `findSimilarJoinedWordsToolStripMenuItem_Click` at line 1666
-  - Opens: `SimilarJoinedWordsSetupForm` (line 1668)
-  - Behavior: Line 1670-1671: If dialog OK, sets up word list with joined/split results
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 190
+  - Handler: `findSimilarJoinedWordsToolStripMenuItem_Click`
+  - Opens: `SimilarJoinedWordsSetupForm`
+  - Behavior: If dialog OK, sets up word list with joined/split results
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **Tools**> **Find Incorrectly Joined or Split Words**"
   - HelpData ID: `ef51de0e-ec53-4de4-8598-b05941b25357`
   - Question: "Guide: Tools > Wordlist: Tools > Find incorrectly joined or split words"
@@ -340,40 +340,40 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1310: `approveHyphenationToolStripMenuItem_Click`, Line 1371: `editHyphenationToolStripMenuItem_Click`, Line 1189: `uiViewShowHyphenation_Click`, Line 1687: `addOrRemoveProperNameHyphenationToolStripMenuItem_Click` |
-| 0 | `Paratext/ToolsMenu/ProperNameHyphenationForm.cs` | Form Relationships | Line 1689: `new ProperNameHyphenationForm()` |
-| 1 | `Paratext/Linguistics/HyphenationEngine.cs` | Import in D0 | Line 18: `using Paratext.Linguistics;` |
-| 1 | `ParatextData/Linguistics/Hyphenation.cs` | Import in D0 | Line 43: `using Paratext.Data.Linguistics;` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `approveHyphenationToolStripMenuItem_Click`, `editHyphenationToolStripMenuItem_Click`, `uiViewShowHyphenation_Click`, `addOrRemoveProperNameHyphenationToolStripMenuItem_Click` |
+| 0 | `Paratext/ToolsMenu/ProperNameHyphenationForm.cs` | Form Relationships | `new ProperNameHyphenationForm()` |
+| 1 | `Paratext/Linguistics/HyphenationEngine.cs` | Import in D0 | `using Paratext.Linguistics;` |
+| 1 | `ParatextData/Linguistics/Hyphenation.cs` | Import in D0 | `using Paratext.Data.Linguistics;` |
 
 **Dialog Navigation** `[FR]`:
-- `WordListForm` → `ProperNameHyphenationForm` (line 1689)
+- `WordListForm` → `ProperNameHyphenationForm`
 
 **UI Entry Points**:
 - WordListForm > Edit > Approve word hyphenation `[MS]`
   - Form: `WordListForm`
-  - Handler: `approveHyphenationToolStripMenuItem_Click` at line 1310
+  - Handler: `approveHyphenationToolStripMenuItem_Click`
   - Behavior: Approves hyphenation for selected words
 - WordListForm > Edit > Edit word hyphenation `[MS]`
   - Form: `WordListForm`
-  - Handler: `editHyphenationToolStripMenuItem_Click` at line 1371
+  - Handler: `editHyphenationToolStripMenuItem_Click`
   - Behavior: Opens inline editing for word hyphenation
 - WordListForm > View > Show hyphenation `[MS]`
   - Form: `WordListForm`
-  - Handler: `uiViewShowHyphenation_Click` at line 1189
+  - Handler: `uiViewShowHyphenation_Click`
   - Behavior: Toggles hyphenation column visibility
 - WordListForm > Tools > Add or remove proper name hyphenation `[MS]`
   - Form: `WordListForm`
-  - Handler: `addOrRemoveProperNameHyphenationToolStripMenuItem_Click` at line 1687
-  - Opens: `ProperNameHyphenationForm` (line 1689)
+  - Handler: `addOrRemoveProperNameHyphenationToolStripMenuItem_Click`
+  - Opens: `ProperNameHyphenationForm`
   - HelpData ID: `40b97431-4cdc-415a-bcef-1997816ef702`
   - Question: "How do I approve hyphenation of words?"
 - WordListForm > Tools > Advanced > Compare hyphenation to standard `[MS]`
   - Form: `WordListForm`
-  - Handler: `compareHyphenationToStandardToolStripMenuItem_Click` at line 1389
+  - Handler: `compareHyphenationToStandardToolStripMenuItem_Click`
   - Behavior: Compares against HyphenationStandard.txt file
 - WordListForm > Tools > Advanced > Apply standard hyphenation to random 10% `[MS]`
   - Form: `WordListForm`
-  - Handler: `applyStandardHyphenationToRandom10ToolStripMenuItem_Click` at line 1405
+  - Handler: `applyStandardHyphenationToRandom10ToolStripMenuItem_Click`
   - Behavior: Applies standard hyphenation to sample of words
 
 **HelpData Items**:
@@ -402,7 +402,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 17: "Add a spelling discussion note to words that need further discussion" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "Add a spelling discussion note to words that need further discussion" | `[M]` |
 | Menu Structure | `WordListForm`: View > Show base text spelling discussion notes | `[MS]` |
 | HelpData | Keyword: `ComponentNotesOther` | `[H]` |
 
@@ -410,16 +410,16 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1183: `uiViewShowBaseSpellingNotes_Click` |
-| 1 | `ParatextBase/ProjectComments/` | Import in D0 | Line 34: `using Paratext.Base.ProjectComments;` |
-| 1 | `ParatextData/ProjectComments/` | Import in D0 | Line 45: `using Paratext.Data.ProjectComments;` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `uiViewShowBaseSpellingNotes_Click` |
+| 1 | `ParatextBase/ProjectComments/` | Import in D0 | `using Paratext.Base.ProjectComments;` |
+| 1 | `ParatextData/ProjectComments/` | Import in D0 | `using Paratext.Data.ProjectComments;` |
 
 **UI Entry Points**:
 - WordListForm > View > Show base text spelling discussion notes `[MS]`
   - Form: `WordListForm`
-  - Handler: `uiViewShowBaseSpellingNotes_Click` at line 1183
-  - Behavior: Line 1185: `RefreshItems()` - toggles visibility of spelling notes column
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 17
+  - Handler: `uiViewShowBaseSpellingNotes_Click`
+  - Behavior: `RefreshItems()` - toggles visibility of spelling notes column
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "Add a spelling discussion note to words that need further discussion"
   - HelpData ID: `918205ea-bf04-4824-a8b2-d4468ba83af7`
   - Question: "How do I see spelling discussion notes in my project?"
@@ -448,7 +448,7 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 134: "**≡ Tab**, under **Tools**> **Spell check >**" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "**≡ Tab**, under **Tools**> **Spell check >**" | `[M]` |
 | Menu Structure | `WordListForm`: Tools > Spell check > (7 submenu items) | `[MS]` |
 | HelpData | Keyword: `ComponentWordlist/Spelling` | `[H]` |
 
@@ -456,9 +456,9 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1709: `allChecksMenuItem_Click`, etc. |
-| 0 | `Paratext/WordList/WordListSource.cs` | Import in D0 | Line 140: `class SpellingWordListSource` |
-| 1 | `Paratext/Checking/Spelling/SpellingEngine.cs` | Import in D0 | Line 27: `enum EngineTypes { AllChecks, MissingCapitals, ...}` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `allChecksMenuItem_Click`, etc. |
+| 0 | `Paratext/WordList/WordListSource.cs` | Import in D0 | `class SpellingWordListSource` |
+| 1 | `Paratext/Checking/Spelling/SpellingEngine.cs` | Import in D0 | `enum EngineTypes { AllChecks, MissingCapitals, ...}` |
 | 1 | `Paratext/Checking/Spelling/CaseConsistencyHeuristic.cs` | SpellingEngine | Handles MissingCapitals check |
 | 1 | `Paratext/Checking/Spelling/EditDistanceHeuristic.cs` | SpellingEngine | Handles SingleCharacterTypos check |
 | 1 | `Paratext/Checking/Spelling/LetterNgramHeuristic.cs` | SpellingEngine | Handles UnusualLetterCombinations check |
@@ -469,36 +469,36 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 **UI Entry Points**:
 - WordListForm > Tools > Spell check > All checks `[MS]`
   - Form: `WordListForm`
-  - Handler: `allChecksMenuItem_Click` at line 1709
-  - Behavior: Line 1711: `Setup(new SpellingWordListSource(), true)`
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 134
+  - Handler: `allChecksMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(), true)`
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
   - Quote: "**≡ Tab**, under **Tools**> **Spell check >**"
   - HelpData ID: `100b2fb6-c4b8-4f36-bc35-5adc9d364da2`
   - Question: "How do I check text for specific spelling issues?"
 - WordListForm > Tools > Spell check > Missing capitals `[MS]`
   - Form: `WordListForm`
-  - Handler: `missingCapitalsMenuItem_Click` at line 1714
-  - Behavior: Line 1716: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.MissingCapitals), true)`
+  - Handler: `missingCapitalsMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.MissingCapitals), true)`
 - WordListForm > Tools > Spell check > Single character typos `[MS]`
   - Form: `WordListForm`
-  - Handler: `singleCharacterTyposMenuItem_Click` at line 1719
-  - Behavior: Line 1721: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.SingleCharacterTypos), true)`
+  - Handler: `singleCharacterTyposMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.SingleCharacterTypos), true)`
 - WordListForm > Tools > Spell check > Unusual letter combinations `[MS]`
   - Form: `WordListForm`
-  - Handler: `unusualLetterCombinationsMenuItem_Click` at line 1724
-  - Behavior: Line 1726: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.UnusualLetterCombinations), true)`
+  - Handler: `unusualLetterCombinationsMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.UnusualLetterCombinations), true)`
 - WordListForm > Tools > Spell check > Diacritic errors `[MS]`
   - Form: `WordListForm`
-  - Handler: `diacriticErrorsMenuItem_Click` at line 1729
-  - Behavior: Line 1731: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.DiacriticErrors), true)`
+  - Handler: `diacriticErrorsMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.DiacriticErrors), true)`
 - WordListForm > Tools > Spell check > Common typos `[MS]`
   - Form: `WordListForm`
-  - Handler: `commonTyposMenuItem_Click` at line 1734
-  - Behavior: Line 1736: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.CommonTypos), true)`
+  - Handler: `commonTyposMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.CommonTypos), true)`
 - WordListForm > Tools > Spell check > Unknown morphology `[MS]`
   - Form: `WordListForm`
-  - Handler: `unknownMorphologyMenuItem_Click` at line 1739
-  - Behavior: Line 1741: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.UnknownMorphology), true)`
+  - Handler: `unknownMorphologyMenuItem_Click`
+  - Behavior: `Setup(new SpellingWordListSource(SpellingEngine.EngineTypes.UnknownMorphology), true)`
 
 **HelpData Items**:
 - ID: `100b2fb6-c4b8-4f36-bc35-5adc9d364da2` - "How do I check text for specific spelling issues?"
@@ -531,27 +531,27 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | Line 1168: `uiViewShowMorphology_Click`, Line 1334: `approveMorphologyToolStripMenuItem_Click`, Line 1352: `editMorphologyToolStripMenuItem_Click`, Line 1679: `spellCheckByMorphologyToolStripMenuItem_Click` |
-| 1 | `Paratext/WordList/WordListSource.cs` | Same directory | Line 367: `class MorphologicalRootWordListSource` |
-| 1 | `ParatextData/Linguistics/ParatextLexicalAnalyser.cs` | Import in D0 | Line 18: `using Paratext.Linguistics;` namespace maps here |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | `uiViewShowMorphology_Click`, `approveMorphologyToolStripMenuItem_Click`, `editMorphologyToolStripMenuItem_Click`, `spellCheckByMorphologyToolStripMenuItem_Click` |
+| 1 | `Paratext/WordList/WordListSource.cs` | Same directory | `class MorphologicalRootWordListSource` |
+| 1 | `ParatextData/Linguistics/ParatextLexicalAnalyser.cs` | Import in D0 | `using Paratext.Linguistics;` namespace maps here |
 | 1 | `Paratext.LexicalContractsV2/LexiconV2.cs` | LexicalAnalyser reference | Lexicon for morphological data |
 
 **UI Entry Points**:
 - WordListForm > View > Show morphology `[MS]`
   - Form: `WordListForm`
-  - Handler: `uiViewShowMorphology_Click` at line 1168
+  - Handler: `uiViewShowMorphology_Click`
   - Behavior: Toggles visibility of morphology columns
 - WordListForm > Edit > Approve word morphology `[MS]`
   - Form: `WordListForm`
-  - Handler: `approveMorphologyToolStripMenuItem_Click` at line 1334
+  - Handler: `approveMorphologyToolStripMenuItem_Click`
   - Behavior: Approves morphological analysis for selected words
 - WordListForm > Edit > Edit word morphology `[MS]`
   - Form: `WordListForm`
-  - Handler: `editMorphologyToolStripMenuItem_Click` at line 1352
+  - Handler: `editMorphologyToolStripMenuItem_Click`
   - Behavior: Opens inline editing for word morphology
 - WordListForm > Tools > Spell check by morphology `[MS]`
   - Form: `WordListForm`
-  - Handler: `spellCheckByMorphologyToolStripMenuItem_Click` at line 1679
+  - Handler: `spellCheckByMorphologyToolStripMenuItem_Click`
   - Behavior: Filters wordlist to show morphology-based spell check results
 
 **HelpData Items**:
@@ -580,9 +580,9 @@ Spelling and Wordlist features help translation teams maintain consistent spelli
 **Cross-Reference**:
 - See **04_Biblical_Terms.md** for the actual Word Prefixes and Suffixes feature
 - Tools > Word prefixes and suffixes (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `wordPrefixesAndSuffixesStripMenuItem_Click`, line 1044
+  - Menu Structure: `BiblicalTermsForm`, handler `wordPrefixesAndSuffixesStripMenuItem_Click`
 
-**Evidence** (from `ProjectSettings.cs` line 406):
+**Evidence** (from `ProjectSettings.cs`):
 > "WordPrefixes are used when matching in BiblicalTerms"
 
 ---

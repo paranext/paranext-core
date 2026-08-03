@@ -44,18 +44,18 @@ The Translation Workspace encompasses the core features users interact with dail
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/TextForm.cs` | Form Relationships | Main Scripture editing form; inherits `ParatextWindowWithMenus` |
-| 1 | `FormattedEditor/FormattedEditorControl.cs` | Import in D0 | Line 50: `using Paratext.FormattedEditor;` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 126: `private ScrText loadedScrText;` |
+| 1 | `FormattedEditor/FormattedEditorControl.cs` | Import in D0 | `using Paratext.FormattedEditor;` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private ScrText loadedScrText;` |
 
 **Not Found**:
 - No HelpData dialog specifically for editor (uses generic `OptionsForm`)
 
 **UI Entry Points**:
 - Double-click Paratext 9 icon on desktop
-  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 66
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`
   - Quote: "Double-click on Paratext 9 icon on the **desktop**"
 - ≡ Paratext > Paratext > Open > Projects
-  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 82
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`
   - Quote: "**≡ Paratext** menu under **Paratext** > **Open**, Projects"
 
 **HelpData Items**:
@@ -139,17 +139,17 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `nextViewToolStripMenuItem_Click` at line 1933 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `nextViewToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > View > Switch Scripture view (cycles through views)
-  - Menu Structure: `TextForm`, handler `nextViewToolStripMenuItem_Click`, line 1933
+  - Menu Structure: `TextForm`, handler `nextViewToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > View > [click "v" icon for expanded menu] > Select specific view
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 52
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "**≡ Tab** under **View** menu, choose the view (usually Standard)."
 - Ctrl+E (toggle view)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 51
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - HelpData ID: `9b81209d-eb15-44d7-b646-44a837c03c54`
   - Question: "How do I insert markers in my project text?"
 
@@ -192,8 +192,8 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | HelpData confirmed → code search | Line 329: `public VerseRef Reference` property; Line 170: `uiVerseControlHost.VerseControl` |
-| 0 | `Paratext/MainForm.cs` | HelpData confirmed → code search | Line 407: `Windows.GotoReference(verseRef, callingWindow)` method |
+| 0 | `Paratext/MainForm.cs` | HelpData confirmed → code search | `public VerseRef Reference` property; `uiVerseControlHost.VerseControl` |
+| 0 | `Paratext/MainForm.cs` | HelpData confirmed → code search | `Windows.GotoReference(verseRef, callingWindow)` method |
 
 **Not Found**:
 - `BCVRef.cs` (search: "BCVRef" - no matches in Paratext project)
@@ -201,19 +201,19 @@ The Translation Workspace encompasses the core features users interact with dail
 
 **UI Entry Points**:
 - Navigation toolbar icons (book, chapter, verse)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 31
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "Using the icons on the toolbar, change the project, book, chapter and verse as needed."
 - Ctrl+B (go to navigation area)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 137
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "Ctrl + B = go to the navigation area of the toolbar."
   - HelpData ID: `3b10f808-04bc-4276-a7cf-d8bc1791312f`
   - Dialog: `OptionsForm`
   - Question: "How do I go to a Bible reference?"
 - F8 / Ctrl+F8 (next/prev chapter)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 135
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "F8 = Next Chapter (Ctrl + F8 for previous chapter)"
 - F9 / Ctrl+F9 (next/prev book)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 136
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "F9 = Next Book (Ctrl + F9 for previous book)"
 
 **HelpData Items**:
@@ -253,7 +253,7 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/FocusSharer.cs` | HelpData confirmed → code search | Line 85: `public Enum<ScrollGroup> ScrollingGroup` property manages sync |
+| 0 | `ParatextBase/FocusSharer.cs` | HelpData confirmed → code search | `public Enum<ScrollGroup> ScrollingGroup` property manages sync |
 
 **UI Entry Points**:
 - Automatic when windows in same scroll group
@@ -300,8 +300,8 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/Themes/DockingTheme/ScrollGroupBadgeHelper.cs` | HelpData confirmed → code search | Line 15: `public static class ScrollGroupBadgeHelper` draws scroll group badges |
-| 1 | `ParatextBase/FocusSharer.cs` | Type reference in D0 | Line 27: `Enum<ScrollGroup> scrollGroup` parameter; Line 85: manages group membership |
+| 0 | `ParatextBase/Themes/DockingTheme/ScrollGroupBadgeHelper.cs` | HelpData confirmed → code search | `public static class ScrollGroupBadgeHelper` draws scroll group badges |
+| 1 | `ParatextBase/FocusSharer.cs` | Type reference in D0 | `Enum<ScrollGroup> scrollGroup` parameter; manages group membership |
 
 **UI Entry Points**:
 - Title bar scroll group indicator (badge)
@@ -348,9 +348,9 @@ The Translation Workspace encompasses the core features users interact with dail
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `saveTextCombinationToolStripMenuItem_Click` at line 1357 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `saveTextCombinationToolStripMenuItem_Click` |
 | 0 | `Paratext/WindowMenu/SaveTextCombinationsForm.cs` | HelpData dialog | `SaveTextCombinationsForm` |
-| 1 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Import in D0 | Line 14: `using Paratext.Base.ParatextWindows` |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Import in D0 | `using Paratext.Base.ParatextWindows` |
 
 **Floating-window chrome** (sub-feature "Float windows anywhere") — added 2026-07-23 by the
 floating-windows investigation. This sub-feature previously had **no** implementation anchor here,
@@ -358,13 +358,13 @@ which led a PRD to assert that none existed; it does.
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/Themes/DockingTheme/ParatextFloatWindow.cs` | Investigation | Line 19: `sealed class ParatextFloatWindow : FloatWindow, IActiveWindowProvider, PersistedDockingWindow` (280 lines) — owns pushpin/always-on-top (`:55-66`), title+icon rules (`:103-117`), pin-state persistence (`:79`), min/max DWM workarounds (`:119-154`, PTX-17379), edge snapping (`:161`), 6-item reduced toolbar and title bar (`:204-270`) |
-| 0 | `ParatextBase/Themes/DockingTheme/ParatextDockingTheme.cs` | Investigation | `:31` installs `ParatextFloatWindowFactory` as the **only** float-window factory; `:180-216` builds the tab-bar right-click menu — "Dock window" (`:196`), "Open as a floating window" (`:203`), "Move to autohide" (`:210`) |
-| 1 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Investigation | `:368-411` `ChangeDockState` dock↔float state machine; `:395-400` centers over the main form only when the in-memory `floatBounds` (`:49`) is null |
-| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Investigation | `:371-376` `IsDockStateValid` — the Ctrl gate: **without** Ctrl, Float is valid only while the pointer is outside `MainWindow.Bounds` |
-| 1 | `Paratext/WindowCollection.cs` | Investigation | `:1209-1214` `OpenAsType.Floating`; `:1348-1354` `GetFloatWindowFromPersistString` restores bounds + pin state with **no** off-screen clamping |
-| 2 | `PtxUtils.UI/Winforms/SnappingFormHelper.cs` | Investigation | 15px edge snapping to other Paratext forms and `Screen.FromControl(owner).WorkingArea` (`:31, 56-69`); unconditional — the `EnableFormSnapping` setting is never read |
-| 2 | `PtxUtils.UI/DialogRestorer.cs` | Investigation | `:186-276` off-screen clamping and multi-monitor spanning rules; `:278-285` never restores minimized (PT-3114) |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextFloatWindow.cs` | Investigation | `sealed class ParatextFloatWindow : FloatWindow, IActiveWindowProvider, PersistedDockingWindow` (280 lines) — owns pushpin/always-on-top, title+icon rules, pin-state persistence, min/max DWM workarounds, edge snapping, 6-item reduced toolbar and title bar |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextDockingTheme.cs` | Investigation | installs `ParatextFloatWindowFactory` as the **only** float-window factory; builds the tab-bar right-click menu — "Dock window", "Open as a floating window", "Move to autohide" |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Investigation | `ChangeDockState` dock↔float state machine; centers over the main form only when the in-memory `floatBounds` is null |
+| 1 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Investigation | `IsDockStateValid` — the Ctrl gate: **without** Ctrl, Float is valid only while the pointer is outside `MainWindow.Bounds` |
+| 1 | `Paratext/WindowCollection.cs` | Investigation | `OpenAsType.Floating`; `GetFloatWindowFromPersistString` restores bounds + pin state with **no** off-screen clamping |
+| 2 | `PtxUtils.UI/Winforms/SnappingFormHelper.cs` | Investigation | 15px edge snapping to other Paratext forms and `Screen.FromControl(owner).WorkingArea`; unconditional — the `EnableFormSnapping` setting is never read |
+| 2 | `PtxUtils.UI/DialogRestorer.cs` | Investigation | off-screen clamping and multi-monitor spanning rules; never restores minimized (PT-3114) |
 
 **Corrections to common assumptions** (verified 2026-07-23 against `~/Paratext@master`):
 
@@ -372,20 +372,20 @@ which led a PRD to assert that none existed; it does.
   WinForms DLL (`ParatextBase/ParatextBase.csproj:186-189`) — **not** AvalonDock, which appears
   nowhere in the tree.
 - "Always on top" is an **owner-window** relationship (`Owner = DockPanel.FindForm()`,
-  `ParatextFloatWindow.cs:55-66`), **not** `TopMost` — a pinned float window sits above Paratext
+  `ParatextFloatWindow.cs`), **not** `TopMost` — a pinned float window sits above Paratext
   only, never above other applications. This is what produces the documented maximize-while-pinned
   taskbar trap (HelpData "What are the limitations of a floating window?").
 - Float geometry persists **across restarts** (`Settings.Default.WindowCollectionMemento`,
-  `Paratext/MainForm.cs:2423`) and into **named, shareable** layouts — pin state rides along as the
+  `Paratext/MainForm.cs`) and into **named, shareable** layouts — pin state rides along as the
   float window's `PersistString`.
 - The Open dialog's first-run "Open As" default is **Panel**, not Floating
-  (`SelectScrTextsForm.cs:850`), despite a stale XML doc comment at `OpenAsType.cs:11` saying
+  (`SelectScrTextsForm.cs`), despite a stale XML doc comment at `OpenAsType.cs` saying
   otherwise. 17 tools hard-code `OpenAsType.Floating` with no user choice.
 
 **Additional HelpData Items** (floating chrome; `Paratext/HelpData.xml`):
-- ID: `7554630d-9d2a-43d5-bac9-2210b054bf11` - "What is a floating window?" (line 23634)
-- ID: `95609de1-987e-4da4-bc8b-6b1d507bad09` - "What are the limitations of a floating window?" (line 2676)
-- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (line 15339)
+- ID: `7554630d-9d2a-43d5-bac9-2210b054bf11` - "What is a floating window?"
+- ID: `95609de1-987e-4da4-bc8b-6b1d507bad09` - "What are the limitations of a floating window?"
+- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?"
 
 **Autohide area** (sub-feature) — added 2026-07-23 by the Quick-Reference & Autohide investigation.
 This sub-feature previously appeared in **one cell** of this file (the floating-window addendum's
@@ -403,20 +403,20 @@ default, user-resizable by a splitter.
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/Themes/DockingTheme/ParatextDockingTheme.cs` | Investigation | `:207-212` "Move to autohide" → `ChangeDockState(DockState.DockRightAutoHide)` (loc key `ParatextDockingTheme_3`); `:193-198` "Dock window" → `ChangeDockState(DockState.Document)`; `:742-1150` **`ParatextAutoHideStrip : AutoHideStripBase`** — sizes (`:745-748`, collapsed 20/28 at `:772, 868`, expanded 90), `MeasureHeight()` returns 0 when empty (`:834-843`), `AllTabs` = right-autohide panes only (`:821-822`), scrollbar overflow (`:811-819, 1108-1137`), tooltips (`:899-923`), expand/collapse + persist (`:952-991`), paint incl. badges (`:993-1071`) |
-| 0 | `ParatextBase/Themes/DockingTheme/ParatextAutoHideWindow.cs` | Investigation | 78 lines — `ParatextAutoHideWindow : DockPanel.AutoHideWindowControl`; `AnimateTime = 140` ms (`:11`); `DisplayingRectangle`/`OnLayout` overrides; per-edge splitter (`:47-62`); non-active panes parked off-screen at `x = -width` (`:64-73`) |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Investigation | `:368-411` `ChangeDockState` state machine (accepts only `DockRightAutoHide`/`Document`/`Float`, else throws); **`:138-168` `MakeActive()`** — the single auto-activate funnel: `if (Pane.IsAutoHide) DockPanel.ActiveAutoHideContent = this`, then a *deferred* `DockHandler.Activate()` (calling `Activate()` alone would collapse the flyout); `:574-578, 684-695` lazy load — autohidden content defers `LoadWindow()` to `OnActivated` |
-| 0 | `ParatextBase/Themes/DockingTheme/SendReceiveBadgeHelper.cs` | Investigation | 100 lines — the **colored dot**: 10px filled ellipse drawn iff a Send/Receive **update is available** for the project/resource. Set by `Paratext/Repository/AutoSendReceiveManager.cs:430-449`, cleared by performing a Send/Receive (`:197-210`). **Unrelated to activation** |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextDockingTheme.cs` | Investigation | "Move to autohide" → `ChangeDockState(DockState.DockRightAutoHide)` (loc key `ParatextDockingTheme_3`); "Dock window" → `ChangeDockState(DockState.Document)`; **`ParatextAutoHideStrip : AutoHideStripBase`** — sizes (collapsed 20/28, expanded 90), `MeasureHeight()` returns 0 when empty, `AllTabs` = right-autohide panes only, scrollbar overflow, tooltips, expand/collapse + persist, paint incl. badges |
+| 0 | `ParatextBase/Themes/DockingTheme/ParatextAutoHideWindow.cs` | Investigation | 78 lines — `ParatextAutoHideWindow : DockPanel.AutoHideWindowControl`; `AnimateTime = 140` ms; `DisplayingRectangle`/`OnLayout` overrides; per-edge splitter; non-active panes parked off-screen at `x = -width` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindow.cs` | Investigation | `ChangeDockState` state machine (accepts only `DockRightAutoHide`/`Document`/`Float`, else throws); **`MakeActive()`** — the single auto-activate funnel: `if (Pane.IsAutoHide) DockPanel.ActiveAutoHideContent = this`, then a *deferred* `DockHandler.Activate()` (calling `Activate()` alone would collapse the flyout); lazy load — autohidden content defers `LoadWindow()` to `OnActivated` |
+| 0 | `ParatextBase/Themes/DockingTheme/SendReceiveBadgeHelper.cs` | Investigation | 100 lines — the **colored dot**: 10px filled ellipse drawn iff a Send/Receive **update is available** for the project/resource. Set by `Paratext/Repository/AutoSendReceiveManager.cs`, cleared by performing a Send/Receive. **Unrelated to activation** |
 | 0 | `ParatextBase/Themes/DockingTheme/ScrollGroupBadgeHelper.cs` | Investigation | 93 lines — scroll-group letter badge on strip icons; its visibility raises the collapsed strip from 20 to 28 px |
-| 1 | `Paratext/WindowCollection.cs` | Investigation | `:1234-1238` `OpenAsType.AutoHide`; `:650-652` `ResetAutoHideStripWindow()` before layout load (**PTXS-20868**, z-order fix); `:698-705` re-seeds `Pane.ActiveContent` for autohide panes saved with none (**PTX-18050**, invisible-pane fix); `:675-679` force-resets `Dock*Portion` to 0.25 after load; `:884-894` deferred invalidate on close; `:1204-1205` new-tab anchoring skips autohide panes |
-| 1 | `Paratext/EditMenu/ListForm.cs` | Investigation | `:900-912` the **canonical auto-activate referrer** — a Results-list selection calls `ptw.MakeActive()` then scrolls to the match |
-| 1 | `ParatextBase/ParatextWindows/WindowStackManager.cs` | Investigation | `:124-133, 199-217` undo-layout-change snapshot/restore of autohide panes incl. `AutoHidePortion` |
-| 1 | `ParatextBase/ParatextWindows/WindowManagerHelper.cs` | Investigation | `:206-207` `FirstActiveWindow` excludes autohidden windows — they don't drive the main toolbar |
-| 1 | `ParatextBase/CommonForms/SelectScrTextsForm.Designer.cs` | Investigation | `:414` the Open dialog's "Open As → **Autohide**" option (`OpenAsType.AutoHide = 4`, `ParatextBase/ParatextWindows/OpenAsType.cs:40-44`) |
-| 1 | `ParatextBase/SharedSettings/Settings.Designer.cs` | Investigation | `:152-162` user setting `AutoHideBarExpanded` (default `False`) — strip expanded (90px, icon+label) vs collapsed (icon only) |
-| 1 | `ParatextBase/MegaMenu/MegaMenuButton.cs` | Investigation | `:122-191` sets `HideWhenMouseLeaves = false` while a menu is open so the flyout doesn't collapse under it; same pattern in `Paratext/ParallelPassages/ParallelPassagesTool.cs:516-523` |
+| 1 | `Paratext/WindowCollection.cs` | Investigation | `OpenAsType.AutoHide`; `ResetAutoHideStripWindow()` before layout load (**PTXS-20868**, z-order fix); re-seeds `Pane.ActiveContent` for autohide panes saved with none (**PTX-18050**, invisible-pane fix); force-resets `Dock*Portion` to 0.25 after load; deferred invalidate on close; new-tab anchoring skips autohide panes |
+| 1 | `Paratext/EditMenu/ListForm.cs` | Investigation | the **canonical auto-activate referrer** — a Results-list selection calls `ptw.MakeActive()` then scrolls to the match |
+| 1 | `ParatextBase/ParatextWindows/WindowStackManager.cs` | Investigation | undo-layout-change snapshot/restore of autohide panes incl. `AutoHidePortion` |
+| 1 | `ParatextBase/ParatextWindows/WindowManagerHelper.cs` | Investigation | `FirstActiveWindow` excludes autohidden windows — they don't drive the main toolbar |
+| 1 | `ParatextBase/CommonForms/SelectScrTextsForm.Designer.cs` | Investigation | the Open dialog's "Open As → **Autohide**" option (`OpenAsType.AutoHide = 4`, `ParatextBase/ParatextWindows/OpenAsType.cs`) |
+| 1 | `ParatextBase/SharedSettings/Settings.Designer.cs` | Investigation | user setting `AutoHideBarExpanded` (default `False`) — strip expanded (90px, icon+label) vs collapsed (icon only) |
+| 1 | `ParatextBase/MegaMenu/MegaMenuButton.cs` | Investigation | sets `HideWhenMouseLeaves = false` while a menu is open so the flyout doesn't collapse under it; same pattern in `Paratext/ParallelPassages/ParallelPassagesTool.cs` |
 | 2 | `ParatextBase/WeifenLuo.WinFormsUI.Docking.dll` | Investigation | **v3.0.4.0, binary only — no source in tree.** Owns flyout geometry (`DockPanel.AutoHideWindowRectangle`), `DockContentHandler.AutoHidePortion` (default `0.25`), the mouse-leave collapse timer, and XML persistence of `DockState` + `AutoHidePortion`. Reproduce with `ilspycmd -t WeifenLuo.WinFormsUI.Docking.DockPanel <dll>` |
-| — | `Paratext.Tests/WindowMenu/WindowCollectionTests.cs` | Investigation | `:538-613` three `[TestCase]`-driven undo-layout tests covering `DockRightAutoHide`; `UserInterfaceTests/BVTRepository9_1.cs:38` drives the "Move to autohide" context item |
+| — | `Paratext.Tests/WindowMenu/WindowCollectionTests.cs` | Investigation | three `[TestCase]`-driven undo-layout tests covering `DockRightAutoHide`; `UserInterfaceTests/BVTRepository9_1.cs` drives the "Move to autohide" context item |
 
 **Autohide UI entry points** — there is **no** application-menu command, toolbar button, keyboard
 shortcut, or drag gesture that enters autohide:
@@ -456,36 +456,36 @@ shortcut, or drag gesture that enters autohide:
 - Content is **lazily loaded on first expand and then kept alive** — never unloaded while collapsed.
 
 **Autohide HelpData Items** (`Paratext/HelpData.xml`; 17 items mention autohide):
-- ID: `ac545da7-b7dd-4d2a-8102-160ddcc85a74` - "What is the autohide area and what is it for?" (line 5562)
-- ID: `bb04b325-539c-48b3-ad53-313a339203be` - "How do I arrange open items in Paratext?" (line 24544;
-  section "Move to or from autohide" at `:24624`, right-click-menu inventory at `:24605-24616`)
-- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (`:15384` documents
+- ID: `ac545da7-b7dd-4d2a-8102-160ddcc85a74` - "What is the autohide area and what is it for?"
+- ID: `bb04b325-539c-48b3-ad53-313a339203be` - "How do I arrange open items in Paratext?" (includes
+  the "Move to or from autohide" section and the right-click-menu inventory)
+- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (documents
   the Open-dialog autohide option)
-- ID: `f47bd6e2-4747-4fd6-add4-0cb4864c9e43` (line 20106) / `199ecab8-4f56-4453-9940-69ab35575f93`
-  (line 22279) - the colored dot, for projects and for resources respectively
+- ID: `f47bd6e2-4747-4fd6-add4-0cb4864c9e43` / `199ecab8-4f56-4453-9940-69ab35575f93`
+  - the colored dot, for projects and for resources respectively
 - IDs `e804749d-8c0c-48c1-9605-2a554592169c` (1865) and `1a140dc5-0380-440d-8d1f-d5a88fe1c7af`
   (25624) - shared/modified layouts explicitly include autohide contents
 
 **UI Entry Points**:
 - ≡ Paratext > Layout > Save current layout
-  - Menu Structure: `MainForm`, handler `saveTextCombinationToolStripMenuItem_Click`, line 1357
+  - Menu Structure: `MainForm`, handler `saveTextCombinationToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
-  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 113
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`
   - Quote: "**≡ Paratext**, under **Layout** > **Save current layout**"
   - HelpData ID: `aad37193-723a-4ffc-9026-7e42c8f82590`
   - Dialog: `SaveTextCombinationsForm`
   - Question: "How do I save a layout of open items?"
 - ≡ Paratext > Layout > Manage layouts
-  - Menu Structure: `MainForm`, handler `manageLayoutsToolStripMenuItem_Click`, line 1370
+  - Menu Structure: `MainForm`, handler `manageLayoutsToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Paratext > Window > Arrange into columns/rows
-  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`, line 93
+  - Manual: `../paratext-manual/chapters/02_organizing_desktop.md`
   - Quote: "you can use the main Paratext menu to arrange windows by **rows** and **columns**"
   - HelpData ID: `bb04b325-539c-48b3-ad53-313a339203be`
   - Dialog: `SaveTextCombinationsForm`
   - Question: "How do I arrange open items in Paratext?"
 - Project > Project settings > Share saved layouts
-  - Menu Structure: `ParatextWindowWithMenus`, handler `shareSavedLayoutsToolStripMenuItem_Click`, line 928
+  - Menu Structure: `ParatextWindowWithMenus`, handler `shareSavedLayoutsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **HelpData Items**:
@@ -528,33 +528,33 @@ shortcut, or drag gesture that enters autohide:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `findToolStripMenuItem_Click` at line 1631 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `findToolStripMenuItem_Click` |
 | 0 | `Paratext/EditMenu/FindReplaceForm.cs` | HelpData dialog | `FindReplaceForm_tabBasic` |
-| 1 | `Paratext/EditMenu/FindReplaceSource.cs` | Import in D0 | Line 17: `using Paratext.Data.Find` |
-| 1 | `Paratext/EditMenu/FindReplaceInFiles.cs` | Field type in D0 | Line 47: `FindReplaceSource` |
-| 1 | `ParatextData/Find/FindSource.cs` | Base class | Line 24: `class FindReplaceSource : FindSource` |
-| 1 | `ParatextData/Filters/SelectedPassages.cs` | Field in D0 | Line 48: `SelectedPassages selectedPassages` |
-| 2 | `ParatextData/Find/SearchResult.cs` | Return type in D1 | FindSource.cs line 148: returns `SearchResult` |
-| 2 | `ParatextData/Find/VerseListItemCollection.cs` | Parameter in D1 | FindSource.cs line 158: `List<VerseListItem>` |
-| 2 | `ParatextData/ScrText.cs` | Field in D1 | FindSource.cs line 19: `protected ScrText _scrText` |
+| 1 | `Paratext/EditMenu/FindReplaceSource.cs` | Import in D0 | `using Paratext.Data.Find` |
+| 1 | `Paratext/EditMenu/FindReplaceInFiles.cs` | Field type in D0 | `FindReplaceSource` |
+| 1 | `ParatextData/Find/FindSource.cs` | Base class | `class FindReplaceSource : FindSource` |
+| 1 | `ParatextData/Filters/SelectedPassages.cs` | Field in D0 | `SelectedPassages selectedPassages` |
+| 2 | `ParatextData/Find/SearchResult.cs` | Return type in D1 | FindSource.cs: returns `SearchResult` |
+| 2 | `ParatextData/Find/VerseListItemCollection.cs` | Parameter in D1 | FindSource.cs: `List<VerseListItem>` |
+| 2 | `ParatextData/ScrText.cs` | Field in D1 | FindSource.cs: `protected ScrText _scrText` |
 
 **Not Found**:
 - `FindReplaceOptions.cs` (search: "FindReplaceOptions" - class defined inline, not separate file)
 
 **Dialog Navigation**:
-- `TextForm` → `FindReplaceForm` (via menu handler at line 1631)
+- `TextForm` → `FindReplaceForm` (via menu handler)
 
 **UI Entry Points**:
 - ≡ Tab > Edit > Find (Ctrl+F)
-  - Menu Structure: `TextForm`, handler `findToolStripMenuItem_Click`, line 1631
+  - Menu Structure: `TextForm`, handler `findToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 44
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "you could use the **Find** feature to look for a word that occurs in the verse you are looking for. Ctrl+F."
   - HelpData ID: `fd1874e8-271b-43b8-b8c7-8eda5fead261`
   - Dialog: `FindReplaceForm_tabBasic`
   - Question: "How do I find a word or phrase in a text?"
 - ≡ Tab > Edit > Replace (Ctrl+H)
-  - Menu Structure: `TextForm`, handler `replaceToolStripMenuItem_Click`, line 1636
+  - Menu Structure: `TextForm`, handler `replaceToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - HelpData ID: `8aa266ed-7665-4233-bdd5-40f1eaf95020`
   - Dialog: `FindReplaceForm_tabReplacement`
@@ -601,38 +601,38 @@ shortcut, or drag gesture that enters autohide:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/WindowCollection.cs` | Investigation | `:277-304` **`OpenQuickModeWindow(ScrText, VerseRef)`** — the whole feature. Singleton field `:75`; `new TextForm(true)`; `ScrollingGroup = ScrollGroup.None` (`:283`); `ShowWindow(…, OpenAsType.Floating)` (`:288`); re-target branch `:291-299`; cleared on close `:876-877` |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `quickReferenceToolStripMenuItem_Click` at **line 380**; Designer `:830` `ShortcutKeys = Keys.Control \| Keys.Q`, `:832` text, `:742` parent menu; enablement gate `:164` (Scripture projects only) |
-| 0 | `Paratext/TextForm.cs` | Investigation | `:182-192` `TextForm(bool isQuickMode, …)`. The flag changes exactly **two** things: caption suffix `" (Quick Reference)"` (`:649-650`) and copyright-banner suppression (`:4117`) |
+| 0 | `Paratext/WindowCollection.cs` | Investigation | **`OpenQuickModeWindow(ScrText, VerseRef)`** — the whole feature. Singleton field; `new TextForm(true)`; `ScrollingGroup = ScrollGroup.None`; `ShowWindow(…, OpenAsType.Floating)`; re-target branch; cleared on close |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `quickReferenceToolStripMenuItem_Click`; Designer sets `ShortcutKeys = Keys.Control \| Keys.Q`, text, and parent menu; enablement gate (Scripture projects only) |
+| 0 | `Paratext/TextForm.cs` | Investigation | `TextForm(bool isQuickMode, …)`. The flag changes exactly **two** things: caption suffix `" (Quick Reference)"` and copyright-banner suppression |
 | 0 | `ParatextBase/Themes/DockingTheme/ParatextFloatWindow.cs` | Investigation | the hosting float chrome — see the 1.6 floating-window addendum |
-| 1 | `ParatextInternalShared/ScriptureEditor/ScriptureViewSource.cs` | Investigation | `:315-335` `GetDefaultScriptureView` — decides which view the popup renders in |
-| 1 | `Paratext/Checking/Reference/ReferenceAnnotation.cs` | Investigation | `:55-62` `Click` → `OpenQuickModeWindow`; `:40-53` valid vs invalid icon/style; `:68` hover text |
-| 1 | `Paratext/Checking/Reference/ReferenceAnnotationSource.cs` | Investigation | produces the clickable icons; registered per-project at `TextForm.cs:904-911` |
-| 1 | `ParatextBase/ParatextWindows/WindowCollectionBase.cs` | Investigation | `:144` abstract `OpenQuickModeWindow`; `:22-39` `OpenWindowBehavior.QuickReference` |
-| 1 | `CorePluginInterfaces/IPluginHost.cs` | Investigation | `:52-73` public plugin API for opening a Quick Reference window |
-| — | `Paratext.Tests/WindowMenu/WindowCollectionTests.cs` | Investigation | `:866, 995, 1092, 1190, 1286` — asserts singleton reuse, `ScrollGroup.None`, `DockState.Float` |
+| 1 | `ParatextInternalShared/ScriptureEditor/ScriptureViewSource.cs` | Investigation | `GetDefaultScriptureView` — decides which view the popup renders in |
+| 1 | `Paratext/Checking/Reference/ReferenceAnnotation.cs` | Investigation | `Click` → `OpenQuickModeWindow`; valid vs invalid icon/style; hover text |
+| 1 | `Paratext/Checking/Reference/ReferenceAnnotationSource.cs` | Investigation | produces the clickable icons; registered per-project at `TextForm.cs` |
+| 1 | `ParatextBase/ParatextWindows/WindowCollectionBase.cs` | Investigation | abstract `OpenQuickModeWindow`; `OpenWindowBehavior.QuickReference` |
+| 1 | `CorePluginInterfaces/IPluginHost.cs` | Investigation | public plugin API for opening a Quick Reference window |
+| — | `Paratext.Tests/WindowMenu/WindowCollectionTests.cs` | Investigation | — asserts singleton reuse, `ScrollGroup.None`, `DockState.Float` |
 
 **UI Entry Points** (the inventory previously listed 2 of 8):
-- ≡ Tab > Tools > Quick reference — **Ctrl+Q** (`ParatextWindowWithMenus.cs:380`; enabled only for
+- ≡ Tab > Tools > Quick reference — **Ctrl+Q** (`ParatextWindowWithMenus.cs`; enabled only for
   Scripture projects). HelpData `747ceec6-…`
-- Click a **valid** reference icon in the text (`ReferenceAnnotation.cs:55-62`; the red-X invalid
+- Click a **valid** reference icon in the text (`ReferenceAnnotation.cs`; the red-X invalid
   icon is inert). HelpData `daad5fd1-…`
 - Results list > View > **Quick reference mode**, then double-click / Alt+↑ / Alt+↓ a result
-  (`Paratext/EditMenu/ListForm.cs:720-728, 904-908`; persisted in `Settings.Default.List_UseQuickMode`)
+  (`Paratext/EditMenu/ListForm.cs, 904-908`; persisted in `Settings.Default.List_UseQuickMode`)
 - Find/Replace > **"Quick Reference Mode"** checkbox — seeds the Results list it creates
-  (`Paratext/EditMenu/FindReplaceForm.cs:766-769`)
+  (`Paratext/EditMenu/FindReplaceForm.cs`)
 - Project-qualified `link:ref:prj:…` hyperlink click in the editor
-  (`Paratext/TextForm.cs:2722-2735` — only when the link supplied a `ScrText`; otherwise the main
+  (`Paratext/TextForm.cs` — only when the link supplied a `ScrText`; otherwise the main
   window navigates instead)
-- Link click in an XML-resource window (`Paratext/XmlResource/XmlResourceWindow.cs:1290-1300`)
+- Link click in an XML-resource window (`Paratext/XmlResource/XmlResourceWindow.cs`)
 - `quickref:` link click in an Enhanced Resource / Marble window
-  (`Paratext/Marble/MarbleForm.cs:2059-2063`; markup `quickref:` + zero-padded `BBBCCCVVV`)
-- Plugin API `OpenWindowBehavior.QuickReference` (`ParatextBase/Plugins/ParatextPluginUtils.cs:154`)
+  (`Paratext/Marble/MarbleForm.cs`; markup `quickref:` + zero-padded `BBBCCCVVV`)
+- Plugin API `OpenWindowBehavior.QuickReference` (`ParatextBase/Plugins/ParatextPluginUtils.cs`)
 
 **Corrections** (verified 2026-07-23 against `~/Paratext@master` by the autohide/Quick-Reference
 investigation):
 
-- The handler is at **`ParatextWindowWithMenus.cs:380`**, not 363 — the file has drifted. Both the
+- The handler is at **`ParatextWindowWithMenus.cs`**, not 363 — the file has drifted. Both the
   old Implementation row and the old UI-Entry-Point row cited 363.
 - **"No dedicated dialog class / HelpData-documented behavior only" is wrong.** There is no class
   *named* `QuickReference*`, but the feature is concrete code: `WindowCollection.OpenQuickModeWindow`
@@ -640,12 +640,12 @@ investigation):
   `OpenWindowBehavior.QuickReference` enum value with XML docs, a public plugin API, and five NUnit
   tests. The window itself is `TextForm(isQuickMode: true)` hosted in `ParatextFloatWindow`.
 - **The popup does NOT render in "Unformatted" view.** `OpenQuickModeWindow` resolves the view via
-  `ScriptureViewSource.GetDefaultScriptureView` (`:315-335`): **`Standard`** for an editable
+  `ScriptureViewSource.GetDefaultScriptureView`: **`Standard`** for an editable
   Scripture project, **`Formatted`** for a resource / any non-editable project, `Study Bible` /
   `Study Bible Additions` for those project types, and `Standard Specification` on a book with a
   Bible-module association. `"Unformatted"` appears nowhere on the Quick Reference path.
-- **Ctrl+Q is sourced twice** — `ParatextWindowWithMenus.Designer.cs:830` and the HelpData shortcut
-  list (`HelpData.xml:8477`, "Ctrl + Q = Open Quick Reference window").
+- **Ctrl+Q is sourced twice** — `ParatextWindowWithMenus.Designer.cs` and the HelpData shortcut
+  list (`HelpData.xml`, "Ctrl + Q = Open Quick Reference window").
 - The window is **not read-only** and not view-restricted by virtue of being quick-mode; it is an
   ordinary text window in a float window.
 - Quick-mode-ness **does not survive a layout save/restore**: `TextFormMemento` has no quick-mode
@@ -661,11 +661,11 @@ investigation):
   translation on a canonical, non-module book.
 
 **HelpData Items**:
-- ID: `747ceec6-54f3-4a94-8b71-157492cb2ac6` - "How do I open a Quick Reference window?" (line 15321)
-- ID: `daad5fd1-67ba-40f0-96bb-7f570e165755` - "What is a Quick Reference window?" (line 29661)
-- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" (line 15339) —
+- ID: `747ceec6-54f3-4a94-8b71-157492cb2ac6` - "How do I open a Quick Reference window?"
+- ID: `daad5fd1-67ba-40f0-96bb-7f570e165755` - "What is a Quick Reference window?"
+- ID: `cb4d28bc-093e-463e-8a36-6fc4eec861ef` - "Where do items open in Paratext?" —
   Quick Reference heads the "always open as a floating window" list
-- `HelpData.xml:8477` - keyboard-shortcut list entry for Ctrl+Q
+- `HelpData.xml` - keyboard-shortcut list entry for Ctrl+Q
 
 **Validation**: [MS] - - [M] [H] [C] — Last verified: 2026-07-23
 
@@ -688,7 +688,7 @@ investigation):
 |--------|-----------|--------|
 | Menu Structure | Menu: `Insert > Figure`; Handler: `figureToolStripMenuItem_Click`; Owner: `TextForm` | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
-| Manual | `../paratext-manual/chapters/24_finalizing.md`, line 55: "From the **Insert** menu, choose **Figure**" | `[M]` |
+| Manual | `../paratext-manual/chapters/24_finalizing.md`: "From the **Insert** menu, choose **Figure**" | `[M]` |
 | HelpData | Keyword: `ComponentInsertFigure`; Dialog: `FigurePropertiesForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -698,13 +698,13 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `figureToolStripMenuItem_Click` at line 1808 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `figureToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Insert > Figure
-  - Menu Structure: `TextForm`, handler `figureToolStripMenuItem_Click`, line 1808
+  - Menu Structure: `TextForm`, handler `figureToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
-  - Manual: `../paratext-manual/chapters/24_finalizing.md`, line 55
+  - Manual: `../paratext-manual/chapters/24_finalizing.md`
   - Quote: "From the **Insert** menu, choose **Figure**"
 
 **Validation**: [MS] - [R] [M] [H] [C] — Last verified: 2026-01-20
@@ -736,11 +736,11 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `tableToolStripMenuItem_Click` at line 1781 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `tableToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Insert > Table
-  - Menu Structure: `TextForm`, handler `tableToolStripMenuItem_Click`, line 1781
+  - Menu Structure: `TextForm`, handler `tableToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] - [R] - [H] [C] — Last verified: 2026-01-20
@@ -777,22 +777,22 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `footnoteToolStripMenuItem_Click` at line 1761 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `endNoteToolStripMenuItem_Click` at line 1771 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertEfMarkerButtonOnClick` at line 4531 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `footnoteToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `endNoteToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertEfMarkerButtonOnClick` |
 
 **UI Entry Points**:
 - ≡ Tab > Insert > Footnote
-  - Menu Structure: `TextForm`, handler `footnoteToolStripMenuItem_Click`, line 1761
+  - Menu Structure: `TextForm`, handler `footnoteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > End note
-  - Menu Structure: `TextForm`, handler `endNoteToolStripMenuItem_Click`, line 1771
+  - Menu Structure: `TextForm`, handler `endNoteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Extended footnote
-  - Menu Structure: `TextForm`, handler `InsertEfMarkerButtonOnClick`, line 4531
+  - Menu Structure: `TextForm`, handler `InsertEfMarkerButtonOnClick`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Extended end note
-  - Menu Structure: `TextForm`, handler `extendedEndNoteToolStripMenuItem_Click`, line 1734
+  - Menu Structure: `TextForm`, handler `extendedEndNoteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] - [R] [M] [H] [C] — Last verified: 2026-01-20
@@ -836,31 +836,31 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `crossReferenceToolStripMenuItem_Click` at line 1766 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertExMarkerButtonOnClick` at line 4520 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `extractCrossReferencesToolStripMenuItem_Click` at line 472 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `insertCrossReferencesToolStripMenuItem_Click` at line 507 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `insertMissingOriginReferencesToolStripMenuItem_Click` at line 566 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `crossReferenceToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `InsertExMarkerButtonOnClick` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `extractCrossReferencesToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `insertCrossReferencesToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `insertMissingOriginReferencesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 
 *Interactive Insertion:*
 - ≡ Tab > Insert > Cross-reference
-  - Menu Structure: `TextForm`, handler `crossReferenceToolStripMenuItem_Click`, line 1766
+  - Menu Structure: `TextForm`, handler `crossReferenceToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Extended cross reference
-  - Menu Structure: `TextForm`, handler `InsertExMarkerButtonOnClick`, line 4520
+  - Menu Structure: `TextForm`, handler `InsertExMarkerButtonOnClick`
   - File: `Paratext/TextForm.cs`
 
 *Batch Operations:*
 - ≡ Tab > Project > Advanced > Extract cross-references
-  - Menu Structure: `ParatextWindowWithMenus`, handler `extractCrossReferencesToolStripMenuItem_Click`, line 472
+  - Menu Structure: `ParatextWindowWithMenus`, handler `extractCrossReferencesToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Advanced > Insert cross-references
-  - Menu Structure: `ParatextWindowWithMenus`, handler `insertCrossReferencesToolStripMenuItem_Click`, line 507
+  - Menu Structure: `ParatextWindowWithMenus`, handler `insertCrossReferencesToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Advanced > Insert missing origin references
-  - Menu Structure: `ParatextWindowWithMenus`, handler `insertMissingOriginReferencesToolStripMenuItem_Click`, line 566
+  - Menu Structure: `ParatextWindowWithMenus`, handler `insertMissingOriginReferencesToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **Use Cases**:
@@ -893,11 +893,11 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `verseNumberToolStripMenuItem_Click` at line 1756 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `verseNumberToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Insert > Verse number
-  - Menu Structure: `TextForm`, handler `verseNumberToolStripMenuItem_Click`, line 1756
+  - Menu Structure: `TextForm`, handler `verseNumberToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] - - - [H] [C] — Last verified: 2026-01-20
@@ -929,15 +929,15 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `noteToolStripMenuItem_Click` at line 1719 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `consultantNoteToolStripMenuItem_Click` at line 1740 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `noteToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `consultantNoteToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Insert > Project note
-  - Menu Structure: `TextForm`, handler `noteToolStripMenuItem_Click`, line 1719
+  - Menu Structure: `TextForm`, handler `noteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > Insert > Consultant note
-  - Menu Structure: `TextForm`, handler `consultantNoteToolStripMenuItem_Click`, line 1740
+  - Menu Structure: `TextForm`, handler `consultantNoteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **Validation**: [MS] - [R] - [H] [C] — Last verified: 2026-01-20
@@ -971,17 +971,17 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `quotationRulesToolStripMenuItem_Click` at line 912 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `quotationRulesToolStripMenuItem_Click` |
 | 0 | `Paratext/Checking/QuotationRulesForm.cs` | HelpData dialog | `QuotationRulesForm` - handles quotation rules and autocorrect settings |
-| 1 | `Paratext.Base.AutoReplace` namespace | Import in D0 | Line 16: `using Paratext.Base.AutoReplace;` |
-| 1 | `PtxUtils.AutoReplace` namespace | Import in D0 | Line 25: `using PtxUtils.AutoReplace;` |
+| 1 | `Paratext.Base.AutoReplace` namespace | Import in D0 | `using Paratext.Base.AutoReplace;` |
+| 1 | `PtxUtils.AutoReplace` namespace | Import in D0 | `using PtxUtils.AutoReplace;` |
 
 **Dialog Navigation**:
-- `ParatextWindowWithMenus` → `QuotationRulesForm` (via menu handler at line 912)
+- `ParatextWindowWithMenus` → `QuotationRulesForm` (via menu handler)
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > Quotation rules
-  - Menu Structure: `ParatextWindowWithMenus`, handler `quotationRulesToolStripMenuItem_Click`, line 912
+  - Menu Structure: `ParatextWindowWithMenus`, handler `quotationRulesToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `d5a62c31-6d19-4670-8ee7-8188dfcde4bc`
   - Dialog: `QuotationRulesForm`
@@ -1023,19 +1023,19 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `removeAllNonbreakingSpacesFromProjectToolStripMenuItem_Click` at line 574 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `replaceNoBreakSpacesWithNormalSpacesButKeepTildesToolStripMenuItem_Click` at line 579 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `standardizeWhitespaceToolStripMenuItem_Click` at line 584 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `removeAllNonbreakingSpacesFromProjectToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `replaceNoBreakSpacesWithNormalSpacesButKeepTildesToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `standardizeWhitespaceToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > Project > Advanced > Replace no-break spaces with normal spaces
-  - Menu Structure: `ParatextWindowWithMenus`, handler `removeAllNonbreakingSpacesFromProjectToolStripMenuItem_Click`, line 574
+  - Menu Structure: `ParatextWindowWithMenus`, handler `removeAllNonbreakingSpacesFromProjectToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Advanced > Replace no-break spaces with normal spaces but keep tildes
-  - Menu Structure: `ParatextWindowWithMenus`, handler `replaceNoBreakSpacesWithNormalSpacesButKeepTildesToolStripMenuItem_Click`, line 579
+  - Menu Structure: `ParatextWindowWithMenus`, handler `replaceNoBreakSpacesWithNormalSpacesButKeepTildesToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Advanced > Standardize whitespace
-  - Menu Structure: `ParatextWindowWithMenus`, handler `standardizeWhitespaceToolStripMenuItem_Click`, line 584
+  - Menu Structure: `ParatextWindowWithMenus`, handler `standardizeWhitespaceToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **Use Cases**:
@@ -1076,8 +1076,8 @@ investigation):
 | HelpData | ID: `333a9610-21c9-4d5d-a7c1-bc97fe66eecc`; Section "More on the reference icon"; Keywords: `ComponentScriptureReferenceSettings` | `[H]` |
 | HelpData | ID: `cace882a-69cb-4325-8068-fc34a708e2ee`; Question: "Why do some markers display in red?" | `[H]` |
 | HelpData | ID: `50553df7-ae46-4a16-bc91-56265604a27a`; Question: "How do I highlight invalid or unknown characters in my text?" | `[H]` |
-| Manual | `../paratext-manual/chapters/04_keyboarding.md`, line 63: "You can use ≡ Tab under View > Highlight Invalid Characters" | `[M]` |
-| Manual | `../paratext-manual/chapters/08_spell_check.md`, line 21: "Work through your text with red squiggly lines" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "You can use ≡ Tab under View > Highlight Invalid Characters" | `[M]` |
+| Manual | `../paratext-manual/chapters/08_spell_check.md`: "Work through your text with red squiggly lines" | `[M]` |
 
 **Key Quote** (from HelpData ID: `333a9610-21c9-4d5d-a7c1-bc97fe66eecc`):
 > "Wherever references occur, a reference icon shows whether the reference is valid or invalid... If a reference is invalid, the reference icon has a red X. If a reference is valid, the reference icon is entirely black and you can click the reference icon to open a Quick Reference window."
@@ -1089,26 +1089,26 @@ investigation):
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `highlightInvalidCharactersToolStripMenuItem_Click` at line 2113 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `displaySpellingMenuItem_Click` at line 2186 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `highlightBiblicalTermsToolStripMenuItem_Click` at line 2095 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `highlightGuessedRenderingsToolStripMenuItem_Click` at line 2104 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `highlightInvalidCharactersToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `displaySpellingMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `highlightBiblicalTermsToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `highlightGuessedRenderingsToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Tab > View > Highlight invalid characters
-  - Menu Structure: `TextForm`, handler `highlightInvalidCharactersToolStripMenuItem_Click`, line 2113
+  - Menu Structure: `TextForm`, handler `highlightInvalidCharactersToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - HelpData ID: `50553df7-ae46-4a16-bc91-56265604a27a`
   - Question: "How do I highlight invalid or unknown characters in my text?"
 - ≡ Tab > View > Display spelling errors
-  - Menu Structure: `TextForm`, handler `displaySpellingMenuItem_Click`, line 2186
+  - Menu Structure: `TextForm`, handler `displaySpellingMenuItem_Click`
   - File: `Paratext/TextForm.cs`
-  - Manual: `../paratext-manual/chapters/08_spell_check.md`, line 21
+  - Manual: `../paratext-manual/chapters/08_spell_check.md`
 - ≡ Tab > View > Highlight biblical term renderings
-  - Menu Structure: `TextForm`, handler `highlightBiblicalTermsToolStripMenuItem_Click`, line 2095
+  - Menu Structure: `TextForm`, handler `highlightBiblicalTermsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Tab > View > Highlight guessed renderings
-  - Menu Structure: `TextForm`, handler `highlightGuessedRenderingsToolStripMenuItem_Click`, line 2104
+  - Menu Structure: `TextForm`, handler `highlightGuessedRenderingsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Reference icons display automatically in text (no menu required)
   - HelpData ID: `333a9610-21c9-4d5d-a7c1-bc97fe66eecc`
@@ -1178,7 +1178,7 @@ investigation):
 ## Notes
 
 - FormattedEditor is at repo root (`FormattedEditor/`), not under `Paratext/`
-- BCV navigation is toolbar-based with implementation in MainForm (line 329: Reference property, line 407: GotoReference method)
+- BCV navigation is toolbar-based with implementation in MainForm (Reference property: GotoReference method)
 - Quick Reference menu item is in `ParatextWindowWithMenus` (base class), inherited by all windows
 - Find/Replace has richest evidence chain showing UI → Logic → Data layers
 - **Autocorrect**: Accessed via Project > Project settings > Quotation rules (not a dedicated menu item). Also uses autocorrect.txt file in project folder for custom replacements.

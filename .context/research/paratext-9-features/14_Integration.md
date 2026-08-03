@@ -44,18 +44,18 @@ Integration features connect Paratext to external tools and services. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `pluginManagerToolStripMenuItem_Click` at line 1120 |
-| 1 | `Paratext/Plugins/PluginManagerForm.cs` | Instantiated in D0 | Line 1122: `new PluginManagerForm()` |
-| 1 | `ParatextBase/Plugins/PluginManager.cs` | Import in D1 | Line 18: `PluginManager.Default?.InstalledPlugins` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `pluginManagerToolStripMenuItem_Click` |
+| 1 | `Paratext/Plugins/PluginManagerForm.cs` | Instantiated in D0 | `new PluginManagerForm()` |
+| 1 | `ParatextBase/Plugins/PluginManager.cs` | Import in D1 | `PluginManager.Default?.InstalledPlugins` |
 | 2 | `ParatextData/Plugins/PluginDataMergeKeysFile.cs` | Plugin data storage | Part of plugin data management |
 | 2 | `PluginFramework/HostSideAdapters/` | Framework adapters | .NET Add-In adapters |
 
 **Dialog Navigation**:
-- `MainForm` → `PluginManagerForm` (line 1122)
+- `MainForm` → `PluginManagerForm`
 
 **UI Entry Points**:
 - Paratext > Advanced > Plugins
-  - Menu Structure: `MainForm`, handler `pluginManagerToolStripMenuItem_Click`, line 1120
+  - Menu Structure: `MainForm`, handler `pluginManagerToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -99,35 +99,35 @@ Integration features connect Paratext to external tools and services. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `findInDictionaryToolStripMenuItem_Click` at line 1641 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `findRelatedWordsToolStripMenuItem_Click` at line 1646 |
-| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | handler at line 1751 (Find in dictionary) |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `importSLTTDBFileToolStripMenuItem_Click` at line 1545 |
-| 1 | `Paratext/Linguistics/FindLexemeForm.cs` | Invoked by D0 | Line 1643: `FindInDictionary.Run()` |
-| 1 | `Paratext/Linguistics/RelatedLexemesForm.cs` | Invoked by D0 | Line 1648: `FindRelatedWords.Run()` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `findInDictionaryToolStripMenuItem_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `findRelatedWordsToolStripMenuItem_Click` |
+| 0 | `Paratext/WordList/WordListForm.cs` | Menu Structure | handler (Find in dictionary) |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `importSLTTDBFileToolStripMenuItem_Click` |
+| 1 | `Paratext/Linguistics/FindLexemeForm.cs` | Invoked by D0 | `FindInDictionary.Run()` |
+| 1 | `Paratext/Linguistics/RelatedLexemesForm.cs` | Invoked by D0 | `FindRelatedWords.Run()` |
 | 2 | `Paratext/Linguistics/ChooseLexicalProviderForm.cs` | Form Relationships | Lexical provider selection |
-| 2 | `Paratext.LexicalContracts/Lexeme.cs` | Import in D1 | Line 27: `Lexeme[] lexemes` |
+| 2 | `Paratext.LexicalContracts/Lexeme.cs` | Import in D1 | `Lexeme[] lexemes` |
 
 **Dialog Navigation**:
 - `TextForm` → `FindLexemeForm` (via FindInDictionary.Run)
 - `TextForm` → `RelatedLexemesForm` (via FindRelatedWords.Run)
-- `ProjectPropertiesForm` → `ChooseLexicalProviderForm` (line 5125)
+- `ProjectPropertiesForm` → `ChooseLexicalProviderForm`
 
 **UI Entry Points**:
 - Tools > Find in dictionary (FLEx)
-  - Menu Structure: `TextForm`, handler `findInDictionaryToolStripMenuItem_Click`, line 1641
+  - Menu Structure: `TextForm`, handler `findInDictionaryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Tools > Find related words (FLEx)
-  - Menu Structure: `TextForm`, handler `findRelatedWordsToolStripMenuItem_Click`, line 1646
+  - Menu Structure: `TextForm`, handler `findRelatedWordsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Tools > Find in dictionary (FLEx) [WordListForm]
-  - Menu Structure: `WordListForm`, handler `findInDictionaryToolStripMenuItem_Click`, line 1751
+  - Menu Structure: `WordListForm`, handler `findInDictionaryToolStripMenuItem_Click`
   - File: `Paratext/WordList/WordListForm.cs`
 - Tools > Find related words (FLEx) [WordListForm]
-  - Menu Structure: `WordListForm`, handler `findRelatedWordsToolStripMenuItem_Click`, line 1759
+  - Menu Structure: `WordListForm`, handler `findRelatedWordsToolStripMenuItem_Click`
   - File: `Paratext/WordList/WordListForm.cs`
 - ≡ Tab > Project > Advanced > Import SLT TDB file
-  - Menu Structure: `TextForm`, handler `importSLTTDBFileToolStripMenuItem_Click`, line 1545
+  - Menu Structure: `TextForm`, handler `importSLTTDBFileToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Note: SLT (Source Language Tools) is a predecessor to FLEx; TDB files contain lexical/term data
 
@@ -172,14 +172,14 @@ Integration features connect Paratext to external tools and services. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `accessLogosResourcesToolStripMenuItem_Click` at line 1083 |
-| 1 | `ParatextBase/LogosResources/LogosAccess.cs` | Import in D0 | Line 1085: `LogosAccess.SingleInstance` |
-| 1 | `Paratext/SourceLanguageTools/LibronixForm.cs` | Instantiated in D0 | Line 1093: `new LibronixForm()` (for Logos 3) |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `accessLogosResourcesToolStripMenuItem_Click` |
+| 1 | `ParatextBase/LogosResources/LogosAccess.cs` | Import in D0 | `LogosAccess.SingleInstance` |
+| 1 | `Paratext/SourceLanguageTools/LibronixForm.cs` | Instantiated in D0 | `new LibronixForm()` (for Logos 3) |
 | 2 | `LogosSynch/Src/LibronixLinker/Logos4PositionHandler.cs` | Logos v4 integration | Position synchronization |
 
 **UI Entry Points**:
 - Paratext > Access Logos resources
-  - Menu Structure: `MainForm`, handler `accessLogosResourcesToolStripMenuItem_Click`, line 1083
+  - Menu Structure: `MainForm`, handler `accessLogosResourcesToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -395,7 +395,7 @@ Integration features connect Paratext to external tools and services. This inclu
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/ToolsMenu/CMSManager.cs` | Code | `BuildMenu()` at line 46 - populates Custom tools menu |
+| 0 | `Paratext/ToolsMenu/CMSManager.cs` | Code | `BuildMenu()` - populates Custom tools menu |
 | 0 | `Paratext/ToolsMenu/PythonChecksForm.cs` | Form Relationships | Executes Python scripts via IronPython |
 | 1 | `Paratext/ToolsMenu/CMSItem.cs` | Used by CMSManager | Tool definition class parsed from .cms files |
 | 1 | `Paratext/TextForm.cs` | Opens PythonChecksForm | Via Custom tools menu selection |
@@ -407,7 +407,7 @@ Integration features connect Paratext to external tools and services. This inclu
 
 The **Custom tools** menu is populated dynamically by `CMSManager.cs` from `.cms` files located in the `My Paratext Projects/cms` directory. Each `.cms` file defines a tool that runs a Python script against project data.
 
-**Menu Building Logic** (CMSManager.cs lines 46-76):
+**Menu Building Logic** (CMSManager.cs):
 
 ```
 1. Scan cms directory for *.cms files
@@ -598,23 +598,23 @@ CMS files use a backslash-prefixed marker format. Required and optional paramete
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `regexPalToolStripMenuItem_Click` at line 1132 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `regExPalToolStripMenuItem_Click` at line 1139 |
-| 1 | `Paratext/RegExPal/RegExPalForm.cs` | Invoked by D0 | Line 1134: `RegexPalForm.Display(ActiveScriptureText)` |
-| 1 | `Paratext/RegExPal/RegExMatchingEngine.cs` | Field in D1 | Line 77: `RegExMatchingEngine _engine` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `regexPalToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `regExPalToolStripMenuItem_Click` |
+| 1 | `Paratext/RegExPal/RegExPalForm.cs` | Invoked by D0 | `RegexPalForm.Display(ActiveScriptureText)` |
+| 1 | `Paratext/RegExPal/RegExMatchingEngine.cs` | Field in D1 | `RegExMatchingEngine _engine` |
 | 2 | `Paratext/RegExPal/Match.cs` | Used by D1 | Match result class |
 | 2 | `Paratext/RegExPal/Options.cs` | Form in D1 | RegEx options form |
 
 **Dialog Navigation**:
-- `MainForm` → `RegExPalForm` (line 1134)
-- `ParatextWindowWithMenus` → `RegExPalForm` (line 1141)
+- `MainForm` → `RegExPalForm`
+- `ParatextWindowWithMenus` → `RegExPalForm`
 
 **UI Entry Points**:
 - Paratext > Advanced > RegEx Pal
-  - Menu Structure: `MainForm`, handler `regexPalToolStripMenuItem_Click`, line 1132
+  - Menu Structure: `MainForm`, handler `regexPalToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Tab > Project > Advanced > RegEx Pal
-  - Menu Structure: `ParatextWindowWithMenus`, handler `regExPalToolStripMenuItem_Click`, line 1139
+  - Menu Structure: `ParatextWindowWithMenus`, handler `regExPalToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **RegExPalForm Menus** (ownerForm: RegExPalForm):
@@ -679,7 +679,7 @@ CMS files use a backslash-prefixed marker format. Required and optional paramete
 - RegEx Pal is accessible from both MainForm and ParatextWindowWithMenus (different handlers)
 - CMS (Custom Management System) files define Python-based tools in `My Paratext Projects/cms/`
 - CMSManager.cs dynamically builds the Tools > Custom tools menu from .cms files
-- Tools marked `\check DELETED` on line 1 are excluded from the menu
+- Tools marked `\check DELETED` on are excluded from the menu
 - Tools with `\wordlist` are hidden (integrated into Biblical Terms tool)
 - Only Python-based tools (`\programToRun python` or no programToRun) appear in menu
 - Tools with `\outputProject` can modify project text and show "[CAN CHANGE TEXT]" in menu

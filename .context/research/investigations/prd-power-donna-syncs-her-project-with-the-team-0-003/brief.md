@@ -1,11 +1,13 @@
 # Donna syncs her project with the team (core Send/Receive): investigation
 
-> **Note**: this brief predates the current 7-section brief template — it has no §3
-> confirm-intent or §7 engineering-decisions section, and its open questions live in §5.
+> **Frozen record** — investigation as run 2026-07-02, kept as a worked example. The code state
+> and work items it describes have since evolved — follow the current code, not this document. It
+> also predates the current 7-section brief template: no §3 confirm-intent or §7
+> engineering-decisions section, and its open questions live in §5.
 
 > PRD: `PRD-Power-Donna syncs her project with the team_0-003.md` (v0-003, owner Vladimir).
 > Shakedown run of `/investigate-prd`, 2026-07-02. No Jira tickets existed for this PRD when this
-> ran; work items below are what the investigation proposes for the state of the code today.
+> ran; work items below are what the investigation proposed against the code state of that date.
 
 ## 1. What the PRD asks for
 

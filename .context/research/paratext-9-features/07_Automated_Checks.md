@@ -34,9 +34,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks`; Dialog: `RunBasicChecksForm` | `[H]` |
-| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`, line 158: "The capitalization check looks for several types of capitalization problems." | `[M]` |
+| Manual | `../paratext-manual/chapters/12_basic_checks_2.md`: "The capitalization check looks for several types of capitalization problems." | `[M]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
 
 **Key Quote** (from Manual):
@@ -46,18 +46,18 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/CapitalizationCheck.cs` | BasicChecks.GetCheck() | Line 46: `return new CapitalizationCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/CapitalizationCheck.cs` | BasicChecks.GetCheck() | `return new CapitalizationCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Run basic checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm` (select "Capitalization" check within dialog)
   - HelpData Keyword: `ComponentRunBasicChecks`
@@ -82,9 +82,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentQuotationRules`; Dialog: `QuotationRulesForm_tabQuoteMarks` | `[H]` |
-| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 99: "The quotations check ensures you have been consistent in marking the direct speech correctly." | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`: "The quotations check ensures you have been consistent in marking the direct speech correctly." | `[M]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
 
 **Key Quote** (from Requirements):
@@ -97,14 +97,14 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/QuotationCheck.cs` | BasicChecks.GetCheck() | Line 58: `return new QuotationCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/QuotationCheck.cs` | BasicChecks.GetCheck() | `return new QuotationCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > Quotation rules
@@ -112,7 +112,7 @@ Automated Checks run validation rules against project text to find errors. They 
   - Dialog: `QuotationRulesForm_tabQuoteMarks`
   - Question: "Guide: Project > Project settings > Quotation rules > Quote marks"
 - ≡ Tab > Tools > Run basic checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm` (select "Quotations" check within dialog)
   - HelpData ID: `c80abc3d-52c2-4849-880f-9bdaaedf984e`
@@ -138,22 +138,22 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentNumberSettings`; Dialog: `NumberSettingsForm` | `[H]` |
-| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 77: "19.3 Numbers check" | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`: "19.3 Numbers check" | `[M]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/NumberCheck.cs` | BasicChecks.GetCheck() | Line 66: `return new NumberCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/NumberCheck.cs` | BasicChecks.GetCheck() | `return new NumberCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > Number settings
@@ -161,7 +161,7 @@ Automated Checks run validation rules against project text to find errors. They 
   - Dialog: `NumberSettingsForm`
   - Question: "How do I specify punctuation used with numbers?"
 - ≡ Tab > Tools > Run basic checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm` (select "Numbers" check within dialog)
 
@@ -185,9 +185,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentScriptureReferenceSettings`; Dialog: `ScriptureReferenceSettingsForm_tabOriginOptions` | `[H]` |
-| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 44: "19.2 References" | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`: "19.2 References" | `[M]` |
 | Requirements | Section: "Inventories and Checks" | `[R]` |
 
 **Key Quote** (from Requirements):
@@ -197,20 +197,20 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/CrossReferencesCheck.cs` | BasicChecks.GetCheck() | Line 60: `return new CrossReferencesCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/CrossReferencesCheck.cs` | BasicChecks.GetCheck() | `return new CrossReferencesCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Project > Project settings > Scripture reference settings
   - Dialog: `ScriptureReferenceSettingsForm_tabOriginOptions`
 - ≡ Tab > Tools > Run basic checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm` (select "References" check within dialog)
   - HelpData ID: `333a9610-21c9-4d5d-a7c1-bc97fe66eecc`
@@ -236,9 +236,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks`; Dialog: `RunBasicChecksForm` | `[H]` |
-| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`, line 17: "It is important to run the chapter/verse check first because all the other checks depend on it." | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`: "It is important to run the chapter/verse check first because all the other checks depend on it." | `[M]` |
 
 **Key Quote** (from Manual):
 > "It is important to run the chapter/verse check first because all the other checks depend on it."
@@ -247,18 +247,18 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/ChapterVerseCheck.cs` | BasicChecks.GetCheck() | Line 44: `return new ChapterVerseCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/ChapterVerseCheck.cs` | BasicChecks.GetCheck() | `return new ChapterVerseCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Run Basic Checks > Chapter/verse numbers
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm`
 
@@ -281,9 +281,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks` | `[H]` |
-| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`, line 84: "Markers check" | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`: "Markers check" | `[M]` |
 
 **Key Quote** (from Manual):
 > "What to look for. Markers that only occur a few times. Similar markers \q and \q1. Markers that appear together but do not have the same count (e.g. \f and \f\*)"
@@ -292,18 +292,18 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/MarkerCheck.cs` | BasicChecks.GetCheck() | Line 48: `return new MarkerCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/MarkerCheck.cs` | BasicChecks.GetCheck() | `return new MarkerCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Run basic checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm` (select "Markers" check within dialog)
 
@@ -333,9 +333,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326); `RunBasicChecksForm` → `BookChooserForm` (line 158) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm`; `RunBasicChecksForm` → `BookChooserForm` | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks`; Dialog: `RunBasicChecksForm`; 13 items | `[H]` |
-| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`, line 23: "It is easier to run the checks from the Assignments and Progress." | `[M]` |
+| Manual | `../paratext-manual/chapters/05_basic_checks_1.md`: "It is easier to run the checks from the Assignments and Progress." | `[M]` |
 
 **Key Quote** (from Manual):
 > "It is easier to run the checks from the Assignments and Progress."
@@ -344,19 +344,19 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Called in D1 | Line 69: `ScriptureCheckBase[] availableChecks = BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
-| 2 | `ParatextBase/CommonForms/BookChooserForm.cs` | Opens dialog D1 | Line 158: `using (BookChooserForm frm = new BookChooserForm(...)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Called in D1 | `ScriptureCheckBase[] availableChecks = BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 2 | `ParatextBase/CommonForms/BookChooserForm.cs` | Opens dialog D1 | `using (BookChooserForm frm = new BookChooserForm(...)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
-- `RunBasicChecksForm` → `BookChooserForm` (line 158)
+- `TextForm` → `RunBasicChecksForm`
+- `RunBasicChecksForm` → `BookChooserForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Run Basic Checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - HelpData ID: `ccb98e6f-287f-41f0-8ae5-16561e2c9c98`
   - Dialog: `RunBasicChecksForm`
@@ -388,9 +388,9 @@ Automated Checks run validation rules against project text to find errors. They 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Tools > Run basic checks`; Handler: `runBasicChecksToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextForm` → `RunBasicChecksForm` (line 2326) | `[FR]` |
+| Form Relationships | `TextForm` → `RunBasicChecksForm` | `[FR]` |
 | HelpData | Keyword: `ComponentRunBasicChecks` | `[H]` |
-| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`, line 129: "The Footnote quotes check (previously Quoted text) looks at text in a footnote..." | `[M]` |
+| Manual | `../paratext-manual/chapters/19_basic_checks_3.md`: "The Footnote quotes check (previously Quoted text) looks at text in a footnote..." | `[M]` |
 
 **Key Quote** (from Manual):
 > "The Footnote quotes check (previously Quoted text) looks at text in a footnote (after the \fk or the \fq marker) or in a cross-reference (after the \xk or the \xq marker) to make sure it matches text in the verse."
@@ -399,18 +399,18 @@ Automated Checks run validation rules against project text to find errors. They 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` at line 2316 |
-| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | Line 2326: `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
-| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | Line 69: `BasicChecks.GetAllChecks()` |
-| 2 | `ParatextChecks/Checks/QuotedTextCheck.cs` | BasicChecks.GetCheck() | Line 68: `return new QuotedTextCheck()` |
-| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | Line 51: `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `runBasicChecksToolStripMenuItem_Click` |
+| 1 | `Paratext/Checking/RunBasicChecksForm.cs` | Opens dialog D0 | `using (RunBasicChecksForm frm = new RunBasicChecksForm(...)` |
+| 1 | `Paratext/Checking/BasicChecks.cs` | Import in D1 | `BasicChecks.GetAllChecks()` |
+| 2 | `ParatextChecks/Checks/QuotedTextCheck.cs` | BasicChecks.GetCheck() | `return new QuotedTextCheck()` |
+| 2 | `ParatextChecks/ChecksDataSource.cs` | Field in D1 | `ChecksDataSource checksDataSource = new ChecksDataSource(scrText)` |
 
 **Dialog Navigation**:
-- `TextForm` → `RunBasicChecksForm` (line 2326)
+- `TextForm` → `RunBasicChecksForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Run basic checks
-  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`, line 2316
+  - Menu Structure: `TextForm`, handler `runBasicChecksToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
   - Dialog: `RunBasicChecksForm` (select "Footnote Quotes" check within dialog)
 

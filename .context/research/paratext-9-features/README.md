@@ -40,10 +40,12 @@ closed-source Paratext 9 codebase and are included for reference only.
   (source last verified 2026-01-21). **This bundled copy is now the source of truth.**
 - The `lyonsm/` copy is obsolete — do not sync from it. Going forward, edit these files
   directly (here, and once this profile lands in paranext-core, there).
-- **PT9 snapshot**: citations were verified against the team's PT9 reference checkout, last at
-  commit `5538787d12adf9fa78ca67f7c598df4411d7442e` (2026-06-12) at the time this inventory
-  landed in paranext-core. PT9 line numbers drift as that codebase moves; treat `file:line`
-  as a starting point, not an exact address.
+- **PT9 provenance**: the inventory describes PT9 as observed during the original survey
+  (~2026-01, the "Last verified" dates on each entry), with spot-verification against the team's
+  reference checkout at commit `5538787d12adf9fa78ca67f7c598df4411d7442e` (2026-06-12) when it
+  landed in paranext-core. Citations are **file + symbol** anchors (line numbers were removed
+  2026-08-03 — symbols survive PT9's evolution, line numbers don't); verify current behavior by
+  grepping the symbol in your live PT9 checkout.
 - The original survey's generated evidence sources (`menu_structure_*.json`,
   `form_relationships_*.json`, `HelpData.xml`) are **not** committed here, so the inventory is
   a curated snapshot — it can be hand-maintained but not regenerated or mechanically diffed

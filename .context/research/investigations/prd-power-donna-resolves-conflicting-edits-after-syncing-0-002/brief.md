@@ -1,11 +1,13 @@
 # Donna resolves conflicting edits after syncing: investigation
 
-> **Note**: this brief predates the current 7-section brief template — it has no §3
-> confirm-intent or §7 engineering-decisions section, and its open questions live in §5.
+> **Frozen record** — investigation as run 2026-07-02, kept as a worked example. The "in flight"
+> PRs it references (#2482, #2484, #2495) have all merged and the backlog it describes has moved
+> on — follow the current code, not this document. It also predates the current 7-section brief
+> template: no §3 confirm-intent or §7 engineering-decisions section, and its open questions live
+> in §5.
 
 > PRD: `PRD-Power-Donna resolves conflicting edits after syncing_0-002.md` (v0-002, owner Vladimir).
-> Shakedown run of `/investigate-prd`, 2026-07-02. Note: three of the work items below were found
-> already in flight as open PRs — this brief reflects the backlog as of today, not a blind plan.
+> Shakedown run of `/investigate-prd`, 2026-07-02.
 
 ## 1. What the PRD asks for
 

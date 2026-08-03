@@ -35,15 +35,15 @@ Back Translation and Adaptation features support creating derived projects from 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | *No direct menu entry* - Back translation projects created via New Project dialog | `-` |
-| Form Relationships | `ProjectPropertiesForm` opens `ScrTextListSelectionForm` (line 2459) | `[FR]` |
+| Form Relationships | `ProjectPropertiesForm` opens `ScrTextListSelectionForm` | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation > Interlinear View" | `[R]` |
-| Manual | `../paratext-manual/chapters/16_back_translation_1.md`, line 9: "In preparing for a consultant check, the consultant will need one or more versions of your text in a language they understand" | `[M]` |
+| Manual | `../paratext-manual/chapters/16_back_translation_1.md`: "In preparing for a consultant check, the consultant will need one or more versions of your text in a language they understand" | `[M]` |
 | HelpData | Keyword: `ComponentBackTranslation`; Dialogs: `ProjectPropertiesForm_tabGeneral`, `ProjectUsersForm` | `[H]` |
 
 **Key Quote** (from Requirements):
 > "An interlinear view can also be used to generate a back translation"
 
-**Key Quote** (from Manual, `16_back_translation_1.md`, line 9):
+**Key Quote** (from Manual, `16_back_translation_1.md`):
 > "In preparing for a consultant check, the consultant will need one or more versions of your text in a language they understand. This is often called a back-translation."
 
 **Implementation**:
@@ -51,29 +51,29 @@ Back Translation and Adaptation features support creating derived projects from 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | HelpData dialog | `ProjectPropertiesForm_tabGeneral` |
-| 1 | `Paratext.Data.ProjectSettingsAccess` | Import in D0 | Line 13: `using Paratext.Data.ProjectSettingsAccess` |
-| 1 | `ParatextBase/DerivedTranslation/DerivedTranslationManager.cs` | Import in D0 | Line 26: `using Paratext.Base.StudyBible` (same folder) |
-| 1 | `ParatextData/DerivedTranslation/DerivedTranslationVerseFile.cs` | Field in D1 | Line 33: `DerivedTranslationVerseFile derivedStatusFile` |
+| 1 | `Paratext.Data.ProjectSettingsAccess` | Import in D0 | `using Paratext.Data.ProjectSettingsAccess` |
+| 1 | `ParatextBase/DerivedTranslation/DerivedTranslationManager.cs` | Import in D0 | `using Paratext.Base.StudyBible` (same folder) |
+| 1 | `ParatextData/DerivedTranslation/DerivedTranslationVerseFile.cs` | Field in D1 | `DerivedTranslationVerseFile derivedStatusFile` |
 | 2 | `ParatextData/DerivedTranslation/DerivedTranslationVerse.cs` | Type in D1 | Used by DerivedTranslationVerseFile |
-| 2 | `ParatextData/ScrText.cs` | Field in D1 | Line 30: `ScrText derivedScrText`, `ScrText baseScrText` |
+| 2 | `ParatextData/ScrText.cs` | Field in D1 | `ScrText derivedScrText`, `ScrText baseScrText` |
 
 **Dialog Navigation**:
-- `ProjectPropertiesForm` → `LanguageSettingsForm` (line 533)
-- `ProjectPropertiesForm` → `LanguageIDSelectionForm` (line 559)
-- `ProjectPropertiesForm` → `ScrTextListSelectionForm` (line 2459) - Base project selection
+- `ProjectPropertiesForm` → `LanguageSettingsForm`
+- `ProjectPropertiesForm` → `LanguageIDSelectionForm`
+- `ProjectPropertiesForm` → `ScrTextListSelectionForm` - Base project selection
 
 **UI Entry Points**:
 - ≡ Paratext > New Project (Type: Back Translation)
-  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`, line 35
+  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`
   - Quote: "**≡ Paratext** under **Paratext** > **New Project**"
   - HelpData ID: `64ae1a22-ef68-4b9f-8136-d628b9dc11c9`
   - Dialog: `ProjectPropertiesForm_tabGeneral`
   - Question: "How do I create a back translation project?"
 - ≡ Project > Open base project
-  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`, line 29
+  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`
   - Quote: "you can now open your project from the back translation (**≡ Project** choose **Open base project …**)"
 - Status checkbox toolbar dropdown > Mark All Verses in Chapter as Finished
-  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`, line 68
+  - Manual: `../paratext-manual/chapters/16_back_translation_1.md`
   - Quote: "Choose **Mark All Verses in Chapter as Finished**"
 
 **HelpData Items**:
@@ -109,50 +109,50 @@ Back Translation and Adaptation features support creating derived projects from 
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Interlinearizer`; Handler: `uiFileOpenInterlinear_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 408; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
-| Form Relationships | `InterlinearForm` opens `InterlinearSetupForm` (line 160), `CopyGlossesForm` via menu | `[FR]` |
+| Menu Structure | Menu: `Tools > Interlinearizer`; Handler: `uiFileOpenInterlinear_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
+| Form Relationships | `InterlinearForm` opens `InterlinearSetupForm`, `CopyGlossesForm` via menu | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation > Interlinear View" | `[R]` |
-| Manual | `../paratext-manual/chapters/17_back_translation_2.md`, line 7: "There is another type of back translation...a word-for-word style back translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/17_back_translation_2.md`: "There is another type of back translation...a word-for-word style back translation" | `[M]` |
 | HelpData | Keyword: `ComponentInterlinearizer`; Dialogs: `InterlinearSetupForm_uiBasicTab`, `CopyGlossesForm` | `[H]` |
 
 **Key Quote** (from Requirements):
 > "The key issue in generating an interlinear view is to be able to do alignment between the two translations"
 
-**Key Quote** (from Manual, `17_back_translation_2.md`, line 7):
+**Key Quote** (from Manual, `17_back_translation_2.md`):
 > "There is another type of back translation that is sometimes used and that is a word-for-word style back translation. Some consultants may ask for this style of back translation."
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenInterlinear_Click` at line 408 |
-| 0 | `Paratext/Interlinear/InterlinearForm.cs` | Form Relationships | Opens `InterlinearSetupForm` at line 160 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenInterlinear_Click` |
+| 0 | `Paratext/Interlinear/InterlinearForm.cs` | Form Relationships | Opens `InterlinearSetupForm` |
 | 0 | `Paratext/Interlinear/InterlinearSetupForm.cs` | HelpData dialog | `InterlinearSetupForm_uiBasicTab` |
-| 1 | `Paratext.Data.Interlinear` | Import in D0 | Line 14: `using Paratext.Data.Interlinear` |
-| 1 | `Paratext.Data.Languages` | Import in D0 | Line 15: `using Paratext.Data.Languages` |
-| 1 | `Paratext.Data.Linguistics` | Import in D0 | Line 16: `using Paratext.Data.Linguistics` |
+| 1 | `Paratext.Data.Interlinear` | Import in D0 | `using Paratext.Data.Interlinear` |
+| 1 | `Paratext.Data.Languages` | Import in D0 | `using Paratext.Data.Languages` |
+| 1 | `Paratext.Data.Linguistics` | Import in D0 | `using Paratext.Data.Linguistics` |
 | 0 | `Paratext/ToolsMenu/CopyGlossesForm.cs` | HelpData dialog | `CopyGlossesForm` |
-| 2 | `ParatextData/ScrText.cs` | Field in D1 | InterlinearSetupForm line 56: `ScrText projectText` |
+| 2 | `ParatextData/ScrText.cs` | Field in D1 | InterlinearSetupForm: `ScrText projectText` |
 
 **Dialog Navigation**:
-- `InterlinearForm` → `InterlinearSetupForm` (line 160)
-- `InterlinearForm` → `ExportForm` (line 731)
-- `InterlinearForm` → `CssDisplaySettingsForm` (line 802)
-- `InterlinearSetupForm` → `ProjectPropertiesForm` (line 252)
+- `InterlinearForm` → `InterlinearSetupForm`
+- `InterlinearForm` → `ExportForm`
+- `InterlinearForm` → `CssDisplaySettingsForm`
+- `InterlinearSetupForm` → `ProjectPropertiesForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Interlinearizer
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`, line 408
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
-  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 24
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`
   - Quote: "**≡ Tab**, under **Tools** > **Interlinearizer**"
   - HelpData ID: `6aa250fe-c02d-450c-b49e-b9aff98fc833`
   - Dialog: `InterlinearSetupForm_uiBasicTab`
 - Output glosses to project checkbox
-  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 35
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`
   - Quote: "Click the checkbox to output glosses to the project"
 - Approve glosses button
-  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 75
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`
   - Quote: "Click **Approve glosses**"
 
 **HelpData Items**:
@@ -181,8 +181,8 @@ Back Translation and Adaptation features support creating derived projects from 
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Interlinearizer` (select "Text revision/adaptation" task); Handler: `uiFileOpenInterlinear_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 408; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
-| Form Relationships | `InterlinearSetupForm` opens `ProjectPropertiesForm` (line 252) | `[FR]` |
+| Menu Structure | Menu: `Tools > Interlinearizer` (select "Text revision/adaptation" task); Handler: `uiFileOpenInterlinear_Click`; File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
+| Form Relationships | `InterlinearSetupForm` opens `ProjectPropertiesForm` | `[FR]` |
 | Requirements | Section: "Data Formats > Projects" | `[R]` |
 | Manual | *No dedicated chapter found* | `-` |
 | HelpData | Keyword: `adaptation` (within `ComponentInterlinearizer` context); ID: `cf150fe0-89eb-4155-a868-296695e33a44` | `[H]` |
@@ -194,22 +194,22 @@ Back Translation and Adaptation features support creating derived projects from 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenInterlinear_Click` at line 408 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenInterlinear_Click` |
 | 0 | `Paratext/Interlinear/InterlinearSetupForm.cs` | HelpData dialog | `InterlinearSetupForm_uiBasicTab` |
-| 1 | `Paratext.Data.Interlinear` | Import in D0 | Line 14: `using Paratext.Data.Interlinear` |
+| 1 | `Paratext.Data.Interlinear` | Import in D0 | `using Paratext.Data.Interlinear` |
 | 0 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | HelpData dialog | `ProjectPropertiesForm_tabGeneral` |
-| 1 | `ParatextData/DerivedTranslation/DerivedTranslationVerseFile.cs` | Import in D0 | Line 37: `using Paratext.Data.StudyBible` |
+| 1 | `ParatextData/DerivedTranslation/DerivedTranslationVerseFile.cs` | Import in D0 | `using Paratext.Data.StudyBible` |
 | 2 | `ParatextData/ScrText.cs` | Base class ref | Settings.TranslationInfo.BaseScrText |
 
 **Not Found**:
 - Dedicated AdaptationForm.cs (search: "AdaptationForm" - no matches; adaptations use InterlinearSetupForm or ProjectPropertiesForm)
 
 **Dialog Navigation**:
-- `InterlinearSetupForm` → `ProjectPropertiesForm` (line 252)
+- `InterlinearSetupForm` → `ProjectPropertiesForm`
 
 **UI Entry Points**:
 - ≡ Tab > Tools > Interlinearizer (select "Text revision/adaptation" task)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`, line 408
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `cf150fe0-89eb-4155-a868-296695e33a44`
   - Dialog: `InterlinearSetupForm_uiBasicTab`
@@ -245,7 +245,7 @@ Back Translation and Adaptation features support creating derived projects from 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | *No direct menu entry* - Daughter translations created via New Project dialog | `-` |
-| Form Relationships | `ProjectPropertiesForm` opens `ScrTextListSelectionForm` (line 2459) for base project selection | `[FR]` |
+| Form Relationships | `ProjectPropertiesForm` opens `ScrTextListSelectionForm` for base project selection | `[FR]` |
 | Requirements | Section: "Data Formats > Projects" | `[R]` |
 | Manual | *No dedicated chapter - concept referenced in BT chapters* | `-` |
 | HelpData | Keyword: `daughter translation` (within `ComponentBackTranslation`); ID: `0e4d5f3a-4b44-472c-8cdc-e6a2344f1765` | `[H]` |
@@ -259,13 +259,13 @@ Back Translation and Adaptation features support creating derived projects from 
 |-------|------|-----------|----------|
 | 0 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | HelpData dialog | `ProjectPropertiesForm_tabGeneral` |
 | 1 | `ParatextBase/DerivedTranslation/DerivedTranslationManager.cs` | Folder structure | Same folder as ProjectProperties refs |
-| 1 | `ParatextData/DerivedTranslation/DerivedTranslationVerseFile.cs` | Field in D1 | Line 33: `DerivedTranslationVerseFile derivedStatusFile` |
+| 1 | `ParatextData/DerivedTranslation/DerivedTranslationVerseFile.cs` | Field in D1 | `DerivedTranslationVerseFile derivedStatusFile` |
 | 2 | `ParatextData/DerivedTranslation/DerivedTranslationVerse.cs` | Type in D1 | Used by DerivedTranslationVerseFile |
 | 0 | `Paratext/DerivedTranslation/DerivedTranslationStatusAnnotationSource.cs` | Search | Provides status annotations |
-| 2 | `ParatextData/ScrText.cs` | Field in D1 | Line 30: `ScrText derivedScrText`, `ScrText baseScrText` |
+| 2 | `ParatextData/ScrText.cs` | Field in D1 | `ScrText derivedScrText`, `ScrText baseScrText` |
 
 **Dialog Navigation**:
-- `ProjectPropertiesForm` → `ScrTextListSelectionForm` (line 2459) - Base project selection
+- `ProjectPropertiesForm` → `ScrTextListSelectionForm` - Base project selection
 
 **UI Entry Points**:
 - ≡ Paratext > New Project > Based on (select parent translation)
@@ -308,82 +308,82 @@ Back Translation and Adaptation features support creating derived projects from 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Multiple menu items (see UI Entry Points below) | `[MS]` |
-| Form Relationships | `StudyBibleForm` opens `BookChooserForm` (line 418); `StudyBibleMergeProjectForm` opens `ProjectPropertiesForm` (line 126) | `[FR]` |
+| Form Relationships | `StudyBibleForm` opens `BookChooserForm`; `StudyBibleMergeProjectForm` opens `ProjectPropertiesForm` | `[FR]` |
 | Requirements | *Not explicitly covered - newer feature* | `-` |
-| Manual | `../paratext-manual/chapters/25_study_bibles.md`, line 29: "With Paratext 9.2 (and above) you can create a study Bible based on your translation" | `[M]` |
+| Manual | `../paratext-manual/chapters/25_study_bibles.md`: "With Paratext 9.2 (and above) you can create a study Bible based on your translation" | `[M]` |
 | HelpData | Keywords: `ComponentStudyBibleGeneral`, `ComponentStudyBibleAdditions`; Dialogs: `StudyBibleForm`, `EditStudyBibleCategoriesForm`, `ProjectPropertiesForm_tabStudyBible` | `[H]` |
 
-**Key Quote** (from Manual, `25_study_bibles.md`, line 29):
+**Key Quote** (from Manual, `25_study_bibles.md`):
 > "With Paratext 9.2 (and above) you can create a study Bible based on your translation by adding introductory paragraphs, sidebars and detailed footnotes and additional cross-references"
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `studyBibleFootnoteToolStripMenuItem_Click` at line 1816 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `mergeStudyBibleProjectsToolStripMenuItem_Click` at line 630 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `studyBibleFootnoteToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `mergeStudyBibleProjectsToolStripMenuItem_Click` |
 | 0 | `Paratext/ToolsMenu/StudyBibleForm.cs` | HelpData dialog | `StudyBibleForm` |
 | 1 | `Paratext.Data.StudyBible` | Import in D0 | Implied by namespace structure |
-| 1 | `Paratext.Base.SBMerger` | Import in D0 | Line 8: `using Paratext.Base.SBMerger` |
-| 1 | `Paratext.Data.Find` | Import in D0 | Line 10: `using Paratext.Data.Find` |
-| 1 | `Paratext.Data.Repository` | Import in D0 | Line 11: `using Paratext.Data.Repository` |
+| 1 | `Paratext.Base.SBMerger` | Import in D0 | `using Paratext.Base.SBMerger` |
+| 1 | `Paratext.Data.Find` | Import in D0 | `using Paratext.Data.Find` |
+| 1 | `Paratext.Data.Repository` | Import in D0 | `using Paratext.Data.Repository` |
 | 0 | `ParatextBase/DerivedTranslation/EditStudyBibleCategoriesForm.cs` | HelpData dialog | `EditStudyBibleCategoriesForm` |
-| 0 | `Paratext/StudyBibleTools/StudyBibleMergeProjectForm.cs` | Form Relationships | Opens `ProjectPropertiesForm` at line 126 |
+| 0 | `Paratext/StudyBibleTools/StudyBibleMergeProjectForm.cs` | Form Relationships | Opens `ProjectPropertiesForm` |
 | 2 | `ParatextData/StudyBible/StudyBibleAdditions.cs` | Namespace | Core data class |
 | 2 | `ParatextData/StudyBible/StudyBibleCategory.cs` | Namespace | Category management |
 | 2 | `ParatextData/StudyBible/StudyBibleOperations.cs` | Namespace | Operations logic |
 | 2 | `ParatextData/StudyBible/MergedStudyBible.cs` | Namespace | Merge functionality |
-| 2 | `ParatextData/ScrText.cs` | Field in D0 | Line 27: `ScrText scrText` |
+| 2 | `ParatextData/ScrText.cs` | Field in D0 | `ScrText scrText` |
 
 **Dialog Navigation**:
-- `StudyBibleForm` → `BookChooserForm` (line 418)
-- `StudyBibleMergeProjectForm` → `ProjectPropertiesForm` (line 126)
+- `StudyBibleForm` → `BookChooserForm`
+- `StudyBibleMergeProjectForm` → `ProjectPropertiesForm`
 
 **UI Entry Points**:
 - ≡ Paratext > New Project (Type: Study Bible Additions)
-  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 52
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`
   - Quote: "Use the **Paratext menu** to create a **new project**. Set the **type** of project to **Study Bible Additions**"
   - HelpData ID: `43e83c1a-358b-4fb4-a3e8-09ba395549d1`
   - Question: "How do I create a Study Bible Additions project?"
 - Insert > Study Bible extended footnote
-  - Menu Structure: `TextForm`, handler `studyBibleFootnoteToolStripMenuItem_Click`, line 1816
+  - Menu Structure: `TextForm`, handler `studyBibleFootnoteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Insert > Study Bible cross reference
-  - Menu Structure: `TextForm`, handler `studyBibleCrossReferenceToolStripMenuItem_Click`, line 1825
+  - Menu Structure: `TextForm`, handler `studyBibleCrossReferenceToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Insert > Study Bible sidebar
-  - Menu Structure: `TextForm`, handler `studyBibleSidebarToolStripMenuItem_Click`, line 1831
+  - Menu Structure: `TextForm`, handler `studyBibleSidebarToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Insert > Study Bible category
-  - Menu Structure: `TextForm`, handler `studyBibleCategoryToolStripMenuItem_Click`, line 1836
+  - Menu Structure: `TextForm`, handler `studyBibleCategoryToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Tools > Check study content order
-  - Menu Structure: `TextForm`, handler `CheckStudyContentOrder_Click`, line 2267
+  - Menu Structure: `TextForm`, handler `CheckStudyContentOrder_Click`
   - File: `Paratext/TextForm.cs`
 - ≡ Project > Advanced > Merge Study Bible projects
-  - Menu Structure: `ParatextWindowWithMenus`, handler `mergeStudyBibleProjectsToolStripMenuItem_Click`, line 630
+  - Menu Structure: `ParatextWindowWithMenus`, handler `mergeStudyBibleProjectsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `de3ba611-3977-41d2-a6c5-4c784f346fdc`
 - ≡ Project > Advanced > Extract Study Bible Additions project from Study Bible
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedMigrateStudyBible_Click`, line 656
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedMigrateStudyBible_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Project > Advanced > Update to latest Study Bible format
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedMigrateToStudyBibleAdditions2FileFormat_Click`, line 678
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedMigrateToStudyBibleAdditions2FileFormat_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Add + button on SBA toolbar (introductions)
-  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 64
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`
   - Quote: "Click **Add +** on the toolbar"
 - \esb button on toolbar (sidebars)
-  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 71
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`
   - Quote: "click **\\esb** on the toolbar"
 - \ex button on toolbar (extended cross-references)
-  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 80
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`
   - Quote: "click **\\ex** on the toolbar"
 - \ef button on toolbar (extended footnotes)
-  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 87
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`
   - Quote: "click **\\ef** on the toolbar"
 - Hide button on toolbar
-  - Manual: `../paratext-manual/chapters/25_study_bibles.md`, line 94
+  - Manual: `../paratext-manual/chapters/25_study_bibles.md`
   - Quote: "Click **Hide** on the toolbar"
 
 **HelpData Items**:

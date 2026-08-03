@@ -48,27 +48,27 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenInterlinear_Click` at line 408 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenInterlinear_Click` |
 | 1 | `Paratext/Interlinear/InterlinearForm.cs` | Opens from D0 | Form Relationships: `InterlinearForm` |
-| 1 | `Paratext/Interlinear/InterlinearSetupForm.cs` | Opens from D1 | Form Relationships line 783: `new InterlinearSetupForm()` |
+| 1 | `Paratext/Interlinear/InterlinearSetupForm.cs` | Opens from D1 | Form Relationships: `new InterlinearSetupForm()` |
 | 2 | `Paratext/ToolsMenu/CopyGlossesForm.cs` | Opens from D1 | Form Relationships: InterlinearForm opens CopyGlossesForm |
 
 **Not Found**:
 - `InterlinearSetups.cs` as standalone file (search: "InterlinearSetups" - class defined in `InterlinearSetup.cs`)
 
 **Dialog Navigation**:
-- `InterlinearForm` → `InterlinearSetupForm` (line 783)
+- `InterlinearForm` → `InterlinearSetupForm`
 - `InterlinearForm` → `CopyGlossesForm` (via menu)
 
 **UI Entry Points**:
 - Tools > Interlinearizer
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`, line 408
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenInterlinear_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - View > Interlinear display settings (within InterlinearForm)
-  - Menu Structure: `InterlinearForm`, handler `displaySettingsToolStripMenuItem_Click`, line 800
+  - Menu Structure: `InterlinearForm`, handler `displaySettingsToolStripMenuItem_Click`
   - File: `Paratext/Interlinear/InterlinearForm.cs`
 - Also documented in:
-  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`, line 35
+  - Manual: `../paratext-manual/chapters/17_back_translation_2.md`
   - Quote: "**≡ Tab**, under **Tools** > **Interlinearizer**"
   - HelpData ID: `b1107d4d-2bed-4d4b-a1c5-664edc3e0b5b`
 
@@ -113,33 +113,33 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `parallelPassagesToolStripMenuItem_Click` at line 400 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `parallelPassagesToolStripMenuItem_Click` |
 | 1 | `Paratext/ParallelPassages/ParallelPassagesTool.cs` | Opens from D0 | Form Relationships: tool form |
-| 2 | `Paratext/ParallelPassages/Filter/PassageFilterSelectionAdapter.cs` | Import in D1 | Line 17: `using Paratext.ParallelPassages.Filter` |
-| 2 | `ParatextData/ParallelPassages/ParallelPassageStatus.cs` | Import in D1 | Line 30: `using Paratext.Data.ParallelPassages` |
+| 2 | `Paratext/ParallelPassages/Filter/PassageFilterSelectionAdapter.cs` | Import in D1 | `using Paratext.ParallelPassages.Filter` |
+| 2 | `ParatextData/ParallelPassages/ParallelPassageStatus.cs` | Import in D1 | `using Paratext.Data.ParallelPassages` |
 
 **Not Found**:
 - None - all expected files located
 
 **Dialog Navigation**:
-- `ParallelPassagesTool` → `ScrTextListSelectionForm` (line 616: Select comparative texts)
-- `ParallelPassagesTool` → `BookChooserForm` (line 893: Select books to check)
+- `ParallelPassagesTool` → `ScrTextListSelectionForm` (Select comparative texts)
+- `ParallelPassagesTool` → `BookChooserForm` (Select books to check)
 
 **UI Entry Points**:
 - Tools > Parallel Passages
-  - Menu Structure: `ParatextWindowWithMenus`, handler `parallelPassagesToolStripMenuItem_Click`, line 400
+  - Menu Structure: `ParatextWindowWithMenus`, handler `parallelPassagesToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Parallel passages > Select books to check (within tool)
-  - Menu Structure: `ParallelPassagesTool`, handler `setBooksInScopeToolStripMenuItem_Click`, line 888
+  - Menu Structure: `ParallelPassagesTool`, handler `setBooksInScopeToolStripMenuItem_Click`
   - File: `Paratext/ParallelPassages/ParallelPassagesTool.cs`
 - Parallel passages > Select comparative texts (within tool)
-  - Menu Structure: `ParallelPassagesTool`, handler `uiComparativeTexts_Click`, line 616
+  - Menu Structure: `ParallelPassagesTool`, handler `uiComparativeTexts_Click`
   - File: `Paratext/ParallelPassages/ParallelPassagesTool.cs`
 - View > Approve sets of parallels (within tool)
-  - Menu Structure: `ParallelPassagesTool`, handler `approveByRowToolStripMenuItem_Click`, line 867
+  - Menu Structure: `ParallelPassagesTool`, handler `approveByRowToolStripMenuItem_Click`
   - File: `Paratext/ParallelPassages/ParallelPassagesTool.cs`
 - Also documented in:
-  - Manual: `../paratext-manual/chapters/23_parallel_passages.md`, line 36
+  - Manual: `../paratext-manual/chapters/23_parallel_passages.md`
   - Quote: "**≡ Tab**, under **Tools** > **Parallel passages**"
   - HelpData ID: `94b5036c-42df-413c-ad2a-e0cadc790cfd`
 
@@ -184,25 +184,25 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiToolsCompareTexts_Click` at line 531 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiToolsCompareTexts_Click` |
 | 1 | `Paratext/ToolsMenu/DifferencesToolForm.cs` | Opens from D0 | Form Relationships: DifferencesToolForm |
-| 2 | `Paratext/ToolsMenu/DifferencesToolVersionHelper.cs` | Field in D1 | Line 43: `private readonly DifferencesToolVersionHelper diffHelper1` |
-| 2 | `ParatextBase/UsfmDiff/DiffViewSource.cs` | Import in D1 | Line 14: `using Paratext.Base.UsfmDiff` |
+| 2 | `Paratext/ToolsMenu/DifferencesToolVersionHelper.cs` | Field in D1 | `private readonly DifferencesToolVersionHelper diffHelper1` |
+| 2 | `ParatextBase/UsfmDiff/DiffViewSource.cs` | Import in D1 | `using Paratext.Base.UsfmDiff` |
 
 **Not Found**:
 - `DifferencesToolForm` dialog in HelpData (search: "DifferencesToolForm" - no matches; feature uses `ComponentCompareVersions` keyword)
 
 **Dialog Navigation**:
-- `DifferencesToolForm` → `CommitChangesForm` (line 1390: view commit history)
+- `DifferencesToolForm` → `CommitChangesForm` (view commit history)
 
 **UI Entry Points**:
 - Project > Compare versions
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsCompareTexts_Click`, line 531
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsCompareTexts_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Also documented in:
-  - Manual: `../paratext-manual/chapters/18_compare_text.md`, line 24
+  - Manual: `../paratext-manual/chapters/18_compare_text.md`
   - Quote: "**≡ Tab** under **Project** > **Mark a point in project history**"
-  - Manual: `../paratext-manual/chapters/18_compare_text.md`, line 32
+  - Manual: `../paratext-manual/chapters/18_compare_text.md`
   - Quote: "**≡ Tab** expand the menus then under **Project** > **Compare Versions**"
   - HelpData ID: `dbbd1298-e40d-44ea-b55a-9a9068ed4bfe`
 
@@ -249,10 +249,10 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `wordsOrPhrasesToolStripMenuItem_Click` at line 2413 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `wordsOrPhrasesToolStripMenuItem_Click` |
 | 1 | `Paratext/Checklists/ChecklistsTool.cs` | Opens from D0 | Form Relationships: ChecklistsTool |
-| 2 | `Paratext/Checklists/CLData.cs` | Field in D1 | Line 55: `private CLData checklistData` |
-| 2 | `SubsystemInterfaces/IChecklistsTool.cs` | Interface in D1 | Line 42: `ChecklistsTool : ParatextSnappingForm, IChecklistsTool` |
+| 2 | `Paratext/Checklists/CLData.cs` | Field in D1 | `private CLData checklistData` |
+| 2 | `SubsystemInterfaces/IChecklistsTool.cs` | Interface in D1 | `ChecklistsTool : ParatextSnappingForm, IChecklistsTool` |
 
 **Not Found**:
 - Specific HelpData entry for "Word or Phrase" checklist (search: "WordOrPhrase", "CompareWord", "phrase" - no matches; uses general `ComponentInventories/Checklists` keyword)
@@ -263,13 +263,13 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 **UI Entry Points**:
 - Tools > Checklists > Word or phrase
-  - Menu Structure: `TextForm`, handler `wordsOrPhrasesToolStripMenuItem_Click`, line 2413
+  - Menu Structure: `TextForm`, handler `wordsOrPhrasesToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Also documented in:
-  - Manual: `../paratext-manual/chapters/11_compare_word.md`, line 22
+  - Manual: `../paratext-manual/chapters/11_compare_word.md`
   - Quote: "From the **≡ Tab**, under **Tools**, point to **Checklists**, and select **Word or Phrase**"
 - Biblical Terms tool > tool icon (for term comparison)
-  - Manual: `../paratext-manual/chapters/11_compare_word.md`, line 52
+  - Manual: `../paratext-manual/chapters/11_compare_word.md`
   - Quote: "Choose a term which has a rendering... Click on the tool icon"
 
 **HelpData Items**:
@@ -311,7 +311,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `guessTranslationsToolStripMenuItem_Click` at line 1539 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `guessTranslationsToolStripMenuItem_Click` |
 | 1 | `Paratext/Interlinear/GuessTranslationsForm.cs` | Opens from D0 | Form Relationships: GuessTranslationsForm |
 | 2 | `Paratext/Interlinear/` namespace | Same namespace as D1 | Related interlinear functionality |
 
@@ -320,10 +320,10 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 **UI Entry Points**:
 - Project > Advanced > Guess translations
-  - Menu Structure: `TextForm`, handler `guessTranslationsToolStripMenuItem_Click`, line 1539
+  - Menu Structure: `TextForm`, handler `guessTranslationsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - View > Highlight guessed renderings (related)
-  - Menu Structure: `TextForm`, handler `highlightGuessedRenderingsToolStripMenuItem_Click`, line 2104
+  - Menu Structure: `TextForm`, handler `highlightGuessedRenderingsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 
 **HelpData Items**:
@@ -371,7 +371,7 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ConcordanceTool/MainForm.cs` | Menu Structure | handler `uiFileNewFromModel_Click` at line 781 |
+| 0 | `ConcordanceTool/MainForm.cs` | Menu Structure | handler `uiFileNewFromModel_Click` |
 | 1 | `ConcordanceTool/AddEntriesForm.cs` | Form Relationships | opens from MainForm |
 | 2 | *Separate ConcordanceTool namespace* | Same project | Directory listing: `ConcordanceTool/` |
 
@@ -380,19 +380,19 @@ Advanced Checking Tools are sophisticated analysis features typically used by co
 
 **UI Entry Points** (within ConcordanceTool):
 - File > New Concordance
-  - Menu Structure: `MainForm`, handler `uiFileNewFromModel_Click`, line 781
+  - Menu Structure: `MainForm`, handler `uiFileNewFromModel_Click`
   - File: `ConcordanceTool/MainForm.cs`
 - Tools > Concordance Settings
-  - Menu Structure: `MainForm`, handler `uiToolsConcordanceSettings_Click`, line 1238
+  - Menu Structure: `MainForm`, handler `uiToolsConcordanceSettings_Click`
   - File: `ConcordanceTool/MainForm.cs`
 - Tools > Advanced Options > Create an Empty Concordance
-  - Menu Structure: `MainForm`, handler `uiFileNewBlank_Click`, line 737
+  - Menu Structure: `MainForm`, handler `uiFileNewBlank_Click`
   - File: `ConcordanceTool/MainForm.cs`
 - Tools > Advanced Options > Merge with Another Concordance
-  - Menu Structure: `MainForm`, handler `mergeWithAnotherConcordanceToolStripMenuItem_Click`, line 2254
+  - Menu Structure: `MainForm`, handler `mergeWithAnotherConcordanceToolStripMenuItem_Click`
   - File: `ConcordanceTool/MainForm.cs`
 - Tools > Advanced Options > Subset Concordance
-  - Menu Structure: `MainForm`, handler `uiSubsetConcordance_Click`, line 2346
+  - Menu Structure: `MainForm`, handler `uiSubsetConcordance_Click`
   - File: `ConcordanceTool/MainForm.cs`
 
 **HelpData Items**:

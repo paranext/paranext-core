@@ -34,9 +34,9 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `View > Standard`, `View > Unformatted`; Handler: `standardToolStripMenuItem_Click`, `unformattedToolStripMenuItem_Click` in `TextCollectionForm.cs`, lines 467, 462 | `[MS]` |
+| Menu Structure | Menu: `View > Standard`, `View > Unformatted`; Handler: `standardToolStripMenuItem_Click`, `unformattedToolStripMenuItem_Click` in `TextCollectionForm.cs`, 462 | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" | `[R]` |
-| Manual | `appendices/appendix_c_usfm.md`, line 11: "All Styles of type 'Paragraph' require using the 'Enter' key when choosing the marker" | `[M]` |
+| Manual | `appendices/appendix_c_usfm.md`: "All Styles of type 'Paragraph' require using the 'Enter' key when choosing the marker" | `[M]` |
 | HelpData | Keyword: `ComponentUSFM/Markers`; Dialog: `OptionsForm`, `ProjectPropertiesForm_tabAdvanced` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -47,24 +47,24 @@ Data Formats features define how Scripture and project data is stored, structure
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `ParatextData/UsfmParser.cs` | Core USFM component | Search: "UsfmParser" in ParatextData |
-| 1 | `ParatextData/UsfmToken.cs` | Field type in D0 | Line 26: `private readonly List<UsfmToken> tokens;` |
-| 1 | `ParatextData/UsfmParserSink.cs` | Field type in D0 | Line 35: `private readonly UsfmParserSink sink;` |
-| 1 | `ParatextData/UsfmParserState.cs` | Field type in D0 | Line 38: `private UsfmParserState state;` |
-| 1 | `ParatextData/ScrStylesheet.cs` | Field type in D0 | Line 29: `private readonly ScrStylesheet scrStylesheet;` |
-| 1 | `ParatextData/ScrText.cs` | Field type in D0 | Line 32: `private readonly ScrText scrText;` |
+| 1 | `ParatextData/UsfmToken.cs` | Field type in D0 | `private readonly List<UsfmToken> tokens;` |
+| 1 | `ParatextData/UsfmParserSink.cs` | Field type in D0 | `private readonly UsfmParserSink sink;` |
+| 1 | `ParatextData/UsfmParserState.cs` | Field type in D0 | `private UsfmParserState state;` |
+| 1 | `ParatextData/ScrStylesheet.cs` | Field type in D0 | `private readonly ScrStylesheet scrStylesheet;` |
+| 1 | `ParatextData/ScrText.cs` | Field type in D0 | `private readonly ScrText scrText;` |
 
 **Note**: USFM parsing is a core data layer component. HelpData items reference UI dialogs (`OptionsForm`, `ProjectPropertiesForm_tabAdvanced`) for user help, but the implementation is accessed through multiple UI entry points throughout Paratext.
 
 **UI Entry Points**:
 - **≡ Tab** > **View** > Standard/Unformatted/Preview (Ctrl+E to toggle)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, lines 55-56
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "**Ctrl** + **E** -or-" / "**≡ Tab** under **View** menu, choose the view (usually Standard)."
 - **Insert** menu > USFM markers (via backslash key)
   - HelpData ID: `9b81209d-eb15-44d7-b646-44a837c03c54`
   - Dialog: `OptionsForm`
   - Question: "How do I insert markers in my project text?"
 - Character markers (via \\ key in Standard view)
-  - Manual: `appendices/appendix_c_usfm.md`, line 12
+  - Manual: `appendices/appendix_c_usfm.md`
   - Quote: "All Style Type 'Note' and 'Character' require using the 'Backslash' key"
 
 **HelpData Items**:
@@ -100,8 +100,8 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Advanced > Export project to USX`; Handler: `exportProjectToUSXToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 692; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
-| Form Relationships | Opens: `ExportUsxForm` from `Program.cs`, line 1575 | `[FR]` |
+| Menu Structure | Menu: `Project > Advanced > Export project to USX`; Handler: `exportProjectToUSXToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`; ownerForm: `ParatextWindowWithMenus` | `[MS]` |
+| Form Relationships | Opens: `ExportUsxForm` from `Program.cs` | `[FR]` |
 | Requirements | Section: "Data Formats > Export > USX" | `[R]` |
 | Manual | *No direct USX reference found in manual chapters* | `-` |
 | HelpData | Keyword: `ContentExportToUSX`; Dialog: `ExportUsxForm` | `[H]` |
@@ -114,11 +114,11 @@ Data Formats features define how Scripture and project data is stored, structure
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/ToolsMenu/ExportUsxForm.cs` | HelpData dialog | `ExportUsxForm` |
-| 1 | `ParatextData/UsfmToUsx.cs` | Method call in D0 | Line 75: `UsfmToUsx.ConvertToXmlWriter(scrText, bookNum, usfm, xw, true);` |
+| 1 | `ParatextData/UsfmToUsx.cs` | Method call in D0 | `UsfmToUsx.ConvertToXmlWriter(scrText, bookNum, usfm, xw, true);` |
 | 1 | `ParatextData/UsxImporter.cs` | Codebase search: "UsxImporter" | Import functionality counterpart |
 | 1 | `Paratext/FileMenu/ImportBooksForm.cs` | HelpData dialog | `ImportBooksForm` (ID: `2f3daf31-12cc-4c4e-bd0a-ade974520c7d`) |
-| 2 | `ParatextData/UsfmToken.cs` | Method call in D1 | UsfmToUsx.cs line 34: `List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm.TrimStart(), false);` |
-| 2 | `ParatextData/UsxFragmenter.cs` | Method call in D1 | UsxImporter.cs line 47: `UsxFragmenter.FindFragments(scrText.DefaultStylesheet, ...)` |
+| 2 | `ParatextData/UsfmToken.cs` | Method call in D1 | UsfmToUsx.cs: `List<UsfmToken> tokens = UsfmToken.Tokenize(scrStylesheet, usfm.TrimStart(), false);` |
+| 2 | `ParatextData/UsxFragmenter.cs` | Method call in D1 | UsxImporter.cs: `UsxFragmenter.FindFragments(scrText.DefaultStylesheet, ...)` |
 | 2 | `ParatextChecks/Archiving/UsxValidator.cs` | Codebase search: "UsxValidator" | Validation component using RelaxNG |
 
 **Not Found**:
@@ -132,7 +132,7 @@ Data Formats features define how Scripture and project data is stored, structure
   - Dialog: `ExportUsxForm`
   - Question: "How do I export project text from Paratext?"
 - ≡ Tab > Project > Manage books > Import book(s) (for USX import via general import)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `importBooksToolStripMenuItem_Click`, line 831
+  - Menu Structure: `ParatextWindowWithMenus`, handler `importBooksToolStripMenuItem_Click`
   - HelpData ID: `2f3daf31-12cc-4c4e-bd0a-ade974520c7d`
   - Dialog: `ImportBooksForm`
   - Question: "How do I import a book into my project?"
@@ -170,8 +170,8 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Export: `Project > Advanced > Wrap (export) project in a Scripture Burrito`; Handler: `wrapProjectInAScriptureBurritoToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 1126 | `[MS]` |
-| Menu Structure | Import: `Paratext > Advanced > Consume (import) Scripture Burrito`; Handler: `consumeScriptureBurritoToolStripMenuItem_Click` in `MainForm.cs`, line 1913 | `[MS]` |
+| Menu Structure | Export: `Project > Advanced > Wrap (export) project in a Scripture Burrito`; Handler: `wrapProjectInAScriptureBurritoToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Import: `Paratext > Advanced > Consume (import) Scripture Burrito`; Handler: `consumeScriptureBurritoToolStripMenuItem_Click` in `MainForm.cs` | `[MS]` |
 | Requirements | Section: "Data Formats > Export > Scripture Burrito" | `[R]` |
 | Manual | *No Scripture Burrito reference found in manual chapters* | `-` |
 | HelpData | *No Scripture Burrito items found in HelpData (search: "burrito" - 0 results)* | `-` |
@@ -184,26 +184,26 @@ Data Formats features define how Scripture and project data is stored, structure
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/ScriptureBurrito/ScriptureBurritoCreationForm.cs` | Directory search | `Paratext\ScriptureBurrito\` folder |
-| 1 | `Paratext/ScriptureBurrito/Metadata/SBMetadata.cs` | Object creation in D0 | Line 96: `SBMetadata metadata = new SBMetadata(scrText);` |
-| 1 | `Paratext/ScriptureBurrito/BurritoUtensils.cs` | Method call in D0 | Line 92: `BurritoUtensils.InitializeMimeTypes(scrText);` |
-| 1 | `Paratext/ScriptureBurrito/FoodInspector.cs` | Method call in D0 | Line 75: `FoodInspector.InspectBurrito(metadataStream);` |
-| 1 | `Paratext/ScriptureBurrito/Burrito.cs` | Base class for import | BurritoUtensils.cs line 40: Creates `LooseBurrito` or `ZipBurrito` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 35: `private readonly ScrText scrText;` |
-| 2 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Using in D1 | SBMetadata.cs line 9: `using Paratext.Data.ProjectSettingsAccess;` |
-| 2 | `ParatextData/Repository/` | Using in D1 | SBMetadata.cs line 10: `using Paratext.Data.Repository;` |
-| 2 | `ParatextData/Languages/` | Using in D1 | BurritoUtensils.cs line 11: `using Paratext.Data.Languages;` |
-| 2 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | Using in D1 | BurritoUtensils.cs line 13: `using Paratext.ProjectMenu;` |
-| 2 | `ParatextData/ProblemReporter/` | Using in D1 | FoodInspector.cs line 10: `using Paratext.Data.ProblemReporter;` |
+| 1 | `Paratext/ScriptureBurrito/Metadata/SBMetadata.cs` | Object creation in D0 | `SBMetadata metadata = new SBMetadata(scrText);` |
+| 1 | `Paratext/ScriptureBurrito/BurritoUtensils.cs` | Method call in D0 | `BurritoUtensils.InitializeMimeTypes(scrText);` |
+| 1 | `Paratext/ScriptureBurrito/FoodInspector.cs` | Method call in D0 | `FoodInspector.InspectBurrito(metadataStream);` |
+| 1 | `Paratext/ScriptureBurrito/Burrito.cs` | Base class for import | BurritoUtensils.cs: Creates `LooseBurrito` or `ZipBurrito` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private readonly ScrText scrText;` |
+| 2 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Using in D1 | SBMetadata.cs: `using Paratext.Data.ProjectSettingsAccess;` |
+| 2 | `ParatextData/Repository/` | Using in D1 | SBMetadata.cs: `using Paratext.Data.Repository;` |
+| 2 | `ParatextData/Languages/` | Using in D1 | BurritoUtensils.cs: `using Paratext.Data.Languages;` |
+| 2 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | Using in D1 | BurritoUtensils.cs: `using Paratext.ProjectMenu;` |
+| 2 | `ParatextData/ProblemReporter/` | Using in D1 | FoodInspector.cs: `using Paratext.Data.ProblemReporter;` |
 
 **Not Found**:
 - *No HelpData dialog* (search: "burrito" returned 0 results - feature exists in code but not documented in HelpData)
 
 **UI Entry Points**:
 - ≡ Tab > Project > Advanced > Wrap (export) project in a Scripture Burrito
-  - Menu Structure: `ParatextWindowWithMenus`, handler `wrapProjectInAScriptureBurritoToolStripMenuItem_Click`, line 1126
+  - Menu Structure: `ParatextWindowWithMenus`, handler `wrapProjectInAScriptureBurritoToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Paratext > Advanced > Consume (import) Scripture Burrito
-  - Menu Structure: `MainForm`, handler `consumeScriptureBurritoToolStripMenuItem_Click`, line 1913
+  - Menu Structure: `MainForm`, handler `consumeScriptureBurritoToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **Note**: Scripture Burrito support exists in code (`Paratext/ScriptureBurrito/` directory with 15+ files) but is not documented in Manual or HelpData. The `ScriptureBurritoCreationForm` provides export functionality. The `BurritoUtensils.ProcessBurrito()` method provides import functionality.
@@ -232,7 +232,7 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 872 | `[MS]` |
+| Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
 | Requirements | Section: "Data Formats > Projects" | `[R]` |
 | Manual | *No specific project structure chapter found* | `-` |
 | HelpData | Keyword: `ComponentProjects`; Multiple dialogs reference projects | `[H]` |
@@ -245,15 +245,15 @@ Data Formats features define how Scripture and project data is stored, structure
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `ParatextData/ScrText.cs` | Core project class | Search: "ScrText.cs" in ParatextData |
-| 1 | `ParatextData/ProjectFileAccess/ProjectFileManager.cs` | Field in D0 | Line 76: `protected readonly LazyInitHelper<ProjectFileManager> cachedFileManager;` |
-| 1 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Field in D0 | Line 81: `protected readonly LazyInitHelper<ProjectSettings> cachedSettings;` |
-| 1 | `ParatextData/Users/PermissionManager.cs` | Field in D0 | Line 77: `private readonly LazyInitHelper<PermissionManager> cachedPermissionManager;` |
-| 1 | `ParatextData/ScrStylesheet.cs` | Field in D0 | Line 78: `protected readonly LazyInitHelper<ScrStylesheet> cachedDefaultStylesheet;` |
-| 1 | `ParatextData/ProjectProgress/ProjectProgressInfo.cs` | Field in D0 | Line 88: `protected readonly LazyInitHelper<ProjectProgressInfo> cachedProgressInfo;` |
-| 2 | `ParatextData/Terms/` | Using in D1 | ProjectSettings.cs line 12: `using Paratext.Data.Terms;` |
-| 2 | `ParatextData/Encodings/` | Using in D1 | ProjectSettings.cs line 13: `using Paratext.Data.Encodings;` |
-| 2 | `ParatextData/Languages/` | Using in D1 | ProjectSettings.cs line 14: `using Paratext.Data.Languages;` |
-| 2 | `ParatextData/StudyBible/` | Using in D1 | ProjectSettings.cs line 16: `using Paratext.Data.StudyBible;` |
+| 1 | `ParatextData/ProjectFileAccess/ProjectFileManager.cs` | Field in D0 | `protected readonly LazyInitHelper<ProjectFileManager> cachedFileManager;` |
+| 1 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Field in D0 | `protected readonly LazyInitHelper<ProjectSettings> cachedSettings;` |
+| 1 | `ParatextData/Users/PermissionManager.cs` | Field in D0 | `private readonly LazyInitHelper<PermissionManager> cachedPermissionManager;` |
+| 1 | `ParatextData/ScrStylesheet.cs` | Field in D0 | `protected readonly LazyInitHelper<ScrStylesheet> cachedDefaultStylesheet;` |
+| 1 | `ParatextData/ProjectProgress/ProjectProgressInfo.cs` | Field in D0 | `protected readonly LazyInitHelper<ProjectProgressInfo> cachedProgressInfo;` |
+| 2 | `ParatextData/Terms/` | Using in D1 | ProjectSettings.cs: `using Paratext.Data.Terms;` |
+| 2 | `ParatextData/Encodings/` | Using in D1 | ProjectSettings.cs: `using Paratext.Data.Encodings;` |
+| 2 | `ParatextData/Languages/` | Using in D1 | ProjectSettings.cs: `using Paratext.Data.Languages;` |
+| 2 | `ParatextData/StudyBible/` | Using in D1 | ProjectSettings.cs: `using Paratext.Data.StudyBible;` |
 
 **Not Found**:
 - *No single dialog* (project structure is accessed through multiple dialogs: ProjectPropertiesForm, ImportBooksForm, etc.)
@@ -287,7 +287,7 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 872 (access via General tab) | `[MS]` |
+| Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` (access via General tab) | `[MS]` |
 | Requirements | Section: "Data Formats > Projects" | `[R]` |
 | Manual | *No dedicated versification chapter found* | `-` |
 | HelpData | Keyword: `ComponentVersification`; Dialog: `ProjectPropertiesForm_tabGeneral` | `[H]` |
@@ -300,9 +300,9 @@ Data Formats features define how Scripture and project data is stored, structure
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | HelpData dialog | `ProjectPropertiesForm_tabGeneral` |
-| 1 | `ParatextData/ScrText.cs` | Field access in D0 | Line 236: `bookChooserCtrl.Setup(this.scrText.Settings.Versification.ScriptureBooks,`<br>Line 379: `if (!baseProject.Settings.Versification.IsCustomized)` |
-| 1 | `ParatextData/ParatextVersificationTable.cs` | Method call in D0 | Line 1732: `foreach (ScrVers scrVers in Versification.Table.Implementation.VersificationTables()` |
-| 2 | `ParatextData/ScrTextCollection.cs` | Method call in D1 | ParatextVersificationTable.cs line 39: `ScrText scrText = ScrTextCollection.FindById(...)`<br>Line 96: `ScrText scrText = ScrTextCollection.FindById(...)` |
+| 1 | `ParatextData/ScrText.cs` | Field access in D0 | `bookChooserCtrl.Setup(this.scrText.Settings.Versification.ScriptureBooks,`<br>`if (!baseProject.Settings.Versification.IsCustomized)` |
+| 1 | `ParatextData/ParatextVersificationTable.cs` | Method call in D0 | `foreach (ScrVers scrVers in Versification.Table.Implementation.VersificationTables()` |
+| 2 | `ParatextData/ScrTextCollection.cs` | Method call in D1 | ParatextVersificationTable.cs: `ScrText scrText = ScrTextCollection.FindById(...)`<br>`ScrText scrText = ScrTextCollection.FindById(...)` |
 
 **Note**: Versification is accessed through `ScrText.Settings.Versification` property. The `ParatextVersificationTable` class (which implements `Versification.Table`) handles loading both standard and custom versifications. Custom versifications are stored in `custom.vrs` files within project directories and are loaded via `ScrTextCollection.FindById()`.
 
@@ -351,8 +351,8 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Manage books > Import book(s)`; Handler: `importBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 831 | `[MS]` |
-| Form Relationships | Opens: `ImportBooksForm` from `Program.cs`, line 1700 | `[FR]` |
+| Menu Structure | Menu: `Project > Manage books > Import book(s)`; Handler: `importBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Form Relationships | Opens: `ImportBooksForm` from `Program.cs` | `[FR]` |
 | Requirements | *Not explicitly covered in Requirements document* | `-` |
 | Manual | *Import mentioned in context of various features* | `[M]` |
 | HelpData | Keyword: `ComponentImporting`; Dialog: `ImportBooksForm` | `[H]` |
@@ -364,16 +364,16 @@ Data Formats features define how Scripture and project data is stored, structure
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
 | 0 | `Paratext/FileMenu/ImportBooksForm.cs` | HelpData dialog | `ImportBooksForm` |
-| 1 | `ParatextData/ImportSfmText.cs` | Field in D0 | Line 30: `private ImportSfmText sfmImporter;`<br>Line 38: `sfmImporter = new ImportSfmText(scrText);` |
-| 1 | `ParatextData/ScrText.cs` | Field in D0 | Line 26: `private ScrText scrText;`<br>Constructor parameter | 
-| 2 | `ParatextData/SourceAndDestFileInfo.cs` | Return type in D1 | ImportSfmText.cs line 30: `public List<SourceAndDestFileInfo> GetMatchingDestFiles(...)`<br>Line 32, 38: `SourceAndDestFileInfo` objects |
-| 2 | `ParatextData/PtwFileInfo.cs` | Parameter/return type in D1 | ImportSfmText.cs line 30: `List<PtwFileInfo> srcBooks`<br>Line 76: `public List<PtwFileInfo> ReadAndParseFilesIntoBooks(...)` |
+| 1 | `ParatextData/ImportSfmText.cs` | Field in D0 | `private ImportSfmText sfmImporter;`<br>`sfmImporter = new ImportSfmText(scrText);` |
+| 1 | `ParatextData/ScrText.cs` | Field in D0 | `private ScrText scrText;`<br>Constructor parameter | 
+| 2 | `ParatextData/SourceAndDestFileInfo.cs` | Return type in D1 | ImportSfmText.cs: `public List<SourceAndDestFileInfo> GetMatchingDestFiles(...)`<br>`SourceAndDestFileInfo` objects |
+| 2 | `ParatextData/PtwFileInfo.cs` | Parameter/return type in D1 | ImportSfmText.cs: `List<PtwFileInfo> srcBooks`<br>`public List<PtwFileInfo> ReadAndParseFilesIntoBooks(...)` |
 
 **Note**: The `ImportBooksForm` uses `ImportSfmText` to handle the actual import logic. `ImportSfmText` reads source files, parses them into books using `PtwFileInfo`, matches them with destination files using `SourceAndDestFileInfo`, and writes them to the project through the `ScrText` object. The import process handles encoding conversions and USFM marker parsing.
 
 **UI Entry Points**:
 - ≡ Tab > Project > Manage books > Import book(s)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `importBooksToolStripMenuItem_Click`, line 831
+  - Menu Structure: `ParatextWindowWithMenus`, handler `importBooksToolStripMenuItem_Click`
   - HelpData ID: `2f3daf31-12cc-4c4e-bd0a-ade974520c7d`
   - Dialog: `ImportBooksForm`
   - Question: "How do I import a book into my project?"
@@ -422,7 +422,7 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 872 (access via Advanced tab) | `[MS]` |
+| Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` (access via Advanced tab) | `[MS]` |
 | Requirements | Section: "Data Formats > USFM" (implied) | `[R]` |
 | Manual | *Stylesheet mentioned in context of USFM and project properties* | `-` |
 | HelpData | Keyword: `ComponentStyleSheets`; Dialog: `ProjectPropertiesForm_tabAdvanced` | `[H]` |
@@ -481,42 +481,42 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Manage books > Show book(s)`; Handler: `showBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 790 | `[MS]` |
-| Menu Structure | Menu: `Project > Manage books > Create book(s)`; Handler: `createBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 796 | `[MS]` |
-| Menu Structure | Menu: `Project > Manage books > Copy book(s)`; Handler: `copyBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 805 | `[MS]` |
-| Menu Structure | Menu: `Project > Manage books > Delete book(s)`; Handler: `deleteBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 818 | `[MS]` |
-| Menu Structure | Menu: `Project > Manage books > Import book(s)`; Handler: `importBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 831 | `[MS]` |
-| Form Relationships | Opens: `ShowBooksForm`, `CreateBooksForm`, `CopyBooksForm`, `DeleteBooksForm`, `ImportBooksForm` from `Program.cs`, lines 1690, 1695, 1680, 1685, 1700 | `[FR]` |
+| Menu Structure | Menu: `Project > Manage books > Show book(s)`; Handler: `showBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Manage books > Create book(s)`; Handler: `createBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Manage books > Copy book(s)`; Handler: `copyBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Manage books > Delete book(s)`; Handler: `deleteBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Manage books > Import book(s)`; Handler: `importBooksToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Form Relationships | Opens: `ShowBooksForm`, `CreateBooksForm`, `CopyBooksForm`, `DeleteBooksForm`, `ImportBooksForm` from `Program.cs`, 1695, 1680, 1685, 1700 | `[FR]` |
 | HelpData | Keyword: `ComponentManageBooks`; 12 items; Dialogs: `ShowBooksForm`, `CreateBooksForm`, `CopyBooksForm`, `DeleteBooksForm`, `ImportBooksForm` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handlers at lines 790, 796, 805, 818, 831 |
-| 1 | `Paratext/ToolsMenu/ShowBooksForm.cs` | Method call in D0 | Line 792: `CreateShowBooksWindow(ScriptureText)` |
-| 1 | `Paratext/ToolsMenu/CreateBooksForm.cs` | Method call in D0 | Line 802: `CreateBooks(ScriptureText, Reference.BookNum)` |
-| 1 | `Paratext/ToolsMenu/CopyBooksForm.cs` | Method call in D0 | Line 813: `CreateCopyBooksWindow(ScriptureText)` |
-| 1 | `Paratext/ToolsMenu/DeleteBooksForm.cs` | Method call in D0 | Line 825: `CreateDeleteBooksWindow(ScriptureText)` |
-| 1 | `Paratext/FileMenu/ImportBooksForm.cs` | Method call in D0 | Line 836: `ImportBooks(ScriptureText)` |
-| 2 | `ParatextData/ScrText.cs` | Field in D1 | ShowBooksForm.cs line 5: `using Paratext.Data;`; Field `scrText` |
-| 2 | `SIL.Scripture/Canon.cs` | Method call in D1 | ShowBooksForm.cs line 45: `Canon.AllBookNumbers` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handlers, 796, 805, 818, 831 |
+| 1 | `Paratext/ToolsMenu/ShowBooksForm.cs` | Method call in D0 | `CreateShowBooksWindow(ScriptureText)` |
+| 1 | `Paratext/ToolsMenu/CreateBooksForm.cs` | Method call in D0 | `CreateBooks(ScriptureText, Reference.BookNum)` |
+| 1 | `Paratext/ToolsMenu/CopyBooksForm.cs` | Method call in D0 | `CreateCopyBooksWindow(ScriptureText)` |
+| 1 | `Paratext/ToolsMenu/DeleteBooksForm.cs` | Method call in D0 | `CreateDeleteBooksWindow(ScriptureText)` |
+| 1 | `Paratext/FileMenu/ImportBooksForm.cs` | Method call in D0 | `ImportBooks(ScriptureText)` |
+| 2 | `ParatextData/ScrText.cs` | Field in D1 | ShowBooksForm.cs: `using Paratext.Data;`; Field `scrText` |
+| 2 | `SIL.Scripture/Canon.cs` | Method call in D1 | ShowBooksForm.cs: `Canon.AllBookNumbers` |
 
 **UI Entry Points**:
 - ≡ Tab > Project > Manage books > Show book(s)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `showBooksToolStripMenuItem_Click`, line 790
+  - Menu Structure: `ParatextWindowWithMenus`, handler `showBooksToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Manage books > Create book(s)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `createBooksToolStripMenuItem_Click`, line 796
+  - Menu Structure: `ParatextWindowWithMenus`, handler `createBooksToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Manage books > Copy book(s)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `copyBooksToolStripMenuItem_Click`, line 805
+  - Menu Structure: `ParatextWindowWithMenus`, handler `copyBooksToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Manage books > Delete book(s)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `deleteBooksToolStripMenuItem_Click`, line 818
+  - Menu Structure: `ParatextWindowWithMenus`, handler `deleteBooksToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Project > Manage books > Import book(s)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `importBooksToolStripMenuItem_Click`, line 831
+  - Menu Structure: `ParatextWindowWithMenus`, handler `importBooksToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **HelpData Items**:
@@ -589,10 +589,10 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Paratext > Advanced > Backup project to file`; Handler: `backupToFileToolStripMenuItem_Click` in `MainForm.cs`, line 1017 | `[MS]` |
-| Menu Structure | Menu: `Paratext > Advanced > Restore project from file`; Handler: `restoreFromFileToolStripMenuItem_Click` in `MainForm.cs`, line 1027 | `[MS]` |
-| Menu Structure | Menu: `Project > Advanced > Backup project to file`; Handler: `backupProjectToFileToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs`, line 1114 | `[MS]` |
-| Form Relationships | Opens: `BackupForm` from `MainForm.cs`, line 1023; Opens: `RestoreForm` from `MainForm.cs`, line 1029 | `[FR]` |
+| Menu Structure | Menu: `Paratext > Advanced > Backup project to file`; Handler: `backupToFileToolStripMenuItem_Click` in `MainForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Paratext > Advanced > Restore project from file`; Handler: `restoreFromFileToolStripMenuItem_Click` in `MainForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Advanced > Backup project to file`; Handler: `backupProjectToFileToolStripMenuItem_Click` in `ParatextWindowWithMenus.cs` | `[MS]` |
+| Form Relationships | Opens: `BackupForm` from `MainForm.cs`; Opens: `RestoreForm` from `MainForm.cs` | `[FR]` |
 | Manual | `../paratext-manual/chapters/admin/ma_03_project_sharing.md`: Backup section | `[M]` |
 | HelpData | Keyword: `ComponentBackupProject`; 9 items; Dialogs: `BackupForm`, `RestoreForm` | `[H]` |
 
@@ -600,23 +600,23 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | Handlers at lines 1017, 1027 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler at line 1114 |
-| 1 | `Paratext/BackupRestore/BackupForm.cs` | Method call in D0 | Line 1023: `using (BackupForm frm = new BackupForm(scrText))` |
-| 1 | `Paratext/BackupRestore/RestoreForm.cs` | Method call in D0 | Line 1029: `using (RestoreForm frm = new RestoreForm())` |
-| 2 | `ParatextData/ScrText.cs` | Field in D1 | BackupForm.cs line 26: `private ScrText scrText;` |
-| 2 | `Paratext/BackupRestore/Restorer.cs` | Field in D1 | RestoreForm.cs line 34: `private readonly Restorer restorer;` |
-| 2 | `SIL.Scripture/BookSet.cs` | Field in D1 | BackupForm.cs line 27: `private BookSet selectedBooks` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | Handlers, 1027 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | Handler |
+| 1 | `Paratext/BackupRestore/BackupForm.cs` | Method call in D0 | `using (BackupForm frm = new BackupForm(scrText))` |
+| 1 | `Paratext/BackupRestore/RestoreForm.cs` | Method call in D0 | `using (RestoreForm frm = new RestoreForm())` |
+| 2 | `ParatextData/ScrText.cs` | Field in D1 | BackupForm.cs: `private ScrText scrText;` |
+| 2 | `Paratext/BackupRestore/Restorer.cs` | Field in D1 | RestoreForm.cs: `private readonly Restorer restorer;` |
+| 2 | `SIL.Scripture/BookSet.cs` | Field in D1 | BackupForm.cs: `private BookSet selectedBooks` |
 
 **UI Entry Points**:
 - ≡ Paratext > Advanced > Backup project to file
-  - Menu Structure: `MainForm`, handler `backupToFileToolStripMenuItem_Click`, line 1017
+  - Menu Structure: `MainForm`, handler `backupToFileToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Paratext > Advanced > Restore project from file
-  - Menu Structure: `MainForm`, handler `restoreFromFileToolStripMenuItem_Click`, line 1027
+  - Menu Structure: `MainForm`, handler `restoreFromFileToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Tab > Project > Advanced > Backup project to file
-  - Menu Structure: `ParatextWindowWithMenus`, handler `backupProjectToFileToolStripMenuItem_Click`, line 1114
+  - Menu Structure: `ParatextWindowWithMenus`, handler `backupProjectToFileToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 
 **HelpData Items**:
@@ -656,24 +656,24 @@ Data Formats features define how Scripture and project data is stored, structure
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Advanced > Convert project`; Handler: `uiToolsAdvancedConvertProject_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`, line 638; Owner: `ParatextWindowWithMenus` | `[MS]` |
-| Form Relationships | Opens: `ConvertProjectForm` from `Program.cs`, line 1550 | `[FR]` |
+| Menu Structure | Menu: `Project > Advanced > Convert project`; Handler: `uiToolsAdvancedConvertProject_Click` in `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`; Owner: `ParatextWindowWithMenus` | `[MS]` |
+| Form Relationships | Opens: `ConvertProjectForm` from `Program.cs` | `[FR]` |
 | HelpData | Keyword: `ComponentConvertProject`; Dialog: `ConvertProjectForm`; 9 items | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiToolsAdvancedConvertProject_Click` at line 638 |
-| 0 | `Paratext/ToolsMenu/ConvertProjectForm.cs` | Form Relationships | line 1550: `return new ConvertProjectForm(scrText);` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiToolsAdvancedConvertProject_Click` |
+| 0 | `Paratext/ToolsMenu/ConvertProjectForm.cs` | Form Relationships |: `return new ConvertProjectForm(scrText);` |
 | 1 | `ParatextData/ScrText.cs` | Field in D0 | Constructor parameter `ScrText scrText` |
 
 **Dialog Navigation** `[FR]`:
-- `ParatextWindowWithMenus` → `ConvertProjectForm` (via Program.cs line 1550)
+- `ParatextWindowWithMenus` → `ConvertProjectForm` (via Program.cs)
 
 **UI Entry Points**:
 - ≡ Tab > Project > Advanced > Convert project
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedConvertProject_Click`, line 638
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsAdvancedConvertProject_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `78859548-99cf-4a77-83bf-77179b9175b0`
   - Dialog: `ConvertProjectForm`

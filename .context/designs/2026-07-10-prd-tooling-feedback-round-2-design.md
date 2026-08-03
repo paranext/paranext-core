@@ -1,5 +1,8 @@
 # PRD tooling, feedback round 2: question routing, divergence audit, PT10 awareness, and a PRD coach
 
+> **Frozen record** — design as approved 2026-07-10, since implemented (PR #2438). The tooling
+> has evolved past it; follow the current command/agent files, not this document.
+
 > Design for the second revision of the PRD tooling (`/investigate-prd`, `/prd-to-jira`), driven
 > by first-use feedback from the engineering manager (Matt) and product manager (Josh), plus
 > research runs on the four real sync PRDs. Approved in discussion 2026-07-10.

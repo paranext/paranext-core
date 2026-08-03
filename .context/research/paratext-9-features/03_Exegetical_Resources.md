@@ -47,12 +47,12 @@ Source language texts are data resources, not code features. UI access is via st
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | `openToolStripMenuItem_Click` handler, line 895 |
-| 1 | `ParatextBase/CommonForms/SelectScrTextsForm.cs` | Instantiated in D0 | Line 906: `new SelectScrTextsForm(null, availableProjects...)` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | `openToolStripMenuItem_Click` handler |
+| 1 | `ParatextBase/CommonForms/SelectScrTextsForm.cs` | Instantiated in D0 | `new SelectScrTextsForm(null, availableProjects...)` |
 
 **UI Entry Points**:
 - ≡ Paratext > Open (generic open dialog includes SLTs)
-  - Menu Structure: `MainForm`, handler `openToolStripMenuItem_Click`, line 895
+  - Menu Structure: `MainForm`, handler `openToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Paratext > Open Source Language
   - HelpData ID: `b38ec262-631e-4410-a4e1-4a8f5eee5491`
@@ -83,7 +83,7 @@ Source language texts are data resources, not code features. UI access is via st
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | `Paratext > Download/Install resources` → `installResourcesToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `MainForm` → `InstallResourcesForm` (line 785) | `[FR]` |
+| Form Relationships | `MainForm` → `InstallResourcesForm` | `[FR]` |
 | Requirements | Section: "Exegetical Research" | `[R]` |
 | HelpData | Keyword: `ComponentResources`; Dialog: `InstallResourcesForm` | `[H]` |
 
@@ -91,22 +91,22 @@ Source language texts are data resources, not code features. UI access is via st
 > "The Digital Bible Library provides 3,927 text Bibles in 2,336 languages. These texts have been generously made available to registered Paratext users."
 
 **Dialog Navigation**:
-- `MainForm.cs` → `installResourcesToolStripMenuItem_Click` (line 997) → `InstallResources()` (line 785)
+- `MainForm.cs` → `installResourcesToolStripMenuItem_Click` → `InstallResources()`
 - Opens: `InstallResourcesForm` via `new InstallResourcesForm().ShowDialog()`
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | `installResourcesToolStripMenuItem_Click`, line 997 |
-| 0 | `Paratext/FileMenu/InstallResourcesForm.cs` | Form Relationships | `InstallResourcesForm`, line 39 |
-| 1 | `Paratext/MainForm.cs` | Handler code | Line 785: `using (InstallResourcesForm frm = new InstallResourcesForm())` |
-| 1 | `ParatextData/Archiving` | Import in D0 | Line 25: `using Paratext.Data.Archiving` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | `installResourcesToolStripMenuItem_Click` |
+| 0 | `Paratext/FileMenu/InstallResourcesForm.cs` | Form Relationships | `InstallResourcesForm` |
+| 1 | `Paratext/MainForm.cs` | Handler code | `using (InstallResourcesForm frm = new InstallResourcesForm())` |
+| 1 | `ParatextData/Archiving` | Import in D0 | `using Paratext.Data.Archiving` |
 
 **UI Entry Points**:
 - ≡ Paratext > Download/Install Resources
-  - Menu Structure: `MainForm`, handler `installResourcesToolStripMenuItem_Click`, line 997
-  - Form Relationships: Opens `InstallResourcesForm`, line 785
+  - Menu Structure: `MainForm`, handler `installResourcesToolStripMenuItem_Click`
+  - Form Relationships: Opens `InstallResourcesForm`
   - HelpData ID: `e01095ac-e488-4c4b-86f7-cf80e942e9b2`
   - Question: "How do I download and install a resource text?"
 
@@ -139,7 +139,7 @@ Source language texts are data resources, not code features. UI access is via st
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | N/A - accessed via generic `Paratext > Open` menu | - |
-| Form Relationships | `MarbleForm` → `InstallResourcesForm` (lines 1392, 1450) | `[FR]` |
+| Form Relationships | `MarbleForm` → `InstallResourcesForm` | `[FR]` |
 | Requirements | Section: "Exegetical Research" | `[R]` |
 | HelpData | Keyword: `ComponentEnhancedResources`; 19 items | `[H]` |
 
@@ -147,17 +147,17 @@ Source language texts are data resources, not code features. UI access is via st
 > "An Enhanced Resource is a Bible translation in a language of wider communication that has words or phrases linked to exegetical research materials of various types"
 
 **Dialog Navigation**:
-- Enhanced Resources are opened via `Paratext > Open` dialog (line 895) as part of available resources
+- Enhanced Resources are opened via `Paratext > Open` dialog as part of available resources
 - `MarbleForm` is used to display Enhanced Resources; inherits from `ParatextWindowWithMenus`
-- `MarbleForm` can open `InstallResourcesForm` to download required resources (lines 1392, 1450)
+- `MarbleForm` can open `InstallResourcesForm` to download required resources
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/Marble/MarbleForm.cs` | Form Relationships | `MarbleForm`, line 51, inherits `ParatextWindowWithMenus` |
-| 1 | `Paratext/Marble/MarbleForm.cs` | FR: opensDialogs | Line 1392: `using (var form = new InstallResourcesForm())` |
-| 1 | `Paratext/Marble/MarbleForm.cs` | FR: opensDialogs | Line 1450: `using (var form = new InstallResourcesForm())` |
+| 0 | `Paratext/Marble/MarbleForm.cs` | Form Relationships | `MarbleForm`, inherits `ParatextWindowWithMenus` |
+| 1 | `Paratext/Marble/MarbleForm.cs` | FR: opensDialogs | `using (var form = new InstallResourcesForm())` |
+| 1 | `Paratext/Marble/MarbleForm.cs` | FR: opensDialogs | `using (var form = new InstallResourcesForm())` |
 | 1 | `Paratext/Marble/MarbleDataAccess.cs` | Same directory | Data access layer |
 | 1 | `Paratext/Marble/MarbleDataParser.cs` | Same directory | Parsing logic |
 | 1 | `Paratext/Marble/MarbleLexiconEntry.cs` | Same directory | Lexicon entry model |
@@ -167,7 +167,7 @@ Source language texts are data resources, not code features. UI access is via st
 
 **UI Entry Points**:
 - ≡ Paratext > Open (generic open dialog includes Enhanced Resources)
-  - Menu Structure: `MainForm`, handler `openToolStripMenuItem_Click`, line 895
+  - Menu Structure: `MainForm`, handler `openToolStripMenuItem_Click`
   - Enhanced Resources appear in selection when `MarbleDataAccess.Default.HaveMarbleData` is true
 - ≡ Paratext > Open > Enhanced Resource
   - HelpData ID: `a899ad8a-21f5-4d1d-a5c1-5e987071d56a`
@@ -206,21 +206,21 @@ Source language texts are data resources, not code features. UI access is via st
 | HelpData | Keyword: `ComponentSourceLanguageDictionary`; 6 items | `[H]` |
 
 **Dialog Navigation**:
-- `SLTDictionaryForm.cs` → `menuFileNew_Click` (line 1708) opens dictionary selection
-- `SLTDictionaryForm` inherits from `ParatextWindowWithMenus` (line 30)
+- `SLTDictionaryForm.cs` → `menuFileNew_Click` opens dictionary selection
+- `SLTDictionaryForm` inherits from `ParatextWindowWithMenus`
 - Dictionary functionality also integrated with Enhanced Resources (Marble)
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/SourceLanguageTools/SLTDictionaryForm.cs` | Menu Structure | `menuFileNew_Click`, line 1708 |
-| 0 | `Paratext/SourceLanguageTools/SLTDictionaryForm.cs` | Form Relationships | Line 30: `public partial class SLTDictionaryForm : ParatextWindowWithMenus` |
+| 0 | `Paratext/SourceLanguageTools/SLTDictionaryForm.cs` | Menu Structure | `menuFileNew_Click` |
+| 0 | `Paratext/SourceLanguageTools/SLTDictionaryForm.cs` | Form Relationships | `public partial class SLTDictionaryForm : ParatextWindowWithMenus` |
 | 1 | `Paratext/Marble/MarbleLexiconEntry.cs` | Same namespace | Lexicon entry model |
 
 **UI Entry Points**:
 - ≡ Dictionary > Open Dictionary
-  - Menu Structure: `SLTDictionaryForm`, handler `menuFileNew_Click`, line 1708
+  - Menu Structure: `SLTDictionaryForm`, handler `menuFileNew_Click`
   - HelpData ID: `f8d4c4a9-9edd-4d2f-b97d-a143a7610833`
   - Question: "How do I open a Source Language Dictionary?"
 - Click word in Enhanced Resource
@@ -260,7 +260,7 @@ Source language texts are data resources, not code features. UI access is via st
 > "Commentaries, Handbooks, and Consultant Notes are additional resources available to Paratext users...Handbooks are similar to a commentary in structure, but focused on issues that relate to the process of translating the passage"
 
 **Dialog Navigation**:
-- Commentaries and handbooks are data resources opened via `Paratext > Open` dialog (line 895)
+- Commentaries and handbooks are data resources opened via `Paratext > Open` dialog
 - Displayed in standard `ParatextWindowWithMenus`-based windows
 - No dedicated UI form; uses generic resource viewing infrastructure
 
@@ -270,12 +270,12 @@ Commentaries are data resources opened as standard Paratext windows. No dedicate
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | `openToolStripMenuItem_Click` handler, line 895 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | `openToolStripMenuItem_Click` handler |
 | 1 | `ParatextBase/CommonForms/SelectScrTextsForm.cs` | Instantiated in D0 | Shows available resources including commentaries |
 
 **UI Entry Points**:
 - ≡ Paratext > Open (generic open dialog includes commentaries/handbooks)
-  - Menu Structure: `MainForm`, handler `openToolStripMenuItem_Click`, line 895
+  - Menu Structure: `MainForm`, handler `openToolStripMenuItem_Click`
   - HelpData Keyword: `ComponentResources`
   - Commentaries and handbooks opened as standard resources
 
@@ -299,33 +299,33 @@ Commentaries are data resources opened as standard Paratext windows. No dedicate
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | `Paratext > Open text collection` → `openTCMenuItem_Click` | `[MS]` |
-| Form Relationships | `TextCollectionForm` → `TextRangePrintForm` (line 410) | `[FR]` |
+| Form Relationships | `TextCollectionForm` → `TextRangePrintForm` | `[FR]` |
 | HelpData | Keyword: `ComponentTextCollections`; 9 items | `[H]` |
 
 **Dialog Navigation**:
-- `MainForm.cs` → `openTCMenuItem_Click` (line 914) opens Text Collection
-- `TextCollectionForm` inherits from `ParatextWindowWithMenus` (line 32)
-- `Edit > Modify text collection` handler at `TextCollectionForm.cs`, line 499
-- Opens `TextRangePrintForm` for printing (line 410)
+- `MainForm.cs` → `openTCMenuItem_Click` opens Text Collection
+- `TextCollectionForm` inherits from `ParatextWindowWithMenus`
+- `Edit > Modify text collection` handler at `TextCollectionForm.cs`
+- Opens `TextRangePrintForm` for printing
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | `openTCMenuItem_Click`, line 914 |
-| 0 | `Paratext/TextCollectionForm.cs` | Form Relationships | `TextCollectionForm`, line 32, inherits `ParatextWindowWithMenus` |
-| 1 | `Paratext/TextCollectionForm.cs` | FR: opensDialogs | Line 410: `using (TextRangePrintForm frm = new TextRangePrintForm(...))` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | `openTCMenuItem_Click` |
+| 0 | `Paratext/TextCollectionForm.cs` | Form Relationships | `TextCollectionForm`, inherits `ParatextWindowWithMenus` |
+| 1 | `Paratext/TextCollectionForm.cs` | FR: opensDialogs | `using (TextRangePrintForm frm = new TextRangePrintForm(...))` |
 | 1 | `ParatextBase/TextCollection/TextCollectionControl.cs` | Control in D0 | Main text collection control |
 | 2 | `ParatextBase/TextCollection/TextCollectionCss.css` | Same directory | Styling |
 | 2 | `ParatextBase/TextCollection/TextCollectionForward.xslt` | Same directory | XSLT transform |
 
 **UI Entry Points**:
 - ≡ Paratext > Open text collection
-  - Menu Structure: `MainForm`, handler `openTCMenuItem_Click`, line 914
+  - Menu Structure: `MainForm`, handler `openTCMenuItem_Click`
   - HelpData ID: `2f8e8251-7e5c-40fe-ad8c-a8e9b3c88a07`
   - Question: "How do I open a Text Collection?"
 - ≡ Edit > Modify text collection (within TextCollectionForm)
-  - Menu Structure: `TextCollectionForm`, handler `modifyTextCollectionToolStripMenuItem_Click`, line 499
+  - Menu Structure: `TextCollectionForm`, handler `modifyTextCollectionToolStripMenuItem_Click`
   - HelpData ID: `e532fe20-b4d6-4858-b1ef-3e38dcc61e2b`
   - Question: "How do I modify a Text Collection?"
 
@@ -356,7 +356,7 @@ Commentaries are data resources opened as standard Paratext windows. No dedicate
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | `Paratext > Download/Install resources` → `installResourcesToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `MainForm` → `InstallResourcesForm` (line 785) | `[FR]` |
+| Form Relationships | `MainForm` → `InstallResourcesForm` | `[FR]` |
 | Requirements | Section: "Exegetical Research" | `[R]` |
 | HelpData | Keyword: `ComponentResources`; Dialog: `InstallResourcesForm` | `[H]` |
 
@@ -364,7 +364,7 @@ Commentaries are data resources opened as standard Paratext windows. No dedicate
 > "The Paratext user interface makes it simple to browse resources in a given language, click and download to view those resources"
 
 **Dialog Navigation**:
-- `MainForm.cs` → `installResourcesToolStripMenuItem_Click` (line 997) → `InstallResources()` (line 785)
+- `MainForm.cs` → `installResourcesToolStripMenuItem_Click` → `InstallResources()`
 - Opens: `InstallResourcesForm` via `new InstallResourcesForm().ShowDialog()`
 - Note: Same form as Feature 3.2 (Translated Bibles); this feature focuses on browse/download UX
 
@@ -372,16 +372,16 @@ Commentaries are data resources opened as standard Paratext windows. No dedicate
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | `installResourcesToolStripMenuItem_Click`, line 997 |
-| 0 | `Paratext/FileMenu/InstallResourcesForm.cs` | Form Relationships | `InstallResourcesForm`, line 39 |
-| 1 | `Paratext/MainForm.cs` | Handler code | Line 785: `using (InstallResourcesForm frm = new InstallResourcesForm())` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | `installResourcesToolStripMenuItem_Click` |
+| 0 | `Paratext/FileMenu/InstallResourcesForm.cs` | Form Relationships | `InstallResourcesForm` |
+| 1 | `Paratext/MainForm.cs` | Handler code | `using (InstallResourcesForm frm = new InstallResourcesForm())` |
 | 1 | `Paratext/FileMenu/InstallResourcesScheduleManager.cs` | Same directory | Download scheduling |
 | 1 | `ParatextData/ProjectFileAccess` | Import in D0 | Project file access layer |
 
 **UI Entry Points**:
 - ≡ Paratext > Download/Install Resources
-  - Menu Structure: `MainForm`, handler `installResourcesToolStripMenuItem_Click`, line 997
-  - Form Relationships: Opens `InstallResourcesForm`, line 785
+  - Menu Structure: `MainForm`, handler `installResourcesToolStripMenuItem_Click`
+  - Form Relationships: Opens `InstallResourcesForm`
   - HelpData ID: `e01095ac-e488-4c4b-86f7-cf80e942e9b2`
   - Question: "How do I download and install a resource text?"
 - ≡ Paratext > Check for updates
@@ -420,7 +420,7 @@ Commentaries are data resources opened as standard Paratext windows. No dedicate
 > "This concept of synchronized scrolling goes beyond Paratext, and also includes Logos and Translator's Workplace"
 
 **Dialog Navigation**:
-- `MainForm.cs` → `accessLogosResourcesToolStripMenuItem_Click` (line 1083)
+- `MainForm.cs` → `accessLogosResourcesToolStripMenuItem_Click`
 - Logos integration is via external communication (LOGOS-PARATEXT protocol)
 - No dedicated Paratext form; opens external Logos application resources
 
@@ -430,11 +430,11 @@ Logos integration is via external communication, not dedicated code files.
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | `accessLogosResourcesToolStripMenuItem_Click`, line 1083 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | `accessLogosResourcesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - ≡ Paratext > Access Logos resources
-  - Menu Structure: `MainForm`, handler `accessLogosResourcesToolStripMenuItem_Click`, line 1083
+  - Menu Structure: `MainForm`, handler `accessLogosResourcesToolStripMenuItem_Click`
   - HelpData ID: `a274371d-7b39-4b63-a768-c945c4525ff2`
   - Question: "How do I add Logos resources?"
 

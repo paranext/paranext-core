@@ -44,21 +44,21 @@ Language and writing system features enable Paratext to support the world's lang
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `keyboardToolStripMenuItem_Click` at line 893 |
-| 0 | `Paratext/ProjectMenu/KeyboardSelectionForm.cs` | Opens from D0 | Line 896: `CreateKeyboardSelectionWindow()` |
-| 1 | `ParatextBase/Keyboarding/KeyboardHelper.cs` | Import in D0 | Line 9: `using Paratext.Base.Keyboarding` |
-| 1 | `SIL.Keyboarding` | Import in D0 | Line 25: `using SIL.Keyboarding` |
-| 2 | `SIL.Windows.Forms.Keyboarding` | Import in D1 | KeyboardHelper.cs line 13: `using SIL.Windows.Forms.Keyboarding` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `keyboardToolStripMenuItem_Click` |
+| 0 | `Paratext/ProjectMenu/KeyboardSelectionForm.cs` | Opens from D0 | `CreateKeyboardSelectionWindow()` |
+| 1 | `ParatextBase/Keyboarding/KeyboardHelper.cs` | Import in D0 | `using Paratext.Base.Keyboarding` |
+| 1 | `SIL.Keyboarding` | Import in D0 | `using SIL.Keyboarding` |
+| 2 | `SIL.Windows.Forms.Keyboarding` | Import in D1 | KeyboardHelper.cs: `using SIL.Windows.Forms.Keyboarding` |
 
 **Dialog Navigation**:
-- `ParatextWindowWithMenus` → `KeyboardSelectionForm` (line 896)
+- `ParatextWindowWithMenus` → `KeyboardSelectionForm`
 
 **UI Entry Points**:
 - Project > Project settings > Keyboard
-  - Menu Structure: `ParatextWindowWithMenus`, handler `keyboardToolStripMenuItem_Click`, line 893
+  - Menu Structure: `ParatextWindowWithMenus`, handler `keyboardToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Alt+Shift (system shortcut to switch keyboards)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 60
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "Change your keyboard system as needed on your computer."
 
 **HelpData Items**:
@@ -97,8 +97,8 @@ Language and writing system features enable Paratext to support the world's lang
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/Keyboarding/KeyboardHelper.cs` | HelpData keyword search | Line 12: `using SIL.Keyboarding` |
-| 1 | `SIL.Windows.Forms.Keyboarding` | Import in D0 | Line 13: `using SIL.Windows.Forms.Keyboarding` |
+| 0 | `ParatextBase/Keyboarding/KeyboardHelper.cs` | HelpData keyword search | `using SIL.Keyboarding` |
+| 1 | `SIL.Windows.Forms.Keyboarding` | Import in D0 | `using SIL.Windows.Forms.Keyboarding` |
 
 **Not Found**:
 - `KeymanController.cs` (search: "KeymanController" - no matches; Keyman integration via SIL libraries)
@@ -107,7 +107,7 @@ Language and writing system features enable Paratext to support the world's lang
 - Keyman tray icon (system)
   - External: Keyman application
 - Choose keyboard in project settings
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 61
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "If you are using Keyman then choose your keyboard (e.g. Tchad Unicode)"
   - Related: See 2.1 Keyboard Switching for menu entry
 
@@ -137,7 +137,7 @@ Language and writing system features enable Paratext to support the world's lang
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Project settings > Language settings`; Handler: `languageSettingsToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `LanguageSettingsForm` opens `ConfigFontFeaturesForm` (line 391) | `[FR]` |
+| Form Relationships | `LanguageSettingsForm` opens `ConfigFontFeaturesForm` | `[FR]` |
 | Requirements | Section: "Drafting Support > Language Support" | `[R]` |
 | Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Font settings" | `[M]` |
 | HelpData | Keyword: `ComponentLanguageSettings`; Dialogs: `LanguageSettingsForm_tabFont`, `LanguageSettingsForm_tabGraphite` | `[H]` |
@@ -149,17 +149,17 @@ Language and writing system features enable Paratext to support the world's lang
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `languageSettingsToolStripMenuItem_Click` at line 877 |
-| 0 | `Paratext/ToolsMenu/LanguageSettingsForm.cs` | Opens from D0 | Line 877 calls `MainWindow.DisplayLanguageSettingsTool()` |
-| 1 | `Paratext/ToolsMenu/ConfigFontFeaturesForm.cs` | Form Relationships | Line 391: `new ConfigFontFeaturesForm()` |
-| 1 | `NGraphite` | Import in D0 | LanguageSettingsForm.cs line 8: `using NGraphite` |
-| 1 | `PtxUtils.Fonts` | Import in D0 | LanguageSettingsForm.cs line 20: `using PtxUtils.Fonts` |
-| 2 | `ParatextData/Languages/ScrLanguage.cs` | Field in D1 | LanguageSettingsForm.cs line 54: `ScrLanguage scrLanguage` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `languageSettingsToolStripMenuItem_Click` |
+| 0 | `Paratext/ToolsMenu/LanguageSettingsForm.cs` | Opens from D0 | Calls `MainWindow.DisplayLanguageSettingsTool()` |
+| 1 | `Paratext/ToolsMenu/ConfigFontFeaturesForm.cs` | Form Relationships | `new ConfigFontFeaturesForm()` |
+| 1 | `NGraphite` | Import in D0 | LanguageSettingsForm.cs: `using NGraphite` |
+| 1 | `PtxUtils.Fonts` | Import in D0 | LanguageSettingsForm.cs: `using PtxUtils.Fonts` |
+| 2 | `ParatextData/Languages/ScrLanguage.cs` | Field in D1 | LanguageSettingsForm.cs: `ScrLanguage scrLanguage` |
 
 **Dialog Navigation**:
 - `ParatextWindowWithMenus` → `LanguageSettingsForm` (via menu handler)
-- `LanguageSettingsForm` → `ConfigFontFeaturesForm` (line 391)
-- `LanguageSettingsForm` → `LanguageSelectionForm` (lines 231, 246)
+- `LanguageSettingsForm` → `ConfigFontFeaturesForm`
+- `LanguageSettingsForm` → `LanguageSelectionForm`
 
 **Not Found**:
 - `FontManager.cs` (search: "FontManager" - no matches)
@@ -167,7 +167,7 @@ Language and writing system features enable Paratext to support the world's lang
 
 **UI Entry Points**:
 - Project > Project settings > Language settings
-  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`, line 877
+  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Font tab (within Language Settings dialog)
   - HelpData ID: `1af5d594-c397-4cc4-be27-5e88759c6d27`
@@ -217,16 +217,16 @@ Language and writing system features enable Paratext to support the world's lang
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `languageSettingsToolStripMenuItem_Click` at line 877 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `languageSettingsToolStripMenuItem_Click` |
 | 0 | `Paratext/ToolsMenu/LanguageSettingsForm.cs` | Opens from D0 | Contains tabs for Alphabetic/Other Characters |
 | 1 | `ParatextData/LdmlAdapter.cs` | Import in D0 | LDML file reading |
-| 1 | `ParatextData/ILdmlAdapter.cs` | Interface in D1 | Line 3: interface definition |
-| 1 | `ParatextData/Languages/ScrLanguage.cs` | Import in D0 | Line 16: `using Paratext.Data.Languages` |
-| 2 | `SIL.WritingSystems` | Import in D1 | LdmlAdapter.cs line 4: `using SIL.WritingSystems` |
+| 1 | `ParatextData/ILdmlAdapter.cs` | Interface in D1 | interface definition |
+| 1 | `ParatextData/Languages/ScrLanguage.cs` | Import in D0 | `using Paratext.Data.Languages` |
+| 2 | `SIL.WritingSystems` | Import in D1 | LdmlAdapter.cs: `using SIL.WritingSystems` |
 
 **UI Entry Points**:
 - Project > Project settings > Language settings
-  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`, line 877
+  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Alphabetic Characters tab (within Language Settings dialog)
   - HelpData ID: `1fcd5e77-2561-43d2-affc-2e13d6c67a24`
@@ -278,8 +278,8 @@ Language and writing system features enable Paratext to support the world's lang
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextData/Languages/ScrLanguage.cs` | HelpData keyword search | Line 41: `private readonly ProjectNormalization normalization` |
-| 1 | `UnicodeHelper` | Import in D0 | ScrLanguage.cs line 15: `using UnicodeHelper` |
+| 0 | `ParatextData/Languages/ScrLanguage.cs` | HelpData keyword search | `private readonly ProjectNormalization normalization` |
+| 1 | `UnicodeHelper` | Import in D0 | ScrLanguage.cs: `using UnicodeHelper` |
 
 **Not Found**:
 - `UnicodeNormalizer.cs` (search: "UnicodeNormaliz" - no matches; normalization via UnicodeHelper library)
@@ -325,21 +325,21 @@ Language and writing system features enable Paratext to support the world's lang
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `languageSettingsToolStripMenuItem_Click` at line 877 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `languageSettingsToolStripMenuItem_Click` |
 | 0 | `ParatextData/Languages/LanguageCharacters.cs` | HelpData keyword search | Character handling class |
-| 1 | `UnicodeHelper` | Import in D0 | Line 6: `using UnicodeHelper` |
-| 1 | `PtxUtils` | Import in D0 | Line 5: `using PtxUtils` |
+| 1 | `UnicodeHelper` | Import in D0 | `using UnicodeHelper` |
+| 1 | `PtxUtils` | Import in D0 | `using PtxUtils` |
 
 **UI Entry Points**:
 - Project > Project settings > Language settings
-  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`, line 877
+  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Alphabetic Characters tab (within Language Settings dialog)
   - HelpData ID: `1fcd5e77-2561-43d2-affc-2e13d6c67a24`
   - Dialog: `LanguageSettingsForm_tabAlphabetic`
   - Question: "How do I set up my language in Paratext?"
 - View > Highlight Invalid Characters (in text window)
-  - Manual: `../paratext-manual/chapters/04_keyboarding.md`, line 65
+  - Manual: `../paratext-manual/chapters/04_keyboarding.md`
   - Quote: "You can use **≡ Tab** under **View** > **Highlight Invalid Characters**"
 
 **HelpData Items**:
@@ -548,13 +548,13 @@ Ruby glossing is accessed via a dynamic View menu item in text windows when enab
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Code search | Line 1682: `public bool Vertical` property; Line 1684: `GetSetting(Setting.Vertical) == "T"` |
-| 0 | `ParatextData/ProjectSettingsAccess/Setting.cs` | Code search | Line 187: `Vertical` enum value |
-| 1 | `ParatextInternalShared/ScriptureEditor/CSSCreator.cs` | Uses D0 | Line 33: `scrText.Settings.Vertical`; Lines 51, 54: `writing-mode: vertical-rl/lr` |
-| 1 | `Paratext/Archiving/Projects/XmlStylesheetCreator.cs` | Uses D0 | Line 18: `scrText.Settings.Vertical`; Line 37: `writing-mode: tb-rl/tb-lr` |
-| 1 | `ParatextInternalShared/ScriptureEditor/ViewUsfmXhtmlConverter.cs` | Uses D0 | Line 75: passes `scrText.Settings.Vertical` to converter |
-| 2 | `PtxUtils/CSS/ldml_handMod.css` | Font defaults | Lines 2713-2717: `:lang(mn-Mong)` with "Noto Sans Mongolian" font |
-| 2 | `PtxUtils/CSS/DefaultLanguageFont.cs` | Font defaults | Line 95: `"Mong"` script mapped to "Mongolian Baiti" font |
+| 0 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Code search | `public bool Vertical` property; `GetSetting(Setting.Vertical) == "T"` |
+| 0 | `ParatextData/ProjectSettingsAccess/Setting.cs` | Code search | `Vertical` enum value |
+| 1 | `ParatextInternalShared/ScriptureEditor/CSSCreator.cs` | Uses D0 | `scrText.Settings.Vertical`; `writing-mode: vertical-rl/lr` |
+| 1 | `Paratext/Archiving/Projects/XmlStylesheetCreator.cs` | Uses D0 | `scrText.Settings.Vertical`; `writing-mode: tb-rl/tb-lr` |
+| 1 | `ParatextInternalShared/ScriptureEditor/ViewUsfmXhtmlConverter.cs` | Uses D0 | passes `scrText.Settings.Vertical` to converter |
+| 2 | `PtxUtils/CSS/ldml_handMod.css` | Font defaults | `:lang(mn-Mong)` with "Noto Sans Mongolian" font |
+| 2 | `PtxUtils/CSS/DefaultLanguageFont.cs` | Font defaults | `"Mong"` script mapped to "Mongolian Baiti" font |
 
 **Configuration**:
 

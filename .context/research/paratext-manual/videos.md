@@ -6,7 +6,7 @@ regenerated_date: "2026-08-03"
 
 # Paratext Training Videos
 
-Video links extracted from the bundled manual files (regenerated from the corpus; links resolve to the public manual/paratext.org sites).
+Video links extracted from the bundled manual files (regenerated from the corpus 2026-08-03; the links point at external video hosts — mostly vimeo.com — and are not availability-checked).
 
 ## admin/whats_new.md
 

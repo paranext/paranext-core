@@ -37,10 +37,10 @@ Collaboration features enable distributed translation teams to work together on 
 |--------|-----------|--------|
 | Menu Structure | Menu: `Paratext > Send/Receive projects`; Handler: `sendReceiveToolStripMenuItem_Click` | `[MS]` |
 | Menu Structure | Menu: `Project > Send/Receive this project`; Handler: `sendReceiveThisProjectToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `MainForm` opens `SendReceiveProjectsForm` (line 3395) | `[FR]` |
+| Form Relationships | `MainForm` opens `SendReceiveProjectsForm` | `[FR]` |
 | Requirements | Section: "Workflow Management > Cloud Synchronization" | `[R]` |
 | Manual | `admin/ma_06_send_receive.md`: Setup guide | `[M]` |
-| Manual | `../paratext-manual/chapters/04_keyboarding.md`, line 163: "Send/receive this project to the Internet" | `[M]` |
+| Manual | `../paratext-manual/chapters/04_keyboarding.md`: "Send/receive this project to the Internet" | `[M]` |
 | HelpData | Keyword: `ComponentSend/ReceiveGeneral`; Dialog: `SendReceiveProjectsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -50,25 +50,25 @@ Collaboration features enable distributed translation teams to work together on 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `sendReceiveToolStripMenuItem_Click` at line 950 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `sendReceiveThisProjectToolStripMenuItem_Click` at line 706 |
-| 0 | `Paratext/Repository/SendReceiveProjectsForm.cs` | Form Relationships | opened from MainForm line 3395 |
-| 1 | `ParatextData/Repository/SharedRepositorySource.cs` | Field type in D0 | Line 51: `private SharedRepositorySource source;` |
-| 1 | `ParatextData/Repository/SharingLogic.cs` | Import in D0 | Line 24: `using Paratext.Data.Repository;` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `sendReceiveToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `sendReceiveThisProjectToolStripMenuItem_Click` |
+| 0 | `Paratext/Repository/SendReceiveProjectsForm.cs` | Form Relationships | opened from MainForm |
+| 1 | `ParatextData/Repository/SharedRepositorySource.cs` | Field type in D0 | `private SharedRepositorySource source;` |
+| 1 | `ParatextData/Repository/SharingLogic.cs` | Import in D0 | `using Paratext.Data.Repository;` |
 | 2 | `ParatextData/Repository/Hg.cs` | Used by D1 | SharingLogic.cs calls Hg for Mercurial operations |
 | 2 | `ParatextData/Repository/InternetSharedRepositorySource.cs` | Base class | Extends SharedRepositorySource |
 | 2 | `ParatextData/Repository/FileSharedRepositorySource.cs` | Base class | Extends SharedRepositorySource (USB) |
 
 **Dialog Navigation**:
-- `MainForm` → `SendReceiveProjectsForm` (line 3395)
+- `MainForm` → `SendReceiveProjectsForm`
 - `ParatextWindowWithMenus` → `SendReceiveProjectsForm` (via menu handler)
 
 **UI Entry Points**:
 - Paratext > Send/Receive projects (Ctrl+Shift+S)
-  - Menu Structure: `MainForm`, handler `sendReceiveToolStripMenuItem_Click`, line 950
+  - Menu Structure: `MainForm`, handler `sendReceiveToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Project > Send/Receive this project (no shortcut — PT9 binds F9 to Next Book; the multi-project dialog uses Ctrl+Shift+S)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `sendReceiveThisProjectToolStripMenuItem_Click`, line 706
+  - Menu Structure: `ParatextWindowWithMenus`, handler `sendReceiveThisProjectToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - USB Backup Option
   - HelpData ID: `7ab331ff-c1aa-4aa7-b25a-82ea2dc0d60e`
@@ -154,38 +154,38 @@ Collaboration features enable distributed translation teams to work together on 
 | Form Relationships | `PTLiveDedicatedServerForm` at `Paratext/PTLive/PTLiveDedicatedServerForm.cs` | `[FR]` |
 | Form Relationships | `SelectServerForm` at `Paratext/PTLive/SelectServerForm.cs` | `[FR]` |
 | Requirements | Section: "Real-time Collaborative Editing" | `[R]` |
-| Manual | `../paratext-manual/chapters/20_collaboration.md`, line 1: "In this module you will use Paratext Live as a way that the team can collaborate together" | `[M]` |
+| Manual | `../paratext-manual/chapters/20_collaboration.md`: "In this module you will use Paratext Live as a way that the team can collaborate together" | `[M]` |
 | HelpData | Keyword: `ComponentPTLive`; Dialog: `PTLiveTag` | `[H]` |
 
 **Key Quote** (from Requirements):
 > "Paratext currently supports RCE, but only within the same geographic location"
 
-**Key Quote** (from Manual, `../paratext-manual/chapters/20_collaboration.md`, line 5):
+**Key Quote** (from Manual, `../paratext-manual/chapters/20_collaboration.md`):
 > "Paratext Live allows everyone to look at the text on their own computer and see the changes in real time"
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `paratextLiveToolStripMenuItem_Click` at line 1151 |
-| 0 | `Paratext/PTLive/SelectServerForm.cs` | Form Relationships | Server selection form, line 6005 |
-| 1 | `Paratext/PTLive/PTLiveControlCentre.cs` | Reference in D0 | Line 64: `PTLiveControlCentre.Default.StatusChanged` |
-| 1 | `Paratext/PTLive/PTLiveSessionManager.cs` | Used by D1 | Line 33: `List<PTLiveSessionManager> sessionManagers` |
-| 1 | `ParatextData/Repository/SharingLogic.cs` | Import in D1 | Line 46: `SharingLogic.BeforeSharingProject` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `paratextLiveToolStripMenuItem_Click` |
+| 0 | `Paratext/PTLive/SelectServerForm.cs` | Form Relationships | Server selection form |
+| 1 | `Paratext/PTLive/PTLiveControlCentre.cs` | Reference in D0 | `PTLiveControlCentre.Default.StatusChanged` |
+| 1 | `Paratext/PTLive/PTLiveSessionManager.cs` | Used by D1 | `List<PTLiveSessionManager> sessionManagers` |
+| 1 | `ParatextData/Repository/SharingLogic.cs` | Import in D1 | `SharingLogic.BeforeSharingProject` |
 | 2 | `Paratext/PTLive/PTLiveHg.cs` | Related functionality | Mercurial operations for PTLive |
 | 2 | `Paratext/PTLive/PTLiveServiceAdvertiser.cs` | Related functionality | LAN service discovery |
 | 2 | `PTLiveBase/` | Project reference | Core PTLive library |
 
 **Dialog Navigation**:
-- `ParatextWindowWithMenus` → PTLive session (via menu handler line 1151)
-- `MainForm` → `PTLiveDedicatedServerForm` (line 4113)
+- `ParatextWindowWithMenus` → PTLive session (via menu handler)
+- `MainForm` → `PTLiveDedicatedServerForm`
 
 **UI Entry Points**:
 - Tools > Paratext Live
-  - Menu Structure: `ParatextWindowWithMenus`, handler `paratextLiveToolStripMenuItem_Click`, line 1151
+  - Menu Structure: `ParatextWindowWithMenus`, handler `paratextLiveToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Toolbar Paratext Live button
-  - Manual: `../paratext-manual/chapters/20_collaboration.md`, line 50
+  - Manual: `../paratext-manual/chapters/20_collaboration.md`
   - Quote: "Or use the icon on the toolbar"
   - HelpData ID: `6ad6852b-3df8-441a-9bac-bdd40c3acac9`
   - Dialog: `PTLiveTag`
@@ -230,7 +230,7 @@ Collaboration features enable distributed translation teams to work together on 
 | Menu Structure | Menu: `View > Show project notes`; Handler: `showProjectNotesToolStripMenuItemClicked` | `[MS]` |
 | Form Relationships | `CommentListForm` at `Paratext/ProjectComments/CommentListForm.cs` | `[FR]` |
 | Requirements | Section: "Workflow Management > Project Comments" | `[R]` |
-| Manual | `../paratext-manual/chapters/15_using_notes.md`, line 1: "As you are translating and checking you may want to make comments on various errors or issues" | `[M]` |
+| Manual | `../paratext-manual/chapters/15_using_notes.md`: "As you are translating and checking you may want to make comments on various errors or issues" | `[M]` |
 | HelpData | Keyword: `ComponentProjectNotes`; Dialog: `CreateCommentReportForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -240,31 +240,31 @@ Collaboration features enable distributed translation teams to work together on 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `noteToolStripMenuItem_Click` at line 1719 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenNotes_Click` at line 766 |
-| 0 | `Paratext/ProjectComments/CommentListForm.cs` | Form Relationships | Notes list form, line 718 |
-| 1 | `ParatextData/ProjectComments/CommentManager.cs` | Import in D0 | Line 28: `using Paratext.Data.ProjectComments;` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `noteToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiFileOpenNotes_Click` |
+| 0 | `Paratext/ProjectComments/CommentListForm.cs` | Form Relationships | Notes list form |
+| 1 | `ParatextData/ProjectComments/CommentManager.cs` | Import in D0 | `using Paratext.Data.ProjectComments;` |
 | 1 | `ParatextData/ProjectComments/CommentThread.cs` | Used by D1 | Thread management |
-| 2 | `ParatextData/ProjectComments/CommentList.cs` | Field in D1 | Line 35: `CommentList allComments` |
+| 2 | `ParatextData/ProjectComments/CommentList.cs` | Field in D1 | `CommentList allComments` |
 | 2 | `ParatextData/ProjectComments/CommentTags.cs` | Used by D1 | Note categories/icons |
 | 2 | `ParatextData/ProjectComments/ThreadStatus.cs` | Used by D1 | Resolved/unresolved status |
 
 **Dialog Navigation**:
-- `CommentListForm` → `BookChooserForm` (line 724)
-- `CommentListForm` → `CreateCommentReportForm` (line 731)
+- `CommentListForm` → `BookChooserForm`
+- `CommentListForm` → `CreateCommentReportForm`
 
 **UI Entry Points**:
 - Insert > Project note (Ctrl+Shift+N)
-  - Menu Structure: `TextForm`, handler `noteToolStripMenuItem_Click`, line 1719
+  - Menu Structure: `TextForm`, handler `noteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Tools > Notes list
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenNotes_Click`, line 766
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiFileOpenNotes_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - View > Show project notes
-  - Menu Structure: `TextForm`, handler `showProjectNotesToolStripMenuItemClicked`, line 2154
+  - Menu Structure: `TextForm`, handler `showProjectNotesToolStripMenuItemClicked`
   - File: `Paratext/TextForm.cs`
 - Click note icon in text
-  - Manual: `../paratext-manual/chapters/15_using_notes.md`, line 96
+  - Manual: `../paratext-manual/chapters/15_using_notes.md`
   - Quote: "Click the icon in the text"
 
 **HelpData Items**:
@@ -314,30 +314,30 @@ Collaboration features enable distributed translation teams to work together on 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `consultantNoteToolStripMenuItem_Click` at line 1740 |
-| 0 | `Paratext/TextCollectionForm.cs` | Menu Structure | handler `insertNoteToolStripMenuItem_Click` at line 490 |
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `importTNENotesToolStripMenuItem_Click` at line 1202 |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `consultantNoteToolStripMenuItem_Click` |
+| 0 | `Paratext/TextCollectionForm.cs` | Menu Structure | handler `insertNoteToolStripMenuItem_Click` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `importTNENotesToolStripMenuItem_Click` |
 | 1 | `ParatextData/ProjectComments/CommentManager.cs` | Import in D0 | `using Paratext.Data.ProjectComments;` |
 | 2 | `ParatextData/ScrText.cs` | Used by D1 | `ProjectType.ConsultantNotes` check |
 
 **UI Entry Points**:
 - Insert > Consultant note
-  - Menu Structure: `TextForm`, handler `consultantNoteToolStripMenuItem_Click`, line 1740
+  - Menu Structure: `TextForm`, handler `consultantNoteToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Edit > Insert consultant note (Text Collection)
-  - Menu Structure: `TextCollectionForm`, handler `insertNoteToolStripMenuItem_Click`, line 490
+  - Menu Structure: `TextCollectionForm`, handler `insertNoteToolStripMenuItem_Click`
   - File: `Paratext/TextCollectionForm.cs`
 - View > Show consultant notes
   - Menu Structure: `TextForm`, ownerForm: `TextForm`
   - File: `Paratext/TextForm.cs`
 - Paratext > Advanced > Import TNE notes
-  - Menu Structure: `MainForm`, handler `importTNENotesToolStripMenuItem_Click`, line 1202
+  - Menu Structure: `MainForm`, handler `importTNENotesToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Paratext > Advanced > Import new Global Consultant Notes
-  - Menu Structure: `MainForm`, handler `importIntoGToolStripMenuItem_Click`, line 1232
+  - Menu Structure: `MainForm`, handler `importIntoGToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Paratext > Advanced > Publish accepted Global Consultant Notes
-  - Menu Structure: `MainForm`, handler `publishAcceptedGlobalConsultantNotesToolStripMenuItem_Click`, line 1240
+  - Menu Structure: `MainForm`, handler `publishAcceptedGlobalConsultantNotesToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -377,7 +377,7 @@ Collaboration features enable distributed translation teams to work together on 
 | Menu Structure | Menu: `Project > Compare versions`; Handler: `uiToolsCompareTexts_Click` | `[MS]` |
 | Form Relationships | `CommitChangesForm` at `Paratext/Repository/CommitChangesForm.cs` | `[FR]` |
 | Requirements | Section: "Workflow Management > Version Control" | `[R]` |
-| Manual | `../paratext-manual/chapters/18_compare_text.md`, line 1: "In this module, you will learn how to save your text at various points and review them later" | `[M]` |
+| Manual | `../paratext-manual/chapters/18_compare_text.md`: "In this module, you will learn how to save your text at various points and review them later" | `[M]` |
 | HelpData | Keyword: `ComponentProjectHistory`; Dialog: `CommitChangesForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -387,10 +387,10 @@ Collaboration features enable distributed translation teams to work together on 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `viewHistoryToolStripMenuItem_Click` at line 947 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `recordProjectStatusToolStripMenuItem_Click` at line 938 |
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiToolsCompareTexts_Click` at line 531 |
-| 0 | `Paratext/Repository/CommitChangesForm.cs` | Form Relationships | Mark point in history dialog, line 760 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `viewHistoryToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `recordProjectStatusToolStripMenuItem_Click` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiToolsCompareTexts_Click` |
+| 0 | `Paratext/Repository/CommitChangesForm.cs` | Form Relationships | Mark point in history dialog |
 | 1 | `ParatextData/Repository/Hg.cs` | Import in D0 | `using Paratext.Data.Repository;` |
 | 1 | `ParatextData/Repository/HgRevision.cs` | Used by D0 | Revision data structure |
 | 1 | `ParatextData/Repository/HgRevisionCollection.cs` | Field in D0 | `HgRevisionCollection revisions` |
@@ -402,15 +402,15 @@ Collaboration features enable distributed translation teams to work together on 
 
 **UI Entry Points**:
 - Project > Project history
-  - Menu Structure: `ParatextWindowWithMenus`, handler `viewHistoryToolStripMenuItem_Click`, line 947
+  - Menu Structure: `ParatextWindowWithMenus`, handler `viewHistoryToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Project > Mark point in history
-  - Menu Structure: `ParatextWindowWithMenus`, handler `recordProjectStatusToolStripMenuItem_Click`, line 938
+  - Menu Structure: `ParatextWindowWithMenus`, handler `recordProjectStatusToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `1dc95456-5703-49cf-b58b-d32c49b34c24`
   - Dialog: `CommitChangesForm`
 - Project > Compare versions
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsCompareTexts_Click`, line 531
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiToolsCompareTexts_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
   - HelpData ID: `4c0d2e79-260b-4a98-a6d0-08f03f40c421`
   - Dialog: `CommitChangesForm`
@@ -451,21 +451,21 @@ Collaboration features enable distributed translation teams to work together on 
 | Menu Structure | Menu: `Paratext > Support and development > Delete all conflict notes`; Handler: `deleteAllConflictsToolStripMenuItem_Click` | `[MS]` |
 | Form Relationships | Uses `SendReceiveProjectsForm` for conflict detection | `[FR]` |
 | Requirements | Section: "Workflow Management > Cloud Synchronization" | `[R]` |
-| Manual | `../paratext-manual/chapters/15_using_notes.md`, line 43: Conflict icon description | `[M]` |
+| Manual | `../paratext-manual/chapters/15_using_notes.md`: Conflict icon description | `[M]` |
 | HelpData | Keyword: `ComponentMergeConflict`; Dialog: `SendReceiveProjectsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
 > "Given that this is an asynchronous method of collaboration there is the possibility of a merge conflict. In most cases merge conflicts can be resolved quickly and easily"
 
-**Key Quote** (from Manual, `../paratext-manual/chapters/15_using_notes.md`, line 43):
+**Key Quote** (from Manual, `../paratext-manual/chapters/15_using_notes.md`):
 > "Icon is a **black exclamation point !** within a **red triangle.** There is a Send/Receive merge conflict because two users have made different changes to the same verse."
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiProjectShowConflicts_Click` at line 994 |
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `deleteAllConflictsToolStripMenuItem_Click` at line 1655 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `uiProjectShowConflicts_Click` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `deleteAllConflictsToolStripMenuItem_Click` |
 | 0 | `Paratext/Repository/SendReceiveProjectsForm.cs` | Form Relationships | Conflict detection during S/R |
 | 1 | `ParatextData/Repository/SharingLogic.cs` | Import in D0 | Handles merge operations |
 | 1 | `ParatextData/Repository/Mergers/` | Directory | Merge logic implementations |
@@ -474,17 +474,17 @@ Collaboration features enable distributed translation teams to work together on 
 | 2 | `ParatextData/ProjectComments/TagIcons/conflict1.png` | Assets | Conflict note icons (conflict1, conflict4, conflict5) |
 
 **Dialog Navigation**:
-- `ParatextWindowWithMenus` → Conflict notes list (via `uiProjectShowConflicts_Click` line 994)
+- `ParatextWindowWithMenus` → Conflict notes list (via `uiProjectShowConflicts_Click`)
 
 **UI Entry Points**:
 - Project > Open conflict notes
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiProjectShowConflicts_Click`, line 994
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiProjectShowConflicts_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Paratext > Support and development > Delete all conflict notes
-  - Menu Structure: `MainForm`, handler `deleteAllConflictsToolStripMenuItem_Click`, line 1655
+  - Menu Structure: `MainForm`, handler `deleteAllConflictsToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Conflict note icon in text (appears automatically after Send/Receive with conflict)
-  - Manual: `../paratext-manual/chapters/15_using_notes.md`, line 43 (icon description)
+  - Manual: `../paratext-manual/chapters/15_using_notes.md` (icon description)
   - HelpData ID: `b847ea4c-bdc9-43df-820b-e59e1a797cbc`
   - Question: "What is a Send/Receive merge conflict?"
 

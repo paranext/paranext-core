@@ -33,10 +33,10 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Biblical Terms`; Handler: `biblicalTermsMenuItem_Click`; File: `ParatextWindowWithMenus.cs`, line 394 | `[MS]` |
+| Menu Structure | Menu: `Tools > Biblical Terms`; Handler: `biblicalTermsMenuItem_Click`; File: `ParatextWindowWithMenus.cs` | `[MS]` |
 | Form Relationships | `BiblicalTermsForm` opens: `GuessRenderingsForm` (874), `TermDefineFilterForm` (1733), `EditScrTextForm` (998) | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation > Rendering of Key, Biblical Terms" | `[R]` |
-| Manual | `../paratext-manual/chapters/10_biblical_terms.md`, line 42: "**≡ Tab**, under **Tools** > **Biblical terms rendering**" | `[M]` |
+| Manual | `../paratext-manual/chapters/10_biblical_terms.md`: "**≡ Tab**, under **Tools** > **Biblical terms rendering**" | `[M]` |
 | HelpData | Keyword: `ComponentBiblicalTermsTool`; Dialog: `BiblicalTermsForm`; 26 items | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -46,29 +46,29 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `biblicalTermsMenuItem_Click` at line 394 |
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | HelpData dialog | `BiblicalTermsForm`, line 57 |
-| 1 | `BiblicalTerms/Internal/BiblicalTermsGridControlLogic.cs` | Import in D0 | Line 31: `using BiblicalTerms.Internal` |
-| 1 | `ParatextData/Terms/BiblicalTerms.cs` | Import in D0 | Line 33: `using Paratext.Data.Terms` |
-| 1 | `ParatextData/Terms/BiblicalTermsList.cs` | Field in D0 | Line 67: `BiblicalTermsList _termsList` |
-| 1 | `ParatextData/Terms/BiblicalTermsInfo.cs` | Field in D0 | Line 68: `BiblicalTermsInfo _termsInfo` |
-| 2 | `ParatextData/Terms/Filters/BiblicalTermsFilter.cs` | Import in D1 | BiblicalTermsList.cs line 19: `using Paratext.Data.Terms.Filters` |
-| 2 | `CorePluginInterfaces/IBiblicalTermsWindow.cs` | Interface in D0 | Line 12: `IBiblicalTermsWindow` |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `biblicalTermsMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | HelpData dialog | `BiblicalTermsForm` |
+| 1 | `BiblicalTerms/Internal/BiblicalTermsGridControlLogic.cs` | Import in D0 | `using BiblicalTerms.Internal` |
+| 1 | `ParatextData/Terms/BiblicalTerms.cs` | Import in D0 | `using Paratext.Data.Terms` |
+| 1 | `ParatextData/Terms/BiblicalTermsList.cs` | Field in D0 | `BiblicalTermsList _termsList` |
+| 1 | `ParatextData/Terms/BiblicalTermsInfo.cs` | Field in D0 | `BiblicalTermsInfo _termsInfo` |
+| 2 | `ParatextData/Terms/Filters/BiblicalTermsFilter.cs` | Import in D1 | BiblicalTermsList.cs: `using Paratext.Data.Terms.Filters` |
+| 2 | `CorePluginInterfaces/IBiblicalTermsWindow.cs` | Interface in D0 | `IBiblicalTermsWindow` |
 
 **Dialog Navigation**:
-- `BiblicalTermsForm` → `GuessRenderingsForm` (line 874)
-- `BiblicalTermsForm` → `TermDefineFilterForm` (line 1733)
-- `BiblicalTermsForm` → `EditScrTextForm` (line 998)
-- `BiblicalTermsForm` → `ReattachNoteForm` (line 1149)
-- `BiblicalTermsForm` → `ScrTextListSelectionForm` (line 2019)
+- `BiblicalTermsForm` → `GuessRenderingsForm`
+- `BiblicalTermsForm` → `TermDefineFilterForm`
+- `BiblicalTermsForm` → `EditScrTextForm`
+- `BiblicalTermsForm` → `ReattachNoteForm`
+- `BiblicalTermsForm` → `ScrTextListSelectionForm`
 
 **UI Entry Points**:
 - Tools > Biblical Terms (Ctrl+Shift+B)
-  - Menu Structure: `ParatextWindowWithMenus`, handler `biblicalTermsMenuItem_Click`, line 394
+  - Menu Structure: `ParatextWindowWithMenus`, handler `biblicalTermsMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - ≡ Tab > Tools > Biblical Terms Renderings
-  - Menu Structure: `ParatextWindowWithMenus`, handler `OpenRenderingsToolStripMenuItem_Click`, line 733
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 42
+  - Menu Structure: `ParatextWindowWithMenus`, handler `OpenRenderingsToolStripMenuItem_Click`
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "**≡ Tab**, under **Tools** > **Biblical terms rendering**"
   - HelpData ID: `32b4039d-2fa4-469a-ad09-691f944cac43`
   - Dialog: `BiblicalTermsForm`
@@ -100,11 +100,11 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Biblical Terms Renderings`; Handler: `OpenRenderingsToolStripMenuItem_Click`; File: `ParatextWindowWithMenus.cs`, line 733 | `[MS]` |
-| Menu Structure | Menu: `Edit > Edit renderings`; Handler: `editRenderingsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 749 | `[MS]` |
-| Form Relationships | `EditRenderingsForm` opens: `TermRenderingsDifferencesForm` (line 291) | `[FR]` |
+| Menu Structure | Menu: `Tools > Biblical Terms Renderings`; Handler: `OpenRenderingsToolStripMenuItem_Click`; File: `ParatextWindowWithMenus.cs` | `[MS]` |
+| Menu Structure | Menu: `Edit > Edit renderings`; Handler: `editRenderingsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Form Relationships | `EditRenderingsForm` opens: `TermRenderingsDifferencesForm` | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation" | `[R]` |
-| Manual | `../paratext-manual/chapters/10_biblical_terms.md`, line 62: "Double-click in the renderings cell" | `[M]` |
+| Manual | `../paratext-manual/chapters/10_biblical_terms.md`: "Double-click in the renderings cell" | `[M]` |
 | HelpData | Keyword: `ComponentBiblicalTermsRenderings`; Dialog: `EditRenderingsForm_tabTerm`; 24 items | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -114,35 +114,35 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `OpenRenderingsToolStripMenuItem_Click` at line 733 |
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `editRenderingsToolStripMenuItem_Click` at line 749 |
-| 0 | `BiblicalTerms/Internal/EditRenderingsForm.cs` | Form Relationships | `EditRenderingsForm`, line 34 |
-| 1 | `ParatextData/Terms/BiblicalTerms.cs` | Import in D0 | Line 28: `using Paratext.Data.Terms` |
-| 1 | `ParatextInternalShared/Terms/BiblicalTermsHTMLBuilder.cs` | Import in D0 | Line 29: `using ParatextInternalShared.Terms` |
-| 2 | `BiblicalTerms/Internal/RenderingDifferences/TermRenderingsDifferencesForm.cs` | Opens dialog in D0 | EditRenderingsForm.cs line 291 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `OpenRenderingsToolStripMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `editRenderingsToolStripMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/EditRenderingsForm.cs` | Form Relationships | `EditRenderingsForm` |
+| 1 | `ParatextData/Terms/BiblicalTerms.cs` | Import in D0 | `using Paratext.Data.Terms` |
+| 1 | `ParatextInternalShared/Terms/BiblicalTermsHTMLBuilder.cs` | Import in D0 | `using ParatextInternalShared.Terms` |
+| 2 | `BiblicalTerms/Internal/RenderingDifferences/TermRenderingsDifferencesForm.cs` | Opens dialog in D0 | EditRenderingsForm.cs |
 
 **Dialog Navigation**:
 - `BiblicalTermsForm` → `EditRenderingsForm` (via menu Edit > Edit renderings)
-- `EditRenderingsForm` → `TermRenderingsDifferencesForm` (line 291)
+- `EditRenderingsForm` → `TermRenderingsDifferencesForm`
 
 **UI Entry Points**:
 - Tools > Biblical Terms Renderings
-  - Menu Structure: `ParatextWindowWithMenus`, handler `OpenRenderingsToolStripMenuItem_Click`, line 733
+  - Menu Structure: `ParatextWindowWithMenus`, handler `OpenRenderingsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Edit > Edit renderings (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `editRenderingsToolStripMenuItem_Click`, line 749
+  - Menu Structure: `BiblicalTermsForm`, handler `editRenderingsToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Edit > Add rendering (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `addRenderingToolStripMenuItem_Click`, line 761
+  - Menu Structure: `BiblicalTermsForm`, handler `addRenderingToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Biblical Terms window > Double-click rendering cell
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 62
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "Double-click in the renderings cell of the Biblical Terms rendering window"
   - HelpData ID: `d1c8f5bc-d0a1-47fd-867d-c0cc09261e73`
   - Dialog: `EditRenderingsForm_tabTerm`
   - Question: "How do I add, edit, or approve renderings for Biblical Terms?"
 - Ctrl+V to paste rendering
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 66
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "Paste (**Ctrl**+**V**) the rendering in the dialog box"
 
 **HelpData Items**:
@@ -170,12 +170,12 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Guess renderings`; Handler: `guessRenderingsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 868 | `[MS]` |
-| Menu Structure | Menu: `Edit > Approve guessed renderings in selected terms`; Handler: `approveSelectedRenderingsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 931 | `[MS]` |
-| Menu Structure | Menu: `Tools > Clear guessed renderings`; Handler: `clearGuessedRenderingsStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 918 | `[MS]` |
-| Form Relationships | `BiblicalTermsForm` opens: `GuessRenderingsForm` (line 874) | `[FR]` |
+| Menu Structure | Menu: `Tools > Guess renderings`; Handler: `guessRenderingsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Edit > Approve guessed renderings in selected terms`; Handler: `approveSelectedRenderingsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Tools > Clear guessed renderings`; Handler: `clearGuessedRenderingsStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Form Relationships | `BiblicalTermsForm` opens: `GuessRenderingsForm` | `[FR]` |
 | Requirements | Section: "Quality Checking/Validation" | `[R]` |
-| Manual | `../paratext-manual/chapters/10_biblical_terms.md`, line 87: "Add the rendering using **Ctrl**+**A**" | `[M]` |
+| Manual | `../paratext-manual/chapters/10_biblical_terms.md`: "Add the rendering using **Ctrl**+**A**" | `[M]` |
 | HelpData | Keyword: `ComponentGuessRenderings/Translations`; Dialog: `GuessRenderingsForm` | `[H]` |
 
 **Key Quote** (from Requirements):
@@ -185,35 +185,35 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `guessRenderingsToolStripMenuItem_Click` at line 868 |
-| 0 | `BiblicalTerms/Internal/GuessRenderingsForm.cs` | Form Relationships | opened from BiblicalTermsForm line 874 |
-| 1 | `ParatextData/Terms/BiblicalTerms.cs` | Import in D0 | Line 24: `using Paratext.Data.Terms` |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `guessRenderingsToolStripMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/GuessRenderingsForm.cs` | Form Relationships | opened from BiblicalTermsForm |
+| 1 | `ParatextData/Terms/BiblicalTerms.cs` | Import in D0 | `using Paratext.Data.Terms` |
 
 **Not Found**:
 - `GuessRenderingsLogic.cs` (search: "GuessRenderingsLogic" - no matches, logic may be in GuessRenderingsForm.cs)
 
 **Dialog Navigation**:
-- `BiblicalTermsForm` → `GuessRenderingsForm` (line 874)
+- `BiblicalTermsForm` → `GuessRenderingsForm`
 
 **UI Entry Points**:
 - Tools > Guess renderings (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `guessRenderingsToolStripMenuItem_Click`, line 868
+  - Menu Structure: `BiblicalTermsForm`, handler `guessRenderingsToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Edit > Approve guessed renderings in selected terms (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `approveSelectedRenderingsToolStripMenuItem_Click`, line 931
+  - Menu Structure: `BiblicalTermsForm`, handler `approveSelectedRenderingsToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Tools > Clear guessed renderings (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `clearGuessedRenderingsStripMenuItem_Click`, line 918
+  - Menu Structure: `BiblicalTermsForm`, handler `clearGuessedRenderingsStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - View > Highlight guessed renderings (in TextForm)
-  - Menu Structure: `TextForm`, handler `highlightGuessedRenderingsToolStripMenuItem_Click`, line 2104
+  - Menu Structure: `TextForm`, handler `highlightGuessedRenderingsToolStripMenuItem_Click`
   - File: `Paratext/TextForm.cs`
 - Biblical Terms window > Guessed column
   - HelpData ID: `67911084-b133-40d1-aee8-a288f2a66c49`
   - Dialog: `GuessRenderingsForm`
   - Question: "How do I use the Guess Renderings tool?"
 - Ctrl+A to add rendering from verse
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 87
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "Add the rendering using **Ctrl**+**A**"
 
 **HelpData Items**:
@@ -239,45 +239,45 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Open biblical terms list`; Handler: `selectTermsListToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1054 | `[MS]` |
-| Menu Structure | Menu: `Project > Import biblical terms list`; Handler: `importBtListMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1366 | `[MS]` |
-| Menu Structure | Menu: `Project > Export biblical terms list`; Handler: `exportCurrentListMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1375 | `[MS]` |
-| Form Relationships | `SelectTermsListForm` opens: `CustomDualButtonForm` (lines 399, 425, 529) | `[FR]` |
-| Manual | `../paratext-manual/chapters/10_biblical_terms.md`, line 43: "**≡ Tab** (of the new window), under **Biblical Terms** > **Select Biblical terms list**" | `[M]` |
+| Menu Structure | Menu: `Project > Open biblical terms list`; Handler: `selectTermsListToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Import biblical terms list`; Handler: `importBtListMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Project > Export biblical terms list`; Handler: `exportCurrentListMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Form Relationships | `SelectTermsListForm` opens: `CustomDualButtonForm` | `[FR]` |
+| Manual | `../paratext-manual/chapters/10_biblical_terms.md`: "**≡ Tab** (of the new window), under **Biblical Terms** > **Select Biblical terms list**" | `[M]` |
 | HelpData | Keyword: `ComponentBiblicalTermsLists`; Dialog: `SelectTermsListForm`; 14 items | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `selectTermsListToolStripMenuItem_Click` at line 1054 |
-| 0 | `BiblicalTerms/Internal/SelectTermsListForm.cs` | HelpData dialog | `SelectTermsListForm`, line 28 |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `selectTermsListToolStripMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/SelectTermsListForm.cs` | HelpData dialog | `SelectTermsListForm` |
 | 1 | `ParatextData/Terms/BiblicalTermsList.cs` | Import in D0 | BiblicalTermsList.cs references term lists |
-| 1 | `ParatextData/Terms/BiblicalTermsListType.cs` | Import in D1 | BiblicalTermsList.cs line 17: `BiblicalTermsListType` |
+| 1 | `ParatextData/Terms/BiblicalTermsListType.cs` | Import in D1 | BiblicalTermsList.cs: `BiblicalTermsListType` |
 | 2 | `ParatextData/Terms/Lists/*.xml` | Data directory | XML files containing term list data |
 
 **Dialog Navigation**:
 - `BiblicalTermsForm` → `SelectTermsListForm` (via menu Project > Open biblical terms list)
-- `SelectTermsListForm` → `CustomDualButtonForm` (lines 399, 425, 529)
+- `SelectTermsListForm` → `CustomDualButtonForm`
 
 **UI Entry Points**:
 - Project > Open biblical terms list (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `selectTermsListToolStripMenuItem_Click`, line 1054
+  - Menu Structure: `BiblicalTermsForm`, handler `selectTermsListToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Project > Import biblical terms list (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `importBtListMenuItem_Click`, line 1366
+  - Menu Structure: `BiblicalTermsForm`, handler `importBtListMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Project > Export biblical terms list (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `exportCurrentListMenuItem_Click`, line 1375
+  - Menu Structure: `BiblicalTermsForm`, handler `exportCurrentListMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Project > Export filtered biblical terms (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `exportFilteredTermsMenuItem_Click`, line 1380
+  - Menu Structure: `BiblicalTermsForm`, handler `exportFilteredTermsMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Paratext > Advanced > Import biblical terms list (in MainForm)
-  - Menu Structure: `MainForm`, handler `importBTListToolStripMenuItem_Click`, line 1193
+  - Menu Structure: `MainForm`, handler `importBTListToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Tab > Biblical Terms > Select Biblical terms list
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 43
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "**≡ Tab** (of the new window), under **Biblical Terms** > **Select Biblical terms list**"
   - HelpData ID: `00806c7d-383c-47bc-96e3-3e7f1cb98cca`
   - Dialog: `SelectTermsListForm`
@@ -308,35 +308,35 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Project > Export filtered biblical terms`; Handler: `exportFilteredTermsMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1380 | `[MS]` |
-| Menu Structure | Menu: `View > Show category column`; Handler: `showCategoryColumnToolStripMenuItem_Click`; File: `BiblicalTermsRenderingsForm.cs`, line 380 | `[MS]` |
-| Form Relationships | `BiblicalTermsForm` opens: `TermDefineFilterForm` (line 1733) | `[FR]` |
-| Form Relationships | `BiblicalTermsRenderingsForm` opens: `TermDefineFilterForm` (line 476) | `[FR]` |
-| Manual | `../paratext-manual/chapters/10_biblical_terms.md`, line 77: "From the second filter button choose **current book**" | `[M]` |
+| Menu Structure | Menu: `Project > Export filtered biblical terms`; Handler: `exportFilteredTermsMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `View > Show category column`; Handler: `showCategoryColumnToolStripMenuItem_Click`; File: `BiblicalTermsRenderingsForm.cs` | `[MS]` |
+| Form Relationships | `BiblicalTermsForm` opens: `TermDefineFilterForm` | `[FR]` |
+| Form Relationships | `BiblicalTermsRenderingsForm` opens: `TermDefineFilterForm` | `[FR]` |
+| Manual | `../paratext-manual/chapters/10_biblical_terms.md`: "From the second filter button choose **current book**" | `[M]` |
 | HelpData | Keyword: `ComponentBiblicalTermsTool`; Dialog: `CategoriesChooserForm` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `exportFilteredTermsMenuItem_Click` at line 1380 |
-| 0 | `BiblicalTerms/Internal/Filters/TermDefineFilterForm.cs` | Form Relationships | opened from BiblicalTermsForm line 1733 |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `exportFilteredTermsMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/Filters/TermDefineFilterForm.cs` | Form Relationships | opened from BiblicalTermsForm |
 | 1 | `BiblicalTerms/Internal/Filters/BiblicalTermsTextFilterAdapter.cs` | Directory search | Filter adapter in BiblicalTerms directory |
-| 1 | `ParatextData/Terms/Filters/BiblicalTermsFilter.cs` | Import in D0 | Line 23: `using Paratext.Data.Terms.Filters` |
+| 1 | `ParatextData/Terms/Filters/BiblicalTermsFilter.cs` | Import in D0 | `using Paratext.Data.Terms.Filters` |
 
 **Dialog Navigation**:
-- `BiblicalTermsForm` → `TermDefineFilterForm` (line 1733)
-- `BiblicalTermsRenderingsForm` → `TermDefineFilterForm` (line 476)
+- `BiblicalTermsForm` → `TermDefineFilterForm`
+- `BiblicalTermsRenderingsForm` → `TermDefineFilterForm`
 
 **UI Entry Points**:
 - Project > Export filtered biblical terms (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `exportFilteredTermsMenuItem_Click`, line 1380
+  - Menu Structure: `BiblicalTermsForm`, handler `exportFilteredTermsMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - View > Show category column (in Biblical Terms Renderings window)
-  - Menu Structure: `BiblicalTermsRenderingsForm`, handler `showCategoryColumnToolStripMenuItem_Click`, line 380
+  - Menu Structure: `BiblicalTermsRenderingsForm`, handler `showCategoryColumnToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsRenderingsForm.cs`
 - Biblical Terms window > Filter dropdown (second filter button)
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 77
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "From the second filter button choose **current book**"
   - HelpData ID: `d85752b0-e2b1-466d-8ad1-391891d16285`
   - Dialog: `BiblicalTermsForm`
@@ -370,9 +370,9 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Edit > Link selected renderings to glossary`; Handler: `markGlossaryOccurrencesForSelectedTermsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1214 | `[MS]` |
-| Menu Structure | Menu: `Edit > Unlink selected renderings from glossary`; Handler: `unmarkSelectedTermsForGlossary_Click`; File: `BiblicalTermsForm.cs`, line 1222 | `[MS]` |
-| Menu Structure | Menu: `Edit > Unlink all renderings from glossary`; Handler: `unmarkAllTermsForGlossary_Click`; File: `BiblicalTermsForm.cs`, line 1247 | `[MS]` |
+| Menu Structure | Menu: `Edit > Link selected renderings to glossary`; Handler: `markGlossaryOccurrencesForSelectedTermsToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Edit > Unlink selected renderings from glossary`; Handler: `unmarkSelectedTermsForGlossary_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Edit > Unlink all renderings from glossary`; Handler: `unmarkAllTermsForGlossary_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
 | Manual | `../paratext-manual/chapters/09_glossary.md` | `[M]` |
 | HelpData | Keyword: `ComponentGlossary`; Dialog: `EditRenderingsForm_tabGlossary` | `[H]` |
 
@@ -380,19 +380,19 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `markGlossaryOccurrencesForSelectedTermsToolStripMenuItem_Click` at line 1214 |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `markGlossaryOccurrencesForSelectedTermsToolStripMenuItem_Click` |
 | 0 | `BiblicalTerms/Internal/EditRenderingsForm.cs` | HelpData dialog | `EditRenderingsForm_tabGlossary` tab |
 | 1 | `ParatextData/GlossaryParser.cs` | Import in D0 | Glossary parsing utilities |
 
 **UI Entry Points**:
 - Edit > Link selected renderings to glossary (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `markGlossaryOccurrencesForSelectedTermsToolStripMenuItem_Click`, line 1214
+  - Menu Structure: `BiblicalTermsForm`, handler `markGlossaryOccurrencesForSelectedTermsToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Edit > Unlink selected renderings from glossary (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `unmarkSelectedTermsForGlossary_Click`, line 1222
+  - Menu Structure: `BiblicalTermsForm`, handler `unmarkSelectedTermsForGlossary_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Edit > Unlink all renderings from glossary (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `unmarkAllTermsForGlossary_Click`, line 1247
+  - Menu Structure: `BiblicalTermsForm`, handler `unmarkAllTermsForGlossary_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Biblical Terms > Edit Renderings > Glossary tab
   - HelpData ID: `fa3431e2-a280-415d-b0ba-f111a5d525a0`
@@ -426,38 +426,38 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Edit > Edit rendering discussion note`; Handler: `insertRenderingNoteToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1341 | `[MS]` |
-| Menu Structure | Menu: `Edit > Edit rendering discussion note`; Handler: `insertRenderingNoteToolStripMenuItem_Click`; File: `BiblicalTermsRenderingsForm.cs`, line 432 | `[MS]` |
-| Form Relationships | `BiblicalTermsForm` opens: `ReattachNoteForm` (line 1149) | `[FR]` |
-| Manual | `../paratext-manual/chapters/10_biblical_terms.md`, line 143: "Double-click on the note icon (in the second column)" | `[M]` |
+| Menu Structure | Menu: `Edit > Edit rendering discussion note`; Handler: `insertRenderingNoteToolStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
+| Menu Structure | Menu: `Edit > Edit rendering discussion note`; Handler: `insertRenderingNoteToolStripMenuItem_Click`; File: `BiblicalTermsRenderingsForm.cs` | `[MS]` |
+| Form Relationships | `BiblicalTermsForm` opens: `ReattachNoteForm` | `[FR]` |
+| Manual | `../paratext-manual/chapters/10_biblical_terms.md`: "Double-click on the note icon (in the second column)" | `[M]` |
 | HelpData | Keyword: `ComponentBiblicalTermsNotes` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `insertRenderingNoteToolStripMenuItem_Click` at line 1341 |
-| 0 | `BiblicalTerms/Internal/BiblicalTermsRenderingsForm.cs` | Menu Structure | handler `insertRenderingNoteToolStripMenuItem_Click` at line 432 |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `insertRenderingNoteToolStripMenuItem_Click` |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsRenderingsForm.cs` | Menu Structure | handler `insertRenderingNoteToolStripMenuItem_Click` |
 | 1 | `ParatextData/ProjectComments/CommentManager.cs` | Import in D0 | Comment management for notes |
-| 1 | `ParatextBase/ProjectComments/ReattachNoteForm.cs` | Form Relationships | opened from BiblicalTermsForm line 1149 |
+| 1 | `ParatextBase/ProjectComments/ReattachNoteForm.cs` | Form Relationships | opened from BiblicalTermsForm |
 
 **Dialog Navigation**:
-- `BiblicalTermsForm` → `ReattachNoteForm` (line 1149)
+- `BiblicalTermsForm` → `ReattachNoteForm`
 
 **UI Entry Points**:
 - Edit > Edit rendering discussion note (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `insertRenderingNoteToolStripMenuItem_Click`, line 1341
+  - Menu Structure: `BiblicalTermsForm`, handler `insertRenderingNoteToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - Edit > Edit rendering discussion note (in Biblical Terms Renderings window)
-  - Menu Structure: `BiblicalTermsRenderingsForm`, handler `insertRenderingNoteToolStripMenuItem_Click`, line 432
+  - Menu Structure: `BiblicalTermsRenderingsForm`, handler `insertRenderingNoteToolStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsRenderingsForm.cs`
 - Double-click note icon (second column)
-  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`, line 143
+  - Manual: `../paratext-manual/chapters/10_biblical_terms.md`
   - Quote: "Double-click on the note icon (in the second column)"
   - HelpData ID: `a9527f52-9a9b-4bf2-a566-10ef23f45f9b`
   - Question: "How do I see Biblical Term notes in my project?"
 - Edit > Edit rendering discussion note (in Biblical Terms Renderings window)
-  - Menu Structure: `BiblicalTermsRenderingsForm`, handler `insertRenderingNoteToolStripMenuItem_Click`, line 432
+  - Menu Structure: `BiblicalTermsRenderingsForm`, handler `insertRenderingNoteToolStripMenuItem_Click`
   - HelpData ID: `ff67eb54-9d3d-4d67-bf3b-f2c4ad52f664`
   - Question: "How do I insert a note for a Biblical Term or a Biblical Term Rendering?"
 
@@ -484,18 +484,18 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Adapt names`; Handler: `uiToolsAdaptNames_Click`; File: `BiblicalTermsForm.cs`, line 1317 | `[MS]` |
+| Menu Structure | Menu: `Tools > Adapt names`; Handler: `uiToolsAdaptNames_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
 | HelpData | Keyword: `AdaptNames` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `uiToolsAdaptNames_Click` at line 1317 |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `uiToolsAdaptNames_Click` |
 
 **UI Entry Points**:
 - Tools > Adapt names (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `uiToolsAdaptNames_Click`, line 1317
+  - Menu Structure: `BiblicalTermsForm`, handler `uiToolsAdaptNames_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
 - ≡ Tab > Tools > Adapt names
   - HelpData Keyword: `AdaptNames`
@@ -521,22 +521,22 @@ Biblical Terms features ensure consistent translation of key theological and bib
 
 | Source | Reference | Status |
 |--------|-----------|--------|
-| Menu Structure | Menu: `Tools > Word prefixes and suffixes`; Handler: `wordPrefixesAndSuffixesStripMenuItem_Click`; File: `BiblicalTermsForm.cs`, line 1044 | `[MS]` |
+| Menu Structure | Menu: `Tools > Word prefixes and suffixes`; Handler: `wordPrefixesAndSuffixesStripMenuItem_Click`; File: `BiblicalTermsForm.cs` | `[MS]` |
 | HelpData | Keyword: `Prefixes/Suffixes` | `[H]` |
 
 **Implementation**:
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `wordPrefixesAndSuffixesStripMenuItem_Click` at line 1044 |
+| 0 | `BiblicalTerms/Internal/BiblicalTermsForm.cs` | Menu Structure | handler `wordPrefixesAndSuffixesStripMenuItem_Click` |
 | 0 | `BiblicalTerms/Internal/WordPrefixesAndSuffixesForm.cs` | Form Relationships | opened from BiblicalTermsForm |
-| 1 | `ParatextData/Linguistics/MorphologicalMatcher.cs` | Import in D0 | lines 47-48: `suffixes = scrText.Settings.WordSuffixesList; prefixes = scrText.Settings.WordPrefixesList;` |
+| 1 | `ParatextData/Linguistics/MorphologicalMatcher.cs` | Import in D0 |: `suffixes = scrText.Settings.WordSuffixesList; prefixes = scrText.Settings.WordPrefixesList;` |
 | 1 | `ParatextData/Terms/TermRenderingMatcher.cs` | Uses D1 | Uses MorphologicalMatcher for term matching |
-| 2 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Data source in D1 | line 406 comment: *"WordPrefixes are used when matching in BiblicalTerms"* |
+| 2 | `ParatextData/ProjectSettingsAccess/ProjectSettings.cs` | Data source in D1 | comment: *"WordPrefixes are used when matching in BiblicalTerms"* |
 
 **UI Entry Points**:
 - Tools > Word prefixes and suffixes (in Biblical Terms window)
-  - Menu Structure: `BiblicalTermsForm`, handler `wordPrefixesAndSuffixesStripMenuItem_Click`, line 1044
+  - Menu Structure: `BiblicalTermsForm`, handler `wordPrefixesAndSuffixesStripMenuItem_Click`
   - File: `BiblicalTerms/Internal/BiblicalTermsForm.cs`
   - Opens: `WordPrefixesAndSuffixesForm`
   - HelpData Keyword: `Prefixes/Suffixes`

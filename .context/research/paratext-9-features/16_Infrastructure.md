@@ -34,7 +34,7 @@ Infrastructure features provide the foundational support that enables all other 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Paratext > Paratext settings`; Handler: `optionsToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `MainForm` opens `OptionsForm` (line 1128) | `[FR]` |
+| Form Relationships | `MainForm` opens `OptionsForm` | `[FR]` |
 | HelpData | Keyword: `ComponentParatextSettings`; Dialog: `OptionsForm` | `[H]` |
 
 **Key Quote** (from HelpData):
@@ -44,15 +44,15 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `optionsToolStripMenuItem_Click` at line 1126 |
-| 1 | `Paratext/ToolsMenu/OptionsForm.cs` | Opens dialog in D0 | Line 1128: `using (OptionsForm optionsForm = new OptionsForm())` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `optionsToolStripMenuItem_Click` |
+| 1 | `Paratext/ToolsMenu/OptionsForm.cs` | Opens dialog in D0 | `using (OptionsForm optionsForm = new OptionsForm())` |
 
 **Dialog Navigation**:
-- `MainForm` → `OptionsForm` (line 1128)
+- `MainForm` → `OptionsForm`
 
 **UI Entry Points**:
 - Paratext > Paratext settings
-  - Menu Structure: `MainForm`, handler `optionsToolStripMenuItem_Click`, line 1126
+  - Menu Structure: `MainForm`, handler `optionsToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -86,7 +86,7 @@ Infrastructure features provide the foundational support that enables all other 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Project > Project settings > Project properties`; Handler: `projectPropertiesAndSettingsToolStripMenuItem_Click` | `[MS]` |
-| Form Relationships | `MainForm` opens `ProjectPropertiesForm` (line 498) | `[FR]` |
+| Form Relationships | `MainForm` opens `ProjectPropertiesForm` | `[FR]` |
 | HelpData | Keyword: `ComponentProjectProperties`; Dialogs: `ProjectPropertiesForm_*` | `[H]` |
 
 **Key Quote** (from HelpData):
@@ -96,25 +96,25 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `projectPropertiesAndSettingsToolStripMenuItem_Click` at line 872 |
-| 1 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | Form Relationships | Opens dialog from MainForm at line 498 |
+| 0 | `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs` | Menu Structure | handler `projectPropertiesAndSettingsToolStripMenuItem_Click` |
+| 1 | `Paratext/ProjectMenu/ProjectPropertiesForm.cs` | Form Relationships | Opens dialog from MainForm |
 
 **Dialog Navigation**:
-- `MainForm` → `ProjectPropertiesForm` (line 498)
-- `ProjectPropertiesForm` → `LanguageSettingsForm` (line 533)
-- `ProjectPropertiesForm` → `LanguageIDSelectionForm` (line 559)
-- `ProjectPropertiesForm` → `ProjectNameForm` (line 607)
+- `MainForm` → `ProjectPropertiesForm`
+- `ProjectPropertiesForm` → `LanguageSettingsForm`
+- `ProjectPropertiesForm` → `LanguageIDSelectionForm`
+- `ProjectPropertiesForm` → `ProjectNameForm`
 
 **UI Entry Points**:
 - Project > Project settings > Project properties
-  - Menu Structure: `ParatextWindowWithMenus`, handler `projectPropertiesAndSettingsToolStripMenuItem_Click`, line 872
+  - Menu Structure: `ParatextWindowWithMenus`, handler `projectPropertiesAndSettingsToolStripMenuItem_Click`
   - File: `ParatextBase/ParatextWindows/ParatextWindowWithMenus.cs`
 - Project > Project settings > User permissions
-  - Menu Structure: `ParatextWindowWithMenus`, handler `uiProjectUsersMenuItem_Click`, line 861
+  - Menu Structure: `ParatextWindowWithMenus`, handler `uiProjectUsersMenuItem_Click`
 - Project > Project settings > Keyboard
-  - Menu Structure: `ParatextWindowWithMenus`, handler `keyboardToolStripMenuItem_Click`, line 893
+  - Menu Structure: `ParatextWindowWithMenus`, handler `keyboardToolStripMenuItem_Click`
 - Project > Project settings > Language settings
-  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`, line 877
+  - Menu Structure: `ParatextWindowWithMenus`, handler `languageSettingsToolStripMenuItem_Click`
 
 **HelpData Items**:
 - ID: `103bc82c-7dec-454d-9408-74d27203fa06` - "How do I choose a language for my project?"
@@ -195,14 +195,14 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `contentsIndexSearchToolStripMenuItem_Click` at line 1403 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `contentsIndexSearchToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - Help > Browse Help
-  - Menu Structure: `MainForm`, handler `contentsIndexSearchToolStripMenuItem_Click`, line 1403
+  - Menu Structure: `MainForm`, handler `contentsIndexSearchToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Help > Help Editor
-  - Menu Structure: `MainForm`, handler `uiHelpEditorMenuItem_Click`, line 1431
+  - Menu Structure: `MainForm`, handler `uiHelpEditorMenuItem_Click`
 - F1 key (context sensitive)
 
 **HelpData Statistics**:
@@ -240,15 +240,15 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `uiHelpCheckUpdates_Click` at line 1426 |
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `enableAutomaticUpdatesToolStripMenuItem_Click` at line 1421 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `uiHelpCheckUpdates_Click` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `enableAutomaticUpdatesToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - Help > Check for updates
-  - Menu Structure: `MainForm`, handler `uiHelpCheckUpdates_Click`, line 1426
+  - Menu Structure: `MainForm`, handler `uiHelpCheckUpdates_Click`
   - File: `Paratext/MainForm.cs`
 - Help > Automatically update Paratext (toggle)
-  - Menu Structure: `MainForm`, handler `enableAutomaticUpdatesToolStripMenuItem_Click`, line 1421
+  - Menu Structure: `MainForm`, handler `enableAutomaticUpdatesToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **Validation**: [MS] — Last verified: 2026-01-21
@@ -273,7 +273,7 @@ Infrastructure features provide the foundational support that enables all other 
 | Source | Reference | Status |
 |--------|-----------|--------|
 | Menu Structure | Menu: `Help > Registration information`; Handler: `helpChangeRegistration_Click` | `[MS]` |
-| Form Relationships | `MainForm` opens `RegistrationForm` (line 1116) | `[FR]` |
+| Form Relationships | `MainForm` opens `RegistrationForm` | `[FR]` |
 | HelpData | Keyword: `ComponentRegistry`; 6 items | `[H]` |
 
 **Key Quote** (from HelpData):
@@ -283,15 +283,15 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `helpChangeRegistration_Click` at line 1106 |
-| 1 | `Paratext/RegistrationForm.cs` | Form Relationships | Line 1116: `using (RegistrationForm form = new RegistrationForm(...)` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `helpChangeRegistration_Click` |
+| 1 | `Paratext/RegistrationForm.cs` | Form Relationships | `using (RegistrationForm form = new RegistrationForm(...)` |
 
 **Dialog Navigation**:
-- `MainForm` → `RegistrationForm` (line 1116)
+- `MainForm` → `RegistrationForm`
 
 **UI Entry Points**:
 - Help > Registration information
-  - Menu Structure: `MainForm`, handler `helpChangeRegistration_Click`, line 1106
+  - Menu Structure: `MainForm`, handler `helpChangeRegistration_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -399,23 +399,23 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `validateProjectsToolStripMenuItem_Click` at line 1249 |
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `verifyProjectRepositoriesToolStripMenuItem_Click` at line 1265 |
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `enableGeckoDebugging_Click` at line 1293 |
-| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `textRenderingDebugTool_Click` at line 1524 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `validateProjectsToolStripMenuItem_Click` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `verifyProjectRepositoriesToolStripMenuItem_Click` |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `enableGeckoDebugging_Click` |
+| 0 | `Paratext/TextForm.cs` | Menu Structure | handler `textRenderingDebugTool_Click` |
 
 **UI Entry Points**:
 - Paratext > Advanced > Diagnostics > Validate projects USX
-  - Menu Structure: `MainForm`, handler `validateProjectsToolStripMenuItem_Click`, line 1249
+  - Menu Structure: `MainForm`, handler `validateProjectsToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Paratext > Advanced > Diagnostics > Verify project repositories
-  - Menu Structure: `MainForm`, handler `verifyProjectRepositoriesToolStripMenuItem_Click`, line 1265
+  - Menu Structure: `MainForm`, handler `verifyProjectRepositoriesToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 - Paratext > Advanced > Diagnostics > Enable remote Gecko debugging
-  - Menu Structure: `MainForm`, handler `enableGeckoDebugging_Click`, line 1293
+  - Menu Structure: `MainForm`, handler `enableGeckoDebugging_Click`
   - File: `Paratext/MainForm.cs`
 - ≡ Tab > Project > Advanced > Html rendering test tool
-  - Menu Structure: `TextForm`, handler `textRenderingDebugTool_Click`, line 1524
+  - Menu Structure: `TextForm`, handler `textRenderingDebugTool_Click`
   - File: `Paratext/TextForm.cs`
   - Note: Developer/debug utility for testing HTML rendering in text views
 
@@ -451,12 +451,12 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `reportAProblemToolStripMenuItem_Click` at line 1413 |
-| 1 | `Paratext/ReportProblemForm.cs` | Form Relationships | Form definition at line 40 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `reportAProblemToolStripMenuItem_Click` |
+| 1 | `Paratext/ReportProblemForm.cs` | Form Relationships | Form definition |
 
 **UI Entry Points**:
 - Help > Give feedback
-  - Menu Structure: `MainForm`, handler `reportAProblemToolStripMenuItem_Click`, line 1413
+  - Menu Structure: `MainForm`, handler `reportAProblemToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
@@ -492,11 +492,11 @@ Infrastructure features provide the foundational support that enables all other 
 
 | Depth | File | Found Via | Evidence |
 |-------|------|-----------|----------|
-| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `keyboardToolStripMenuItem_Click` at line 1408 |
+| 0 | `Paratext/MainForm.cs` | Menu Structure | handler `keyboardToolStripMenuItem_Click` |
 
 **UI Entry Points**:
 - Help > Keyboard shortcuts
-  - Menu Structure: `MainForm`, handler `keyboardToolStripMenuItem_Click`, line 1408
+  - Menu Structure: `MainForm`, handler `keyboardToolStripMenuItem_Click`
   - File: `Paratext/MainForm.cs`
 
 **HelpData Items**:
