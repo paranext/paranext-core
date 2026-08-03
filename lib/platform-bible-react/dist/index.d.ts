@@ -1258,6 +1258,15 @@ export interface MarkerMenuItem {
 	 * selected.
 	 */
 	isDisallowed?: boolean;
+	/**
+	 * How much of the consumer's current selection this marker covers: `'all'`, `'partial'`, or
+	 * `'none'`. Optional and additive — with no value, no selection affordance renders and no
+	 * `aria-checked` is set, which is how consumers that do not track a selection behave.
+	 *
+	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this affects
+	 * neither visibility nor selectability. It is display only.
+	 */
+	selectionState?: "all" | "partial" | "none";
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
 }

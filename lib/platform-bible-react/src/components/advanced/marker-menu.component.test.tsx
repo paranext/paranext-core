@@ -225,3 +225,88 @@ describe('MarkerMenu — disallowed items', () => {
     expect(screen.getByRole('separator')).toBeInTheDocument();
   });
 });
+
+describe('MarkerMenu — selection state', () => {
+  const SELECTION_STRINGS = { '%markerMenu_searchPlaceholder%': 'Type a style or search.' };
+
+  it('renders no selection affordance and sets no aria-checked when an item omits selectionState', () => {
+    // The inertness guard. Both Power-mode consumers (the `\` menu and the footnote editor) pass
+    // items without this field, and they must render exactly as they did before it existed.
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', action: vi.fn() }]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Bold/ });
+    expect(row).not.toHaveAttribute('aria-checked');
+    expect(row.querySelector('[data-slot="marker-selection-state"]')).toBeNull();
+  });
+
+  it('marks a fully covered item as checked', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', selectionState: 'all', action: vi.fn() }]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Bold/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('marks a partially covered item as mixed', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[
+          { marker: 'bd', title: 'Bold', selectionState: 'partial', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Bold/ })).toHaveAttribute('aria-checked', 'mixed');
+  });
+
+  it('marks an uncovered item as unchecked while still rendering its slot', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[
+          { marker: 'it', title: 'Italic', selectionState: 'none', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Italic/ });
+    expect(row).toHaveAttribute('aria-checked', 'false');
+    expect(row.querySelector('[data-slot="marker-selection-state"]')).not.toBeNull();
+  });
+
+  it('never sets data-checked, so the trailing check stays hidden', () => {
+    // CommandItem renders its own trailing check keyed on data-checked. The leading glyph carries
+    // all three states, so setting it would double the checkmark.
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', selectionState: 'all', action: vi.fn() }]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Bold/ })).not.toHaveAttribute('data-checked');
+  });
+
+  it('still fires the action for an item that carries a selection state', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const action = vi.fn();
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', selectionState: 'partial', action }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('option', { name: /Bold/ }));
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+});

@@ -1,5 +1,5 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, Check, Minus } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -65,6 +65,15 @@ export interface MarkerMenuItem {
    * selected.
    */
   isDisallowed?: boolean;
+  /**
+   * How much of the consumer's current selection this marker covers: `'all'`, `'partial'`, or
+   * `'none'`. Optional and additive — with no value, no selection affordance renders and no
+   * `aria-checked` is set, which is how consumers that do not track a selection behave.
+   *
+   * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this affects
+   * neither visibility nor selectability. It is display only.
+   */
+  selectionState?: 'all' | 'partial' | 'none';
   /** Function to be triggered when the marker or command is selected */
   action: () => void;
 }
@@ -94,6 +103,25 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 }
 
 /**
+ * Leading tri-state indicator for a marker row. Rendered only when the consumer supplies a
+ * selection state, so rows without one keep the layout they have always had.
+ */
+function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | 'none' }) {
+  return (
+    <div
+      data-slot="marker-selection-state"
+      className="tw:flex tw:w-4 tw:min-w-4 tw:items-center tw:justify-center"
+    >
+      {state === 'all' && <Check size={16} />}
+      {state === 'partial' && <Minus size={16} />}
+      {state === 'none' && (
+        <span className="tw:size-3 tw:rounded-[3px] tw:border tw:border-input" />
+      )}
+    </div>
+  );
+}
+
+/**
  * Function that renders the marker menu command item for both the marker matches and the title
  * matches
  */
@@ -108,8 +136,22 @@ function MarkerMenuCommandItem({
     <CommandItem
       className="tw:flex tw:gap-2 tw:hover:bg-accent"
       disabled={item.isDisallowed || item.isDeprecated}
+      // Absent for items with no selection state, so existing consumers' rows are unchanged.
+      // Never pair this with `data-checked`: CommandItem renders its own trailing check for that,
+      // which would double the checkmark.
+      aria-checked={
+        item.selectionState === undefined
+          ? undefined
+          : // `as const` keeps the literal types ('mixed', true, false) instead of widening to
+            // `string | boolean`, which is required for assignability to CommandItem's
+            // `aria-checked` prop type (boolean | 'false' | 'true' | 'mixed' | undefined).
+            ({ all: true, partial: 'mixed', none: false } as const)[item.selectionState]
+      }
       onSelect={item.action}
     >
+      {item.selectionState !== undefined && (
+        <MarkerSelectionStateIndicator state={item.selectionState} />
+      )}
       <div className="tw:w-8 tw:min-w-8">
         {item.marker ? (
           <span className="tw:text-xs">{item.marker}</span>
