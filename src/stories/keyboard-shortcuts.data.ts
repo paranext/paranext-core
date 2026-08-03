@@ -125,6 +125,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/reference-history-keyboard.util.ts'],
   },
   {
+    id: 'focus-notification-toasts',
+    purpose: 'Focus the notification toasts, cycling across position groups on repeated presses',
+    category: 'Navigation',
+    context: 'Renderer (global)',
+    // Sonner's built-in Toaster hotkey and NotificationDisplay's focus-cycling handler share this
+    // combo (NOTIFICATION_TOASTER_HOTKEY) - they must not drift apart.
+    keys: { macOS: '⌥T', windows: 'Alt+T', linux: 'Alt+T' },
+    locations: ['src/renderer/components/notification-display.tsx'],
+  },
+  {
     id: 'zoom-in',
     purpose: 'Zoom in',
     category: 'Zoom',
@@ -208,9 +218,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Open the chapter-context view for the focused cell',
     category: 'View',
     context: 'Scripture Text Grid web view',
-    keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/scripture-text-grid/resource-cell-view.component.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
+  },
+  {
+    id: 'scripture-text-grid-move-between-cells',
+    purpose: 'Move to the next or previous cell in the Scripture Text Grid',
+    category: 'Navigation',
+    context: 'Scripture Text Grid web view',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
     ],
   },
   {
@@ -220,6 +240,21 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     context: 'Scripture Text Grid web view',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: ['extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx'],
+  },
+  {
+    id: 'scripture-text-grid-reorder-cell',
+    purpose:
+      'Reorder the focused Scripture Text Grid cell one position (verse view: up/down; chapter view: left/right)',
+    category: 'View',
+    context: 'Scripture Text Grid web view',
+    keys: {
+      macOS: '↑ / ↓ / ← / →',
+      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+    },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid/scripture-text-grid.component.tsx',
+    ],
   },
   {
     id: 'enhanced-resources-toggle-footnotes',

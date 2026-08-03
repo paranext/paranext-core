@@ -11,10 +11,14 @@ vi.mock('./downloaded-resources.utils', async (orig) => ({
   fetchDownloadedResources: vi.fn(),
 }));
 
+// These imports must follow the vi.mock() calls above: vitest requires the modules to be mocked
+// before they are imported, which necessarily violates import/first.
 // eslint-disable-next-line import/first
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+// Mocked above; must be imported after the mock is registered.
 // eslint-disable-next-line import/first
 import { fetchDownloadedResources } from './downloaded-resources.utils';
+// The hook under test; imported after its mocked dependencies are registered above.
 // eslint-disable-next-line import/first
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 
@@ -66,7 +70,7 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
         name: 'Admin',
         id: 'p-admin',
         source: 'admin',
-        isResourceShownByDefault: true,
+        isInTextCollection: true,
       },
     ]),
     false,

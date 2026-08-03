@@ -25,12 +25,12 @@ const COMMENTARY_STYLES_BY_DBL_ENTRY_UID: Record<string, string> = {
   '815f988992157b10': hbkfraStyles, // HBKFRA — French
   '24daa5f24f0020b3': hbkptStyles, // HBKPT — Portuguese
   '1ff24938918bd69e': hbkespStyles, // HBKESP — Spanish
-  // UBS Translator's Notes
+  // SIL Translator's Notes
   '090f7cbf7924b245': tnnStyles, // TNN — English
   '0617c397f003127c': tnnespStyles, // TNNESP — Spanish
   '233345361843ce8b': tnnptgStyles, // TNNPTG — Portuguese
   d95fde28b4346e61: tnnfrStyles, // TNNFR — French
-  // UBS Translator's Notes (Deuterocanon)
+  // SIL Translator's Notes (Deuterocanon)
   b58b80b798e22be6: tndStyles, // TND — English
   '943164c222f75687': tndespStyles, // TNDESP — Spanish
   e0b3f20ff8677585: tndptgStyles, // TNDPTG — Portuguese

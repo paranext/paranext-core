@@ -188,25 +188,25 @@ public class ResourceReferenceListXmlTests
         Assert.That(result.Items[4], Is.InstanceOf<SourceLanguageResourceReference>());
     }
 
-    // --- IsResourceShownByDefault XML round-trip ---
+    // --- IsInTextCollection XML round-trip ---
 
     [Test]
-    public void ToXml_FromXml_ProjectReference_IsResourceShownByDefaultTrue_RoundTripsCorrectly()
+    public void ToXml_FromXml_ProjectReference_IsInTextCollectionTrue_RoundTripsCorrectly()
     {
         var list = new ResourceReferenceList
         {
-            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsResourceShownByDefault = true }],
+            Items = [new ProjectReference { Name = "My Project", Id = "aabbcc", IsInTextCollection = true }],
         };
         var xml = ResourceReferenceList.ToXml(list);
         var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
 
         var item = result.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     [Test]
-    public void ToXml_FromXml_ProjectReference_IsResourceShownByDefaultNull_RoundTripsAsNull()
+    public void ToXml_FromXml_ProjectReference_IsInTextCollectionNull_RoundTripsAsNull()
     {
         var list = new ResourceReferenceList
         {
@@ -217,11 +217,11 @@ public class ResourceReferenceListXmlTests
 
         var item = result.Items[0] as ProjectReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsResourceShownByDefault, Is.Null);
+        Assert.That(item!.IsInTextCollection, Is.Null);
     }
 
     [Test]
-    public void ToXml_ProjectReference_IsResourceShownByDefaultNull_NoAttributeInXml()
+    public void ToXml_ProjectReference_IsInTextCollectionNull_NoAttributeInXml()
     {
         var list = new ResourceReferenceList
         {
@@ -229,52 +229,52 @@ public class ResourceReferenceListXmlTests
         };
         var xml = ResourceReferenceList.ToXml(list);
         var itemEl = xml.Elements("Item").First();
-        Assert.That(itemEl.Attribute("isResourceShownByDefault"), Is.Null);
+        Assert.That(itemEl.Attribute("isInTextCollection"), Is.Null);
     }
 
     [Test]
-    public void ToXml_FromXml_EnhancedResourceReference_IsResourceShownByDefaultTrue_RoundTripsCorrectly()
+    public void ToXml_FromXml_EnhancedResourceReference_IsInTextCollectionTrue_RoundTripsCorrectly()
     {
         var list = new ResourceReferenceList
         {
-            Items = [new EnhancedResourceReference { Name = "BDAG", IsResourceShownByDefault = true }],
+            Items = [new EnhancedResourceReference { Name = "BDAG", IsInTextCollection = true }],
         };
         var xml = ResourceReferenceList.ToXml(list);
         var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
 
         var item = result.Items[0] as EnhancedResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     [Test]
-    public void ToXml_FromXml_XmlResourceReference_IsResourceShownByDefaultFalse_RoundTripsCorrectly()
+    public void ToXml_FromXml_XmlResourceReference_IsInTextCollectionFalse_RoundTripsCorrectly()
     {
         var list = new ResourceReferenceList
         {
-            Items = [new XmlResourceReference { Name = "SomeXml", IsResourceShownByDefault = false }],
+            Items = [new XmlResourceReference { Name = "SomeXml", IsInTextCollection = false }],
         };
         var xml = ResourceReferenceList.ToXml(list);
         var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
 
         var item = result.Items[0] as XmlResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(false));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(false));
     }
 
     [Test]
-    public void ToXml_FromXml_SourceLanguageResourceReference_IsResourceShownByDefaultTrue_RoundTripsCorrectly()
+    public void ToXml_FromXml_SourceLanguageResourceReference_IsInTextCollectionTrue_RoundTripsCorrectly()
     {
         var list = new ResourceReferenceList
         {
-            Items = [new SourceLanguageResourceReference { Name = "Greek", IsResourceShownByDefault = true }],
+            Items = [new SourceLanguageResourceReference { Name = "Greek", IsInTextCollection = true }],
         };
         var xml = ResourceReferenceList.ToXml(list);
         var result = ResourceReferenceList.FromXml(xml, list.DataVersion);
 
         var item = result.Items[0] as SourceLanguageResourceReference;
         Assert.That(item, Is.Not.Null);
-        Assert.That(item!.IsResourceShownByDefault, Is.EqualTo(true));
+        Assert.That(item!.IsInTextCollection, Is.EqualTo(true));
     }
 
     [Test]

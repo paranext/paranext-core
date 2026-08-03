@@ -4,13 +4,25 @@
       "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
     },
     "%paratextRegistration_description_internetUse_option_Enabled%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[0]%"
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[0]%",
+      "deprecationInfo": {
+        "message": "Shortened label to \"Unrestricted\". The new key is %paratextRegistration_description_internetUse_option_Enabled_2%.",
+        "date": "2026-07-26"
+      }
     },
     "%paratextRegistration_description_internetUse_option_Disabled%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%",
+      "deprecationInfo": {
+        "message": "Changed label to \"Disable ALL internet access\". The new key is %paratextRegistration_description_internetUse_option_Disabled_2%.",
+        "date": "2026-07-26"
+      }
     },
     "%paratextRegistration_description_internetUse_option_VpnRequired%": {
-      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%",
+      "deprecationInfo": {
+        "message": "Changed label to \"Disable access to some Bible translation services\". The new key is %paratextRegistration_description_internetUse_option_VpnRequired_2%.",
+        "date": "2026-07-26"
+      }
     },
     "%paratextRegistration_label_proxyHost%": {
       "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
@@ -62,19 +74,72 @@
         "message": "Changed the value of this locale to just be \"Paratext Registration\". The new key is %paratextRegistration_webView_title_2%.",
         "date": "2025-09-15"
       }
+    },
+    "%settings_paratextRegistration_registration_internet_group_description%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_registration_internet_group_label%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_shouldShowOnStartup_description%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%settings_paratextRegistration_shouldShowOnStartup_label%": {
+      "deprecationInfo": {
+        "message": "Removed when the paratextRegistration.shouldShowOnStartup setting was removed.",
+        "date": "2026-07-22"
+      }
+    },
+    "%internetSettings_webView_title%": {
+      "deprecationInfo": {
+        "message": "Changed the title to \"Internet & connectivity\". The new key is %internetSettings_webView_title_2%.",
+        "date": "2026-07-26"
+      }
+    },
+    "%paratextRegistration_description_internetUse_option_ProxyOnly%": {
+      "deprecationInfo": {
+        "message": "Changed label to \"Configure proxy\". The new key is %paratextRegistration_description_internetUse_option_ProxyOnly_2%.",
+        "date": "2026-07-26"
+      }
+    },
+    "%paratextRegistration_alert_updatedInternetSettings%": {
+      "deprecationInfo": {
+        "message": "Changed label to \"Internet & connectivity settings updated\". The new key is %paratextRegistration_alert_updatedInternetSettings_2%.",
+        "date": "2026-07-26"
+      }
+    },
+    "%mainMenu_openInternetSettings%": {
+      "deprecationInfo": {
+        "message": "Updated menu label to match the panel's new name. The new key is %mainMenu_openInternetSettings_2%.",
+        "date": "2026-07-27"
+      }
     }
   },
   "localizedStrings": {
     "en": {
+      "%internetSettings_button_retry%": "Retry",
+      "%internetSettings_webView_subtitle%": "Manage how Paratext accesses the internet. These settings only apply to the Paratext app (not all internet traffic on your computer), and are shared with any co-installed Paratext 9.",
       "%internetSettings_webView_title%": "Internet Settings",
+      "%internetSettings_webView_title_2%": "Internet & connectivity",
       "%internetSettings_webView_tooltip%": "Enter your Paratext Registration Internet Settings into this form.",
       "%mainMenu_openInternetSettings%": "Internet Settings...",
+      "%mainMenu_openInternetSettings_2%": "Internet & connectivity",
       "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
       "%paratextRegistration_alert_invalidRegistration%": "Registration information not found",
       "%paratextRegistration_alert_invalidRegistration_description%": "Check to make sure that the registration name and code you received are accurately entered here.",
       "%paratextRegistration_alert_unchangedRegistration%": "Unchanged registration information",
       "%paratextRegistration_alert_unchangedRegistration_description%": "Registration name and code have not been changed.",
       "%paratextRegistration_alert_updatedInternetSettings%": "Internet settings updated",
+      "%paratextRegistration_alert_updatedInternetSettings_2%": "Internet & connectivity settings updated",
       "%paratextRegistration_alert_updatedRegistration%": "Registration information updated",
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "The application successfully restarted! Your changes are now in effect.",
@@ -82,17 +147,31 @@
       "%paratextRegistration_alert_validRegistration_description%": "You can now save the changes and the app will restart to make them in effect.",
       "%paratextRegistration_app_startup_description%": "Welcome to {%product_name%}! To get started, login with your registration information.",
       "%paratextRegistration_button_change%": "Change",
+      "%paratextRegistration_button_reset%": "Discard changes",
+      "%paratextRegistration_button_restarting%": "Restarting…",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
-      "%paratextRegistration_button_restarting%": "Restarting...",
       "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
       "%paratextRegistration_description_internetUse_disclaimer%": "These Internet settings only affect connection to Paratext services like the Registry, send/receive, and download resources.",
-      "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
+      "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Block internet when in sensitive locations",
+      "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Automatically blocks Paratext internet access in configured sensitive areas.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
+      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Disable all Internet access",
+      "%paratextRegistration_description_internetUse_option_Disabled_details%": "Blocks all internet access within the Paratext app. Other applications on your computer are not affected.",
+      "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
+      "%paratextRegistration_description_internetUse_option_Enabled_2%": "Unrestricted",
+      "%paratextRegistration_description_internetUse_option_Enabled_details%": "Allows Paratext to use the internet for all services: Registry, Send/Receive, and resource downloads.",
       "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Use a proxy",
+      "%paratextRegistration_description_internetUse_option_ProxyOnly_2%": "Configure proxy",
+      "%paratextRegistration_description_internetUse_option_ProxyOnly_details%": "Routes Paratext internet traffic through a configured proxy server.",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Disable Internet use in sensitive locations",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Disable access to some Bible translation services",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Disables access to Registry, Send/Receive, and the Digital Bible Library within the Paratext app. Other internet features and other applications are not affected.",
       "%paratextRegistration_description_is_registered%": "Your {%product_name%} is registered!",
       "%paratextRegistration_description_shared_with_paratext_9%": "These settings also apply to Paratext 9.",
+      "%paratextRegistration_developer_section_label%": "Developer only",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
+      "%paratextRegistration_internetUse_comingSoon%": "Coming soon",
+      "%paratextRegistration_internetUse_footer%": "Disabled options are planned for future updates.",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
@@ -127,30 +206,50 @@
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show “Paratext Registration Information” on startup"
     },
     "es": {
+      "%internetSettings_button_retry%": "Reintentar",
+      "%internetSettings_webView_subtitle%": "Gestiona cómo Paratext accede a internet. Esta configuración solo afecta a la aplicación Paratext (no todo el tráfico de internet en tu computadora) y se comparte con cualquier Paratext 9 instalado.",
       "%internetSettings_webView_title%": "Configuración de Internet",
+      "%internetSettings_webView_title_2%": "Internet y conectividad",
       "%internetSettings_webView_tooltip%": "Ingrese su configuración de Internet de Registro de Paratext en este formulario.",
       "%mainMenu_openInternetSettings%": "Configuración de Internet...",
+      "%mainMenu_openInternetSettings_2%": "Internet y conectividad",
       "%mainMenu_openParatextRegistration%": "Información de Registro Paratext...",
       "%paratextRegistration_alert_invalidRegistration%": "Información de registro no encontrada",
       "%paratextRegistration_alert_invalidRegistration_description%": "Verifique que el nombre y el código de registro que recibió estén ingresados correctamente aquí.",
       "%paratextRegistration_alert_unchangedRegistration%": "Información de registro sin cambios",
       "%paratextRegistration_alert_unchangedRegistration_description%": "El nombre y el código de registro no han sido modificados.",
       "%paratextRegistration_alert_updatedInternetSettings%": "Configuración de internet actualizada",
+      "%paratextRegistration_alert_updatedInternetSettings_2%": "Configuración de Internet y conectividad actualizada",
       "%paratextRegistration_alert_updatedRegistration%": "Información de registro actualizada",
       "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados. La aplicación se reiniciará en unos segundos.",
       "%paratextRegistration_alert_updatedRegistration_description_hasRestarted%": "¡La aplicación se reinició correctamente! Sus cambios ahora están activos.",
       "%paratextRegistration_alert_validRegistration%": "Información de registro aceptada",
       "%paratextRegistration_alert_validRegistration_description%": "Ahora puede guardar los cambios y la aplicación se reiniciará para aplicarlos.",
       "%paratextRegistration_app_startup_description%": "¡Bienvenido a {%product_name%}! Para comenzar, inicie sesión con su información de registro.",
+      "%paratextRegistration_button_reset%": "Descartar cambios",
+      "%paratextRegistration_button_restarting%": "Reiniciando…",
       "%paratextRegistration_button_saveAndRestart%": "Guardar y reiniciar",
       "%paratextRegistration_commit_comment_changing_user%": "Antes de cambiar el usuario registrado",
       "%paratextRegistration_description_internetUse_disclaimer%": "Estas configuraciones de Internet solo afectan la conexión a los servicios de Paratext, como el Registro, Enviar/Recibir y la descarga de recursos.",
+      "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations%": "Bloquear internet en lugares sensibles",
+      "%paratextRegistration_description_internetUse_option_BlockInSensitiveLocations_details%": "Bloquea automáticamente el acceso a internet de Paratext en áreas sensibles configuradas.",
       "%paratextRegistration_description_internetUse_option_Disabled%": "Deshabilitar todo uso de Internet",
+      "%paratextRegistration_description_internetUse_option_Disabled_2%": "Deshabilitar todo el acceso a Internet",
+      "%paratextRegistration_description_internetUse_option_Disabled_details%": "Bloquea todo el acceso a internet dentro de la aplicación Paratext. Otras aplicaciones en tu computadora no se ven afectadas.",
       "%paratextRegistration_description_internetUse_option_Enabled%": "Permitir uso de Internet sin restricción",
+      "%paratextRegistration_description_internetUse_option_Enabled_2%": "Sin restricciones",
+      "%paratextRegistration_description_internetUse_option_Enabled_details%": "Permite a Paratext usar internet para todos los servicios: Registro, Enviar/Recibir y descargas de recursos.",
       "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Usar un proxy",
+      "%paratextRegistration_description_internetUse_option_ProxyOnly_2%": "Configurar proxy",
+      "%paratextRegistration_description_internetUse_option_ProxyOnly_details%": "Enruta el tráfico de internet de Paratext a través de un servidor proxy configurado.",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Deshabilitar Internet en áreas sensibles",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_2%": "Deshabilitar acceso a algunos servicios de traducción bíblica",
+      "%paratextRegistration_description_internetUse_option_VpnRequired_details%": "Deshabilita el acceso al Registro, Enviar/Recibir y la Biblioteca Bíblica Digital dentro de la aplicación Paratext. Otras funciones de internet y otras aplicaciones no se ven afectadas.",
       "%paratextRegistration_description_shared_with_paratext_9%": "Estas configuraciones se aplican también a Paratext 9.",
+      "%paratextRegistration_developer_section_label%": "Solo para desarrolladores",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar credenciales de Registro de Paratext válidas antes de abrir recursos de la Biblioteca Bíblica Digital.",
+      "%paratextRegistration_internetUse_comingSoon%": "Próximamente",
+      "%paratextRegistration_internetUse_footer%": "Las opciones deshabilitadas están previstas para futuras actualizaciones.",
       "%paratextRegistration_label_emailAddress%": "Dirección de correo electrónico",
       "%paratextRegistration_label_proxyHost%": "Servidor",
       "%paratextRegistration_label_proxyMode%": "Modo",

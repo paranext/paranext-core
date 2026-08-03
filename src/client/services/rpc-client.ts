@@ -176,12 +176,19 @@ export class RpcClient implements IRpcMethodRegistrar {
   }
 
   async unregisterMethod(methodName: string): Promise<boolean> {
-    if (!this.jsonRpcServer.hasMethod(methodName)) return false;
+    if (!this.jsonRpcServer.hasMethod(methodName)) {
+      logger.warn(`Cannot unregister RPC method ${methodName}: not locally registered`);
+      return false;
+    }
     const mutex = this.registrationMutexMap.get(methodName);
     return mutex.runExclusive(async () => {
-      if (!this.jsonRpcServer.hasMethod(methodName)) return false;
+      if (!this.jsonRpcServer.hasMethod(methodName)) {
+        logger.warn(`Cannot unregister RPC method ${methodName}: not locally registered`);
+        return false;
+      }
       const successful = await this.jsonRpcClient.request(UNREGISTER_METHOD, [methodName]);
       if (successful) this.jsonRpcServer.removeMethod(methodName);
+      else logger.warn(`Remote failed to unregister RPC method ${methodName}`);
       return successful;
     });
   }

@@ -273,6 +273,19 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * Whether the simple-mode first-run setup wizard has been completed. Hidden; managed by the
+     * first-run state machine, not user-configurable. `false` (default) means onboarding has not
+     * finished and the wizard should gate the app on the next simple-mode startup.
+     */
+    'platform.firstRunComplete': boolean;
+    /**
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.syncOnStartup': boolean;
   }
 
   /**
@@ -870,6 +883,16 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
   };
 
   /**

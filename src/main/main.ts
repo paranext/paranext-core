@@ -45,6 +45,8 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  STARTUP_MARK_PROCESS_START,
+  STARTUP_MARKS_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -56,6 +58,7 @@ import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
@@ -197,8 +200,12 @@ async function openExternal(url: string) {
 }
 
 async function main() {
+  // This is the run boundary the startup-waterfall parser keys on (main + process-start).
+  markStartup(STARTUP_MARK_PROCESS_START);
+
   // The network service has to start first, and it uses the shared store after initialization
   await networkService.initialize();
+  markStartup('network-service-up');
   await initializeSharedStoreService(networkService);
 
   // The network object status service relies on seeing everything else start up later
@@ -225,17 +232,34 @@ async function main() {
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
   await extensionHostService.start(PROCESS_CLOSE_TIME_OUT_MS);
+  markStartup('extension-host-forked');
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Fire-and-forget startup tasks (e.g. simple-mode initial S/R). Must not block window creation.
-  // The S/R command is registered by the .NET data provider, which may not yet be reachable;
-  // performStartupTasks uses retrying sendCommand semantics and swallows failures internally.
+  // Signals for the fire-and-forget startup tasks: an abort controller so the Power-mode boot-race
+  // retry loop stops the moment the app begins quitting (wired below), and a window-interactive
+  // clock so a startup sync that only registers late isn't fired onto an editor the user is already
+  // using (see performStartupTasks / STARTUP_SYNC_FRESHNESS_WINDOW_MS).
+  const startupTasksAbort = new AbortController();
+  let mainWindowInteractiveAt: number | undefined;
+
+  // Fire-and-forget startup tasks (initial S/R). Must not block window creation. In Simple mode the
+  // S/R command is served by the .NET data provider and is driven through the retrying
+  // `commandService.sendCommand`. In Power mode the trigger is `runScheduledSessionSync`, which the
+  // send-receive extension registers in the extension host (not the .NET data provider) and which
+  // performStartupTasks drives via `requestNoRetry` inside its own bounded 120 s boot-race loop —
+  // deliberately NOT sendCommand's retry semantics. Either way failures are swallowed internally.
   // Wrapped in an async IIFE per code-style preference for try/catch over `.catch()` chains.
   (async () => {
     try {
-      await performStartupTasks();
+      await performStartupTasks({
+        abortSignal: startupTasksAbort.signal,
+        getWindowInteractiveElapsedMs: () =>
+          mainWindowInteractiveAt === undefined
+            ? undefined
+            : performance.now() - mainWindowInteractiveAt,
+      });
     } catch (e) {
       logger.warn(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`);
     }
@@ -398,6 +422,10 @@ async function main() {
           : path.join(globalThis.resourcesPath, '.erb/dll/preload.js'),
       },
     });
+    // createWindow re-runs mid-session on macOS (app.on('activate') after the window was closed),
+    // so once-guard this so a second window-created mark can't land in the latest run and inflate
+    // the waterfall's Total span.
+    markStartupOnce('window-created');
 
     // Set our custom protocol handler to load assets from extensions
     extensionAssetProtocolService.initialize();
@@ -476,12 +504,18 @@ async function main() {
 
     mainWindow.on('ready-to-show', async () => {
       logger.info('mainWindow is ready to show');
+      // Anchor the startup-sync freshness clock to when the window first becomes interactive (see
+      // the startup-tasks signals above): a late-registering startup sync is only fired if the user
+      // hasn't yet had the window long enough to be editing.
+      mainWindowInteractiveAt ??= performance.now();
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
       if (process.env.START_MINIMIZED) {
         logger.info('mainWindow is starting minimized due to START_MINIMIZED env variable');
         mainWindow.minimize();
       } else {
         mainWindow.show();
+        // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
+        markStartupOnce('window-shown');
         if (getCommandLineSwitch(CommandLineArgs.Maximize)) {
           logger.info('mainWindow is starting maximized due to --maximize command-line switch');
           mainWindow.maximize();
@@ -555,13 +589,20 @@ async function main() {
     // the window until the sync completes.
     let isWindowClosing = false;
     mainWindow.on('close', async (event) => {
-      // Prevents a "double close" when the user tries to press the close window button a second
-      // time
+      // A second close click while the first shutdown is still running falls through to Electron's
+      // default close on purpose: with the shutdown sync's request timeout disabled by the
+      // extension, the bounded wait below can hold the window up to AUTO_SYNC_MAX_DURATION_MS with
+      // no feedback, and this fall-through is the user's only escape hatch until a real
+      // feedback/cancel UX exists (tracked on the shutdown-cancel follow-up ticket). It abandons
+      // the in-flight sync mid-flight — same risk profile as force-quitting the app.
       if (isWindowClosing) return;
 
       // Prevents the main window from initially closing
       event.preventDefault();
       isWindowClosing = true;
+      // The app is on its way down: stop the startup boot-race retry loop so it can't fire a startup
+      // sync after this shutdown sync, or reach a network connection that is about to be torn down.
+      startupTasksAbort.abort();
 
       try {
         await performShutdownTasks();
@@ -610,6 +651,7 @@ async function main() {
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+    if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
@@ -802,6 +844,9 @@ async function main() {
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
       logger.info('Main process is quitting');
+      // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
+      // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
+      startupTasksAbort.abort();
 
       // Prevent closing before graceful shutdown is complete.
       // Also, in the future, this should allow a "are you sure?" dialog to display.

@@ -4,14 +4,33 @@ import { logger } from '@shared/services/logger.service';
 import { SettingNames } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 
+const { getInterfaceLanguageCallback, setInterfaceLanguageCallback } = vi.hoisted(() => {
+  let cb: ((v: unknown) => void) | undefined;
+  return {
+    getInterfaceLanguageCallback: () => cb,
+    setInterfaceLanguageCallback: (c: (v: unknown) => void) => {
+      cb = c;
+    },
+  };
+});
+
 const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
-    "%general_button_submit%": "Submit"
+    "%general_button_submit%": "Submit",
+    "%firstRun_title%": "Set up",
+    "%firstRun_button_next%": "Next"
   }`,
   'resources://assets/localization/fr.json': `{
     "%some_localization_key%": "Ceci est le texte en français pour %some_localization_key%.",
-    "%general_button_submit%": "Soumettre"
+    "%general_button_submit%": "Soumettre",
+    "%firstRun_title%": "Configurer",
+    "%firstRun_button_next%": "Suivant"
+  }`,
+  // de has only 1 of the 2 baseline firstRun keys (50%) → below the 90% setup-dialog threshold.
+  'resources://assets/localization/de.json': `{
+    "%general_button_submit%": "Senden",
+    "%firstRun_title%": "Einrichten"
   }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
@@ -30,6 +49,10 @@ vi.mock('@shared/services/settings.service', () => ({
     get<SettingName extends SettingNames>(key: SettingName) {
       if (key === 'platform.interfaceLanguage') return ['en'];
       return undefined;
+    },
+    subscribe(key: string, cb: (v: unknown) => void) {
+      if (key === 'platform.interfaceLanguage') setInterfaceLanguageCallback(cb);
+      return Promise.resolve(async () => true);
     },
   },
 }));
@@ -214,4 +237,46 @@ test('Good keys and missing but valid language code return default English', asy
     '%some_localization_key%': 'This is the English text for %some_localization_key%.',
     '%general_button_submit%': 'Submit',
   });
+});
+
+test('getSetupDialogLanguages includes fully-translated locales and excludes under-translated ones', async () => {
+  const result = await localizationDataProviderEngine.getSetupDialogLanguages();
+  expect(result.en).toBeDefined(); // always qualifies
+  expect(result.fr).toBeDefined(); // 2/2 firstRun keys = 100%
+  expect(result.de).toBeUndefined(); // 1/2 firstRun keys = 50% → excluded by the 90% threshold
+});
+
+test('setSetupDialogLanguages always throws', async () => {
+  await expect(localizationDataProviderEngine.setSetupDialogLanguages()).rejects.toThrow(
+    'setSetupDialogLanguages disabled',
+  );
+});
+
+test('firstRun key falls back to English when the requested locale lacks it', async () => {
+  // %firstRun_button_next% exists in en (and fr here); request a firstRun key only in en via a
+  // locale that has no firstRun data → resolves to English (chosen → base → English → raw key).
+  const response = await localizationDataProviderEngine.getLocalizedString({
+    localizeKey: '%firstRun_title%',
+    locales: ['es'], // es.json has no firstRun keys in MOCK_FILES
+  });
+  expect(response).toEqual('Set up');
+});
+
+test('re-emits localized strings when the interface language changes', async () => {
+  // The engine subscribes in its constructor via an async IIFE; let that microtask run.
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+  const callback = getInterfaceLanguageCallback();
+  if (!callback) throw new Error('Expected interface language callback to be defined');
+
+  const notifySpy = vi.spyOn(localizationDataProviderEngine, 'notifyUpdate');
+  callback(['en']); // first emit seeds the baseline — no notify
+  expect(notifySpy).not.toHaveBeenCalled();
+
+  callback(['fr']); // real change → notify localized-string data types
+  expect(notifySpy).toHaveBeenCalledWith(['LocalizedString', 'LocalizedStrings']);
+
+  callback(['fr']); // unchanged (e.g. an unrelated settings write) → no extra notify
+  expect(notifySpy).toHaveBeenCalledTimes(1);
 });

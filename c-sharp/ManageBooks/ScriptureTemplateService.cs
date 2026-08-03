@@ -145,6 +145,7 @@ public static partial class ScriptureTemplateService
                 else
                     result = CreateIdLineOnly(scrText, initialLines, bookNum, textLock);
 
+                // SR-write-gate: exempt — reached only via the gated ManageBooksService.CreateBooksAsync (TODO(PT-4210): assess).
                 scrText.Save();
             }
             catch (IOException)
@@ -272,6 +273,7 @@ public static partial class ScriptureTemplateService
             return false;
 
         string template = idLine + ExtractTemplate(text, modelScrText, bookNum);
+        // SR-write-gate: exempt — reached only via the gated ManageBooksService.CreateBooksAsync (TODO(PT-4210): assess).
         scrText.PutText(bookNum, 0, false, template, textLock);
 
         return true;
@@ -389,6 +391,7 @@ public static partial class ScriptureTemplateService
         if (cvText == null)
             return false;
 
+        // SR-write-gate: exempt — reached only via the gated ManageBooksService.CreateBooksAsync (TODO(PT-4210): assess).
         scrText.PutText(bookNum, 0, false, idLine + cvText, textLock);
         return true;
     }
@@ -451,6 +454,7 @@ public static partial class ScriptureTemplateService
         WriteLock textLock
     )
     {
+        // SR-write-gate: exempt — reached only via the gated ManageBooksService.CreateBooksAsync (TODO(PT-4210): assess).
         scrText.PutText(bookNum, 0, false, idLine + "\r\n", textLock);
         return true;
     }

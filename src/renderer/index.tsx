@@ -4,6 +4,8 @@ import '@renderer/global-this-web-view.model';
 import '@renderer/global-this.model';
 
 import { App } from '@renderer/app.component';
+import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
+import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
@@ -24,6 +26,7 @@ import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import {
   applyThemeStylesheet,
   getErrorMessage,
@@ -31,6 +34,12 @@ import {
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
+
+// This runs only after the ENTIRE static import graph above has been downloaded, parsed, and
+// evaluated, so it marks the end of bundle evaluation - the window-created -> bundle-eval-end gap
+// contains download+parse+eval. It cannot simply move up: globalThis.startupMarks is set by
+// '@renderer/global-this.model', itself the second import (the first pulls in React).
+markStartup('bundle-eval-end');
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -87,6 +96,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   try {
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    markStartup('papi-connected');
     await initializeSharedStoreService(networkService);
 
     // This needs to run before web views start running and after the network service is running
@@ -107,6 +117,15 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       initializeThemeService(),
       initializeWindowService(),
     );
+
+    // Drives the auto-sync edit-block banner on Scripture editors during a Send/Receive. Needs the
+    // network service (already up above) for the blocking event and the web view service (already
+    // up, from the block above) to read/update editor definitions. Both return unsubscribers we
+    // intentionally never call — they run for the renderer's lifetime. The blocking service also
+    // launches a fire-and-forget consult of the backend's current blocking snapshot, so a renderer
+    // reload during an in-flight sync seeds the store instead of assuming unblocked.
+    initAutoSyncBlockingService();
+    initAutoSyncEditBlockDriver();
 
     // Subscribe to updates to the current theme
     await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
@@ -132,6 +151,7 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<App />);
+markStartup('root-render');
 
 // #endregion
 

@@ -32,7 +32,11 @@ export type {
   CommentListLocalizedStrings,
   AddCommentToThreadOptions,
 } from './components/advanced/comment-list/comment-list.types';
-export { COMMENT_LIST_STRING_KEYS } from './components/advanced/comment-list/comment-list.types';
+export {
+  COMMENT_LIST_STRING_KEYS,
+  COMMENT_LIST_ELEMENT_ID,
+  getCommentThreadElementId,
+} from './components/advanced/comment-list/comment-list.types';
 export { default as CommentList } from './components/advanced/comment-list/comment-list.component';
 export type {
   ConflictNoteCardProps,
@@ -116,12 +120,6 @@ export {
 } from './components/advanced/multi-select-combo-box.component';
 export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
-  default as ResourcePickerDialog,
-  type ResourcePickerDialogProps,
-  type ResourcePickerDialogLocalizedStrings,
-  RESOURCE_PICKER_DIALOG_STRING_KEYS,
-} from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
-export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
   type ProjectInfo,
@@ -170,6 +168,12 @@ export {
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
+export {
+  default as InterfaceLanguagePicker,
+  INTERFACE_LANGUAGE_PICKER_STRING_KEYS,
+  type InterfaceLanguagePickerLocalizedStrings,
+  type InterfaceLanguagePickerProps,
+} from './components/advanced/interface-language-picker/interface-language-picker.component';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
@@ -200,6 +204,8 @@ export type {
   CancelAcceptButtonsLocalizedStrings,
   CancelAcceptButtonsProps,
 } from './components/basics/cancel-accept-buttons.component';
+export { default as DestructiveKeyConfirmation } from './components/basics/destructive-key-confirmation.component';
+export type { DestructiveKeyConfirmationProps } from './components/basics/destructive-key-confirmation.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
 export { UNDO_REDO_BUTTONS_STRING_KEYS } from './components/basics/undo-redo-buttons.component';
 export type {
@@ -215,6 +221,8 @@ export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
+export { default as WizardStepper } from './components/basics/wizard-stepper/wizard-stepper.component';
+export type { WizardStepperProps } from './components/basics/wizard-stepper/wizard-stepper.component';
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
 export { Avatar, AvatarFallback, AvatarImage } from './components/shadcn-ui/avatar';
 export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
@@ -291,6 +299,16 @@ export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
+export { useViewVisibility } from './hooks/use-view-visibility.hook';
+export {
+  pickTabIconUrl,
+  useTabIconSelection,
+  type TabIconUrls,
+} from './hooks/use-tab-icon-selection.hook';
+export {
+  useTruncationTooltip,
+  type UseTruncationTooltipResult,
+} from './hooks/use-truncation-tooltip.hook';
 export {
   useListbox,
   type UseListboxProps,
@@ -300,6 +318,7 @@ export {
 // Z-index scale
 export {
   Z_INDEX_ABOVE_DOCK,
+  Z_INDEX_FIRST_RUN,
   Z_INDEX_FOOTNOTE_EDITOR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,

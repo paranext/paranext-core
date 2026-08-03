@@ -129,12 +129,14 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
+export { normalizeProjectId } from './project-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
-export { MODIFIER_KEYS } from './keyboard-util';
+export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
 
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
+export type { NameablePhysicalKey } from './keyboard-util';
 export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
 export type {
   Dispose,
@@ -173,6 +175,7 @@ export type {
   ReferencedItem,
   OrderedItem,
   OrderedExtensibleContainer,
+  InterfaceMode,
   MenuItemBase,
   MenuItemContainingSubmenu,
   MenuItemContainingCommand,

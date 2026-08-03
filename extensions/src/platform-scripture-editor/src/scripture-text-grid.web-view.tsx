@@ -12,6 +12,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
   usePromise,
+  useTabIconSelection,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import { Settings2 } from 'lucide-react';
 import {
@@ -23,11 +25,15 @@ import {
 } from 'platform-bible-utils';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
-  getScriptureTextGridContents,
-  getViewOptionsTexts,
-} from './scripture-text-grid-contents.utils';
+  getOrderedScriptureTextGridContents,
+  reorderShownIds,
+  reconcileCellOrder,
+} from './scripture-text-grid-order.utils';
+import { resolveDblLongName } from './scripture-text-grid/view-options-long-name.utils';
 import {
+  persistCellOrder,
   persistUserAddition,
   persistUserDisplay,
   persistUserRemoval,
@@ -45,8 +51,19 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
+import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
+import {
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+  type ZoomMenuLabels,
+} from './scripture-text-grid/resource-cell-view.component';
 
-// The tab is icon-only; this is the hover tooltip / accessible name for it.
+// The tab's visible title, hover tooltip, and accessible name. The title/tooltip themselves are
+// resolved and set by scriptureTextGridWebViewProvider in main.ts (not by this web view); this key
+// is still needed here for the accessible name below.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
 // Notification keys are localized by the notification service, so they are NOT fetched via
@@ -57,6 +74,12 @@ const NO_PROJECT_KEY = '%webView_resourcePanel_noProject%';
 const CHAPTER_CONTEXT_CLOSE_KEY = '%webView_scriptureTextGrid_chapterContext_close%';
 const EMPTY_STATE_KEY = '%webView_scriptureTextGrid_emptyState_prompt%';
 const CELL_ACCESSIBLE_NAME_KEY = '%webView_scriptureTextGrid_cell_accessibleName%';
+// Screen-reader announcements for the chapter-context split opening/closing.
+const ARIA_OPENED_KEY = '%webView_scriptureTextGrid_aria_chapterContextOpened%';
+const ARIA_CLOSED_KEY = '%webView_scriptureTextGrid_aria_chapterContextClosed%';
+const REORDER_ANNOUNCEMENT_KEY = '%webView_scriptureTextGrid_cell_reorderAnnouncement%';
+const REORDER_HANDLE_KEY = '%webView_scriptureTextGrid_cell_reorderHandle%';
+const REORDER_HINT_KEY = '%webView_scriptureTextGrid_cell_reorderHint%';
 
 const ALL_STRING_KEYS: LocalizeKey[] = [
   TITLE_KEY,
@@ -65,6 +88,15 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   CHAPTER_CONTEXT_CLOSE_KEY,
   EMPTY_STATE_KEY,
   CELL_ACCESSIBLE_NAME_KEY,
+  ARIA_OPENED_KEY,
+  ARIA_CLOSED_KEY,
+  ZOOM_IN_KEY,
+  ZOOM_OUT_KEY,
+  RESET_ZOOM_KEY,
+  ZOOM_OPTIONS_KEY,
+  REORDER_ANNOUNCEMENT_KEY,
+  REORDER_HANDLE_KEY,
+  REORDER_HINT_KEY,
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
@@ -72,10 +104,15 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
 const GRID_RESOURCE_TYPE = 'ScriptureResource';
 
 // Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
-// `currentColor` SVG can't follow the theme. Swap between a dark-stroke (light theme) and a
-// light-stroke (dark theme) variant based on the web view's themed foreground brightness.
-const LIGHT_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library.svg';
-const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/library-dark.svg';
+// `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
+// and the tab's selected state (light theme: white when selected, near-black when unselected,
+// mid-slate fallback when selection state is unknown; dark theme: always light).
+const TAB_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/library.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/library-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/library-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/library-unselected.svg',
+};
 
 /**
  * Scripture Text Grid web view: the tab shell, per-user first-open overlay initialization, the View
@@ -84,10 +121,12 @@ const DARK_THEME_ICON_URL = 'papi-extension://platformScriptureEditor/assets/lib
  * The header hosts the View Options icon button + popover wrapping the reusable
  * `ResourceCollectionOptions` component, wired to the View Options data-layer helpers and persisted
  * through the per-user text-connection PDP setters. Below the header, the body renders one
- * `ResourceCell` per shown resource — the resources come from the `getScriptureTextGridContents`
- * selector over the Text Collection sources assembled by `useTextCollectionSources`. The `viewMode`
- * toggle selects the layout: a vertical list of stacked verse rows (verse mode), or a horizontal
- * row of side-by-side full-chapter columns (chapter mode).
+ * `ResourceCell` per shown resource — the resources come from the
+ * `getOrderedScriptureTextGridContents` selector over the Text Collection sources assembled by
+ * `useTextCollectionSources`. The `viewMode` toggle selects the layout: a vertical list of stacked
+ * verse rows (verse mode), or a horizontal row of side-by-side full-chapter columns (chapter mode).
+ * In chapter mode the columns are reorderable (drag or keyboard); the persisted order is wired via
+ * `handleReorder`.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
   projectId,
@@ -96,6 +135,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   useWebViewState,
 }: WebViewProps) {
   const [localizedStrings, isLoadingLocalizedStrings] = useLocalizedStrings(ALL_STRING_KEYS);
+
+  const zoom = useResourceZoom(useWebViewState);
+  const zoomMenuLabels = useMemo<ZoomMenuLabels>(
+    () => ({
+      zoomIn: localizedStrings[ZOOM_IN_KEY],
+      zoomOut: localizedStrings[ZOOM_OUT_KEY],
+      reset: localizedStrings[RESET_ZOOM_KEY],
+      options: localizedStrings[ZOOM_OPTIONS_KEY],
+    }),
+    [localizedStrings],
+  );
 
   // The shared scroll-group scrRef is owned here (WebViewProps) and passed down to the grid. The
   // 5th tuple member is the project driving the active Scripture reference (the editor's project):
@@ -125,6 +175,11 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   // Resources whose install is in flight after a Get Resources pick (keyed by id so duplicate
   // display names can't drop each other's row); their names drive the "Installing {name}…" rows.
   const [installing, setInstalling] = useState<Array<{ id: string; name: string }>>([]);
+  // Increment to re-fetch cachedResources. The initial fetch runs once at mount; after any resource
+  // installation (including one done in the picker dialog before it returned), the `installed` flag
+  // in the cached list is stale, so `toGridResources` can't resolve the new resource to a projectId.
+  // Bumping this counter triggers a fresh getCachedResources call which re-validates installed flags.
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   // Chapter-context overlay opened from a verse cell; Escape closes it. Intentionally NOT cleared on
   // a view-mode switch: chapter mode ignores it, and keeping it restores the open split when the user
@@ -132,9 +187,22 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   const [chapterContext, setChapterContext] = useState<ChapterContextResource | undefined>(
     undefined,
   );
+  // Live-region message announced when the chapter-context split opens or closes (rendered into the
+  // `role="status"` region below).
+  const [announcement, setAnnouncement] = useState('');
+  const handleChapterContextChange = useCallback(
+    (context: ChapterContextResource) => {
+      setChapterContext(context);
+      setAnnouncement(
+        buildChapterContextOpenedMessage(localizedStrings[ARIA_OPENED_KEY] ?? '', context.label),
+      );
+    },
+    [localizedStrings],
+  );
   const handleCloseChapterContext = useCallback(() => {
     setChapterContext(undefined);
-  }, []);
+    setAnnouncement(localizedStrings[ARIA_CLOSED_KEY] ?? '');
+  }, [localizedStrings]);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || chapterContext === undefined) return;
@@ -146,25 +214,42 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [chapterContext, handleCloseChapterContext]);
 
-  const { top, bottom } = useMemo(
-    // downloaded option intentionally omitted here — PT-4171 will wire it up
-    () => (sources ? getViewOptionsTexts(sources) : { top: [], bottom: [] }),
-    [sources],
-  );
-
   // The cached DBL resource list resolves DBL references (whose `id` is a DBL entry UID) to the
-  // installed project id the cell fetches chapter text with; project references need no lookup.
+  // installed project id the cell fetches chapter text with; project references need no lookup. It
+  // also supplies the DBL `fullName` shown as the long name in the View Options list.
+  // Re-fetched on `refreshCounter` bumps so a newly-installed resource's `installed` flag is
+  // current when `toGridResources` resolves it.
   const [cachedResources, isLoadingCachedResources] = usePromise(
-    useCallback(() => papi.commands.sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(
+      () => papi.commands.sendCommand('platformGetResources.getCachedResources'),
+      // refreshCounter is a refresh-trigger counter: the factory doesn't use its value, but each
+      // bump creates a new function reference so usePromise re-runs and re-validates installed
+      // flags — necessary after any installation completes.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [refreshCounter],
+    ),
     undefined,
   );
 
-  // The grid body's cells: the `getScriptureTextGridContents` selector over the Text Collection
-  // sources, resolved to the row's `{ projectId, label }` shape. The selector returns
+  const { top, bottom } = useMemo(
+    () =>
+      sources
+        ? getViewOptionsTexts(sources, (reference) =>
+            resolveDblLongName(reference, cachedResources ?? []),
+          )
+        : { top: [], bottom: [] },
+    [sources, cachedResources],
+  );
+
+  // The grid body's cells: the `getOrderedScriptureTextGridContents` selector over the Text
+  // Collection sources, resolved to the row's `{ resourceId, projectId, label }` shape. The selector returns
   // already-filtered, ordered Bible-text refs.
   const resources = useMemo<GridResource[]>(
     () =>
-      toGridResources(sources ? getScriptureTextGridContents(sources) : [], cachedResources ?? []),
+      toGridResources(
+        sources ? getOrderedScriptureTextGridContents(sources) : [],
+        cachedResources ?? [],
+      ),
     [sources, cachedResources],
   );
 
@@ -194,24 +279,26 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     if (!effectiveProjectId || !textConnectionPdp) return;
     if (initializedProjectIds.current.has(effectiveProjectId)) return;
     initializedProjectIds.current.add(effectiveProjectId);
-    textConnectionPdp.initializeShownByDefaultOverlay().catch((error) => {
+    textConnectionPdp.initializeTextCollectionOverlay().catch((error) => {
       initializedProjectIds.current.delete(effectiveProjectId);
       logger.error(
-        `Failed to initialize shown-by-default overlay for ${effectiveProjectId}: ${error}`,
+        `Failed to initialize text-collection overlay for ${effectiveProjectId}: ${error}`,
       );
     });
   }, [effectiveProjectId, textConnectionPdp]);
 
-  // Icon-only tab: no visible text label, with "Text Collection" as the hover tooltip / accessible
-  // name so the tab stays identifiable.
-  useEffect(() => {
-    if (isLoadingLocalizedStrings) return;
-    updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
-  }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+  // "Text Collection" (icon+title when the column is roomy, hidden in favor of the icon alone once
+  // it narrows — same responsive behavior as the other Column 3 tabs) is resolved and set directly
+  // by scriptureTextGridWebViewProvider in main.ts, not here: this web view's own render/effects
+  // don't reliably run promptly while its tab is backgrounded, which previously left the header
+  // blank until the tab was activated once, even though updateWebViewDefinition had already pushed
+  // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
+  // its very first render, independent of this web view's own mount timing.
 
-  // Pick the tab icon variant to match the current theme. The tab icon is painted by the platform
-  // as a static background-image, so a `currentColor` SVG can't follow the theme — we swap the
-  // `iconUrl` ourselves based on the theme type from `papi.themes`.
+  // Pick the tab icon variant to match the current theme and selected state. The tab icon is
+  // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
+  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
+  // detection and variant picking.
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
     let disposed = false;
@@ -232,9 +319,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     };
   }, []);
 
+  const gridIconUrl = useTabIconSelection(isDarkTheme, TAB_ICON_URLS);
   useEffect(() => {
-    updateWebViewDefinition({ iconUrl: isDarkTheme ? DARK_THEME_ICON_URL : LIGHT_THEME_ICON_URL });
-  }, [isDarkTheme, updateWebViewDefinition]);
+    updateWebViewDefinition({ iconUrl: gridIconUrl });
+  }, [gridIconUrl, updateWebViewDefinition]);
 
   const handleCheckedChange = useCallback(
     (resourceId: string, checked: boolean) => {
@@ -263,6 +351,34 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     [textConnectionPdp],
   );
 
+  const handleReorder = useCallback(
+    (newShownIdSequence: string[]) => {
+      const { current } = sourcesRef;
+      if (!current || !textConnectionPdp) return;
+      const nextOrder = reorderShownIds(current.order, newShownIdSequence);
+      persistCellOrder(textConnectionPdp, nextOrder).catch((e) => {
+        papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
+        logger.warn(`Failed to persist cell order: ${getErrorMessage(e)}`);
+      });
+    },
+    [textConnectionPdp],
+  );
+
+  const getReorderHandleLabel = useCallback(
+    (resourceName: string) =>
+      formatReplacementString(localizedStrings[REORDER_HANDLE_KEY] ?? '', { resourceName }),
+    [localizedStrings],
+  );
+  const getReorderAnnouncement = useCallback(
+    (resourceName: string, position: number, total: number) =>
+      formatReplacementString(localizedStrings[REORDER_ANNOUNCEMENT_KEY] ?? '', {
+        resourceName,
+        position,
+        total,
+      }),
+    [localizedStrings],
+  );
+
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       if (!textConnectionPdp) return;
@@ -280,6 +396,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         } finally {
           setInstalling((prev) => prev.filter((info) => info.id !== resource.dblEntryUid));
         }
+        // Resource was just installed; bump the cache key so `getCachedResources` re-validates the
+        // `installed` flag — without this, `cachedResources` loaded at mount still shows the resource
+        // as not-installed and `toGridResources` can't resolve it to a projectId.
+        setRefreshCounter((k) => k + 1);
       }
 
       // Re-read after the await: the subscription may have advanced during the install.
@@ -302,6 +422,23 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     () => [...top, ...bottom].map((entry) => entry.reference.id),
     [top, bottom],
   );
+
+  // Reconcile the saved order: drop ids that have left the user's world (X-removed, or an admin
+  // entry no longer shared). `selectedResourceIds` is every resource the user still has (shown AND
+  // hidden), so hidden-but-known ids keep their saved slots. Reads sourcesRef.current for freshness;
+  // `sources` is in the deps only to re-run on subscription updates. reconcileCellOrder persists
+  // only on a real change, so the subscribe→persist→subscribe cycle converges. (A reorder persisted
+  // in the same tick that a resource is removed is a narrow last-writer-wins window; acceptable —
+  // the next delivery reconciles.)
+  useEffect(() => {
+    const { current } = sourcesRef;
+    if (!current || !textConnectionPdp) return;
+    const next = reconcileCellOrder(current.order, selectedResourceIds);
+    if (!next) return;
+    persistCellOrder(textConnectionPdp, next).catch((e) =>
+      logger.warn(`Failed to reconcile cell order: ${getErrorMessage(e)}`),
+    );
+  }, [sources, textConnectionPdp, selectedResourceIds]);
 
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
@@ -327,6 +464,12 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       data-testid="scripture-text-grid"
       className="tw:flex tw:h-screen tw:flex-col tw:bg-background tw:text-foreground"
     >
+      {/* Polite live region announcing chapter-context open/close. Placed at the top of the render
+          tree so it exists in the DOM before any announcement fires (a screen reader ignores text
+          present at initial render). */}
+      <div role="status" aria-live="polite" aria-atomic="true" className="tw:sr-only">
+        {announcement}
+      </div>
       <div className="tw:flex tw:items-center tw:justify-end tw:border-b tw:p-1">
         <Popover>
           <TooltipProvider>
@@ -398,11 +541,17 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
             scrRef={scrRef}
             setScrRef={setScrRef}
             viewMode={viewMode}
+            zoom={zoom}
+            zoomMenuLabels={zoomMenuLabels}
             chapterContext={chapterContext}
-            onChapterContextChange={setChapterContext}
+            onChapterContextChange={handleChapterContextChange}
             onChapterContextClose={handleCloseChapterContext}
             closeChapterContextLabel={localizedStrings[CHAPTER_CONTEXT_CLOSE_KEY]}
             cellAccessibleNameTemplate={localizedStrings[CELL_ACCESSIBLE_NAME_KEY]}
+            onReorder={handleReorder}
+            getReorderHandleLabel={getReorderHandleLabel}
+            reorderHint={localizedStrings[REORDER_HINT_KEY]}
+            getReorderAnnouncement={getReorderAnnouncement}
           />
         )}
       </div>

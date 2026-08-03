@@ -2,6 +2,7 @@ using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using PtxUtils;
@@ -354,6 +355,11 @@ internal sealed class ManageBooksService : NetworkObject
     /// <returns>Result with success flag, deleted count, warnings, errors.</returns>
     public Task<DeleteBooksResult> DeleteBooksAsync(DeleteBooksRequest request)
     {
+        // Bracket the whole deletion in a write scope: rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ProjectId);
+
         EnsureBookNumbersNonEmpty(request.BookNumbers);
 
         ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
@@ -640,6 +646,11 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<CreateBooksResult> CreateBooksAsync(CreateBooksRequest request)
     {
+        // Bracket the whole creation in a write scope: rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ProjectId);
+
         EnsureBookNumbersNonEmpty(request.BookNumbers);
 
         ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
@@ -991,6 +1002,12 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<CopyBooksResult> CopyBooksAsync(CopyBooksRequest request)
     {
+        // Bracket the whole copy in a write scope on the DESTINATION project (the only one written;
+        // the source is read-only): rejects (fail-fast) while it is syncing, and keeps the sync's
+        // drain waiting until this mutation completes. Inert in public core — see
+        // SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ToProjectId);
+
         EnsureBookNumbersNonEmpty(request.BookNumbers);
         EnsureDifferentProjects(request.FromProjectId, request.ToProjectId);
 
@@ -1056,6 +1073,12 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task CopyCustomVersificationAsync(string sourceProjectId, string destProjectId)
     {
+        // Bracket the whole copy in a write scope on the DESTINATION project (its custom.vrs and
+        // versification table are mutated): rejects (fail-fast) while it is syncing, and keeps the
+        // sync's drain waiting until this mutation completes. Inert in public core — see
+        // SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(destProjectId);
+
         ScrText fromScrText = ResolveProjectOrThrow(
             sourceProjectId,
             PlatformErrorCodes.NotFound,
@@ -1222,6 +1245,11 @@ internal sealed class ManageBooksService : NetworkObject
     /// </summary>
     public Task<ImportBooksResult> ImportBooksAsync(ImportBooksInput request)
     {
+        // Bracket the whole import in a write scope: rejects (fail-fast) while an automatic
+        // Send/Receive is syncing this project, and keeps the sync's drain waiting until this
+        // mutation completes. Inert in public core — see SendReceiveWriteLock.
+        using var _ = SendReceiveWriteLock.EnterWrite(request.ProjectId);
+
         // Guard 1: project must resolve (NOT_FOUND per Theme 7).
         ScrText scrText = GetProjectOrThrowNotFound(request.ProjectId);
 

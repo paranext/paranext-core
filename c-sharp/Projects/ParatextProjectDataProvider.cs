@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
+using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
@@ -78,9 +79,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     private string? _cachedUserId;
 
     // Reference the shared data-type constant so the storage key and the data-type name can't drift.
-    private const string OverlaySettingName = ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY;
+    private const string OverlaySettingName = ProjectDataType.TEXT_COLLECTION_OVERLAY;
     private const string OverlayInitializedMarkerName = OverlaySettingName + "Initialized";
     private const string OverlaySchemaVersion = "1.0.0";
+
+    private const string CellOrderSettingName = ProjectDataType.CELL_ORDER;
+    private const string CellOrderSchemaVersion = "1.0.0";
 
     #endregion
 
@@ -155,10 +159,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(
             ("resetUserReferencedProjectsAndResources", ResetUserReferencedProjectsAndResources)
         );
-        retVal.Add(("getShownByDefaultOverlay", GetShownByDefaultOverlay));
-        retVal.Add(("setShownByDefaultOverlay", SetShownByDefaultOverlay));
-        retVal.Add(("resetShownByDefaultOverlay", ResetShownByDefaultOverlay));
-        retVal.Add(("initializeShownByDefaultOverlay", InitializeShownByDefaultOverlay));
+        retVal.Add(("getTextCollectionOverlay", GetTextCollectionOverlay));
+        retVal.Add(("setTextCollectionOverlay", SetTextCollectionOverlay));
+        retVal.Add(("resetTextCollectionOverlay", ResetTextCollectionOverlay));
+        retVal.Add(("initializeTextCollectionOverlay", InitializeTextCollectionOverlay));
+        retVal.Add(("getCellOrder", GetCellOrder));
+        retVal.Add(("setCellOrder", SetCellOrder));
+        retVal.Add(("resetCellOrder", ResetCellOrder));
         retVal.Add(
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
@@ -337,6 +344,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public override bool SetExtensionData(ProjectDataScope scope, string data)
     {
+        using var _ = EnterSyncWriteScope();
         if (string.IsNullOrEmpty(scope.ExtensionName))
             throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
@@ -476,6 +484,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool DeleteComment(string commentId)
     {
+        using var _ = EnterSyncWriteScope();
         lock (_commentMutationLock)
         {
             // Find the comment by ID and its parent thread
@@ -517,6 +526,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// in this project.
     public string CreateComment(PlatformCommentWrapper comment)
     {
+        using var _ = EnterSyncWriteScope();
         VerifyUserCanCreateComments();
 
         // Never let the "content could not be displayed" placeholder become a note's real content.
@@ -649,6 +659,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidDataException">If the thread ID is missing or doesn't exist</exception>
     public string AddCommentToThread(PlatformCommentWrapper comment)
     {
+        using var _ = EnterSyncWriteScope();
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(comment.Thread))
@@ -761,6 +772,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <exception cref="InvalidOperationException">Not a verseText conflict, the thread is already resolved, the user lacks permission, the resolve was canceled, or resolution is 'reject' or 'merge' and the verse text has changed since the conflict was recorded (stale).</exception>
     public void ResolveConflict(string threadId, string resolution)
     {
+        // Named (not `_`) because this method later uses `out _` discards, which would bind to a
+        // using variable named `_` and fail to compile.
+        using var syncWriteScope = EnterSyncWriteScope();
         if (resolution != "accept" && resolution != "reject" && resolution != "merge")
             throw new InvalidDataException(
                 $"Invalid resolution '{resolution}' for ResolveConflict; expected 'accept', 'reject', or 'merge'."
@@ -1071,6 +1085,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool UpdateComment(string commentId, string updatedContentHtml)
     {
+        using var _ = EnterSyncWriteScope();
         lock (_commentMutationLock)
         {
             if (string.IsNullOrEmpty(commentId))
@@ -1690,16 +1705,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // Paratext project setting value found, so return the value with the appropriate type
             if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
             {
-                return settingValue.ToUpperInvariant() switch
-                {
-                    "F" => false,
-                    "FALSE" => false,
-                    "T" => true,
-                    "TRUE" => true,
-                    _ => throw new InvalidDataException(
+                if (!ProjectSettingsNames.TryParseParatextBoolean(settingValue, out bool boolValue))
+                    throw new InvalidDataException(
                         $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
-                    ),
-                };
+                    );
+                return boolValue;
             }
             return settingValue;
         }
@@ -1713,6 +1723,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetProjectSetting(string settingName, object? value)
     {
+        using var _ = EnterSyncWriteScope();
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         if (scrText.IsResourceProject)
             throw new Exception("Cannot change settings on resources");
@@ -1730,11 +1741,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
 
-        // The referenced-projects-and-resources list carries the admin-only isResourceShownByDefault
-        // flag (the shared shown-by-default default for the Scripture Text Grid), so its writes are
+        // The referenced-projects-and-resources list carries the admin-only isInTextCollection
+        // flag (the shared text-collection default for the Scripture Text Grid), so its writes are
         // gated to project administrators server-side (the UI-facing query is
         // canUserWriteProjectTextConnectionSettings()). Model texts do NOT participate in
-        // shown-by-default and keep their pre-existing ungated behavior. USER-scope writes (user
+        // text-collection and keep their pre-existing ungated behavior. USER-scope writes (user
         // lists, overlay, init) are intentionally UNGATED.
         if (
             paratextSettingName == ProjectSettingsNames.PT_REFERENCED_PROJECTS_AND_RESOURCES
@@ -1859,16 +1870,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         )
                         {
                             var stringValue = value?.ToString() ?? "";
-                            value = stringValue.ToUpperInvariant() switch
-                            {
-                                "F" => "F",
-                                "FALSE" => "F",
-                                "T" => "T",
-                                "TRUE" => "T",
-                                _ => throw new InvalidDataException(
+                            if (
+                                !ProjectSettingsNames.TryParseParatextBoolean(
+                                    stringValue,
+                                    out bool boolValue
+                                )
+                            )
+                                throw new InvalidDataException(
                                     $"Failed to convert Paratext setting {settingName} to boolean. Value was \"{stringValue}\""
-                                ),
-                            };
+                                );
+                            // Normalize to the canonical single-letter form Paratext stores
+                            value = boolValue ? "T" : "F";
                         }
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
@@ -1887,6 +1899,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new Exception(errorMessage);
 
         SendDataUpdateEvent(ProjectDataType.SETTING, "project setting data update event");
+
+        // If the write changed a setting that backs the project-picker / Home metadata (name,
+        // fullName, language, languageTag, isEditable), tell those list consumers the metadata is
+        // stale so they refetch it, rather than showing the old value until an unrelated refresh.
+        if (ProjectSettingsNames.IsProjectMetadataDisplaySetting(paratextSettingName))
+            _paratextProjects.NotifyProjectsChanged();
 
         // When the versification setting changes, the platformScripture.Versification
         // projectInterface's derived values change too — notify subscribers on those data types so
@@ -2088,7 +2106,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return true;
     }
 
-    public Dictionary<string, bool> GetShownByDefaultOverlay(object? param = null)
+    public Dictionary<string, bool> GetTextCollectionOverlay(object? param = null)
     {
         var (schemaVersion, content) = GetUserProjectSettings().GetSetting(OverlaySettingName);
         if (content == null || string.IsNullOrEmpty(content.Value))
@@ -2100,7 +2118,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return content.Value.DeserializeFromJson<Dictionary<string, bool>>() ?? [];
     }
 
-    public bool SetShownByDefaultOverlay(object? value)
+    public bool SetTextCollectionOverlay(object? value)
     {
         string? json = value?.ToString();
         Dictionary<string, bool>? map;
@@ -2117,56 +2135,117 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         catch (JsonException ex)
         {
             throw new InvalidDataException(
-                "ShownByDefaultOverlay value must be a JSON object map",
+                "TextCollectionOverlay value must be a JSON object map",
                 ex
             );
         }
         if (map is null)
-            throw new InvalidDataException("ShownByDefaultOverlay value must be a JSON object map");
+            throw new InvalidDataException("TextCollectionOverlay value must be a JSON object map");
         WriteOverlay(map);
         SendDataUpdateEvent(
-            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
-            "shown-by-default overlay update event"
+            ProjectDataType.TEXT_COLLECTION_OVERLAY,
+            "text-collection overlay update event"
         );
         return true;
     }
 
-    public bool ResetShownByDefaultOverlay()
+    public bool ResetTextCollectionOverlay()
     {
         // Full reset: forget the overlay AND the initialized marker so the next first-open re-inits
         // from the current admin defaults.
         GetUserProjectSettings().RemoveSetting(OverlaySettingName);
         GetUserProjectSettings().RemoveSetting(OverlayInitializedMarkerName);
         SendDataUpdateEvent(
-            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
-            "shown-by-default overlay reset event"
+            ProjectDataType.TEXT_COLLECTION_OVERLAY,
+            "text-collection overlay reset event"
         );
         return true;
     }
 
+    public List<string> GetCellOrder(object? param = null)
+    {
+        var (schemaVersion, content) = GetUserProjectSettings().GetSetting(CellOrderSettingName);
+        if (content == null || string.IsNullOrEmpty(content.Value))
+            return [];
+        ValidateCellOrderSchemaVersion(schemaVersion);
+        return content.Value.DeserializeFromJson<List<string>>() ?? [];
+    }
+
+    public bool SetCellOrder(object? value)
+    {
+        string? json = value?.ToString();
+        List<string>? order;
+        try
+        {
+            // Deserialize inside try/catch so a wrong-SHAPE value (JSON object/number/string) surfaces
+            // the same InvalidDataException as a null/empty value, rather than leaking a raw
+            // JsonException (mirrors SetTextCollectionOverlay).
+            order = string.IsNullOrEmpty(json) ? null : json.DeserializeFromJson<List<string>>();
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("CellOrder value must be a JSON array of strings", ex);
+        }
+        if (order is null || order.Any(element => element is null))
+            throw new InvalidDataException("CellOrder value must be a JSON array of strings");
+        WriteCellOrder(order);
+        SendDataUpdateEvent(ProjectDataType.CELL_ORDER, "cell order update event");
+        return true;
+    }
+
+    public bool ResetCellOrder()
+    {
+        GetUserProjectSettings().RemoveSetting(CellOrderSettingName);
+        SendDataUpdateEvent(ProjectDataType.CELL_ORDER, "cell order reset event");
+        return true;
+    }
+
+    private void WriteCellOrder(List<string> order)
+    {
+        GetUserProjectSettings()
+            .SetSetting(
+                CellOrderSettingName,
+                CellOrderSchemaVersion,
+                new XElement("Items", order.SerializeToJson())
+            );
+    }
+
+    private static void ValidateCellOrderSchemaVersion(string? schemaVersion)
+    {
+        int expectedMajor = new Version(CellOrderSchemaVersion).Major;
+        if (!Version.TryParse(schemaVersion, out Version? parsed))
+            throw new InvalidDataException(
+                $"CellOrder has invalid version format: '{schemaVersion}'"
+            );
+        if (parsed.Major != expectedMajor)
+            throw new InvalidDataException(
+                $"CellOrder has incompatible major version {parsed.Major}; expected {expectedMajor}"
+            );
+    }
+
     /// <summary>
-    /// First-open initialization of the current user's shown-by-default overlay for this project.
+    /// First-open initialization of the current user's text-collection overlay for this project.
     /// For each Bible-text reference in <c>PT_REFERENCED_PROJECTS_AND_RESOURCES</c> whose
-    /// <c>IsResourceShownByDefault</c> is set, records overlay[resourceId] = that value. Idempotent:
+    /// <c>IsInTextCollection</c> is set, records overlay[resourceId] = that value. Idempotent:
     /// a per-user-per-project marker prevents re-initialization, so later opens (and user un-checks)
     /// are preserved. Returns <c>false</c> when already initialized. Model texts do NOT participate
-    /// in shown-by-default and are intentionally not read here.
+    /// in text-collection and are intentionally not read here.
     /// </summary>
-    public bool InitializeShownByDefaultOverlay(object? param = null)
+    public bool InitializeTextCollectionOverlay(object? param = null)
     {
         var settings = GetUserProjectSettings();
         var (_, marker) = settings.GetSetting(OverlayInitializedMarkerName);
         if (marker != null)
             return false;
 
-        var overlay = GetShownByDefaultOverlay();
+        var overlay = GetTextCollectionOverlay();
         if (
             GetProjectSetting(ProjectSettingsNames.PB_REFERENCED_PROJECTS_AND_RESOURCES)
             is ResourceReferenceList list
         )
             foreach (var item in list.Items)
                 if (
-                    item.IsResourceShownByDefault is bool shown
+                    item.IsInTextCollection is bool shown
                     && TryGetBibleTextKey(item) is (_, string id)
                 )
                     // Overlay is keyed by resource id only (matching the TS `{ [id]: boolean }`
@@ -2182,8 +2261,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             new XElement("Items", "true")
         );
         SendDataUpdateEvent(
-            ProjectDataType.SHOWN_BY_DEFAULT_OVERLAY,
-            "shown-by-default overlay first-open init event"
+            ProjectDataType.TEXT_COLLECTION_OVERLAY,
+            "text-collection overlay first-open init event"
         );
         return true;
     }
@@ -2228,7 +2307,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Validates the schema version stored alongside the shown-by-default overlay. The overlay has
+    /// Validates the schema version stored alongside the text-collection overlay. The overlay has
     /// its own version line (<see cref="OverlaySchemaVersion"/>), independent of the S/R'd resource
     /// lists, so it is validated against that rather than
     /// <see cref="ResourceReferenceList.CurrentMajorVersion"/>.
@@ -2238,11 +2317,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         int expectedMajor = new Version(OverlaySchemaVersion).Major;
         if (!Version.TryParse(schemaVersion, out Version? parsed))
             throw new InvalidDataException(
-                $"Shown-by-default overlay has invalid version format: '{schemaVersion}'"
+                $"Text-collection overlay has invalid version format: '{schemaVersion}'"
             );
         if (parsed.Major != expectedMajor)
             throw new InvalidDataException(
-                $"Shown-by-default overlay has incompatible major version {parsed.Major}; "
+                $"Text-collection overlay has incompatible major version {parsed.Major}; "
                     + $"expected {expectedMajor}"
             );
     }
@@ -2334,6 +2413,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetBookUsfm(VerseRef verseRef, string data)
     {
+        using var _ = EnterSyncWriteScope();
+        return SetBookUsfmInScope(verseRef, data);
+    }
+
+    /// <summary>
+    /// The body of <see cref="SetBookUsfm"/> WITHOUT opening its own sync-write scope. Callers MUST
+    /// already hold one (via <see cref="EnterSyncWriteScope"/>). This exists so a gated method that
+    /// delegates to the book-USFM write (<see cref="SetBookUsx"/>) can reuse it inside a single
+    /// outer scope. (Nesting a second <see cref="SendReceiveWriteLock.EnterWrite"/> is NOT a safe
+    /// alternative: if a sync armed while the outer scope was open, the nested call would throw
+    /// mid-mutation and tear the write. One scope per mutation is required, not stylistic.)
+    /// </summary>
+    private bool SetBookUsfmInScope(VerseRef verseRef, string data)
+    {
         verseRef.ChapterNum = 0;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
@@ -2346,6 +2439,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
                 isNewBook = !localBooksPresentSet.IsSelected(verseRef.BookNum);
                 // Set with chapter 0 sets the whole book
+                // SR-write-gate: exempt — un-gated core; the whole mutation runs inside SetBookUsfm/SetBookUsx's write scope (nesting a 2nd gate is unsafe; see SendReceiveWriteLock).
                 scrText.PutText(verseRef.BookNum, 0, false, data, writeLock);
             }
         );
@@ -2362,6 +2456,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetChapterUsfm(VerseRef verseRef, string data)
     {
+        using var _ = EnterSyncWriteScope();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -2481,6 +2576,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetChapterUsx(VerseRef verseRef)
     {
+        // Time the first chapter served process-wide, without spamming every navigation. MarkOnce is
+        // process-wide and thread-safe, so a mid-session open of another project (or two concurrent
+        // first calls) can't inject a duplicate mark.
+        Services.StartupTiming.MarkOnce("first-get-chapter-usx");
         return GetFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, true)
@@ -2494,15 +2593,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public bool SetBookUsx(VerseRef verseRef, string data)
     {
-        // Don't need to take a write lock in this function because SetBookUsfm will do it
+        // Open ONE sync-write scope for the whole convert-then-write mutation. Rejecting here also
+        // skips the USX→USFM conversion when sync-blocked. We then call the un-gated
+        // SetBookUsfmInScope (NOT the public SetBookUsfm) so the whole mutation sits under a single
+        // scope — nesting is unsafe under an arm race; see SetBookUsfmInScope. Inert in public core.
+        using var _ = EnterSyncWriteScope();
+        // The ParatextData project write lock (RunWithinLock) is taken inside SetBookUsfmInScope —
+        // unrelated to the S/R gate scope above, despite the similar name.
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
         string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
-        SetBookUsfm(verseRef, usfm);
-        return true;
+        return SetBookUsfmInScope(verseRef, usfm);
     }
 
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
+        using var _ = EnterSyncWriteScope();
         string? failedMessage = null;
         bool didChange = true;
         try
@@ -2762,6 +2867,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             myLock.ReleaseAndNotify();
         }
+    }
+
+    /// <summary>
+    /// Opens a write scope that brackets a project mutation while an automatic Send/Receive is
+    /// syncing this project, so an editor change can't race the sync's on-disk file replacement. If
+    /// the project is sync-blocked the scope throws immediately (fail-fast); otherwise it counts the
+    /// write as in-flight until disposed, so a sync starting mid-write drains it first. Inert in
+    /// public core: nothing calls <see cref="SendReceiveWriteLock.SetSyncing"/> there, so this never
+    /// throws (see that class). Use as the FIRST statement of the project write methods (Scripture,
+    /// settings, extension data, and comment mutations):
+    /// <c>using var _ = EnterSyncWriteScope();</c> so the scope covers the whole mutation.
+    /// </summary>
+    private IDisposable EnterSyncWriteScope()
+    {
+        return SendReceiveWriteLock.EnterWrite(ProjectDetails.Metadata.Id);
     }
 
     #endregion

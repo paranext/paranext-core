@@ -16,15 +16,14 @@ namespace Paranext.DataProvider.Projects;
 ///     (<see cref="GetCrossFactoryRejectionMessage"/>,
 ///     <see cref="GetRegistrationTaskDescription"/>).</item>
 /// </list>
-/// All other plumbing - the per-factory PDP cache, double-checked-locking creation, and existing-PDP
+/// All other plumbing - the per-factory PDP cache, per-project lazy creation, and existing-PDP
 /// lookup - lives here so fixes and improvements apply to every Paratext PDP factory automatically.
 /// </summary>
 internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProviderFactory
 {
     protected readonly LocalParatextProjects _paratextProjects;
-    private readonly ConcurrentDictionary<string, ParatextProjectDataProvider> _pdpMap = new();
-    private readonly object _creationLock = new();
-    private readonly Random _random = new((int)DateTime.Now.Ticks);
+    private readonly ConcurrentDictionary<string, Lazy<ParatextProjectDataProvider>> _pdpMap =
+        new();
 
     protected ParatextProjectDataProviderFactoryBase(
         PapiClient papiClient,
@@ -81,58 +80,104 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
     public override string GetProjectDataProviderID(string projectID)
     {
         projectID = projectID.ToUpperInvariant();
+        // GetOrAdd with Lazy => the engine is constructed at most once per project even under
+        // concurrency, and distinct projects never contend on a shared lock.
+        var lazy = _pdpMap.GetOrAdd(
+            projectID,
+            id => new Lazy<ParatextProjectDataProvider>(
+                () =>
+                {
+                    ScrText scrText;
+                    try
+                    {
+                        scrText = LocalParatextProjects.GetParatextProject(id);
+                    }
+                    catch (KeyNotFoundException)
+                    {
+                        throw new KeyNotFoundException("Unknown project ID: " + id);
+                    }
 
-        // If we already have a PDP for this project, just return it
-        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return existingPdp.DataProviderName;
+                    if (!ShouldServeProject(scrText))
+                        throw new KeyNotFoundException(GetCrossFactoryRejectionMessage(id));
 
-        // Prevent multiple threads from trying to create PDPs at the same time
-        // This could probably be relaxed to be scoped per project ID, but this is more conservative
-        lock (_creationLock)
+                    var details = scrText.GetProjectDetails();
+
+                    // Create a random 30 character string containing letters A-Z. Random.Shared
+                    // (not an instance Random) because concurrent Lazy factories for distinct
+                    // projects can run this at the same time, and Random is not thread-safe.
+                    var name = new string(
+                        Enumerable
+                            .Range(0, 30)
+                            .Select(_ => (char)Random.Shared.Next(65, 91))
+                            .ToArray()
+                    );
+                    var pdp = new ParatextProjectDataProvider(
+                        name,
+                        PapiClient,
+                        details,
+                        _paratextProjects
+                    );
+                    // Wait for registration to finish before returning this PDP, so the name we
+                    // hand back is immediately usable - never a window where a caller has the name
+                    // but the PDP's methods aren't registered yet (which would burn their bounded
+                    // MethodNotFound retry budget and spuriously fail a valid project). Treat BOTH a
+                    // timeout and a registration fault as a failed registration and throw, so the
+                    // catch below evicts the Lazy (self-healing on the next call) instead of caching
+                    // a permanently-unusable PDP. RunTask only propagates a fault that occurs while
+                    // it is still waiting and returns false (does not throw) on timeout, so inspect
+                    // its result and the task's faulted state explicitly rather than relying on it to
+                    // throw. A registration that timed out here may still be in flight: it will
+                    // finish registering under this now-discarded name while the retry registers a
+                    // fresh PDP under a new name - an accepted cost of not blocking the caller
+                    // indefinitely. This does NOT re-serialize distinct projects: each project has
+                    // its own per-project Lazy, so concurrent creations for different projects still
+                    // register concurrently - only same-project callers share (and await) this one.
+                    var registrationTask = pdp.RegisterDataProviderAsync();
+                    var registrationCompleted = ThreadingUtils.RunTask(
+                        registrationTask,
+                        $"{GetRegistrationTaskDescription(pdp, details)} for project {id}",
+                        ThreadingUtils.DefaultTimeout
+                    );
+                    if (!registrationCompleted)
+                        throw new TimeoutException(
+                            $"Registration for project {id} did not complete within "
+                                + $"{ThreadingUtils.DefaultTimeout}."
+                        );
+                    if (registrationTask.IsFaulted)
+                        throw registrationTask.Exception!;
+                    return pdp;
+                },
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        );
+        try
         {
-            // If the PDP was created while we were locked, use it
-            if (_pdpMap.TryGetValue(projectID, out var existingPdpInLock))
-                return existingPdpInLock.DataProviderName;
-
-            ScrText scrText;
-            try
-            {
-                scrText = LocalParatextProjects.GetParatextProject(projectID);
-            }
-            catch (KeyNotFoundException)
-            {
-                throw new KeyNotFoundException("Unknown project ID: " + projectID);
-            }
-
-            if (!ShouldServeProject(scrText))
-            {
-                throw new KeyNotFoundException(GetCrossFactoryRejectionMessage(projectID));
-            }
-
-            var details = scrText.GetProjectDetails();
-
-            // Create a random 30 character string containing letters A-Z
-            var name = new string(
-                Enumerable.Range(0, 30).Select(_ => (char)_random.Next(65, 90)).ToArray()
+            return lazy.Value.DataProviderName;
+        }
+        catch
+        {
+            // A faulted Lazy caches its exception forever. Evict it so a later call retries
+            // (e.g. a resource requested before Paratext registration completes, a project
+            // requested mid-clone, or a PDP whose RegisterDataProviderAsync faulted or timed out -
+            // now surfaced here because registration is awaited and checked above rather than
+            // fire-and-forget) instead of
+            // staying broken until process restart. Caching nothing on failure keeps failed
+            // lookups self-healing. Compare-and-remove by the
+            // exact Lazy so we never clobber a different,
+            // successful entry created for this project in the meantime. Eviction runs only on
+            // throw, so the success path still creates exactly one PDP per project.
+            //
+            // Eviction alone keeps the map consistent: it never stays poisoned, so the next call
+            // for this project (from any caller) retries fresh and self-heals. In the rare race
+            // where a concurrent caller already replaced this faulted Lazy with a newer, successful
+            // entry, that entry survives (compare-and-remove leaves it untouched) - only THIS
+            // caller rethrows the stale exception, and its own next call then observes the newer
+            // entry. That one accepted spurious error is why we don't add a bounded in-line retry
+            // here.
+            _pdpMap.TryRemove(
+                new KeyValuePair<string, Lazy<ParatextProjectDataProvider>>(projectID, lazy)
             );
-
-            // Create and store the PDP in the map for future lookups
-            var newPdp = new ParatextProjectDataProvider(
-                name,
-                PapiClient,
-                details,
-                _paratextProjects
-            );
-            if (!_pdpMap.TryAdd(projectID, newPdp))
-                throw new InvalidOperationException("Internal error adding project data provider");
-
-            // Once the PDP has been registered, return the name of it so callers can get it
-            ThreadingUtils.RunTask(
-                newPdp.RegisterDataProviderAsync(),
-                GetRegistrationTaskDescription(newPdp, details),
-                ThreadingUtils.DefaultTimeout
-            );
-            return newPdp.DataProviderName;
+            throw;
         }
     }
 
@@ -143,8 +188,10 @@ internal abstract class ParatextProjectDataProviderFactoryBase : ProjectDataProv
     {
         projectID = projectID.ToUpperInvariant();
 
-        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return existingPdp;
-        return null;
+        // IsValueCreated guards against forcing creation (or re-throwing a cached creation
+        // failure) from what is meant to be a "does one exist yet?" query.
+        return _pdpMap.TryGetValue(projectID, out var lazy) && lazy.IsValueCreated
+            ? lazy.Value
+            : null;
     }
 }

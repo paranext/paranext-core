@@ -51,6 +51,27 @@ public static class ThreadingUtils
     }
 
     /// <summary>
+    /// Observe a fire-and-forget task's faults and log them to stderr at error level (stderr reaches
+    /// the main process log as <c>logger.error</c>), rather than the info-level stdout logging
+    /// <see cref="RunTask"/> does. Use for background work whose failure means a feature is missing
+    /// for the whole session. Keeps the <c>ContinueWith(OnlyOnFaulted)</c> shape (not an async-lambda
+    /// try/catch) so the full <see cref="AggregateException"/> - every fault, e.g. from a
+    /// <c>Task.WhenAll</c> - is formatted, not just the first.
+    /// </summary>
+    /// <param name="task">Task to observe. Wrap a synchronous throw in <c>Task.Run</c> before
+    /// calling so it is captured into the task rather than escaping unobserved.</param>
+    /// <param name="description">Included in the logged message to identify the failed work.</param>
+    public static void ObserveTaskLoggingErrorsToStderr(Task task, string description)
+    {
+        _ = task.ContinueWith(
+            t => Console.Error.WriteLine($"Task \"{description}\" failed: {t.Exception}"),
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default
+        );
+    }
+
+    /// <summary>
     /// Run an asynchronous task in a synchronous method and return the result
     /// </summary>
     /// <typeparam name="T">The type of the result produced by the task</typeparam>

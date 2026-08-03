@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, DblResourceData, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ResourceType, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
@@ -147,6 +147,12 @@ export type BookChapterControlProps = {
 	 */
 	triggerVariant?: ButtonProps["variant"];
 	/**
+	 * Set to `true` to render an up-down chevron indicator at the end of the trigger, signaling that
+	 * it opens a picker. Defaults to `false` (no chevron) — most existing embeddings show the current
+	 * reference alone and don't need one.
+	 */
+	showTriggerChevron?: boolean;
+	/**
 	 * Optional callback fired whenever the control's popover open state changes. Useful when the
 	 * parent needs to react to the picker opening or closing — e.g. dimming a sibling control while
 	 * this one is active. Internal back-navigation within the popover (verses → chapters → books)
@@ -198,7 +204,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -484,6 +490,19 @@ export declare const COMMENT_LIST_STRING_KEYS: readonly [
 export type CommentListLocalizedStrings = {
 	[localizedKey in (typeof COMMENT_LIST_STRING_KEYS)[number]]?: string;
 };
+/**
+ * DOM id of the CommentList container element. Exported so consumers that need to interact with the
+ * rendered list (e.g. scrolling it into view) can look it up by a shared, typed name instead of a
+ * hardcoded string that could silently drift from the actual markup.
+ */
+export declare const COMMENT_LIST_ELEMENT_ID = "comment-list";
+/**
+ * Returns the DOM id used for a comment thread's rendered element, given its thread id. Currently
+ * an identity function — the thread element's id is the thread id itself — but centralizes that
+ * contract in one place so CommentThread (which sets the id) and any external consumer (which looks
+ * it up) can never silently disagree.
+ */
+export declare function getCommentThreadElementId(threadId: string): string;
 /** Props for the CommentList component */
 export interface CommentListProps {
 	/** Additional class name for the component */
@@ -1268,57 +1287,6 @@ export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRe
 export interface SelectMenuItemHandler {
 	(selectedMenuItem: MenuItemContainingCommand): void;
 }
-/**
- * Localization keys used by {@link ResourcePickerDialog}. Pass to `useLocalizedStrings` and forward
- * the result as the `localizedStrings` prop.
- */
-export declare const RESOURCE_PICKER_DIALOG_STRING_KEYS: readonly [
-	"%resourcePicker_title%",
-	"%resourcePicker_section_already_selected%",
-	"%resourcePicker_section_installed%",
-	"%resourcePicker_section_available_to_download%",
-	"%resourcePicker_no_results%",
-	"%resourcePicker_search_placeholder%",
-	"%resourcePicker_language_filter_any%",
-	"%resourcePicker_language_filter_multipleSelected%",
-	"%resourcePicker_showing_count%"
-];
-/**
- * Map of localized strings required by {@link ResourcePickerDialog}. Derive from
- * {@link RESOURCE_PICKER_DIALOG_STRING_KEYS}.
- */
-export type ResourcePickerDialogLocalizedStrings = {
-	[key in (typeof RESOURCE_PICKER_DIALOG_STRING_KEYS)[number]]?: string;
-};
-/** Props for {@link ResourcePickerDialog} */
-export interface ResourcePickerDialogProps {
-	/** Full list of DBL resources fetched by the caller via PAPI */
-	allResources: DblResourceData[];
-	/** Whether the `allResources` is still loading */
-	isResourcesLoading?: boolean;
-	/** If provided, only resources of this type are shown */
-	resourceType?: ResourceType;
-	/** IDs of resources already selected in the calling panel */
-	selectedResourceIds?: string[];
-	/** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
-	localizedStrings: ResourcePickerDialogLocalizedStrings;
-	/** Called when the user clicks a resource row to select it */
-	onSelect: (resource: DblResourceData) => void;
-}
-/**
- * Presentational dialog content for picking a DBL resource. Renders three sections — Already
- * Selected, Installed, and Available to Download — derived from `allResources` and
- * `selectedResourceIds`. Supports text search and language filtering.
- *
- * Does not include an outer `Dialog` or `DialogContent` wrapper; the host (paranext-core dialog
- * infrastructure or a Storybook decorator) is responsible for providing that context.
- *
- * Obtain localized strings by passing {@link RESOURCE_PICKER_DIALOG_STRING_KEYS} to
- * `useLocalizedStrings` and forwarding the result as `localizedStrings`.
- *
- * @param props See {@link ResourcePickerDialogProps}
- */
-export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -2066,6 +2034,42 @@ export type UiLanguageSelectorProps = {
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
+ * feed the result to the `localizedStrings` prop.
+ *
+ * @experimental
+ */
+export declare const INTERFACE_LANGUAGE_PICKER_STRING_KEYS: readonly [
+	"%firstRun_language_search_placeholder%",
+	"%firstRun_language_noResults%",
+	"%firstRun_language_selected%"
+];
+/** @experimental */
+export type InterfaceLanguagePickerLocalizedStrings = {
+	[K in (typeof INTERFACE_LANGUAGE_PICKER_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+/** @experimental */
+export type InterfaceLanguagePickerProps = {
+	/** Languages to offer, keyed by BCP-47 tag. Displayed by autonym (native script). */
+	languages: Record<string, LanguageInfo>;
+	/** Currently selected BCP-47 tag. */
+	value: string;
+	/** Called with the chosen BCP-47 tag. */
+	onChange: (tag: string) => void;
+	/** Localized strings (search placeholder, no-results, selected label). */
+	localizedStrings: InterfaceLanguagePickerLocalizedStrings;
+	className?: string;
+	id?: string;
+};
+/**
+ * Searchable, scrollable list for choosing the interface language. Each option is shown by its
+ * autonym (native script); search matches the autonym, names in other UI languages, and other known
+ * names (the latter for matching only — never displayed). Scales to hundreds of languages.
+ *
+ * @experimental
+ */
+export declare function InterfaceLanguagePicker({ languages, value, onChange, localizedStrings, className, id, }: InterfaceLanguagePickerProps): import("react/jsx-runtime").JSX.Element;
+/**
  * @deprecated 2026-06-08 Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the
  *   existing export for backward compatibility and will be removed in a future release.
  */
@@ -2321,6 +2325,50 @@ export type CancelAcceptButtonsProps = {
  * Tooltip text defaults to the localization key if no localized strings are provided.
  */
 export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, acceptLabel, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
+/** Props for {@link DestructiveKeyConfirmation}. */
+export type DestructiveKeyConfirmationProps = {
+	/** Whether the confirmation hint is currently showing. */
+	open: boolean;
+	/**
+	 * Position and size of the invisible anchor, in the coordinates of the nearest `position:
+	 * relative` ancestor. Typically the bounding rect of the element the hint should point at (e.g. a
+	 * verse marker), recomputed by the caller as it moves/scrolls.
+	 */
+	anchorRect: {
+		top: number;
+		left: number;
+		width: number;
+		height: number;
+	};
+	/** Localized message to display. Include a `{key}` placeholder where the confirming key belongs. */
+	message: string;
+	/**
+	 * Localized/display label for the key that confirms the action on a second press (e.g.
+	 * "Backspace").
+	 */
+	confirmingKeyLabel: string;
+	/**
+	 * Tooltip placement side. Defaults to `'bottom'`.
+	 *
+	 * Only `'top'`/`'bottom'` are supported — the bordered arrow this component renders relies on
+	 * clip-path/translate math in `tooltip.tsx` that has only been worked out for those two sides;
+	 * the equivalent math for `'left'`/`'right'` was tried and found visibly broken (see
+	 * tooltip.tsx), so those two values are omitted from this component's public API rather than
+	 * silently degrading to a borderless arrow.
+	 */
+	side?: "top" | "bottom";
+	/** Tooltip placement alignment. Defaults to `'start'`. */
+	align?: "start" | "center" | "end";
+	/** Whether to render the pointer arrow. Defaults to `true`. */
+	showArrow?: boolean;
+};
+/**
+ * A destructive-styled "press again to confirm" hint, anchored to an arbitrary point (`anchorRect`)
+ * rather than a rendered trigger element. Built for two-step destructive actions (e.g. deleting a
+ * verse marker on a second Backspace/Delete) where the caller owns detecting the "armed" state and
+ * this component only renders the hint.
+ */
+export declare function DestructiveKeyConfirmation({ open, anchorRect, message, confirmingKeyLabel, side, align, showArrow, }: DestructiveKeyConfirmationProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -2511,6 +2559,26 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the {@link WizardStepper} component. */
+export interface WizardStepperProps {
+	/** 1-based index of the currently active step. */
+	currentStep: number;
+	/** Total number of numbered steps. */
+	totalSteps: number;
+	/**
+	 * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
+	 * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a
+	 * `RangeError` in V8).
+	 */
+	locale?: string;
+}
+/**
+ * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
+ * presentational — owns no navigation state. All circles are `aria-hidden`; the consuming shell is
+ * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
+ * readers.
+ */
+export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 declare const alertVariants: (props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & ClassProp) | undefined) => string;
@@ -2952,7 +3020,7 @@ export type SelectTriggerProps = React$1.ComponentProps<typeof SelectPrimitive.T
 /** @inheritdoc Select */
 export declare function SelectTrigger({ className, size, children, ...props }: SelectTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
-export declare function SelectContent({ className, children, position, align, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
+export declare function SelectContent({ className, children, position, align, style, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Content>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
 export declare function SelectLabel({ className, ...props }: React$1.ComponentProps<typeof SelectPrimitive.Label>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Select */
@@ -3044,8 +3112,9 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
+export declare function TooltipContent({ className, sideOffset, style, showArrow, arrowClassName, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
 	showArrow?: boolean;
+	arrowClassName?: string;
 }): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
@@ -3375,6 +3444,93 @@ export declare function useStylesheet(stylesheet: string | undefined): void;
  *   Empty when `usj` is `undefined` or uses no markers.
  */
 export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
+/**
+ * Whether this web view's document is currently rendered — i.e. its dock tab is active. rc-dock
+ * hides inactive tab panes with `display: none`, which keeps the web view's iframe mounted and its
+ * JavaScript running but removes all layout: geometry reads return zero and `scrollIntoView`
+ * no-ops. Layout-dependent side effects should be deferred while this returns `false` and caught up
+ * when it flips to `true`.
+ *
+ * Detection is an `IntersectionObserver` on `document.body` against the iframe's viewport: a hidden
+ * iframe has zero area, so the body never intersects; when the tab is shown the observer fires with
+ * a non-zero intersection. The initial value is a synchronous geometry check so a visible view does
+ * not flash a "hidden" frame while waiting for the observer's first callback.
+ *
+ * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
+ */
+export declare const useViewVisibility: () => boolean;
+/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+export type TabIconUrls = {
+	/** Dark theme (any selection). */
+	dark: string;
+	/**
+	 * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
+	 * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
+	 * would be invisible there. Kept in the type for a future host that does give the selected tab a
+	 * dark background and needs a contrasting icon.
+	 */
+	lightSelected: string;
+	/** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
+	lightUnselected: string;
+	/** Light theme, selection unknown (mid-slate fallback). */
+	lightDefault: string;
+};
+/**
+ * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
+ * the near-black variant regardless of selection — every current host keeps the active tab's header
+ * on a plain light background rather than a dark/tinted one (see
+ * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
+ * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
+ * state is unknown (`undefined`).
+ */
+export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
+/**
+ * Resolves which tab-icon variant a web view tab should show, given the current theme and this
+ * tab's live selected state.
+ *
+ * The tab icon is painted by the platform as a static CSS `background-image`, so a `currentColor`
+ * SVG can't follow the theme or selection state — callers must swap the actual icon URL. "Selected"
+ * here means this tab is the active one in its group: rc-dock renders exactly one tab's pane at a
+ * time, hiding the rest with `display: none`, so "my pane is currently visible" and "I'm the
+ * selected tab" are the same condition — this reuses `useViewVisibility`'s event-driven
+ * `IntersectionObserver` detection rather than polling `frameElement.offsetParent` on an interval.
+ * `pickTabIconUrl`'s `undefined` ("selection unknown") case is effectively unreachable through this
+ * call site, since `useViewVisibility` resolves synchronously on first render with no unknown
+ * window, but `pickTabIconUrl` keeps accepting it as a standalone, independently-testable
+ * function.
+ *
+ * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
+ * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
+ *
+ * @param isDarkTheme Whether the current theme is dark.
+ * @param tabIconUrls The four icon variant URLs for this tab.
+ * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.
+ */
+export declare function useTabIconSelection(isDarkTheme: boolean, tabIconUrls: TabIconUrls): string;
+/** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
+export type UseTruncationTooltipResult<T extends HTMLElement> = {
+	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
+	ref: React$1.RefObject<T | null>;
+	/** Whether the tooltip should currently be open. Pass to a controlled `<Tooltip open={...}>`. */
+	open: boolean;
+	/** Pointer-enter handler for the trigger; opens the tooltip only when the trigger text is clipped. */
+	onPointerEnter: () => void;
+	/** Pointer-leave handler for the trigger; closes the tooltip. */
+	onPointerLeave: () => void;
+};
+/**
+ * Drives a controlled tooltip that opens on hover only when the trigger element's text is actually
+ * truncated (its content overflows the visible box, i.e. `scrollWidth > clientWidth`). Useful for
+ * revealing the full text of a label that uses CSS truncation, without showing a redundant tooltip
+ * when the text already fits.
+ *
+ * Attach the returned `ref` to the truncating trigger element, spread `onPointerEnter` /
+ * `onPointerLeave` onto it, and pass `open` to a controlled Radix `<Tooltip open={...}>`.
+ *
+ * @typeParam T - The type of the trigger element (e.g. `HTMLSpanElement`, `HTMLDivElement`).
+ * @returns An object with `ref`, `open`, `onPointerEnter`, and `onPointerLeave`.
+ */
+export declare function useTruncationTooltip<T extends HTMLElement>(): UseTruncationTooltipResult<T>;
 /** Properties of one option contained in a listbox */
 export interface ListboxOption {
 	/** Unique identifier for the option */
@@ -3424,6 +3580,12 @@ export declare const Z_INDEX_OVERLAY = 400;
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
+ * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
+ * startup and nothing behind it remains clickable or focusable.
+ */
+export declare const Z_INDEX_FIRST_RUN = 700;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

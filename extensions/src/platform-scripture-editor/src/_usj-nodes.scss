@@ -1739,6 +1739,20 @@
   margin-right: 10vw;
 }
 
+/* Real-table layout. The editor renders \table / \tr / \tc* / \th* as real
+   <table>/<tr>/<td>/<th>. The paragraph rules above (e.g.
+   .text-spacing .usfm_tr { text-indent: -5vw }) model \tr as an indented block;
+   text-indent is inherited, so on a real <tr> it pulls every cell's text left and
+   collapses the columns. Reset it on the real-table structural classes. Setting
+   text-indent:0 on the cell itself overrides the value inherited from the row
+   regardless of cascade order. Applies to all resources + the project view, since
+   real tables can appear in any USJ. */
+.usfm .table-row,
+.usfm .table-cell {
+  text-indent: 0;
+  margin: 0;
+}
+
 .formatted-font .usfm_th1 {
   font-size: 100%;
   font-style: italic;
@@ -2210,22 +2224,12 @@
   color: #7777ff;
 }
 
-.usfm table {
-  border-collapse: collapse;
-}
-
-.usfm td {
-  border: 1px solid #000000;
-  page-break-inside: avoid;
-  /* FB27281 adding padding based on font size*/
-  padding-right: 0.28em;
-  padding-left: 0.28em;
-}
-
-.usfm td.markercell {
-  border-style: none;
-}
-
+/* The generic table-cell box that used to live here (border-collapse on tables +
+   `1px solid #000` on td, with a `.markercell` borderless exception) was moved to
+   marker-styles/commentary-overrides.scss (PT-3086) so it applies only in handbook
+   (HBKENG/TNN/TND) iframes. Real tables in the project view and other resources are
+   intentionally borderless; the paragraph-indent reset for real tables lives in the
+   table-marker section above (.usfm .table-row, .usfm .table-cell). */
 .usfm rt {
   cursor: pointer;
 }
@@ -2268,6 +2272,46 @@
   padding: 0px 1px 0px 1px;
   text-indent: 0in;
   white-space: nowrap;
+}
+
+/* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
+   Destructive styling — light-destructive background, destructive text, roomier padding, and a
+   caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
+   token (`--destructive`) so it adapts to light/dark. The blink is gated on the
+   `verse-delete-armed` root class so a verse merely inside an ordinary range selection shows the
+   tint but does not blink. `verse-selected` is on the inner VerseDecorator span (the element that
+   paints the red), NOT the outer `.verse`/`.usfm_v` element — so padding lives here, with an equal
+   negative margin so neighbors don't shift when it arms. */
+.verse-selected {
+  background-color: color-mix(in srgb, var(--destructive) 15%, transparent);
+  color: var(--destructive);
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 -3px;
+}
+
+.dark .verse-selected {
+  background-color: color-mix(in oklab, var(--destructive) 20%, transparent);
+}
+
+/* Caret-like glow-underline blink, only while armed (StructureKeyboardPlugin sets the root class). */
+@keyframes verse-armed-glow {
+  0%,
+  100% {
+    box-shadow: 0 2px 0 -1px var(--destructive);
+  }
+  50% {
+    box-shadow: 0 2px 0 -1px transparent;
+  }
+}
+.verse-delete-armed .verse-selected {
+  animation: verse-armed-glow 1.06s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .verse-delete-armed .verse-selected {
+    animation: none;
+    box-shadow: 0 2px 0 -1px var(--destructive); /* static glow underline — still signals "armed" */
+  }
 }
 
 span.unread img {

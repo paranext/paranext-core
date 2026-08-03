@@ -87,23 +87,36 @@ describe('convert', () => {
     expect(scss).toContain('.formatted-font .usfm_id');
   });
 
-  test('skips table markers and records them as warnings', () => {
+  test('skips only the table row marker; emits table cell markers as real bucketed rules', () => {
     const css = `
-      .usfm_tr { font-size: 100%; }
-      .usfm_tc1 { font-size: 100%; }
-      .usfm_th2 { font-size: 100%; }
+      .usfm_tr { font-size: 100%; text-indent: -20pt; }
+      .usfm_tc1 { font-size: 110%; text-align: center; }
+      .usfm_th2 { font-size: 120%; text-align: right; }
       .usfm_id { font-size: 100%; }
     `;
 
     const { scss, warnings, markerCount } = convert(css, { generatedAt: FIXED_DATE });
 
-    expect(markerCount).toBe(1);
-    expect(warnings.skippedTableMarkers).toEqual(['tr', 'tc1', 'th2']);
+    // Only the row marker `tr` is skipped; tc1, th2, id are emitted.
+    expect(markerCount).toBe(3);
+    expect(warnings.skippedTableMarkers).toEqual(['tr']);
     expect(scss).not.toContain('.usfm_tr');
-    expect(scss).not.toContain('.usfm_tc1');
-    expect(scss).not.toContain('.usfm_th2');
-    expect(scss).toContain('.usfm_id');
-    expect(scss).toContain('Skipped table markers: tr, tc1, th2');
+    expect(scss).toContain('Skipped table markers: tr');
+
+    // The data-cell marker is emitted as real, correctly-bucketed rules — not just a
+    // stray `.usfm_tc1` substring: its font-size lands under .formatted-font and its
+    // alignment under .text-spacing.
+    expect(scss).toMatch(/\.formatted-font \.usfm_tc1 \{[^}]*font-size: 110%;/);
+    expect(scss).toMatch(/\.text-spacing \.usfm_tc1 \{[^}]*text-align: center;/);
+
+    // Header-cell markers flow through the same pipeline and bucket the same way.
+    // `text-align: right` stays non-directional (never mirrored into a [dir] block).
+    expect(scss).toMatch(/\.formatted-font \.usfm_th2 \{[^}]*font-size: 120%;/);
+    expect(scss).toMatch(/\.text-spacing \.usfm_th2 \{[^}]*text-align: right;/);
+    expect(scss).not.toMatch(/\[dir='(ltr|rtl)'\] \.usfm_th2/);
+
+    // The plain marker is unaffected.
+    expect(scss).toMatch(/\.formatted-font \.usfm_id \{[^}]*font-size: 100%;/);
   });
 
   test('skips non-marker selectors including pseudo-elements', () => {
@@ -200,6 +213,8 @@ describe('convert', () => {
     expect(scss).not.toContain("[dir='rtl']");
   });
 
+  // prettier startup + format takes ~800 ms in isolation but can exceed the 5 s default under
+  // full parallel-suite load; 15 s gives comfortable headroom on a loaded CI worker.
   test('emits prettier-conformant SCSS (no formatting drift through prettier)', async () => {
     // Exercises every shape that previously failed prettier --check on the
     // downstream marker-style files: uppercase hex, trailing-zero decimals,
@@ -217,5 +232,7 @@ describe('convert', () => {
     const formatted = await prettier.format(scss, { ...config, parser: 'scss' });
 
     expect(scss).toBe(formatted);
-  });
+    // Raised from vitest's 5s default: this test spawns prettier, which is slow to
+    // cold-start (notably on Windows CI) and otherwise flakes on an unrelated timeout.
+  }, 60_000);
 });

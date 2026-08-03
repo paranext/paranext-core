@@ -1,3 +1,5 @@
+using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 
 namespace Paranext.DataProvider.ManageBooks;
@@ -81,29 +83,21 @@ public record ProjectSummary(
             IsResource: scrText.IsResourceProject,
             // I2: surface fullName + versification on the list so the frontend drops its
             // per-project pdp.getSetting fan-out (the source of the slow initial load).
-            FullName: GetRawSetting(scrText, "FullName", string.Empty),
+            // GetRawParatextSetting keeps these cheap, exception-free, parity-faithful lookups (see
+            // its doc for the getSetting-parity reasoning). Only the Versification fallback "4"
+            // reproduces that setting's contribution default (see below). The FullName fallback is
+            // string.Empty, which does NOT reproduce platform.fullName's default - a localized
+            // "%project_full_name_missing%" placeholder resolved from live extension-host state,
+            // named by GetRawParatextSetting's doc as the non-reproducible case.
+            FullName: scrText.GetRawParatextSetting(
+                ProjectSettingsNames.PT_FULL_NAME,
+                string.Empty
+            ),
             // Fallback "4" (English), NOT "0" (Unknown): a project with no stored Versification
             // resolved to the contribution default 4 under the old getSetting path
             // (projectSettings.json → platformScripture.versification default: 4), and PT9's own
             // ScrVers accessor treats absent versification as English. "0" would regress such
             // projects from the English group to the Unknown group in the Create "Based on" picker.
-            Versification: GetRawSetting(scrText, "Versification", "4")
+            Versification: scrText.GetRawParatextSetting(ProjectSettingsNames.PT_VERSIFICATION, "4")
         );
-
-    /// <summary>
-    /// Read a raw Paratext setting value straight from the settings parameter dictionary — exactly
-    /// the source (and behavior) <c>ParatextProjectDataProvider.GetProjectSetting</c> uses for
-    /// non-special-cased settings, so the value matches what the corresponding <c>pdp.getSetting</c>
-    /// call returned before I2 (the frontend's prior source). Specifically: a present value (even
-    /// empty) is returned as-is, and a missing key falls back to <paramref name="fallback"/> — which
-    /// the caller sets to the same contribution default the old getSetting path returned via
-    /// <c>ProjectSettingsService.GetDefault</c>. Read the dictionary directly (NOT
-    /// <c>ProjectSettings.GetSetting</c>, which adds base-text delegation the old path did not do,
-    /// and NOT typed accessors like <c>Settings.Versification.Type</c>, which construct a
-    /// <c>ScrVers</c> per project) so this stays a cheap, exception-free, parity-faithful lookup.
-    /// </summary>
-    private static string GetRawSetting(ScrText scrText, string ptSettingName, string fallback) =>
-        scrText.Settings.ParametersDictionary.TryGetValue(ptSettingName, out string? value)
-            ? value
-            : fallback;
 }

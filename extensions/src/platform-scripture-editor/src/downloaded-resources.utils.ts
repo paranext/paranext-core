@@ -91,7 +91,7 @@ function resolveReferenced(
   item: EffectiveResourceReference,
   dblResources: DblResourceData[],
 ): PickerResource {
-  const isAdminLocked = !!item.isResourceShownByDefault;
+  const isAdminLocked = !!item.isInTextCollection;
   if (isDblResourceReference(item)) {
     const dbl = dblResources.find((r) => r.dblEntryUid === item.id);
     return {

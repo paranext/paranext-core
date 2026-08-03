@@ -5,17 +5,11 @@ import {
   useDataProvider,
   useLocalizedStrings,
   useProjectDataProvider,
-  useProjectSetting,
   useScrollGroupScrRef,
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { usePromise } from 'platform-bible-react';
-import {
-  formatReplacementString,
-  getErrorMessage,
-  isPlatformError,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -24,7 +18,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
-import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -61,15 +55,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     projectId,
     'platformScripture.modelTexts',
   );
-
-  const [adminModelTextsSetting, setAdminModelTextsSetting] = useProjectSetting(
-    projectId,
-    'platformScripture.modelTexts',
-    DEFAULT_RESOURCE_REFERENCE_LIST,
-  );
-  const adminModelTexts = isPlatformError(adminModelTextsSetting)
-    ? undefined
-    : adminModelTextsSetting;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -146,28 +131,15 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // --- Operation callbacks ---
 
-  const installResource = useCallback(
-    async (dblEntryUid: string) => {
-      try {
-        await dblResourcesProvider?.installDblResource(dblEntryUid);
-        setFetchResources(true);
-      } catch (e: unknown) {
-        papi.notifications.send({
-          message: '%webView_selectDblResource_installFailed%',
-          severity: 'error',
-        });
-        logger.warn(`Error installing dbl resource for model text panel: ${getErrorMessage(e)}`);
-        throw e;
-      }
-    },
-    [dblResourcesProvider],
-  );
-
-  const setAdminModelTexts = useCallback(
-    (list: ResourceReferenceList) => {
-      setAdminModelTextsSetting?.(list);
-    },
-    [setAdminModelTextsSetting],
+  // Re-resolve the cached resource list once an install completes so the resource flips to
+  // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
+  // provider resolves — its identity change then re-fires the panel's auto-install effect for the
+  // real install.
+  const markResourcesStale = useCallback(() => setFetchResources(true), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'model text panel',
+    markResourcesStale,
   );
 
   const setUserModelTexts = useCallback(
@@ -179,11 +151,6 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   const getUserModelTexts = useCallback(
     async () => textConnectionsProvider?.getUserModelTexts(),
-    [textConnectionsProvider],
-  );
-
-  const getCanWriteProjectSettings = useCallback(
-    async () => textConnectionsProvider?.canUserWriteProjectTextConnectionSettings(),
     [textConnectionsProvider],
   );
 
@@ -233,13 +200,10 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
       dblResources={dblResources}
       isLoadingResources={isLoadingResources}
-      adminModelTexts={adminModelTexts}
       getUserModelTexts={getUserModelTexts}
-      getCanWriteProjectSettings={getCanWriteProjectSettings}
       scrRef={scrRef}
       onScrRefChange={setScrRef}
       installResource={installResource}
-      setAdminModelTexts={setAdminModelTexts}
       setUserModelTexts={setUserModelTexts}
       showResourcePicker={showResourcePicker}
       getResourceChapter={getResourceChapter}

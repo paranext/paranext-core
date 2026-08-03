@@ -243,6 +243,7 @@ Run `npm run storybook` and see:
 - **Guidelines/Component Choices** - When to use which component
 - **Guidelines/Responsiveness** - Narrow-first design requirements
 - **Guidelines/Application Interactions** - Standard interaction patterns
+- **Guidelines/Applying Changes** - How changes take effect (immediate vs. explicit apply), error handling, feedback, button microcopy
 - **Guidelines/Vocabulary** - UI terminology standards
 
 ## Design Resources

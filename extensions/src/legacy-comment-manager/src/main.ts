@@ -16,17 +16,22 @@ import type {
 import { serialize } from 'platform-bible-utils';
 import commentListWebView from './comment-list.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
-import { CommentListWebViewMessage } from './comment-list-messages.model';
 import { SCOPE_FILTER_CURRENT_CHAPTER, UNFILTERED } from './comment-list-filters.model';
 import {
   LEGACY_COMMENT_USJ_PDPF_ID,
   LegacyCommentManagerUsjProjectDataProviderEngineFactory,
 } from './project-data-provider/legacy-comment-manager-usj-pdpef.model';
 import { LEGACY_COMMENT_USJ_PROJECT_INTERFACES } from './project-data-provider/legacy-comment-manager-usj-pdpe.model';
-import { resolveCommentListPanelProjectId } from './comment-list-panel.utils';
+import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
+import { createCommentListWebViewController } from './comment-list-web-view-controller.util';
+import {
+  CommentListPanelOptions,
+  CommentListPanelWebViewFactory,
+  setPendingCommentListPanelProjectId,
+} from './comment-list-panel-web-view.factory';
 
 const commentListWebViewType = 'legacyCommentManager.commentList';
-const commentListPanelWebViewType = 'legacyCommentManager.commentListPanel';
+const commentListPanelWebViewType = COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
 
 // #region Comment List WebView
 
@@ -101,6 +106,12 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
+        // Always rebuild un-blocked. `isSyncBlocked` is transient runtime state owned by the core
+        // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+        // restore a read-only comment view from the saved layout (mirrors the scripture editor's
+        // scrub in platform-scripture-editor main.ts). The driver re-flags it if a sync is still in
+        // flight.
+        isSyncBlocked: false,
         editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
         // Seeded only when opening a new view (undefined otherwise, which clears any persisted
         // value). Deliberately NOT persisted across restarts: a restored view has these undefined
@@ -115,31 +126,7 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
     webViewDefinition: WebViewDefinition,
     webViewNonce: string,
   ): Promise<CommentListWebViewController> {
-    // Single message channel for this controller, closing over the id/nonce so the two methods
-    // can't drift on the plumbing.
-    const postToWebView = (message: CommentListWebViewMessage) =>
-      papi.webViewProviders.postMessageToWebView(webViewDefinition.id, webViewNonce, message);
-
-    return {
-      async selectThread(threadId: string): Promise<void> {
-        logger.debug(
-          `Comment List WebView Controller ${webViewDefinition.id} received request to selectThread ${threadId}`,
-        );
-        await postToWebView({ method: 'selectThread', threadId });
-      },
-      async setFilters(
-        filters?: Partial<CommentFilters>,
-        scopeFilter?: ScopeFilter,
-      ): Promise<void> {
-        logger.debug(
-          `Comment List WebView Controller ${webViewDefinition.id} received setFilters ${serialize({ filters, scopeFilter })}`,
-        );
-        await postToWebView({ method: 'setFilters', filters, scopeFilter });
-      },
-      async dispose(): Promise<boolean> {
-        return true;
-      },
-    };
+    return createCommentListWebViewController(webViewDefinition, webViewNonce);
   }
 }
 
@@ -149,49 +136,7 @@ const commentListWebViewProvider: IWebViewProvider = new CommentListWebViewFacto
 
 // #region Comment List Panel WebView (Column 3 fixed tab)
 
-interface CommentListPanelOptions extends OpenWebViewOptions {
-  projectId?: string;
-}
-
-/**
- * Pending projectId consumed by commentListPanelProvider.getWebView() after reloadWebView().
- *
- * Note: `undefined` doubles as the "no pending value" sentinel, so a pending `undefined` cannot
- * clear an already-open panel's project — resolution falls back to the saved projectId. This is an
- * accepted limitation; see {@link openCommentListPanel}.
- */
-let currentCommentListPanelProjectId: string | undefined;
-
-const commentListPanelProvider: IWebViewProvider = {
-  async getWebView(
-    savedWebView: SavedWebViewDefinition,
-    openWebViewOptions: CommentListPanelOptions,
-  ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== commentListPanelWebViewType)
-      throw new Error(
-        `${commentListPanelWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
-
-    const projectId = resolveCommentListPanelProjectId(
-      currentCommentListPanelProjectId,
-      openWebViewOptions.projectId,
-      savedWebView.projectId,
-    );
-    currentCommentListPanelProjectId = undefined;
-
-    const title = await papi.localization.getLocalizedString({
-      localizeKey: '%webView_legacyCommentManager_commentListPanel_title%',
-    });
-
-    return {
-      ...savedWebView,
-      title,
-      projectId,
-      content: commentListWebView,
-      styles: tailwindStyles,
-    };
-  },
-};
+const commentListPanelWebViewProvider: IWebViewProvider = new CommentListPanelWebViewFactory();
 
 /**
  * Opens or updates the fixed Comment List Panel in Column 3 for the given project. If the panel is
@@ -216,15 +161,56 @@ async function openCommentListPanel(projectId: string | undefined): Promise<stri
   );
 
   if (existingId) {
-    currentCommentListPanelProjectId = projectId;
+    setPendingCommentListPanelProjectId(projectId);
     return papi.webViews.reloadWebView(commentListPanelWebViewType, existingId, {
-      bringToFront: false, // Don't steal focus from the scripture editor on project switch
+      bringToFront: false, // Don't steal focus from the Scripture editor on project switch
     });
   }
 
   // Panel not yet open (shouldn't happen in Simple mode where it's always in the layout).
   const openOptions: CommentListPanelOptions = { projectId };
   return papi.webViews.openWebView(commentListPanelWebViewType, { type: 'tab' }, openOptions);
+}
+
+/**
+ * Selects/scrolls to a specific thread in the fixed Column 3 Comment List panel — without reloading
+ * the panel. Reloading (as {@link openCommentListPanel} does) remounts the panel's React root, which
+ * would discard any in-progress inline edit; this function assumes the panel is already showing the
+ * right project (it does not accept a `projectId`) and only changes which thread is selected and,
+ * optionally, which tab is in front.
+ *
+ * This implements the `legacyCommentManager.selectCommentThreadInPanel` command.
+ *
+ * @param threadId The ID of the thread to select and scroll to in the panel
+ * @param bringToFront Whether to also bring the panel's tab to the front
+ * @returns The webView ID of the panel, or `undefined` if it isn't open in the current layout
+ */
+async function selectCommentThreadInPanel(
+  threadId: string,
+  bringToFront: boolean,
+): Promise<string | undefined> {
+  // Same existingId: '?' probe openCommentListPanel uses to find the singleton Column 3 panel.
+  const panelWebViewId = await papi.webViews.openWebView(
+    commentListPanelWebViewType,
+    { type: 'tab' },
+    { existingId: '?', createNewIfNotFound: false, bringToFront },
+  );
+  if (!panelWebViewId) {
+    throw new Error('Comment List Panel is not open in the current layout');
+  }
+
+  const panelController = await papi.webViews.getWebViewController(
+    commentListPanelWebViewType,
+    panelWebViewId,
+  );
+  if (!panelController) {
+    throw new Error(
+      `Could not get WebView Controller for comment list panel WebView ${panelWebViewId} to select thread ${threadId}`,
+    );
+  }
+
+  await panelController.selectThread(threadId);
+  return panelWebViewId;
 }
 
 // #endregion Comment List Panel WebView
@@ -386,7 +372,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const commentListPanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     commentListPanelWebViewType,
-    commentListPanelProvider,
+    commentListPanelWebViewProvider,
   );
 
   const openCommentListPanelPromise = papi.commands.registerCommand(
@@ -401,6 +387,35 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             required: false,
             summary: 'The project whose comments to display',
             schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The webView ID of the panel',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+
+  const selectCommentThreadInPanelPromise = papi.commands.registerCommand(
+    'legacyCommentManager.selectCommentThreadInPanel',
+    selectCommentThreadInPanel,
+    {
+      method: {
+        summary: 'Select a thread in the fixed Comment List panel in Column 3',
+        params: [
+          {
+            name: 'threadId',
+            required: true,
+            summary: 'The ID of the thread to select and scroll to in the panel',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'bringToFront',
+            required: true,
+            summary: "Whether to also bring the panel's tab to the front",
+            schema: { type: 'boolean' },
           },
         ],
         result: {
@@ -508,6 +523,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await commentListPanelWebViewProviderPromise,
     await openCommentListPromise,
     await openCommentListPanelPromise,
+    await selectCommentThreadInPanelPromise,
     await commentsUsjPdpefPromise,
     webViewUpdateUnsub,
   );

@@ -1,12 +1,11 @@
 import { usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { Dialog, DialogContent } from 'platform-bible-react';
 import {
-  Dialog,
-  DialogContent,
   ResourcePickerDialog,
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import type { DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
@@ -108,8 +107,10 @@ type DecoratorConfig = {
   hasProject?: boolean;
   /** Whether the user can write admin settings. */
   canWriteProjectSettings?: boolean;
-  /** Disable install so the Installing state is observable (otherwise it auto-completes). */
+  /** Disable install so the Selecting state is observable (otherwise it auto-completes). */
   disableInstall?: boolean;
+  /** Make install reject so the recoverable install-failed state is observable. */
+  failInstall?: boolean;
 };
 
 /**
@@ -119,7 +120,10 @@ type DecoratorConfig = {
  */
 function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
   const [resources, setResources] = useState<DblResourceData[]>(config.resources ?? seedResources);
-  const [adminItems, setAdminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
+  // No setter needed: the admin-level list is only used to seed `effectiveModelTexts` for these
+  // stories now that `ModelTextPanel` no longer writes admin-level settings itself (that write path
+  // moved to the Share Layout dialog).
+  const [adminItems] = useState<DblResourceReference[]>(config.initialAdmin ?? []);
   const [userItems, setUserItems] = useState<DblResourceReference[]>([]);
   const [scrRef, setScrRef] = useState<SerializedVerseRef>({
     book: 'GEN',
@@ -169,23 +173,14 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         isEffectiveModelTextsLoading={false}
         dblResources={resources}
         isLoadingResources={false}
-        adminModelTexts={{ dataVersion: DATA_VERSION, items: adminItems }}
-        getCanWriteProjectSettings={async () => config.canWriteProjectSettings ?? true}
         getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
         installResource={async (uid) => {
+          if (config.failInstall) throw new Error('Simulated install failure');
           if (config.disableInstall) return;
           setResources((rs) =>
             rs.map((r) => (r.dblEntryUid === uid ? { ...r, installed: true } : r)),
-          );
-        }}
-        setAdminModelTexts={(list) => {
-          // Settings write — log it, then reflect it so the panel updates (thin CRUD).
-          // eslint-disable-next-line no-console
-          console.log('setAdminModelTexts', list);
-          setAdminItems(
-            list.items.filter((i): i is DblResourceReference => i.type === 'dblResource'),
           );
         }}
         setUserModelTexts={async (list) => {
@@ -247,9 +242,17 @@ export const NoModelText: Story = {
   decorators: [createDecorator({})],
 };
 
-/** A configured resource that is still installing (install disabled so the state is observable). */
-export const Installing: Story = {
+/** A configured resource that is still being selected (install disabled so the state is observable). */
+export const Selecting: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], disableInstall: true })],
+};
+
+/**
+ * A configured resource whose install fails — shows the recoverable state (message + "Try again"
+ * button) instead of an endless spinner. The retry re-attempts the same resource.
+ */
+export const InstallFailed: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[1])], failInstall: true })],
 };
 
 /** The configured model text id isn't present in the DBL list. */

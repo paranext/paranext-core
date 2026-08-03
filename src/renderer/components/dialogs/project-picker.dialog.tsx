@@ -12,6 +12,10 @@ import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.ho
 
 const STRING_KEYS = [...PROJECT_PICKER_STRING_KEYS];
 
+/**
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
 function ProjectPickerWrapper({
   submitDialog,
 }: DialogTypes[typeof PROJECT_PICKER_DIALOG_TYPE]['props']) {
@@ -30,6 +34,10 @@ function ProjectPickerWrapper({
   );
 }
 
+/**
+ * @experimental This dialog was recently added, and its shape may change as we learn how it is used.
+ *   It is not yet a stable contract.
+ */
 export const PROJECT_PICKER_DIALOG: DialogDefinition<typeof PROJECT_PICKER_DIALOG_TYPE> =
   Object.freeze({
     ...DIALOG_BASE,

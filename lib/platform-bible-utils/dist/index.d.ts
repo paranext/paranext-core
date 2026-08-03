@@ -1103,6 +1103,15 @@ export type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
 };
+/**
+ * An interface mode a menu item can be hidden in.
+ *
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in
+ * `src/declarations/papi-shared-types.ts` — this package can't import that app-level type
+ * (dependency layering runs the other way), so this is an independently declared, structurally
+ * identical union rather than a shared one.
+ */
+export type InterfaceMode = "simple" | "power";
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
@@ -1139,6 +1148,11 @@ export type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
+	/**
+	 * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+	 * items that should show in every mode — most items need no value here at all.
+	 */
+	hiddenInterfaceModes?: InterfaceMode[];
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1439,6 +1453,14 @@ export declare const menuDocumentSchema: {
 				order: {
 					description: string;
 					type: string;
+				};
+				hiddenInterfaceModes: {
+					description: string;
+					type: string;
+					items: {
+						enum: string[];
+					};
+					uniqueItems: boolean;
 				};
 			};
 			required: string[];
@@ -3982,6 +4004,19 @@ export declare function formatBytes(fileSize: number, decimals?: number): string
  */
 export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /**
+ * Normalizes a project id to its canonical, case-insensitive form (UPPERCASE) so it can key a
+ * `Map`/`Set` or be compared for equality without a casing mismatch silently dropping a match.
+ *
+ * Paratext project ids are hex GUIDs that the .NET data provider canonicalizes to uppercase;
+ * callers that join or dedupe ids arriving from mixed sources (e.g. an open-tab's `projectId`
+ * against a project list) must fold case the same way. This is the single shared normalizer so
+ * those callers cannot drift apart.
+ *
+ * @param projectId The project id to normalize.
+ * @returns The uppercase form of the id.
+ */
+export declare function normalizeProjectId(projectId: string): string;
+/**
  * Get a localized string representation of the time between two dates
  *
  * @example
@@ -4017,6 +4052,22 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
+/**
+ * Physical keys (`KeyboardEvent.key` values) that {@link getLocalizeKeyForPhysicalKey} can name. Add
+ * to this union as UI needs to display more key names.
+ *
+ * Adding a member here requires adding a matching `%physicalKey_<camelCaseName>%` entry to every
+ * locale file under `assets/localization/` (see `en.json`/`es.json`) — this union alone doesn't
+ * guarantee the translation exists.
+ */
+export type NameablePhysicalKey = "Backspace" | "Delete";
+/**
+ * Gets the localized string key naming a physical keyboard key, for UI that needs to display a
+ * translated key name (e.g. a "press {key} again to confirm" hint). The platform's core
+ * localization assets (`assets/localization/*.json`) provide the translations, so any caller can
+ * use this without an extension having to declare its own copy of the string.
+ */
+export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
 /** Inputs to {@link computeEffectiveStructureProtection}. */
 export type EffectiveStructureProtectionInputs = {
 	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */

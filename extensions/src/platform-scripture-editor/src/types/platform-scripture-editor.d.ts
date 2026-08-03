@@ -685,6 +685,33 @@ declare module 'papi-shared-types' {
      * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSelectionChange')`.
      */
     'platformScriptureEditor.onDidSelectionChange': SelectionChangeEvent;
+    /**
+     * Emitted to tell the reactive resource/model-text panels to apply the current (synced) admin
+     * layout for a project — i.e. "re-arm" their in-memory hold. Fired on auto-apply and on the
+     * user confirming a buffered layout. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onSharedLayoutApply')`.
+     */
+    'platformScriptureEditor.onSharedLayoutApply': { projectId: string };
+    /**
+     * Emitted just before a scripture editor web view is opened or replaced with a new project.
+     * `switchId` uniquely identifies this switch and pairs it with the matching
+     * `platformScriptureEditor.onDidSwitchProject` event. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+     *
+     * @experimental Recently-added switch-pairing plumbing for the workspace-updating overlay; the
+     *   payload shape and event name are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.onWillSwitchProject': { switchId: string };
+    /**
+     * Emitted after the scripture editor web view open/replace call resolves. Carries the
+     * `switchId` of the `platformScriptureEditor.onWillSwitchProject` event that started the
+     * switch. Subscribe with
+     * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
+     *
+     * @experimental Recently-added switch-pairing plumbing for the workspace-updating overlay; the
+     *   payload shape and event name are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.onDidSwitchProject': { switchId: string };
   }
 
   export interface SettingTypes {
@@ -791,6 +818,11 @@ declare module 'papi-shared-types' {
      * receives the `notificationId` when the notification's click action is used.
      */
     'platformScriptureEditor.dismissMarkerNotificationForProjectToday': NotificationClickCommandHandler;
+    /**
+     * Notification "Apply now" handler: applies the buffered shared layout for the project tied to
+     * the given notification id, then dismisses the notification.
+     */
+    'platformScriptureEditor.applySharedLayout': NotificationClickCommandHandler;
     /**
      * Opens the model text panel WebView for a translation project
      *

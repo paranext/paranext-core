@@ -71,7 +71,7 @@ describe('buildPickerResources', () => {
       name: 'WEB',
       id: 'proj-web',
       source: 'admin',
-      isResourceShownByDefault: true,
+      isInTextCollection: true,
     },
   ];
 
@@ -112,7 +112,7 @@ describe('buildPickerResources', () => {
       type: 'enhancedResource',
       name: 'MyEnhanced',
       source: 'user',
-      isResourceShownByDefault: false,
+      isInTextCollection: false,
     };
     const rows = buildPickerResources([enhancedRef], [], []);
     expect(rows).toHaveLength(1);

@@ -10,6 +10,7 @@ import {
   isResolvedFilter,
   isScopeFilter,
   isTypeFilter,
+  resolveEffectiveScopeFilter,
   SCOPE_FILTER_CURRENT_CHAPTER,
   UNFILTERED,
 } from './comment-list-filters.model';
@@ -78,6 +79,23 @@ describe('buildCommentThreadSelector', () => {
         end: { book: 'GEN', chapterNum: 1, verseNum: 1 },
       },
     ]);
+  });
+});
+
+describe('resolveEffectiveScopeFilter', () => {
+  it('passes the scope through unchanged when the list can scope to the current chapter', () => {
+    expect(resolveEffectiveScopeFilter(SCOPE_FILTER_CURRENT_CHAPTER, true)).toBe(
+      SCOPE_FILTER_CURRENT_CHAPTER,
+    );
+    expect(resolveEffectiveScopeFilter(UNFILTERED, true)).toBe(UNFILTERED);
+  });
+
+  it('coerces current-chapter to unfiltered when the list cannot scope to the current chapter', () => {
+    expect(resolveEffectiveScopeFilter(SCOPE_FILTER_CURRENT_CHAPTER, false)).toBe(UNFILTERED);
+  });
+
+  it('leaves an already-unfiltered scope alone when it cannot scope to the current chapter', () => {
+    expect(resolveEffectiveScopeFilter(UNFILTERED, false)).toBe(UNFILTERED);
   });
 });
 

@@ -46,11 +46,14 @@ import { useMemo } from 'react';
  *       {@link PlatformError} if the Project Data Provider throws an error. You can call
  *       {@link isPlatformError} on this value to check if it is an error.
  *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
- *       setting with the specified key. Returns `true` if successful. Note that this function does
- *       not update the data. The Project Data Provider sends out an update to this subscription if
- *       it successfully updates data.
+ *       setting with the specified key. Returns a promise that resolves to the update instructions
+ *       once the write completes, and rejects if the write is rejected (e.g. by the Send/Receive
+ *       write-gate) — await it (or attach a `.catch`) to observe write failures. Note that this
+ *       function does not update the data. The Project Data Provider sends out an update to this
+ *       subscription if it successfully updates data.
  *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
- *       setting
+ *       setting. Returns a promise that resolves to `true` if successfully reset, and rejects if
+ *       the reset is rejected.
  *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
  *
  * @throws When subscription callback function is called with an update that has an unexpected
@@ -65,8 +68,18 @@ export const useProjectSetting = <ProjectSettingName extends ProjectSettingNames
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [
   setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
-  setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
-  resetSetting: (() => void) | undefined,
+  setSetting:
+    | ((
+        newSetting: ProjectSettingTypes[ProjectSettingName],
+      ) => Promise<
+        DataProviderUpdateInstructions<
+          ExtractDataProviderDataTypes<
+            ProjectInterfaceDataTypes[typeof PROJECT_INTERFACE_PLATFORM_BASE]
+          >
+        >
+      >)
+    | undefined,
+  resetSetting: (() => Promise<boolean>) | undefined,
   isLoading: boolean,
 ] => {
   const projectDataProvider = useProjectDataProvider(
@@ -107,12 +120,7 @@ export const useProjectSetting = <ProjectSettingName extends ProjectSettingNames
   /* eslint-enable */
 
   const resetSetting = useMemo(
-    () =>
-      projectDataProvider
-        ? () => {
-            projectDataProvider.resetSetting(key);
-          }
-        : undefined,
+    () => (projectDataProvider ? () => projectDataProvider.resetSetting(key) : undefined),
     [projectDataProvider, key],
   );
 

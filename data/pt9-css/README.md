@@ -20,16 +20,16 @@ their generated SCSS reproduces from the committed `.css`).
 | `hbkfra.css`        | extractor output | UBS Translator's Handbook (French) — HBKFRA                |
 | `hbkpt.css`         | extractor output | UBS Translator's Handbook (Portuguese) — HBKPT             |
 | `hbkesp.css`        | extractor output | UBS Translator's Handbook (Spanish) — HBKESP               |
-| `tnn.css`           | extractor output | UBS Translator's Notes (English) — TNN                     |
-| `tnnesp.css`        | extractor output | UBS Translator's Notes (Spanish) — TNNESP                  |
-| `tnnptg.css`        | extractor output | UBS Translator's Notes (Portuguese) — TNNPTG               |
-| `tnnfr.css`         | extractor output | UBS Translator's Notes (French) — TNNFR                    |
-| `tnd.css`           | extractor output | UBS Translator's Notes (Deuterocanon, English) — TND       |
-| `tndesp.css`        | extractor output | UBS Translator's Notes (Deuterocanon, Spanish) — TNDESP    |
-| `tndptg.css`        | extractor output | UBS Translator's Notes (Deuterocanon, Portuguese) — TNDPTG |
+| `tnn.css`           | extractor output | SIL Translator's Notes (English) — TNN                     |
+| `tnnesp.css`        | extractor output | SIL Translator's Notes (Spanish) — TNNESP                  |
+| `tnnptg.css`        | extractor output | SIL Translator's Notes (Portuguese) — TNNPTG               |
+| `tnnfr.css`         | extractor output | SIL Translator's Notes (French) — TNNFR                    |
+| `tnd.css`           | extractor output | SIL Translator's Notes (Deuterocanon, English) — TND       |
+| `tndesp.css`        | extractor output | SIL Translator's Notes (Deuterocanon, Spanish) — TNDESP    |
+| `tndptg.css`        | extractor output | SIL Translator's Notes (Deuterocanon, Portuguese) — TNDPTG |
 | `hbkeng-manual.css` | manual reference | UBS Translator's Handbook (English) — HBKENG               |
-| `tnn-manual.css`    | manual reference | UBS Translator's Notes — TNN                               |
-| `tnd-manual.css`    | manual reference | UBS Translator's Notes (Deuterocanon) — TND                |
+| `tnn-manual.css`    | manual reference | SIL Translator's Notes — TNN                               |
+| `tnd-manual.css`    | manual reference | SIL Translator's Notes (Deuterocanon) — TND                |
 
 ### `<id>.css` — extractor output (the live converter source)
 
@@ -93,3 +93,15 @@ representative books (FRT, BAK, INT, XXA, DC books, and a sample of canonical
 books). Markers that exist in the resource's stylesheet but never render in
 normal viewing were skipped. Property _values_ were captured verbatim from
 "Computed styles" — no manual normalization or pruning of values.
+
+## Table cell box (handbook section headings)
+
+The boxed look of handbook single-cell section headings is **structural**, not
+per-marker: PT9's cell markers (`.usfm_tc1`, `.usfm_th1`, …) in these snapshots
+carry only `font-size` / `font-style` / `text-align` — no border. The box comes
+from PT9's generic `td { border: 1px solid #000 }`. In the editor that border is
+applied, scoped to handbook iframes, from
+`extensions/src/platform-scripture-editor/src/marker-styles/commentary-overrides.scss`
+(not the generated per-marker sheets). So the absence of any border in the
+`*-manual.css` / `*.css` cell markers is correct and expected — the audit baseline
+needs no table-box additions.

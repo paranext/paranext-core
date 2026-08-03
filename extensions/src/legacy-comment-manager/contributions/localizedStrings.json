@@ -35,6 +35,11 @@
       "%comment_aria_mark_as_read%": "Mark as read",
       "%comment_aria_mark_as_unread%": "Mark as unread",
       "%comment_aria_resolve_thread%": "Resolve thread",
+      "%comment_filter_aria_resolved%": "Filter by resolved status",
+      "%comment_filter_aria_read%": "Filter by read status",
+      "%comment_filter_aria_type%": "Filter by note type",
+      "%comment_filter_aria_assignment%": "Filter by assignment",
+      "%comment_filter_aria_scope%": "Filter by scope",
       "%comment_filter_resolved_all%": "All resolved statuses",
       "%comment_filter_resolved_unresolved%": "Unresolved",
       "%comment_filter_resolved_resolved%": "Resolved",
@@ -72,6 +77,8 @@
       "%no_comments_match_filter%": "No comments match your filter settings.",
       "%webView_legacyCommentManager_commentList_title%": "Comments",
       "%webView_legacyCommentManager_commentListPanel_title%": "Comments",
+      "%webView_legacyCommentManager_error_syncEditBlocked%": "Editing is paused while an automatic Send/Receive is in progress. Your change was not saved.",
+      "%webView_legacyCommentManager_syncEditBlocked_notice%": "Editing paused — Send/Receive in progress",
       "%webView_legacyCommentManager_openComments%": "Open Comments"
     },
     "es": {
@@ -95,6 +102,11 @@
       "%comment_aria_mark_as_read%": "Marcar como leído",
       "%comment_aria_mark_as_unread%": "Marcar como no leído",
       "%comment_aria_resolve_thread%": "Resolver hilo",
+      "%comment_filter_aria_resolved%": "Filtrar por estado de resolución",
+      "%comment_filter_aria_read%": "Filtrar por estado de lectura",
+      "%comment_filter_aria_type%": "Filtrar por tipo de nota",
+      "%comment_filter_aria_assignment%": "Filtrar por asignación",
+      "%comment_filter_aria_scope%": "Filtrar por alcance",
       "%comment_filter_resolved_all%": "Todos los estados de resolución",
       "%comment_filter_resolved_unresolved%": "No resueltos",
       "%comment_filter_resolved_resolved%": "Resueltos",
@@ -132,6 +144,8 @@
       "%no_comments_match_filter%": "No hay comentarios que coincidan con sus parámetros de filtros.",
       "%webView_legacyCommentManager_commentList_title%": "Comentarios",
       "%webView_legacyCommentManager_commentListPanel_title%": "Comentarios de proyecto",
+      "%webView_legacyCommentManager_error_syncEditBlocked%": "La edición está pausada mientras se realiza un Enviar/Recibir automático. Su cambio no se guardó.",
+      "%webView_legacyCommentManager_syncEditBlocked_notice%": "Edición pausada — Enviar/Recibir en curso",
       "%webView_legacyCommentManager_openComments%": "Abrir Comentarios"
     }
   }

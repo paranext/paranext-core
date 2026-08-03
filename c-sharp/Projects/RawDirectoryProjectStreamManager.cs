@@ -94,6 +94,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
 
         try
         {
+            // SR-write-gate: exempt — reached only via the gated ParatextProjectDataProvider.SetExtensionData; DeleteDataStream currently unused (TODO(PT-4210): assess).
             File.Delete(fileName);
             return File.Exists(fileName);
         }

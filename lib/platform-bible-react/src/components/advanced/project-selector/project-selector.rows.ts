@@ -1,4 +1,4 @@
-import type { ScrollGroupId } from 'platform-bible-utils';
+import { normalizeProjectId, type ScrollGroupId } from 'platform-bible-utils';
 
 // #region Types
 
@@ -152,17 +152,6 @@ type TabInfo = {
   scrollGroupId: ScrollGroupId;
   scrollGroupScrRefLabel?: string;
 };
-
-/**
- * Project ids are matched case-insensitively because their casing is not guaranteed to agree across
- * sources: canonical ids are UPPERCASE (C# `ProjectSummary` → `Guid.ToUpperInvariant()`), but some
- * producers (e.g. the open-project-tabs hook) lowercase them. Normalizing both sides of the
- * open-tab↔project join here keeps the "Open Tabs" section from silently disappearing on a casing
- * mismatch. See I12.
- */
-export function normalizeProjectId(projectId: string): string {
-  return projectId.toUpperCase();
-}
 
 function collectOpenTabsByProject(
   openTabs: readonly ProjectSelectorOpenTab[],

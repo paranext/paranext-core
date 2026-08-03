@@ -90,6 +90,7 @@
     "start:main": "concurrently -k -P \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon . {@}\" --",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "start:renderer": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack serve --config ./.erb/configs/webpack.config.renderer.dev.ts",
+    "startup-waterfall": "ts-node ./.erb/scripts/startup-waterfall.ts",
     "stop": "tsx stop-processes.mjs",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
@@ -101,8 +102,9 @@
     "test:e2e:isolated": "node e2e-tests/run-isolated.mjs",
     "test:e2e:smoke": "playwright test --config e2e-tests/playwright.config.ts --project=smoke",
     "test:e2e:smoke-wsl": "e2e-tests/run-e2e-wsl.sh",
-    "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run typecheck:core && npm run typecheck:erb && npm run typecheck --workspaces --if-present",
     "typecheck:core": "tsc -p ./tsconfig.json",
+    "typecheck:erb": "tsc -p ./tsconfig.erb.json",
     "typecheck:papi-dts": "cd lib/papi-dts && npm run typecheck",
     "typecheck:platform-bible-react": "cd lib/platform-bible-react && npm run typecheck",
     "typecheck:platform-bible-utils": "cd lib/platform-bible-utils && npm run typecheck",
@@ -274,7 +276,7 @@
     "url-loader": "^4.1.1",
     "vite": "^6.4.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.2.4",
+    "vitest": "^3.2.7",
     "webpack": "^5.105.2",
     "webpack-bundle-analyzer": "^4.10.2",
     "webpack-cli": "^5.1.4",
@@ -294,6 +296,12 @@
     "@vitest/expect": "^3.2.4",
     "eslint-config-airbnb": {
       "eslint-plugin-react-hooks": "$eslint-plugin-react-hooks"
+    },
+    "@modelcontextprotocol/sdk": {
+      "@hono/node-server": "^2.0.5"
+    },
+    "sockjs": {
+      "uuid": "^11.1.1"
     }
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],

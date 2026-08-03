@@ -13,10 +13,22 @@ import { deserialize, getErrorMessage, serialize, wait } from 'platform-bible-ut
 /** Port to use for the WebSocket */
 export const WEBSOCKET_PORT = 8876;
 
-/** How many times to try sending a request before giving up if the request is not yet registered */
-const MAX_REQUEST_ATTEMPTS = 10;
-/** How long in ms to wait between request attempts if the request is not yet registered */
-const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
+/**
+ * How many times to try sending a request before giving up if the request is not yet registered.
+ * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
+ * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
+ * re-declaring the literal and silently diverging if it is ever retuned.
+ *
+ * @experimental
+ */
+export const MAX_REQUEST_ATTEMPTS = 10;
+/**
+ * How long in ms to wait between request attempts if the request is not yet registered. Exported
+ * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
+ *
+ * @experimental
+ */
+export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
 
 /**
  * Whether an RPC object is setting up or has finished setting up its connection and is ready to
@@ -256,3 +268,31 @@ export const GET_METHODS = 'rpc.discover';
 
 /** Prefix on requests that indicates that the request is a command */
 export const CATEGORY_COMMAND = 'command';
+
+/**
+ * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+ * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+ * followed by `: <error message>`.
+ *
+ * Exported so the few callers that must classify these thrown errors by message (there is no richer
+ * machine-readable marker for a "method not found" response) derive the format from this single
+ * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
+ * producer and a separate matcher/fixture keeps matching its old string while real errors stop
+ * matching, and the tests stay green. Everything routing through this function stays in lockstep.
+ *
+ * @param code The JSON-RPC error code from the error response being classified
+ * @returns The exact message prefix `doRequest` uses for an error response with that `code`
+ * @experimental
+ */
+export function getJsonRpcRequestErrorMessagePrefix(code: number): string {
+  return `JSON-RPC Request error (${code})`;
+}
+
+/**
+ * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
+ * out client-side before any response arrives. Exported for the same drift-prevention reason as
+ * {@link getJsonRpcRequestErrorMessagePrefix}.
+ *
+ * @experimental
+ */
+export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';

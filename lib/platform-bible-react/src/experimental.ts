@@ -19,6 +19,12 @@ export {
   type ProjectSelectorProjectPair,
   type ProjectSelectorLocalizedStrings,
 } from './components/advanced/project-selector/project-selector.component';
+export {
+  default as ResourcePickerDialog,
+  type ResourcePickerDialogProps,
+  type ResourcePickerDialogLocalizedStrings,
+  RESOURCE_PICKER_DIALOG_STRING_KEYS,
+} from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
 export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 export type {
@@ -47,3 +53,13 @@ export {
   type NavigationHistoryButtonsLocalizedStrings,
   type NavigationHistoryItem,
 } from './components/advanced/navigation-history-buttons/navigation-history-buttons.component';
+export {
+  default as InternetAccessOptionList,
+  INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
+} from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export type { InternetAccessOptionListProps } from './components/advanced/internet-access-option-list/internet-access-option-list.component';
+export {
+  default as DeveloperSection,
+  DEVELOPER_SECTION_STRING_KEYS,
+} from './components/advanced/developer-section/developer-section.component';
+export type { DeveloperSectionProps } from './components/advanced/developer-section/developer-section.component';

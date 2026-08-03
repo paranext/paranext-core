@@ -3,6 +3,8 @@
 // this is required for many overwrites
 /* stylelint-disable selector-class-pattern */
 
+@use './simple-mode';
+
 // Platform.Bible modifications
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
@@ -266,5 +268,23 @@ button {
     -webkit-mask-size: contain;
     -webkit-mask-position: center;
     background-color: currentColor;
+  }
+}
+
+// Translator Comment annotations: editor-typed-mark-external-translator-comment comes
+// from ANNOTATION_TYPE_TRANSLATOR_COMMENT in platform-scripture-editor.web-view.tsx.
+// _editor.scss (upstream mirror) has no rule for it, so inserted comments rendered with
+// no visible marking. Styled as a dashed underline (matching Paratext 9) rather than a
+// persistent background highlight, so it stays visually distinct from whatever other
+// highlight (selection, verse markers, etc.) might be applied at the same time. On hover, a
+// background tint and solid underline give a clearer, transient affordance that it's clickable.
+.editor-typed-mark-external-translator-comment {
+  border-bottom: 1px dashed var(--muted-foreground);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+    border-bottom: 2px solid var(--foreground);
   }
 }

@@ -23,6 +23,7 @@ import {
   REPEATED_WORDS_INVENTORY_STRING_KEYS,
 } from './checks/inventories/repeated-words-inventory.component';
 import { useInventory } from './hooks/use-inventory';
+import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
 
 const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
@@ -314,6 +315,12 @@ global.webViewComponent = function InventoryWebView({
       try {
         await setValidItems?.(items.join(' '));
       } catch (error) {
+        // The write-gate rejects this settings write while an automatic Send/Receive is syncing.
+        // Show the shared "editing paused" warning instead of only logging (which is invisible).
+        if (isSyncEditBlockedError(error)) {
+          notifySyncEditBlocked();
+          return;
+        }
         logger.error(`Error updating approved items: ${getErrorMessage(error)}`);
       }
     },
@@ -326,6 +333,12 @@ global.webViewComponent = function InventoryWebView({
       try {
         await setInvalidItems?.(items.join(' '));
       } catch (error) {
+        // The write-gate rejects this settings write while an automatic Send/Receive is syncing.
+        // Show the shared "editing paused" warning instead of only logging (which is invisible).
+        if (isSyncEditBlockedError(error)) {
+          notifySyncEditBlocked();
+          return;
+        }
         logger.error(`Error updating unapproved items: ${getErrorMessage(error)}`);
       }
     },

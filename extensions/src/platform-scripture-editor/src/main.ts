@@ -10,6 +10,7 @@ import {
   AsyncVariable,
   deepEqual,
   getErrorMessage,
+  newGuid,
   PlatformEventEmitter,
   ResourceType,
   serialize,
@@ -46,6 +47,7 @@ import {
   toScriptureEditorInfos,
 } from './platform-scripture-editor.utils';
 import { MarkersViewNotifier } from './markers-view-notifier.model';
+import { SharedLayoutReceiver } from './shared-layout-receiver.model';
 
 logger.debug('Scripture Editor is importing!');
 
@@ -53,6 +55,8 @@ const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+/** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
+const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
 // #region Editor Selection Tracking
 
@@ -88,15 +92,32 @@ const PROJECT_SWITCH_WILL_START_EVENT = 'platformScriptureEditor.onWillSwitchPro
 const PROJECT_SWITCH_DID_FINISH_EVENT = 'platformScriptureEditor.onDidSwitchProject';
 
 /**
- * Event emitter fired before a project switch. Created lazily on the first call to open() to avoid
- * network initialization races during extension activation.
+ * Event emitter fired before a project switch. Payload carries the switch's unique `switchId`, so
+ * the renderer's workspace-updating service can pair each finish with exactly the switch that
+ * started it. Created lazily on the first call to open() to avoid network initialization races
+ * during extension activation.
  */
-let projectSwitchWillStartEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+let projectSwitchWillStartEmitter: PlatformEventEmitter<{ switchId: string }> | undefined;
 
-/** Event emitter fired after a project switch completes. Created lazily on the first call to open(). */
-let projectSwitchDidFinishEmitter: PlatformEventEmitter<Record<string, never>> | undefined;
+/**
+ * Event emitter fired after a project switch completes, with the `switchId` of the will-start event
+ * that began it. Created lazily on the first call to open().
+ */
+let projectSwitchDidFinishEmitter: PlatformEventEmitter<{ switchId: string }> | undefined;
 
 // #endregion Project Switch Events
+
+// #region Shared Layout
+
+/**
+ * Coordinates team-member receipt of a shared layout across project switches and Send/Receive
+ * syncs. Created in activate(). `open()` is a separate top-level function (not nested inside
+ * activate()), so this is module-level rather than a local const; call sites there use optional
+ * chaining since it is `undefined` until activation completes.
+ */
+let sharedLayoutReceiver: SharedLayoutReceiver | undefined;
+
+// #endregion Shared Layout
 
 interface ResourceViewerOptions extends OpenWebViewOptions {
   projectId?: string;
@@ -284,18 +305,57 @@ async function open(
     // The transition overlay and project-switch sync only apply in simple mode when the tab
     // content is actually being replaced (not on new-tab opens or focus-existing navigations).
     const needsOverlay = interfaceMode === 'simple' && dispatch.kind === 'replace-tab';
+    // Pairs this switch's will-start and did-finish events, so the renderer releases exactly this
+    // switch when it finishes — never an unrelated concurrent one.
+    const switchId = newGuid();
 
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
+      // Uses the async factory (the sync createNetworkEventEmitter is deprecated) so the events can
+      // carry `x-experimental` in the generated OpenRPC document — these are recently-added switch-
+      // pairing events whose contract isn't settled (see their @experimental TSDoc in the d.ts). The
+      // payload type is inferred from the NetworkEvents augmentation, so no explicit generic here.
+      // Awaited before emit: the enclosing handler is async, so this only adds first-use latency and
+      // the will-start event still fires before the switch below.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<
-          Record<string, never>
-        >(PROJECT_SWITCH_WILL_START_EVENT);
+        projectSwitchWillStartEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_WILL_START_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary:
+                'Emitted just before a scripture editor web view is opened or replaced with a new project.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       if (!projectSwitchDidFinishEmitter)
-        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<
-          Record<string, never>
-        >(PROJECT_SWITCH_DID_FINISH_EVENT);
-      projectSwitchWillStartEmitter.emit({});
+        projectSwitchDidFinishEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_DID_FINISH_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary: 'Emitted after the scripture editor web view open/replace call resolves.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary:
+                    'The switchId of the onWillSwitchProject event that started this switch.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
+      projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
       // Skip outgoing S/R for read-only viewers — no local changes are possible.
@@ -308,7 +368,7 @@ async function open(
 
     const emitDidFinish = () => {
       if (!needsOverlay) return;
-      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({});
+      if (projectSwitchDidFinishEmitter) projectSwitchDidFinishEmitter.emit({ switchId });
       else
         logger.warn(
           'projectSwitchDidFinishEmitter was disposed before the project switch completed — workspace-updating overlay may be stuck',
@@ -325,8 +385,13 @@ async function open(
     // (model text, bible texts, commentaries, comments). Gated on isEditable: the related panels
     // follow the active translation project, so opening a read-only published resource in the
     // editor column must not switch them over to the resource.
-    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
+    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
+      // Auto-apply the admin's shared layout for the project being opened/switched to: re-arm the
+      // buffered panels and focus the col-3 tab. A manual sync's held change is applied via the
+      // notification's "Apply now" instead.
+      await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
+    }
 
     // Re-check the replace-tab target after openOrUpdateRelatedPanels: concurrent panel
     // operations can remove the target tab between when the dispatch was resolved (above) and
@@ -510,6 +575,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
         optionsDecorations,
       ),
       isReadOnly,
+      // Always rebuild un-blocked. isSyncBlocked is transient runtime state owned by the core
+      // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+      // restore a read-only editor from the saved layout.
+      isSyncBlocked: false,
       /**
        * The original title string or localized string key passed in for us to use to format the
        * title when it should change
@@ -543,6 +612,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       // BCV control (which is the single navigation point in simple mode). Power mode preserves the
       // saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This webview is dual-mode: in simple mode it's the fixed 3-column layout's Column 2 and
+      // must always remain open, so it's non-closable there. Power mode allows closing/rearranging
+      // freely, matching its pre-existing behavior.
+      isClosable: interfaceMode === 'power',
     };
   }
 
@@ -899,6 +972,11 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       // with the scripture editor (which is also forced to 0 in simple mode). Power mode preserves
       // the saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This tab is part of the fixed 3-column simple-mode layout (Column 1) and must always
+      // remain open there, so it's non-closable in simple mode. Power mode allows closing (this
+      // webview type isn't currently opened outside the fixed layout, but this keeps it consistent
+      // with the other fixed-layout webviews rather than hardcoding `false`).
+      isClosable: interfaceMode === 'power',
     };
   },
 };
@@ -918,16 +996,29 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
+    // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
+    // LocalizeKey passed as `title`, so that half needs no resolution — but `tooltip` is a plain
+    // string, never auto-resolved, so it must already be localized text by the time it's set. Doing
+    // both here means the tab shows "Text Collection" and a working tooltip from its very first
+    // render, instead of depending on this tab's own (possibly backgrounded, and therefore
+    // unreliably-timed) web view to push the resolved strings back out via updateWebViewDefinition
+    // after mount.
+    const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+      localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    });
     return {
       ...savedWebView,
-      // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps
-      // this in sync). The initial empty title avoids flashing a label before the web view runs.
-      title: '',
-      tooltip: '%webView_scriptureTextGrid_title_multiple%',
-      // Part of the default Simple-mode layout and must always remain open, so the tab is
-      // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
-      // so this covers both close paths.
-      isClosable: false,
+      title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+      tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+      // This webview is dual-mode: in simple mode it's part of Column 3's fixed layout and must
+      // always remain open (the X-button is omitted and there is no keyboard close shortcut, so
+      // this covers both close paths), so it's non-closable there. Power mode allows closing
+      // freely, matching the other Column 3 providers (ScriptureEditorWebViewFactory,
+      // createResourceTextPanelProvider) — this also determines its rc-dock group (getTabGroup):
+      // isClosable === false routes it to TAB_GROUP_RESOURCES, which getGroups() only registers in
+      // Simple mode, so leaving this unconditionally false left the tab pointing at a group with no
+      // registered config in Power mode.
+      isClosable: interfaceMode === 'power',
       // No top toolbar in this view; the View Options icon button lives in the web view's header.
       shouldShowToolbar: false,
       projectId,
@@ -961,6 +1052,7 @@ function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  defaultIconUrl: string,
 ): IWebViewProvider {
   return {
     async getWebView(
@@ -978,6 +1070,8 @@ function createResourceTextPanelProvider(
         ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       currentResourceTextPanelProjectIds.delete(webViewType);
+      // Re-read every call so mode changes are picked up at open/replace/restore time.
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
       // commentaries are read-only reference panels that navigate independently; they are
       // not scroll-synced with the scripture editor in simple mode.
@@ -987,10 +1081,17 @@ function createResourceTextPanelProvider(
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
+        // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
+        // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
+        // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
+        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
         state: {
           ...savedWebView.state,
           resourceType,
         },
+        // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
+        // must always remain open there, so it's non-closable in simple mode.
+        isClosable: interfaceMode === 'power',
       };
     },
   };
@@ -1000,12 +1101,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
+  'papi-extension://platformScriptureEditor/assets/book-open.svg',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
+  'papi-extension://platformScriptureEditor/assets/file-text.svg',
 );
 
 async function openResourceText(
@@ -1337,6 +1440,35 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // triggers coalesce into a single follow-up run.
   const unsubFromDefaultProjectPicker = startDefaultProjectPicker(papi);
 
+  // Payload type is inferred from the NetworkEvents augmentation added earlier — do NOT pass an
+  // explicit payload generic here.
+  const sharedLayoutReArmEmitter = await papi.network.createNetworkEventEmitterAsync(
+    'platformScriptureEditor.onSharedLayoutApply',
+  );
+
+  sharedLayoutReceiver = new SharedLayoutReceiver(papi, sharedLayoutReArmEmitter);
+
+  const applySharedLayoutPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.applySharedLayout',
+    async (notificationId) => {
+      await sharedLayoutReceiver?.applyFromNotification(notificationId);
+    },
+    {
+      method: {
+        summary: 'Apply the buffered shared layout for the project tied to a notification',
+        params: [
+          {
+            name: 'notificationId',
+            required: true,
+            summary: 'The id of the notification whose shared layout should be applied',
+            schema: { type: ['string', 'number'] },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -1380,6 +1512,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
+    await applySharedLayoutPromise,
+    sharedLayoutReArmEmitter,
+    {
+      dispose: async () => {
+        sharedLayoutReceiver?.dispose();
+        sharedLayoutReceiver = undefined;
+        return true;
+      },
+    },
   );
 
   logger.debug('Scripture editor is finished activating!');
