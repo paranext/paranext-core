@@ -66,11 +66,12 @@ investigation found the prior discovery for this PRD reflected in ADR-0002, and 
 | WI-2 | Show cancelled syncs as cancelled, not empty success          | paratext-bible-internal-extensions  | Simple     | —          | NN-5, NTH-3       |
 | WI-3 | Verify each non-negotiable against the shipped feature        | all (verification)                  | Moderate   | —          | NN-2…NN-6 (evidence) |
 
-**WI-1 — Wire F9.** Add the F9 branch to the main-process `before-input-event` handler
-(`src/main/main.ts` ~618-685) dispatching `paratextBibleSendReceive.openSendReceive`, exactly as
-ADR-0002 prescribes (no declarative keybinding API). First verify F9 is unclaimed in PT10 (PT9
-used it for book navigation, so users won't miss an old binding — but a PT10 collision must be
-checked). Degrade gracefully when the S/R extension is absent.
+**WI-1 — Wire the S/R shortcut (F6).** Add the key branch to the main-process
+`before-input-event` handler (`src/main/main.ts` ~663-798) dispatching
+`paratextBibleSendReceive.openSendReceive`, exactly as ADR-0002 prescribes (no declarative
+keybinding API). F9 was the PRD's candidate but is taken by PT10 book navigation, so ADR-0002
+settled on F6 (verified free); update the shortcuts catalog per `keyboard-shortcuts-catalog.md`.
+Degrade gracefully when the S/R extension is absent.
 
 **WI-2 — Honest cancelled-sync rendering.** `send-receive.web-view.tsx` (~line 300) ignores the
 `Cancelled` result flag, so a cancelled run renders as a success with no changes. Add an explicit
@@ -88,7 +89,7 @@ verse counts, notes/renderings). Each named gap becomes a new ticket.
 
 | Requirement                   | Work item(s) | Notes                                                                     |
 | ----------------------------- | ------------ | -------------------------------------------------------------------------- |
-| NN-1 F9 + Project menu        | WI-1         | Menu trigger ships; F9 is the one unwired piece                             |
+| NN-1 shortcut + Project menu  | WI-1         | Menu trigger ships; the keyboard shortcut (F6, was F9 in the PRD) is the one unwired piece |
 | NN-2 select projects          | WI-3         | Ships (picker + single-project path); WI-3 records the evidence             |
 | NN-3 completion confirmation  | WI-3         | Ships (auto-shown results); WI-3 records the evidence                       |
 | NN-4 sent/received summary    | WI-3         | Ships (per-user/book/chapters/verses + notes/renderings); WI-3 verifies parity |
@@ -107,9 +108,10 @@ verse counts, notes/renderings). Each named gap becomes a new ticket.
    resilience is reconnect-retry plus atomic per-project transactions, and a literal resume would
    require the transport changes this PRD forbids. Suggested: accept "fail cleanly + safe retry"
    as satisfying NN-6, and let WI-3 verify it empirically.
-3. **F9 provenance.** The PRD lists F9 as a PT9 behavior; PT9 actually binds F9 to "Next book"
-   (the inventory annotation was wrong). ADR-0002 already commits PT10 to F9-for-S/R as a new
-   decision — no action needed unless the owner wants to reconsider the key.
+3. **Shortcut provenance.** The PRD lists F9 as a PT9 behavior; PT9 actually binds F9 to "Next
+   book" (the inventory annotation was wrong), and PT10 also uses F9 for book navigation. ADR-0002
+   commits PT10 to a new S/R shortcut on F6 — no action needed unless the owner wants to
+   reconsider the key.
 4. **PT9's hidden S/R support gestures** (Shift-open resets sync mementos, Ctrl-click forces all
    projects, hidden HTML export, `redirect.txt` server override…) — six were catalogued for the
    dev-access inventory (proposed DEV-002…DEV-007). Port any to PT10? Suggested: record, port none
