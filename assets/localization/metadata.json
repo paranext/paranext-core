@@ -29,6 +29,12 @@
       "message": "We made the internet settings its own page so the localized string needs to indicate that. The new localized string key is %data_loading_error_internetAccess_disabled%."
     }
   },
+  "%firstRun_button_continueWithoutSetup%": {
+    "deprecationInfo": {
+      "date": "2026-07-31",
+      "message": "Reworded to \"Continue without finishing setup\" to match the surrounding body copy (PT-4302). The new key is %firstRun_button_continueWithoutFinishingSetup%."
+    }
+  },
   "%firstRun_button_skip%": {
     "deprecationInfo": {
       "date": "2026-07-27",
