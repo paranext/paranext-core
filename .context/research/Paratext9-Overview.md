@@ -1,6 +1,7 @@
 # Paratext 9 — Repository Navigation Primer
 
-Orientation for reading the PT9 source (`~/git/Paratext`). For detailed architecture,
+Orientation for reading the PT9 source (`{ROOT}/Paratext`, where `{ROOT}` is the parent
+directory of the paranext-core checkout — `PT_REPOS_ROOT` overrides). For detailed architecture,
 code patterns, and gotchas, **always consult the repo's own `AGENTS.md` files first** —
 this primer is only for orientation, search exclusions, and reuse triage.
 
@@ -23,13 +24,13 @@ relevant to PT10 work).
 
 Ripgrep form (`--glob '!…'`):
 
-    rg "SearchTerm" ~/git/Paratext -t cs \
+    rg "SearchTerm" {ROOT}/Paratext -t cs \
       --glob '!**/.git/**' --glob '!**/DataAccessServer/**' \
       --glob '!**/DataAccessServer.Tests/**' --glob '!**/PA/**'
 
 grep form — `grep` has no `--glob`; use `--exclude-dir` (add these flags to any `grep -r`):
 
-    grep -rn "SearchTerm" ~/git/Paratext --include='*.cs' \
+    grep -rn "SearchTerm" {ROOT}/Paratext --include='*.cs' \
       --exclude-dir=DataAccessServer --exclude-dir=DataAccessServer.Tests --exclude-dir=PA
 
 ## Layer reuse triage (portable backend vs rewrite-UI)

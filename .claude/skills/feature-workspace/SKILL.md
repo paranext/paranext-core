@@ -1,17 +1,25 @@
 ---
 name: feature-workspace
-description: "[paranext-core ONLY] Create, enter, list, and tear down multi-repo feature workspaces under ~/git/workspaces/<feature-slug>/ built from git worktrees of the sibling repos a feature touches. Use when a feature spans more than one repo, or to work inside a workspace that already exists. For a single-repo worktree, use the native EnterWorktree tool instead."
+description: "[paranext-core ONLY] Create, enter, list, and tear down multi-repo feature workspaces under <repos-root>/workspaces/<feature-slug>/ (repos-root = the parent directory of the canonical sibling checkouts) built from git worktrees of the sibling repos a feature touches. Use when a feature spans more than one repo, or to work inside a workspace that already exists. For a single-repo worktree, use the native EnterWorktree tool instead."
 allowed-tools: Bash, Read
 ---
 
 # Feature Workspace Skill
 
-A **feature workspace** is a directory at `~/git/workspaces/<feature-slug>/` holding git
+A **feature workspace** is a directory at `$REPOS/workspaces/<feature-slug>/` holding git
 worktrees of the sibling repos a feature touches, so several features can be worked on
-concurrently without disturbing the canonical checkouts under `~/git/`.
+concurrently without disturbing the canonical checkouts.
+
+**Every fence below assumes this definition** — the repos root is the parent directory of the
+paranext-core checkout, wherever that lives on this machine (`~/git/`, `~/`, …), overridable
+with `PT_REPOS_ROOT`:
+
+```bash
+REPOS="${PT_REPOS_ROOT:-$(cd "$(git rev-parse --show-toplevel)/.." && pwd)}"
+```
 
 ```
-~/git/
+$REPOS/
 ├── paranext-core/                     # canonical checkouts — leave them alone
 ├── Paratext/                          # (PT9)
 ├── paratext-10-studio/
@@ -44,18 +52,18 @@ the workspace, and name the workspace directory after it.
 ## Create a workspace
 
 ```bash
-SLUG=pt-1234-my-feature                # feature slug = branch name
-WS=~/git/workspaces/$SLUG
+SLUG=pt-1234-my-feature                # feature slug = branch name — set to the real one
+WS="$REPOS/workspaces/$SLUG"
 [ -d "$WS" ] && echo "workspace already exists — enter it instead" || mkdir -p "$WS"
 
 # Editable repos (repeat per repo the feature changes; base per table above):
-git -C ~/git/paranext-core fetch origin
-git -C ~/git/paranext-core worktree add -b "$SLUG" "$WS/paranext-core" origin/main
+git -C "$REPOS/paranext-core" fetch origin
+git -C "$REPOS/paranext-core" worktree add -b "$SLUG" "$WS/paranext-core" origin/main
 
 # Read-only reference repos (e.g. PT9): pin a detached worktree so the code
 # you analyze cannot drift if the canonical checkout is updated later.
-git -C ~/git/Paratext fetch origin
-git -C ~/git/Paratext worktree add --detach "$WS/Paratext" origin/master
+git -C "$REPOS/Paratext" fetch origin
+git -C "$REPOS/Paratext" worktree add --detach "$WS/Paratext" origin/master
 
 # Each worktree needs its own dependencies:
 cd "$WS/paranext-core" && npm install --prefer-offline
@@ -68,14 +76,14 @@ Branch-handling notes (from hard experience):
   `git worktree add "$WS/paranext-core" "$SLUG"` — git reuses the local branch or
   auto-creates a tracking branch from the remote.
 - **"already checked out" error**: the branch is in use by another worktree — often the
-  canonical checkout itself. Run `git -C ~/git/<repo> worktree list` to find it; if the
+  canonical checkout itself. Run `git -C "$REPOS/<repo>" worktree list` to find it; if the
   canonical checkout is sitting on the branch, switch it back to its base branch first.
 
 ## Enter an existing workspace
 
 ```bash
-ls ~/git/workspaces/                       # find the workspace
-cd ~/git/workspaces/<slug>/paranext-core   # work here, not in the canonical checkout
+ls "$REPOS/workspaces/"                    # find the workspace
+cd "$REPOS/workspaces/$SLUG/paranext-core" # work here, not in the canonical checkout
 ```
 
 When the work needs to read sibling repos in the workspace, make them accessible to
@@ -85,8 +93,8 @@ Claude Code (`claude --add-dir ../Paratext`, or `permissions.additionalDirectori
 ## List workspaces
 
 ```bash
-ls ~/git/workspaces/
-git -C ~/git/paranext-core worktree list   # maps each worktree to its branch, per repo
+ls "$REPOS/workspaces/"
+git -C "$REPOS/paranext-core" worktree list   # maps each worktree to its branch, per repo
 ```
 
 ## Tear down a workspace
@@ -95,17 +103,20 @@ Run `worktree remove` from each canonical repo. **Without `--force` it refuses i
 tree is dirty — that refusal is the safety guard.** Force only changes you confirmed are disposable.
 
 ```bash
-WS=~/git/workspaces/<slug>
-git -C ~/git/paranext-core worktree remove "$WS/paranext-core"
-git -C ~/git/Paratext worktree remove "$WS/Paratext"
-rm -rf "$WS"                               # leftovers (untracked artifacts, node_modules)
-rmdir ~/git/workspaces 2>/dev/null || true # only removes the parent if now empty
+set -euo pipefail                          # a refused remove must abort the teardown
+SLUG=pt-1234-my-feature                    # set to the workspace's real slug
+WS="$REPOS/workspaces/$SLUG"
+git -C "$REPOS/paranext-core" worktree remove "$WS/paranext-core"
+git -C "$REPOS/Paratext" worktree remove "$WS/Paratext"
+# Reached only if every remove above succeeded — now leftovers are safe to delete:
+rm -rf "$WS"                               # (untracked artifacts, node_modules)
+rmdir "$REPOS/workspaces" 2>/dev/null || true  # only removes the parent if now empty
 
 # Optional, after the PR is merged:
-git -C ~/git/paranext-core branch -D "<slug>"
+git -C "$REPOS/paranext-core" branch -D "$SLUG"
 ```
 
-If a worktree directory was deleted by hand, run `git -C ~/git/<repo> worktree prune`
+If a worktree directory was deleted by hand, run `git -C "$REPOS/<repo>" worktree prune`
 to clear the stale registration.
 
 ## Hazards
@@ -118,5 +129,5 @@ to clear the stale registration.
   then drop the entry by re-finding it by message.
 - **One branch per worktree**: the same branch cannot be checked out in two worktrees.
 - **Operate in the workspace, not the canonical checkout**: run the feature's git
-  operations inside `~/git/workspaces/<slug>/<repo>`; never `reset --hard` a canonical
+  operations inside `$REPOS/workspaces/<slug>/<repo>`; never `reset --hard` a canonical
   checkout to "fix" a workspace problem.

@@ -42,8 +42,11 @@ silent or in doubt, flag it for engineering verification instead of guessing.
 
 ## Step 4: Scan what Paratext 10 already ships
 
-Probe the PT10 repos with your file tools (`~/git/paranext-core`, `~/git/paratext-10-studio`,
-`~/git/paratext-bible-extensions`, `~/git/paratext-bible-internal-extensions`). If readable,
+Probe the PT10 repos with your file tools — sibling checkouts under `{ROOT}`, the parent
+directory of this checkout (override: `PT_REPOS_ROOT`; the convention `/investigate-prd`
+§ "Repo access" defines): `{ROOT}/paranext-core`, `{ROOT}/paratext-10-studio`,
+`{ROOT}/paratext-bible-extensions`, `{ROOT}/paratext-bible-internal-extensions`. A `Glob` of a
+repo returning zero entries means it's unreachable. If readable,
 dispatch `pt10-reuse-scout` (`subagent_type: "pt10-reuse-scout"`) with the PRD summary, the
 NN/NTH tables, the aspect breakdown, and `DEPTH: capability-scan`. Translate its findings to
 product language yourself — capability names and product modes, never file:line. If the repos

@@ -56,15 +56,17 @@ Items**, and a **Validation** line. Extract:
 Source codes: **MS** menu entry points · **FR** form/dialog relationships · **R** requirements
 · **M** manual tutorials · **H** HelpData topics · **C** confirmed source files.
 
-## Step 3 — Corroborate against live PT9 *(only if `~/git/Paratext` is readable)*
+## Step 3 — Corroborate against live PT9 *(only if `{ROOT}/Paratext` is readable)*
 
-The inventory is a **starting point, not exhaustive**. If PT9 is checked out, confirm and
+`{ROOT}` = the parent directory of the paranext-core checkout (`PT_REPOS_ROOT` overrides it) —
+the sibling-checkout convention from `/investigate-prd` § "Repo access"; a `Glob` returning
+zero entries means the repo isn't there. The inventory is a **starting point, not exhaustive**. If PT9 is checked out, confirm and
 extend with targeted searches — `grep` has no `--glob`, so use the `--exclude-dir` flags from
 `.context/research/Paratext9-Overview.md` to cut the noise directories:
 
 ```bash
-find ~/git/Paratext -name '*{Feature}*.cs' -type f
-grep -rn '{FeatureName}' ~/git/Paratext --include='*.cs' \
+find {ROOT}/Paratext -name '*{Feature}*.cs' -type f
+grep -rn '{FeatureName}' {ROOT}/Paratext --include='*.cs' \
   --exclude-dir=DataAccessServer --exclude-dir=DataAccessServer.Tests --exclude-dir=PA
 ```
 
@@ -107,8 +109,4 @@ Aspects: {ASPECTS verbatim, or "not provided"}
 - **DONE_WITH_CONCERNS** — mapped, but with gaps (low corroboration, or PT9 not readable).
 - **NEEDS_CONTEXT** — feature not in the inventory and no usable PT9 reference to search.
 
-## Not in scope (dropped from the old porting workflow)
-
-Do not copy inventory content into porting artifacts; no research-corpus/`.context/features/`
-paths, no feature/tracking-issue IDs, no `[auto]/[semi]/[human]` gate tags. You map, you don't
-plan the port.
+You map where the feature lives in PT9; you don't plan the port.

@@ -67,7 +67,7 @@ For **each** aspect decide its origin:
 - **hybrid** — does both (e.g. ports the sync engine *and* adds a new conflict-resolution UI).
 
 Produce one row per aspect: `Aspect | Origin | PT9 form / category (if any) | One-line summary
-| Covers | Appetite slice` — where `Covers` lists the NN/NTH IDs this aspect serves (an aspect
+| Covers` — where `Covers` lists the NN/NTH IDs this aspect serves (an aspect
 may cover several; every NN must be covered by at least one aspect, or be flagged as a gap).
 A fully net-new PRD simply has zero PT9-port aspects (no PT9 source to investigate).
 
@@ -128,8 +128,8 @@ Return one markdown block:
 - {rabbit hole + the PRD's decided approach}
 
 ## Aspect breakdown
-| Aspect | Origin | PT9 form / category | Summary | Covers | Appetite slice |
-| … | PT9-port / net-new / hybrid | … | … | NN-1, NTH-2 | … |
+| Aspect | Origin | PT9 form / category | Summary | Covers |
+| … | PT9-port / net-new / hybrid | … | … | NN-1, NTH-2 |
 
 ## PT9 claims to verify
 | # | PRD assertion about PT9 | PRD section |
@@ -158,7 +158,4 @@ End with one token:
 - **DONE_WITH_CONCERNS** — parsed, but one or more CLARIFICATION items need the human.
 - **BLOCKED** — could not read or make sense of the PRD; explain why.
 
-## Not in scope (dropped from the old porting workflow)
-
-No `feature-description.md` artifact, no phase/gate IDs, no tracking-issue/branch bookkeeping,
-no BHV/EXT IDs. You normalize the PRD and stop.
+You normalize the PRD and stop — no other artifacts.

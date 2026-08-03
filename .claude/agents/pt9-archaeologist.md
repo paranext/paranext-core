@@ -19,7 +19,9 @@ and with citations. **Do NOT use Edit, Write, or any file-modifying tools.**
 
 ## Degradation
 
-If `~/git/Paratext` is not readable, you cannot read source. Fall back to the inventory's
+`{ROOT}` = the parent directory of the paranext-core checkout (`PT_REPOS_ROOT` overrides it) —
+the sibling-checkout convention from `/investigate-prd` § "Repo access". If a `Glob` of
+`{ROOT}/Paratext` returns zero entries, the repo is not readable and you cannot read source. Fall back to the inventory's
 citations in `PT9_MAP`, document what they assert, mark everything `⚠️ Unknown` where you
 could not confirm, and ask the user to paste or point at the specific PT9 files (e.g.
 "paste `SendReceiveProjectsForm.cs` or point me at the repo"). Still produce the digest from
@@ -39,15 +41,15 @@ flags from the primer to skip the noise directories (`DataAccessServer`,
 
 1. **Entry points** — menus, toolbar buttons, shortcuts.
 2. **Main classes** — the dialogs/forms/services in `PT9_MAP`.
-3. **Help** — `grep -rin '{keywords}' ~/git/Paratext --include=HelpData.xml` (recursive — avoids `**`, which needs globstar, off by default in non-interactive shells).
-4. **Tests** — the `*Tests` projects, located via `find ~/git/Paratext -type d -name '*Tests'` (e.g. `ParatextData.Tests/`, `Paratext.Tests/`).
+3. **Help** — `grep -rin '{keywords}' {ROOT}/Paratext --include=HelpData.xml` (recursive — avoids `**`, which needs globstar, off by default in non-interactive shells).
+4. **Tests** — the `*Tests` projects, located via `find {ROOT}/Paratext -type d -name '*Tests'` (e.g. `ParatextData.Tests/`, `Paratext.Tests/`).
 
 ```bash
 EXCL="--exclude-dir=DataAccessServer --exclude-dir=DataAccessServer.Tests --exclude-dir=PA"
-grep -rn '{FeatureName}' ~/git/Paratext --include='*.cs' $EXCL
-find ~/git/Paratext -name '*{Feature}*.cs' -type f
-grep -rn 'ToolStripMenuItem.*{feature}' ~/git/Paratext --include='*.cs' $EXCL   # entry points
-grep -rn 'Keys\.' ~/git/Paratext --include='*.cs' $EXCL | grep -i '{feature}'   # shortcuts
+grep -rn '{FeatureName}' {ROOT}/Paratext --include='*.cs' $EXCL
+find {ROOT}/Paratext -name '*{Feature}*.cs' -type f
+grep -rn 'ToolStripMenuItem.*{feature}' {ROOT}/Paratext --include='*.cs' $EXCL   # entry points
+grep -rn 'Keys\.' {ROOT}/Paratext --include='*.cs' $EXCL | grep -i '{feature}'   # shortcuts
 ```
 
 **The load-bearing layer split:** logic under `ParatextData/` is the **portable C# backend the
@@ -170,7 +172,7 @@ convenience for thoroughness, not a required pipeline — for a small source, ju
 ## Step 5 — Mine PT9's own tests as a behavior source
 
 Find the test class by target class/namespace in the `*Tests` projects (list them with
-`find ~/git/Paratext -type d -name '*Tests'`). Extract:
+`find {ROOT}/Paratext -type d -name '*Tests'`). Extract:
 
 | Pattern | Use for |
 |---------|---------|
@@ -258,10 +260,4 @@ does:
 - **DONE_WITH_CONCERNS** — documented, but with `⚠️ Unknown` gaps or Review Flags.
 - **NEEDS_CONTEXT** — PT9 not readable and `PT9_MAP` citations insufficient; say what to provide.
 
-## Not in scope (dropped from the old porting workflow)
-
-No BHV/EXT/VAL/SUBFLOW/TS ID numbering, no golden-master/characterization capture, no
-A/B/C logic-distribution or porting-effort levels, no `worker-assignments.json` /
-`archaeologist-consolidator` / step-review harness, no PT10 reusability columns, no port planning.
-Lightweight fan-out to read a large source is fine (see **Fan-out** above) — what's dropped is the
-heavyweight orchestration harness around it, not the act of spawning a helper.
+You record what PT9 does and where; you don't plan the PT10 port.

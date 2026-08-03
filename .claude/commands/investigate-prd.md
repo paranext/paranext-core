@@ -33,17 +33,20 @@ boundaries — cross-repo work carries no coordination cost and is not a risk to
 
 ## Repo access
 
-Investigations read sibling checkouts under `~/git/` — `Paratext` (PT9) and the PT10 repos
+Investigations read sibling checkouts of this repo — `Paratext` (PT9) and the PT10 repos
 (`paranext-core`, `paratext-10-studio`, `paratext-bible-extensions`,
-`paratext-bible-internal-extensions`). These live **outside this working directory**, so your
-file tools (`Read`/`Glob`) need access to them. In the default paranext-core checkout this
-**works out of the box** — its `.claude/settings.json` broadly allows `Read`/`Glob`, so the file
-tools reach siblings under `~/git/` with no extra flags. If your setup restricts file reads, grant
-access at launch instead (e.g. `claude --add-dir ~/git`). Bash can reach them regardless, but the
-agents rely on `Read` for their deep source reads. **Step 1 preflights this empirically — it only
-warns if reads actually fail**, so you normally won't be asked to relaunch. If a repo is still
-unreachable mid-run, the owning agent degrades and notes the gap. This is a **convention**, not a
-hard requirement — never pin paths into the user's settings for them.
+`paratext-bible-internal-extensions`). **The repos root — written `{ROOT}` throughout this
+command and its agents — is the parent directory of this checkout** (`git rev-parse
+--show-toplevel`, up one level), overridable by setting `PT_REPOS_ROOT` in the environment.
+This matches the repo's existing sibling-checkout convention (the `file:../paranext-core`
+setup in README.md); machines differ in where that parent lives (`~/git/`, `~/`, …), which is
+why no absolute path is ever assumed. The siblings live **outside this working directory**;
+file tools (`Read`/`Glob`) reach them by absolute path in a default setup, and **Step 1
+preflights this empirically** — a repo whose files can't be listed is treated as unreachable
+and you'll be warned before investigating. If your setup restricts reads outside the repo,
+relaunch with `claude --add-dir {ROOT}`. If a repo becomes unreachable mid-run, the owning
+agent degrades and notes the gap. This is a **convention**, not a hard requirement — never pin
+paths into the user's settings for them.
 
 ## Step 1: Prepare the run
 
@@ -60,18 +63,22 @@ mkdir -p ".context/research/investigations/$SLUG"
 
 Do **not** auto-commit the brief — the developer commits it as part of their normal flow.
 
-**Preflight — repo access.** Before going further, probe each expected repo with your file tools
-(e.g. `Glob ~/git/Paratext/*`, and a `Glob` of each PT10 repo — or `Read` a file under each).
-Treat an *outside-the-allowed-directories / access* error (not an empty result) as
-**unreachable**. If any are unreachable, **stop and warn the user before investigating**:
+**Preflight — repo access.** Before going further, resolve `{ROOT}` (parent of this checkout,
+or `PT_REPOS_ROOT` if set) and probe each expected repo with a `Glob` (e.g.
+`{ROOT}/Paratext/*`, and one per PT10 repo). **Zero entries — or any error — means
+unreachable.** A `Glob` over a path that doesn't exist returns *empty*, not an error, so
+emptiness is the signal; don't wait for an access error that may never come. If any repo is
+unreachable, **stop and warn the user before investigating**:
 
-> ⚠️ My file tools can't read these repos: {list}. Either your config restricts file reads
-> (relaunch with `claude --add-dir ~/git`, or broaden the `Read` permission in
-> `.claude/settings.json`) or they aren't checked out under `~/git/`. Without them my coverage
-> shrinks — I'll fall back to the bundled inventory and flag the gaps. Continue anyway, or relaunch?
+> ⚠️ I can't list files in these repos: {list, with the paths probed}. Either they aren't
+> checked out as siblings of this repo (expected under {ROOT}), or your setup restricts file
+> reads outside the working directory (relaunch with `claude --add-dir {ROOT}`). If the
+> checkouts live somewhere else, set `PT_REPOS_ROOT` to that directory. Without them my
+> coverage shrinks — I'll fall back to the bundled inventory and flag the gaps. Continue
+> anyway, or fix and rerun?
 
 An unreachable **PT10** repo degrades `pt10-reuse-scout` (affects every PRD — it always runs);
-an unreachable **`~/git/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD ports
+an unreachable **`{ROOT}/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD ports
 PT9 features). Wait for the user. If they choose to proceed, continue and let the agents degrade
 per their own `## Degradation` rules.
 
@@ -242,8 +249,10 @@ settled.
 
 ## Step 8: Checkpoint
 
-Present a concise **inline** summary — the work-item table, the coverage table, §3
-(confirm-intent items), and the §6/§7 questions — and point to the full brief:
+Present a concise **inline** summary — the work-item table, the coverage table, the
+confirm-intent items (**New in Paratext 10**), and the open questions (**Questions for the
+product owner** / **Engineering decisions** — match sections by title; older briefs may number
+them differently) — and point to the full brief:
 
 > Brief written to `.context/research/investigations/$SLUG/brief.md`. Summary:
 > {work items; coverage; open questions}

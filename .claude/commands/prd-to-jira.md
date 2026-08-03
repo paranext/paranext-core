@@ -15,9 +15,10 @@ tools); **drafting** doesn't — if Jira isn't connected, say so and follow step
 - Read the brief. It must contain a **Proposed work items** section and a **Requirement
   coverage** section. If either is missing, stop: the brief hasn't been through
   `/investigate-prd`'s checkpoint — finish that first.
-- If §6 (questions for the product owner) still contains a question whose answer would change
-  the **work-item boundaries** (not just wording), point at it and confirm the user really wants
-  to create tickets now. Questions that only affect details inside an item are fine — carry them
+- Find the brief's **Questions for the product owner** section — match by **title**, not
+  number (it's §6 in the current template, but older briefs number it differently, e.g. §5).
+  If it still contains a question whose answer would change the **work-item boundaries** (not
+  just wording), point at it and confirm the user really wants to create tickets now. Questions that only affect details inside an item are fine — carry them
   into that item's description.
 
 ## Target shape (mirrors epic PT-4024)

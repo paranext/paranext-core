@@ -37,7 +37,7 @@ declare module 'papi-shared-types' {
 
 ## Command Signature: Conform to Established Siblings
 
-When adding a net-new command that joins a family of existing commands (e.g. another `open*` command alongside sibling inventory/tool openers), match the siblings' signature exactly rather than designing a richer one. The sibling `open*` commands take a single optional argument (e.g. `(projectId?: string) => Promise<string | undefined>`, returning the opened web-view id); a new sibling should do the same.
+When adding a net-new command that joins a family of existing commands (e.g. another `open*` command alongside sibling inventory/tool openers), match the siblings' signature exactly rather than designing a richer one. The sibling `open*` commands take a single optional argument — **the triggering web view's id** (`(webViewId: string | undefined) => Promise<string | undefined>`, returning the opened web-view id; see `openPlatformCharactersInventory` and `openFind` in `extensions/src/platform-scripture/src/main.ts`) — and resolve everything else internally. A new sibling should do the same. (`openManageBooks` accepts `webViewIdOrProjectId` to serve two dispatch paths; the plain web-view-id shape is the default.)
 
 Derive contextual inputs from state — do not add them as open parameters:
 

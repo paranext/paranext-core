@@ -1,3 +1,8 @@
+---
+paths:
+  - ".claude/commands/prd-to-jira.md"
+---
+
 ## Creating Jira Issues — Fill the Template, Don't Overwrite It
 
 Platform.Bible work is tracked in the **Paratext (`PT`) Jira project** on
