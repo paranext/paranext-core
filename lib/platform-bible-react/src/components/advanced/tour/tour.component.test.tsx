@@ -29,7 +29,7 @@ beforeEach(() => {
   // The type cast is needed because the object literal satisfies DOMRect's shape but TypeScript
   // cannot verify that without a full class instance; this is the standard jsdom test pattern.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  Element.prototype.getBoundingClientRect = () => DEFAULT_TEST_RECT as DOMRect;
+  Element.prototype.getBoundingClientRect = () => DEFAULT_TEST_RECT;
 });
 afterEach(() => {
   Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
@@ -191,7 +191,9 @@ describe('Tour', () => {
     // Give the target element a real bounding rect so computeCardPosition has non-zero geometry.
     // jsdom always returns zeros from getBoundingClientRect, so we mock it on the element.
     const TARGET_RECT = { left: 100, top: 50, width: 80, height: 40, right: 180, bottom: 90 };
-    const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    // Capture the current prototype method (which is already the beforeEach mock) so we can
+    // restore it in the finally block without re-shadowing the module-scope variable.
+    const priorGetBoundingClientRect = Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
       if (this.id === 'a')
         // The spread can't satisfy the full DOMRect interface (it has methods); this cast is the
@@ -203,7 +205,7 @@ describe('Tour', () => {
           y: TARGET_RECT.top,
           toJSON: () => ({}),
         } as DOMRect;
-      return originalGetBoundingClientRect.call(this);
+      return priorGetBoundingClientRect.call(this);
     };
 
     try {
@@ -227,7 +229,7 @@ describe('Tour', () => {
     } finally {
       // Restore prototype mocks regardless of assertion failures so subsequent tests are not
       // contaminated by the overridden getBoundingClientRect.
-      Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+      Element.prototype.getBoundingClientRect = priorGetBoundingClientRect;
       vi.mocked(readDirection).mockReturnValue('ltr');
     }
   });

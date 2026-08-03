@@ -3620,7 +3620,14 @@ export interface TourStep {
 }
 /** Props accepted by the {@link Tour} component. */
 export interface TourProps {
-	/** Ordered list of steps. Steps whose target selector is not found are skipped. */
+	/**
+	 * Ordered list of steps. Steps whose target selector is not found are skipped.
+	 *
+	 * **Snapshotted at open:** the list is filtered once when `open` flips to `true`. Steps added
+	 * after that point — or steps whose targets mount after the tour opens — are not picked up until
+	 * the tour re-opens. Pass steps only after the targets you intend to spotlight are already in the
+	 * DOM.
+	 */
 	steps: TourStep[];
 	/** Whether the tour overlay is visible. */
 	open: boolean;

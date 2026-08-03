@@ -23,13 +23,13 @@ import type {
   EffectiveResourceReferenceList,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { ComponentProps, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
 import { isDblResourceReference, getRefLabel } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ExpandableInfo, InstallFailedView, InstallingView } from './install-state-views.component';
 import { scrollToVerse } from './editor-dom.util';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -163,8 +163,6 @@ export function ModelTextPanel({
   } = useTruncationTooltip<HTMLDivElement>();
 
   const [isSelecting, setIsSelecting] = useState(false);
-  const [isMoreInfoOpen, setIsMoreInfoOpen] = useState(false);
-  const moreInfoBodyId = useId();
 
   // Auto-install a matched-but-uninstalled configured model text (shared with the resource panel);
   // without it the panel spins forever with the picker unreachable. Skipped while a manual pick is
@@ -385,24 +383,11 @@ export function ModelTextPanel({
         ) : (
           <>
             <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
-            <button
-              type="button"
-              className="tw:text-sm tw:text-primary tw:underline tw:cursor-pointer"
-              aria-expanded={isMoreInfoOpen}
-              aria-controls={moreInfoBodyId}
-              onClick={() => setIsMoreInfoOpen((prev) => !prev)}
-            >
-              {isMoreInfoOpen
-                ? localizedStrings['%webView_modelTextPanel_emptyState_lessInfo%']
-                : localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
-            </button>
-            <p
-              id={moreInfoBodyId}
-              hidden={!isMoreInfoOpen}
-              className="tw:text-sm tw:text-muted-foreground tw:max-w-xs"
-            >
-              {localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
-            </p>
+            <ExpandableInfo
+              moreLabel={localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
+              lessLabel={localizedStrings['%webView_modelTextPanel_emptyState_lessInfo%']}
+              body={localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
+            />
             <Button onClick={() => handlePickModelText()}>
               {localizedStrings['%webView_modelTextPanel_pickModelText%']}
             </Button>
