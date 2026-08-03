@@ -528,6 +528,45 @@ describe('scroll group service publishing across windows', () => {
     expect(forgetUnreachableRemoteObjects).toHaveBeenCalled();
   });
 
+  // A takeover can be triggered again while one is already in flight — close announcements arrive
+  // in quick succession, and the sweep fires the dispose events of the cached objects it forgets.
+  // Concurrent triggers must share one takeover run: two concurrent runs would race each other for
+  // the object name, with the loser noisily failing against a registry that rejects even the same
+  // registrant.
+  it('concurrent close announcements share one takeover run, and a later close still retries', async () => {
+    networkObjectSet.mockRejectedValueOnce(new Error('already registered'));
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+    expect(networkObjectSet).toHaveBeenCalledTimes(1);
+
+    // Hold the takeover's registration attempt in flight so the second announcement arrives before
+    // the run started by the first has settled.
+    let settleTakeoverRegistration = () => {};
+    networkObjectSet.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          settleTakeoverRegistration = () => reject(new Error('already registered'));
+        }),
+    );
+
+    closeWindow(1);
+    closeWindow(2);
+    await settlePendingWork();
+
+    // One registration attempt shared by both announcements, not one per announcement
+    expect(networkObjectSet).toHaveBeenCalledTimes(2);
+
+    // The in-flight attempt settles by losing the race to another surviving window
+    settleTakeoverRegistration();
+    await settlePendingWork();
+
+    // The guard must not latch: when the window that won that race closes later, this window
+    // re-enters the race again.
+    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
+    closeWindow(3);
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
+  });
+
   it('leaves the publishing window publishing when a different window closes', async () => {
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
     const host = await import('@renderer/services/scroll-group.service-host');

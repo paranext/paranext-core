@@ -5400,11 +5400,12 @@ declare module 'shared/services/internet.service' {
 declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   export type Severity = 'info' | 'warning' | 'error';
   /**
    * The placements a notification can appear in, as a frozen array so it can be the single source of
    * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
-   * `position` enum (which the service host spreads from this).
+   * `position` enum ({@link NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS} spreads from this).
    *
    * @experimental
    */
@@ -5575,6 +5576,17 @@ declare module 'shared/models/notification.service-model' {
     dismiss(notificationId: string | number): Promise<void>;
   }
   export const NotificationServiceNetworkObjectName = 'NotificationService';
+  /**
+   * OpenRPC documentation for the notification service network object.
+   *
+   * Attached in two places: each window's renderer registers its window-scoped name (e.g.
+   * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
+   * registers its routing proxy under the generic {@link NotificationServiceNetworkObjectName} — the
+   * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation;
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -12197,6 +12209,37 @@ declare module 'renderer/services/theme.service-host' {
       userThemes: ThemeFamiliesById,
       saveUserThemes: (userThemes: ThemeFamiliesById) => void,
     );
+    /**
+     * Replace the engine's live state with freshly loaded values and rebuild the served theme list
+     * from them.
+     *
+     * Run when this window takes over serving the engine from a closed host: the engine otherwise
+     * still holds the state this window loaded at startup, and serving (then eventually re-saving)
+     * that snapshot would silently roll back everything the previous host changed since.
+     *
+     * Static rather than an instance method because every non-`#`-private method on the engine is
+     * exposed to consumers when the engine is registered (see the note on the save methods above),
+     * and reloading state is a host-side lifecycle operation, not part of the theme data API. A
+     * static stays off the instance while still being able to reach the `#` members it needs.
+     *
+     * @param engine The engine whose state to replace
+     * @param currentTheme Freshly loaded current theme
+     * @param shouldMatchSystem Freshly loaded setting for matching the system theme
+     * @param currentSystemTheme The system theme as it is right now. Re-read alongside the persisted
+     *   values because only the hosting window listens for system theme changes, so a window that
+     *   spent its life attached carries the snapshot from its own load — and rebuilding the current
+     *   theme below against that stale value could flip the freshly loaded theme back to the wrong
+     *   type
+     * @param userThemes Freshly loaded user-defined theme families
+     * @experimental
+     */
+    static reloadState(
+      engine: ThemeDataProviderEngine,
+      currentTheme: ThemeDefinitionExpanded,
+      shouldMatchSystem: boolean,
+      currentSystemTheme: 'light' | 'dark',
+      userThemes: ThemeFamiliesById,
+    ): void;
     getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
     setCurrentTheme(
       newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,

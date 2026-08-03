@@ -88,16 +88,21 @@ const STARTUP_TIME_MS = 30000;
 
 // #region interacting with localStorage
 
+// The theme keys live in plain `localStorage`, which is shared across every window of the app, so
+// a fresh read always sees the values the current engine host last saved. These loaders run once at
+// module load and again when this window takes the engine over from a closed host — serving the
+// module-load snapshot at takeover would roll the app back to whatever this window saw when it
+// started (see `reloadPersistedThemeState`).
+
 const CURRENT_THEME_STORAGE_KEY = 'theme.service-host.currentTheme';
 
-/** FOR LOADING ONLY! DO NOT USE */
-const currentThemeSerialized = localStorage.getItem(CURRENT_THEME_STORAGE_KEY);
-// Load the whole theme data from localStorage now, then we will retrieve the actual theme data for
-// this theme when we can
-/** Current application theme that should be applied at startup. Will not be used afterward */
-const currentThemeFromLocalStorage: ThemeDefinitionExpanded = currentThemeSerialized
-  ? deserialize(currentThemeSerialized)
-  : DEFAULT_THEME;
+/** Read the most recently persisted current application theme (default theme if none persisted) */
+function loadCurrentThemeFromLocalStorage(): ThemeDefinitionExpanded {
+  const currentThemeSerialized = localStorage.getItem(CURRENT_THEME_STORAGE_KEY);
+  // Load the whole theme data from localStorage now, then we will retrieve the actual theme data
+  // for this theme when we can
+  return currentThemeSerialized ? deserialize(currentThemeSerialized) : DEFAULT_THEME;
+}
 
 function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeDefinitionExpanded) {
   localStorage.setItem(CURRENT_THEME_STORAGE_KEY, serialize(newCurrentTheme));
@@ -105,15 +110,14 @@ function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeDefinitionExpanded
 
 const SHOULD_MATCH_SYSTEM_STORAGE_KEY = 'theme.service-host.shouldMatchSystem';
 
-/** FOR LOADING ONLY! DO NOT USE */
-const shouldMatchSystemSerialized = localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY);
 /**
- * Whether the theme type (light/dark) should match the system theme at startup. Will not be used
- * afterward
+ * Read the most recently persisted setting for whether the theme type (light/dark) should match the
+ * system theme (`true` if none persisted)
  */
-const shouldMatchSystemFromLocalStorage: boolean = shouldMatchSystemSerialized
-  ? deserialize(shouldMatchSystemSerialized)
-  : true;
+function loadShouldMatchSystemFromLocalStorage(): boolean {
+  const shouldMatchSystemSerialized = localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY);
+  return shouldMatchSystemSerialized ? deserialize(shouldMatchSystemSerialized) : true;
+}
 
 function saveShouldMatchSystemToLocalStorage(newShouldMatchSystem: boolean) {
   localStorage.setItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY, serialize(newShouldMatchSystem));
@@ -121,17 +125,18 @@ function saveShouldMatchSystemToLocalStorage(newShouldMatchSystem: boolean) {
 
 const USER_THEMES_STORAGE_KEY = 'theme.service-host.userThemes';
 
-/** FOR LOADING ONLY! DO NOT USE */
-const userThemesSerialized = localStorage.getItem(USER_THEMES_STORAGE_KEY);
-/** User-defined theme families at startup. Will not be used afterward */
-const userThemesFromLocalStorage: ThemeFamiliesById = {
-  ...Object.fromEntries(
-    Object.entries(THEMES_DATA_OBJECT).filter(([themeFamilyId]) =>
-      startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+/** Read the most recently persisted user-defined theme families over the built-in ones */
+function loadUserThemesFromLocalStorage(): ThemeFamiliesById {
+  const userThemesSerialized = localStorage.getItem(USER_THEMES_STORAGE_KEY);
+  return {
+    ...Object.fromEntries(
+      Object.entries(THEMES_DATA_OBJECT).filter(([themeFamilyId]) =>
+        startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+      ),
     ),
-  ),
-  ...(userThemesSerialized ? deserialize(userThemesSerialized) : {}),
-};
+    ...(userThemesSerialized ? deserialize(userThemesSerialized) : {}),
+  };
+}
 
 function saveUserThemesToLocalStorage(newUserThemes: ThemeFamiliesById) {
   localStorage.setItem(USER_THEMES_STORAGE_KEY, serialize(newUserThemes));
@@ -187,6 +192,14 @@ class ThemeDataProviderEngine
    * `undefined`, await this variable.
    */
   #allThemeFamiliesByIdAsyncVariable: AsyncVariable<ThemeFamiliesByIdExpanded>;
+  /**
+   * The most recent theme families received from `onDidUpdateAllThemes`, WITHOUT the user-defined
+   * families merged in. Kept so {@link ThemeDataProviderEngine.reloadState} can rebuild
+   * `allThemeFamiliesById` from a pristine base: rebuilding over the merged set instead would let a
+   * user-defined family that no longer exists in the freshly loaded user themes live on in the
+   * served list.
+   */
+  #themeFamiliesFromLastUpdate: ThemeFamiliesByIdExpanded | undefined;
   #isDisposed = false;
 
   // Actually private methods set in the constructor. These need to be real private methods to avoid
@@ -240,6 +253,10 @@ class ThemeDataProviderEngine
     (async () => {
       try {
         const unsubscribe = await onDidUpdateAllThemes((allThemeFamilies) => {
+          // Keep the payload as received — no user themes merged in — for `reloadState` to
+          // rebuild from (see `#themeFamiliesFromLastUpdate`)
+          if (!isPlatformError(allThemeFamilies))
+            this.#themeFamiliesFromLastUpdate = allThemeFamilies;
           const dataTypesToUpdate = this.#updateAllThemeFamiliesNoUpdate(allThemeFamilies);
           // Notify others if theme data changed
           if (dataTypesToUpdate) this.notifyUpdate(dataTypesToUpdate);
@@ -262,6 +279,49 @@ class ThemeDataProviderEngine
     };
     updateThemeToSystem(currentSystemTheme);
     this.unsubscribeEventListeners.add(onDidChangeSystemTheme(updateThemeToSystem));
+  }
+
+  /**
+   * Replace the engine's live state with freshly loaded values and rebuild the served theme list
+   * from them.
+   *
+   * Run when this window takes over serving the engine from a closed host: the engine otherwise
+   * still holds the state this window loaded at startup, and serving (then eventually re-saving)
+   * that snapshot would silently roll back everything the previous host changed since.
+   *
+   * Static rather than an instance method because every non-`#`-private method on the engine is
+   * exposed to consumers when the engine is registered (see the note on the save methods above),
+   * and reloading state is a host-side lifecycle operation, not part of the theme data API. A
+   * static stays off the instance while still being able to reach the `#` members it needs.
+   *
+   * @param engine The engine whose state to replace
+   * @param currentTheme Freshly loaded current theme
+   * @param shouldMatchSystem Freshly loaded setting for matching the system theme
+   * @param currentSystemTheme The system theme as it is right now. Re-read alongside the persisted
+   *   values because only the hosting window listens for system theme changes, so a window that
+   *   spent its life attached carries the snapshot from its own load — and rebuilding the current
+   *   theme below against that stale value could flip the freshly loaded theme back to the wrong
+   *   type
+   * @param userThemes Freshly loaded user-defined theme families
+   * @experimental
+   */
+  static reloadState(
+    engine: ThemeDataProviderEngine,
+    currentTheme: ThemeDefinitionExpanded,
+    shouldMatchSystem: boolean,
+    currentSystemTheme: 'light' | 'dark',
+    userThemes: ThemeFamiliesById,
+  ): void {
+    engine.currentTheme = currentTheme;
+    engine.shouldMatchSystem = shouldMatchSystem;
+    engine.currentSystemTheme = currentSystemTheme;
+    engine.userThemes = userThemes;
+    // Rebuild the served theme list so it merges the fresh user themes over the latest provider
+    // payload, and reconcile the fresh current theme against the result the same way an incoming
+    // update would. Before the first payload arrives there is nothing to rebuild — the
+    // subscription's first event will pick the fresh user themes up when it fires.
+    if (engine.#themeFamiliesFromLastUpdate)
+      engine.#updateAllThemeFamiliesNoUpdate(engine.#themeFamiliesFromLastUpdate);
   }
 
   async getCurrentTheme(): Promise<ThemeDefinitionExpanded> {
@@ -566,18 +626,34 @@ class ThemeDataProviderEngine
 }
 
 const themeServiceEngine = new ThemeDataProviderEngine(
-  currentThemeFromLocalStorage,
+  loadCurrentThemeFromLocalStorage(),
   saveCurrentThemeToLocalStorage,
-  shouldMatchSystemFromLocalStorage,
+  loadShouldMatchSystemFromLocalStorage(),
   saveShouldMatchSystemToLocalStorage,
   async (allThemesHandler) => {
     return themeDataService.subscribeAllThemes(undefined, allThemesHandler);
   },
   getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
   onDidChangeSystemThemeEmitter.event,
-  userThemesFromLocalStorage,
+  loadUserThemesFromLocalStorage(),
   saveUserThemesToLocalStorage,
 );
+
+/**
+ * Re-read everything {@link themeServiceEngine} was constructed with at module load — the persisted
+ * theme state (current theme, should-match-system, user themes; `localStorage` is shared across all
+ * windows, so this sees the last values any window saved) and the current system theme — and apply
+ * it to the engine's live state.
+ */
+function reloadPersistedThemeState(): void {
+  ThemeDataProviderEngine.reloadState(
+    themeServiceEngine,
+    loadCurrentThemeFromLocalStorage(),
+    loadShouldMatchSystemFromLocalStorage(),
+    getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
+    loadUserThemesFromLocalStorage(),
+  );
+}
 
 /** Need to run initialize before using this */
 let dataProvider: IThemeService;
@@ -591,12 +667,41 @@ let runInitialize: () => Promise<void>;
 /** Whether this window is the one currently hosting the theme engine */
 let isHostingThemeEngine = false;
 
-/** Re-arm {@link runInitialize} and run it, so this window re-enters the host-or-attach race. */
+/**
+ * Host-or-attach run started by {@link retryHostOrAttachToThemeEngine} that has not settled yet, if
+ * any. A takeover fires from two triggers at once: clearing the unreachable provider fires its
+ * `onDidDispose` (wired to the retry), and the sweep that cleared it retries again on its own
+ * completion. Each retry builds a fresh cached initializer, so without this guard the two triggers
+ * would run `registerEngine` concurrently and race each other for the engine name — the loser's
+ * event registration is rejected by the central registry (single-source names reject even the same
+ * handler) and it noisily falls into the attach path. Cleared when the run settles so a later host
+ * close can retry again.
+ */
+let pendingRetryPromise: Promise<void> | undefined;
+
+/**
+ * Re-arm {@link runInitialize} and run it, so this window re-enters the host-or-attach race.
+ *
+ * Idempotent while a retry is in flight: concurrent triggers share the pending run instead of
+ * starting another (see {@link pendingRetryPromise}).
+ */
 function retryHostOrAttachToThemeEngine(): void {
+  if (pendingRetryPromise) return;
+  // The engine still holds whatever this window loaded at startup, and the host that just went away
+  // may have saved newer state since then. Refresh before re-entering the race: winning it with the
+  // startup snapshot would republish — and, on the next save, persist — pre-close state, dropping
+  // the user's changes.
+  reloadPersistedThemeState();
   runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
-  runInitialize().catch((e) => {
-    logger.warn(`Failed to re-host the theme service after its host closed: ${getErrorMessage(e)}`);
-  });
+  pendingRetryPromise = runInitialize()
+    .catch((e) => {
+      logger.warn(
+        `Failed to re-host the theme service after its host closed: ${getErrorMessage(e)}`,
+      );
+    })
+    .finally(() => {
+      pendingRetryPromise = undefined;
+    });
 }
 
 /**

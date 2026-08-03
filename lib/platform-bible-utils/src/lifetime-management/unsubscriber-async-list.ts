@@ -23,7 +23,11 @@ export class UnsubscriberAsyncList {
   /**
    * Run all unsubscribers added to this list and then clear the list.
    *
-   * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+   * An unsubscriber that throws (synchronously or asynchronously) does not make this method reject:
+   * the error is caught and logged via `console.error`, the remaining unsubscribers still run, and
+   * the thrower counts as a failure in the return value.
+   *
+   * @returns `true` if all unsubscribers succeeded, `false` if any returned `false` or threw.
    */
   async runAllUnsubscribers(): Promise<boolean> {
     // Each unsubscriber is invoked and awaited independently so one that throws — synchronously or

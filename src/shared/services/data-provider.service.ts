@@ -819,6 +819,18 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     REGISTER_DATA_PROVIDER_TIMEOUT_MS,
   );
 
+  /**
+   * The provider's networked update emitter. Declared outside the `try` so the failure path can
+   * dispose it: the update event is centrally registered before the network object is, so a failure
+   * between those steps (e.g. losing the object-name race to another process) would otherwise leave
+   * the event name registered under this process's live connection — and a registered single-source
+   * event name rejects every future attempt to host this provider, app-wide, for as long as this
+   * process stays connected.
+   */
+  let onDidUpdateEmitter:
+    | PlatformEventEmitter<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>
+    | undefined;
+
   try {
     // Create a networked update event
     const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
@@ -826,7 +838,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     // NetworkEvents. Cast the name to satisfy the constraint; the payload type is recovered
     // from the surrounding function's generic context.
     /* eslint-disable no-type-assertion/no-type-assertion */
-    const onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
+    onDidUpdateEmitter = (await networkService.createNetworkEventEmitterAsync(
       dynamicEventName as NetworkEventTypes,
       {
         notification: {
@@ -883,6 +895,19 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 
     return disposableDataProvider;
   } catch (e) {
+    // If the update event was already registered, unregister it (disposing the emitter sends the
+    // unregister); otherwise the event name would stay centrally registered under this live
+    // connection and reject every future attempt to host this provider. Wrapped so a dispose
+    // failure cannot mask the registration error that actually caused this.
+    if (onDidUpdateEmitter) {
+      try {
+        onDidUpdateEmitter.dispose();
+      } catch (disposeError) {
+        logger.warn(
+          `Failed to dispose the update event emitter while cleaning up the failed registration of data provider ${providerName}: ${getErrorMessage(disposeError)}`,
+        );
+      }
+    }
     // Nothing below settles this variable on the failure path, so without this it would sit until
     // its timeout and reject ~30 seconds after the fact, far from the cause and pointing nowhere
     // useful. Settling it here makes a failed registration fail fast and attributably. The

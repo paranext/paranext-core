@@ -514,7 +514,8 @@ async function main() {
     resetShutdownLatchesForNewSession();
 
     // Load the previous state with fallback to defaults.
-    // Only use windowStateKeeper for the first window; subsequent windows let the OS stagger them.
+    // Only use windowStateKeeper for the first window; subsequent windows are not managed by it, so
+    // their size and position are not persisted.
     const isFirstWindow = windows.length === 0;
     const mainWindowState = isFirstWindow
       ? windowStateKeeper({ defaultWidth: 1024, defaultHeight: 728 })
