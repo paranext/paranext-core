@@ -115,7 +115,6 @@ import { FootnotesLayout } from './platform-scripture-editor-footnotes.component
 import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
-  CHARACTER_MARKER_MENU_STRING_KEYS,
   deepEqualAcrossIframes,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
@@ -124,6 +123,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
+import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import {
