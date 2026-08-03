@@ -34,7 +34,7 @@ import {
   ResourceType,
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -51,7 +51,7 @@ import {
   getRefLabel,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ExpandableInfo, InstallFailedView, InstallingView } from './install-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -329,8 +329,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
   let resourceProjectId: string | undefined;
   let dblMatch: (typeof dblResources)[number] | undefined;
   const [isSelecting, setIsSelecting] = useState(false);
-  const [isBibleTextsMoreInfoOpen, setIsBibleTextsMoreInfoOpen] = useState(false);
-  const bibleTextsMoreInfoBodyId = useId();
 
   if (isDblResourceReference(selectedRef)) {
     dblMatch = findCachedDblResource(selectedRef, dblResources);
@@ -564,26 +562,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
         <p>{localizedStrings[emptyStatePromptKey]}</p>
         {resourceType === 'ScriptureResource' && (
-          <>
-            <button
-              type="button"
-              className="tw:text-sm tw:text-primary tw:underline tw:cursor-pointer"
-              aria-expanded={isBibleTextsMoreInfoOpen}
-              aria-controls={bibleTextsMoreInfoBodyId}
-              onClick={() => setIsBibleTextsMoreInfoOpen((prev) => !prev)}
-            >
-              {isBibleTextsMoreInfoOpen
-                ? localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']
-                : localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
-            </button>
-            <p
-              id={bibleTextsMoreInfoBodyId}
-              hidden={!isBibleTextsMoreInfoOpen}
-              className="tw:text-sm tw:text-muted-foreground tw:max-w-xs"
-            >
-              {localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
-            </p>
-          </>
+          <ExpandableInfo
+            moreLabel={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
+            lessLabel={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']}
+            body={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
+          />
         )}
         <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
       </div>

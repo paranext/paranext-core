@@ -32,7 +32,14 @@ export interface TourStep {
 
 /** Props accepted by the {@link Tour} component. */
 export interface TourProps {
-  /** Ordered list of steps. Steps whose target selector is not found are skipped. */
+  /**
+   * Ordered list of steps. Steps whose target selector is not found are skipped.
+   *
+   * **Snapshotted at open:** the list is filtered once when `open` flips to `true`. Steps added
+   * after that point — or steps whose targets mount after the tour opens — are not picked up until
+   * the tour re-opens. Pass steps only after the targets you intend to spotlight are already in the
+   * DOM.
+   */
   steps: TourStep[];
   /** Whether the tour overlay is visible. */
   open: boolean;
@@ -139,7 +146,7 @@ export function Tour({
   // Resolve which steps actually have a target in the DOM, computed when the tour opens.
   // Steps whose targets mount after open() fires are not picked up until the tour re-opens.
   const [visibleSteps, setVisibleSteps] = useState<TourStep[]>([]);
-  const [pos, setPos] = useState(0);
+  const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<TargetRect | undefined>(undefined);
   // Tracks real card height; starts with an approximation for the first render's position math.
   const [cardHeight, setCardHeight] = useState(CARD_APPROX_HEIGHT_PX);
@@ -161,23 +168,23 @@ export function Tour({
   useLayoutEffect(() => {
     if (!open) {
       setVisibleSteps([]);
-      setPos(0);
+      setStepIndex(0);
       setTargetRect(undefined);
       return;
     }
     setVisibleSteps(steps.filter((step) => !!document.querySelector(step.target)));
-    setPos(0);
+    setStepIndex(0);
     // Snapshot steps once on open; intentionally excludes 'steps' from deps so mid-tour
     // locale updates do not reset the user back to step 1.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const currentStep = visibleSteps[pos];
+  const currentStep = visibleSteps[stepIndex];
 
   // Measure the current target; re-measure on resize or scroll.
   useEffect(() => {
     if (!open || !currentStep) return undefined;
-    let rafId: number | undefined;
+    let remeasureFrameId: number | undefined;
     const measure = () => {
       const r = measureTarget(currentStep.target);
       // Keep last-known-good rect if the target momentarily can't be measured, so the overlay
@@ -185,9 +192,9 @@ export function Tour({
       if (r) setTargetRect(r);
     };
     const scheduleRemeasure = () => {
-      if (rafId !== undefined) return;
-      rafId = requestAnimationFrame(() => {
-        rafId = undefined;
+      if (remeasureFrameId !== undefined) return;
+      remeasureFrameId = requestAnimationFrame(() => {
+        remeasureFrameId = undefined;
         measure();
       });
     };
@@ -198,7 +205,7 @@ export function Tour({
     return () => {
       window.removeEventListener('resize', scheduleRemeasure);
       window.removeEventListener('scroll', scheduleRemeasure, { capture: true });
-      if (rafId !== undefined) cancelAnimationFrame(rafId);
+      if (remeasureFrameId !== undefined) cancelAnimationFrame(remeasureFrameId);
     };
   }, [open, currentStep]);
 
@@ -209,7 +216,7 @@ export function Tour({
   useLayoutEffect(() => {
     const measured = cardRef.current?.offsetHeight;
     if (measured) setCardHeight((prev) => (prev !== measured ? measured : prev));
-  }, [open, pos]);
+  }, [open, stepIndex]);
 
   // Save focus on open; restore it on close.
   useEffect(() => {
@@ -230,16 +237,16 @@ export function Tour({
     if (open && currentStep) primaryButtonRef.current?.focus();
   }, [open, currentStep]);
 
-  const isLast = pos === visibleSteps.length - 1;
-  const isFirst = pos === 0;
+  const isLast = stepIndex === visibleSteps.length - 1;
+  const isFirst = stepIndex === 0;
 
   const handleNext = useCallback(() => {
-    if (!isLast) setPos((p) => p + 1);
+    if (!isLast) setStepIndex((i) => i + 1);
     else onDone();
   }, [isLast, onDone]);
 
   const handleBack = useCallback(() => {
-    if (!isFirst) setPos((p) => p - 1);
+    if (!isFirst) setStepIndex((i) => i - 1);
   }, [isFirst]);
 
   useEffect(() => {
@@ -289,11 +296,11 @@ export function Tour({
   const physicalSide = resolvePhysicalSide(currentStep.side ?? 'bottom');
   const cardPos = computeCardPosition(targetRect, physicalSide, cardHeight);
 
-  const pad = currentStep.spotlightPadding ?? SPOTLIGHT_PADDING_PX;
-  const spotX = targetRect.left - pad;
-  const spotY = targetRect.top - pad;
-  const spotW = targetRect.width + pad * 2;
-  const spotH = targetRect.height + pad * 2;
+  const spotlightPadding = currentStep.spotlightPadding ?? SPOTLIGHT_PADDING_PX;
+  const spotlightX = targetRect.left - spotlightPadding;
+  const spotlightY = targetRect.top - spotlightPadding;
+  const spotlightWidth = targetRect.width + spotlightPadding * 2;
+  const spotlightHeight = targetRect.height + spotlightPadding * 2;
 
   return (
     <div
@@ -325,7 +332,14 @@ export function Tour({
         <defs>
           <mask id={maskId}>
             <rect width="100%" height="100%" fill="white" />
-            <rect x={spotX} y={spotY} width={spotW} height={spotH} rx="6" fill="black" />
+            <rect
+              x={spotlightX}
+              y={spotlightY}
+              width={spotlightWidth}
+              height={spotlightHeight}
+              rx="6"
+              fill="black"
+            />
           </mask>
         </defs>
         <rect width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask={`url(#${maskId})`} />
@@ -346,8 +360,8 @@ export function Tour({
       >
         <p className="tw:text-xs tw:text-muted-foreground">
           {stepCounter
-            ? stepCounter(pos + 1, visibleSteps.length)
-            : `${pos + 1} / ${visibleSteps.length}`}
+            ? stepCounter(stepIndex + 1, visibleSteps.length)
+            : `${stepIndex + 1} / ${visibleSteps.length}`}
         </p>
         <h3 className="tw:text-sm tw:font-semibold">{currentStep.title}</h3>
         <p id={descId} className="tw:text-sm tw:text-muted-foreground">
@@ -373,5 +387,3 @@ export function Tour({
     </div>
   );
 }
-
-export default Tour;

@@ -4,7 +4,7 @@ import { OnboardingTour } from './onboarding-tour.component';
 const meta: Meta<typeof OnboardingTour> = {
   title: 'Advanced/OnboardingTour',
   component: OnboardingTour,
-  tags: ['autodocs', 'test'],
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     docs: {
