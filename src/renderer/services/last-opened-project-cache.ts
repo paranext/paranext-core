@@ -13,9 +13,18 @@
 
 const STORAGE_KEY = 'platform-bible.lastOpenedProject';
 
-export type LastOpenedProject = { id: string; name?: string };
+/**
+ * `isEditable` mirrors `ProjectMetadata.isEditable`: whether the cached project's Scripture text
+ * can be edited by the current user. Missing (older cache entries, or a write that raced the
+ * metadata fetch) must be treated as editable by callers — same "absent means editable" default
+ * used for `ProjectMetadata.isEditable` elsewhere (e.g. `use-project-picker-data.hook.ts`) — so
+ * that a stale/partial cache entry doesn't downgrade a genuinely editable project.
+ */
+export type LastOpenedProject = { id: string; name?: string; isEditable?: boolean };
 
-function isLastOpenedProject(value: unknown): value is { id: string; name?: unknown } {
+function isLastOpenedProject(
+  value: unknown,
+): value is { id: string; name?: unknown; isEditable?: unknown } {
   if (!value || typeof value !== 'object') return false;
   if (!('id' in value)) return false;
   const { id }: { id: unknown } = value;
@@ -27,6 +36,11 @@ function readName(value: { name?: unknown }): string | undefined {
   return typeof name === 'string' && name.length > 0 ? name : undefined;
 }
 
+function readIsEditable(value: { isEditable?: unknown }): boolean | undefined {
+  const { isEditable } = value;
+  return typeof isEditable === 'boolean' ? isEditable : undefined;
+}
+
 export function getLastOpenedProject(): LastOpenedProject | undefined {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -34,10 +48,15 @@ export function getLastOpenedProject(): LastOpenedProject | undefined {
     const parsed: unknown = JSON.parse(raw);
     if (!isLastOpenedProject(parsed)) return undefined;
     const name = readName(parsed);
-    // Omit the `name` key entirely when there's no name to report, matching the optional shape of
-    // `LastOpenedProject` — destructuring `name` then yields a missing key rather than an explicit
+    const isEditable = readIsEditable(parsed);
+    // Omit keys entirely when there's nothing to report, matching the optional shape of
+    // `LastOpenedProject` — destructuring then yields a missing key rather than an explicit
     // `undefined`.
-    return name === undefined ? { id: parsed.id } : { id: parsed.id, name };
+    return {
+      id: parsed.id,
+      ...(name === undefined ? {} : { name }),
+      ...(isEditable === undefined ? {} : { isEditable }),
+    };
   } catch {
     // unavailable or malformed — fall through
   }
@@ -47,7 +66,10 @@ export function getLastOpenedProject(): LastOpenedProject | undefined {
 export function setLastOpenedProject(project: LastOpenedProject): void {
   if (!project.id) return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: project.id, name: project.name }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ id: project.id, name: project.name, isEditable: project.isEditable }),
+    );
   } catch {
     // best-effort cache; a failed write just means the next switch falls back to the slow path
   }

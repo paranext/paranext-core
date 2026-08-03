@@ -1,7 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BoxBase, LayoutBase, PanelBase } from 'rc-dock';
+import { LayoutBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
-import { buildSimpleLayoutForProject, SIMPLE_LAYOUT_TAB_IDS } from './simple-layout.builder';
+import {
+  buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_TAB_IDS,
+  visitPanels,
+  visitTabs,
+} from './simple-layout.builder';
 import { simpleLayout } from './simple-layout.data';
 
 vi.mock('@renderer/components/web-view.component', () => ({
@@ -15,22 +20,6 @@ vi.mock('@renderer/services/theme.service-host', () => ({
 
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
 
-function visitTabs(layout: LayoutBase, visit: (tab: SavedTabInfo) => void): void {
-  const isBoxBase = (node: BoxBase | PanelBase): node is BoxBase => 'children' in node;
-  const isPanelBase = (node: BoxBase | PanelBase): node is PanelBase => 'tabs' in node;
-  const visitNode = (node: BoxBase | PanelBase) => {
-    if (isBoxBase(node)) node.children.forEach(visitNode);
-    else if (isPanelBase(node))
-      node.tabs.forEach((tab) => {
-        // rc-dock's `TabBase` doesn't expose `data`, but every tab in `simpleLayout` is built as a
-        // SavedTabInfo (mirrors the cast in `simple-layout.builder.ts`).
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        visit(tab as unknown as SavedTabInfo);
-      });
-  };
-  if (layout.dockbox) visitNode(layout.dockbox);
-}
-
 function collectTabs(layout: LayoutBase): SavedTabInfo[] {
   const tabs: SavedTabInfo[] = [];
   visitTabs(layout, (tab) => tabs.push(tab));
@@ -43,13 +32,7 @@ function countColumns(layout: LayoutBase): number {
 
 function panelTabCounts(layout: LayoutBase): number[] {
   const counts: number[] = [];
-  const isBoxBase = (node: BoxBase | PanelBase): node is BoxBase => 'children' in node;
-  const isPanelBase = (node: BoxBase | PanelBase): node is PanelBase => 'tabs' in node;
-  const visitNode = (node: BoxBase | PanelBase) => {
-    if (isBoxBase(node)) node.children.forEach(visitNode);
-    else if (isPanelBase(node)) counts.push(node.tabs.length);
-  };
-  if (layout.dockbox) visitNode(layout.dockbox);
+  visitPanels(layout, (panel) => counts.push(panel.tabs.length));
   return counts;
 }
 
@@ -80,17 +63,17 @@ describe('simple-layout.builder', () => {
 
   describe('buildSimpleLayoutForProject', () => {
     it('returns a LayoutBase with the same column structure as simpleLayout', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const result = buildSimpleLayoutForProject('proj-1', false);
       expect(countColumns(result)).toBe(countColumns(simpleLayout));
     });
 
     it('returns a LayoutBase with the same per-panel tab counts as simpleLayout', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const result = buildSimpleLayoutForProject('proj-1', false);
       expect(panelTabCounts(result)).toEqual(panelTabCounts(simpleLayout));
     });
 
     it('every tab in the result has data.projectId === provided projectId', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const result = buildSimpleLayoutForProject('proj-1', false);
       const tabs = collectTabs(result);
       expect(tabs.length).toBeGreaterThan(0);
       tabs.forEach((tab) => {
@@ -101,8 +84,8 @@ describe('simple-layout.builder', () => {
       });
     });
 
-    it('the scripture editor tab has data.state.isReadOnly === false', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+    it('the scripture editor tab has data.state.isReadOnly === false when isReadOnly arg is false', () => {
+      const result = buildSimpleLayoutForProject('proj-1', false);
       const tabs = collectTabs(result);
       const editorTab = tabs.find((tab) => {
         // Narrow only the field we read.
@@ -118,8 +101,25 @@ describe('simple-layout.builder', () => {
       expect(state?.isReadOnly).toBe(false);
     });
 
+    it('the scripture editor tab has data.state.isReadOnly === true when isReadOnly arg is true', () => {
+      const result = buildSimpleLayoutForProject('proj-1', true);
+      const tabs = collectTabs(result);
+      const editorTab = tabs.find((tab) => {
+        // Narrow only the field we read.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const data = tab.data as { webViewType?: string };
+        return data.webViewType === SCRIPTURE_EDITOR_WEB_VIEW_TYPE;
+      });
+      expect(editorTab).toBeDefined();
+      // Narrow only the field we read.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const { state } = editorTab?.data as { state?: { isReadOnly?: boolean } };
+      expect(state).toBeDefined();
+      expect(state?.isReadOnly).toBe(true);
+    });
+
     it('preserves the empty {} state shape on non-editor tabs', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const result = buildSimpleLayoutForProject('proj-1', false);
       const tabs = collectTabs(result);
       const nonEditorTabs = tabs.filter((tab) => {
         // Narrow only the field we read.
@@ -137,7 +137,7 @@ describe('simple-layout.builder', () => {
     });
 
     it('returns a deep clone — mutating a tab in the result does not mutate simpleLayout', () => {
-      const result = buildSimpleLayoutForProject('proj-1');
+      const result = buildSimpleLayoutForProject('proj-1', false);
       const resultTabs = collectTabs(result);
       const staticTabs = collectTabs(simpleLayout);
       const firstResultTab = resultTabs[0];
@@ -155,8 +155,8 @@ describe('simple-layout.builder', () => {
     });
 
     it('produces independent objects across calls with different projectIds', () => {
-      const a = buildSimpleLayoutForProject('proj-a');
-      const b = buildSimpleLayoutForProject('proj-b');
+      const a = buildSimpleLayoutForProject('proj-a', false);
+      const b = buildSimpleLayoutForProject('proj-b', false);
       expect(a).not.toBe(b);
       expect(a.dockbox).not.toBe(b.dockbox);
       const aTabs = collectTabs(a);

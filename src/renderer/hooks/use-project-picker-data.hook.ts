@@ -91,6 +91,10 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
     shortName: m.name ?? m.id,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
+    // `isEditable` is optional on `ProjectMetadata`; a factory that omits it must be treated as
+    // editable to match the registered contribution default (true) for `platform.isEditable` (see
+    // the recents filter below for the full reasoning).
+    isEditable: m.isEditable !== false,
   };
 }
 
@@ -369,11 +373,27 @@ export function useProjectPickerData(): ProjectPickerData {
   // Cache the current Scripture editor's project so a future power → simple switch can show the
   // overlay with the right name and build the simple layout without awaiting the recents provider
   // + PDP chain. Best-effort: read by `handleSwitchToSimpleMode` in `web-view.service-host`.
+  // `isEditable` is cached alongside the id because `currentProject` is "whichever scripture-editor
+  // web view is active" (`findFirstEditorWebViewDefinition`), which is not necessarily editable — it
+  // can be a read-only Resource Viewer. Baking that project into the simple layout must preserve its
+  // real read-only state instead of assuming editable.
+  //
+  // Skip the write entirely when `currentProjectError` is set: the `currentProject` promise's catch
+  // branch (above) resolves to a degraded placeholder with no `isEditable` field rather than
+  // rejecting, so without this guard a transient metadata-fetch failure (e.g. a project locked
+  // mid-Send/Receive) would overwrite a previously-known `isEditable: false` with "no info" —
+  // silently downgrading a cached non-editable project back to editable.
   useEffect(() => {
-    if (!currentProject?.id) return;
+    if (!currentProject?.id || currentProjectError) return;
     const name = currentProject.fullName || currentProject.shortName || undefined;
-    setLastOpenedProject({ id: currentProject.id, name });
-  }, [currentProject?.id, currentProject?.fullName, currentProject?.shortName]);
+    setLastOpenedProject({ id: currentProject.id, name, isEditable: currentProject.isEditable });
+  }, [
+    currentProject?.id,
+    currentProject?.fullName,
+    currentProject?.shortName,
+    currentProject?.isEditable,
+    currentProjectError,
+  ]);
 
   const recentIdSet = useMemo(
     () => new Set(safeRecentIds.map((id: string) => normalizeProjectId(id))),
