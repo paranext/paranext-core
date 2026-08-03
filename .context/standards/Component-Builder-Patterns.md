@@ -10,6 +10,8 @@ toc: true
 
 # Component Builder Patterns Reference
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 This is a reference document containing patterns and examples for building Platform.Bible UI components.
 
 <!-- TOC:BEGIN -->
@@ -60,6 +62,7 @@ Reference: `extensions/src/platform-scripture/tsconfig.json`. Each extension's `
 - `../../../node_modules/@types` — default type declarations
 - `../../../lib` — `papi-dts` type declarations (for `papi.d.ts`)
 - `../../../extensions/src` — sibling extensions' type declarations
+- `../../../src/@types` — core's React 19 / library compat type shims — **required**: without it, the auto-loaded broken `@types/*` packages (e.g. `@types/mdx`) fail typecheck
 - `src/types` — this extension's own `.d.ts`
 
 Do **not** use `../paranext-core/...` — that's a path from outside the repo and will silently miss type roots.
@@ -98,9 +101,9 @@ import { WebViewProps } from '@papi/core';
 import { Button, Card, cn } from 'platform-bible-react';
 import './feature-name.web-view.scss'; // Optional SCSS
 
-// IMPORTANT: Use `global.webViewComponent` (NOT `globalThis.webViewComponent`)
-// `globalThis` causes TypeScript strict mode errors
-global.webViewComponent = function FeatureWebView({
+// papi.d.ts documents `globalThis.webViewComponent` as the canonical form;
+// `global.webViewComponent` also works and appears in some shipped web views.
+globalThis.webViewComponent = function FeatureWebView({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
@@ -143,7 +146,7 @@ export class FeatureWebViewProvider implements IWebViewProvider {
 
 `useWebViewState<T>(key, default)` is scoped **per `webViewId`**, not per project or per user. Each `openWebView` call without a reuse strategy mints a **new** web view id, so closing and reopening a tool creates a fresh instance with empty state — slots persisted via `useWebViewState` do **not** survive close/reopen.
 
-There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/shared/services/web-view.service-host.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
+There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/renderer/services/web-view.service-host.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
 
 ### Custom Web View Options
 
@@ -374,7 +377,7 @@ grep -i "cancel\|ok\|save\|close\|submit\|error\|loading" \
   extensions/src/{ext}/contributions/localizedStrings.json
 ```
 
-Common reusable keys: `%general_cancel%`, `%general_ok%`, `%general_save%`, `%general_close%`, `%general_loading%`
+Common reusable keys (verify in `assets/localization/en.json` before using — the set changes): `%general_cancel%`, `%general_ok%`, `%general_loading%`, `%general_open%`, `%general_run%`
 
 ### Existing Strings Are Immutable
 
@@ -641,7 +644,7 @@ Find similar React components in the codebase for patterns to follow:
 | checks-side-panel | Filter + results list | `extensions/src/platform-scripture/src/checks-side-panel.web-view.tsx` |
 | find | Search + results | `extensions/src/platform-scripture/src/find.web-view.tsx` |
 | inventory | Data grid | `extensions/src/platform-scripture/src/inventory.web-view.tsx` |
-| project-settings | Settings/form | `extensions/src/platform-scripture/src/project-settings.web-view.tsx` |
+| settings tab (core) | Settings/form | `src/renderer/components/settings-tabs/settings-tab.component.tsx` |
 
 ---
 

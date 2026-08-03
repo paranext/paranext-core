@@ -5,6 +5,8 @@ description: Established C#/TypeScript patterns, naming conventions, file organi
 
 # paranext-core Implementation Patterns
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 This document describes the established patterns in the paranext-core codebase — the conventions a new contributor should follow when adding C# services, data providers, TypeScript commands, or extensions.
 
 ## C# Patterns
@@ -39,7 +41,7 @@ Terse decisions for the C# backend. Each lists the chosen approach, what to avoi
 
 - **JSON serialization:** System.Text.Json.
   - Avoid: Newtonsoft (Json.NET).
-  - Why: modern, built-in, faster. STJ is the established convention (54 files use it; a single legacy Newtonsoft usage survives in `EnhancedResources/PartOfSpeechTranslator.cs`).
+  - Why: modern, built-in, faster. STJ is the established convention (dozens of files use it; a single legacy Newtonsoft usage survives in `EnhancedResources/PartOfSpeechTranslator.cs`).
 - **Dependency injection:** manual constructor wiring.
   - Avoid: any DI container (Microsoft.Extensions.DependencyInjection, Autofac, etc.).
   - Why: explicit, simpler to debug; the object graph is small and assembled in `Program.cs`.
@@ -189,10 +191,10 @@ NetworkObject (base)
 ```
 
 **Key methods:**
-- `RegisterDataProviderAsync()` - Registers on PAPI network
+- `RegisterDataProviderAsync()` - Registers on PAPI network and starts the provider
 - `GetFunctions()` - Returns callable functions as `List<(string functionName, Delegate function)>`
 - `SendDataUpdateEvent()` - Notifies network of data changes
-- `StartDataProviderAsync()` - Starts the provider after registration
+- `StartDataProviderAsync()` - Protected override hook invoked by `RegisterDataProviderAsync()` (not a caller API)
 
 **When to use:**
 - Stateful data whose consumers need to observe changes over time (the `get` / `set` / `subscribe` triplet over named data types)
@@ -295,7 +297,7 @@ When you want to expose new data from an existing `ProjectDataProvider` (e.g. `P
    ```csharp
    public const string BOOK_SUMMARY = "platformScripture.BookSummary";
    ```
-4. **C# project advertisement.** Add the constant to the provider's supported interfaces list (e.g. `s_paratextProjectInterfaces` in `LocalParatextProjects.cs`) so projects advertise it via `getMetadataForAllProjects`:
+4. **C# project advertisement.** Add the constant to the provider's supported interfaces lists in `LocalParatextProjects.cs` — since #2342 (2026-06-18) there are two: `s_paratextPublishedProjectInterfaces` (include only if published/read-only resource projects can genuinely serve the interface) and `s_paratextUnpublishedProjectInterfaces` (regular editable projects). Projects advertise it via `getMetadataForAllProjects`:
    ```csharp
    ProjectInterfaces.BOOK_SUMMARY,
    ```
@@ -550,7 +552,7 @@ public static JsonSerializerOptions CreateSerializationOptions()
 
 **Existing converters:**
 - `VerseRefConverter` - Paratext verse references
-- `CommentConverter` - Project comments
+- `PlatformCommentConverter` - Project comments (with the `PlatformCommentThread*` family alongside)
 - `InventoryOptionValueConverter` - Inventory option values
 - `InternetSettingsMementoConverter` - Internet settings
 
@@ -652,22 +654,19 @@ Interlocked.Add(ref _totalCount, itemList.Count);
 For a factory that lazily creates and caches one instance per key, use the `ConcurrentDictionary` check → `lock` → re-check → create sequence. The lock-free first check handles the common (already-cached) path without contention; the re-check inside the lock prevents two callers from both creating the instance.
 
 ```csharp
-if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-    return existingPdp;
+// Lazy-per-key GetOrAdd: creation is single-flighted per key with no shared lock.
+private readonly ConcurrentDictionary<string, Lazy<ParatextProjectDataProvider>> _pdpMap = new();
 
-lock (_creationLock)
-{
-    // Re-check: another caller may have created it while we waited for the lock.
-    if (_pdpMap.TryGetValue(projectID, out var existingPdpInLock))
-        return existingPdpInLock;
-
-    // ... create, add to _pdpMap, and return ...
-}
+var lazyPdp = _pdpMap.GetOrAdd(
+    projectID,
+    id => new Lazy<ParatextProjectDataProvider>(() => CreateProvider(id))
+);
+return lazyPdp.Value;
 ```
 
-**When:** factory patterns with cached instances. Verified in `c-sharp/Projects/ParatextProjectDataProviderFactory.cs`.
+**When:** factory patterns with cached instances. Verified in `c-sharp/Projects/ParatextProjectDataProviderFactoryBase.cs` (`GetOrAdd` with `Lazy<T>`).
 
-**Why:** minimizes lock contention for entries that already exist while keeping creation single-flighted.
+**Why:** `Lazy<T>` inside `GetOrAdd` keeps creation single-flighted per key without any cross-key lock. This superseded the earlier `_creationLock` double-checked-locking idiom in #2579 (2026-07-23), which caused cross-project lock contention.
 
 #### Atomicity
 
@@ -955,25 +954,20 @@ var factory = new ParatextProjectDataProviderFactory(papi);
 var inventoryProvider = new InventoryDataProvider(papi);
 var checkRunner = new CheckRunner(papi);
 
-// 3. Register in parallel where possible
+// 3. Register in parallel where possible. RegisterDataProviderAsync registers
+//    AND starts each provider — StartDataProviderAsync is a protected override
+//    hook (DataProvider.cs), not a caller API, so there is no separate start step.
 await Task.WhenAll(
     factory.InitializeAsync(),
     inventoryProvider.RegisterDataProviderAsync(),
     checkRunner.RegisterDataProviderAsync()
-);
-
-// 4. Start providers after registration
-await Task.WhenAll(
-    factory.StartAsync(),
-    inventoryProvider.StartDataProviderAsync()
 );
 ```
 
 **Key ordering rules:**
 1. SharedStore must initialize before PapiClient uses it
 2. Settings service must initialize before providers that need settings
-3. Registration before StartDataProviderAsync
-4. Use `Task.WhenAll` for independent parallel operations
+3. Use `Task.WhenAll` for independent parallel operations
 
 **Location:** `c-sharp/Program.cs`
 

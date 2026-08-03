@@ -9,6 +9,8 @@ last_updated: 2026-03-04
 
 # Extension Development Guide
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 This document provides a concise overview of extension development for Platform.Bible. For comprehensive details, refer to the linked wiki pages.
 
 ---
@@ -158,7 +160,7 @@ WebViews are React components rendered in sandboxed iframes:
 import { useData } from '@papi/frontend/react';
 
 globalThis.webViewComponent = function MyWebView() {
-  const [data] = useData('extensionName.dataProvider').DataType('selector');
+  const [data] = useData('extensionName.dataProvider').DataType('selector', 'default value'); // defaultValue (2nd arg) is required
   return <div>{data}</div>;
 };
 ```

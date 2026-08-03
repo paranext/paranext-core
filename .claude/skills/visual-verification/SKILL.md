@@ -5,6 +5,8 @@ description: "[paranext-core ONLY] Visual verification and UI interaction for Pl
 
 # Visual Verification Skill
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 Visual verification and **full UI interaction** for Platform.Bible using Playwright connected via CDP (Chrome DevTools Protocol) to the Electron renderer.
 
 ## Architecture Overview
@@ -525,22 +527,17 @@ All commands above use the short form via `pw-interact.sh`. For the full path:
 
 ### Common Selectors
 
-Platform.Bible uses consistent patterns:
+Prefer test IDs where they exist; otherwise discover selectors live rather than
+guessing class names (there is no `.papi-*` class convention and no
+`#main-content`/`#sidebar`/`#toolbar` landmarks in the app):
 
 ```css
 /* Test IDs */
 [data-testid="component-name"]
-
-/* Component classes */
-.papi-button
-.papi-input
-.papi-select
-
-/* Layout sections */
-#main-content
-#sidebar
-#toolbar
 ```
+
+For everything else, use the verified rc-dock/radix selectors documented earlier
+in this file, or run the `snapshot` command to discover the live DOM structure.
 
 ## Console Log Inspection
 

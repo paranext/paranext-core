@@ -5,6 +5,8 @@ description: Vitest, NUnit, TDD, testing trophy model, AI agent test quality gua
 
 # Testing Guide for paranext-core
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 An overview of the testing infrastructure in paranext-core and guidelines for writing tests that catch real defects.
 
 ---
@@ -340,7 +342,7 @@ Add tests when they speed up development or make a critical part of the code mor
 
 ## TypeScript/JavaScript Testing
 
-### Framework: Vitest (v3.2.4)
+### Framework: Vitest (3.x — see `package.json` for the exact version)
 
 Vitest is a Jest-compatible test runner optimized for Vite projects.
 
@@ -381,7 +383,7 @@ export default defineConfig(async () => {
 
 ```json
 {
-  "vitest": "^3.2.4",
+  "vitest": "^3.x",
   "@testing-library/react": "^16.2.0",
   "@testing-library/jest-dom": "^6.6.3",
   "@testing-library/dom": "^10.4.0",
@@ -446,7 +448,7 @@ npm run test:core -- --coverage
   <PackageReference Include="NUnit" Version="4.0.1" />
   <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
   <PackageReference Include="coverlet.collector" Version="6.0.0" />
-  <PackageReference Include="ParatextData" Version="9.5.0.18" />
+  <PackageReference Include="ParatextData" Version="…" /> <!-- see c-sharp-tests/c-sharp-tests.csproj for current versions -->
 </ItemGroup>
 ```
 
@@ -460,14 +462,14 @@ c-sharp-tests/
 │   ├── InputRangeTests.cs
 │   ├── InputRangesFilterTests.cs
 │   └── UsfmLocationTests.cs
+├── FixtureSetup.cs              # Assembly-level setup (repo: c-sharp-tests root)
 ├── JsonUtils/
-│   ├── CommentConverterTests.cs
+│   ├── PlatformCommentConverterTests.cs
 │   └── InventoryOptionValueConverterTests.cs
 ├── Projects/
-│   ├── FixtureSetup.cs              # Assembly-level setup
 │   ├── LocalParatextProjectsTests.cs
 │   ├── ParatextDataProviderTests.cs
-│   ├── ParatextDataProviderCommentTests.cs
+│   ├── ParatextProjectDataProviderCommentTests.cs
 │   └── ParatextProjectDataProviderFactoryTests.cs
 ├── Services/
 │   └── SettingsServiceTests.cs
@@ -519,15 +521,15 @@ internal abstract class PapiTestBase
     [TearDown]
     public virtual void TestTearDown()
     {
-        // Clean up ScrTextCollection — pass `true` to trigger full index cleanup.
-        // Using `false` leaves stale entries in the internal project index, which
-        // causes "Sequence contains more than one matching element" errors when
-        // tests create many DummyScrText instances with unique HexIds.
+        // Clean up ScrTextCollection. The second parameter of Remove is `notify`;
+        // the codebase convention — including PapiTestBase itself — is
+        // `Remove(project, false)` in teardown (no change notifications needed
+        // while tearing tests down).
         List<ScrText> projects = ScrTextCollection
             .ScrTexts(IncludeProjects.Everything)
             .ToList();
         foreach (ScrText project in projects)
-            ScrTextCollection.Remove(project, true);
+            ScrTextCollection.Remove(project, false);
 
         _client?.Dispose();
     }
@@ -544,7 +546,7 @@ internal abstract class PapiTestBase
 
 ### Assembly-Level Setup
 
-**File:** `c-sharp-tests/Projects/FixtureSetup.cs`
+**File:** `c-sharp-tests/FixtureSetup.cs`
 
 ```csharp
 [SetUpFixture]
@@ -1035,9 +1037,11 @@ public class VerseRefInvariantTests
 }
 ```
 
-For random input generation, use TypeScript with `fast-check` (below).
+For random input generation in TypeScript, `fast-check` is the standard library — **not currently installed in this repo** (adding it is a dependency decision that needs approval first). The hand-supplied-inputs invariant pattern above is what the repo uses today.
 
-### TypeScript with fast-check
+### TypeScript with fast-check (aspirational — not yet in this repo)
+
+If/when `fast-check` + `@fast-check/vitest` are added, property tests look like:
 
 ```typescript
 import fc from 'fast-check';
@@ -1074,32 +1078,11 @@ Mutation testing verifies **test quality** by checking whether tests detect smal
 - **Critical business logic** — merge algorithms, conflict resolution, data persistence.
 - **Threshold:** ≥70% mutation score for critical paths.
 
-### Tools
+### Tooling status (verified 2026-08-03)
 
-| Language   | Tool        | Config File                         |
-| ---------- | ----------- | ----------------------------------- |
-| TypeScript | Stryker     | `stryker.config.json`               |
-| C#         | Stryker.NET | `c-sharp-tests/stryker-config.json` |
+**No mutation-testing tooling is set up in paranext-core** — there is no Stryker/Stryker.NET config, dependency, or npm script in the repo. Treat mutation testing as a manual/aspirational practice: if the team adopts it, the standard tools are Stryker (TypeScript) and Stryker.NET (C#), and this section should then be rewritten around the real configs and scripts.
 
-### Running Mutation Tests
-
-```bash
-# TypeScript mutation tests
-npm run test:mutation
-
-# C# mutation tests
-npm run test:mutation:csharp
-```
-
-### Score Thresholds
-
-| Threshold | Score | Meaning                  |
-| --------- | ----- | ------------------------ |
-| High      | 80%   | Excellent test quality   |
-| Low       | 70%   | Minimum acceptable       |
-| Break     | 0%    | Build failure threshold  |
-
-### Interpreting Results
+### Interpreting Results (when tooling exists)
 
 - **Survived mutants** — code changes not caught by tests (bad).
 - **Killed mutants** — code changes caught by tests (good).
@@ -1202,7 +1185,9 @@ e2e-tests/
 │   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
 │   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
 │   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
-│   └── helpers.ts               # waitForAppReady(), sendPapiCommand()
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (state-mutating tests)
+│   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
+│   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
 ├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
 ├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
 └── tests/
@@ -1218,6 +1203,7 @@ e2e-tests/
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
+| `isolated.fixture` | Launches an isolated Electron per test    | Tests that mutate application state       | fresh app per test        |
 
 ### Command-Surface Verification (papi-live.fixture)
 

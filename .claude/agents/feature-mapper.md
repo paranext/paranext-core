@@ -74,7 +74,7 @@ If PT9 is **not** checked out, rely on the inventory's citations and say so.
 
 ### HelpData / manual mining (only when PT9 is present)
 
-PT9's `HelpData.xml` is large (~17 MB) — never read it whole; targeted grep only. The
+PT9's `HelpData.xml` is large (~2 MB, plus a second ~5 MB copy under Discourse/) — never read it whole; targeted grep only. The
 high-value mapping technique: the `<Dialogs>` field of a `<HelpDataItem>` names the **form
 class** (e.g. `ProjectPropertiesForm_tabGeneral` → form `ProjectPropertiesForm`, tab
 `General`). Search `<Question>` text with name variants first (user-facing language matches

@@ -9,6 +9,8 @@ last_updated: 2026-06-18
 
 # Component Selection Quick Reference
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 > **Source**: [UX Component Choices Google Doc](https://docs.google.com/document/d/1gKmb2PnCWtRAbVN8ERskRRy-IoTRTsEpC4-kpgEvzxY/)
 >
 > This guide helps you select appropriate components from `platform-bible-react` when building extension UI.
@@ -22,9 +24,9 @@ last_updated: 2026-06-18
 | **Pick a project** | **ProjectSelector** (NOT ComboBox/Select) | `manage-books-sidebar.component.tsx`, `checklist.web-view.tsx` |
 | Data Grid | DataTable, Inventory | `inventory.web-view.tsx` |
 | **Book/file comparison grid** | copy the Manage Books grid's approach (not a from-scratch table) | `manage-books-dialog/book-grid.component.tsx` |
-| Settings Form | Input, Select, Checkbox, Card | `project-settings.web-view.tsx` |
+| Settings Form | Input, Select, Checkbox, Card | `src/renderer/components/settings-tabs/settings-tab.component.tsx` |
 | Scripture Selection | BookChapterControl, ScopeSelector | (multiple extensions) |
-| Comments/Notes | CommentList, CommentThread | `comment-manager.web-view.tsx` |
+| Comments/Notes | CommentList, CommentEditor | `legacy-comment-manager/src/comment-list.web-view.tsx` |
 | Progress/Loading | Progress, Spinner, Skeleton | (common pattern) |
 | Modal alert/confirm | `papi.dialogs.showDialog('platform.alert', …)` | `hello-rock3` |
 | Dialogs/Modals | Dialog, Drawer, Popover | (common pattern) |
@@ -43,7 +45,7 @@ last_updated: 2026-06-18
 ### Display Text
 - Plain label? → **Label**
 - Markdown content? → **MarkdownRenderer**
-- Smart formatting? → **SmartLabel**
+- Smart formatting? → **SmartLabel** *(exists in the library but is not exported today — internal-only until promoted)*
 
 ### User Input
 - Single line text? → **Input**
@@ -77,7 +79,7 @@ last_updated: 2026-06-18
 - Vertical menu? → **Sidebar** with **TabsVertical**
 - Toolbar actions? → **Toolbar** or **TabToolbar**
 - Switching between views (e.g., list/grid)? → **ButtonGroup**
-- Breadcrumb trail? → **Breadcrumb**
+- Breadcrumb trail? → **Breadcrumb** *(not yet existing)*
 
 ### Toggles
 - Single toggle button? → **Toggle**
@@ -165,7 +167,7 @@ Avoid:
 Common toolbar controls:
 - Scripture reference input? → **BookChapterControl** (BCV)
 - Scope selection? → **ScopeSelector** (dropdown or radio variants)
-- Book or chapter selection? → **BookSelector** / **ChapterSelector**
+- Book or chapter selection? → **BookSelector** *(ChapterSelector does not exist yet)*
 - Navigation history? → Forward/Back buttons
 - Edit history? → Undo/Redo buttons
 - Synchronized scrolling? → **ScrollGroup**
@@ -173,7 +175,7 @@ Common toolbar controls:
 
 ## Project Picking
 
-**Decision: use `<ProjectSelector>` (from `platform-bible-react`) for ALL project-picking UI** — single-select, multi-select, and scroll-group modes. It ships shortName + fullName + scroll-group chips, keyboard search, "group by open tabs", "show selected only", per-row tooltips, a trigger tooltip, and per-row `isDisabled`/`disabledReason` out of the box.
+**Decision: use `<ProjectSelector>` (from `platform-bible-react/experimental` — it is an experimental export, absent from the main entry point) for ALL project-picking UI** — single-select, multi-select, and scroll-group modes. It ships shortName + fullName + scroll-group chips, keyboard search, "group by open tabs", "show selected only", per-row tooltips, a trigger tooltip, and per-row `isDisabled`/`disabledReason` out of the box.
 
 Avoid:
 - shadcn **ComboBox** for project lists

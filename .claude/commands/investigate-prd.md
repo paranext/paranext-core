@@ -38,8 +38,8 @@ Investigations read sibling checkouts of this repo — `Paratext` (PT9) and the 
 `paratext-bible-internal-extensions`). **The repos root — written `{ROOT}` throughout this
 command and its agents — is the parent directory of this checkout** (`git rev-parse
 --show-toplevel`, up one level), overridable by setting `PT_REPOS_ROOT` in the environment.
-This matches the repo's existing sibling-checkout convention (the `file:../paranext-core`
-setup in README.md); machines differ in where that parent lives (`~/git/`, `~/`, …), which is
+This matches the repo's existing sibling-checkout convention (README.md's local-copy
+setup for `scripture-editors`, cloned as a sibling of this repo); machines differ in where that parent lives (`~/git/`, `~/`, …), which is
 why no absolute path is ever assumed. The siblings live **outside this working directory**;
 file tools (`Read`/`Glob`) reach them by absolute path in a default setup, and **Step 1
 preflights this empirically** — a repo whose files can't be listed is treated as unreachable

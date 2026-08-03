@@ -1,5 +1,7 @@
 # Architecture Decisions
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 A lightweight, append-only log of **significant architecture decisions** and the reasoning behind
 them. It holds the one thing the prescriptive standards (`Architecture.md`,
 `Paranext-Core-Patterns.md`, `.claude/rules/`) can't: the **why**, the **alternatives we rejected**,
@@ -91,8 +93,8 @@ step, no automation. Just a record.
   (a) PT9 menu items hide/disable themselves via predicate evaluation before render
   (permission checks, project-state guards). paranext-core's menu system has **no arbitrary
   predicate/expression gating** of menu visibility — the one supported declarative axis is
-  `MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/menus.model.ts`, enforced in
-  `src/shared/services/menu-data.service-host.ts`), which hides an item per interface mode; beyond
+  `MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/extension-contributions/menus.model.ts`,
+  enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`), which hides an item per interface mode; beyond
   that the schema cannot express "show only if X." (b) When a
   C# layer mutates shared state that DataProvider subscribers observe (via `useProjectSetting` and
   similar), where the mutation lives determines whether external PAPI callers stay in sync. A
