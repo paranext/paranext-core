@@ -9,6 +9,32 @@ vi.mock('@/utils/dir-helper.util', () => ({
   readDirection: vi.fn(() => 'ltr'),
 }));
 
+// jsdom always returns {width:0, height:0} from getBoundingClientRect, which our measureTarget
+// guard correctly rejects as a zero-area element. Restore a default non-zero rect so tests that
+// place elements in the DOM (real tour targets) see them as visible. Tests that need specific
+// geometry (the RTL positioning test) override the mock per-element inside that test.
+const DEFAULT_TEST_RECT: DOMRect = {
+  width: 100,
+  height: 50,
+  top: 0,
+  left: 0,
+  right: 100,
+  bottom: 50,
+  x: 0,
+  y: 0,
+  toJSON: () => ({}),
+};
+const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+beforeEach(() => {
+  // The type cast is needed because the object literal satisfies DOMRect's shape but TypeScript
+  // cannot verify that without a full class instance; this is the standard jsdom test pattern.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  Element.prototype.getBoundingClientRect = () => DEFAULT_TEST_RECT as DOMRect;
+});
+afterEach(() => {
+  Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;
+});
+
 afterEach(cleanup);
 
 function renderWithTargets(steps: TourStep[], present: string[]) {

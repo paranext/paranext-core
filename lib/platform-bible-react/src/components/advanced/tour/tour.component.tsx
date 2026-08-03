@@ -75,6 +75,10 @@ function measureTarget(selector: string): TargetRect | undefined {
   const el = document.querySelector(selector);
   if (!el) return undefined;
   const r = el.getBoundingClientRect();
+  // Skip elements that are in the DOM but have no visual area (e.g. an empty wrapper div
+  // whose conditional children are not rendered). A zero-size rect produces a degenerate
+  // 2×padding spotlight over an invisible point, which is misleading to the user.
+  if (r.width <= 0 || r.height <= 0) return undefined;
   return { top: r.top, left: r.left, width: r.width, height: r.height };
 }
 
