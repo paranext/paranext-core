@@ -21,16 +21,14 @@ const css = readFileSync(resolve(dir, '_usj-nodes.scss'), 'utf-8').replace(/\/\*
 function getGutterMarkers(property: string): Set<string> {
   const markers = new Set<string>();
   const ruleBlock = /([^{}]+)\{([^}]+)\}/g;
-  let match;
-  // eslint-disable-next-line no-cond-assign
-  while ((match = ruleBlock.exec(css)) !== null) {
+  for (let match = ruleBlock.exec(css); match; match = ruleBlock.exec(css)) {
     const [, selectors, declarations] = match;
-    if (!selectors.includes('psc-gutter-markers') || !declarations.includes(`${property}:`))
-      continue;
-    const markerName = /\.usfm_([a-z0-9]+)/g;
-    let m;
-    // eslint-disable-next-line no-cond-assign
-    while ((m = markerName.exec(selectors)) !== null) markers.add(m[1]);
+    // `${property}:` matches a rule that SETS the custom property, not one that only reads it
+    // via var(--property).
+    if (selectors.includes('psc-gutter-markers') && declarations.includes(`${property}:`)) {
+      const markerName = /\.usfm_([a-z0-9]+)/g;
+      for (let m = markerName.exec(selectors); m; m = markerName.exec(selectors)) markers.add(m[1]);
+    }
   }
   return markers;
 }
@@ -118,22 +116,20 @@ describe('_usj-nodes.scss .psc-gutter-markers.text-spacing coverage', () => {
   it('every USFM indented marker has a --para-indent entry', () => {
     const covered = getGutterMarkers('--para-indent');
     // Guard against a silently-broken parser (no matches -> every marker would look "missing").
-    expect(covered.size, 'no --para-indent gutter markers parsed').toBeGreaterThan(0);
+    expect(covered.size).toBeGreaterThan(0);
+    // Any USFM indented marker lacking a --para-indent entry in .psc-gutter-markers.text-spacing;
+    // the toEqual diff names them on failure.
     const missing = [...PARA_INDENT_MARKERS].filter((m) => !covered.has(m));
-    expect(
-      missing,
-      `Add --para-indent entries to .psc-gutter-markers.text-spacing for: ${missing.join(', ')}`,
-    ).toEqual([]);
+    expect(missing).toEqual([]);
   });
 
   it('every hanging-indent marker has a --verse-text-start entry', () => {
     const covered = getGutterMarkers('--verse-text-start');
     // Guard against a silently-broken parser (no matches -> every marker would look "missing").
-    expect(covered.size, 'no --verse-text-start gutter markers parsed').toBeGreaterThan(0);
+    expect(covered.size).toBeGreaterThan(0);
+    // Any hanging-indent marker lacking a --verse-text-start entry in .psc-gutter-markers.text-spacing;
+    // the toEqual diff names them on failure.
     const missing = [...VERSE_TEXT_START_MARKERS].filter((m) => !covered.has(m));
-    expect(
-      missing,
-      `Add --verse-text-start entries to .psc-gutter-markers.text-spacing for: ${missing.join(', ')}`,
-    ).toEqual([]);
+    expect(missing).toEqual([]);
   });
 });
