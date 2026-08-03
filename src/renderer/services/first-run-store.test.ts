@@ -118,6 +118,29 @@ describe('resolveFirstRunState', () => {
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
   });
 
+  it('continuing without setup blocks a superseded run from persisting wizard state (PT-4302)', async () => {
+    stubSettings({ firstRunComplete: false });
+    // Pending probe → the slow-provider window where the watchdog surfaces the escape hatch.
+    let releaseProbe: (validity: RegistrationValidity) => void = () => {};
+    mockResolveReg.mockReturnValue(
+      new Promise<RegistrationValidity>((resolve) => {
+        releaseProbe = resolve;
+      }),
+    );
+    const resolution = resolveFirstRunState();
+    // User bails out while the probe is still pending.
+    continueWithoutRegistration();
+    // The probe now settles to 'invalid', which unguarded routes to startWizard(language) and would
+    // persist WIZARD_ACTIVE_KEY (and seed the interface language) — resuming the wizard mid-flow on
+    // the next launch even though the user chose to skip setup. The generation gate must suppress
+    // these durable writes, not just the in-memory status.
+    releaseProbe('invalid');
+    await resolution;
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(localStorage.getItem('platform-bible.firstRunWizardActive')).toBeNull();
+    expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
+  });
+
   it('resumes at sync consent after the registration relaunch (wizardActive persisted)', async () => {
     localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
     stubSettings({ firstRunComplete: false });
