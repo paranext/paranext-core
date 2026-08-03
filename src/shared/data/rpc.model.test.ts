@@ -1,5 +1,11 @@
-import { describe, expect, test, vi, beforeEach } from 'vitest';
-import { sendPayloadToWebSocket } from '@shared/data/rpc.model';
+import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
+import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
+import {
+  MAX_REQUEST_ATTEMPTS,
+  REQUEST_ATTEMPT_WAIT_TIME_MS,
+  requestWithRetry,
+  sendPayloadToWebSocket,
+} from '@shared/data/rpc.model';
 
 // Mock the logger so we can assert on warnings without writing to disk.
 const { mockLoggerWarn, mockLoggerDebug } = vi.hoisted(() => ({
@@ -133,5 +139,79 @@ describe('sendPayloadToWebSocket — D-010 regression', () => {
       expect(sendFn).toHaveBeenCalledTimes(1);
     });
     expect(mockLoggerWarn).toHaveBeenCalledTimes(DEAD_INDICES.size);
+  });
+});
+
+function successResponse(result: unknown): JSONRPCResponse {
+  return { jsonrpc: '2.0', id: 1, result };
+}
+function missingHandlerResponse(): JSONRPCResponse {
+  return {
+    jsonrpc: '2.0',
+    id: 1,
+    error: { code: JSONRPCErrorCode.MethodNotFound, message: 'Method not found' },
+  };
+}
+
+describe('requestWithRetry', () => {
+  beforeEach(() => mockLoggerDebug.mockClear());
+  afterEach(() => vi.useRealTimers());
+
+  test('returns a successful response without retrying', async () => {
+    const cb = vi.fn().mockResolvedValue(successResponse('ok'));
+    const response = await requestWithRetry(cb, 'handler', 'testRequest');
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(response).toEqual(successResponse('ok'));
+  });
+
+  test('returns a non-missing-handler error without retrying', async () => {
+    const errorResponse: JSONRPCResponse = {
+      jsonrpc: '2.0',
+      id: 1,
+      error: { code: JSONRPCErrorCode.InternalError, message: 'boom' },
+    };
+    const cb = vi.fn().mockResolvedValue(errorResponse);
+    const response = await requestWithRetry(cb, 'handler', 'testRequest');
+    // Only MethodNotFound is the race we retry; any other error is the caller's to handle.
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(response).toEqual(errorResponse);
+  });
+
+  test('retries a MethodNotFound response, then returns once a handler appears', async () => {
+    vi.useFakeTimers();
+    const cb = vi
+      .fn()
+      .mockResolvedValueOnce(missingHandlerResponse())
+      .mockResolvedValueOnce(successResponse('ok'));
+    const promise = requestWithRetry(cb, 'handler', 'testRequest');
+    await vi.advanceTimersByTimeAsync(REQUEST_ATTEMPT_WAIT_TIME_MS); // elapse the backoff → attempt 2
+    await expect(promise).resolves.toEqual(successResponse('ok'));
+    expect(cb).toHaveBeenCalledTimes(2);
+  });
+
+  test('gives up after MAX_REQUEST_ATTEMPTS and returns the missing-handler response (no throw)', async () => {
+    vi.useFakeTimers();
+    const cb = vi.fn().mockResolvedValue(missingHandlerResponse());
+    const promise = requestWithRetry(cb, 'handler', 'testRequest');
+    // MAX-1 backoffs separate the MAX attempts; no wait after the last.
+    await vi.advanceTimersByTimeAsync(REQUEST_ATTEMPT_WAIT_TIME_MS * (MAX_REQUEST_ATTEMPTS - 1));
+    await expect(promise).resolves.toEqual(missingHandlerResponse());
+    expect(cb).toHaveBeenCalledTimes(MAX_REQUEST_ATTEMPTS);
+  });
+
+  test('logs each retry and a final give-up on exhaustion', async () => {
+    vi.useFakeTimers();
+    const cb = vi.fn().mockResolvedValue(missingHandlerResponse());
+    const promise = requestWithRetry(cb, 'handler', 'myRequest');
+    await vi.advanceTimersByTimeAsync(REQUEST_ATTEMPT_WAIT_TIME_MS * (MAX_REQUEST_ATTEMPTS - 1));
+    await promise;
+    expect(mockLoggerDebug).toHaveBeenCalledWith(
+      expect.stringContaining(`attempt 1 of ${MAX_REQUEST_ATTEMPTS}. Retrying...`),
+    );
+    expect(mockLoggerDebug).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `attempt ${MAX_REQUEST_ATTEMPTS} of ${MAX_REQUEST_ATTEMPTS}. Giving up.`,
+      ),
+    );
   });
 });
