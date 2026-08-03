@@ -21,7 +21,11 @@ let initialize = createCachedInitializer(initializeWindowService);
 
 /** Resolve the scoped provider for whichever window currently has focus */
 async function getFocusedWindowService(): Promise<IWindowService> {
-  const focusedWindowId = await sendCommand('platform.getFocusedWindowId');
+  // The command's declared TypeScript return type is `number | undefined`, but its return schema
+  // over JSON-RPC also permits `null` for "no focused window" — collapse a `null` to `undefined`
+  // so it cannot skip the guard below and end up in a nonsense scoped provider name like
+  // `...window-null`
+  const focusedWindowId = (await sendCommand('platform.getFocusedWindowId')) ?? undefined;
   if (focusedWindowId === undefined) {
     throw new Error('Window service is not available: no focused window found. Is a window open?');
   }

@@ -9,6 +9,7 @@
 import { getTargetWindowId, getWindows } from '@main/services/window-state.service';
 import {
   INotificationService,
+  NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   NotificationServiceNetworkObjectName,
 } from '@shared/models/notification.service-model';
 import { logger } from '@shared/services/logger.service';
@@ -90,6 +91,11 @@ export async function startNotificationRoutingService(): Promise<void> {
   await networkObjectService.set<INotificationService>(
     NotificationServiceNetworkObjectName,
     notificationServiceProxy,
+    undefined,
+    undefined,
+    // The generic name is the one consumers actually call, so it carries the same OpenRPC docs the
+    // renderers attach to their window-scoped registrations
+    NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   );
   logger.info('NotificationService routing proxy registered');
 }

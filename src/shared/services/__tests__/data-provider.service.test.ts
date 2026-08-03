@@ -2,6 +2,7 @@ import { describe, it, expect, expectTypeOf, vi, beforeEach } from 'vitest';
 import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 import * as networkService from '@shared/services/network.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import type { registerEngineByType } from '@shared/services/data-provider.service';
 
@@ -161,5 +162,104 @@ describe('dataProviderService.registerEngine — failure does not leak a pending
     }
 
     expect(unhandled).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Runtime tests: a failed registration does not leak its update event emitter
+// ---------------------------------------------------------------------------
+
+describe('dataProviderService.registerEngine — failure disposes the update event emitter', () => {
+  let mockEmitter: {
+    emit: ReturnType<typeof vi.fn>;
+    event: ReturnType<typeof vi.fn>;
+    dispose: ReturnType<typeof vi.fn>;
+  };
+  const engine = { getData: async () => 1, setData: async () => true };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEmitter = { emit: vi.fn(), event: vi.fn(() => () => {}), dispose: vi.fn() };
+    vi.mocked(networkService.createNetworkEventEmitterAsync).mockResolvedValue(
+      // Needed for testing — the real return carries the full emitter surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      mockEmitter as unknown as Awaited<
+        ReturnType<typeof networkService.createNetworkEventEmitterAsync>
+      >,
+    );
+    // The mock stands in for the full proxy type; cast the minimal test double.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(networkObjectService.get).mockResolvedValue({ getData: vi.fn() } as never);
+  });
+
+  it('disposes the emitter and propagates the original error when object registration fails', async () => {
+    // The update event is centrally registered before the network object is. Losing the
+    // object-name race to another process must dispose the emitter (which unregisters the event);
+    // otherwise the event name would stay registered under this process's live connection and
+    // reject every future attempt to host this provider, app-wide.
+    vi.mocked(networkObjectService.set).mockRejectedValue(
+      new Error('object name is already registered'),
+    );
+
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        /* eslint-disable no-type-assertion/no-type-assertion */
+        'test.emitterCleanupOnSetFailure' as never,
+        engine as never,
+        /* eslint-enable no-type-assertion/no-type-assertion */
+      ),
+    ).rejects.toThrow('object name is already registered');
+
+    expect(mockEmitter.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('still propagates the registration error when disposing the emitter itself fails', async () => {
+    vi.mocked(networkObjectService.set).mockRejectedValue(
+      new Error('object name is already registered'),
+    );
+    mockEmitter.dispose.mockImplementation(() => {
+      throw new Error('dispose exploded');
+    });
+
+    // The dispose failure must not mask the error that actually broke the registration
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        /* eslint-disable no-type-assertion/no-type-assertion */
+        'test.emitterDisposeFailure' as never,
+        engine as never,
+        /* eslint-enable no-type-assertion/no-type-assertion */
+      ),
+    ).rejects.toThrow('object name is already registered');
+
+    expect(mockEmitter.dispose).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('dispose exploded'),
+    );
+  });
+
+  it('does not attempt a dispose when the failure happens before the emitter exists', async () => {
+    // When event creation itself is what failed, there is nothing to clean up — the cleanup must
+    // not turn the real error into a crash on a missing emitter.
+    vi.mocked(networkService.createNetworkEventEmitterAsync).mockRejectedValue(
+      new Error('event was rejected by the central registry'),
+    );
+    const disposable = { dispose: vi.fn(async () => true) };
+    // The mock stands in for the full disposable type; cast the minimal test double.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    vi.mocked(networkObjectService.set).mockResolvedValue(disposable as never);
+
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        /* eslint-disable no-type-assertion/no-type-assertion */
+        'test.noEmitterToDispose' as never,
+        engine as never,
+        /* eslint-enable no-type-assertion/no-type-assertion */
+      ),
+    ).rejects.toThrow('event was rejected by the central registry');
+
+    expect(mockEmitter.dispose).not.toHaveBeenCalled();
   });
 });

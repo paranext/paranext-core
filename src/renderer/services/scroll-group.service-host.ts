@@ -783,10 +783,27 @@ let isPublishingScrollGroupService = false;
  * succeed. That is also what lets `scrollGroupService` consumers in this process stop calling into
  * the closed window.
  */
+/**
+ * Takeover run that has not settled yet, if any. A takeover can be triggered again while one is
+ * already in flight — the sweep in {@link takeOverScrollGroupServiceAfterWindowClose} fires the
+ * dispose events of the cached objects it forgets, and close announcements can arrive in quick
+ * succession. Two concurrent runs would race each other for the object name, with the loser noisily
+ * failing against a registry that rejects even the same registrant. Concurrent triggers share this
+ * pending run instead; cleared when it settles so a later close can take over again.
+ */
+let pendingTakeoverPromise: Promise<void> | undefined;
+
 async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
   if (isPublishingScrollGroupService) return;
-  await forgetUnreachableRemoteObjects();
-  await hostOrAttachToScrollGroupService();
+  if (!pendingTakeoverPromise) {
+    pendingTakeoverPromise = (async () => {
+      await forgetUnreachableRemoteObjects();
+      await hostOrAttachToScrollGroupService();
+    })().finally(() => {
+      pendingTakeoverPromise = undefined;
+    });
+  }
+  await pendingTakeoverPromise;
 }
 
 getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {

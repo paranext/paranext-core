@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import { CommandHandlers } from 'papi-shared-types';
 import {
-  NOTIFICATION_POSITIONS,
+  NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   NotificationServiceNetworkObjectName,
   type INotificationService,
   type PlatformNotification,
@@ -213,59 +213,7 @@ export async function startNotificationService(): Promise<void> {
     notificationService,
     undefined,
     undefined,
-    {
-      summary: 'Service that sends notifications to users in the UI',
-      methods: [
-        {
-          name: 'send',
-          summary: "Send a notification to the user's UI",
-          params: [
-            {
-              name: 'notification',
-              required: true,
-              summary: 'The notification to send',
-              schema: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string' },
-                  severity: { type: 'string' },
-                  clickCommand: { type: 'string' },
-                  clickCommandLabel: { type: 'string' },
-                  secondaryClickCommand: { type: 'string' },
-                  secondaryClickCommandLabel: { type: 'string' },
-                  dismissClickCommand: { type: 'string' },
-                  position: { type: 'string', enum: [...NOTIFICATION_POSITIONS] },
-                  dismissible: { type: 'boolean' },
-                  notificationId: { type: ['string', 'number'] },
-                  duration: { type: 'number' },
-                },
-                required: ['message', 'severity'],
-              },
-            },
-          ],
-          result: {
-            name: 'return value',
-            schema: { type: ['string', 'number'] },
-          },
-        },
-        {
-          name: 'dismiss',
-          summary: "Dismiss a notification from the user's UI",
-          params: [
-            {
-              name: 'notificationId',
-              required: true,
-              summary: 'The ID of the notification to dismiss',
-              schema: { type: ['string', 'number'] },
-            },
-          ],
-          result: {
-            name: 'return value',
-            schema: { type: 'null' },
-          },
-        },
-      ],
-    },
+    NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   );
 }
 
