@@ -3,6 +3,7 @@
 import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
+import { Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
@@ -53,6 +54,21 @@ export function valuesAreDeeplyEqual(a: unknown, b: unknown): boolean {
 // Alias that makes the "across iframes" intent explicit for callers that prefer it.
 // Exported with this syntax to preserve the TSDocs
 export { valuesAreDeeplyEqual as deepEqualAcrossIframes };
+
+/**
+ * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
+ *
+ * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
+ * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
+ * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
+ * need to change how we're handling this.
+ */
+export function correctEditorUsjVersion(editorUsj: Usj): Usj {
+  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
+  // well right now
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
 
 // #region Editor Title Formatting
 
