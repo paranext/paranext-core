@@ -131,6 +131,8 @@ function ResourceSelectorDropdown({
   );
 }
 
+const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
+
 globalThis.webViewComponent = function ResourceTextPanel({
   projectId,
   updateWebViewDefinition,
@@ -189,8 +191,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   );
   const [pickerResources, isPickerLoading] = useResourcePickerResources(
     projectId,
-    // stable reference — no inline object literal in JSX to avoid recreation
-    useMemo(() => ({ includeDownloaded: true }), []),
+    RESOURCE_PICKER_OPTIONS,
     dblResources,
   );
   const getCanWriteProjectSettings = useCallback(

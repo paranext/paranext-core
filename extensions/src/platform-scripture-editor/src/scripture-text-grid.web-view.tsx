@@ -147,6 +147,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
   }, [chapterContext, handleCloseChapterContext]);
 
   const { top, bottom } = useMemo(
+    // downloaded option intentionally omitted here — PT-4171 will wire it up
     () => (sources ? getViewOptionsTexts(sources) : { top: [], bottom: [] }),
     [sources],
   );

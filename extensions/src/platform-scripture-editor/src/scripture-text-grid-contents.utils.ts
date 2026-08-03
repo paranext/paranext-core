@@ -159,6 +159,10 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * Checkbox state comes from the overlay for admin-owned entries and from `isResourceShownForUser`
  * for the user's own entries. An admin-owned id never also appears as a user entry (admin
  * precedence).
+ *
+ * @param sources Data sources for the current project.
+ * @param options.downloaded When provided, downloaded-but-unlisted projects are appended to
+ *   `bottom` as unchecked, non-removable rows. Omit to skip — PT-4171 will wire this up.
  */
 export function getViewOptionsTexts(
   sources: TextCollectionSources,
@@ -192,11 +196,24 @@ export function getViewOptionsTexts(
     });
   });
 
-  const listedIds = new Set([...top, ...bottom].map((r) => r.reference.id));
-  (options?.downloaded ?? []).forEach((dl) => {
-    if (listedIds.has(dl.projectId)) return;
+  const allRows = [...top, ...bottom];
+  (options?.downloaded ?? []).forEach((downloadedResource) => {
+    const alreadyListed = allRows.some((row) => {
+      if (isProjectReference(row.reference))
+        return row.reference.id === downloadedResource.projectId;
+      if (isDblResourceReference(row.reference))
+        return downloadedResource.projectId
+          .toLowerCase()
+          .startsWith(row.reference.id.toLowerCase());
+      return false;
+    });
+    if (alreadyListed) return;
     bottom.push({
-      reference: { type: 'project', name: dl.name, id: dl.projectId },
+      reference: {
+        type: 'project',
+        name: downloadedResource.name,
+        id: downloadedResource.projectId,
+      },
       checked: false,
       isAdminLocked: false,
       isUserRemovable: false,
