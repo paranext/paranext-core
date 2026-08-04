@@ -1,16 +1,15 @@
 /**
- * Window layout persistence e2e test.
+ * Window layout persistence e2e tests.
  *
- * Locks the across-restart behaviour of the window set: every window open at quit comes back on
- * relaunch — the main window with its dock layout, a deliberately-empty secondary window empty —
- * each at its saved bounds, while a window the user deliberately closed mid-session does NOT come
- * back.
+ * Two tests, each running sequential launches into its own preserved user-data profile (the launch
+ * helpers accept an existing `userDataDir` and can preserve it across teardowns — see
+ * `LaunchElectronAppOptions`). Launches are strictly sequential: the fixed WebSocket port and
+ * Electron's per-profile singleton lock forbid overlap, so each phase quits gracefully (and its
+ * leftover process group is reaped) before the next launches.
  *
- * One test, three sequential launches into the SAME user-data profile (the launch helpers accept an
- * existing `userDataDir` and can preserve it across teardowns — see `LaunchElectronAppOptions`).
- * Launches are strictly sequential: the fixed WebSocket port and Electron's per-profile singleton
- * lock forbid overlap, so each phase quits gracefully (and its leftover process group is reaped)
- * before the next launches.
+ * TEST 1 — the window set across restarts: every window open at quit comes back on relaunch — the
+ * main window with its dock layout, a deliberately-empty secondary window empty — each at its saved
+ * bounds, while a window the user deliberately closed mid-session does NOT come back.
  *
  * - Phase 1 (fresh profile): the first window shows the single-Home-tab fallback layout; a second
  *   window is created mid-session (it starts empty); both windows are placed at known,
@@ -21,18 +20,32 @@
  * - Phase 3 (second relaunch): exactly ONE window comes back (the deliberately closed window stays
  *   closed), still with its Home tab; graceful quit. The final teardown deletes the profile.
  *
+ * TEST 2 — the pre-multi-window upgrade path: a profile from before the window-layouts structure
+ * existed (a legacy dock layout under the renderer's unprefixed localStorage key, the old
+ * bounds-keeper file, and NO structure file) upgrades to exactly one window that loads the legacy
+ * layout and honors the keeper's window size — and a window created mid-session in that upgraded
+ * session still starts empty rather than cloning the legacy layout.
+ *
+ * - Launch A (fresh profile): the app runs normally; the layout it persists for the main window is
+ *   harvested from the structure file, extended with a SECOND web view tab (a Home clone under a
+ *   distinct id), and written to the legacy localStorage key from inside the renderer; graceful
+ *   quit.
+ * - Between launches (no app running): the structure file is deleted and an old-style keeper file
+ *   with a known window size is written — the profile now looks exactly like a pre-multi-window
+ *   install.
+ * - Launch B: exactly one window; it renders BOTH seeded tabs (the discriminator — no fallback layout
+ *   has two tabs, so a pass cannot come from the fresh-profile default); its size is the keeper
+ *   file's; a newly created second window starts empty; graceful quit; the final teardown deletes
+ *   the profile.
+ *
  * ## App configuration
  *
  * Same pre-configuration as `multi-window.spec.ts` (power mode, first-run complete, English) — and
- * here `platform.interfaceMode: 'power'` is additionally REQUIRED for phase 2's both-windows
+ * here `platform.interfaceMode: 'power'` is additionally REQUIRED for test 1 phase 2's both-windows
  * assertion, because simple mode is single-window and restores only the main window.
  *
  * ## Not covered here (and why)
  *
- * - The single-window legacy upgrade path (a profile holding only the previous bounds-keeper file and
- *   a pre-multi-window localStorage layout): needs a pre-multi-window profile fixture to be
- *   authored; the legacy-read behaviour is unit-covered in the main process's persistence service
- *   tests.
  * - Multi-monitor behaviour (restoring a window whose saved display is gone): this environment has a
  *   single virtual display; the monitor-gone re-placement is a pure function with its own unit
  *   tests.
@@ -255,6 +268,88 @@ function readSavedWindowEntries(userDataDir: string): SavedWindowEntry[] {
       bounds,
     };
   });
+}
+
+/**
+ * The legacy `localStorage` key the dock layout was saved under before per-window persistence moved
+ * layouts into the main process's window-layouts structure. The renderer still READS this key
+ * (never writes it) for the one window of a legacy pre-multi-window startup — see
+ * `getLegacySavedLayout` in `src/renderer/services/web-view.service-host.ts`.
+ */
+const LEGACY_DOCK_LAYOUT_STORAGE_KEY = 'dock-saved-layout';
+
+/**
+ * File the pre-multi-window bounds keeper maintained in the profile, holding the single window's
+ * placement as top-level `x`/`y`/`width`/`height` plus state flags. The main process reads it once
+ * for upgrade placement when no window-layouts structure exists — see
+ * `src/main/services/window-layout-persistence.service.ts`.
+ */
+const LEGACY_WINDOW_STATE_FILE_NAME = 'window-state.json';
+
+/**
+ * Web view id of the SECOND tab the upgrade test seeds into the legacy layout: a clone of the Home
+ * tab under this distinct id. Two tabs are the upgrade test's discriminator — the fresh-profile
+ * fallback layout has exactly one tab and an empty layout has none, so only the seeded legacy blob
+ * can produce a tab with this id.
+ */
+const LEGACY_SECOND_TAB_UUID = 'ada6a781-10bf-46f3-a2f9-a1bb0e2fa221';
+
+/**
+ * Window size the upgrade test writes into the legacy keeper file. Deliberately different from the
+ * app's fallback size ({@link FALLBACK_WINDOW_SIZE}), so an upgrade that ignores the keeper file
+ * (and falls back to the default size) is distinguishable from one that honors it.
+ */
+const LEGACY_KEEPER_SIZE = { width: 1000, height: 640 };
+
+/**
+ * Build the legacy two-tab layout for the upgrade test from the layout the app itself persisted:
+ * find the panel holding the Home tab and append a clone of that tab under
+ * {@link LEGACY_SECOND_TAB_UUID}. Cloning the app's own saved tab (rather than authoring a layout by
+ * hand) keeps the blob's shape exactly what a real pre-multi-window profile held. The clone's saved
+ * web view definition mirrors the new id the way every saved web view tab's does — the tab loader
+ * enforces that match.
+ *
+ * @param mainLayoutJson The main entry's layout from the persisted structure, as JSON text
+ * @returns The two-tab layout object, ready to serialize under the legacy localStorage key
+ */
+function buildTwoTabLegacyLayout(mainLayoutJson: string): Record<string, unknown> {
+  const layout = asRecord(JSON.parse(mainLayoutJson));
+  if (!layout) throw new Error('main entry layout is not object-shaped');
+
+  const insertCloneTab = (node: Record<string, unknown>): boolean => {
+    const { tabs } = node;
+    if (Array.isArray(tabs)) {
+      const homeTab = tabs
+        .map((tab: unknown) => asRecord(tab))
+        .find((tab) => typeof tab?.id === 'string' && tab.id.includes(HOME_TAB_UUID));
+      if (homeTab && typeof homeTab.id === 'string') {
+        // Derive the clone id from the Home tab id so any window-scoping suffix carries over
+        // unchanged (loading re-scopes ids to the loading window anyway)
+        const cloneId = homeTab.id.split(HOME_TAB_UUID).join(LEGACY_SECOND_TAB_UUID);
+        const homeTabData = asRecord(homeTab.data);
+        tabs.push({
+          ...homeTab,
+          id: cloneId,
+          ...(homeTabData ? { data: { ...homeTabData, id: cloneId } } : {}),
+        });
+        return true;
+      }
+    }
+    const { children } = node;
+    if (Array.isArray(children))
+      return children.some((child: unknown) => {
+        const childRecord = asRecord(child);
+        return childRecord ? insertCloneTab(childRecord) : false;
+      });
+    return false;
+  };
+
+  const dockbox = asRecord(layout.dockbox);
+  if (!dockbox || !insertCloneTab(dockbox))
+    throw new Error(
+      `could not find the Home tab to clone in the persisted layout: ${mainLayoutJson}`,
+    );
+  return layout;
 }
 
 test.describe('window layout persistence', () => {
@@ -509,6 +604,180 @@ test.describe('window layout persistence', () => {
     } finally {
       // On any failure above: kill whatever instance is still up, then remove the preserved
       // profile directory so a failed run leaks nothing. Both are no-ops after a clean phase 3.
+      if (ctx) await teardownElectronApp(ctx);
+      if (profileDir) fs.rmSync(profileDir, { recursive: true, force: true });
+    }
+  });
+
+  test('a pre-multi-window profile upgrades to one window with its legacy layout, and new windows still start empty', async () => {
+    const logStep = createStepLogger('window-layout-upgrade');
+    let ctx: ElectronAppContext | undefined;
+    let profileDir: string | undefined;
+
+    try {
+      // #region Launch A — build a genuine pre-multi-window profile with the app itself
+
+      ctx = await launchElectronApp({ ...BASE_LAUNCH_OPTIONS, preserveUserDataDir: true });
+      const { userDataDir } = ctx;
+      profileDir = userDataDir;
+      const outputA = captureAppOutput(ctx.electronApp);
+      const pageA = await ctx.electronApp.firstWindow({ timeout: 90_000 });
+      await pageA.waitForLoadState('domcontentloaded');
+      await pageA.waitForSelector('#root', { state: 'attached', timeout: 60_000 });
+      await waitForAppReady(pageA, 180_000);
+      const windowAId = getWindowIdOfPage(pageA);
+      await expect(homeTabTitle(pageA, windowAId)).toBeAttached({ timeout: 60_000 });
+      logStep(`launch A: window ${windowAId} ready with its Home tab`);
+
+      // Harvest the layout the app itself persists for the main window (the renderer pushes the
+      // loaded layout and the main process's write is debounced, so poll for the file) — the base
+      // for the legacy blob, so its shape is exactly what the app saves, not a hand-authored
+      // approximation.
+      let mainLayoutJson: string | undefined;
+      await expect(() => {
+        const mainEntry = readSavedWindowEntries(userDataDir).find((entry) => entry.isMain);
+        expect(mainEntry?.layoutJson ?? '').toContain(HOME_TAB_UUID);
+        mainLayoutJson = mainEntry?.layoutJson;
+      }).toPass({ timeout: 30_000, intervals: [500] });
+      if (!mainLayoutJson) throw new Error('unreachable: poll passed without a main entry layout');
+
+      // Write the two-tab legacy blob under the legacy localStorage key, from inside the renderer
+      // — the same storage a real pre-multi-window install left behind.
+      const legacyLayout = buildTwoTabLegacyLayout(mainLayoutJson);
+      await pageA.evaluate(
+        ([storageKey, serializedLayout]) => localStorage.setItem(storageKey, serializedLayout),
+        [LEGACY_DOCK_LAYOUT_STORAGE_KEY, JSON.stringify(legacyLayout)] as const,
+      );
+      logStep('launch A: seeded the legacy dock layout (Home tab + cloned second tab)');
+
+      // The keeper bounds written below sit at the primary display's origin, so the upgrade's
+      // on-display validation is guaranteed to accept them (this compositor honors requested
+      // sizes, which is the half the assertion uses).
+      const primaryDisplayBounds = await ctx.electronApp.evaluate(
+        ({ screen }) => screen.getPrimaryDisplay().bounds,
+      );
+
+      const exitA = await quitAppAndWaitForExit(ctx.electronApp);
+      logStep(`launch A: exited with code ${exitA.code} signal ${exitA.signal}`);
+      expect(exitA.signal).toBeUndefined();
+      expect(exitA.code).toBe(0);
+
+      const logA = outputA.text();
+      FAULT_MARKERS.forEach((marker) => expect(logA).not.toContain(marker));
+      expect(logA).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+
+      await teardownElectronApp(ctx);
+      ctx = undefined;
+
+      // #endregion
+
+      // #region Between launches — make the profile look pre-multi-window
+
+      // No structure file (the marker of the new persistence), a legacy layout in localStorage
+      // (seeded above, and retained by the quit), and an old-style keeper file with a known
+      // placement: exactly the state an install from before the window-layouts structure holds.
+      fs.rmSync(path.join(userDataDir, 'window-layouts.json'), { force: true });
+      expect(fs.existsSync(path.join(userDataDir, 'window-layouts.json'))).toBe(false);
+      fs.writeFileSync(
+        path.join(userDataDir, LEGACY_WINDOW_STATE_FILE_NAME),
+        JSON.stringify({
+          x: primaryDisplayBounds.x,
+          y: primaryDisplayBounds.y,
+          ...LEGACY_KEEPER_SIZE,
+          isMaximized: false,
+          isFullScreen: false,
+          displayBounds: primaryDisplayBounds,
+        }),
+      );
+      logStep('between launches: structure file removed, legacy keeper file written');
+
+      // #endregion
+
+      // #region Launch B — the upgrade
+
+      // No preserveUserDataDir: this launch's teardown must delete the profile directory.
+      ctx = await launchElectronApp({ ...BASE_LAUNCH_OPTIONS, userDataDir });
+      const outputB = captureAppOutput(ctx.electronApp);
+      const pagesB = await waitForAppPages(ctx.electronApp, 1, 180_000);
+      const pageB = pagesB[0];
+      const windowBId = getWindowIdOfPage(pageB);
+      await waitForAppReady(pageB, 180_000);
+      logStep(`launch B: window ${windowBId} ready`);
+
+      // Premise check on the harness itself: the seeded blob must have survived the quit (the
+      // renderer only reads this key, never writes or clears it). Failing here means the SEEDING
+      // did not persist — a test-harness problem — so the layout assertions below can only fail
+      // for product reasons.
+      const storedLegacyBlob = await pageB.evaluate(
+        (storageKey) => localStorage.getItem(storageKey),
+        LEGACY_DOCK_LAYOUT_STORAGE_KEY,
+      );
+      expect(storedLegacyBlob ?? '').toContain(LEGACY_SECOND_TAB_UUID);
+
+      // The discriminator: BOTH seeded tabs must render. A pass cannot be vacuous through some
+      // other layout source — the fresh-profile fallback layout has exactly ONE tab (Home) and an
+      // empty layout has none, so a tab with the seeded clone id can only have come from the
+      // legacy localStorage blob itself. An upgrade that lost the legacy layout would show one
+      // Home tab (fallback) or an empty dock, and fail here.
+      await expect(homeTabTitle(pageB, windowBId)).toBeAttached({ timeout: 60_000 });
+      await expect(
+        pageB.locator(
+          `.platform-tab-title[data-web-view-id="${LEGACY_SECOND_TAB_UUID}-w${windowBId}"]`,
+        ),
+      ).toBeAttached({ timeout: 60_000 });
+      await expect(pageB.locator('.platform-tab-title')).toHaveCount(2);
+      logStep('launch B: legacy layout loaded — Home tab and seeded second tab both render');
+
+      // Exactly ONE window: the upgrade rule is one window, not two, not zero. Give a wrongly
+      // created extra window time to appear before asserting the count (secondary windows are
+      // created late in startup, once the interface mode becomes readable).
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 10_000);
+      });
+      expect(getAppPages(ctx.electronApp)).toHaveLength(1);
+      logStep('launch B: exactly one window restored');
+
+      // The keeper file's size must be honored (its placement is on-display by construction, so
+      // the app's off-display fallback cannot legitimately apply). An upgrade that ignores the
+      // keeper file would come up at the default size instead — which the keeper size deliberately
+      // differs from.
+      const upgradedBounds = await getWindowBounds(ctx.electronApp, windowBId);
+      expect(upgradedBounds.width, 'upgraded window: width from the keeper file').toBe(
+        LEGACY_KEEPER_SIZE.width,
+      );
+      expect(upgradedBounds.height, 'upgraded window: height from the keeper file').toBe(
+        LEGACY_KEEPER_SIZE.height,
+      );
+      logStep('launch B: keeper-file window size honored');
+
+      // A window created mid-session in the upgraded session must START EMPTY even though a legacy
+      // blob exists in localStorage — the kill-shot for the fallback that cloned the legacy layout
+      // into every new window. A regression to that behaviour would render the two seeded tabs
+      // here.
+      const page2B = await createSecondWindow(ctx.electronApp);
+      const window2BId = getWindowIdOfPage(page2B);
+      await waitForRendererRegistered(window2BId, 120_000);
+      await expectWindowDockEmpty(page2B);
+      logStep(`launch B: mid-session window ${window2BId} started empty despite the legacy blob`);
+
+      const exitB = await quitAppAndWaitForExit(ctx.electronApp);
+      logStep(`launch B: exited with code ${exitB.code} signal ${exitB.signal}`);
+      expect(exitB.signal).toBeUndefined();
+      expect(exitB.code).toBe(0);
+
+      const logB = outputB.text();
+      FAULT_MARKERS.forEach((marker) => expect(logB).not.toContain(marker));
+      expect(logB).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+
+      // The final teardown (launched without preserveUserDataDir) deletes the profile directory.
+      await teardownElectronApp(ctx);
+      ctx = undefined;
+      expect(fs.existsSync(userDataDir)).toBe(false);
+
+      // #endregion
+    } finally {
+      // On any failure above: kill whatever instance is still up, then remove the preserved
+      // profile directory so a failed run leaks nothing. Both are no-ops after a clean launch B.
       if (ctx) await teardownElectronApp(ctx);
       if (profileDir) fs.rmSync(profileDir, { recursive: true, force: true });
     }
