@@ -150,6 +150,84 @@ export async function pollUntil<T>(
 
 // #endregion
 
+// #region focused-window routing
+
+/**
+ * Per-attempt timeout for one-shot routed PAPI calls. While a routed service's target window is not
+ * ready yet, the main process retries its handler lookup for up to ~9 seconds (10 attempts, 1
+ * second apart — see `requestWithRetry` in `src/shared/data/rpc.model.ts`) before answering
+ * method-not-found, so each attempt needs a budget above that to distinguish "not ready yet" from a
+ * transport failure.
+ */
+const ROUTED_CALL_TIMEOUT_MS = 15_000;
+
+/** Ask the main process which window id it currently routes to. */
+export async function getFocusedWindowId(): Promise<number | undefined> {
+  return sendPapiRequestOnce<number | undefined>(
+    'command:platform.getFocusedWindowId',
+    [],
+    WEBSOCKET_PORT,
+    ROUTED_CALL_TIMEOUT_MS,
+  );
+}
+
+/**
+ * How long {@link focusWindowAndWaitForRouting} keeps asking the display server to activate the
+ * window before falling back to delivering the focus notification at the Electron boundary itself.
+ * Activation requests that a compositor honors at all are honored within a second or two, so ten
+ * seconds of retries means it will not cooperate.
+ */
+const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
+
+/**
+ * Give a window focus and wait until the main process routes to it.
+ *
+ * Two escalation stages, re-issued on every poll attempt:
+ *
+ * 1. Ask the display server: minimize every other window (a covering window need not be re-raised by a
+ *    bare `focus()` call) and request activation of the target.
+ * 2. If the display server has not cooperated within {@link OS_FOCUS_COOPERATION_BUDGET_MS}, also emit
+ *    the window's `focus` notification directly. Headless/CI compositors (observed on WSLg/Weston)
+ *    honor the activation a window gets when it is first shown but ignore programmatic
+ *    re-activation of an existing window, so no amount of asking produces the event a real user's
+ *    window switch produces. Emitting it simulates the compositor's delivery at the app boundary;
+ *    everything the app does with the event — focus tracking, routing target re-resolution, relay
+ *    re-pointing — still runs for real, so a break anywhere in that chain still fails the wait.
+ *
+ * A previously minimized target is restored, so alternating focus between windows is self-healing.
+ */
+export async function focusWindowAndWaitForRouting(
+  electronApp: ElectronApplication,
+  windowId: number,
+): Promise<void> {
+  const startTime = Date.now();
+  await pollUntil(
+    async () => {
+      const shouldSimulateFocusDelivery = Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS;
+      await electronApp.evaluate(
+        ({ BrowserWindow }, { id, simulateFocusDelivery }) => {
+          const win = BrowserWindow.fromId(id);
+          if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+          BrowserWindow.getAllWindows().forEach((otherWindow) => {
+            if (otherWindow.id !== id && !otherWindow.isMinimized()) otherWindow.minimize();
+          });
+          if (win.isMinimized()) win.restore();
+          win.show();
+          win.focus();
+          if (simulateFocusDelivery) win.emit('focus');
+        },
+        { id: windowId, simulateFocusDelivery: shouldSimulateFocusDelivery },
+      );
+      return getFocusedWindowId();
+    },
+    (focusedId) => focusedId === windowId,
+    30_000,
+    `main process to route to window ${windowId}`,
+  );
+}
+
+// #endregion
+
 // #region window helpers
 
 /**
