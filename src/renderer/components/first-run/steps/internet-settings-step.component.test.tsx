@@ -5,7 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
+import {
+  getJsonRpcRequestErrorMessagePrefix,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+} from '@shared/data/rpc.model';
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import { wait } from 'platform-bible-utils';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
@@ -226,6 +229,22 @@ describe('InternetSettingsStep', () => {
       expect(screen.getByText(/getting things ready/i)).toBeInTheDocument();
       // Still within budget — no error yet.
       expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+    });
+
+    it('retries a client request timeout like a startup miss (not just method-not-found)', async () => {
+      // An overloaded provider mid-cold-start can blow the client timeout instead of replying
+      // method-not-found; that's still transient and should be retried within the budget.
+      mockSendCommand
+        .mockRejectedValueOnce(
+          new Error(`${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} getInternet`),
+        )
+        .mockResolvedValue(MOCK_SETTINGS);
+      const { setCanProceed } = renderStep();
+
+      await advance(1_000); // one 500 ms backoff, then the resolving attempt
+      expect(screen.getByTestId('option-list')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+      expect(setCanProceed).toHaveBeenCalledWith(true);
     });
 
     it('re-issues across more than one command-layer window, then loads once registration completes', async () => {
