@@ -36,22 +36,11 @@ beforeAll(() => {
 // for a Range with no client rects (exactly the degenerate case resolveActiveLineRect falls back
 // for), so this polyfills only that spec-compliant zero shape — not a faked non-zero rect — to let
 // jsdom exercise the same path a real browser would. Mirrors character-marker-bar.utils.test.ts.
-/* eslint-disable no-type-assertion/no-type-assertion */
+// A real `DOMRect` (constructible in this repo's jsdom) satisfies the type exactly, so no cast is
+// needed.
 if (!Range.prototype.getBoundingClientRect) {
-  Range.prototype.getBoundingClientRect = () =>
-    ({
-      top: 0,
-      bottom: 0,
-      left: 0,
-      right: 0,
-      width: 0,
-      height: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    }) as DOMRect;
+  Range.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 0, 0);
 }
-/* eslint-enable no-type-assertion/no-type-assertion */
 
 // Mutable so one test can mount hidden and then flip to visible, which is the whole point.
 const mockVisibility = { isVisible: true };
@@ -79,20 +68,8 @@ const stubRects = (caretTop: number) => {
     rectReadCount += 1;
     const isPara = this instanceof HTMLElement && this.classList.contains('para');
     const top = isPara ? caretTop : 0;
-    // A plain object literal satisfies every field DOMRect callers read; casting avoids
-    // implementing the full DOMRect prototype for a test stub.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return {
-      top,
-      bottom: top + 20,
-      left: 0,
-      right: 200,
-      width: 200,
-      height: 20,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    } as DOMRect;
+    // A real DOMRect (left, top, width, height) satisfies every field callers read with no cast.
+    return new DOMRect(0, top, 200, 20);
   });
 };
 
@@ -121,6 +98,16 @@ const putCaretInParagraph = () => {
 };
 
 const barContainer = () => screen.getByTestId('character-marker-bar-container');
+
+// The overlay's resize callback ignores both ResizeObserverCallback arguments (it only calls
+// recompute()), so a minimal object satisfying the ResizeObserver interface stands in for the
+// real observer without a cast or a second MockResizeObserver instance (which would register an
+// unwanted extra entry in resizeCallbacks).
+const stubResizeObserverInstance: ResizeObserver = {
+  observe: () => {},
+  unobserve: () => {},
+  disconnect: () => {},
+};
 
 beforeEach(() => {
   mockVisibility.isVisible = true;
@@ -158,6 +145,12 @@ describe('CharacterMarkerBarOverlay', () => {
 
     // Opening the popover moves focus into Radix content, which reports a selection outside the
     // editor. The bar must not jump back to the top of the editor.
+    //
+    // Change the stubbed geometry here so "hold last position" and "anchor to first paragraph"
+    // produce different results: the single .para in the fixture would report this new value too,
+    // so an assertion that kept the caret-in-paragraph stub value (120) would pass even if the
+    // component fell through to the anchor-first branch instead of holding.
+    stubRects(999);
     const outside = document.createElement('p');
     outside.textContent = 'popover content';
     document.body.appendChild(outside);
@@ -173,6 +166,8 @@ describe('CharacterMarkerBarOverlay', () => {
       document.dispatchEvent(new Event('selectionchange'));
     });
 
+    // Still 120, not 999: proves the bar HELD its last position rather than falling through to
+    // the anchor-first-paragraph branch and re-reading the (now different) paragraph rect.
     expect(barContainer().style.top).toBe('120px');
   });
 
@@ -214,10 +209,7 @@ describe('CharacterMarkerBarOverlay', () => {
 
     stubRects(220);
     act(() => {
-      // The mock's callback body ignores its arguments entirely, so an empty object stands in
-      // for the observer instance without implementing the full ResizeObserver interface.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      resizeCallbacks.forEach((callback) => callback([], {} as ResizeObserver));
+      resizeCallbacks.forEach((callback) => callback([], stubResizeObserverInstance));
     });
 
     expect(barContainer().style.top).toBe('220px');
