@@ -6,8 +6,10 @@
  * rejects any `require` other than `papi` ("Requiring other than papi is not allowed in
  * extensions!"), so a UI value reachable from there makes the whole extension fail to activate and
  * no scripture editor opens. That is why these helpers live in their own module instead of in
- * `platform-scripture-editor.utils.ts`, which `main.ts` imports. Nothing enforces the boundary at
- * build or lint time — it fails at runtime.
+ * `platform-scripture-editor.utils.ts`, which `main.ts` imports. Neither the build nor lint catches
+ * the violation — it fails at runtime — so `extension-host-import-boundary.test.ts` enforces the
+ * boundary by walking `main.ts`'s transitive value-import graph. Keeping this module out of that
+ * graph is what makes the `lucide-react` import below safe.
  */
 
 import { isCharacterMarker, LanguageStrings, LocalizeKey, usfmMarkers } from 'platform-bible-utils';
@@ -47,11 +49,13 @@ export const CHARACTER_MARKER_MENU_STRING_KEYS = Object.freeze([
  * @param characterMarkerOptions The character marker applied at the current selection plus the
  *   optional editor operations for acting on it. Each operation is optional because the editor does
  *   not expose all of them yet; omit an operation to disable the actions that need it. With no
- *   `changeCharacterMarker`, picking a marker adds it instead of changing it.
+ *   `changeCharacterMarker`, picking a marker while one is applied does nothing — it never falls
+ *   back to adding, because adding nests.
  * @returns The list of character marker menu items, sorted by marker code. Empty when
- *   `parentMarker` is absent or contributes no character markers (e.g. `c`) — those early returns
- *   win over the remove row, so the result is `[]` even when a marker is applied and
- *   `removeCharacterMarker` is supplied.
+ *   `parentMarker` is absent or contributes no character markers — whether it has no children at
+ *   all (e.g. `c`) or only non-character children (e.g. `mt`). That wins over the remove row, so
+ *   the result is `[]` even when a marker is applied and `removeCharacterMarker` is supplied; the
+ *   menu never offers "Remove" with nothing to add.
  */
 export function generateCharacterMarkerMenuListItems(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -69,7 +73,9 @@ export function generateCharacterMarkerMenuListItems(
     /**
      * Replaces the applied character marker with the picked one. `EditorRef` exposes no
      * replace-character-marker operation yet, so supply this only once it does; while it is absent,
-     * picking a marker adds instead of changing.
+     * every marker row is inert whenever a character marker is applied. It does **not** fall back
+     * to `insertMarker`, because inserting over an existing character marker nests it rather than
+     * replacing it (verified against the editor package — see the comment at the call site).
      */
     changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
     /**
@@ -99,42 +105,49 @@ export function generateCharacterMarkerMenuListItems(
       ? rawCurrentCharacterMarker
       : undefined;
 
-  const markerMenuItems: MarkerMenuItem[] = [];
-  Object.values(markerDetails.children).forEach((markers) => {
-    markerMenuItems.push(
-      ...markers
-        .filter((marker) => isCharacterMarker(marker))
-        .map((marker): MarkerMenuItem => {
-          return {
-            marker,
-            title:
-              localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
-            action: () => {
-              if (marker === currentCharacterMarker) {
-                // This marker is already applied to the selection, and inserting it again would nest
-                // an identical character marker. Doing nothing is deliberate: what a second pick
-                // should do (toggle it off, or extend it over the whole selection) is a UX decision
-                // that has not been made, so this stays inert rather than guessing.
-                closeMarkersMenu();
-                return;
-              }
-              if (currentCharacterMarker && changeCharacterMarker)
-                changeCharacterMarker(currentCharacterMarker, marker);
-              else editorRef.current?.insertMarker(marker);
-              closeMarkersMenu();
-            },
-          };
-        }),
-    );
-  });
-  const sortedMarkerMenuItems = markerMenuItems.sort((a, b) =>
-    (a.marker ?? a.title).localeCompare(b.marker ?? b.title),
+  // Every generated item carries a marker code — `MarkerMenuItem.marker` is optional only for rows
+  // like the remove row below, which is prepended after sorting — so the sort compares codes
+  // directly with no title fallback.
+  const markerMenuItems: (MarkerMenuItem & { marker: string })[] = Object.values(
+    markerDetails.children,
+  ).flatMap((markers) =>
+    markers
+      .filter((marker) => isCharacterMarker(marker))
+      .map((marker) => ({
+        marker,
+        title: localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
+        action: () => {
+          // Never `insertMarker` while a character marker is already applied: it *nests* rather
+          // than replaces. Verified 2026-08-04 against the editor package by driving
+          // `getUsjMarkerAction('bd')` over a selection inside an existing `\nd` CharNode, which
+          // produced `char:nd > char:bd > "LORD"` — and `char:nd > char:nd` for the same marker
+          // picked twice. `$charNodeTransform`
+          // (`libs/shared-react/src/plugins/usj/CharNodePlugin.tsx`) only coalesces *sibling*
+          // CharNodes, so the nesting survives into the saved USJ. So when a marker is applied,
+          // change it if the editor can, and otherwise stay inert: picking the applied marker again
+          // (toggle off? extend over the whole selection?) and picking a different one with no
+          // replace operation available are both UX decisions that have not been made, and writing
+          // nested markup is worse than doing nothing.
+          if (currentCharacterMarker) {
+            if (marker !== currentCharacterMarker)
+              changeCharacterMarker?.(currentCharacterMarker, marker);
+          } else editorRef.current?.insertMarker(marker);
+          closeMarkersMenu();
+        },
+      })),
   );
+  const sortedMarkerMenuItems = markerMenuItems.sort((a, b) => a.marker.localeCompare(b.marker));
 
   // The remove row goes first, ahead of the sorted markers. Note this ordering only holds while the
   // menu's search box is empty: the row has no marker code to match on, so a search can only match
   // its title, and `MarkerMenu` renders title matches after every code match.
-  if (!currentCharacterMarker || !removeCharacterMarker) return sortedMarkerMenuItems;
+  //
+  // An empty marker list suppresses the remove row too, so a parent that contributes no character
+  // markers always yields `[]`. Some parents have children of which none is a character marker (e.g.
+  // `mt`, `h`, `qs`), which gets past the early returns above; without this check those would offer
+  // a remove row and nothing to add, while a childless parent like `c` offers nothing at all.
+  if (!sortedMarkerMenuItems.length || !currentCharacterMarker || !removeCharacterMarker)
+    return sortedMarkerMenuItems;
   return [
     {
       title: localizedStrings[REMOVE_CHARACTER_MARKER_KEY] ?? REMOVE_CHARACTER_MARKER_KEY,

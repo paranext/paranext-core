@@ -10,9 +10,9 @@ type LocalizedStringsFile = {
 
 function readLocalizedStrings(): LocalizedStringsFile['localizedStrings'] {
   const stringsFilePath = path.resolve(__dirname, '../contributions/localizedStrings.json');
-  // JSON.parse returns `any`; asserting the known shape of localized strings contribution files
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const stringsFile = JSON.parse(readFileSync(stringsFilePath, 'utf-8')) as LocalizedStringsFile;
+  // JSON.parse returns `any`, which assigns to the known shape of localized strings contribution
+  // files without a type assertion
+  const stringsFile: LocalizedStringsFile = JSON.parse(readFileSync(stringsFilePath, 'utf-8'));
   return stringsFile.localizedStrings;
 }
 
@@ -39,8 +39,22 @@ describe('character marker menu labels', () => {
 
     it(`Spanish label uses sentence case for ${key}`, () => {
       const es = localizedStrings.es[key];
-      expect(es.charAt(0)).toMatch(/[A-ZÁÉÍÓÚÜÑ]/);
-      expect(es.slice(1)).toBe(es.slice(1).toLowerCase());
+      // A missing string is already reported by the parity test above; fail cleanly here rather
+      // than throwing a TypeError off `undefined`
+      expect(typeof es).toBe('string');
+      // Spanish may open a phrase with ¿ or ¡ ahead of the first letter
+      expect(es).toMatch(/^[¿¡]?[A-ZÁÉÍÓÚÜÑ]/);
+      // Sentence case here means "not Title Case": no capitalized word after the first. All-caps
+      // tokens are allowed so an acronym (USFM, RTL) doesn't fail a correct translation. A
+      // translation that legitimately contains a capitalized proper noun will need an explicit
+      // exception added here.
+      const titleCasedWords = es
+        .split(/\s+/)
+        .slice(1)
+        .filter(
+          (word) => /^[¿¡"'(«]*[A-ZÁÉÍÓÚÜÑ]/.test(word) && word !== word.toLocaleUpperCase('es'),
+        );
+      expect(titleCasedWords).toEqual([]);
     });
   });
 });
