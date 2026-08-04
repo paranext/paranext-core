@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { SyncConsentStep } from './sync-consent-step.component';
 
+vi.mock('@renderer/services/first-run-store', () => ({
+  isDemoMode: vi.fn(() => false),
+}));
+
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn((keys: string[]) => {
     const strings: Record<string, string> = {

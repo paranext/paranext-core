@@ -2568,6 +2568,26 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the {@link WizardStepper} component. */
+export interface WizardStepperProps {
+	/** 1-based index of the currently active step. */
+	currentStep: number;
+	/** Total number of numbered steps. */
+	totalSteps: number;
+	/**
+	 * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
+	 * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a
+	 * `RangeError` in V8).
+	 */
+	locale?: string;
+}
+/**
+ * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
+ * presentational — owns no navigation state. All circles are `aria-hidden`; the consuming shell is
+ * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
+ * readers.
+ */
+export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 declare const alertVariants: (props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & ClassProp) | undefined) => string;

@@ -1,5 +1,9 @@
 # PT-4030 — ConflictThread extraction (PR #2497 review, finding #15 + absorbed fixes)
 
+> **Frozen record** — execution plan for PR #2497's review round; that PR merged 2026-07-10 and
+> this plan was carried out. The code states and finding numbers it references are historical —
+> follow the current files, not this document.
+
 ## Goal
 
 Make the shared `CommentThread` conflict-agnostic by extracting a `ConflictThread`

@@ -1,5 +1,7 @@
 # Platform.Bible App State Detection
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 Shared reference for detecting Platform.Bible application state across all skills.
 
 ## Quick One-Liner Check
@@ -37,7 +39,7 @@ echo "Renderer: $(curl -s -m 2 http://localhost:1212 > /dev/null && echo UP || e
 | **log-inspector** | Historical only | Historical | Both | Both |
 | **visual-verification** | BLOCKED | Limited | Wait | WORKS* |
 
-*visual-verification requires visible window AND Chrome MCP enabled (`claude --chrome`)
+*visual-verification works headless via Playwright-over-CDP (port 9223) — no visible window or `claude --chrome` required; see the visual-verification skill.
 
 ## Detection Script
 
@@ -72,28 +74,22 @@ else
 fi
 ```
 
-## Claude Background Process Limitation
+## Claude-Started Apps (headless CDP)
 
-When Claude Code runs `./.erb/scripts/refresh.sh` in a background process:
-- Webpack dev server starts (port 1212 works)
-- Electron main process may start
-- **GUI window may NOT be visible** to the user
+Claude may start the app itself with `./.erb/scripts/refresh.sh` — it runs the app
+under `xvfb-run` with `--remote-debugging-port=9223`, so there is no visible window
+by design, and that is fine:
 
-This happens because background processes lack access to the display environment.
-
-### Implications
-
-| Scenario | What Works | What Doesn't |
-|----------|------------|--------------|
-| Claude starts app | WebSocket API (PAPI) | Visual verification (no visible window) |
-| User starts app | Everything | N/A |
+| Scenario | What Works |
+|----------|------------|
+| Claude starts app (refresh.sh) | WebSocket API (PAPI) **and** visual verification via CDP screenshots |
+| User starts app (`npm start`) | Everything, with a visible window |
 
 ### Recommended Approach
 
 1. **Always check** if app is already running before any action
-2. **For visual verification**: Ask user to start app manually
-3. **For PAPI-only work**: Can attempt background start, but user won't see window
-4. **Document** when visual verification is skipped due to this limitation
+2. **For visual verification**: use the visual-verification skill over CDP (port 9223) — works against Claude-started headless apps
+3. Ask the user to start the app manually only when they need to see or drive the window themselves
 
 ## Standard User Prompt
 

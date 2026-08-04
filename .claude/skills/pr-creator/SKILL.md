@@ -6,6 +6,8 @@ allowed-tools: Bash, Read, Grep
 
 # PR Creator Skill
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 Create pull requests for Platform.Bible following team standards.
 
 ## Quick Reference
@@ -54,7 +56,7 @@ JIRA_ID=$(echo "$BRANCH" | grep -oE '^[a-z]+-[0-9]+' | tr 'a-z' 'A-Z')
 
 if [ -n "$JIRA_ID" ]; then
   echo "JIRA: $JIRA_ID"
-  echo "Link: https://paratext.atlassian.net/browse/$JIRA_ID"
+  echo "Link: https://paratextstudio.atlassian.net/browse/$JIRA_ID"
 else
   echo "No JIRA ID found in branch name"
 fi

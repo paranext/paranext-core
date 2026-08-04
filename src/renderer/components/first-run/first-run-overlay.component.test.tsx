@@ -24,7 +24,6 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
       '%firstRun_button_next%': 'Next',
       '%firstRun_button_back%': 'Back',
-      '%firstRun_button_finish%': 'Finish',
       '%firstRun_step_internet_placeholder%': 'Internet settings (coming soon)',
       '%firstRun_step_syncConsent_heading%': 'Sync your projects',
       '%firstRun_step_syncConsent_body%':
@@ -100,6 +99,9 @@ vi.mock('platform-bible-react', () => {
     DialogDescription: DialogDescriptionStub,
     Button: ButtonStub,
     InterfaceLanguagePicker: InterfaceLanguagePickerStub,
+    // Returning null is the idiomatic React "render nothing" pattern; ComponentType requires a renderable return.
+    // eslint-disable-next-line no-null/no-null
+    WizardStepper: () => null,
     Progress: ({ value, 'aria-label': l }: { value?: number; 'aria-label'?: string }) => (
       <div role="progressbar" aria-valuenow={value} aria-label={l} />
     ),

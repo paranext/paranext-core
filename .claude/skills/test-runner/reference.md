@@ -1,5 +1,7 @@
 # Test Runner Reference
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 This is a quick reference for common test patterns. For comprehensive testing standards, see [Testing-Guide.md](../../../.context/standards/Testing-Guide.md).
 
 ## Testing Stack
@@ -99,7 +101,7 @@ describe('ComponentName', () => {
 public class FeatureTests
 {
     [Test]
-    [Category("Unit")]
+    [Category("Contract")]
     public void Method_Condition_ExpectedResult()
     {
         // Arrange
@@ -220,6 +222,11 @@ ProjectDetails details = CreateProjectDetails(scrText);
 ParatextProjects.FakeAddProject(details, scrText);
 ```
 
+> **Localization gotcha:** `DummyPapiClient.SendRequestAsync` returns `default(T)` for unregistered
+> services, so `GetLocalizedString` falls back to its `defaultValue` — a wire integration test can
+> still see English even when no localization service is registered. See
+> [Localization-Guide.md](../../../.context/standards/Localization-Guide.md) § "Testing Localized C# Backends".
+
 ## Test Base Classes
 
 ### C# Test Base
@@ -294,6 +301,6 @@ npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/
 
 ```bash
 # Simulate CI environment
-CI=true npm test -- --coverage
+CI=true npm run test:core -- --run --coverage
 dotnet test c-sharp-tests/ --configuration Release
 ```
