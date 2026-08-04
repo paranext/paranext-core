@@ -95,10 +95,20 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     saveState === SaveState.IsRestarting;
 
   const handleSaveAndRestart = async () => {
+    if (!setData) {
+      // Provider not registered yet — do not mark saved or restart without persisting.
+      setSaveError(
+        getErrorMessage(
+          new Error('Internet settings are not available yet. Please try again in a moment.'),
+        ),
+      );
+      setSaveState(SaveState.HasNotSaved);
+      return;
+    }
     setSaveState(SaveState.IsSaving);
     setSaveError('');
     try {
-      await setData?.(internetSettings);
+      await setData(internetSettings);
       // Update the saved baseline so Reset reflects the just-persisted state.
       if (isMounted.current) setSavedInternetSettings(internetSettings);
       // Queue restart asynchronously so the UI can update first.
