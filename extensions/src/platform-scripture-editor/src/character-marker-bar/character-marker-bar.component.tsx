@@ -1,9 +1,8 @@
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { LanguageStrings } from 'platform-bible-utils';
-import { MutableRefObject } from 'react';
+import { MutableRefObject, useMemo } from 'react';
 import {
   CharacterMarkerControl,
-  CharacterMarkerControlLocalizedStrings,
   CharacterMarkerToolbar,
 } from '../character-marker-control.component';
 import { CharacterMarkerSelection } from '../character-marker-coverage.utils';
@@ -22,7 +21,7 @@ export type CharacterMarkerBarProps = {
   /** `true` while an automatic Send/Receive has editing paused. */
   isSyncBlocked: boolean;
   /** Localized strings for the control, its tooltips, and the menu. */
-  localizedStrings: CharacterMarkerControlLocalizedStrings & LanguageStrings;
+  localizedStrings: LanguageStrings;
 };
 
 /**
@@ -39,6 +38,12 @@ export type CharacterMarkerBarProps = {
  *   trigger current, and it documents that its caller must provide one. The editor web view's own
  *   `handleSelectionChange` only writes a ref, and `contextMarker` only changes when the marker
  *   itself does — so without this the trigger would show a stale `(mixed)`.
+ * - **`localizedStrings` is re-keyed once for the control.** `LanguageStrings` declares its index
+ *   signature as `[k: LocalizeKey]` (the `%…%` template-literal type), while the control declares
+ *   `[key: string]`. TypeScript does not consider a `LocalizeKey`-keyed type assignable to a
+ *   `string`-keyed one, so the bar takes the `LanguageStrings` every caller actually has — which is
+ *   also what `useCharacterMarkerState` requires — and rebuilds it as a plain string-keyed object
+ *   for the control.
  *
  * The Simple-mode gate lives in `CharacterMarkerToolbar`, so nothing renders in Power mode.
  */
@@ -61,6 +66,14 @@ export function CharacterMarkerBar({
     localizedStrings,
   });
 
+  // See the note above: the control's index signature is keyed by `string`, not `LocalizeKey`, so
+  // the same object has to be handed over re-keyed. Memoized so it is not rebuilt on every caret
+  // move (`useEditorSelectionVersion` re-renders this component constantly).
+  const controlLocalizedStrings = useMemo(
+    () => Object.fromEntries(Object.entries(localizedStrings)),
+    [localizedStrings],
+  );
+
   return (
     <CharacterMarkerToolbar className="tw:m-1">
       <CharacterMarkerControl
@@ -68,7 +81,7 @@ export function CharacterMarkerBar({
         // Omitted deliberately — see the note above; the bare marker code is what fits the gutter.
         currentMarkerLabel={undefined}
         isSyncBlocked={isSyncBlocked}
-        localizedStrings={localizedStrings}
+        localizedStrings={controlLocalizedStrings}
         // tw:w-full + tw:min-w-0 + tw:overflow-hidden make the trigger FILL the gutter width the
         // overlay's container sets and clip inside it, instead of shrink-wrapping its label and
         // growing inline-start over project text. `(mixed)`/`(none)` are localized, so their width
