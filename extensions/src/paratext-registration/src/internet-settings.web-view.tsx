@@ -1,30 +1,22 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { InternetSettings } from 'paratext-registration';
-import { usePromise } from 'platform-bible-react';
-import { getErrorMessage, wait } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { getErrorMessage, isPlatformError, wait } from 'platform-bible-utils';
+import { useEffect, useRef, useState } from 'react';
 import { INTERNET_SETTINGS_STRING_KEYS, InternetSettingsForm } from './internet-settings.component';
 import { SaveState } from './utils';
 
 /** Time in milliseconds to wait before restarting the application after changing internet settings. */
 const INTERNET_SETTINGS_RESTART_DELAY_MS = 5 * 1000;
 
-// #region PAPI helpers
+const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
-async function getInternetSettings() {
-  return papi.commands.sendCommand('paratextRegistration.getParatextDataInternetSettings');
-}
-
-async function saveInternetSettings(internetSettings: InternetSettings) {
-  return papi.commands.sendCommand(
-    'paratextRegistration.setParatextDataInternetSettings',
-    internetSettings,
-  );
-}
-
-// #endregion
+const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
+  permittedInternetUse: 'VpnRequired',
+  selectedServer: 'Production',
+  proxyPort: 0,
+};
 
 // Run once per renderer-process session. Ensures the post-restart detection in the mount
 // effect does not misfire when the panel is reopened while a restart countdown is in progress.
@@ -64,7 +56,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // Staged settings: what the user has edited in the form (persisted in web view state).
   const [internetSettings, setInternetSettings] = useWebViewState<InternetSettings>(
     'internetSettings',
-    { permittedInternetUse: 'VpnRequired', selectedServer: 'Production', proxyPort: 0 },
+    DEFAULT_INTERNET_SETTINGS,
   );
 
   // Last-persisted settings from PAPI: undefined while the fetch is in flight.
@@ -72,32 +64,30 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     InternetSettings | undefined
   >();
 
-  // Stable wrapper so usePromise fires exactly once. Catches PAPI command errors and surfaces
-  // them via saveError so the user sees an actionable message instead of a silent locked form.
-  const getInternetSettingsSafe = useCallback(async () => {
-    try {
-      return await getInternetSettings();
-    } catch (err: unknown) {
-      if (isMounted.current) setSaveError(getErrorMessage(err));
-      return undefined;
-    }
-  }, []); // stable: isMounted is a ref, setSaveError is a useState setter, getInternetSettings is module-level
-
-  // Fetch current settings from PAPI on mount; undefined until resolved or on error.
-  const [fetchedInternetSettings] = usePromise(getInternetSettingsSafe, undefined);
+  const provider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  const [dpValue, setData, isLoadingSettings] = useData(provider).InternetSettings(
+    undefined,
+    DEFAULT_INTERNET_SETTINGS,
+  );
 
   // Guard against overwriting an in-progress user edit if the callback were ever replaced.
   const hasSyncedFetch = useRef(false);
 
-  // When fetch resolves, update both staged and saved baselines.
+  // Treat as unresolved while the provider is registering or the first read is in flight; surface a
+  // load error via saveError; otherwise sync the staged + saved baselines (guarding an in-progress
+  // user edit with hasSyncedFetch).
   useEffect(() => {
-    if (fetchedInternetSettings === undefined) return;
+    if (provider === undefined || isLoadingSettings) return;
+    if (isPlatformError(dpValue)) {
+      if (isMounted.current) setSaveError(getErrorMessage(dpValue));
+      return;
+    }
     if (!hasSyncedFetch.current) {
       hasSyncedFetch.current = true;
-      setInternetSettings(fetchedInternetSettings);
+      setInternetSettings(dpValue);
     }
-    setSavedInternetSettings(fetchedInternetSettings);
-  }, [fetchedInternetSettings, setInternetSettings]);
+    setSavedInternetSettings(dpValue);
+  }, [provider, isLoadingSettings, dpValue, setInternetSettings]);
 
   const isFormDisabled =
     savedInternetSettings === undefined ||
@@ -108,7 +98,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     setSaveState(SaveState.IsSaving);
     setSaveError('');
     try {
-      await saveInternetSettings(internetSettings);
+      await setData?.(internetSettings);
       // Update the saved baseline so Reset reflects the just-persisted state.
       if (isMounted.current) setSavedInternetSettings(internetSettings);
       // Queue restart asynchronously so the UI can update first.
