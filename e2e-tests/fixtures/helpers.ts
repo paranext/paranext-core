@@ -47,6 +47,11 @@ export interface ElectronAppContext {
   userDataDir: string;
   /** Resolves when the Electron process closes (registered before yielding to tests). */
   appClosed: Promise<void>;
+  /**
+   * When true, {@link teardownElectronApp} leaves {@link userDataDir} on disk so a later launch can
+   * reuse it. Carried over from {@link LaunchElectronAppOptions.preserveUserDataDir}.
+   */
+  preserveUserDataDir?: boolean;
 }
 
 /** Wait for the WebSocket server to be ready on the specified port. */
@@ -103,11 +108,28 @@ export interface LaunchElectronAppOptions {
    * developer's machine and never read or write the developer's real projects.
    */
   isolatedProjectRoot?: boolean;
+  /**
+   * Absolute path of an existing user-data directory to launch into, instead of creating a fresh
+   * temp one. For relaunch tests: pass the `userDataDir` a previous {@link launchElectronApp}
+   * returned (launched with {@link LaunchElectronAppOptions.preserveUserDataDir}) so the new
+   * instance starts from the profile state the previous one persisted. Launches must be sequential
+   * — the fixed WebSocket port and Electron's per-profile singleton lock forbid overlapping
+   * instances — so only pass this after the previous instance's process has fully exited.
+   */
+  userDataDir?: string;
+  /**
+   * When true, {@link teardownElectronApp} (and the cleanup that runs when the launch itself fails)
+   * leaves the user-data directory on disk so a later launch can reuse it via
+   * {@link LaunchElectronAppOptions.userDataDir}. The LAST launch of a relaunch chain must leave
+   * this unset so its teardown deletes the directory — otherwise the temp directory leaks.
+   */
+  preserveUserDataDir?: boolean;
 }
 
 /**
- * Launch a fresh Electron instance with an isolated user-data directory. Returns the app handle,
- * the temp directory path, and a promise that resolves when the app closes.
+ * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
+ * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
+ * user-data directory path, and a promise that resolves when the app closes.
  */
 export async function launchElectronApp(
   opts: LaunchElectronAppOptions = {},
@@ -117,8 +139,9 @@ export async function launchElectronApp(
   console.log(`Launching Electron app from project root: ${rootDir}`);
 
   // Use an isolated user-data directory so the singleton instance lock does not
-  // conflict with any already-running Platform.Bible instance.
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
+  // conflict with any already-running Platform.Bible instance. A caller-supplied directory (a
+  // relaunch into a preserved profile) is used as-is.
+  const userDataDir = opts.userDataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
 
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
   // binary to run as plain Node.js. We must omit it (do not set it to undefined:
@@ -154,8 +177,9 @@ export async function launchElectronApp(
     });
   } catch (error) {
     console.error('Failed to launch Electron:', error);
-    // Clean up the temp directory created above — launch never succeeded
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    // Clean up the temp directory created above — launch never succeeded. Preserved profiles are
+    // kept even here so a failed relaunch does not destroy the state under investigation.
+    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
     throw error;
   }
 
@@ -179,7 +203,7 @@ export async function launchElectronApp(
         }
       }
     }
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
     throw error;
   }
   console.log('WebSocket server is ready');
@@ -193,7 +217,7 @@ export async function launchElectronApp(
     });
   });
 
-  return { electronApp, userDataDir, appClosed };
+  return { electronApp, userDataDir, appClosed, preserveUserDataDir: opts.preserveUserDataDir };
 }
 
 /**
@@ -201,7 +225,7 @@ export async function launchElectronApp(
  * user-data directory.
  */
 export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void> {
-  const { electronApp, userDataDir, appClosed } = ctx;
+  const { electronApp, userDataDir, appClosed, preserveUserDataDir } = ctx;
 
   // Teardown: kill the OS process and wait for Playwright to passively detect
   // the disconnection via the 'close' event registered above.
@@ -245,6 +269,15 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
       }),
     ]);
     console.log('[teardown] Done waiting after SIGKILL');
+  }
+
+  // A preserved profile stays on disk so a later launch can relaunch into it (see
+  // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
+  // the flag unset and deletes the directory below.
+  if (preserveUserDataDir) {
+    console.log(`[teardown] Preserving user data dir for relaunch: ${userDataDir}`);
+    console.log('[teardown] Complete');
+    return;
   }
 
   console.log('[teardown] Cleaning up user data dir...');
