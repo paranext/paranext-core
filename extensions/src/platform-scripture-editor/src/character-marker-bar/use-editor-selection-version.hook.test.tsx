@@ -1,17 +1,11 @@
 // @vitest-environment jsdom
 
 import { act, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
-
-// Counts renders so the unmount test can assert the listener was actually removed. Asserting on
-// the DOM after unmount is impossible — there is nothing left to query — so the render count is
-// the only observable that makes that test falsifiable.
-const renderSpy = vi.fn();
 
 function Probe() {
   const version = useEditorSelectionVersion();
-  renderSpy(version);
   return <span data-testid="version">{version}</span>;
 }
 
@@ -21,6 +15,15 @@ const fireSelectionChange = () =>
   });
 
 describe('useEditorSelectionVersion', () => {
+  // Spy on addEventListener and removeEventListener to verify the listener is properly cleaned up
+  let addEventListenerSpy: ReturnType<typeof vi.spyOn>;
+  let removeEventListenerSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    addEventListenerSpy = vi.spyOn(document, 'addEventListener');
+    removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
+  });
+
   it('starts at 0', () => {
     render(<Probe />);
     expect(screen.getByTestId('version').textContent).toBe('0');
@@ -34,16 +37,32 @@ describe('useEditorSelectionVersion', () => {
     expect(screen.getByTestId('version').textContent).toBe('2');
   });
 
+  it('increments correctly when multiple events fire in one batch', () => {
+    render(<Probe />);
+    act(() => {
+      document.dispatchEvent(new Event('selectionchange'));
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    // Both events trigger setState, exercising the functional updater (previous + 1)
+    // React batches both, so version is 0 + 1 + 1 = 2
+    expect(screen.getByTestId('version').textContent).toBe('2');
+  });
+
   it('removes its listener on unmount', () => {
-    renderSpy.mockClear();
     const { unmount } = render(<Probe />);
-    fireSelectionChange();
-    const rendersWhileMounted = renderSpy.mock.calls.length;
 
+    // Capture the handler that was registered
+    const addCalls = addEventListenerSpy.mock.calls;
+    const selectionChangeAddCall = addCalls.find((call) => call[0] === 'selectionchange');
+    expect(selectionChangeAddCall).toBeDefined();
+
+    if (!selectionChangeAddCall) throw new Error('selectionchange listener was never added');
+    const registeredHandler = selectionChangeAddCall[1];
+
+    // Unmount and verify the same handler is unregistered
     unmount();
-    fireSelectionChange();
 
-    // A leaked listener would call setState on an unmounted component, re-rendering it.
-    expect(renderSpy.mock.calls.length).toBe(rendersWhileMounted);
+    // The same handler reference must be passed to removeEventListener
+    expect(removeEventListenerSpy).toHaveBeenCalledWith('selectionchange', registeredHandler);
   });
 });
