@@ -90,8 +90,11 @@ vi.mock('@renderer/services/usersnap.service', () => ({
 }));
 
 const { settingsGetMock, settingsSubscribeMock } = vi.hoisted(() => ({
-  settingsGetMock: vi.fn(async (key: string) =>
-    key === 'platform.interfaceMode' ? 'simple' : false,
+  // Typed broadly (not narrowed to the default implementation's `'simple' | false`) so tests can
+  // also mock other settings keys returning `true`.
+  settingsGetMock: vi.fn(
+    async (key: string): Promise<string | boolean> =>
+      key === 'platform.interfaceMode' ? 'simple' : false,
   ),
   settingsSubscribeMock: vi.fn(async () => async () => true),
 }));
