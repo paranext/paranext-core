@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { forwardRef, useImperativeHandle } from 'react';
@@ -136,9 +136,43 @@ describe('FootnoteEditor inline mode', () => {
     expect(container.querySelector(cancelButtonSelector)).toBeNull();
   });
 
-  it('does not width-lock its container in inline mode', () => {
-    const { container } = renderEditor({ inline: true });
-    const root = container.querySelector<HTMLElement>('.footnote-editor');
-    expect(root?.style.width).toBe('');
+  // jsdom's getBoundingClientRect() always returns width 0, so the width-lock guard
+  // (`if (width > 0) ...`) never fires without a stub — both sides of the popover-vs-inline
+  // guard need a non-zero rect to be actually exercised (rather than passing vacuously
+  // regardless of the guard's presence).
+  describe('width-lock behavior (with non-zero getBoundingClientRect)', () => {
+    let getBoundingClientRectSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      getBoundingClientRectSpy = vi
+        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+        .mockReturnValue({
+          width: 200,
+          height: 100,
+          top: 0,
+          left: 0,
+          bottom: 100,
+          right: 200,
+          x: 0,
+          y: 0,
+          toJSON: () => {},
+        });
+    });
+
+    afterEach(() => {
+      getBoundingClientRectSpy.mockRestore();
+    });
+
+    it('width-locks its container in popover mode (default)', () => {
+      const { container } = renderEditor();
+      const root = container.querySelector<HTMLElement>('.footnote-editor');
+      expect(root?.style.width).toBe('200px');
+    });
+
+    it('does not width-lock its container in inline mode', () => {
+      const { container } = renderEditor({ inline: true });
+      const root = container.querySelector<HTMLElement>('.footnote-editor');
+      expect(root?.style.width).toBe('');
+    });
   });
 });
