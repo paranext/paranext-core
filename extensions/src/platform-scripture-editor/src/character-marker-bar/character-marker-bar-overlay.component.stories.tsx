@@ -17,6 +17,10 @@ const STRINGS = getLocalizedStrings([
 
 // Mirrors the reserved gutter from _simple-mode.scss so the story shows the real geometry: the bar
 // occupies space the text column has given up, never space the text is using.
+// maxWidth matches the sibling paragraph-marker-tooltip story: without a width constraint, wrapping
+// depends on the viewer's monitor and the story can silently degrade to paragraph-level granularity
+// on a wide screen, which would not demonstrate the one thing this overlay exists to prove — that it
+// tracks the caret's LINE, not its paragraph.
 const MOCK_EDITOR_STYLE: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: '4px',
@@ -26,6 +30,7 @@ const MOCK_EDITOR_STYLE: React.CSSProperties = {
   paddingInlineEnd: '5em',
   fontFamily: 'serif',
   lineHeight: 1.8,
+  maxWidth: '520px',
 };
 
 /** Drives the real control from real state, so the story exercises the app's wiring. */
@@ -33,12 +38,22 @@ function BarHarness() {
   const [appliedMarker, setAppliedMarker] = useState<string | undefined>(undefined);
 
   const items: MarkerMenuItem[] = [
-    { marker: 'bd', title: 'Bold', selectionState: 'none', action: () => setAppliedMarker('bd') },
-    { marker: 'it', title: 'Italic', selectionState: 'none', action: () => setAppliedMarker('it') },
+    {
+      marker: 'bd',
+      title: 'Bold',
+      selectionState: appliedMarker === 'bd' ? 'all' : 'none',
+      action: () => setAppliedMarker('bd'),
+    },
+    {
+      marker: 'it',
+      title: 'Italic',
+      selectionState: appliedMarker === 'it' ? 'all' : 'none',
+      action: () => setAppliedMarker('it'),
+    },
     {
       marker: 'nd',
       title: 'Name of God',
-      selectionState: 'none',
+      selectionState: appliedMarker === 'nd' ? 'all' : 'none',
       action: () => setAppliedMarker('nd'),
     },
   ];
@@ -86,7 +101,8 @@ const editorContent = (
   <div className="editor-input usfm" contentEditable suppressContentEditableWarning>
     <p className="para usfm_p" style={PARA_STYLE}>
       The LORD is my shepherd; I shall not want. He makes me lie down in green pastures. He leads me
-      beside still waters. He restores my soul.
+      beside still waters. He restores my soul. He leads me in the paths of righteousness, and he
+      does this for the sake of his own great and holy name, which endures forever and ever.
     </p>
     <p className="para usfm_q1" style={INDENT1_STYLE}>
       He leads me in paths of righteousness for his name&rsquo;s sake.
