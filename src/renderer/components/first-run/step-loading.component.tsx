@@ -14,13 +14,17 @@ interface StepLoadingProps {
  */
 export function StepLoading({ message }: StepLoadingProps) {
   return (
-    <div className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:py-8 tw:text-center">
+    <div className="tw:flex tw:flex-col tw:items-center tw:py-8 tw:text-center">
       <Spinner />
-      {message && (
-        <p className="tw:text-sm tw:text-muted-foreground" aria-live="polite">
-          {message}
-        </p>
-      )}
+      {/* The live region is kept always mounted (empty until there's a message) so it exists BEFORE
+          its text appears — otherwise screen readers don't announce a message that pops in later.
+          The top margin is applied only when populated so the spinner-only state stays tight. */}
+      <p
+        className={`tw:text-sm tw:text-muted-foreground${message ? 'tw:mt-4' : ''}`}
+        aria-live="polite"
+      >
+        {message ?? ''}
+      </p>
     </div>
   );
 }

@@ -9,7 +9,10 @@ import {
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
 import { sendCommand } from '@shared/services/command.service';
-import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
+import {
+  getJsonRpcRequestErrorMessagePrefix,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+} from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import { getErrorMessage, wait, type LocalizeKey } from 'platform-bible-utils';
@@ -34,9 +37,10 @@ const STRING_KEYS: LocalizeKey[] = [
 const METHOD_NOT_FOUND_MESSAGE_PREFIX = getJsonRpcRequestErrorMessagePrefix(
   JSONRPCErrorCode.MethodNotFound,
 );
-// Each call already blocks ~10 s (command-layer retry), up to ~30 s (client request timeout), so this
-// budget affords only ~2-3 re-issues — generous on purpose, and independent of the equal-looking
-// client timeout. Compare the sibling resolve-registration-validity.ts (REGISTRATION_RESOLVE_TIMEOUT_MS).
+// Each call is bounded by the ~30 s client request timeout; method-not-found returns in ~10 s
+// (command-layer retry), so several attempts fit, while a full client timeout consumes the budget in
+// one attempt. Generous on purpose. Compare the sibling resolve-registration-validity.ts
+// (REGISTRATION_RESOLVE_TIMEOUT_MS).
 const SERVICE_STARTUP_BUDGET_MS = 30_000;
 // Backoff between re-issues; only bites when a call rejects fast (a real method-not-found call already
 // spent ~10 s upstream).
@@ -44,6 +48,18 @@ const SERVICE_STARTUP_RETRY_DELAY_MS = 500;
 // Show the "getting ready" message after this much elapsed time — not attempt count; one attempt
 // can block ~10 s.
 const CONNECTING_MESSAGE_DELAY_MS = 2_000;
+
+/**
+ * A failure worth retrying within the startup budget: the handler isn't registered yet, or the
+ * request timed out client-side (an overloaded provider mid-cold-start). Any other error is a real
+ * failure that a retry won't fix.
+ */
+function isTransientStartupError(errorMessage: string): boolean {
+  return (
+    errorMessage.includes(METHOD_NOT_FOUND_MESSAGE_PREFIX) ||
+    errorMessage.includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX)
+  );
+}
 
 async function fetchInternetSettings() {
   return sendCommand('paratextRegistration.getParatextDataInternetSettings');
@@ -108,8 +124,7 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
       } catch (err: unknown) {
         if (isStale()) return;
         lastErrorMessage = getErrorMessage(err);
-        // Only a not-yet-registered handler is worth retrying; any other error is a real failure.
-        if (!lastErrorMessage.includes(METHOD_NOT_FOUND_MESSAGE_PREFIX)) break;
+        if (!isTransientStartupError(lastErrorMessage)) break;
         // Small backoff so a fast-rejecting handler can't spin the loop.
         // eslint-disable-next-line no-await-in-loop
         await wait(SERVICE_STARTUP_RETRY_DELAY_MS);
@@ -117,7 +132,10 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
     }
     // Fell through: a non-transient error, or the budget ran out while still unregistered.
     if (isStale()) return;
-    // Show the user a friendly message; keep the raw RPC error in the log for debugging.
+    // Show a friendly message; keep the raw RPC error in the log for debugging. A generic message is
+    // right here: GetParatextDataInternetSettings (ParatextRegistrationService.cs) only reads local
+    // config, so it can't surface the actionable internet-blocked / auth-failure errors other data
+    // loads classify — its failures are startup/internal, and a Retry is the right affordance.
     logger.warn(`Could not load internet settings: ${lastErrorMessage}`);
     setLoadFailed(true);
   }, [setCanProceed]);
