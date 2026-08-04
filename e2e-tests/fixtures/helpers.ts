@@ -229,7 +229,16 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
 
   // Teardown: kill the OS process and wait for Playwright to passively detect
   // the disconnection via the 'close' event registered above.
-  const electronProcess = electronApp.process();
+  // After a graceful quit, Playwright may have fully disposed the ElectronApplication by the time
+  // teardown runs — on Windows its stdio closes promptly (no .NET watcher child holds the pipe
+  // write-ends open, unlike Linux), and `process()` on the disposed object throws. Treat that as
+  // "process already exited" and fall through to profile cleanup.
+  let electronProcess: ReturnType<ElectronApplication['process']> | undefined;
+  try {
+    electronProcess = electronApp.process();
+  } catch {
+    electronProcess = undefined;
+  }
   console.log(
     `[teardown] Closing Electron app... pid=${electronProcess?.pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
