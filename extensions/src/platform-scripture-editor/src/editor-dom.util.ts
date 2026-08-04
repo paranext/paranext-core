@@ -94,6 +94,39 @@ export function findScrollContainer(
 }
 
 /**
+ * Clamps a target's top edge into the scroll container's visible area, in `positionAnchor` content
+ * coordinates — the shared vertical math behind every gutter-anchored overlay in this extension.
+ *
+ * `scrollContainer` must be an ANCESTOR of `positionAnchor`. Because they move together in the
+ * viewport as the user scrolls, the viewport-relative delta is already the content-relative
+ * position and no `scrollTop` addition is needed; the container's own viewport top is used only to
+ * locate where the visible area begins. `positionAnchor.scrollTop` staying 0 while text visibly
+ * scrolls is the symptom of having passed the wrong element.
+ *
+ * Two clamps, in order: pin to the top of the visible area when the target has scrolled above it,
+ * then never exceed the target's own bottom edge, so an almost-fully-scrolled-past target does not
+ * drag the anchor below itself.
+ *
+ * @param targetRect Viewport rect of the thing being tracked — a paragraph element or a caret range
+ * @param anchorRect Viewport rect of the positioned element that owns the coordinate space
+ * @param scrollContainerRect Viewport rect of the scrolling ancestor
+ * @returns The clamped top, in `positionAnchor` content coordinates
+ */
+export function clampTopToVisibleArea(
+  targetRect: { top: number; bottom: number },
+  anchorRect: { top: number },
+  scrollContainerRect: { top: number },
+): number {
+  const topInContent = targetRect.top - anchorRect.top;
+  const bottomInContent = targetRect.bottom - anchorRect.top;
+  const visibleAreaTop = scrollContainerRect.top - anchorRect.top;
+
+  const ANCHOR_HEIGHT = 1;
+  const clampedTop = Math.max(topInContent, visibleAreaTop);
+  return Math.min(clampedTop, bottomInContent - ANCHOR_HEIGHT);
+}
+
+/**
  * Computes the top edge of the element with the given bounding rect in the scroll container's
  * scroll coordinate space, i.e. the `scrollTop` value at which that top edge sits at the
  * container's content top edge.
