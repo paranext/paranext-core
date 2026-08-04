@@ -10,13 +10,18 @@
  * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
  * each launch costs 30+ seconds, so related assertions are grouped into one instance):
  *
- * 1. Second-window lifecycle: a second window starts clean (its web views get window-scoped ids, no
- *    duplicate-registration errors), generic window-service calls route to whichever window has
- *    focus, and closing the secondary window neither quits the app nor runs shutdown tasks.
+ * 1. Second-window lifecycle: a window created mid-session starts EMPTY — an empty dock with no tabs
+ *    (it must not clone the first window's layout or load a default layout) — while its per-window
+ *    services register under scoped names with no collisions, generic window-service calls route to
+ *    whichever window has focus, and closing the secondary window neither quits the app nor runs
+ *    shutdown tasks.
  * 2. Hosting takeover: window 1 hosts the app-global theme and scroll-group services; closing it hands
  *    hosting to window 2, proven by live PAPI reads AND a write round-trip against the survivor.
  * 3. Quit with two windows: the shutdown tasks run exactly once (not once per window, not zero times)
  *    and the process exits cleanly.
+ *
+ * Shared plumbing (output capture, window helpers, the graceful-quit pattern) lives in
+ * `multi-window.util.ts`, which `window-layout-persistence.spec.ts` also uses.
  *
  * ## App configuration
  *
@@ -33,9 +38,11 @@
  *   intercept every click.
  * - `platform.interfaceLanguage: ['en']` — locale determinism.
  *
- * With `DEV_NOISY=false` and no saved layout (fresh user-data dir per test), every window loads the
- * single-Home-tab layout from `src/renderer/testing/test-layout.data.ts`, whose fixed web view id
- * makes the per-window `-w{windowId}` scoping suffix directly observable.
+ * With `DEV_NOISY=false` and no saved layout (fresh user-data dir per test), the FIRST window loads
+ * the single-Home-tab layout from `src/renderer/testing/test-layout.data.ts` (the fallback for a
+ * profile with no saved window structure), whose fixed web view id makes the per-window
+ * `-w{windowId}` scoping suffix directly observable. A window created mid-session starts with an
+ * EMPTY dock layout — no tabs — by design, so window 2 in these tests renders no content.
  *
  * ## Log capture
  *
@@ -55,24 +62,30 @@ import {
   preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
-  waitForPapiMethodRegistered,
+  waitForOverlayGone,
 } from '../../../fixtures/helpers';
-
-const WEBSOCKET_PORT = 8876;
-
-/**
- * Fixed web view id of the Home tab in the non-noisy dev layout. Source:
- * `src/renderer/testing/test-layout.data.ts` (the `DEV_NOISY=false` branch). The renderer suffixes
- * every web view id from a shared layout with the window it loads into (`-w1`, `-w2`, …; see
- * `src/renderer/components/docking/window-scoped-web-view-ids.util.ts`), so the rendered
- * `data-web-view-id` is this UUID plus that suffix.
- */
-const HOME_TAB_UUID = '7fc0e34a-d601-4995-fadc-92daa9ef713f';
+import {
+  DUPLICATE_REGISTRATION_PATTERN,
+  FAULT_MARKERS,
+  HOME_TAB_UUID,
+  WEBSOCKET_PORT,
+  captureAppOutput,
+  countOccurrences,
+  createSecondWindow,
+  createStepLogger,
+  expectWindowDockEmpty,
+  getWindowIdOfPage,
+  homeTabTitle,
+  pollUntil,
+  quitAppAndWaitForExit,
+  waitForRendererRegistered,
+} from './multi-window.util';
 
 // #region log markers
 // Exact substrings of log lines this suite keys on, each with the file that emits it. These are
 // behaviour-describing lines (outcomes a user/support person reads in a log), not internal symbol
-// names, so they are fair game for behaviour-level assertions.
+// names, so they are fair game for behaviour-level assertions. Markers shared with the
+// persistence spec live in multi-window.util.ts.
 
 /**
  * A renderer that lost the theme-hosting race attaches instead.
@@ -116,85 +129,6 @@ const APP_QUITTING_LOG = 'Main process is quitting';
  */
 const SHUTDOWN_MODE_UNREADABLE_LOG = 'Could not read platform.interfaceMode';
 
-/**
- * Faults that must never appear during any of the exercised flows: an unhandled rejection or
- * exception surfacing in the main process (`src/main/main.ts` process-level handlers), or an event
- * being emitted through an already-disposed emitter (`platform-bible-utils`), which past
- * multi-window handover defects surfaced as.
- */
-const FAULT_MARKERS = [
-  'Unhandled promise rejection',
-  'Unhandled exception in main process',
-  'Emitter is disposed',
-];
-
-/**
- * A warn/error-severity line reporting a name collision in the central registry. The same phrases
- * appear at debug severity on the EXPECTED step-aside paths (a second window losing the app-global
- * hosting race logs "… already registered" as debug), so severity is part of the pattern: only
- * warn/error occurrences indicate a window failing to scope its per-window services.
- */
-const DUPLICATE_REGISTRATION_PATTERN =
-  /\[(warn|error)\][^\n]*(already registered|rejected by the central registry)/;
-
-// #endregion
-
-// #region app output capture
-
-/** Accumulated stdout+stderr of the Electron process, with offset-based slicing. */
-interface AppOutputCapture {
-  /** Everything captured so far (ANSI color codes stripped). */
-  text(): string;
-  /** Opaque offset marking "now"; pass to {@link textFrom} to read only later output. */
-  mark(): number;
-  /** Everything captured after the given {@link mark} (ANSI color codes stripped). */
-  textFrom(offset: number): string;
-}
-
-/**
- * Start capturing the Electron process's stdout and stderr. Captures from the moment of the call —
- * output that was already flushed before (early startup) is not included, which every assertion in
- * this suite accounts for by marking an offset before triggering the behaviour it asserts on.
- *
- * Listeners are intentionally not detached: the process (and its stdio streams) is torn down with
- * the test-scoped fixture right after the test body, so there is nothing to leak into.
- */
-function captureAppOutput(electronApp: ElectronApplication): AppOutputCapture {
-  let buffer = '';
-  const append = (chunk: Buffer | string) => {
-    buffer += chunk.toString();
-  };
-  const proc = electronApp.process();
-  proc.stdout?.on('data', append);
-  proc.stderr?.on('data', append);
-  const stripAnsi = (raw: string) =>
-    // Terminal color escape sequences (from chalk in the app's console log transport) would break
-    // plain-substring matching, so strip them. The escape character is the point of the pattern.
-    // eslint-disable-next-line no-control-regex
-    raw.replace(/\u001b\[[0-9;]*m/g, '');
-  return {
-    text: () => stripAnsi(buffer),
-    mark: () => buffer.length,
-    textFrom: (offset: number) => stripAnsi(buffer.slice(offset)),
-  };
-}
-
-/** Number of times `needle` occurs in `haystack` (non-overlapping). */
-function countOccurrences(haystack: string, needle: string): number {
-  return haystack.split(needle).length - 1;
-}
-
-/**
- * Per-test elapsed-time step logger, so the runner output records how long each phase actually took
- * — the evidence for judging whether a pass exercised the intended waits (e.g. a hosting takeover
- * that includes an unreachability probe) or short-circuited.
- */
-function createStepLogger(): (label: string) => void {
-  const start = Date.now();
-  return (label: string) =>
-    console.log(`[multi-window +${((Date.now() - start) / 1000).toFixed(1)}s] ${label}`);
-}
-
 // #endregion
 
 // #region PAPI helpers (one-shot WebSocket JSON-RPC against the main process, port 8876)
@@ -225,6 +159,20 @@ type ThemeLike = { type?: string; cssVariables?: Record<string, string> } | unde
 async function getGenericWindowFocus(): Promise<FocusSubjectLike> {
   return sendPapiRequestOnce<FocusSubjectLike>(
     'object:platform.windowServiceDataProvider-data.getFocus',
+    [],
+    WEBSOCKET_PORT,
+    PAPI_ATTEMPT_TIMEOUT_MS,
+  );
+}
+
+/**
+ * Ask a SPECIFIC window's scoped window service for its own current focus subject, bypassing the
+ * routing proxy. This is the ground truth of what that window would answer if the generic call were
+ * routed to it.
+ */
+async function getScopedWindowFocus(windowId: number): Promise<FocusSubjectLike> {
+  return sendPapiRequestOnce<FocusSubjectLike>(
+    `object:platform.windowServiceDataProvider-${windowId}-data.getFocus`,
     [],
     WEBSOCKET_PORT,
     PAPI_ATTEMPT_TIMEOUT_MS,
@@ -289,93 +237,9 @@ function isVerseRefShaped(ref: VerseRefLike): boolean {
   return typeof ref?.book === 'string' && typeof ref.chapterNum === 'number';
 }
 
-/**
- * Repeatedly run `attempt` until `isAcceptable` accepts its value or `deadlineMs` elapses.
- * Rejections from `attempt` count as "not yet" (the service may legitimately be unreachable
- * mid-handover), so the last error is folded into the timeout message for diagnosis.
- */
-async function pollUntil<T>(
-  attempt: () => Promise<T>,
-  isAcceptable: (value: T) => boolean,
-  deadlineMs: number,
-  label: string,
-  intervalMs = 1_000,
-): Promise<T> {
-  const deadline = Date.now() + deadlineMs;
-  let lastFailure = 'no attempt settled';
-  for (;;) {
-    try {
-      // Sequential polling: each attempt must settle before the next; parallel attempts would
-      // hammer a service that is mid-handover.
-      // eslint-disable-next-line no-await-in-loop
-      const value = await attempt();
-      if (isAcceptable(value)) return value;
-      lastFailure = `last value was not acceptable: ${JSON.stringify(value)}`;
-    } catch (e) {
-      lastFailure = `last attempt rejected: ${e instanceof Error ? e.message : String(e)}`;
-    }
-    if (Date.now() >= deadline)
-      throw new Error(`Timed out after ${deadlineMs} ms waiting for ${label}; ${lastFailure}`);
-    // Sequential polling: wait between attempts (see above).
-    // eslint-disable-next-line no-await-in-loop
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, intervalMs);
-    });
-  }
-}
-
 // #endregion
 
-// #region window helpers
-
-/**
- * The window's Electron BrowserWindow id, read from the `windowId` query parameter the main process
- * puts in every renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
- */
-function getWindowIdOfPage(page: Page): number {
-  const rawId = new URL(page.url()).searchParams.get('windowId');
-  const id = Number(rawId);
-  if (!Number.isInteger(id) || id <= 0)
-    throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
-  return id;
-}
-
-/**
- * Create a second application window through the public `platform.createWindow` command and return
- * its Page. The window event listener is armed BEFORE the command is sent, so the new window cannot
- * be missed. The predicate skips any non-app page (e.g. a detached devtools window) by requiring
- * the renderer URL's `windowId` query parameter.
- */
-async function createSecondWindow(electronApp: ElectronApplication): Promise<Page> {
-  const windowPromise = electronApp.waitForEvent('window', {
-    predicate: (page: Page) => page.url().includes('windowId='),
-    timeout: 60_000,
-  });
-  await sendPapiRequestOnce('command:platform.createWindow', [], WEBSOCKET_PORT, 30_000);
-  const page = await windowPromise;
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForSelector('#root', { state: 'attached', timeout: 60_000 });
-  return page;
-}
-
-/**
- * Wait until a window's renderer has registered its window-scoped services with the main process:
- * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the routing proxies forward to). Only then can generic-name
- * calls be routed to this window.
- */
-async function waitForRendererRegistered(windowId: number, timeoutMs: number): Promise<void> {
-  await waitForPapiMethodRegistered(
-    new RegExp(`^command:platform\\.about-${windowId}$`),
-    WEBSOCKET_PORT,
-    timeoutMs,
-  );
-  await waitForPapiMethodRegistered(
-    new RegExp(`^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`),
-    WEBSOCKET_PORT,
-    timeoutMs,
-  );
-}
+// #region window focus helpers
 
 /**
  * How long {@link focusWindowAndWaitForRouting} keeps asking the display server to activate the
@@ -432,11 +296,6 @@ async function focusWindowAndWaitForRouting(
   );
 }
 
-/** Locator for a window's Home tab title, which carries the window-scoped web view id. */
-function homeTabTitle(page: Page, windowId: number) {
-  return page.locator(`.platform-tab-title[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
-}
-
 /**
  * Click into a window's Home web view so that window's focus subject becomes the Home web view.
  * Clicking inside the iframe focuses the iframe element in the window document, which the window
@@ -478,7 +337,8 @@ test.use({
   //
   // DEV_NOISY=false: the noisy-dev layout has no stable single web view to key on and loads
   // test-only extensions; the quiet layout is a single Home tab with a fixed web view id (see
-  // HOME_TAB_UUID) in every window, which is exactly what the scoping assertions need.
+  // HOME_TAB_UUID) in the first window, which is exactly what the scoping and focus assertions
+  // need. Mid-session windows start empty regardless of the dev layout.
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 
@@ -503,18 +363,29 @@ test.describe('multi-window lifecycle', () => {
     restoreSettings?.();
   });
 
-  test('second window starts clean, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
+  test('second window starts empty, focus routing follows the focused window, and closing the secondary window does not shut the app down', async ({
     electronApp,
     mainPage,
   }) => {
-    const logStep = createStepLogger();
+    const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
     logStep(`window ${window1Id} ready`);
 
-    // Window 1's own Home web view id carries its window suffix.
+    // Window 1 — the profile's first window, which loads the single-Home-tab fallback layout —
+    // renders its Home web view id with its own window suffix.
     await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 60_000 });
+
+    // Pin the generic window service's focus answer to a window-1 subject BEFORE the second window
+    // exists: click into window 1's Home web view so window 1's focus subject is that web view.
+    // The routing assertion after window 2 takes focus hinges on this baseline — the generic
+    // answer must CHANGE away from this subject, which it can only do by being routed elsewhere.
+    await focusWindowAndWaitForRouting(electronApp, window1Id);
+    await clickIntoHomeWebView(mainPage, window1Id);
+    const baselineFocus = await waitForGenericFocusToReportWindow(window1Id);
+    expect(baselineFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    logStep(`generic getFocus pinned to window ${window1Id}'s Home web view`);
 
     // Create the second window through the public command, with the window listener armed first.
     const beforeCreateMark = output.mark();
@@ -524,10 +395,12 @@ test.describe('multi-window lifecycle', () => {
     await waitForRendererRegistered(window2Id, 120_000);
     logStep(`window ${window2Id} created and registered`);
 
-    // The second renderer renders the app UI with ITS OWN window-scoped web view ids: same layout,
-    // same fixed UUID, different window suffix. If id scoping regressed, both windows would hold
-    // the same id and the second window's messages/state would collide with the first's.
-    await expect(homeTabTitle(page2, window2Id)).toBeAttached({ timeout: 120_000 });
+    // A window created mid-session starts EMPTY: its dock renders with zero tabs and zero web view
+    // iframes. This is decided product behaviour; the failure modes it locks out are a new window
+    // cloning window 1's layout or loading a default layout, either of which would render tabs
+    // here.
+    await expectWindowDockEmpty(page2);
+    logStep(`window ${window2Id} rendered an empty dock`);
 
     // The second renderer must start clean: its per-window services register under scoped names,
     // so nothing may collide with window 1's registrations. Expected step-aside lines for the
@@ -535,11 +408,28 @@ test.describe('multi-window lifecycle', () => {
     const window2StartupLog = output.textFrom(beforeCreateMark);
     expect(window2StartupLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 
-    // Focus routing: with window 2 focused, generic window-service calls answer for window 2.
+    // Focus routing: with window 2 focused, generic window-service calls must be answered by
+    // window 2. A tab-less window has no tab or web view to focus, so its genuine focus report is
+    // the tab-less subject `{ focusType: 'other' }` (the window's focus rests on the document
+    // body, which belongs to no tab). Reaching that answer proves the routing proxy re-pointed to
+    // window 2: window 1's subject remains the Home web view pinned above (`focusType: 'webView'`
+    // with a `-w1` id), which can never satisfy this poll.
     await focusWindowAndWaitForRouting(electronApp, window2Id);
-    await clickIntoHomeWebView(page2, window2Id);
-    const focusInWindow2 = await waitForGenericFocusToReportWindow(window2Id);
-    expect(focusInWindow2?.id).toBe(`${HOME_TAB_UUID}-w${window2Id}`);
+    const focusInWindow2 = await pollUntil(
+      getGenericWindowFocus,
+      (focus) => focus?.focusType === 'other',
+      30_000,
+      `generic getFocus to report window ${window2Id}'s tab-less focus subject`,
+    );
+    // The exact shape a tab-less window reports: 'other' with no id — in particular NOT window 1's
+    // Home web view id.
+    expect(focusInWindow2).toEqual({ focusType: 'other' });
+    // Discriminate "routed to window 2" from "still answering window 1": window 1's own scoped
+    // service must still hold its Home web view subject (a background window's focused element is
+    // retained while the window is inactive), so the 'other' answer above cannot have come from
+    // window 1 — only from the routing proxy genuinely forwarding to window 2.
+    const window1OwnFocus = await getScopedWindowFocus(window1Id);
+    expect(window1OwnFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
     logStep(`generic getFocus answered for window ${window2Id}`);
 
     // …and it follows focus back to window 1.
@@ -594,7 +484,7 @@ test.describe('multi-window lifecycle', () => {
     electronApp,
     mainPage,
   }) => {
-    const logStep = createStepLogger();
+    const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
     logStep('window 1 ready');
@@ -620,9 +510,11 @@ test.describe('multi-window lifecycle', () => {
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);
     await waitForRendererRegistered(window2Id, 120_000);
-    // Window 2 must also have its UI up (not just its services registered) so it is a genuinely
-    // live survivor when window 1 goes away.
-    await expect(homeTabTitle(page2, window2Id)).toBeAttached({ timeout: 120_000 });
+    // Window 2 must also have its UI genuinely up (not just its services registered) so it is a
+    // live survivor when window 1 goes away. A mid-session window has no tabs, so "up" means its
+    // dock container rendered and its startup overlay cleared.
+    await expect(page2.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
+    await waitForOverlayGone(page2, 120_000);
 
     // Window 1 hosts both app-global services, so window 2 steps aside for each — the log records
     // that explicitly. Renderer log lines reach the captured stream asynchronously, hence the poll.
@@ -699,7 +591,7 @@ test.describe('multi-window lifecycle', () => {
     electronApp,
     mainPage,
   }) => {
-    const logStep = createStepLogger();
+    const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
 
@@ -709,57 +601,15 @@ test.describe('multi-window lifecycle', () => {
     await waitForRendererRegistered(window2Id, 120_000);
     logStep('both windows up; quitting');
 
-    // Watch the OS process itself, not Playwright's ElectronApplication `close` event. That event
-    // additionally waits for the process's stdio streams to close, and a graceful dev-mode quit
-    // leaves the .NET data provider watcher child alive holding the inherited pipe write-ends — so
-    // the event can stay unfired long after Electron has exited cleanly. The child process `exit`
-    // event fires on the exit itself, which is the behaviour under test. Armed before quitting.
-    const electronProcess = electronApp.process();
-    const processExit = new Promise<{ code: number | undefined; signal: string | undefined }>(
-      (resolve) => {
-        electronProcess.once('exit', (code, signal) =>
-          resolve({ code: code ?? undefined, signal: signal ?? undefined }),
-        );
-      },
-    );
-
-    // Trigger a REAL quit, exactly what File > Exit or Cmd+Q does. app.quit() is scheduled rather
-    // than called inline so the evaluate round-trip completes before teardown begins.
-    await electronApp.evaluate(({ app }) => {
-      setTimeout(() => app.quit(), 0);
-    });
-
-    // Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately here —
-    // no S/R extension is registered) plus bounded child-process waits of a few seconds, so a
-    // healthy quit lands well under a minute; 120 seconds is slow-machine headroom. A quit that
-    // exceeds it means shutdown hung, which is exactly a failure of the behaviour under test.
-    const exitResult = await Promise.race([
-      processExit,
-      new Promise<never>((_resolve, reject) => {
-        setTimeout(
-          () => reject(new Error('Electron process did not exit within 120 s of app.quit()')),
-          120_000,
-        );
-      }),
-    ]);
+    // Trigger a REAL quit and watch the OS process itself — see quitAppAndWaitForExit for why the
+    // process `exit` event (not Playwright's `close` event) is the right signal and why the
+    // leftover process group is reaped afterwards.
+    const exitResult = await quitAppAndWaitForExit(electronApp);
     logStep(`process exited with code ${exitResult.code} signal ${exitResult.signal}`);
 
     // The process must exit cleanly (exit code 0), not by signal.
     expect(exitResult.signal).toBeUndefined();
     expect(exitResult.code).toBe(0);
-
-    // Reap what the graceful quit leaves behind: in dev mode the .NET watcher child survives its
-    // Electron parent, holding the inherited stdio pipes open. Kill the leftover process group so
-    // nothing leaks into later tests and the runner's own cleanup (which waits on those pipes)
-    // cannot stall on it. The group leader is already gone, so any error just means the group is
-    // fully dead — the desired state.
-    if (electronProcess.pid) {
-      try {
-        process.kill(-electronProcess.pid, 'SIGKILL');
-      } catch {
-        /* process group already gone */
-      }
-    }
 
     const log = output.text();
 
