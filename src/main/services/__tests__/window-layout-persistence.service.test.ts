@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import path from 'path';
 import type { LayoutInfo } from '@shared/models/docking-framework.model';
 import type {
   WindowBoundsState,
@@ -217,11 +218,14 @@ describe('window layout persistence service', () => {
     // No trace anywhere in the file, not just no entry
     const lastWriteCall = mocks.writeFile.mock.calls.at(-1);
     expect(String(lastWriteCall?.[1])).not.toContain('two');
-    // Written safely: temp file first, then renamed over the real one
-    expect(String(lastWriteCall?.[0])).toBe('/mock-user-data/window-layouts.json.tmp');
+    // Written safely: temp file first, then renamed over the real one. Expectations are built with
+    // path.join because the service joins paths, so separators differ per platform.
+    expect(String(lastWriteCall?.[0])).toBe(
+      path.join('/mock-user-data', 'window-layouts.json.tmp'),
+    );
     expect(mocks.rename).toHaveBeenCalledWith(
-      '/mock-user-data/window-layouts.json.tmp',
-      '/mock-user-data/window-layouts.json',
+      path.join('/mock-user-data', 'window-layouts.json.tmp'),
+      path.join('/mock-user-data', 'window-layouts.json'),
     );
   });
 
