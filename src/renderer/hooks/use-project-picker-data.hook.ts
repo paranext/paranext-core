@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
 import { setLastOpenedProject } from '@renderer/services/last-opened-project-cache';
+import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
@@ -81,16 +82,26 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
 }
 
 export type ProjectPickerData = {
-  currentProject: ProjectItem | undefined;
+  /**
+   * The active Scripture editor's project. Named for Simple mode - where there is exactly one
+   * project tab, so this unambiguously is "the current project" - because every consumer only reads
+   * it in a Simple-mode context (the Power-mode toolbar hides the control that would show it). In
+   * Power mode this still resolves (to whichever editor tab happens to be first), but that value is
+   * not meaningful UI state there and MUST NOT be treated as a deliberate selection - see the
+   * cache-writing effect below.
+   */
+  currentSimpleProject: ProjectItem | undefined;
   recentProjects: ProjectItem[];
   /** All projects, with recentProjects already excluded. */
   allProjects: ProjectItem[];
   /** Set when fetching details for the current project fails. */
-  currentProjectError: string | undefined;
+  currentSimpleProjectError: string | undefined;
   isLoading: boolean;
 };
 
 export function useProjectPickerData(): ProjectPickerData {
+  const isPowerMode = useIsPowerMode();
+
   // Two independent refresh generations, so cheap "which project is active?" updates don't drag in
   // the expensive project-metadata fan-out:
   // - metadataRefreshCounter invalidates the shared metadata fetch. Bumped only by events that can
@@ -100,7 +111,9 @@ export function useProjectPickerData(): ProjectPickerData {
   //   cheap getAllOpenWebViewDefinitions query and reuses the cached metadata.
   const [metadataRefreshCounter, setMetadataRefreshCounter] = useState(0);
   const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
-  const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
+  const [currentSimpleProjectError, setCurrentSimpleProjectError] = useState<string | undefined>(
+    undefined,
+  );
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
   const refreshActiveEditor = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
 
@@ -158,7 +171,7 @@ export function useProjectPickerData(): ProjectPickerData {
     return entry.promise;
   }, [metadataRefreshCounter]);
 
-  const [currentProject, isCurrentProjectLoading] = usePromise<ProjectItem | undefined>(
+  const [currentSimpleProject, isCurrentSimpleProjectLoading] = usePromise<ProjectItem | undefined>(
     useCallback(async () => {
       // Referenced so this callback re-runs on web view events (open/update/close) to pick up the
       // active editor, without invalidating the metadata cache.
@@ -168,7 +181,7 @@ export function useProjectPickerData(): ProjectPickerData {
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       const currentProjectId = editorDef?.projectId;
       if (!currentProjectId) {
-        setCurrentProjectError(undefined);
+        setCurrentSimpleProjectError(undefined);
         return undefined;
       }
       try {
@@ -178,7 +191,7 @@ export function useProjectPickerData(): ProjectPickerData {
         const key = normalizeProjectId(currentProjectId);
         const m = metadata.find((md) => normalizeProjectId(md.id) === key);
         if (m) {
-          setCurrentProjectError(undefined);
+          setCurrentSimpleProjectError(undefined);
           return metadataToProjectItem(m);
         }
         // Miss: the active editor references a project not in the USJ-filtered snapshot yet - e.g.
@@ -188,13 +201,13 @@ export function useProjectPickerData(): ProjectPickerData {
         // wedging on an error card. Display fields are identical either way - the interface filter
         // only decides list inclusion, not which fields a project carries.
         const single = await projectLookupService.getMetadataForProject(currentProjectId);
-        setCurrentProjectError(undefined);
+        setCurrentSimpleProjectError(undefined);
         return metadataToProjectItem(single);
       } catch (e) {
         logger.error(
           `ProjectPicker: could not fetch details for current project ${currentProjectId}: ${getErrorMessage(e)}`,
         );
-        setCurrentProjectError('Unable to load current project details');
+        setCurrentSimpleProjectError('Unable to load current project details');
         return {
           id: currentProjectId,
           fullName: 'Unable to load current project details',
@@ -256,26 +269,37 @@ export function useProjectPickerData(): ProjectPickerData {
   // Cache the current Scripture editor's project so a future power → simple switch can show the
   // overlay with the right name and build the simple layout without awaiting the recents provider
   // + PDP chain. Best-effort: read by `handleSwitchToSimpleMode` in `web-view.service-host`.
-  // `isEditable` is cached alongside the id because `currentProject` is "whichever scripture-editor
-  // web view is active" (`findFirstEditorWebViewDefinition`), which is not necessarily editable — it
-  // can be a read-only Resource Viewer. Baking that project into the simple layout must preserve its
-  // real read-only state instead of assuming editable.
+  // `isEditable` is cached alongside the id because `currentSimpleProject` is "whichever
+  // scripture-editor web view is active" (`findFirstEditorWebViewDefinition`), which is not
+  // necessarily editable — it can be a read-only Resource Viewer. Baking that project into the
+  // simple layout must preserve its real read-only state instead of assuming editable.
   //
-  // Skip the write entirely when `currentProjectError` is set: the `currentProject` promise's catch
-  // branch (above) resolves to a degraded placeholder with no `isEditable` field rather than
-  // rejecting, so without this guard a transient metadata-fetch failure (e.g. a project locked
-  // mid-Send/Receive) would overwrite a previously-known `isEditable: false` with "no info" —
+  // Only write while in Simple mode: this cache represents "the last project selected/loaded in
+  // Simple mode", and this hook also runs in Power mode (e.g. via the always-mounted toolbar), where
+  // `currentSimpleProject` tracks whichever editor tab happens to be active rather than a deliberate
+  // Simple-mode selection. Without this guard, opening/switching project tabs in Power mode would
+  // silently overwrite the project Simple mode should return to.
+  //
+  // Skip the write entirely when `currentSimpleProjectError` is set: the `currentSimpleProject`
+  // promise's catch branch (above) resolves to a degraded placeholder with no `isEditable` field
+  // rather than rejecting, so without this guard a transient metadata-fetch failure (e.g. a project
+  // locked mid-Send/Receive) would overwrite a previously-known `isEditable: false` with "no info" —
   // silently downgrading a cached non-editable project back to editable.
   useEffect(() => {
-    if (!currentProject?.id || currentProjectError) return;
-    const name = currentProject.fullName || currentProject.shortName || undefined;
-    setLastOpenedProject({ id: currentProject.id, name, isEditable: currentProject.isEditable });
+    if (!currentSimpleProject?.id || currentSimpleProjectError || isPowerMode) return;
+    const name = currentSimpleProject.fullName || currentSimpleProject.shortName || undefined;
+    setLastOpenedProject({
+      id: currentSimpleProject.id,
+      name,
+      isEditable: currentSimpleProject.isEditable,
+    });
   }, [
-    currentProject?.id,
-    currentProject?.fullName,
-    currentProject?.shortName,
-    currentProject?.isEditable,
-    currentProjectError,
+    currentSimpleProject?.id,
+    currentSimpleProject?.fullName,
+    currentSimpleProject?.shortName,
+    currentSimpleProject?.isEditable,
+    currentSimpleProjectError,
+    isPowerMode,
   ]);
 
   const recentIdSet = useMemo(
@@ -291,12 +315,12 @@ export function useProjectPickerData(): ProjectPickerData {
   );
 
   return {
-    currentProject,
+    currentSimpleProject,
     recentProjects,
     allProjects,
-    currentProjectError,
+    currentSimpleProjectError,
     isLoading:
-      isCurrentProjectLoading ||
+      isCurrentSimpleProjectLoading ||
       isRecentIdsLoading ||
       isRecentProjectsLoading ||
       isAllProjectsLoading,
