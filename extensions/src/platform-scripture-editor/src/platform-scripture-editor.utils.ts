@@ -23,7 +23,8 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import { MarkerContent, Usj } from '@eten-tech-foundation/scripture-utilities';
 import { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
@@ -1041,3 +1042,46 @@ export async function openOrUpdateRelatedPanels(
 }
 
 // #endregion Text Connection Panels
+
+// #region Chapter Scaffold Helpers
+
+function containsChapterOrVerseNode(content: MarkerContent[]): boolean {
+  return content.some((item) => {
+    if (typeof item === 'string') return false;
+    if (item.type === 'chapter' || item.type === 'verse') return true;
+    return item.content ? containsChapterOrVerseNode(item.content) : false;
+  });
+}
+
+/**
+ * Whether the given chapter-scoped USJ is "effectively blank" — contains neither a chapter-type
+ * node nor any verse-type node anywhere in its content tree. Checking for an existing chapter node
+ * (not verses alone) matters: a chapter that already has a `\c` marker but zero verses must not be
+ * flagged blank, or inserting the scaffold would create a duplicate `\c` node.
+ *
+ * @param usj The chapter-scoped USJ to check (as returned by the `platformScripture.USJ_Chapter`
+ *   PDP's `ChapterUSJ`, i.e. already scoped to a single chapter).
+ * @returns `true` if the chapter has no chapter marker and no verses, `false` otherwise.
+ */
+export function isChapterBlank(usj: Usj): boolean {
+  return !containsChapterOrVerseNode(usj.content);
+}
+
+/**
+ * Builds the Delta operations that insert a blank `\c` + `\v 1..N` scaffold — one chapter marker
+ * followed by one verse marker per verse, each with empty text content. Intended for
+ * `EditorRef.applyUpdate` when reinstating a chapter number in an effectively-blank chapter.
+ *
+ * @param chapterNum The chapter number to insert (matching the chapter shown in the BCV control).
+ * @param lastVerseNum The last verse number for this chapter, per the project's versification.
+ * @returns The Delta operations, in insertion order.
+ */
+export function buildChapterScaffoldOps(chapterNum: number, lastVerseNum: number): DeltaOp[] {
+  const verseOps: DeltaOp[] = [];
+  for (let verseNum = 1; verseNum <= lastVerseNum; verseNum += 1) {
+    verseOps.push({ insert: { verse: { number: `${verseNum}`, style: 'v' } } });
+  }
+  return [{ insert: { chapter: { number: `${chapterNum}`, style: 'c' } } }, ...verseOps];
+}
+
+// #endregion Chapter Scaffold Helpers
