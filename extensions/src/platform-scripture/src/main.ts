@@ -659,9 +659,10 @@ export async function activate(context: ExecutionActivationContext) {
       summary: 'Open the find UI',
       params: [
         {
-          name: 'webViewId',
+          name: 'editorWebViewId',
           required: false,
-          summary: 'The ID of the web view tied to the project that we are searching in',
+          summary:
+            'The ID of the triggering editor web view; the project to search in is resolved from it',
           schema: { type: 'string' },
         },
       ],
