@@ -56,7 +56,7 @@
  *
  * `npm run test:e2e:isolated multi-window`
  */
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   preConfigureSettings,
@@ -74,6 +74,8 @@ import {
   createSecondWindow,
   createStepLogger,
   expectWindowDockEmpty,
+  focusWindowAndWaitForRouting,
+  getFocusedWindowId,
   getWindowIdOfPage,
   homeTabTitle,
   pollUntil,
@@ -179,16 +181,6 @@ async function getScopedWindowFocus(windowId: number): Promise<FocusSubjectLike>
   );
 }
 
-/** Ask the main process which window id it currently routes to. */
-async function getFocusedWindowId(): Promise<number | undefined> {
-  return sendPapiRequestOnce<number | undefined>(
-    'command:platform.getFocusedWindowId',
-    [],
-    WEBSOCKET_PORT,
-    PAPI_ATTEMPT_TIMEOUT_MS,
-  );
-}
-
 /** Read the current theme from the app-global theme service. */
 async function getCurrentTheme(): Promise<ThemeLike> {
   return sendPapiRequestOnce<ThemeLike>(
@@ -240,61 +232,6 @@ function isVerseRefShaped(ref: VerseRefLike): boolean {
 // #endregion
 
 // #region window focus helpers
-
-/**
- * How long {@link focusWindowAndWaitForRouting} keeps asking the display server to activate the
- * window before falling back to delivering the focus notification at the Electron boundary itself.
- * Activation requests that a compositor honors at all are honored within a second or two, so ten
- * seconds of retries means it will not cooperate.
- */
-const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
-
-/**
- * Give a window focus and wait until the main process routes to it.
- *
- * Two escalation stages, re-issued on every poll attempt:
- *
- * 1. Ask the display server: minimize every other window (a covering window need not be re-raised by a
- *    bare `focus()` call) and request activation of the target.
- * 2. If the display server has not cooperated within {@link OS_FOCUS_COOPERATION_BUDGET_MS}, also emit
- *    the window's `focus` notification directly. Headless/CI compositors (observed on WSLg/Weston)
- *    honor the activation a window gets when it is first shown but ignore programmatic
- *    re-activation of an existing window, so no amount of asking produces the event a real user's
- *    window switch produces. Emitting it simulates the compositor's delivery at the app boundary;
- *    everything the app does with the event — focus tracking, routing target re-resolution, relay
- *    re-pointing — still runs for real, so a break anywhere in that chain still fails the wait.
- *
- * A previously minimized target is restored, so alternating focus between windows is self-healing.
- */
-async function focusWindowAndWaitForRouting(
-  electronApp: ElectronApplication,
-  windowId: number,
-): Promise<void> {
-  const startTime = Date.now();
-  await pollUntil(
-    async () => {
-      const shouldSimulateFocusDelivery = Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS;
-      await electronApp.evaluate(
-        ({ BrowserWindow }, { id, simulateFocusDelivery }) => {
-          const win = BrowserWindow.fromId(id);
-          if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-          BrowserWindow.getAllWindows().forEach((otherWindow) => {
-            if (otherWindow.id !== id && !otherWindow.isMinimized()) otherWindow.minimize();
-          });
-          if (win.isMinimized()) win.restore();
-          win.show();
-          win.focus();
-          if (simulateFocusDelivery) win.emit('focus');
-        },
-        { id: windowId, simulateFocusDelivery: shouldSimulateFocusDelivery },
-      );
-      return getFocusedWindowId();
-    },
-    (focusedId) => focusedId === windowId,
-    30_000,
-    `main process to route to window ${windowId}`,
-  );
-}
 
 /**
  * Click into a window's Home web view so that window's focus subject becomes the Home web view.
