@@ -1036,4 +1036,224 @@ describe('useEditorPdpSync', () => {
     // The incoming external write is still deferred (the editor is never clobbered while focused).
     expect(setUsjSpy).not.toHaveBeenCalled();
   });
+
+  // Lossy-round-trip telemetry: when OUR OWN save round-trips through the PDP to a DIFFERENT shape
+  // (beyond insignificant whitespace) and STABLY never converges, the editor is doing something
+  // lossy (a non-idempotent USJ->USFM->USJ). That must be surfaced loudly so it can be
+  // investigated. The signal is the pure echo of our unchanged push (editor unchanged AND the same
+  // differing echo re-delivered) — as distinct from a concurrent external write, whose incoming
+  // CHANGES between deliveries (a normal deferral, not our fault).
+  it('warns once that our own save round-tripped lossily when a stable non-convergent echo differs beyond whitespace', () => {
+    // What the editor holds (constant — the editor is quiescent and WE are the writer).
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'holy word text'],
+        },
+      ],
+    };
+    // The PDP's echo of our push, round-tripped to a DIFFERENT shape (same book/chapter, differs
+    // beyond whitespace) and STABLE — the identical shape re-delivered each time. Models the
+    // optbreak / typed-attribute non-idempotent round-trip.
+    const lossyEcho: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'holy ',
+            { type: 'char', marker: 'nd', content: ['word'] },
+            ' text',
+          ],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    // Faithful save mock: records the editor's own USJ as the new PDP baseline (as
+    // saveUsjToPdpInternal sets usjSentToPdp.current = newUsj), so the echo comparison reproduces
+    // the loop shape.
+    const saveUsjToPdpIfUpdated = vi.fn(() => {
+      usjSentToPdp.current = editorRef.current?.getUsj();
+    });
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+    // whichUpdates '*' re-delivers a fresh object with identical content each time.
+    const freshEcho = (): Usj => ({ ...lossyEcho, content: [...lossyEcho.content] });
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: lossyEcho } },
+    );
+    mockLoggerWarn.mockClear();
+
+    // Re-deliver the SAME stable differing echo several times.
+    act(() => rerender({ usjFromPdp: freshEcho() }));
+    act(() => rerender({ usjFromPdp: freshEcho() }));
+    act(() => rerender({ usjFromPdp: freshEcho() }));
+
+    // Exactly one lossy-round-trip warning across all re-deliveries (deduped on the echo).
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    // The message names the defect as a lossy round-trip so the log is greppable.
+    expect(mockLoggerWarn.mock.calls[0][0]).toMatch(/lossy/i);
+    // The editor is never clobbered while the loop runs.
+    expect(setUsjSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not warn about lossiness when the echo equals the editor content except for whitespace', () => {
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'holy text'],
+        },
+      ],
+    };
+    // Same content — only insignificant trailing whitespace at the end of the block marker differs
+    // (the exact case areUsjContentsEqualExceptWhitespace treats as equal; runs are NOT collapsed,
+    // so only end-of-block trailing space is safe to vary).
+    const whitespaceOnlyEcho: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'holy text '],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const saveUsjToPdpIfUpdated = vi.fn(() => {
+      usjSentToPdp.current = editorRef.current?.getUsj();
+    });
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+    const freshEcho = (): Usj => ({
+      ...whitespaceOnlyEcho,
+      content: [...whitespaceOnlyEcho.content],
+    });
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: whitespaceOnlyEcho } },
+    );
+    mockLoggerWarn.mockClear();
+
+    act(() => rerender({ usjFromPdp: freshEcho() }));
+    act(() => rerender({ usjFromPdp: freshEcho() }));
+
+    // A whitespace-only difference is the benign case the sync already tolerates — never lossy.
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
+  it('does not warn about lossiness for a concurrent external write (incoming changes between deliveries)', () => {
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'our editor content'],
+        },
+      ],
+    };
+    // Each external write differs from the previous one — new information, not a stable echo of
+    // ours. Same book/chapter so it is deferred (not treated as navigation).
+    const externalWrite = (n: number): Usj => ({
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, `external edit ${n}`],
+        },
+      ],
+    });
+
+    const setUsjSpy = vi.fn();
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const saveUsjToPdpIfUpdated = vi.fn(() => {
+      usjSentToPdp.current = editorRef.current?.getUsj();
+    });
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: externalWrite(0) } },
+    );
+    mockLoggerDebug.mockClear();
+    mockLoggerWarn.mockClear();
+
+    act(() => rerender({ usjFromPdp: externalWrite(1) }));
+    act(() => rerender({ usjFromPdp: externalWrite(2) }));
+
+    // A changing incoming is a normal deferral (debug), never attributed to our own lossy round-trip.
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+    expect(mockLoggerDebug).toHaveBeenCalled();
+  });
 });

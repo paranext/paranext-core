@@ -2267,18 +2267,22 @@
   color: rgba(204, 30, 20, 1);
 }
 
-/* UnknownNode (§7): lossless carrier for content this editor doesn't model directly — tables,
+/* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,
    figures, sidebars (\esb), \periph, \ref, \optbreak, etc. Hidden by default in every view
    (preserves formatted/markers behavior); standard view (.marker-editable) reveals it as a subdued
-   read-only container with its lead marker shown as a label, so the content is visible/inert instead
-   of silently invisible. Ported from the library's packages/platform/src/usj-nodes.css §7. The
-   source colors it via hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this fork already uses
-   --muted-foreground with a DIFFERENT contract (a full color + hex fallback, lines below), so the
-   subdued grays are written as literal rgba(140, 140, 140, ...) here — matching the fork's own
-   subdued-marker convention (see `.marker-editable .book .marker` above) and avoiding the invalid
-   hsl(var()) that the contract mismatch would produce. Two corpus-proven mid-paragraph constructs
-   get inline treatment instead of a block box (\optbreak → literal `//` via ::before keyed off
-   data-tag; \ref → its own inline child text, no label). */
+   read-only container so the content is visible/inert instead of silently invisible. The node's own
+   USFM bytes (opening marker, attribute run, closing marker) render as ordinary `.marker`/
+   `.attribute` ImmutableTypedTextNode children, already styled by the `.marker`/`.attribute` rules —
+   so NO CSS-generated `::before` label is used here; a generated label would DUPLICATE that real
+   text (a bare `\fig` would show twice; \optbreak's `//` would render as `////`). Ported from the
+   library's packages/platform/src/usj-nodes.css. The source colors it via
+   hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this fork already uses --muted-foreground
+   with a DIFFERENT contract (a full color + hex fallback, lines below), so the subdued grays are
+   written as literal rgba(140, 140, 140, ...) here — matching the fork's own subdued-marker
+   convention (see `.marker-editable .book .marker` above) and avoiding the invalid hsl(var()) that
+   the contract mismatch would produce. Two corpus-proven mid-paragraph constructs get inline
+   treatment instead of a block box: \optbreak (whose `//` token is a real child text node) and \ref
+   (its own inline child text). */
 .unknown-block,
 .unknown-inline {
   display: none;
@@ -2289,24 +2293,14 @@
   margin: 0.25em 0;
   padding: 0.25em 0.5em;
   /* An EMPTY opaque block (e.g. a bare \fig) must stay visible/selectable: without content the
-     box collapses to 0 height. One line-height of room keeps the dashed frame and the
-     ::before marker label renderable. */
+     box collapses to 0 height. One line-height of room keeps the dashed frame renderable. */
   min-height: 1.5em;
   border: 1px dashed rgba(140, 140, 140, 0.5);
   background-color: rgba(140, 140, 140, 0.08);
   color: rgba(140, 140, 140, 0.85);
-  /* Whole-block selection/deletion only (§7): a selection can be made within the container but is
+  /* Whole-block selection/deletion only: a selection can be made within the container but is
      contained by it rather than merging with the surrounding text. */
   user-select: contain;
-}
-
-.marker-editable .unknown-block::before {
-  content: '\\' attr(data-marker);
-  display: block;
-  font-size: 0.7em;
-  font-weight: bold;
-  color: rgba(140, 140, 140, 1);
-  margin-bottom: 0.2em;
 }
 
 .marker-editable .unknown-inline {
@@ -2314,15 +2308,6 @@
   color: rgba(140, 140, 140, 0.85);
   /* Same containment as the block variant. */
   user-select: contain;
-}
-
-/* \optbreak carries no USFM marker text of its own (data-marker is empty) — PT9 renders it as a
-   literal `//` token, so the label is hard-coded rather than driven by attr(data-marker). Keyed off
-   data-tag so it applies ONLY to optbreak: \ref shares the unknown-inline class but displays its own
-   child text and must not grow a `//` prefix. */
-.marker-editable .unknown-inline[data-tag='optbreak']::before {
-  content: '//';
-  color: rgba(140, 140, 140, 1);
 }
 
 .caption {
