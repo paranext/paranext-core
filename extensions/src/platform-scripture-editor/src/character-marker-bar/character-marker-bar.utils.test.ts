@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { computeBarTop, resolveActiveLineRect } from './character-marker-bar.utils';
 
 // Mock rect/element factories — mirrors paragraph-marker-tooltip.utils.test.ts. Only
@@ -105,6 +105,31 @@ describe('resolveActiveLineRect', () => {
     const textNode = outside.firstChild ?? null;
     if (!textNode) throw new Error('expected a text node');
     expect(resolveActiveLineRect(selectionAt(textNode, 3), editorRoot)).toBeUndefined();
+  });
+
+  // Restores the caret-rect spy the line-level test installs, so the degenerate-fallback tests keep
+  // seeing the spec-compliant all-zero rect above.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns the caret line rect, NOT the paragraph rect, when the caret has layout', () => {
+    // The reason this component exists: within a paragraph that wraps over many lines, the bar must
+    // track the caret's LINE. jsdom never produces a non-degenerate Range rect on its own, so every
+    // other test in this file exercises only the fallback — without this one, returning
+    // `para.getBoundingClientRect()` unconditionally would pass the whole suite.
+    const { editorRoot, para } = buildEditor();
+    const caretRect = makeRect(90, 108, 30);
+    const paraRect = makeRect(42, 200);
+    para.getBoundingClientRect = () => paraRect;
+    vi.spyOn(Range.prototype, 'getBoundingClientRect').mockReturnValue(caretRect);
+    // DOM's firstChild is typed as ChildNode | null, not undefined.
+    // eslint-disable-next-line no-null/no-null
+    const textNode = para.firstChild ?? null;
+    if (!textNode) throw new Error('expected a text node');
+
+    // Identity, not field equality: `toBe` cannot pass by coincidence of matching numbers.
+    expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)).toBe(caretRect);
   });
 
   it('falls back to the containing paragraph rect when the caret rect is degenerate', () => {
