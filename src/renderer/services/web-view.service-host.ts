@@ -91,6 +91,7 @@ import {
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
+  wait,
 } from 'platform-bible-utils';
 import withWindowScopedWebViewIds, {
   withWindowScopedWebViewIdInTab,
@@ -590,6 +591,14 @@ function removeForbiddenElements(mutationList: MutationRecord[]) {
 const DOCK_LAYOUT_KEY = 'dock-saved-layout';
 
 /**
+ * A per-window prefixed copy of {@link DOCK_LAYOUT_KEY} (`{windowId}_dock-saved-layout` — the prefix
+ * scheme of `localStorage.service.ts`). Builds that scoped `localStorage` per window before layouts
+ * moved into the main process's structure wrote the dock layout ONLY under such keys; the capture
+ * group is the window id of the window that wrote the copy.
+ */
+const PREFIXED_DOCK_LAYOUT_KEY_PATTERN = new RegExp(`^(\\d+)_${DOCK_LAYOUT_KEY}$`);
+
+/**
  * Layout a window with no saved entry starts from: nothing docked. Deliberately neither the dev
  * `testLayout` nor `simpleLayout` — a window opened mid-session starts empty.
  */
@@ -909,42 +918,99 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
 }
 
 /**
- * The pre-multi-window saved layout, read from the UNPREFIXED `localStorage` key — the raw
- * `localStorage`, not `localWindowStorage`, whose per-window prefixed copies of this key are dead:
- * the main process's window-layouts structure replaced them, and reading through that migration
- * path would clone the legacy layout into every window. Falls back to `defaultLayout` when there is
- * no legacy layout either (a fresh profile).
+ * The pre-multi-window saved layout, read from raw `localStorage` (not `localWindowStorage`, whose
+ * migration path would clone the legacy layout into every window). Builds that scoped
+ * `localStorage` per window wrote the dock layout only under prefixed keys
+ * ({@link PREFIXED_DOCK_LAYOUT_KEY_PATTERN}), leaving the unprefixed key stale — so when any
+ * prefixed copy exists, the one with the lowest window id (the earliest-created, main window of the
+ * session that wrote them) is the newest saved layout and wins; the unprefixed
+ * {@link DOCK_LAYOUT_KEY} is the fallback. Falls back to `defaultLayout` when there is no legacy
+ * layout at all (a fresh profile).
  *
  * @param defaultLayout Layout to fall back to when no legacy layout is stored
  */
 function getLegacySavedLayout(defaultLayout: LayoutInfo): LayoutInfo {
-  const saved = localStorage.getItem(DOCK_LAYOUT_KEY);
+  let lowestPrefixedWindowId: number | undefined;
+  for (let keyIndex = 0; keyIndex < localStorage.length; keyIndex += 1) {
+    const match = localStorage.key(keyIndex)?.match(PREFIXED_DOCK_LAYOUT_KEY_PATTERN);
+    if (match) {
+      const prefixWindowId = Number(match[1]);
+      if (lowestPrefixedWindowId === undefined || prefixWindowId < lowestPrefixedWindowId)
+        lowestPrefixedWindowId = prefixWindowId;
+    }
+  }
+  const saved =
+    lowestPrefixedWindowId !== undefined
+      ? localStorage.getItem(`${lowestPrefixedWindowId}_${DOCK_LAYOUT_KEY}`)
+      : localStorage.getItem(DOCK_LAYOUT_KEY);
   const savedLayout: LayoutInfo | undefined = saved ? deserialize(saved) : undefined;
   return savedLayout || defaultLayout;
 }
 
 /**
+ * How many times {@link getPersistedLayout} asks the main process for this window's saved layout
+ * before giving up. The main process registers the handler before it creates any window, so a
+ * failure can only be transient transport trouble, not a missing handler — worth a few retries.
+ */
+const GET_PERSISTED_LAYOUT_ATTEMPTS = 3;
+
+/** How long {@link getPersistedLayout} waits between attempts */
+const GET_PERSISTED_LAYOUT_RETRY_DELAY_MS = 2_000;
+
+/**
+ * Whether this window is running on a fallback layout because every `windowLayout:get` attempt
+ * failed. While set, {@link saveLayout} holds its pushes: what the dock holds is NOT the user's
+ * saved layout, and pushing it would overwrite the real saved entry in the main process's
+ * structure. Cleared when a later {@link getPersistedLayout} gets an answer (e.g. the reload on an
+ * interface-mode change).
+ */
+let isRunningOnFallbackLayout = false;
+
+/** Whether the held-pushes situation has been logged — once per session, not per layout change */
+let hasLoggedHeldLayoutPushes = false;
+
+/**
  * The layout this window should restore, per the main process's window-layouts structure: this
  * window's saved entry, an empty layout for a window with no entry, or — for the one window a
- * legacy startup restores — the pre-multi-window layout from `localStorage`. Falls back to the
- * legacy path when the request itself fails, which is also what a fresh profile needs.
+ * legacy startup restores — the pre-multi-window layout from `localStorage`. Only that explicit
+ * `legacy` answer may trigger the legacy read: when the request itself fails (after retries), the
+ * window starts EMPTY instead — falling back to the shared legacy layout would clone it into
+ * whichever window hit the failure — and pushes are held so the fallback cannot replace the user's
+ * real saved entry (see {@link isRunningOnFallbackLayout}).
  *
- * @param defaultLayout Layout to fall back to when even the legacy path has nothing
+ * @param defaultLayout Layout to fall back to when the legacy path has nothing
  */
 async function getPersistedLayout(defaultLayout: LayoutInfo): Promise<LayoutInfo> {
   let response: WindowLayoutGetResponse | undefined;
-  try {
-    response = await sendNetworkRequest<[number], WindowLayoutGetResponse>(
-      GET_WINDOW_LAYOUT_REQUEST_TYPE,
-      getWindowIdOrThrow(),
-    );
-  } catch (e) {
-    logger.warn(
-      `Could not get this window's saved layout from main; falling back to the legacy saved layout: ${getErrorMessage(e)}`,
-    );
+  for (let attempt = 1; attempt <= GET_PERSISTED_LAYOUT_ATTEMPTS; attempt += 1) {
+    try {
+      // Sequential retries: each attempt must settle before the next may start
+      // eslint-disable-next-line no-await-in-loop
+      response = await sendNetworkRequest<[number], WindowLayoutGetResponse>(
+        GET_WINDOW_LAYOUT_REQUEST_TYPE,
+        getWindowIdOrThrow(),
+      );
+      break;
+    } catch (e) {
+      logger.warn(
+        `Could not get this window's saved layout from main (attempt ${attempt} of ${GET_PERSISTED_LAYOUT_ATTEMPTS}): ${getErrorMessage(e)}`,
+      );
+      if (attempt < GET_PERSISTED_LAYOUT_ATTEMPTS)
+        // Sequential retries (see above)
+        // eslint-disable-next-line no-await-in-loop
+        await wait(GET_PERSISTED_LAYOUT_RETRY_DELAY_MS);
+    }
   }
-  if (response?.kind === 'entry') return response.layout;
-  if (response?.kind === 'empty') return EMPTY_DOCK_LAYOUT;
+  if (!response) {
+    isRunningOnFallbackLayout = true;
+    logger.warn(
+      `Could not get this window's saved layout after ${GET_PERSISTED_LAYOUT_ATTEMPTS} attempts; starting empty and holding layout pushes until a load succeeds`,
+    );
+    return EMPTY_DOCK_LAYOUT;
+  }
+  isRunningOnFallbackLayout = false;
+  if (response.kind === 'entry') return response.layout;
+  if (response.kind === 'empty') return EMPTY_DOCK_LAYOUT;
   return getLegacySavedLayout(defaultLayout);
 }
 
@@ -965,6 +1031,17 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
+  if (isRunningOnFallbackLayout) {
+    // The dock holds a fallback, not the user's saved layout (see getPersistedLayout); pushing it
+    // would replace the real saved entry in the main process's structure
+    if (!hasLoggedHeldLayoutPushes) {
+      hasLoggedHeldLayoutPushes = true;
+      logger.warn(
+        'Not pushing dock layout changes: this window is running on a fallback layout because its saved layout could not be loaded',
+      );
+    }
+    return;
+  }
   try {
     // Reconcile before pushing so phantom content (duplicate or orphaned tabs, empty panels) never
     // enters the persisted structure

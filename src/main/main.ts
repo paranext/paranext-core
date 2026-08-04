@@ -670,8 +670,14 @@ async function main() {
     // Feed this window's placement to layout persistence as it changes, debounced since
     // resize/move fire continuously during a drag
     let boundsCaptureTimeout: ReturnType<typeof setTimeout> | undefined;
+    const cancelPendingBoundsCapture = () => {
+      if (boundsCaptureTimeout) {
+        clearTimeout(boundsCaptureTimeout);
+        boundsCaptureTimeout = undefined;
+      }
+    };
     const captureBoundsSoon = () => {
-      if (boundsCaptureTimeout) clearTimeout(boundsCaptureTimeout);
+      cancelPendingBoundsCapture();
       boundsCaptureTimeout = setTimeout(() => {
         boundsCaptureTimeout = undefined;
         if (newWindow.isDestroyed()) return;
@@ -865,10 +871,7 @@ async function main() {
       // window's entry on a last-window close). Capture this window's placement first so the flush
       // holds its freshest bounds; on a multi-window quit each window's close handler does the
       // same, so the last flush holds everyone's.
-      if (boundsCaptureTimeout) {
-        clearTimeout(boundsCaptureTimeout);
-        boundsCaptureTimeout = undefined;
-      }
+      cancelPendingBoundsCapture();
       updateWindowBounds(windowId, captureWindowBoundsState());
       await writeNow(windows.map((window) => window.id));
 
@@ -895,10 +898,7 @@ async function main() {
       // did not run for this window — the app stays up), rewrite the structure without it so the
       // window does not come back next session. During a quit the structure was already flushed
       // with this window still in it, and must NOT be rewritten smaller here.
-      if (boundsCaptureTimeout) {
-        clearTimeout(boundsCaptureTimeout);
-        boundsCaptureTimeout = undefined;
-      }
+      cancelPendingBoundsCapture();
       handleWindowRemoved(windowId);
       if (!isWindowClosing) await writeNow(windows.map((window) => window.id));
       try {
@@ -1264,12 +1264,22 @@ async function main() {
 
       await restoreWindows();
 
+      // Collapse overlapping restores: 'activate' can fire again (rapid dock clicks) while a
+      // previous restore is still creating windows — and before the first window exists, the
+      // no-windows guard below does not catch that. A second concurrent restoreWindows run would
+      // reset the layout persistence tracking mid-restore and create duplicate windows, so late
+      // callers await the in-flight run instead of starting their own.
+      let restoreWindowsInFlight: Promise<void> | undefined;
       app.on('activate', async () => {
         // On macOS it's common to re-create windows in the app when the
         // dock icon is clicked and there are no other windows open.
         if (windows.length !== 0) return;
         try {
-          await restoreWindows();
+          if (!restoreWindowsInFlight)
+            restoreWindowsInFlight = restoreWindows().finally(() => {
+              restoreWindowsInFlight = undefined;
+            });
+          await restoreWindowsInFlight;
         } catch (e) {
           logger.error(`Failed to restore windows on activate: ${getErrorMessage(e)}`);
         }
