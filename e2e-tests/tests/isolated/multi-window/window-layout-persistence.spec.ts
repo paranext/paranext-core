@@ -76,8 +76,6 @@ import {
   waitForAppReady,
 } from '../../../fixtures/helpers';
 import {
-  DUPLICATE_REGISTRATION_PATTERN,
-  FAULT_MARKERS,
   HOME_TAB_UUID,
   captureAppOutput,
   createSecondWindow,
@@ -86,7 +84,7 @@ import {
   getAppPages,
   getWindowIdOfPage,
   homeTabTitle,
-  quitAppAndWaitForExit,
+  quitAndExpectCleanExit,
   waitForAppPages,
   waitForRendererRegistered,
 } from './multi-window.util';
@@ -386,9 +384,7 @@ test.describe('window layout persistence', () => {
       const { userDataDir } = ctx;
       profileDir = userDataDir;
       const output1 = captureAppOutput(ctx.electronApp);
-      const mainPage1 = await ctx.electronApp.firstWindow({ timeout: 90_000 });
-      await mainPage1.waitForLoadState('domcontentloaded');
-      await mainPage1.waitForSelector('#root', { state: 'attached', timeout: 60_000 });
+      const [mainPage1] = await waitForAppPages(ctx.electronApp, 1, 90_000);
       await waitForAppReady(mainPage1, 180_000);
       const window1Id = getWindowIdOfPage(mainPage1);
       logStep(`phase 1: window ${window1Id} ready`);
@@ -444,14 +440,7 @@ test.describe('window layout persistence', () => {
       expect(savedSecondBounds.width).not.toBe(savedMainBounds.width);
       expect(savedSecondBounds.height).not.toBe(savedMainBounds.height);
 
-      const exit1 = await quitAppAndWaitForExit(ctx.electronApp);
-      logStep(`phase 1: exited with code ${exit1.code} signal ${exit1.signal}`);
-      expect(exit1.signal).toBeUndefined();
-      expect(exit1.code).toBe(0);
-
-      const log1 = output1.text();
-      FAULT_MARKERS.forEach((marker) => expect(log1).not.toContain(marker));
-      expect(log1).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+      await quitAndExpectCleanExit(ctx.electronApp, output1, logStep, 'phase 1');
 
       // The persisted structure must hold both windows: exactly one main entry, whose layout
       // carries the Home web view — and the second entry must NOT carry it (an empty window's
@@ -550,14 +539,7 @@ test.describe('window layout persistence', () => {
         expect(readSavedWindowEntries(userDataDir)).toHaveLength(1);
       }).toPass({ timeout: 30_000, intervals: [500] });
 
-      const exit2 = await quitAppAndWaitForExit(ctx.electronApp);
-      logStep(`phase 2: exited with code ${exit2.code} signal ${exit2.signal}`);
-      expect(exit2.signal).toBeUndefined();
-      expect(exit2.code).toBe(0);
-
-      const log2 = output2.text();
-      FAULT_MARKERS.forEach((marker) => expect(log2).not.toContain(marker));
-      expect(log2).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+      await quitAndExpectCleanExit(ctx.electronApp, output2, logStep, 'phase 2');
 
       await teardownElectronApp(ctx);
       ctx = undefined;
@@ -585,14 +567,7 @@ test.describe('window layout persistence', () => {
       expect(getAppPages(ctx.electronApp)).toHaveLength(1);
       logStep('phase 3: the deliberately closed window did not return');
 
-      const exit3 = await quitAppAndWaitForExit(ctx.electronApp);
-      logStep(`phase 3: exited with code ${exit3.code} signal ${exit3.signal}`);
-      expect(exit3.signal).toBeUndefined();
-      expect(exit3.code).toBe(0);
-
-      const log3 = output3.text();
-      FAULT_MARKERS.forEach((marker) => expect(log3).not.toContain(marker));
-      expect(log3).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+      await quitAndExpectCleanExit(ctx.electronApp, output3, logStep, 'phase 3');
 
       // The final teardown (launched without preserveUserDataDir) deletes the profile directory —
       // a relaunch chain must not leak temp directories.
@@ -621,9 +596,7 @@ test.describe('window layout persistence', () => {
       const { userDataDir } = ctx;
       profileDir = userDataDir;
       const outputA = captureAppOutput(ctx.electronApp);
-      const pageA = await ctx.electronApp.firstWindow({ timeout: 90_000 });
-      await pageA.waitForLoadState('domcontentloaded');
-      await pageA.waitForSelector('#root', { state: 'attached', timeout: 60_000 });
+      const [pageA] = await waitForAppPages(ctx.electronApp, 1, 90_000);
       await waitForAppReady(pageA, 180_000);
       const windowAId = getWindowIdOfPage(pageA);
       await expect(homeTabTitle(pageA, windowAId)).toBeAttached({ timeout: 60_000 });
@@ -657,14 +630,7 @@ test.describe('window layout persistence', () => {
         ({ screen }) => screen.getPrimaryDisplay().bounds,
       );
 
-      const exitA = await quitAppAndWaitForExit(ctx.electronApp);
-      logStep(`launch A: exited with code ${exitA.code} signal ${exitA.signal}`);
-      expect(exitA.signal).toBeUndefined();
-      expect(exitA.code).toBe(0);
-
-      const logA = outputA.text();
-      FAULT_MARKERS.forEach((marker) => expect(logA).not.toContain(marker));
-      expect(logA).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+      await quitAndExpectCleanExit(ctx.electronApp, outputA, logStep, 'launch A');
 
       await teardownElectronApp(ctx);
       ctx = undefined;
@@ -760,14 +726,7 @@ test.describe('window layout persistence', () => {
       await expectWindowDockEmpty(page2B);
       logStep(`launch B: mid-session window ${window2BId} started empty despite the legacy blob`);
 
-      const exitB = await quitAppAndWaitForExit(ctx.electronApp);
-      logStep(`launch B: exited with code ${exitB.code} signal ${exitB.signal}`);
-      expect(exitB.signal).toBeUndefined();
-      expect(exitB.code).toBe(0);
-
-      const logB = outputB.text();
-      FAULT_MARKERS.forEach((marker) => expect(logB).not.toContain(marker));
-      expect(logB).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+      await quitAndExpectCleanExit(ctx.electronApp, outputB, logStep, 'launch B');
 
       // The final teardown (launched without preserveUserDataDir) deletes the profile directory.
       await teardownElectronApp(ctx);
