@@ -28,8 +28,9 @@ export type CharacterMarkerBarOverlayProps = {
  * Only the vertical axis is computed. Horizontal placement is `inset-inline-end: 0`, which pins the
  * bar to the text column's trailing edge and mirrors for RTL with no math — and makes the bar
  * immune to paragraph indentation (`\q`, `\q2`) by construction. The space it occupies is reserved
- * with a Simple-scoped `padding-inline-end` in `_simple-mode.scss`, so the bar can never overlap
- * project text.
+ * with a Simple-scoped `padding-inline-end` in `_simple-mode.scss`, and this component sizes the
+ * bar to that same reserved width, so the bar can never overlap project text — see the `style` note
+ * below.
  */
 export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarOverlayProps) {
   const [top, setTop] = useState(0);
@@ -50,13 +51,23 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   const isViewVisible = useViewVisibility();
   const selectionVersion = useEditorSelectionVersion();
 
+  // Visibility is read through a ref, never a dependency, so `recompute` has a STABLE identity. If
+  // it closed over `isViewVisible` instead, every tab activation would re-create it, re-run the
+  // effects below (re-attaching the scroll listener and the ResizeObserver, and recomputing twice),
+  // and — worse — that incidental re-run would mask the deliberate catch-up below, making it
+  // untestable. The ref is written in the same layout effect that consumes the catch-up, so it is
+  // always current before any deferred recompute reads it.
+  const isVisibleRef = useRef(isViewVisible);
+
   const recompute = useCallback(() => {
     // Hidden case: rc-dock hides an inactive tab's pane with `display: none`, which keeps this
     // iframe's JavaScript running but removes all layout — every rect read returns zero. Measuring
     // here would store a garbage top and flash it on tab activation, so defer instead and catch up
-    // in the layout effect below. One flag, not a queue: only the latest position matters. In
-    // Simple mode (one visible tab per stack) hidden is the COMMON case, not an edge case.
-    if (!isViewVisible) {
+    // in the layout effect below, which is the ONLY path back to a correct position after a change
+    // arrives while hidden. One flag, not a queue: any number of changes while hidden collapse into
+    // a single catch-up, because only the latest position matters. In Simple mode (one visible tab
+    // per stack) hidden is the COMMON case, not an edge case.
+    if (!isVisibleRef.current) {
       pendingCatchUpRef.current = true;
       return;
     }
@@ -83,7 +94,14 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
 
     hasPositionedRef.current = true;
     setTop(computeBarTop(targetRect, positionAnchor, scrollContainer));
-  }, [isViewVisible]);
+  }, []);
+
+  // Coalesces bursts of high-frequency triggers (scrolling, and dragging a selection, which fires
+  // `selectionchange` at mousemove rate) into at most one measurement per frame.
+  const scheduleRecompute = useCallback(() => {
+    cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = requestAnimationFrame(recompute);
+  }, [recompute]);
 
   useEffect(() => {
     const positionAnchor = positionAnchorRef.current;
@@ -96,13 +114,12 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     scrollContainerRef.current =
       findScrollContainer(positionAnchor, { requireOverflow: false }) ?? positionAnchor;
 
-    const handleScroll = () => {
-      cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = requestAnimationFrame(recompute);
-    };
-
     const scrollContainer = scrollContainerRef.current;
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    scrollContainer.addEventListener('scroll', scheduleRecompute, { passive: true });
+
+    // Position once, synchronously, now that the scroll container is known — not through
+    // `scheduleRecompute`, so the bar never paints a frame at top: 0 before its first measurement.
+    recompute();
 
     // A persistent bar must survive a panel resize or font-size change; the paragraph-marker
     // tooltip needs no equivalent because it is transient. Without this, dragging the dock
@@ -111,21 +128,32 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     resizeObserver.observe(positionAnchor);
 
     return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll);
+      scrollContainer.removeEventListener('scroll', scheduleRecompute);
       resizeObserver.disconnect();
       cancelAnimationFrame(rafIdRef.current);
     };
-  }, [recompute]);
+  }, [recompute, scheduleRecompute]);
 
-  // Reposition on every caret move. Listeners stay attached while hidden — flagging a pending
-  // catch-up is cheaper than tearing down and re-wiring, and these events are rare in a hidden view.
+  // Reposition on every caret move, coalesced per frame. Listeners stay attached while hidden —
+  // flagging a pending catch-up is cheaper than tearing down and re-wiring, and these events are
+  // rare in a hidden view.
+  const hasHandledFirstSelectionEffectRef = useRef(false);
   useEffect(() => {
-    recompute();
-  }, [selectionVersion, recompute]);
+    // The mount effect above already positioned the bar synchronously, so the first run of this
+    // effect (which is mount, before any caret has moved) has nothing to do.
+    if (!hasHandledFirstSelectionEffectRef.current) {
+      hasHandledFirstSelectionEffectRef.current = true;
+      return;
+    }
+    scheduleRecompute();
+  }, [selectionVersion, scheduleRecompute]);
 
-  // Consume the deferred catch-up BEFORE paint, so activating the tab never shows a stale frame.
-  // Instant, never animated.
+  // Hidden case (see `recompute`): consume the deferred catch-up BEFORE paint, so activating the tab
+  // never shows a stale frame. Instant, never animated. Because `recompute` is identity-stable, no
+  // other effect re-runs on the visibility flip — this is the only thing that repairs the position,
+  // which is exactly what makes it testable.
   useLayoutEffect(() => {
+    isVisibleRef.current = isViewVisible;
     if (isViewVisible && pendingCatchUpRef.current) {
       pendingCatchUpRef.current = false;
       recompute();
@@ -143,7 +171,24 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
         // insetInlineEnd is a string ('0px'), not the number 0: React only appends a `px` unit to
         // numeric style values when they are non-zero (see setValueForStyles in react-dom), so a
         // bare `0` renders as the unitless string "0" instead of "0px".
-        style={{ top, insetInlineEnd: '0px', zIndex: Z_INDEX_OVERLAY }}
+        //
+        // width is CONSTRAINED to the reserved gutter, rather than left to shrink-wrap the bar.
+        // Shrink-wrapping grows inline-START — over project text — the moment the bar's content is
+        // wider than expected, which a longer localized `(mixed)`/`(none)` label makes likely. With
+        // a fixed width the bar clips inside the gutter instead, so "never overlaps text" stays a
+        // property of the construction rather than arithmetic on English strings.
+        //
+        // The value comes from the single `--psc-character-marker-bar-width` declaration in
+        // `_simple-mode.scss` (on `.editor-container-simple`, an ancestor of both this container and
+        // the `.usfm` element that reserves the space), so the reservation and the bar can never
+        // drift apart. No fallback value is given on purpose: a literal here would be that second
+        // source of truth.
+        style={{
+          top,
+          insetInlineEnd: '0px',
+          width: 'var(--psc-character-marker-bar-width)',
+          zIndex: Z_INDEX_OVERLAY,
+        }}
       >
         <div className="tw:pointer-events-auto">{bar}</div>
       </div>

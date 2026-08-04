@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { act, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // jsdom ships no ResizeObserver; the overlay observes the editor so a panel resize repositions it.
@@ -73,16 +73,32 @@ const stubRects = (caretTop: number) => {
   });
 };
 
-const renderOverlay = () =>
-  render(
-    <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
-      <div className="editor-input usfm">
-        <p className="para usfm_p">The LORD is my shepherd</p>
-      </div>
-    </CharacterMarkerBarOverlay>,
-  );
+// A factory, not a shared element: React bails out of re-rendering a subtree when the new element
+// is referentially identical to the previous one, so a `rerender` with the same element would skip
+// the render entirely — and with it the visibility flip the hidden-view tests depend on.
+const overlayTree = () => (
+  <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
+    <div className="editor-input usfm">
+      <p className="para usfm_p">The LORD is my shepherd</p>
+    </div>
+  </CharacterMarkerBarOverlay>
+);
 
-const putCaretInParagraph = () => {
+const renderOverlay = () => render(overlayTree());
+
+/**
+ * Waits out one animation frame, since the overlay coalesces selection changes (which a drag fires
+ * at mousemove rate) into at most one measurement per frame.
+ */
+const flushAnimationFrame = async () => {
+  await act(async () => {
+    await new Promise((resolve) => {
+      requestAnimationFrame(() => resolve(undefined));
+    });
+  });
+};
+
+const putCaretInParagraph = async () => {
   const para = document.querySelector('.para');
   if (!para?.firstChild) throw new Error('expected a paragraph text node');
   const selection = window.getSelection();
@@ -95,6 +111,7 @@ const putCaretInParagraph = () => {
   act(() => {
     document.dispatchEvent(new Event('selectionchange'));
   });
+  await flushAnimationFrame();
 };
 
 const barContainer = () => screen.getByTestId('character-marker-bar-container');
@@ -111,6 +128,10 @@ const stubResizeObserverInstance: ResizeObserver = {
 
 beforeEach(() => {
   mockVisibility.isVisible = true;
+  // Each overlay's MockResizeObserver pushes a callback here and nothing removes it on unmount, so
+  // without this the resize test would also invoke callbacks closed over by EARLIER tests' unmounted
+  // overlays.
+  resizeCallbacks.length = 0;
   stubRects(120);
 });
 
@@ -132,15 +153,27 @@ describe('CharacterMarkerBarOverlay', () => {
     expect(barContainer().style.insetInlineEnd).toBe('0px');
   });
 
-  it('repositions the bar to the active line on a selection change', () => {
+  it('constrains the bar container to the reserved gutter width instead of shrink-wrapping', () => {
     renderOverlay();
-    putCaretInParagraph();
-    expect(barContainer().style.top).toBe('120px');
+    // A shrink-wrapped container grows inline-START, i.e. over project text, as soon as a localized
+    // `(mixed)`/`(none)` is wider than English. Taking the width from the same custom property that
+    // reserves the space is what makes "never overlaps text" structural.
+    expect(barContainer().style.width).toBe('var(--psc-character-marker-bar-width)');
   });
 
-  it('holds the last position when the selection moves outside the editor', () => {
+  it('repositions the bar to the active line on a selection change', async () => {
     renderOverlay();
-    putCaretInParagraph();
+    // Re-stub to a DIFFERENT value than the mount-time anchor position (120) before the caret moves.
+    // Keeping 120 here would let this test pass with the selection wiring deleted, since the
+    // anchor-to-first-paragraph pass on mount already reports 120.
+    stubRects(250);
+    await putCaretInParagraph();
+    expect(barContainer().style.top).toBe('250px');
+  });
+
+  it('holds the last position when the selection moves outside the editor', async () => {
+    renderOverlay();
+    await putCaretInParagraph();
     expect(barContainer().style.top).toBe('120px');
 
     // Opening the popover moves focus into Radix content, which reports a selection outside the
@@ -165,33 +198,62 @@ describe('CharacterMarkerBarOverlay', () => {
     act(() => {
       document.dispatchEvent(new Event('selectionchange'));
     });
+    await flushAnimationFrame();
 
     // Still 120, not 999: proves the bar HELD its last position rather than falling through to
     // the anchor-first-paragraph branch and re-reading the (now different) paragraph rect.
     expect(barContainer().style.top).toBe('120px');
   });
 
-  it('reads no geometry while hidden, and catches up on becoming visible', () => {
+  it('reads no geometry while hidden, and catches up on becoming visible', async () => {
     mockVisibility.isVisible = false;
     const { rerender } = renderOverlay();
 
     stubRects(300);
-    putCaretInParagraph();
+    await putCaretInParagraph();
     // The rule: a display:none iframe has no layout, so measuring it would store a garbage top.
     expect(rectReadCount).toBe(0);
 
     mockVisibility.isVisible = true;
-    rerender(
-      <CharacterMarkerBarOverlay bar={<button type="button">bd</button>}>
-        <div className="editor-input usfm">
-          <p className="para usfm_p">The LORD is my shepherd</p>
-        </div>
-      </CharacterMarkerBarOverlay>,
-    );
+    rerender(overlayTree());
 
-    // The deferred change is consumed exactly once, at the position current on activation — no
-    // stale flash.
+    // The deferred change is consumed at the position current on activation — no stale flash. With
+    // `recompute` identity-stable, the layout-effect catch-up is the ONLY thing that can produce
+    // this, so the assertion genuinely covers it.
     expect(rectReadCount).toBeGreaterThan(0);
+    expect(barContainer().style.top).toBe('300px');
+  });
+
+  it('collapses many changes while hidden into exactly one catch-up recompute', async () => {
+    // Baseline: what one recompute costs in rect reads, measured while visible — so the assertion
+    // below reads "exactly one recompute" rather than hardcoding a read count that an unrelated
+    // refactor of the measurement would silently invalidate.
+    renderOverlay();
+    stubRects(120);
+    await putCaretInParagraph();
+    const readsPerRecompute = rectReadCount;
+    expect(readsPerRecompute).toBeGreaterThan(0);
+    cleanup();
+    resizeCallbacks.length = 0;
+
+    mockVisibility.isVisible = false;
+    const { rerender } = renderOverlay();
+
+    stubRects(300);
+    // Three separate caret moves, each given its own frame, so each one reaches `recompute` and is
+    // deferred individually — the collapse must come from the single pending flag, not from the rAF
+    // throttle.
+    await putCaretInParagraph();
+    await putCaretInParagraph();
+    await putCaretInParagraph();
+    expect(rectReadCount).toBe(0);
+
+    mockVisibility.isVisible = true;
+    rerender(overlayTree());
+
+    // One catch-up, not three: only the latest position matters, and re-measuring per deferred
+    // change would multiply layout work at the moment the tab is activated.
+    expect(rectReadCount).toBe(readsPerRecompute);
     expect(barContainer().style.top).toBe('300px');
   });
 
@@ -203,9 +265,9 @@ describe('CharacterMarkerBarOverlay', () => {
     expect(barContainer().style.top).toBe('120px');
   });
 
-  it('repositions when the editor resizes', () => {
+  it('repositions when the editor resizes', async () => {
     renderOverlay();
-    putCaretInParagraph();
+    await putCaretInParagraph();
 
     stubRects(220);
     act(() => {
