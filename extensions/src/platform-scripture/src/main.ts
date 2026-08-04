@@ -410,7 +410,8 @@ export async function activate(context: ExecutionActivationContext) {
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the inventory is for',
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
             schema: { type: 'string' },
           },
         ],
@@ -444,7 +445,8 @@ export async function activate(context: ExecutionActivationContext) {
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the inventory is for',
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
             schema: { type: 'string' },
           },
         ],
@@ -479,7 +481,8 @@ export async function activate(context: ExecutionActivationContext) {
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the inventory is for',
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
             schema: { type: 'string' },
           },
         ],
@@ -518,6 +521,25 @@ export async function activate(context: ExecutionActivationContext) {
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
     openPlatformPunctuationInventory,
+    {
+      method: {
+        summary: 'Open the punctuation inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened punctuation inventory web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const punctuationInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     punctuationInventoryWebViewType,
@@ -531,9 +553,10 @@ export async function activate(context: ExecutionActivationContext) {
         summary: 'Open the checks side panel',
         params: [
           {
-            name: 'webViewId',
+            name: 'editorWebViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the checks are for',
+            summary:
+              'The ID of the editor web view the checks side panel is opened for; the project and scroll group are resolved from it',
             schema: { type: 'string' },
           },
         ],
