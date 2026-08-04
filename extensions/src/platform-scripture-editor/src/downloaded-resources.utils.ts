@@ -32,7 +32,8 @@ export type PickerResource = {
 };
 
 /**
- * Enumerate every installed scripture project and resolve its display metadata.
+ * Enumerate every locally-installed published resource and resolve its display metadata. Filters to
+ * `isPublished === true` so the user's own editable scripture projects are excluded.
  *
  * Note: the renderer uses a similar enumerate-and-resolve pattern in
  * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
@@ -40,9 +41,8 @@ export type PickerResource = {
  */
 export async function fetchDownloadedResources(): Promise<DownloadedResource[]> {
   try {
-    const metadata = await papi.projectLookup.getMetadataForAllProjects({
-      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-    });
+    const allMetadata = await papi.projectLookup.getMetadataForAllProjects();
+    const metadata = allMetadata.filter((m) => m.isPublished === true);
     const results = await Promise.allSettled(
       metadata.map(async (data) => {
         const pdp = await papi.projectDataProviders.get('platform.base', data.id);
