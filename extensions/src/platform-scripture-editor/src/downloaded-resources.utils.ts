@@ -41,7 +41,15 @@ export type PickerResource = {
  */
 export async function fetchDownloadedResources(): Promise<DownloadedResource[]> {
   try {
-    const allMetadata = await papi.projectLookup.getMetadataForAllProjects();
+    // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
+    // commentary/notes resources that do not implement USJ (e.g. TNN, HBK) are included.
+    // Using `platform.base` still guarantees the C# Paratext factory has registered before
+    // the call resolves (the retry mechanism waits for non-empty results — a plain unfiltered
+    // call could settle on TypeScript-only PDPFs before the C# factory appears). The
+    // subsequent `isPublished` check excludes the user's own editable projects.
+    const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platform.base'],
+    });
     const metadata = allMetadata.filter((m) => m.isPublished === true);
     const results = await Promise.allSettled(
       metadata.map(async (data) => {
