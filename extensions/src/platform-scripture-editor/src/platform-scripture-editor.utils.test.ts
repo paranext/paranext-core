@@ -5,6 +5,7 @@ import { UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
   generateParagraphMenuListItems,
@@ -17,6 +18,8 @@ import {
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   toScriptureEditorInfos,
+  isChapterBlank,
+  buildChapterScaffoldOps,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2495,5 +2498,65 @@ describe('generateInlineMarkerMenuListItems', () => {
   it('returns [] when there is no parent marker', () => {
     const { ref } = makeMockEditorRef();
     expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
+  });
+});
+
+describe('isChapterBlank', () => {
+  const emptyUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
+
+  it('returns true when the chapter has no content at all', () => {
+    expect(isChapterBlank(emptyUsj)).toBe(true);
+  });
+
+  it('returns false when the chapter has a chapter marker but no verses (avoids a duplicate \\c on click)', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [{ type: 'chapter', marker: 'c', number: '1' }],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+
+  it('returns false when a verse node exists at the top level', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [{ type: 'verse', marker: 'v', number: '1' }],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+
+  it('returns false when a verse node is nested inside a paragraph', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'Some text'],
+        },
+      ],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+});
+
+describe('buildChapterScaffoldOps', () => {
+  it('builds one chapter-embed op followed by one verse-embed op per verse, 1-indexed', () => {
+    const ops = buildChapterScaffoldOps(3, 4);
+    expect(ops).toEqual([
+      { insert: { chapter: { number: '3', style: 'c' } } },
+      { insert: { verse: { number: '1', style: 'v' } } },
+      { insert: { verse: { number: '2', style: 'v' } } },
+      { insert: { verse: { number: '3', style: 'v' } } },
+      { insert: { verse: { number: '4', style: 'v' } } },
+    ]);
+  });
+
+  it('builds only the chapter-embed op when the chapter has one verse', () => {
+    const ops = buildChapterScaffoldOps(1, 1);
+    expect(ops).toEqual([
+      { insert: { chapter: { number: '1', style: 'c' } } },
+      { insert: { verse: { number: '1', style: 'v' } } },
+    ]);
   });
 });
