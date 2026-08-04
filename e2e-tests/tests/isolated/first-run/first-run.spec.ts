@@ -10,13 +10,15 @@
  *
  * - Wizard appears and localisation resolves
  * - Forward navigation: Language → Internet Settings → Identify (Next hidden at Identify)
- * - Skip setup on Sync consent closes the wizard
- * - Sync progress step renders the syncing heading with Finish disabled
+ * - Skip automatic sync on Sync consent closes the wizard (PT-4178)
+ * - Sync progress step renders the syncing heading with Finish disabled (PT-4179)
  *
  * Navigation note: IdentifyStep hides the shell's Next button and owns its own "Save and restart"
- * primary action (which triggers a real app restart in production). Tests that need to navigate
- * past Identify use demo mode (`platform-bible.firstRunDemoMode` localStorage flag), which makes
- * "Save and restart" call onNext() directly without a backend round-trip or restart.
+ * primary action (which triggers a real app restart in production). SyncConsentStep (PT-4178)
+ * similarly hides Next and owns its own "Sync" primary action (which calls the S/R backend in
+ * production). Tests that need to navigate past either step use demo mode
+ * (`platform-bible.firstRunDemoMode` localStorage flag): "Save and restart" calls onNext()
+ * directly, and "Sync" resolves immediately without a real backend call.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { preConfigureSettings } from '../../../fixtures/helpers';
@@ -68,19 +70,23 @@ test.describe('First-run wizard', () => {
     await frPage.waitForWizard();
 
     // Language step: Next is enabled immediately (LanguageStep calls setCanProceed(true) on
-    // mount); no Back or Skip setup yet.
+    // mount); no Back or Skip automatic sync yet.
     const nextBtn = frPage.dialog.getByRole('button', { name: 'Next' });
     await expect(nextBtn).toBeEnabled();
     await expect(frPage.dialog.getByRole('button', { name: 'Back' })).not.toBeVisible();
-    await expect(frPage.dialog.getByRole('button', { name: 'Skip setup' })).not.toBeVisible();
+    await expect(
+      frPage.dialog.getByRole('button', { name: 'Skip automatic sync' }),
+    ).not.toBeVisible();
     await frPage.clickNext(); // Language → Internet Settings
 
-    // Internet Settings step: Back appears; Skip setup stays hidden. InternetSettingsStep loads
-    // settings asynchronously — clickNext() auto-waits for Next to be enabled.
+    // Internet Settings step: Back appears; Skip automatic sync stays hidden. InternetSettingsStep
+    // loads settings asynchronously — clickNext() auto-waits for Next to be enabled.
     await expect(frPage.dialog.getByRole('button', { name: 'Back' })).toBeVisible({
       timeout: 5_000,
     });
-    await expect(frPage.dialog.getByRole('button', { name: 'Skip setup' })).not.toBeVisible();
+    await expect(
+      frPage.dialog.getByRole('button', { name: 'Skip automatic sync' }),
+    ).not.toBeVisible();
     await frPage.clickNext(); // Internet Settings → Identify
 
     // Identify step: Next is hidden entirely (setCanProceed(undefined)) — the step owns its own
@@ -92,7 +98,7 @@ test.describe('First-run wizard', () => {
     await expect(frPage.dialog.getByRole('button', { name: /save and restart/i })).toBeVisible();
   });
 
-  test('skip setup on Sync consent closes the wizard', async ({ mainPage }) => {
+  test('skip automatic sync on Sync consent closes the wizard', async ({ mainPage }) => {
     // Demo mode: "Save and restart" calls onNext() directly without a real backend call.
     await injectDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);
@@ -103,12 +109,12 @@ test.describe('First-run wizard', () => {
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
 
-    // Skip setup invokes completeFirstRun({ syncSkipped: true }) which marks setup
-    // complete and unmounts the overlay.
-    await expect(frPage.dialog.getByRole('button', { name: 'Skip setup' })).toBeVisible({
+    // "Skip automatic sync" invokes completeFirstRun({ skippedStep: 'syncConsent' }) which marks
+    // setup complete and unmounts the overlay.
+    await expect(frPage.dialog.getByRole('button', { name: 'Skip automatic sync' })).toBeVisible({
       timeout: 5_000,
     });
-    await frPage.clickSkipSetup();
+    await frPage.clickSkipAutomaticSync();
     await frPage.waitForDismissed();
     await expect(frPage.dialog).not.toBeVisible();
   });
@@ -125,8 +131,9 @@ test.describe('First-run wizard', () => {
     await frPage.clickNext(); // Language → Internet Settings
     await frPage.clickNext(); // Internet Settings → Identify
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
-    // The Sync consent placeholder calls setCanProceed(true) on mount, so Next is enabled.
-    await frPage.clickNext(); // Sync consent → Sync progress
+    // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
+    // clicking "Sync" resolves the defaultSyncFn immediately without a real backend call.
+    await frPage.clickSync(); // Sync consent → Sync progress
 
     // The syncing heading confirms the step rendered correctly.
     await expect(

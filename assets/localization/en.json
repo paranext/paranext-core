@@ -48,7 +48,6 @@
   "%firstRun_step_identify_registryLink%": "Visit Paratext Registry",
   "%firstRun_step_identify_validatingCode%": "Checking your registration…",
   "%firstRun_step_language_placeholder%": "Language picker (coming soon)",
-  "%firstRun_step_syncConsent_placeholder%": "Sync consent (coming soon)",
   "%firstRun_step_syncConsent_body%": "When working on shared projects, syncing updates your local copy and shares your changes with others.",
   "%firstRun_step_syncConsent_heading%": "Sync your projects",
   "%firstRun_step_syncProgress_body%": "Setting up your projects. This may take a few minutes.",

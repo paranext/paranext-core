@@ -1,14 +1,16 @@
 ---
 title: Component Builder Patterns Reference
 description: Reference patterns and examples for building React UI components — file naming, structure, shadcn/ui conventions.
-version: 1.4.1
+version: 1.5.0
 status: active
 created: 2026-03-04
-last_updated: 2026-05-11
+last_updated: 2026-06-18
 toc: true
 ---
 
 # Component Builder Patterns Reference
+
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
 
 This is a reference document containing patterns and examples for building Platform.Bible UI components.
 
@@ -18,19 +20,21 @@ This is a reference document containing patterns and examples for building Platf
 <!-- | 36 | File Naming Conventions | -->
 <!-- | 52 | TypeScript & Build Configuration | -->
 <!-- | 88 | Web View Provider Patterns | -->
-<!-- | 180 | PAPI Integration Patterns | -->
-<!-- | 246 | Styling Patterns | -->
-<!-- | 287 | Localization Patterns | -->
-<!-- | 413 | EXPLANATION Comments for Complex Logic | -->
-<!-- | 483 | Common Component Patterns | -->
-<!-- | 511 | Debounce Usage Guidelines | -->
-<!-- | 542 | Controlled Radix Popover with Custom Outside-Pointer Handler | -->
-<!-- | 587 | Disabled Button with Tooltip Pattern | -->
-<!-- | 609 | Test File Patterns | -->
-<!-- | 654 | Reference Extensions | -->
-<!-- | 667 | Design Reference Resources | -->
-<!-- | 674 | Visual Review | -->
-<!-- | 678 | Version Log | -->
+<!-- | 167 | PAPI Integration Patterns | -->
+<!-- | 233 | Styling Patterns | -->
+<!-- | 274 | Localization Patterns | -->
+<!-- | 400 | EXPLANATION Comments for Complex Logic | -->
+<!-- | 422 | Common Component Patterns | -->
+<!-- | 452 | Debounce Usage Guidelines | -->
+<!-- | 483 | Wire UI to Real PAPI — No Stubbing | -->
+<!-- | 491 | Presentational Components and Their Stories | -->
+<!-- | 521 | Controlled Radix Popover with Custom Outside-Pointer Handler | -->
+<!-- | 566 | Disabled Button with Tooltip Pattern | -->
+<!-- | 588 | Test File Patterns | -->
+<!-- | 633 | Reference Extensions | -->
+<!-- | 646 | Design Reference Resources | -->
+<!-- | 653 | Visual Review | -->
+<!-- | 657 | Version Log | -->
 <!-- TOC:END -->
 
 ## File Naming Conventions
@@ -58,6 +62,7 @@ Reference: `extensions/src/platform-scripture/tsconfig.json`. Each extension's `
 - `../../../node_modules/@types` — default type declarations
 - `../../../lib` — `papi-dts` type declarations (for `papi.d.ts`)
 - `../../../extensions/src` — sibling extensions' type declarations
+- `../../../src/@types` — core's React 19 / library compat type shims — **required**: without it, the auto-loaded broken `@types/*` packages (e.g. `@types/mdx`) fail typecheck
 - `src/types` — this extension's own `.d.ts`
 
 Do **not** use `../paranext-core/...` — that's a path from outside the repo and will silently miss type roots.
@@ -96,9 +101,9 @@ import { WebViewProps } from '@papi/core';
 import { Button, Card, cn } from 'platform-bible-react';
 import './feature-name.web-view.scss'; // Optional SCSS
 
-// IMPORTANT: Use `global.webViewComponent` (NOT `globalThis.webViewComponent`)
-// `globalThis` causes TypeScript strict mode errors
-global.webViewComponent = function FeatureWebView({
+// papi.d.ts documents `globalThis.webViewComponent` as the canonical form;
+// `global.webViewComponent` also works and appears in some shipped web views.
+globalThis.webViewComponent = function FeatureWebView({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
@@ -136,6 +141,12 @@ export class FeatureWebViewProvider implements IWebViewProvider {
 ```
 
 **Note:** Use `?inline` imports for content and styles in providers.
+
+### Web View UI-State Persistence Caveat (`useWebViewState`)
+
+`useWebViewState<T>(key, default)` is scoped **per `webViewId`**, not per project or per user. Each `openWebView` call without a reuse strategy mints a **new** web view id, so closing and reopening a tool creates a fresh instance with empty state — slots persisted via `useWebViewState` do **not** survive close/reopen.
+
+There is no id-reuse idiom that survives a close: `existingId: '?'` resolves through the **live** dock layout (`findFirstWebViewDefinitionByType` in `src/renderer/services/web-view.service-host.ts`), so it only finds a currently-open instance — it is a **dedupe** mechanism (don't open a second instance while one is already open; see `openFind` in `extensions/src/platform-scripture/src/main.ts`), not a persistence mechanism. Once a tab is closed it is removed from the layout, and the next `openWebView` mints a fresh id with empty state. For state that must survive close/reopen (or across sessions), use user-scoped `papi.settings` instead of `useWebViewState`.
 
 ### Custom Web View Options
 
@@ -366,7 +377,7 @@ grep -i "cancel\|ok\|save\|close\|submit\|error\|loading" \
   extensions/src/{ext}/contributions/localizedStrings.json
 ```
 
-Common reusable keys: `%general_cancel%`, `%general_ok%`, `%general_save%`, `%general_close%`, `%general_loading%`
+Common reusable keys (verify in `assets/localization/en.json` before using — the set changes): `%general_cancel%`, `%general_ok%`, `%general_loading%`, `%general_open%`, `%general_run%`
 
 ### Existing Strings Are Immutable
 
@@ -479,6 +490,36 @@ const handleNameChange = (name: string) => setProjectName(name);
 A web view's data providers and submit handlers must call the real `papi.commands.sendCommand` (or `papi.dataProviders` / `usePromise` over real commands) backed by actual backend services. Do **not** ship a component wired to mocked/stubbed PAPI, and do **not** substitute hardcoded arrays, static objects, or `// TODO` placeholders for data that is supposed to come from PAPI — that produces a UI that demos green but is dead in the running app.
 
 If the backend functionality a handler needs is genuinely out of scope, leave the call site wired and mark it clearly as DEFERRED (with the missing command named) rather than faking the data — so the gap is visible instead of hidden behind a plausible-looking stub.
+
+---
+
+## Presentational Components and Their Stories
+
+A presentational `*.component.tsx` takes all of its data through props and is decoupled from PAPI (no `@papi`/`useData`/`useSetting`/`globalThis.webViewComponent` — see the purity rule in [Extension-Development-Guide.md](Extension-Development-Guide.md)). The same component code must run unchanged in production and in Storybook. Keep these three discipline rules when building such a component and its stories.
+
+### Keep demo/mock scaffolding out of the component
+
+The component file must be production-clean. Demo data, mock toggles, "load sample data" controls, and environment-gated branches (`process.env.NODE_ENV` / `process.env.STORYBOOK`, `demoMode`/`isDemo`/`sampleData`/`mockData`) belong in the **story decorator**, never in the component. If the component branches on whether it is running in Storybook, it is no longer the thing that ships.
+
+### Cover every wireframe state variant with a story
+
+Each distinct state a wireframe describes — typically `Default`, `Loading`, `Empty`, `Error`, and any populated/selected variants — gets its own named story export so a reviewer can see each state in isolation. A component with a loading and an error state but only a `Default` story is under-covered; add `Loading` and `Error` stories (e.g. `export const Loading: Story = { args: { isLoading: true } }`).
+
+### The `Default` story wires every callback to real `useState`
+
+Stories are interactive sessions, not static snapshots. In the `Default` story, every `on*` callback prop must be wired to a state-mutating handler whose state lives in a `useState` hook in the story's decorator (or render function) — not a `() => {}` stub. The decorator owns the sample data via `useState`, so a reviewer opening the story can click through the full flow and watch the component react to real-shape data.
+
+```tsx
+// Default story: decorator owns sample state; callbacks mutate it.
+export const Default: Story = {
+  render: () => {
+    const [name, setName] = useState('My Project');
+    return <ProjectSettingsForm projectName={name} onSave={setName} onCancel={() => setName('My Project')} />;
+  },
+};
+```
+
+Stub callbacks (`() => {}`) ARE fine in the non-`Default` stories whose whole point is a frozen state — `Loading`, `Empty`, `Error` — since those are not meant to be exercised. The "wire every callback to `useState`" rule applies only to `Default`.
 
 ---
 
@@ -603,7 +644,7 @@ Find similar React components in the codebase for patterns to follow:
 | checks-side-panel | Filter + results list | `extensions/src/platform-scripture/src/checks-side-panel.web-view.tsx` |
 | find | Search + results | `extensions/src/platform-scripture/src/find.web-view.tsx` |
 | inventory | Data grid | `extensions/src/platform-scripture/src/inventory.web-view.tsx` |
-| project-settings | Settings/form | `extensions/src/platform-scripture/src/project-settings.web-view.tsx` |
+| settings tab (core) | Settings/form | `src/renderer/components/settings-tabs/settings-tab.component.tsx` |
 
 ---
 
@@ -629,3 +670,4 @@ After completing UI work on a feature PR, apply the `storybook-review` GitHub la
 | 1.3.0   | 2026-05-01 | Add TypeScript & Build Configuration section (typeRoots, typecheck script, build-doesn't-typecheck). Add Custom Web View Options pattern (extend `OpenWebViewOptions`). Add `ComboBox` option shape callout (NOT `{label,value}[]`). Add return-type gotcha to useLocalizedStrings (`LocalizationData`/`LanguageStrings`, `LocalizeKey` indices). |
 | 1.4.0   | 2026-05-11 | Move `EXPLANATION:` blocks into the function body rather than TSDoc. |
 | 1.4.1   | 2026-05-11 | Code-review fix: align `EXPLANATION:` placement wording with the Code-Style-Guide v1.2.1 relaxation — also accommodate class-level constants (e.g. regex pattern fields) when the constant *is* the algorithm. |
+| 1.5.0   | 2026-06-18 | Add "Presentational Components and Their Stories" section (keep demo/mock scaffolding out of the component, cover every wireframe state variant, `Default` story wires callbacks to `useState`). Add "Web View UI-State Persistence Caveat" (`useWebViewState` is per-`webViewId`; `existingId`/`createNewIfNotFound: false` dedupes currently-open instances only — for state that survives close/reopen use `papi.settings`). |

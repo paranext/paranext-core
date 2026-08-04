@@ -1,10 +1,11 @@
 import * as commandService from '@shared/services/command.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { isDemoMode, markJustRegistered } from '@renderer/services/first-run-store';
-import { Alert, AlertDescription, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
+import { Alert, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { AlertCircle, CircleCheck } from 'lucide-react';
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { CircleCheck } from 'lucide-react';
+import { ChangeEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
 // Copied from the paratext-registration extension — keep in sync if the extension changes.
@@ -41,6 +42,7 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_step_identify_registryHelp%',
   '%firstRun_step_identify_registryLink%',
   '%firstRun_step_identify_validatingCode%',
+  '%firstRun_button_back%',
   '%general_error_title%',
 ];
 
@@ -51,10 +53,8 @@ const KEYS: LocalizeKey[] = [
 export interface IdentifyStepProps extends FirstRunStepProps {
   /**
    * Called after registration data is saved successfully. Defaults to `platform.restart`. When
-   * provided (e.g. for testing or a batched-restart flow), `platform.restart` is not called.
-   *
-   * Known gap: the `isRestarting` overlay still shows even when this prop does not trigger a real
-   * restart.
+   * provided (e.g. for testing or a batched-restart flow), `platform.restart` is not called. If it
+   * resolves without actually relaunching the app, the component resets the spinner overlay.
    */
   onRestartAfterSave?: () => void | Promise<void>;
 }
@@ -67,16 +67,31 @@ export interface IdentifyStepProps extends FirstRunStepProps {
  * re-showing this step.
  *
  * The shell's "Next" button is hidden (`setCanProceed(undefined)` on mount) — this step owns its
- * own explicit "Save and restart" footer action.
+ * own explicit "Save and restart" action via WizardStepForm's `primaryButton` slot.
  *
  * Eight localization keys (`%paratextRegistration_*`) resolve from the paratext-registration
  * extension's `localizedStrings.json` at runtime via PAPI — they will not be in `en.json`.
  */
-export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: IdentifyStepProps) {
-  // Suppress the shell's generic Next entirely — this step owns its own explicit restart action.
-  useEffect(() => setCanProceed?.(undefined), [setCanProceed]);
+export function IdentifyStep({
+  onNext,
+  onBack,
+  setCanProceed,
+  setManagesOwnFooter,
+  onRestartAfterSave,
+}: IdentifyStepProps) {
+  // Suppress the shell's generic Next/Finish and the shell footer before the first paint — this
+  // step owns its navigation entirely via WizardStepForm. onBack is rendered inside the form.
+  useLayoutEffect(() => {
+    setCanProceed?.(undefined);
+    setManagesOwnFooter?.(true);
+  }, [setCanProceed, setManagesOwnFooter]);
 
   const [strings] = useLocalizedStrings(KEYS);
+  // Ref so debounce callbacks always read the latest strings even if PAPI delivers them mid-wait.
+  const stringsRef = useRef(strings);
+  useEffect(() => {
+    stringsRef.current = strings;
+  }, [strings]);
 
   const [name, setName] = useState('');
   const [registrationCode, setRegistrationCode] = useState('');
@@ -119,9 +134,11 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   const validateRegistration = (code: string, newName: string) => {
     if (validationTimeout.current) clearTimeout(validationTimeout.current);
     setRegistrationIsValid(false);
-    // Clear any stale error immediately so the alert doesn't linger while the user keeps typing.
+    // Clear any stale errors immediately so alerts don't linger while the user keeps typing.
     setError('');
     setErrorDescription('');
+    setSaveError('');
+    setSaveErrorDescription('');
     if (isDemoMode()) return;
     validationTimeout.current = setTimeout(async () => {
       // Claim a generation slot before any guard so stale in-flight responses see a mismatched
@@ -136,6 +153,8 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
         return;
       }
       setIsValidating(true);
+      // Read from ref so we always get the latest strings even if PAPI delivered them mid-wait.
+      const latestStrings = stringsRef.current;
       try {
         const isValid = await commandService.sendCommand(
           'paratextRegistration.validateParatextRegistrationData',
@@ -145,15 +164,15 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
         if (!isMounted.current || validationGeneration.current !== gen) return;
         setRegistrationIsValid(!!isValid);
         if (!isValid) {
-          setError(strings['%paratextRegistration_alert_invalidRegistration%']);
+          setError(latestStrings['%paratextRegistration_alert_invalidRegistration%']);
           setErrorDescription(
-            strings['%paratextRegistration_alert_invalidRegistration_description%'],
+            latestStrings['%paratextRegistration_alert_invalidRegistration_description%'],
           );
         }
       } catch (err) {
         if (isMounted.current && validationGeneration.current === gen) {
           setRegistrationIsValid(false);
-          setError(strings['%general_error_title%']);
+          setError(latestStrings['%general_error_title%']);
           setErrorDescription(getErrorMessage(err));
         }
       } finally {
@@ -216,9 +235,11 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
       // certainly a server fluke. The flag is consumed (cleared) on the next resolveInternal call.
       markJustRegistered();
       // Restart immediately — the explicit "Save and restart" button already sets the expectation.
-      // The process terminates here; setIsRestarting(true) above keeps the button in "Restarting…"
-      // until the app exits.
       await (onRestartAfterSave ?? (() => commandService.sendCommand('platform.restart')))();
+      // platform.restart resolves after invoking app.quit() but before the process actually
+      // terminates — the window may still be alive for a few frames. Gate the spinner reset on the
+      // injected path so production (where onRestartAfterSave is undefined) is unaffected.
+      if (onRestartAfterSave && isMounted.current) setIsRestarting(false);
     } catch (err) {
       if (!isMounted.current) return;
       setSaveError(strings['%general_error_title%']);
@@ -233,6 +254,11 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
     ? !name.trim()
     : !name.trim() || !registrationIsValid || isValidating;
 
+  // Validation error and save error are mutually exclusive: validateRegistration (called on every
+  // keystroke) clears both, and save can only be attempted after validation succeeds.
+  const activeError = error || saveError;
+  const activeErrorDescription = error ? errorDescription : saveErrorDescription;
+
   if (isRestarting) {
     return (
       <div className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:py-8 tw:text-center">
@@ -245,11 +271,23 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
   }
 
   return (
-    <div className="tw:flex tw:flex-col tw:gap-4">
-      <h2 className="tw:m-0 tw:text-sm tw:font-normal">
-        {strings['%firstRun_step_identify_heading%']}
-      </h2>
-
+    <WizardStepForm
+      heading={strings['%firstRun_step_identify_heading%']}
+      error={activeError}
+      errorDescription={activeErrorDescription}
+      backButton={
+        onBack && (
+          <Button variant="outline" onClick={onBack}>
+            {strings['%firstRun_button_back%']}
+          </Button>
+        )
+      }
+      primaryButton={
+        <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
+          {strings['%paratextRegistration_button_saveAndRestart%']}
+        </Button>
+      }
+    >
       <div className="tw:flex tw:flex-col tw:gap-3">
         <div className="tw:flex tw:flex-col tw:gap-1">
           <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">
@@ -269,7 +307,9 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
             placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX"
             value={registrationCode}
             aria-invalid={showInvalidCode || (!!error && !isValidating)}
-            aria-describedby="identify-code-warning identify-code-error"
+            // Only link the description when the format-warning element is actually rendered; a
+            // backend error is announced via WizardStepForm's role="alert" Alert, not this field.
+            aria-describedby={showInvalidCode ? 'identify-code-warning' : undefined}
             onChange={onRegistrationCodeChange}
           />
           {showInvalidCode && (
@@ -278,56 +318,34 @@ export function IdentifyStep({ onNext, setCanProceed, onRestartAfterSave }: Iden
             </p>
           )}
         </div>
+
+        {isValidating && (
+          <div className="tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground">
+            <Spinner />
+            {strings['%firstRun_step_identify_validatingCode%']}
+          </div>
+        )}
+
+        <p className="tw:text-sm tw:text-muted-foreground">
+          {strings['%firstRun_step_identify_registryHelp%']}{' '}
+          <a
+            href={PARATEXT_REGISTRY_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tw:underline"
+          >
+            {strings['%firstRun_step_identify_registryLink%']}
+          </a>
+        </p>
+
+        {!error && registrationIsValid && !isValidating && (
+          <Alert>
+            <CircleCheck className="tw:h-4 tw:w-4" />
+            <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
+          </Alert>
+        )}
       </div>
-
-      {isValidating && (
-        <div className="tw:flex tw:items-center tw:gap-2 tw:text-sm tw:text-muted-foreground">
-          <Spinner />
-          {strings['%firstRun_step_identify_validatingCode%']}
-        </div>
-      )}
-
-      <p className="tw:text-sm tw:text-muted-foreground">
-        {strings['%firstRun_step_identify_registryHelp%']}{' '}
-        <a
-          href={PARATEXT_REGISTRY_LINK}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="tw:underline"
-        >
-          {strings['%firstRun_step_identify_registryLink%']}
-        </a>
-      </p>
-
-      {!error && registrationIsValid && !isValidating && (
-        <Alert>
-          <CircleCheck className="tw:h-4 tw:w-4" />
-          <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
-        </Alert>
-      )}
-
-      {error && (
-        <Alert id="identify-code-error" variant="destructive">
-          <AlertCircle className="tw:h-4 tw:w-4" />
-          <AlertTitle>{error}</AlertTitle>
-          <AlertDescription>{errorDescription}</AlertDescription>
-        </Alert>
-      )}
-
-      {saveError && (
-        <Alert id="identify-save-error" variant="destructive">
-          <AlertCircle className="tw:h-4 tw:w-4" />
-          <AlertTitle>{saveError}</AlertTitle>
-          <AlertDescription>{saveErrorDescription}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="tw:flex tw:justify-end">
-        <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
-          {strings['%paratextRegistration_button_saveAndRestart%']}
-        </Button>
-      </div>
-    </div>
+    </WizardStepForm>
   );
 }
 

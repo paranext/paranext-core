@@ -5,6 +5,8 @@ description: TypeScript/C# conventions, design principles, localization, compone
 
 # Code Style Guide
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 ## Software Design and Review Principles
 
 High-level guidelines that should shape both writing and reviewing code. The top-level bullets are essential; the sub-bullets are important clarifications and examples.
@@ -57,6 +59,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **`throw new Error()`**, not `throw Error()`.
 - **Bundled deps belong in `devDependencies`**: Webpack bundles non-`external` imports into the final output, so those packages are `devDependencies`. See [this discussion](https://reviewable.io/reviews/paranext/paranext-core/380#-NcPBady7ifJq0YLZtwN).
 - **Prefer TSDoc over JSDoc** in TypeScript. TSDoc does not duplicate types in the comment — TypeScript already has them.
+- **Namespace-prefix shared-library exported types**: Types exported from `lib/platform-bible-react` (or any other shared library) should carry a feature/namespace prefix so they stay collision-proof across the whole monorepo. Consumers re-import them under a short alias at the module boundary for component-local readability (`import { SomeFeatureAlertEntry as AlertEntry } from 'platform-bible-react'`). Known violation of this rule: the bare `AlertEntry` exported from `platform-scripture`'s `manage-books-dialog.types.ts` — which also collides in name with the unrelated C# `AlertEntry` (`c-sharp/ParatextUtils/AlertEntry.cs`) — is slated for a prefixed rename if it is ever promoted to the shared library.
 
 ---
 
@@ -305,7 +308,7 @@ The rebuilt `dist/` changes are normally part of the same PR that changes the li
 
 ### Folder
 
-All shadcn/ui components live in `lib/platform-bible-react/src/components/shadcn-ui/`. Each file is a single shadcn component (e.g. `button.tsx`, `dialog.tsx`) copied directly from the [shadcn/ui](https://ui.shadcn.com) boilerplate and then customized in place. The folder also contains `CUSTOMIZATIONS.md`, an AI-generated snapshot of all customizations made relative to the boilerplate.
+All shadcn/ui components live in `lib/platform-bible-react/src/components/shadcn-ui/`. Each file is a single shadcn component (e.g. `button.tsx`, `dialog.tsx`) copied directly from the [shadcn/ui](https://ui.shadcn.com) boilerplate and then customized in place. An audit of customizations relative to the boilerplate can be generated on demand via `.claude/commands/shadcn-customizations.md` (there is no standing snapshot file).
 
 ### Boilerplate baseline
 
@@ -453,7 +456,7 @@ Is this logic specific to ONE feature's unique domain model?
     ├─ String/data utilities  → lib/platform-bible-utils/src/
     ├─ React hooks            → lib/platform-bible-react/src/hooks/
     ├─ PAPI hooks             → src/renderer/hooks/papi-hooks/
-    └─ Shared extension code  → extensions/src/common/
+    └─ Shared extension code  → (no such location exists today — promote to lib/platform-bible-utils or lib/platform-bible-react via the ask-first step)
 ```
 
 ### Adding to `platform-bible-utils` (ask first)

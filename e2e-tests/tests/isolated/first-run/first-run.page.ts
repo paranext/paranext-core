@@ -8,9 +8,10 @@ import type { Locator, Page } from '@playwright/test';
  *
  * Button-label notes (from `assets/localization/en.json`):
  *
- * - Primary action: "Next" on steps 1–4, "Finish" on the last step (SyncProgress)
+ * - Primary action: "Next" on steps 1–3, "Finish" on the last step (SyncProgress)
  * - "Back" — absent on the first step (Language) and on the SyncProgress interstitial
- * - "Skip setup" — present only on the Sync consent step
+ * - "Sync" — the Sync consent step's own primary action (Next is hidden on that step)
+ * - "Skip automatic sync" — present only on the Sync consent step (shell footer)
  * - "Save and restart" — the Identify step's own primary action (Next is hidden on that step)
  */
 export class FirstRunPage {
@@ -45,10 +46,9 @@ export class FirstRunPage {
    * handles the brief disabled window that goToStep creates before each step's mount effect calls
    * setCanProceed(true).
    *
-   * Label is "Next" on steps 1–4 and "Finish" on the last step (SyncProgress).
-   *
-   * Note: the Identify step hides Next entirely and owns its own "Save and restart" primary action.
-   * Use {@link clickSaveAndRestart} to navigate through it.
+   * Label is "Next" on steps 1–2 (Language, Internet Settings) and "Finish" on the last step
+   * (SyncProgress). Steps 3–4 (Identify, Sync consent) hide Next and own their own primary actions
+   * — use {@link clickSaveAndRestart} and {@link clickSync} respectively.
    */
   async clickNext(): Promise<void> {
     await this.dialog.getByRole('button', { name: /^(Next|Finish)$/i }).click();
@@ -59,9 +59,17 @@ export class FirstRunPage {
     await this.dialog.getByRole('button', { name: 'Back' }).click();
   }
 
-  /** Click "Skip setup" (present only on the Sync consent step). */
-  async clickSkipSetup(): Promise<void> {
-    await this.dialog.getByRole('button', { name: 'Skip setup' }).click();
+  /**
+   * Click the "Sync" button on the Sync consent step. In demo mode this resolves immediately and
+   * advances to Sync progress; in production it triggers a real S/R sync first.
+   */
+  async clickSync(): Promise<void> {
+    await this.dialog.getByRole('button', { name: /^sync$/i }).click();
+  }
+
+  /** Click "Skip automatic sync" (present only on the Sync consent step shell footer). */
+  async clickSkipAutomaticSync(): Promise<void> {
+    await this.dialog.getByRole('button', { name: 'Skip automatic sync' }).click();
   }
 
   /**

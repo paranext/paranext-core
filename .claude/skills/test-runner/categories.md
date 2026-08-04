@@ -1,9 +1,11 @@
 # Test Categories Reference
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 ## C# Test Categories
 
 The C# tests in `c-sharp-tests/` annotate tests with `[Category("...")]`. Use these
-categories with `dotnet test --filter "Category=..."`.
+categories with `dotnet test c-sharp-tests/ --filter "Category=..."`.
 
 These are the categories that actually exist in the codebase (grep
 `\[Category("...")\]` in `c-sharp-tests/` to confirm). The most heavily used by far is
@@ -32,41 +34,41 @@ There is no `Unit`, `Fast`, `Slow`, `VeryLong`, `PAPI`, `Network`, `Scripture`,
 
 ```bash
 # Run only contract tests
-dotnet test --filter "Category=Contract"
+dotnet test c-sharp-tests/ --filter "Category=Contract"
 
 # Run only golden-master tests
-dotnet test --filter "Category=GoldenMaster"
+dotnet test c-sharp-tests/ --filter "Category=GoldenMaster"
 ```
 
 ### Multiple Categories (OR)
 
 ```bash
 # Run contract OR integration tests
-dotnet test --filter "Category=Contract|Category=Integration"
+dotnet test c-sharp-tests/ --filter "Category=Contract|Category=Integration"
 ```
 
 ### Multiple Categories (AND)
 
 ```bash
 # Run tests that are both Acceptance AND Critical
-dotnet test --filter "Category=Acceptance&Category=Critical"
+dotnet test c-sharp-tests/ --filter "Category=Acceptance&Category=Critical"
 ```
 
 ### Exclude Category
 
 ```bash
 # Run all except golden-master tests
-dotnet test --filter "Category!=GoldenMaster"
+dotnet test c-sharp-tests/ --filter "Category!=GoldenMaster"
 
 # Run all except integration tests
-dotnet test --filter "Category!=Integration"
+dotnet test c-sharp-tests/ --filter "Category!=Integration"
 ```
 
 ### Combine with Name Filter
 
 ```bash
 # Contract tests for the Projects feature
-dotnet test --filter "Category=Contract&FullyQualifiedName~Project"
+dotnet test c-sharp-tests/ --filter "Category=Contract&FullyQualifiedName~Project"
 ```
 
 ## TypeScript Test Organization
@@ -93,13 +95,13 @@ describe('FeatureName', () => {
 
 ```bash
 # By describe block name
-npm test -- --testNamePattern="Unit"
+npm run test:core -- -t "Unit"
 
 # By test name
-npm test -- --testNamePattern="tests isolated behavior"
+npm run test:core -- -t "tests isolated behavior"
 
 # By file pattern
-npm test -- src/**/*.unit.test.ts
+npm run test:core -- src/**/*.unit.test.ts
 ```
 
 ## TDD Phase Categories
@@ -121,13 +123,13 @@ Run in this order:
 
 ```bash
 # 1. Contract tests (the bulk of the suite — verify API/behavior compliance)
-dotnet test --filter "Category=Contract"
+dotnet test c-sharp-tests/ --filter "Category=Contract"
 
 # 2. Integration tests (component interactions)
-dotnet test --filter "Category=Integration"
+dotnet test c-sharp-tests/ --filter "Category=Integration"
 
 # 3. Acceptance tests (feature-level behavior)
-dotnet test --filter "Category=Acceptance"
+dotnet test c-sharp-tests/ --filter "Category=Acceptance"
 
 # 4. All tests
 dotnet test c-sharp-tests/c-sharp-tests.csproj
@@ -139,7 +141,7 @@ Run all tests frequently:
 
 ```bash
 # Quick check during refactor
-dotnet test --filter "Category=Contract|Category=Integration"
+dotnet test c-sharp-tests/ --filter "Category=Contract|Category=Integration"
 
 # Full validation before commit
 dotnet test c-sharp-tests/c-sharp-tests.csproj

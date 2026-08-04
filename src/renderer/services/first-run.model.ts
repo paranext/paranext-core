@@ -1,10 +1,11 @@
-/** The five setup steps, in runtime order. */
-export type FirstRunStep =
-  | 'language'
-  | 'internetSettings'
-  | 'identify'
-  | 'syncConsent'
-  | 'syncProgress';
+/** The navigable wizard steps shown in the step indicator (see `NUMBERED_STEPS`). */
+export type NumberedStep = 'language' | 'internetSettings' | 'identify' | 'syncConsent';
+
+/**
+ * All wizard steps. 'syncProgress' is a post-consent interstitial: it is still the last entry in
+ * `STEP_ORDER`, but is excluded from the numbered-step count shown in the step indicator.
+ */
+export type FirstRunStep = NumberedStep | 'syncProgress';
 
 /** Result of checking the user's Paratext registration. `unknown` = the backend hasn't answered. */
 export type RegistrationValidity = 'valid' | 'invalid' | 'unknown';

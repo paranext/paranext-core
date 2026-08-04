@@ -9,6 +9,8 @@ last_updated: 2026-03-04
 
 # Entry Point Registration Guide
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 This guide documents how to register menu entry points for Platform.Bible extensions. Entry points are how users access features from the UI (menus, toolbar buttons, etc.).
 
 ## When to Use This Guide
@@ -104,6 +106,25 @@ For each entry point, add to `extensions/src/{ext}/contributions/menus.json`:
 - Use `localizeNotes` to document the menu path for translators
 - Order numbers determine sort order within the group
 - Commands must match exactly what's registered in main.ts
+
+### Menu Availability: Menus Stay Always-Available
+
+paranext-core has **no arbitrary predicate/expression gating** of menu visibility — there is no
+`enabledWhen`/`visibleWhen` equivalent, and the contribution schema cannot evaluate conditions
+before a menu item renders. The one supported declarative axis is
+`MenuItemBase.hiddenInterfaceModes` (`lib/platform-bible-utils/src/extension-contributions/menus.model.ts`,
+enforced by `filterItemsForInterfaceMode` in `src/extension-host/services/menu-data.service-host.ts`, used in production by
+`platform-scripture-editor/contributions/menus.json`), which hides an item in named interface
+modes. Beyond that, don't try to add a "should this menu item show?" backend command or
+conditionally suppress the contribution.
+
+Instead, leave menu items **always-available** and enforce permission/state at the point of action:
+the command handler (or its C# backend) checks whether the operation is allowed at submission time
+and surfaces failures via `PlatformError` codes (`NOT_FOUND`, `PERMISSION_DENIED`,
+`FAILED_PRECONDITION`, etc.) rather than by hiding the entry point. Document the PT9
+visibility/enable rules inline in the command/backend so the rationale isn't lost.
+
+See `Architecture-Decisions.md` (ADR on deferred menu availability) for the rationale and history.
 
 ---
 

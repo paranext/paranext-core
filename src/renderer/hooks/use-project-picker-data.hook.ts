@@ -1,12 +1,16 @@
 import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { webViews } from '@renderer/services/papi-frontend.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
-import { type ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
+import {
+  PDP_FACTORY_OBJECT_TYPE,
+  type ProjectMetadataFilterOptions,
+} from '@shared/models/project-data-provider-factory.interface';
+import { type NetworkObjectDetails } from '@shared/models/network-object.model';
 import {
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -16,6 +20,17 @@ import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
+
+/** How long to wait before retrying a failed metadata fetch. */
+const METADATA_FETCH_RETRY_DELAY_MS = 5 * 1000;
+/**
+ * Maximum number of consecutive metadata fetch failures before the hook stops retrying. After this
+ * many failures the picker stays empty until the next external refresh signal (e.g. an extension
+ * reload or a PDPF registration).
+ */
+export const MAX_METADATA_FETCH_RETRIES = 3;
+/** Debounce window that collapses rapid-fire PDPF registrations into a single metadata fan-out. */
+const PDPF_REGISTRATION_DEBOUNCE_MS = 200;
 
 /**
  * `projectInterface` a project must support to belong in the picker: it can be opened in the
@@ -98,6 +113,13 @@ export function useProjectPickerData(): ProjectPickerData {
   const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
   const refreshMetadata = useCallback(() => setMetadataRefreshCounter((n) => n + 1), []);
   const refreshActiveEditor = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
+  // When getMetadataForAllProjects rejects (e.g. a PDPF's getAvailableProjects RPC times out
+  // during startup), isRetryPending becomes true and the effect below schedules a re-fetch after
+  // METADATA_FETCH_RETRY_DELAY_MS — by which time the extension host has typically drained its
+  // queue and responds quickly. fetchRetryCountRef caps consecutive retries so a permanently
+  // unavailable host does not loop forever.
+  const [isRetryPending, setIsRetryPending] = useState(false);
+  const fetchRetryCountRef = useRef(0);
 
   const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
   useEvent(onDidOpenWebView, refreshActiveEditor);
@@ -116,6 +138,43 @@ export function useProjectPickerData(): ProjectPickerData {
   // three sections refetch.
   const onDidChangeProjects = useMemo(() => getNetworkEvent('platform.onDidChangeProjects'), []);
   useEvent(onDidChangeProjects, refreshMetadata);
+  // Heal the project list when a PDP factory registers after the startup grace window expires.
+  // internalGetMetadataWithRetries only retries within 30 s of process start; if the
+  // USJ-providing layering PDPF (Scripture Extender) arrives after that window AND neither
+  // onDidReloadExtensions nor onDidChangeProjects fires, the picker stays empty until the user
+  // triggers an unrelated refresh. Subscribing here ensures a late-arriving PDPF always heals
+  // the list independent of the 30-second bound.
+  const onDidCreateNetworkObject = useMemo(
+    () => getNetworkEvent('object:onDidCreateNetworkObject'),
+    [],
+  );
+  // Debounce to collapse N rapid-fire PDPF registrations (e.g. after extension reload) into a
+  // single getMetadataForAllProjects fan-out. Without debouncing, each registration arrives as a
+  // separate WebSocket message that React 18 cannot batch, producing N wasted fan-outs.
+  const pdpfRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onPdpFactoryRegistered = useCallback(
+    ({ objectType }: NetworkObjectDetails) => {
+      if (objectType !== PDP_FACTORY_OBJECT_TYPE) return;
+      clearTimeout(pdpfRefreshTimerRef.current);
+      pdpfRefreshTimerRef.current = setTimeout(refreshMetadata, PDPF_REGISTRATION_DEBOUNCE_MS);
+    },
+    [refreshMetadata],
+  );
+  useEvent(onDidCreateNetworkObject, onPdpFactoryRegistered);
+  // Cancel any pending debounced refresh on unmount to prevent state updates after teardown.
+  useEffect(() => () => clearTimeout(pdpfRefreshTimerRef.current), []);
+  // After a failed metadata fetch, wait METADATA_FETCH_RETRY_DELAY_MS before trying again.
+  // The timer is cancelled if the hook unmounts before it fires, preventing state updates on an
+  // unmounted component and avoiding spurious fan-outs when the user closes the picker quickly.
+  useEffect(() => {
+    if (!isRetryPending) return undefined;
+    const timeout = setTimeout(() => {
+      fetchRetryCountRef.current += 1;
+      setIsRetryPending(false);
+      refreshMetadata();
+    }, METADATA_FETCH_RETRY_DELAY_MS);
+    return () => clearTimeout(timeout);
+  }, [isRetryPending, refreshMetadata]);
 
   // Recent project IDs from the service — reactive, updates when user opens projects
   const [rawRecentIds, , isRecentIdsLoading] = useData(
@@ -144,11 +203,39 @@ export function useProjectPickerData(): ProjectPickerData {
       counter: metadataRefreshCounter,
       promise: projectLookupService.getMetadataForAllProjects(PICKER_METADATA_FILTER),
     };
-    // Invalidate this generation if its fetch rejects, but only if it's still the current entry so
-    // a newer generation isn't clobbered.
-    entry.promise.catch(() => {
-      if (metadataFetchRef.current === entry) metadataFetchRef.current = undefined;
-    });
+    // Attach success and failure handlers as the two arguments of .then() rather than as a
+    // .then().catch() chain. In the chained form, the .catch() sees both fetch rejections AND
+    // exceptions thrown by the success handler — silently mis-routing a future handler bug as a
+    // fetch failure. The two-argument form keeps the handlers independent: an exception in
+    // onFulfilled does not reach onRejected. The trailing .catch(() => undefined) satisfies the
+    // ESLint promise/catch-or-return rule (the plugin does not recognise the two-argument form
+    // as sufficient) and catches any exception from either handler; neither handler can throw in
+    // practice (ref reads + setState), so this is purely a safety net.
+    entry.promise
+      .then(
+        () => {
+          // Guard: only reset retry state for the current generation so a stale in-flight promise
+          // that resolves late cannot corrupt the retry budget or spuriously cancel the timer of
+          // the generation currently in the cache.
+          if (metadataFetchRef.current === entry) {
+            fetchRetryCountRef.current = 0;
+            // Cancels any pending retry timer: setIsRetryPending(false) triggers the useEffect
+            // cleanup (clearTimeout) so the timer does not fire a redundant fan-out after healing.
+            setIsRetryPending(false);
+          }
+          return undefined;
+        },
+        () => {
+          if (metadataFetchRef.current === entry) {
+            metadataFetchRef.current = undefined;
+            if (fetchRetryCountRef.current < MAX_METADATA_FETCH_RETRIES) {
+              setIsRetryPending(true);
+            }
+          }
+          return undefined;
+        },
+      )
+      .catch(() => undefined);
     metadataFetchRef.current = entry;
     return entry.promise;
   }, [metadataRefreshCounter]);

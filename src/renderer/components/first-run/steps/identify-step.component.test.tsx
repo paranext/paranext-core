@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
+import { ChangeEvent, ReactNode } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
 import {
@@ -35,6 +36,55 @@ vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
 }));
+vi.mock('platform-bible-react', () => ({
+  Alert: ({ children, variant }: { children: ReactNode; variant?: string }) => (
+    <div role="alert" data-variant={variant}>
+      {children}
+    </div>
+  ),
+  AlertTitle: ({ children }: { children: ReactNode }) => <strong>{children}</strong>,
+  AlertDescription: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+  Button: ({
+    children,
+    onClick,
+    disabled,
+  }: {
+    children: ReactNode;
+    onClick?: () => void;
+    disabled?: boolean;
+  }) => (
+    <button type="button" onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
+  Input: ({
+    id,
+    value,
+    onChange,
+    'aria-invalid': ariaInvalid,
+    'aria-describedby': ariaDescribedBy,
+  }: {
+    [key: string]: unknown;
+    id?: string;
+    value?: string;
+    onChange?: (e: ChangeEvent<HTMLInputElement>) => void;
+    'aria-invalid'?: boolean | 'false' | 'true' | 'grammar' | 'spelling';
+    'aria-describedby'?: string;
+  }) => (
+    <input
+      id={id}
+      value={value}
+      onChange={onChange}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+    />
+  ),
+  Spinner: () => <span data-testid="spinner" />,
+}));
+vi.mock('lucide-react', () => ({
+  CircleCheck: () => <span data-testid="circle-check-icon" />,
+  AlertCircle: () => <span data-testid="alert-circle-icon" />,
+}));
 
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
@@ -42,15 +92,20 @@ const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 
 beforeEach(() => {
-  vi.useFakeTimers();
   mockSendCommand.mockReset();
   mockIsDemoMode.mockReturnValue(false);
+  vi.useFakeTimers();
 });
 
 afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
 });
+
+/** Creates a fresh userEvent instance after fake timers are installed. */
+function setupUser() {
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync });
+}
 
 describe('IdentifyStep', () => {
   const onNext = vi.fn();
@@ -62,7 +117,7 @@ describe('IdentifyStep', () => {
   });
 
   it('Save button is disabled until both name and code fields are non-empty', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = setupUser();
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     expect(screen.getByRole('button', { name: /save and restart/i })).toBeDisabled();
@@ -77,8 +132,9 @@ describe('IdentifyStep', () => {
   });
 
   it('submit calls validateParatextRegistrationData with the entered name and code', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -94,8 +150,9 @@ describe('IdentifyStep', () => {
   });
 
   it('shows inline error without advancing when validation fails', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(false);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -108,11 +165,12 @@ describe('IdentifyStep', () => {
   });
 
   it('replaces form with restart messaging after validation success and save', async () => {
+    const user = setupUser();
     mockSendCommand
       .mockResolvedValueOnce(true) // validateParatextRegistrationData
       .mockResolvedValueOnce(undefined) // setParatextRegistrationData
       .mockReturnValueOnce(new Promise(() => {})); // platform.restart — never settles
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -134,11 +192,12 @@ describe('IdentifyStep', () => {
   });
 
   it('calls onRestartAfterSave instead of platform.restart when provided', async () => {
+    const user = setupUser();
     mockSendCommand
       .mockResolvedValueOnce(true) // validateParatextRegistrationData
       .mockResolvedValueOnce(undefined); // setParatextRegistrationData
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(
       <IdentifyStep
         onNext={onNext}
@@ -160,6 +219,37 @@ describe('IdentifyStep', () => {
     expect(mockSendCommand).not.toHaveBeenCalledWith('platform.restart');
   });
 
+  it('clears the spinner overlay when onRestartAfterSave resolves', async () => {
+    const user = setupUser();
+    mockSendCommand
+      .mockResolvedValueOnce(true) // validateParatextRegistrationData
+      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
+    const onRestartAfterSave = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        onRestartAfterSave={onRestartAfterSave}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    // Spinner overlay must clear once onRestartAfterSave resolves
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/restarting/i)).not.toBeInTheDocument();
+  });
+
   it('calls setCanProceed(undefined) on mount to suppress the shell Next button entirely', () => {
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     expect(setCanProceed).toHaveBeenCalledWith(undefined);
@@ -178,8 +268,9 @@ describe('IdentifyStep', () => {
   });
 
   it('shows valid registration alert when backend confirms the name+code', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -190,7 +281,7 @@ describe('IdentifyStep', () => {
   });
 
   it('auto-inserts a dash after every 6th alphanumeric character typed', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = setupUser();
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     const codeInput = screen.getByLabelText(/registration code/i);
@@ -199,7 +290,7 @@ describe('IdentifyStep', () => {
   });
 
   it('removes the dash and the preceding character when backspacing over an auto-inserted dash', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = setupUser();
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     const codeInput = screen.getByLabelText(/registration code/i);
@@ -210,7 +301,7 @@ describe('IdentifyStep', () => {
   });
 
   it('shows format warning and sets aria-invalid after debounce when code has wrong format', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const user = setupUser();
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration code/i), 'ABC');
@@ -225,8 +316,9 @@ describe('IdentifyStep', () => {
   });
 
   it('shows error and keeps Save disabled when validation request throws', async () => {
+    const user = setupUser();
     mockSendCommand.mockRejectedValueOnce(new Error('Network error'));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -238,8 +330,9 @@ describe('IdentifyStep', () => {
   });
 
   it('clears validation error immediately when user types again', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(false);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -253,8 +346,9 @@ describe('IdentifyStep', () => {
   });
 
   it('validates with the correct name when code is entered before name', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
@@ -270,8 +364,9 @@ describe('IdentifyStep', () => {
   });
 
   it('re-disables Save immediately when a valid code is edited (synchronous state reset)', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(true);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -286,8 +381,9 @@ describe('IdentifyStep', () => {
   });
 
   it('shows error and re-enables Save when setParatextRegistrationData fails', async () => {
+    const user = setupUser();
     mockSendCommand.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('Server error'));
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
     await user.type(screen.getByLabelText(/registration name/i), 'Test User');
@@ -309,7 +405,7 @@ describe('IdentifyStep', () => {
     beforeEach(() => mockIsDemoMode.mockReturnValue(true));
 
     it('does not call validateParatextRegistrationData in demo mode', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = setupUser();
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
@@ -323,7 +419,7 @@ describe('IdentifyStep', () => {
     });
 
     it('enables Save and restart when name is non-empty (no code validation needed)', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = setupUser();
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
@@ -334,7 +430,7 @@ describe('IdentifyStep', () => {
     });
 
     it('calls onNext (not platform.restart) when Save and restart is clicked', async () => {
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const user = setupUser();
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
       await user.type(screen.getByLabelText(/registration name/i), 'Demo User');
