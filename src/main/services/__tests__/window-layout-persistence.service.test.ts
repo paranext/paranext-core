@@ -493,6 +493,203 @@ describe('window layout persistence service', () => {
     await expect(service.writeNow([71])).resolves.toBeUndefined();
   });
 
+  test('removing a window cancels its pending debounced write so the flush stays the last write', async () => {
+    vi.useFakeTimers();
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.setMainWindowId(11);
+
+    // The app is going down: the structure is flushed with both windows still tracked…
+    await service.writeNow([11, 12]);
+    expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+
+    // …then a bounds update lands (the window was dragged during the shutdown wait), scheduling a
+    // debounced write, and the window is torn down before the debounce fires.
+    service.updateWindowBounds(12, { bounds: { x: 9, y: 9, width: 900, height: 900 } });
+    service.handleWindowRemoved(12);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // The flush must remain the last write: a debounced write firing after the removal would
+    // rewrite the structure without the removed window, losing its entry.
+    expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'one',
+      'two',
+    ]);
+  });
+
+  test('a layout pushed while a flush waits behind an in-flight write still lands in the flush', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    service.setMainWindowId(11);
+
+    // The first write blocks on the disk, holding the write chain open
+    let releaseFirstWrite: (() => void) | undefined;
+    mocks.writeFile.mockImplementationOnce(
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseFirstWrite = resolve;
+        }),
+    );
+    const firstWrite = service.writeNow([11]);
+    await vi.waitFor(() => expect(mocks.writeFile).toHaveBeenCalledTimes(1));
+
+    // The flush queues behind it, and a last-moment layout push lands before the flush executes
+    const flush = service.writeNow([11]);
+    await registeredHandler('windowLayout:save')(11, layoutWithTab('late'));
+
+    if (!releaseFirstWrite) throw new Error('the first write never reached the disk');
+    releaseFirstWrite();
+    await firstWrite;
+    await flush;
+
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual(['late']);
+    // Defuse the debounced write the late push scheduled so it cannot leak into another test
+    service.handleWindowRemoved(11);
+  });
+
+  test('loading waits for an in-flight write so the plan reflects the newest structure', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    service.setMainWindowId(11);
+    await registeredHandler('windowLayout:save')(11, layoutWithTab('two'));
+
+    // Block the write on the disk, and only surface its content to reads once it completes — the
+    // mocked disk serves the old structure until the write lands, like a real file would
+    let releaseWrite: (() => void) | undefined;
+    let flushedRaw: string | undefined;
+    mocks.writeFile.mockImplementation(
+      async (_filePath: string, content: string) =>
+        new Promise<void>((resolve) => {
+          releaseWrite = () => {
+            flushedRaw = content;
+            resolve();
+          };
+        }),
+    );
+    mocks.readFile.mockImplementation(async (filePath: string) => {
+      if (filePath.endsWith('window-layouts.json'))
+        return flushedRaw ?? JSON.stringify({ windows: [{ layout: layoutWithTab('one') }] });
+      throw enoent(filePath);
+    });
+
+    const write = service.writeNow([11]);
+    await vi.waitFor(() => expect(mocks.writeFile).toHaveBeenCalled());
+    const planPromise = service.loadWindowLayouts();
+    if (!releaseWrite) throw new Error('the write never reached the disk');
+    releaseWrite();
+    await write;
+    const plan = await planPromise;
+
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    expect(firstTabIdOf(plan.entries[0].layout)).toBe('two');
+  });
+
+  test('a pushed layout is reconciled before it is stored, served, or persisted', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackLegacyWindow(61);
+    service.setMainWindowId(61);
+
+    // A duplicated tab, which reconciliation collapses to one occurrence. The renderer reconciles
+    // before pushing, but the handler must not depend on every pusher doing so.
+    const pushed: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [{ id: 'kept', tabType: 'webView' }] },
+          { tabs: [{ id: 'kept', tabType: 'webView' }] },
+        ],
+      },
+    };
+    await registeredHandler('windowLayout:save')(61, pushed);
+
+    const reconciled = reconcileSavedLayout(pushed);
+    await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({
+      kind: 'entry',
+      layout: reconciled,
+    });
+    await service.writeNow([61]);
+    expect(writtenStructure().windows).toEqual([{ layout: reconciled, isMain: true }]);
+  });
+
+  test('assigning to a missing entry index tracks the window as new instead', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    service.setMainWindowId(11);
+
+    service.assignEntryToWindow(99, 5);
+
+    // The window is tracked (it appears in writes) but received no entry layout
+    await expect(registeredHandler('windowLayout:get')(99)).resolves.toEqual({ kind: 'empty' });
+    await service.writeNow([11, 99]);
+    const written = writtenStructure();
+    expect(written.windows).toHaveLength(2);
+    expect(firstTabIdOf(written.windows[0].layout)).toBe('one');
+    expect(written.windows[1].layout).toBeUndefined();
+  });
+
+  test('assigning a window to an already-assigned slot tracks it as a new window', async () => {
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+
+    service.assignEntryToWindow(12, 0);
+
+    // Window 12 must not receive entry 0's layout — that slot belongs to window 11
+    await expect(registeredHandler('windowLayout:get')(12)).resolves.toEqual({ kind: 'empty' });
+    await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
+      kind: 'entry',
+      layout: layoutWithTab('one'),
+    });
+  });
+
+  test('assigning an already-tracked window again leaves its original assignment intact', async () => {
+    const service = await startService();
+    seedFiles({
+      structure: {
+        windows: [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      },
+    });
+    const plan = await service.loadWindowLayouts();
+    if (plan.kind !== 'restore') throw new Error('expected a restore plan');
+    service.assignEntryToWindow(11, 0);
+    service.setMainWindowId(11);
+
+    service.assignEntryToWindow(11, 1);
+
+    await expect(registeredHandler('windowLayout:get')(11)).resolves.toEqual({
+      kind: 'entry',
+      layout: layoutWithTab('one'),
+    });
+    // Entry 'two' survives as a preserved, unassigned slot
+    await service.writeNow([11]);
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'one',
+      'two',
+    ]);
+  });
+
+  test('save requests with a bad id, a bad layout, or an untracked window change nothing', async () => {
+    vi.useFakeTimers();
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackLegacyWindow(61);
+
+    const save = registeredHandler('windowLayout:save');
+    await save('61', layoutWithTab('pushed')); // id must be a number
+    await save(61, 'not-a-layout'); // layout must be object-shaped
+    await save(999, layoutWithTab('pushed')); // window 999 is not tracked
+
+    // None of the bad pushes may schedule a write or alter the tracked window's layout
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mocks.writeFile).not.toHaveBeenCalled();
+    await expect(registeredHandler('windowLayout:get')(61)).resolves.toEqual({ kind: 'legacy' });
+  });
+
   test('a bounds update for one window leaves the other windows’ entries alone', async () => {
     const service = await startService();
     await loadAndAssignAll(
