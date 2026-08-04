@@ -119,3 +119,26 @@ describe('FootnoteEditor note loading', () => {
     expect(editorRefMock.applyUpdate).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('FootnoteEditor inline mode', () => {
+  // CancelAcceptButtons' cancel button carries aria-label from '%cancelButton_tooltip%',
+  // which falls back to the key itself when localizedStrings is empty (verified in
+  // cancel-accept-buttons.component.tsx: aria-label={cancelLocalized}).
+  const cancelButtonSelector = '[aria-label="%cancelButton_tooltip%"]';
+
+  it('renders Save/Cancel buttons in popover mode (default)', () => {
+    const { container } = renderEditor();
+    expect(container.querySelector(cancelButtonSelector)).toBeInTheDocument();
+  });
+
+  it('does not render Save/Cancel buttons in inline mode', () => {
+    const { container } = renderEditor({ inline: true });
+    expect(container.querySelector(cancelButtonSelector)).toBeNull();
+  });
+
+  it('does not width-lock its container in inline mode', () => {
+    const { container } = renderEditor({ inline: true });
+    const root = container.querySelector<HTMLElement>('.footnote-editor');
+    expect(root?.style.width).toBe('');
+  });
+});

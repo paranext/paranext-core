@@ -1,6 +1,7 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { ButtonGroup } from '@/components/shadcn-ui/button-group';
 import { CancelAcceptButtons } from '@/components/basics/cancel-accept-buttons.component';
+import { cn } from '@/utils/shadcn-ui/utils';
 import {
   DeltaOp,
   DeltaOpInsertNoteEmbed,
@@ -71,6 +72,14 @@ export interface FootnoteEditorProps {
    * parent editor, so the client does not need to handle this in the `onChange` callback.
    */
   parentEditorRef?: RefObject<EditorRef | null>;
+  /**
+   * When true, renders for in-place embedding (e.g. inside a footnotes pane row) instead of a
+   * popover: fluid width (no width-lock), no Save/Cancel buttons, and edits apply live to the
+   * parent editor (debounced) rather than on explicit save.
+   *
+   * @default false
+   */
+  inline?: boolean;
 }
 
 /**
@@ -154,6 +163,7 @@ export default function FootnoteEditor({
   defaultMarkerMenuTrigger,
   localizedStrings,
   parentEditorRef,
+  inline = false,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -178,10 +188,12 @@ export default function FootnoteEditor({
   // the natural width. The parent PopoverContent unmounts this component on close, so the effect
   // re-runs fresh on each open.
   useLayoutEffect(() => {
+    // Inline mode lives in a pane and must track its container's width instead of locking.
+    if (inline) return;
     if (!containerRef.current) return;
     const { width } = containerRef.current.getBoundingClientRect();
     if (width > 0) containerRef.current.style.width = `${width}px`;
-  }, []);
+  }, [inline]);
 
   const [callerType, setCallerType] = useState<FootnoteCallerType>('generated');
   const [originalCallerType, setOriginalCallerType] = useState<FootnoteCallerType>('generated');
@@ -517,7 +529,10 @@ export default function FootnoteEditor({
 
   return (
     <>
-      <div ref={containerRef} className="footnote-editor tw:grid tw:gap-[12px]">
+      <div
+        ref={containerRef}
+        className={cn('footnote-editor tw:grid tw:gap-[12px]', inline && 'tw:w-full')}
+      >
         <div className="tw:flex">
           <div className="tw:flex tw:gap-4">
             <FootnoteTypeDropdown
@@ -543,17 +558,19 @@ export default function FootnoteEditor({
                 canRedo={canRedo}
                 localizedStrings={localizedStrings}
               />
-              <CancelAcceptButtons
-                onCancelClick={onClose}
-                onAcceptClick={closeAndSave}
-                canAccept={
-                  !isAtInitialState ||
-                  originalCallerType !== callerType ||
-                  (callerType === 'custom' && customCaller !== originalCustomCaller)
-                }
-                localizedStrings={localizedStrings}
-                acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
-              />
+              {!inline && (
+                <CancelAcceptButtons
+                  onCancelClick={onClose}
+                  onAcceptClick={closeAndSave}
+                  canAccept={
+                    !isAtInitialState ||
+                    originalCallerType !== callerType ||
+                    (callerType === 'custom' && customCaller !== originalCustomCaller)
+                  }
+                  localizedStrings={localizedStrings}
+                  acceptLabel={localizedStrings['%footnoteEditor_saveButton_tooltip%']}
+                />
+              )}
             </ButtonGroup>
           </div>
         </div>
