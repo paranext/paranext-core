@@ -95,20 +95,28 @@ export function reconcileSavedLayout(layout: LayoutInfo): LayoutInfo {
 }
 
 /**
+ * Whether a saved layout holds, anywhere in its root boxes, at least one tab that `isCountedTab`
+ * accepts. The one walker behind both exported has-tabs checks, which differ only in which tabs
+ * count.
+ */
+function layoutHasTabs(layout: LayoutInfo, isCountedTab: (tab: unknown) => boolean): boolean {
+  const nodeHasTabs = (value: unknown): boolean => {
+    const node = asLayoutNode(value);
+    if (!node) return false;
+    if (Array.isArray(node.tabs) && node.tabs.some(isCountedTab)) return true;
+    if (Array.isArray(node.children)) return node.children.some(nodeHasTabs);
+    return false;
+  };
+  return ROOT_BOX_KEYS.some((key) => nodeHasTabs(layout[key]));
+}
+
+/**
  * Whether a saved layout holds at least one tab that could actually render — one with a usable id,
  * reachable through a panel in one of the root boxes. A layout without any is not worth restoring a
  * window for.
  */
 export function savedLayoutHasViewableTabs(layout: LayoutInfo): boolean {
-  const nodeHasViewableTabs = (value: unknown): boolean => {
-    const node = asLayoutNode(value);
-    if (!node) return false;
-    if (Array.isArray(node.tabs) && node.tabs.some((tab) => getTabId(tab) !== undefined))
-      return true;
-    if (Array.isArray(node.children)) return node.children.some(nodeHasViewableTabs);
-    return false;
-  };
-  return ROOT_BOX_KEYS.some((key) => nodeHasViewableTabs(layout[key]));
+  return layoutHasTabs(layout, (tab) => getTabId(tab) !== undefined);
 }
 
 /**
@@ -120,12 +128,5 @@ export function savedLayoutHasViewableTabs(layout: LayoutInfo): boolean {
  * that must not resurrect a window).
  */
 export function savedLayoutHasAnyTabs(layout: LayoutInfo): boolean {
-  const nodeHasAnyTabs = (value: unknown): boolean => {
-    const node = asLayoutNode(value);
-    if (!node) return false;
-    if (Array.isArray(node.tabs) && node.tabs.length > 0) return true;
-    if (Array.isArray(node.children)) return node.children.some(nodeHasAnyTabs);
-    return false;
-  };
-  return ROOT_BOX_KEYS.some((key) => nodeHasAnyTabs(layout[key]));
+  return layoutHasTabs(layout, () => true);
 }

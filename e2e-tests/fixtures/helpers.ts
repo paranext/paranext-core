@@ -48,6 +48,13 @@ export interface ElectronAppContext {
   /** Resolves when the Electron process closes (registered before yielding to tests). */
   appClosed: Promise<void>;
   /**
+   * OS pid of the Electron process, captured at launch time while `electronApp.process()` is
+   * guaranteed to work. Teardown falls back to it when Playwright has already disposed the
+   * ElectronApplication (where `process()` throws) — disposal usually means the process exited, but
+   * that must be verified against the OS rather than assumed.
+   */
+  appPid?: number;
+  /**
    * When true, {@link teardownElectronApp} leaves {@link userDataDir} on disk so a later launch can
    * reuse it. Carried over from {@link LaunchElectronAppOptions.preserveUserDataDir}.
    */
@@ -217,7 +224,13 @@ export async function launchElectronApp(
     });
   });
 
-  return { electronApp, userDataDir, appClosed, preserveUserDataDir: opts.preserveUserDataDir };
+  return {
+    electronApp,
+    userDataDir,
+    appClosed,
+    appPid: electronApp.process().pid,
+    preserveUserDataDir: opts.preserveUserDataDir,
+  };
 }
 
 /**
@@ -225,22 +238,24 @@ export async function launchElectronApp(
  * user-data directory.
  */
 export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void> {
-  const { electronApp, userDataDir, appClosed, preserveUserDataDir } = ctx;
+  const { electronApp, userDataDir, appClosed, appPid, preserveUserDataDir } = ctx;
 
   // Teardown: kill the OS process and wait for Playwright to passively detect
   // the disconnection via the 'close' event registered above.
   // After a graceful quit, Playwright may have fully disposed the ElectronApplication by the time
   // teardown runs — on Windows its stdio closes promptly (no .NET watcher child holds the pipe
-  // write-ends open, unlike Linux), and `process()` on the disposed object throws. Treat that as
-  // "process already exited" and fall through to profile cleanup.
+  // write-ends open, unlike Linux), and `process()` on the disposed object throws. Disposal
+  // usually means the process exited, but not always — so fall back to the pid captured at launch
+  // and ask the OS whether the process is still alive rather than assuming.
   let electronProcess: ReturnType<ElectronApplication['process']> | undefined;
   try {
     electronProcess = electronApp.process();
   } catch {
     electronProcess = undefined;
   }
+  const pid = electronProcess?.pid ?? appPid;
   console.log(
-    `[teardown] Closing Electron app... pid=${electronProcess?.pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
+    `[teardown] Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
 
   // On Linux, processLauncher.js spawns Electron with `detached: true`, making
@@ -252,22 +267,41 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // config has no node environment, so it cannot see the global.
   // eslint-disable-next-line no-undef
   const killGroup = (sig: NodeJS.Signals) => {
-    if (!electronProcess?.pid) return;
+    if (!pid) return;
     try {
-      process.kill(-electronProcess.pid, sig);
+      process.kill(-pid, sig);
     } catch {
       // Process group may already be gone — fall back to single-process kill
       try {
-        electronProcess.kill(sig);
+        process.kill(pid, sig);
       } catch {
         /* already dead */
       }
     }
   };
 
-  // Node.js ChildProcess.exitCode/signalCode are null until the process exits
-  // eslint-disable-next-line no-null/no-null
-  if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
+  /** Whether the Electron OS process is still running, per the best signal available. */
+  const isProcessAlive = (): boolean => {
+    if (electronProcess)
+      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+      // eslint-disable-next-line no-null/no-null
+      return electronProcess.exitCode === null && electronProcess.signalCode === null;
+    if (pid === undefined) return false;
+    // No child-process handle (Playwright disposed it) — probe the OS directly. Signal 0 performs
+    // only an existence/permission check and delivers nothing.
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (isProcessAlive()) {
+    if (!electronProcess)
+      console.log(
+        `[teardown] Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
+      );
     console.log('[teardown] Sending SIGKILL to process group...');
     killGroup('SIGKILL');
     console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
@@ -278,6 +312,8 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
       }),
     ]);
     console.log('[teardown] Done waiting after SIGKILL');
+  } else if (!electronProcess) {
+    console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
   }
 
   // A preserved profile stays on disk so a later launch can relaunch into it (see

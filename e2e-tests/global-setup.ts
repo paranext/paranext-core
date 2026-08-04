@@ -70,8 +70,16 @@ function isDevMainBundleStale(rootDir: string, devMainPath: string): boolean {
   const bundleMtime = fs.statSync(devMainPath).mtimeMs;
   // The bundle's inputs: the main-process entry tree (src/main plus the src/shared and src/node
   // code it imports; src/extension-host and src/renderer run from source/dev-server and cannot go
-  // stale this way) and package.json (dependency changes).
-  const sourceDirs = ['src/main', 'src/shared', 'src/node'];
+  // stale this way), the workspace library the bundle compiles in (platform-bible-utils; the
+  // platform-bible-react import in src/shared is types-only and never reaches the bundle), the
+  // webpack configs that shape the bundle, and package.json (dependency changes).
+  const sourceDirs = [
+    'src/main',
+    'src/shared',
+    'src/node',
+    'lib/platform-bible-utils/src',
+    '.erb/configs',
+  ];
   const newestSource = Math.max(
     ...sourceDirs.map((dir) => newestMtimeMs(path.join(rootDir, dir))),
     fs.statSync(path.join(rootDir, 'package.json')).mtimeMs,
