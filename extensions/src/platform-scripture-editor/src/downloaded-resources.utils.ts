@@ -32,8 +32,10 @@ export type PickerResource = {
 };
 
 /**
- * Enumerate every locally-installed published resource and resolve its display metadata. Filters to
- * `isPublished === true` so the user's own editable scripture projects are excluded.
+ * Enumerate every locally-installed read-only reference resource and resolve its display metadata.
+ * Filters to `isEditable === false` to exclude the user's own editable translation projects while
+ * including both DBL-published resources and locally-installed read-only resources (e.g. VULGP83,
+ * TNN, TND, HBK) that have `isPublished === false` but `isEditable === false`.
  *
  * Note: the renderer uses a similar enumerate-and-resolve pattern in
  * `src/renderer/hooks/use-project-picker-data.hook.ts`. A shared utility isn't possible here
@@ -42,15 +44,19 @@ export type PickerResource = {
 export async function fetchDownloadedResources(): Promise<DownloadedResource[]> {
   try {
     // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
-    // commentary/notes resources that do not implement USJ (e.g. TNN, HBK) are included.
-    // Using `platform.base` still guarantees the C# Paratext factory has registered before
-    // the call resolves (the retry mechanism waits for non-empty results — a plain unfiltered
-    // call could settle on TypeScript-only PDPFs before the C# factory appears). The
-    // subsequent `isPublished` check excludes the user's own editable projects.
+    // commentary/notes resources that do not implement USJ are included. Using `platform.base`
+    // guarantees the C# Paratext factory has registered before the call resolves (the retry
+    // mechanism waits for non-empty results — a plain unfiltered call could settle on
+    // TypeScript-only PDPFs before the C# factory appears).
+    // Then filter to `isEditable === false`: DBL resources always have this flag; locally-installed
+    // read-only resources (VULGP83, TNN, TND, HBK) have `Editable=F` in their Settings.xml and
+    // therefore also get `isEditable: false`, even though `isPublished` is `false` for them.
+    // The user's own editable translation projects have `isEditable: true` and are excluded.
+    // Per the project-metadata model: absence means editable, so the test MUST be `=== false`.
     const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platform.base'],
     });
-    const metadata = allMetadata.filter((m) => m.isPublished === true);
+    const metadata = allMetadata.filter((m) => m.isEditable === false);
     const results = await Promise.allSettled(
       metadata.map(async (data) => {
         const pdp = await papi.projectDataProviders.get('platform.base', data.id);
