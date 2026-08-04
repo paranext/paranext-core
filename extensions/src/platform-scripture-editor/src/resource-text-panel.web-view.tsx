@@ -524,11 +524,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Resource picker dialog
 
-  // Pass both DblResourceReference IDs and ProjectReference IDs to the Resource Picker so that
-  // locally-installed non-DBL resources (added as ProjectReferences via selectTextConnection) are
-  // shown in the INCLUDED section rather than re-appearing in INSTALLED on the next picker open.
+  // Build the set of resource IDs that are already in the user's text collection. Resources with
+  // source 'downloaded' are locally installed but NOT in text connections — they should appear in
+  // INSTALLED in the picker (not INCLUDED). Only text-connection resources (source 'admin' or
+  // 'user') are INCLUDED. ProjectReference IDs are included so that locally-installed non-DBL
+  // resources added via selectTextConnection appear in INCLUDED rather than re-appearing in
+  // INSTALLED on the next picker open.
   const currentFilteredDblIds = useMemo(() => {
     return filteredResources.flatMap((r) => {
+      if (r.source === 'downloaded') return [];
       const { reference } = r;
       if (isDblResourceReference(reference)) return [reference.id];
       if (isProjectReference(reference)) return [reference.id];
