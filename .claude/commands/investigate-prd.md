@@ -77,12 +77,19 @@ unreachable, **stop and warn the user before investigating**:
 > coverage shrinks — I'll fall back to the bundled inventory and flag the gaps. Continue
 > anyway, or fix and rerun?
 
-**Preflight — standards freshness.** The standards and skills this investigation leans on carry
-`Verified against paranext-core origin/main` stamps. Check the newest one
-(`grep -rh "Verified against paranext-core" .context/standards/ .claude/skills/ | sort | tail -1`).
+**Preflight — standards freshness.** The stamped docs this investigation leans on carry
+`Verified against paranext-core origin/main` stamps. Find the **oldest** stamp date (the weakest
+link is what governs risk):
+
+```bash
+grep -rh "Verified against paranext-core" .context/standards/ .claude/skills/ .claude/rules/ .claude/agents/ .claude/commands/ CLAUDE.md 2>/dev/null | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}' | sort | head -1
+```
+
 If it is older than ~30 days, tell the user in one line — "standards last verified {date};
-consider running `/verify-standards` first" — and proceed. Don't run the verification yourself;
-it's a separate, deliberate pass ([`/verify-standards`](verify-standards.md)).
+consider running `/verify-standards` first" — and proceed. If the grep returns **nothing**, that
+is a warning, not a pass: say "no verification stamps found; treat the standards as unverified
+and consider running `/verify-standards` first" — and proceed. Don't run the verification
+yourself; it's a separate, deliberate pass ([`/verify-standards`](verify-standards.md)).
 
 An unreachable **PT10** repo degrades `pt10-reuse-scout` (affects every PRD — it always runs);
 an unreachable **`{ROOT}/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD ports
