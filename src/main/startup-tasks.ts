@@ -16,6 +16,7 @@ import {
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import type { SettingTypes } from 'papi-shared-types';
 import { getErrorMessage, wait } from 'platform-bible-utils';
+import { getRecentlyOpenedProjectIds } from '@shared/utils/recently-opened-project.util';
 
 /**
  * How long (ms) to keep retrying `runScheduledSessionSync` while it's still unregistered before
@@ -106,10 +107,14 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * Runs initialization tasks (currently: triggering an initial project sync) shortly after the app
  * finishes starting up.
  *
- * In Simple mode: requests a sync of all locally-known shared projects so the user sees the latest
- * content as soon as they open the app. All errors are swallowed — the S/R extension may not be
- * installed (e.g. Platform.Bible), the command may not yet be registered, or the sync may fail.
- * Startup must never be blocked or visibly affected by this.
+ * In Simple mode: requests a sync scoped to the project(s) in `recentlyOpenedProjects` — the same
+ * signal the default-active-project picker uses — so a returning user's active project is synced
+ * without paying the cost of checking every locally-known shared project. Falls back to a sync of
+ * everything (today's original behavior) when that list is empty (zero-state: no project opened in
+ * Simple mode yet), so a brand-new user can still discover a project they already have via Paratext
+ * 9. All errors are swallowed — the S/R extension may not be installed (e.g. Platform.Bible), the
+ * command may not yet be registered, or the sync may fail. Startup must never be blocked or visibly
+ * affected by this.
  *
  * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" via the S/R
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
@@ -191,14 +196,26 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
-  // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
-  // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
-  // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
-  // times out. `undefined` as the single arg serializes as `null` in the JSON-RPC params array
-  // — matching the "sync all" sentinel on the C# side.
-  logger.debug('Startup sync starting');
+  // Simple mode: scope the sync to the project(s) the user has actually opened before (steady
+  // state) rather than syncing every locally-known shared project. `recentlyOpenedProjects` is the
+  // same durable, race-safe signal the Simple-mode default-active-project picker already uses to
+  // decide which project to open, so this stays consistent with what actually gets displayed.
+  // Passing the whole (small, capped) list rather than just the top entry means a stale/removed
+  // entry there doesn't block scoping this run — the C# side silently ignores ids that no longer
+  // resolve to a real shared project. An empty list (zero-state: no project has ever been opened
+  // in Simple mode yet) falls back to `undefined` — "sync all" per the C# `String[]? projectIds`
+  // contract — so a brand-new user can still discover a project they already have via Paratext 9.
+  // The C# S/R command registers asynchronously during startup; `sendCommand` will wait (with
+  // retry on missing handler) until it's available or times out.
+  const recentProjectIds = await getRecentlyOpenedProjectIds();
+  const syncProjectIds = recentProjectIds.length > 0 ? recentProjectIds : undefined;
+  logger.debug(
+    syncProjectIds
+      ? `Startup sync starting (scoped to ${syncProjectIds.join(', ')})`
+      : 'Startup sync starting (broad: zero-state or unresolved)',
+  );
   try {
-    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
+    await commandService.sendCommand('paratextBibleSendReceive.syncProjects', syncProjectIds);
     logger.debug('Startup sync complete');
   } catch (e) {
     logger.warn(

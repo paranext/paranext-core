@@ -10,6 +10,7 @@ import { settingsService } from '@shared/services/settings.service';
 import * as commandService from '@shared/services/command.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
+import { getRecentlyOpenedProjectIds } from '@shared/utils/recently-opened-project.util';
 import { performStartupTasks, STARTUP_SYNC_RETRY_BUDGET_MS } from './startup-tasks';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -28,11 +29,16 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('@shared/utils/recently-opened-project.util', () => ({
+  getRecentlyOpenedProjectIds: vi.fn(),
+}));
+
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockLoggerDebug = vi.mocked(logger.debug);
 const mockLoggerWarn = vi.mocked(logger.warn);
+const mockGetRecentlyOpenedProjectIds = vi.mocked(getRecentlyOpenedProjectIds);
 
 /**
  * Builds a rejection shaped like what `networkService`'s request plumbing actually throws for a
@@ -67,6 +73,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockSendCommand.mockResolvedValue(undefined);
   mockRequestNoRetry.mockResolvedValue(undefined);
+  // Zero-state default (no recently-opened project) so every existing test's "called with
+  // undefined" expectation stays valid unless a test explicitly overrides this to exercise the
+  // scoped (steady-state) path.
+  mockGetRecentlyOpenedProjectIds.mockResolvedValue([]);
 });
 
 describe('performStartupTasks', () => {
@@ -80,13 +90,25 @@ describe('performStartupTasks', () => {
     expect(mockSendCommand).not.toHaveBeenCalled();
   });
 
-  it('fires syncProjects with no project IDs when interface mode is simple', async () => {
+  it('fires syncProjects with no project IDs when interface mode is simple and no project has been opened yet (zero-state)', async () => {
     stubSettings({ mode: 'simple', firstRunComplete: true });
+    mockGetRecentlyOpenedProjectIds.mockResolvedValue([]);
     await performStartupTasks();
     expect(mockSendCommand).toHaveBeenCalledWith(
       'paratextBibleSendReceive.syncProjects',
       undefined,
     );
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+  });
+
+  it('scopes the sync to the recently-opened project ids when interface mode is simple and at least one exists (steady-state)', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true });
+    mockGetRecentlyOpenedProjectIds.mockResolvedValue(['project-a', 'project-b']);
+    await performStartupTasks();
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'project-a',
+      'project-b',
+    ]);
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
   });
 

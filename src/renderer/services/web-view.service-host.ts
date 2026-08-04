@@ -48,7 +48,6 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { registerCommand } from '@shared/services/command.service';
-import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-store';
@@ -75,6 +74,7 @@ import {
   OpenWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
+import { getRecentlyOpenedProjectIds } from '@shared/utils/recently-opened-project.util';
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
@@ -1153,16 +1153,8 @@ function waitForNextPaint(): Promise<void> {
 }
 
 async function getMostRecentProjectId(): Promise<string | undefined> {
-  try {
-    const recentsProvider = await dataProviderService.get(
-      'platformScripture.recentlyOpenedProjects',
-    );
-    if (!recentsProvider) return undefined;
-    const recents = await recentsProvider.getRecentProjects(undefined);
-    return Array.isArray(recents) ? recents[0] : undefined;
-  } catch {
-    return undefined;
-  }
+  const recents = await getRecentlyOpenedProjectIds();
+  return recents[0];
 }
 
 // #endregion Dock layouts
