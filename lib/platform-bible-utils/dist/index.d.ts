@@ -1020,6 +1020,26 @@ export declare function wait(ms: number): Promise<void>;
  */
 export declare function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number): Promise<Awaited<TResult> | undefined>;
 /**
+ * Repeatedly runs an async attempt until its result is accepted or the attempt budget is exhausted,
+ * waiting a fixed delay between tries (never after the last). Always resolves to the last result —
+ * it never throws on exhaustion, so the caller decides what a give-up result means.
+ *
+ * This is the fixed-attempts + fixed-delay retry shape shared by flaky-startup probes (e.g.
+ * `resolveRegistrationValidity`, and the missing-handler retry in `requestWithRetry`). For
+ * deadline- or abort-driven retries with variable backoff (e.g. `requestSessionSyncWithBootRetry`
+ * in startup-tasks), use a bespoke loop instead — this helper deliberately does not cover those.
+ *
+ * @param attempt Runs one try; receives the 1-based attempt number and resolves to a result.
+ * @param isDone Returns `true` when `attempt`'s result is acceptable and retrying should stop.
+ * @param options.maxAttempts Total tries; clamped to at least 1. Defaults to 3.
+ * @param options.delayMs Delay between tries. Defaults to 0.
+ * @returns The first accepted result, or the last attempt's result if none qualified.
+ */
+export declare function retryUntil<TResult>(attempt: (attemptNumber: number) => Promise<TResult>, isDone: (result: TResult) => boolean, options?: {
+	maxAttempts?: number;
+	delayMs?: number;
+}): Promise<TResult>;
+/**
  * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
  * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
  * are skipped to avoid including functions like `__defineGetter__`, `__defineSetter__`, `toString`,

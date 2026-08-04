@@ -1026,32 +1026,6 @@ declare module 'shared/services/logger.service' {
   };
   export default logger;
 }
-declare module 'shared/utils/retry.util' {
-  /**
-   * Repeatedly runs an async attempt until its result is accepted or the attempt budget is exhausted,
-   * waiting a fixed delay between tries (never after the last). Always resolves to the last result —
-   * it never throws on exhaustion, so the caller decides what a give-up result means.
-   *
-   * This is the fixed-attempts + fixed-delay retry shape shared by flaky-startup probes (e.g.
-   * `resolveRegistrationValidity`, and the missing-handler retry in `requestWithRetry`). For
-   * deadline- or abort-driven retries with variable backoff (e.g. `requestSessionSyncWithBootRetry`
-   * in startup-tasks), use a bespoke loop instead — this helper deliberately does not cover those.
-   *
-   * @param attempt Runs one try; receives the 1-based attempt number and resolves to a result.
-   * @param isDone Returns `true` when `attempt`'s result is acceptable and retrying should stop.
-   * @param options.maxAttempts Total tries; clamped to at least 1. Defaults to 3.
-   * @param options.delayMs Delay between tries. Defaults to 0.
-   * @returns The first accepted result, or the last attempt's result if none qualified.
-   */
-  export function retryUntil<TResult>(
-    attempt: (attemptNumber: number) => Promise<TResult>,
-    isDone: (result: TResult) => boolean,
-    options?: {
-      maxAttempts?: number;
-      delayMs?: number;
-    },
-  ): Promise<TResult>;
-}
 declare module 'shared/data/rpc.model' {
   import { SerializedRequestType } from 'shared/utils/util';
   import {

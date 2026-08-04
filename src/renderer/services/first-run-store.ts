@@ -152,9 +152,12 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
 async function resolveInternal(generation: number): Promise<void> {
   // True once a user action superseded this run mid-flight (e.g. "continue without setup" from the
   // loading watchdog while a slow probe was still awaiting). Gates both the in-memory status update
-  // AND the durable writes below, so a late-settling run can neither clobber the user's status nor
-  // leave persisted state (WIZARD_ACTIVE_KEY, the interface-language seed, firstRunComplete) that
-  // would resume the wizard at the wrong step on the next launch.
+  // AND the durable wizard-resume writes below (WIZARD_ACTIVE_KEY, firstRunComplete), so a
+  // late-settling run can neither clobber the user's status nor persist state that would resume the
+  // wizard at the wrong step on the next launch. Note the interface-language seed is only guarded at
+  // its boundaries: a bail landing inside seedInterfaceLanguageFromOsLocale's own awaits can still
+  // write platform.interfaceLanguage — that's harmless (it just sets the OS-matched UI language and
+  // never resumes the wizard), so the guard checks before and after the seed rather than atomically.
   const isSuperseded = (): boolean => generation !== resolutionGeneration;
   const applyStatus = (next: FirstRunStatus): void => {
     if (!isSuperseded()) setStatus(next);
