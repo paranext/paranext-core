@@ -26,10 +26,17 @@ frozen records or pinned-snapshot corpora with their own provenance rules.
 ## Exemptions
 
 - **Frozen records**: any in-scope file whose first 30 lines contain `Status: frozen record` or a
-  provenance fence (a blockquote naming itself a historical/point-in-time record) is skipped
-  entirely; the report lists it as skipped.
-- **Aspirational claims**: a line ending in `<!-- aspirational: not yet in repo -->` (or prose
-  saying so) is exempt from identifier/path resolution — it documents intent, not current code.
+  provenance fence — a blockquote starting `**Frozen record**` or naming itself a
+  historical/point-in-time record — is skipped entirely; the report lists each skip with the
+  marker text it matched, so an accidental freeze is visible.
+- **Aspirational claims**: a line **ending in** `<!-- aspirational: not yet in repo -->` is exempt
+  from that line's checks — it documents intent, not current code. The marker is the only
+  recognized form; prose saying "aspirational" does not exempt anything (a mechanical gate can't
+  honor prose).
+- **Fenced code blocks**: localization-key and path checks are suppressed inside ``` fences
+  (example keys and illustrative paths are legitimate there), but identifier, npm-script, dotnet
+  category, and playwright project checks stay live — a fenced command or code sample presents
+  itself as real and readers execute it, so a nonexistent name in one is a finding, not noise.
 
 ## Step 1: Refresh reference state
 
@@ -38,13 +45,17 @@ git fetch origin main --quiet
 git -C "$(git rev-parse --show-toplevel)/../Paratext" rev-parse --short HEAD 2>/dev/null || echo "PT9 checkout absent — PT9-path checks will be skipped"
 ```
 
-All existence checks below run against `origin/main` (not the working tree), so results are
-meaningful on any branch.
+The sweep reads the **doc text from the working tree** (so a PR branch's added or edited content
+is what gets gated — run it from the branch you're gating) while all **existence checks** (paths,
+scripts, identifiers, keys) run against `origin/main`, so "does this exist" answers don't depend
+on your branch state.
 
 ## Step 2: Run the mechanical sweep
 
 Run this from the repo root. It is self-contained and read-only; it prints one `findings:` line
-per candidate issue, grouped by file at the end.
+per candidate issue, grouped by file at the end. **If the sweep prints `FATAL`, stop and report
+the failure to the caller — do not triage, do not tick checklist boxes; a failed run verifies
+nothing.**
 
 ```bash
 python3 - <<'EOF'
@@ -55,8 +66,13 @@ PT9 = os.path.normpath(os.path.join(REPO, "..", "Paratext"))
 SCOPE = [".context/standards", ".claude/rules", ".claude/skills", ".claude/agents", ".claude/commands", "CLAUDE.md"]
 
 def sh(args): return subprocess.run(args, capture_output=True, text=True).stdout
+def sh_ck(args):
+    r = subprocess.run(args, capture_output=True, text=True)
+    if r.returncode != 0: raise SystemExit(f"FATAL: {' '.join(args)} failed: {r.stderr.strip()[:200]}")
+    return r.stdout
 
-main_files = set(sh(["git", "-C", REPO, "ls-tree", "-r", "--name-only", "origin/main"]).splitlines())
+main_files = set(sh_ck(["git", "-C", REPO, "ls-tree", "-r", "--name-only", "origin/main"]).splitlines())
+if not main_files: raise SystemExit("FATAL: could not read origin/main - run `git fetch origin main` (check the remote name) and rerun")
 suffix = collections.defaultdict(list)
 for p in main_files: suffix[p.rsplit("/", 1)[-1]].append(p)
 pt9_files = set()
@@ -66,7 +82,7 @@ pt9_suffix = collections.defaultdict(list)
 for p in pt9_files: pt9_suffix[p.rsplit("/", 1)[-1]].append(p)
 
 scripts = set()
-for pkg in ["package.json", "extensions/package.json"] + [p for p in main_files if p.startswith("lib/") and p.endswith("/package.json") and p.count("/") == 2]:
+for pkg in ["package.json", "extensions/package.json"] + [p for p in main_files if p.startswith("lib/") and p.endswith("/package.json") and p.count("/") == 2] + [p for p in main_files if p.startswith("extensions/src/") and p.endswith("/package.json") and p.count("/") == 3]:
     if pkg in main_files:
         try: scripts |= set(json.loads(sh(["git", "-C", REPO, "show", f"origin/main:{pkg}"])).get("scripts", {}).keys())
         except Exception: pass
@@ -88,22 +104,31 @@ RE_LOC = re.compile(r'(%[A-Za-z0-9_.]+%)')
 RE_INFLIGHT = re.compile(r'not yet merged|in[- ]flight|unmerged|awaiting merge|pending merge', re.I)
 RE_PRREF = re.compile(r'(?:\bPR\s*#|pull/|[A-Za-z][A-Za-z0-9-]*#)(\d{2,5})\b')
 RE_DATE = re.compile(r'\b20\d\d-\d\d(?:-\d\d)?\b')
-RE_ASPIRATIONAL = re.compile(r'aspirational', re.I)
-RE_FROZEN = re.compile(r'Status:\s*frozen record|historical record|point-in-time (?:record|plan)', re.I)
+RE_ASPIRATIONAL = re.compile(r'<!--\s*aspirational:[^>]*-->\s*$')
+RE_FROZEN = re.compile(r'^\s*(?:>.*)?Status:\s*frozen record|^\s*>\s*\**(?:Frozen record|.*historical record|.*point-in-time (?:record|plan))', re.I | re.M)
 SKIP_TOKENS = {"TODO", "README", "LICENSE", "ROOT", "ARGUMENTS", "SLUG", "HEAD", "PATH", "URL", "PT9_MAP", "PT9_REFERENCES", "PRD_PATH", "ASPECTS", "PT9_CLAIMS", "DEPTH", "PT_REPOS_ROOT"}
 
-def is_frozen(text): return bool(RE_FROZEN.search("\n".join(text.splitlines()[:30])))
+def frozen_marker(text):
+    m = RE_FROZEN.search("\n".join(text.splitlines()[:30]))
+    return m.group(0).strip()[:60] if m else None
 
 findings, skipped = collections.defaultdict(list), []
-targets = [f for f in main_files if any(f == s or f.startswith(s + "/") for s in SCOPE) and f.endswith(".md")]
+wt_files = sh_ck(["git", "-C", REPO, "ls-files"]).splitlines()
+targets = [f for f in wt_files if any(f == s or f.startswith(s + "/") for s in SCOPE) and f.endswith(".md")]
+if not targets: raise SystemExit(f"FATAL: no in-scope .md files found under {SCOPE}")
+pr_refs = set()
 for rel in sorted(targets):
-    text = sh(["git", "-C", REPO, "show", f"origin/main:{rel}"])
-    if is_frozen(text): skipped.append(rel); continue
+    with open(os.path.join(REPO, rel), encoding="utf-8") as fh: text = fh.read()
+    fm = frozen_marker(text)
+    if fm: skipped.append(f'{rel} - matched "{fm}"'); continue
+    pr_refs |= set(int(n) for n in RE_PRREF.findall(text))
     in_fence = False
     for i, ln in enumerate(text.splitlines(), 1):
-        if ln.strip().startswith("```"): in_fence = not in_fence
+        if ln.strip().startswith("```"):
+            in_fence = not in_fence
+            continue
         if RE_ASPIRATIONAL.search(ln): continue
-        for m in RE_PATHTOK.finditer(ln):
+        for m in RE_PATHTOK.finditer(ln) if not in_fence else []:
             p = m.group(1).lstrip("./")
             if "*" in p or "{" in p or p.startswith("http"): continue
             if "path/to" in p or "hello-world" in p or p.startswith("foo/"): continue
@@ -116,16 +141,17 @@ for rel in sorted(targets):
         for m in RE_NPM.finditer(ln):
             if m.group(1) not in scripts:
                 findings[rel].append(f":{i} [npm] `npm run {m.group(1)}` not in any package.json")
-        for m in RE_LOC.finditer(ln):
+        for m in RE_LOC.finditer(ln) if not in_fence else []:
             if m.group(1) not in loc_keys:
                 findings[rel].append(f":{i} [l10n] key `{m.group(1)}` not in en.json or contributions")
-        if RE_INFLIGHT.search(ln) and not RE_DATE.search(ln):
+        if RE_INFLIGHT.search(ln) and RE_PRREF.search(ln) and not RE_DATE.search(ln):
             findings[rel].append(f":{i} [status] undated in-flight claim: {ln.strip()[:90]}")
         for m in RE_TICK.finditer(ln):
             tok = m.group(1).strip()
             if tok in SKIP_TOKENS or tok.islower() or len(tok) < 4: continue
             if tok.startswith("$") or re.fullmatch(r'[A-Z0-9_]+', tok): continue  # shell/template placeholders
-            if re.match(r'(Foo|Bar|Baz|Old|Other|Some|My|Example|Variant|Root)[A-Z]?', tok.rsplit(".", 1)[-1].rstrip("()")) and tok.rsplit(".", 1)[-1].rstrip("()") not in ("Root",): continue  # example-name convention
+            bare_tok = tok.rsplit(".", 1)[-1].rstrip("()")
+            if bare_tok in {"Old", "Other", "Some", "My", "Example", "Variant", "Root"} or re.fullmatch(r'(Foo|Bar|Baz)[A-Za-z]*', bare_tok): continue  # example-name convention
             if not RE_IDENT.match(tok): continue
             bare = tok.rstrip("()").rsplit(".", 1)[-1]
             if len(bare) < 4 or bare.islower(): continue
@@ -140,8 +166,7 @@ for rel in sorted(targets):
                 findings[rel].append(f":{i} [playwright] project `{m}` not in playwright-cdp.config.ts")
 
 print(f"scanned {len(targets)} files; skipped {len(skipped)} frozen records: {skipped}")
-prs = sorted({m for rel in targets for m in RE_PRREF.findall(sh(['git','-C',REPO,'show',f'origin/main:{rel}'])) if not is_frozen(sh(['git','-C',REPO,'show',f'origin/main:{rel}']))})
-print(f"PR refs to spot-check with gh (state vs claim): {prs}")
+print(f"PR refs to spot-check with gh (state vs claim): {sorted(pr_refs)}")
 for rel in sorted(findings):
     print(f"\n{rel}")
     for f in findings[rel]: print(f"  {f}")
@@ -175,7 +200,8 @@ The sweep favors precision but still produces noise. For each candidate:
 
 ## Completion checklist
 
-- [ ] `git fetch origin main` ran; checks were against `origin/main`, not the working tree
+- [ ] `git fetch origin main` ran; doc text was read from the working tree, existence checks ran
+      against `origin/main`
 - [ ] Sweep script ran to completion; frozen-record skips listed
 - [ ] Every PR reference spot-checked with `gh`
 - [ ] Findings triaged into misleads-agent / wrong-detail / cosmetic with evidence
