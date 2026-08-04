@@ -145,6 +145,8 @@
   "%firstRun_step_identify_registryHelp%": "找不到您的注册码？",
   "%firstRun_step_identify_registryLink%": "访问 Paratext 注册中心",
   "%firstRun_step_identify_validatingCode%": "正在检查您的注册信息…",
+  "%firstRun_step_internetSettings_connecting%": "正在准备…",
+  "%firstRun_step_internetSettings_loadError%": "我们暂时无法完成准备。请稍后重试。",
   "%firstRun_step_syncConsent_body%": "在协作项目时，同步会更新您的本地副本，并与他人共享您的更改。",
   "%firstRun_step_syncConsent_heading%": "同步您的项目",
   "%firstRun_step_syncProgress_body%": "正在设置您的项目，这可能需要几分钟。",
