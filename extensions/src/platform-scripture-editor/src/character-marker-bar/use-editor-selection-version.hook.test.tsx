@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
 
 function Probe() {
@@ -22,6 +22,12 @@ describe('useEditorSelectionVersion', () => {
   beforeEach(() => {
     addEventListenerSpy = vi.spyOn(document, 'addEventListener');
     removeEventListenerSpy = vi.spyOn(document, 'removeEventListener');
+  });
+
+  // `extensions/vitest.config.ts` sets no `restoreMocks`, so without this the spies stack up across
+  // tests in this file and their recorded `mock.calls` accumulate from earlier renders.
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('starts at 0', () => {
