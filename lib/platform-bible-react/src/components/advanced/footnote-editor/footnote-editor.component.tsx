@@ -163,6 +163,15 @@ export default function FootnoteEditor({
   const containerRef = useRef<HTMLDivElement>(null);
   /* eslint-enable no-null/no-null */
 
+  // The note key can be re-minted by the parent editor whenever the embed is replaced
+  // (live-apply does this constantly in inline mode). Only a new `noteOps` array means
+  // "load a different note"; the key alone must never trigger a reload, so track it in
+  // a ref instead of using it as a load-effect dependency.
+  const noteKeyRef = useRef(noteKey);
+  useEffect(() => {
+    noteKeyRef.current = noteKey;
+  }, [noteKey]);
+
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
   // useLayoutEffect fires after DOM layout but before paint, so getBoundingClientRect() returns
@@ -264,7 +273,7 @@ export default function FootnoteEditor({
         clearTimeout(timeout);
       }
     };
-  }, [noteOps, noteKey]);
+  }, [noteOps]);
 
   /**
    * Gets the current note op from the editor, applies the given caller, calls onChange, and
@@ -290,12 +299,12 @@ export default function FootnoteEditor({
           currentNoteOp.insert.note.caller = caller;
         }
         onChange?.([currentNoteOp]);
-        if (applyToParent && parentEditorRef && noteKey) {
-          parentEditorRef.current?.replaceEmbedUpdate(noteKey, [currentNoteOp]);
+        if (applyToParent && parentEditorRef && noteKeyRef.current) {
+          parentEditorRef.current?.replaceEmbedUpdate(noteKeyRef.current, [currentNoteOp]);
         }
       }
     },
-    [noteKey, onChange, parentEditorRef],
+    [onChange, parentEditorRef],
   );
 
   const closeAndSave = useCallback(() => {
