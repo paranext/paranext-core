@@ -1256,4 +1256,106 @@ describe('useEditorPdpSync', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
     expect(mockLoggerDebug).toHaveBeenCalled();
   });
+
+  // The dedup must be keyed on the DISTINCT DIFFERENCE, not on a single-slot memory of the last
+  // echo. Two distinct stable lossy differences that alternate (A, B, A) — e.g. two different
+  // never-converging spots in the same chapter, revisited as the user moves around — must warn
+  // exactly ONCE EACH (two warnings total): the re-visited A was already warned. A single-slot
+  // dedup keyed on "the last echo" re-warns A the second time (its slot now remembers B), spamming
+  // the log with a warning that is not new information.
+  it('warns once per DISTINCT lossy difference across an A→B→A oscillation (no re-warn on revisit)', () => {
+    // The editor is quiescent (WE are the writer); its content never changes across deliveries.
+    const editorContent: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'alpha text', 'beta text'],
+        },
+      ],
+    };
+    // Difference A: the PDP wraps "alpha" in a \nd char span (stable, distinct from B).
+    const echoA: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            { type: 'char', marker: 'nd', content: ['alpha'] },
+            ' text',
+            'beta text',
+          ],
+        },
+      ],
+    };
+    // Difference B: a genuinely DIFFERENT lossy shape — the PDP wraps "beta" instead.
+    const echoB: Usj = {
+      ...levUsj,
+      content: [
+        ...levUsj.content.slice(0, 2),
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'alpha text',
+            { type: 'char', marker: 'nd', content: ['beta'] },
+            ' text',
+          ],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const saveUsjToPdpIfUpdated = vi.fn(() => {
+      usjSentToPdp.current = editorRef.current?.getUsj();
+    });
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+    // whichUpdates '*' re-delivers a fresh object with identical content each time.
+    const fresh = (echo: Usj): Usj => ({ ...echo, content: [...echo.content] });
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: echoA } },
+    );
+    mockLoggerWarn.mockClear();
+
+    // A must be delivered twice consecutively to look STABLE (the first delivery of any new shape
+    // takes the re-push branch; the second, unchanged, is the stable-echo lossy signal).
+    act(() => rerender({ usjFromPdp: fresh(echoA) })); // warn #1 (difference A)
+    act(() => rerender({ usjFromPdp: fresh(echoB) })); // re-push (B is new incoming)
+    act(() => rerender({ usjFromPdp: fresh(echoB) })); // warn #2 (difference B)
+    act(() => rerender({ usjFromPdp: fresh(echoA) })); // re-push (A is new incoming again)
+    act(() => rerender({ usjFromPdp: fresh(echoA) })); // must NOT warn — A already warned once
+
+    // Two DISTINCT differences → exactly two warnings; the revisited A is not re-warned.
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(2);
+    // Each warning names a different content entry (A wrapped "alpha", B wrapped "beta").
+    const messages = mockLoggerWarn.mock.calls.map((call) => String(call[0]));
+    expect(messages.some((message) => message.includes('alpha'))).toBe(true);
+    expect(messages.some((message) => message.includes('beta'))).toBe(true);
+  });
 });
