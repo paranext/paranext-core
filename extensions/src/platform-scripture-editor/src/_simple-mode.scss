@@ -48,3 +48,37 @@
   height: 42px !important;
   padding-block: 0 !important;
 }
+
+// Reserve the inline-end gutter the character-marker bar occupies (PT-XXX-D2). Reserving rather
+// than floating is what makes "the bar never overlaps project text" GUARANTEED instead of
+// usually-true: there is no right margin to float over — `.editor-input` has just 10px of inline
+// padding (./_editor.scss) and `.editor-container` sets `max-width: none`, so prose wraps to the
+// full panel width and a floating bar would sit on top of text on most wrapped lines.
+//
+// Simple-scoped on purpose. `_usj-nodes.scss` styles the editor in BOTH modes, so putting this on
+// a bare `.usfm` selector — or raising `--psc-gutter-width` — would narrow every Power user's text
+// column to make room for a control they never see. The React `!isPowerMode` gate cannot cover a
+// CSS selector, so the scoping must happen here. Because `.editor-container-simple` and the bar
+// share one condition, the space appears and disappears with the bar.
+//
+// Reservation is unconditional within Simple mode, not tied to whether the bar is currently drawn:
+// reserving only while visible would reflow the whole text column as the caret enters and leaves
+// the editor.
+//
+// 5em (80px) fits the widest trigger label — "(mixed)" at tw:px-2 — where the prototype's bar is
+// 118px. Pending UX sign-off on the exact width; changing this one value is the whole change.
+.editor-container-simple .usfm.psc-gutter-markers {
+  --psc-character-marker-bar-width: 5em;
+
+  padding-inline-end: var(--psc-character-marker-bar-width);
+}
+
+// RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`) re-asserts
+// `padding-left: 10px` PHYSICALLY — the same side `padding-inline-end` resolves to in RTL — at
+// equal specificity (0,3,0) to the rule above. Sass hoists this @used module's CSS above it, so
+// source order would hand the tie to the mirror. Restating the inline-end side with the `[dir]`
+// attribute raises specificity to (0,4,0) and settles it deterministically. That rule's
+// `padding-right` (the start-side gutter in RTL) is untouched and still applies.
+.editor-container-simple .usfm.psc-gutter-markers[dir='rtl'] {
+  padding-left: var(--psc-character-marker-bar-width);
+}
