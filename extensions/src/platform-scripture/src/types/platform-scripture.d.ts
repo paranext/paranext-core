@@ -2392,48 +2392,66 @@ declare module 'papi-shared-types' {
     'platformScripture.invalidateCheckResults': (details: CheckResultsInvalidated) => Promise<void>;
 
     /**
-     * Open the characters inventory web view. The single optional argument is the **triggering web
-     * view's id** (e.g. the editor tab the command was invoked from) — not a project id. The
-     * handler resolves the project internally via `papi.webViews.getOpenWebViewDefinition`; if no
-     * web view id is provided or the web view has no project, the command resolves to `undefined`
-     * without opening anything.
+     * Open the characters inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
+     *   id was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openCharactersInventory': (
       webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the repeated-words inventory web view. Argument semantics are identical to
-     * {@link 'platformScripture.openCharactersInventory'}: the triggering web view's id, from which
-     * the project is resolved internally.
+     * Open the repeated-words inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openRepeatedWordsInventory': (
       webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the markers inventory web view. Argument semantics are identical to
-     * {@link 'platformScripture.openCharactersInventory'}: the triggering web view's id, from which
-     * the project is resolved internally.
+     * Open the markers inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
+     *   was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openMarkersInventory': (
       webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the punctuation inventory web view. Argument semantics are identical to
-     * {@link 'platformScripture.openCharactersInventory'}: the triggering web view's id, from which
-     * the project is resolved internally.
+     * Open the punctuation inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
+     *   id was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openPunctuationInventory': (
       webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the checks side panel next to a scripture editor. The single optional argument is the
-     * **triggering editor's web view id** — not a project id. The handler resolves the editor's
-     * project and scroll group internally via `papi.webViews.getOpenWebViewDefinition` and places
-     * the panel relative to that editor tab.
+     * Open the checks side panel next to a scripture editor.
+     *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
+     *   editor's project and scroll group are resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`, and the panel is placed relative to that editor
+     *   tab.
+     * @returns Id of the newly opened checks side panel web view, or `undefined` if no editor web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
