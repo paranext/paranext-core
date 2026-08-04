@@ -152,12 +152,15 @@ describe('buildPickerResources', () => {
 describe('fetchDownloadedResources', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('resolves names via the platform.base PDP for each USJ_Chapter project', async () => {
+  it('resolves names via the platform.base PDP for each published project', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
       // `as never` is required because mockResolvedValue expects the full ProjectMetadata shape;
       // a minimal stub suffices for this test and refactoring to match the full type adds no value.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'proj-kjn', projectInterfaces: [] } as never,
+      { id: 'proj-kjn', projectInterfaces: [], isPublished: true } as never,
+      // Non-published projects (user's own editing projects) must be filtered out.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'proj-editing', projectInterfaces: [], isPublished: false } as never,
     ]);
     const getSetting = vi.fn(
       async (key: string) =>
@@ -176,9 +179,7 @@ describe('fetchDownloadedResources', () => {
     expect(result).toEqual([
       { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
     ]);
-    expect(papi.projectLookup.getMetadataForAllProjects).toHaveBeenCalledWith({
-      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-    });
+    expect(papi.projectLookup.getMetadataForAllProjects).toHaveBeenCalledWith();
   });
 
   it('returns [] and warns when enumeration throws', async () => {
@@ -192,11 +193,11 @@ describe('fetchDownloadedResources', () => {
       // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
       // minimal stub suffices for this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'proj-bad', projectInterfaces: [] } as never,
+      { id: 'proj-bad', projectInterfaces: [], isPublished: true } as never,
       // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
       // minimal stub suffices for this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'proj-ok', projectInterfaces: [] } as never,
+      { id: 'proj-ok', projectInterfaces: [], isPublished: true } as never,
     ]);
 
     const getSettingOk = vi.fn(
