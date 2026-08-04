@@ -1,5 +1,4 @@
 import { logger } from '@shared/services/logger.service';
-import { retryUntil } from '@shared/utils/retry.util';
 import { SerializedRequestType } from '@shared/utils/util';
 import {
   JSONRPC,
@@ -9,7 +8,7 @@ import {
   JSONRPCResponse,
   JSONRPCSuccessResponse,
 } from 'json-rpc-2.0';
-import { deserialize, getErrorMessage, serialize } from 'platform-bible-utils';
+import { deserialize, getErrorMessage, retryUntil, serialize } from 'platform-bible-utils';
 
 /** Port to use for the WebSocket */
 export const WEBSOCKET_PORT = 8876;
@@ -213,12 +212,14 @@ export async function requestWithRetry(
   // https://github.com/paranext/paranext-core/issues/51
   // If the request type doesn't have a registered handler yet, retry a few times to help with race
   // conditions. This approach is hacky but works well enough for now.
+  // One predicate for "handler not registered yet" so the attempt-side log and the retry-side
+  // stop condition can never disagree about what counts as the retryable race.
+  const isMissingHandler = (response: JSONRPCResponse): boolean =>
+    !!response.error && response.error.code === JSONRPCErrorCode.MethodNotFound;
   return retryUntil(
     async (attemptNumber) => {
       const response = await requestCallback();
-      const isMissingHandler =
-        !!response.error && response.error.code === JSONRPCErrorCode.MethodNotFound;
-      if (isMissingHandler)
+      if (isMissingHandler(response))
         logger.debug(
           `RPC handler ${name} could not find a request handler for requestType ${requestType} on attempt ${attemptNumber} of ${MAX_REQUEST_ATTEMPTS}. ${attemptNumber >= MAX_REQUEST_ATTEMPTS ? 'Giving up.' : 'Retrying...'}`,
         );
@@ -226,7 +227,7 @@ export async function requestWithRetry(
     },
     // Stop as soon as the response is not a missing-handler error — a success or any other error is
     // the caller's to handle, only MethodNotFound is the race we retry.
-    (response) => !response.error || response.error.code !== JSONRPCErrorCode.MethodNotFound,
+    (response) => !isMissingHandler(response),
     { maxAttempts: MAX_REQUEST_ATTEMPTS, delayMs: REQUEST_ATTEMPT_WAIT_TIME_MS },
   );
 }

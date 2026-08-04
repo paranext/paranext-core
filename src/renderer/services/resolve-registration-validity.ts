@@ -1,7 +1,6 @@
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage, waitForDuration } from 'platform-bible-utils';
-import { retryUntil } from '@shared/utils/retry.util';
+import { getErrorMessage, retryUntil, waitForDuration } from 'platform-bible-utils';
 import { RegistrationValidity } from './first-run.model';
 
 /**
@@ -64,21 +63,30 @@ async function resolveRegistrationValidityOnce(timeoutMs: number): Promise<Regis
  * `maxAttempts` times plus the inter-probe backoffs. The gate shows its loading spinner
  * throughout.
  */
-export async function resolveRegistrationValidity(
+export async function resolveRegistrationValidity({
   timeoutMs = REGISTRATION_RESOLVE_TIMEOUT_MS,
   maxAttempts = REGISTRATION_RESOLVE_MAX_ATTEMPTS,
   retryDelayMs = REGISTRATION_RESOLVE_RETRY_DELAY_MS,
-): Promise<RegistrationValidity> {
-  // Retry a transient 'unknown'; a definitive 'valid'/'invalid' stops immediately. retryUntil
-  // clamps maxAttempts to at least 1 and skips the backoff after the final probe.
+}: {
+  /** Per-attempt probe timeout. Defaults to {@link REGISTRATION_RESOLVE_TIMEOUT_MS}. */
+  timeoutMs?: number;
+  /** Total probes before giving up. Defaults to {@link REGISTRATION_RESOLVE_MAX_ATTEMPTS}. */
+  maxAttempts?: number;
+  /** Delay between probes. Defaults to {@link REGISTRATION_RESOLVE_RETRY_DELAY_MS}. */
+  retryDelayMs?: number;
+} = {}): Promise<RegistrationValidity> {
+  // Clamp once and reuse for both the retry budget and the log message, so retryUntil's internal
+  // clamp can never disagree with the number we report.
+  const effectiveMaxAttempts = Math.max(1, maxAttempts);
+  // Retry a transient 'unknown'; a definitive 'valid'/'invalid' stops immediately.
   const validity = await retryUntil(
     () => resolveRegistrationValidityOnce(timeoutMs),
     (result) => result !== 'unknown',
-    { maxAttempts, delayMs: retryDelayMs },
+    { maxAttempts: effectiveMaxAttempts, delayMs: retryDelayMs },
   );
   if (validity === 'unknown') {
     logger.warn(
-      `Could not resolve registration validity after ${Math.max(1, maxAttempts)} attempt(s); the provider is likely still starting up.`,
+      `Could not resolve registration validity after ${effectiveMaxAttempts} attempt(s); the provider is likely still starting up.`,
     );
   }
   return validity;

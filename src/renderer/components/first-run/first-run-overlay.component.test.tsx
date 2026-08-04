@@ -2,13 +2,18 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { ReactNode, useEffect } from 'react';
+import { forwardRef, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
   const actual = await importActual<typeof store>();
-  return { ...actual, getFirstRunStatus: vi.fn(), retryFirstRunResolution: vi.fn() };
+  return {
+    ...actual,
+    getFirstRunStatus: vi.fn(),
+    retryFirstRunResolution: vi.fn(),
+    continueWithoutRegistration: vi.fn(),
+  };
 });
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -20,7 +25,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
         'Checking your registration information. This may take a moment.',
       '%firstRun_loading_slow%': 'This is taking longer than expected.',
       '%firstRun_error_title%': "Couldn't verify your registration",
-      '%firstRun_error_body_2%': 'It may still be starting up — retry in a moment.',
+      '%firstRun_error_body_providerStartingUp%':
+        'It may still be starting up — retry in a moment.',
       '%firstRun_button_retry%': 'Retry',
       '%firstRun_button_continueWithoutFinishingSetup%': 'Continue without finishing setup',
       '%firstRun_stepIndicator%': 'Step {stepNumber} of {stepCount}',
@@ -75,22 +81,19 @@ vi.mock('platform-bible-react', () => {
   function DialogDescriptionStub({ children }: { children: ReactNode }) {
     return <span>{children}</span>;
   }
-  function ButtonStub({
-    children,
-    onClick,
-    disabled,
-  }: {
-    [key: string]: unknown;
-    children: ReactNode;
-    onClick?: () => void;
-    disabled?: boolean;
-  }) {
+  // forwardRef so the component's Retry / escape-hatch focus refs resolve to real jsdom buttons
+  // (the real Button forwards refs), rather than triggering React's "function components cannot be
+  // given refs" warning and leaving the refs null.
+  const ButtonStub = forwardRef<
+    HTMLButtonElement,
+    { [key: string]: unknown; children: ReactNode; onClick?: () => void; disabled?: boolean }
+  >(function ButtonStub({ children, onClick, disabled }, ref) {
     return (
-      <button type="button" onClick={onClick} disabled={disabled}>
+      <button ref={ref} type="button" onClick={onClick} disabled={disabled}>
         {children}
       </button>
     );
-  }
+  });
   function InterfaceLanguagePickerStub() {
     return <div data-testid="language-picker" />;
   }
@@ -197,12 +200,18 @@ describe('FirstRunOverlay', () => {
   it('offers a retry on the error status', async () => {
     mockGetStatus.mockReturnValue({ kind: 'error' });
     render(<FirstRunOverlay />);
-    // Guard the %firstRun_error_body_2% key wiring: if the component reverts to the deprecated key
+    // Guard the %firstRun_error_body_providerStartingUp% key wiring: if the component reverts to the deprecated key
     // or typos this one, formatReplacementString renders an empty body and this assertion fails —
     // otherwise a blank error screen would ship with a green suite.
     expect(screen.getByText(/it may still be starting up/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /retry/i }));
     expect(store.retryFirstRunResolution).toHaveBeenCalledOnce();
+    // The escape hatch must actually reach the store — a missing/wrong onClick would otherwise ship
+    // a dead "continue without finishing setup" button that the render-only assertions wouldn't catch.
+    await userEvent.click(
+      screen.getByRole('button', { name: /continue without finishing setup/i }),
+    );
+    expect(store.continueWithoutRegistration).toHaveBeenCalledOnce();
   });
 
   it('renders a loading status element when status is loading', () => {
@@ -220,6 +229,48 @@ describe('FirstRunOverlay', () => {
       screen.queryByRole('button', { name: /continue without finishing setup/i }),
     ).not.toBeInTheDocument();
     // Past the reveal threshold the escape appears so a stuck startup is never a dead end.
+    act(() => {
+      vi.advanceTimersByTime(15000);
+    });
+    const escapeButton = screen.getByRole('button', {
+      name: /continue without finishing setup/i,
+    });
+    expect(escapeButton).toBeInTheDocument();
+    // Prove the watchdog's escape is wired to the store, not just rendered — a missing/wrong onClick
+    // would otherwise ship a dead button that the presence assertion above wouldn't catch.
+    fireEvent.click(escapeButton);
+    expect(store.continueWithoutRegistration).toHaveBeenCalledOnce();
+  });
+
+  it('re-arms the slow-loading watchdog after loading → error → loading (PT-4302)', () => {
+    vi.useFakeTimers();
+    let notify: (() => void) | undefined;
+    vi.spyOn(store, 'subscribeToFirstRun').mockImplementation((listener) => {
+      notify = listener;
+      return () => {};
+    });
+    mockGetStatus.mockReturnValue({ kind: 'loading' });
+    render(<FirstRunOverlay />);
+
+    // First loading window: the watchdog fires and reveals the escape hatch.
+    act(() => {
+      vi.advanceTimersByTime(15000);
+    });
+    expect(
+      screen.getByRole('button', { name: /continue without finishing setup/i }),
+    ).toBeInTheDocument();
+
+    // Leave loading for error, then return to loading. The effect's reset + clearTimeout must clear
+    // the slow flag so the escape hatch is gone again on re-entry — proving it isn't latched on.
+    mockGetStatus.mockReturnValue({ kind: 'error' });
+    act(() => notify?.());
+    mockGetStatus.mockReturnValue({ kind: 'loading' });
+    act(() => notify?.());
+    expect(
+      screen.queryByRole('button', { name: /continue without finishing setup/i }),
+    ).not.toBeInTheDocument();
+
+    // A fresh timer was armed on re-entry: advancing past the threshold reveals the escape again.
     act(() => {
       vi.advanceTimersByTime(15000);
     });
