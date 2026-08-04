@@ -73,10 +73,13 @@ async function startBackgroundFetchResources(): Promise<void> {
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
     try {
-      // Checks to make sure all the `installed` flags are accurate
+      // Checks to make sure all the `installed` flags are accurate.
+      // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
+      // locally-installed resources that don't implement USJ (e.g. VULGP83, TNN, TND, HBK)
+      // are found and their installed flags are correctly set to true.
       let isChanged = false;
       const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        includeProjectInterfaces: ['platform.base'],
       });
       const newCachedResources = cachedResources.map((resource) => {
         const matchingLocalProject = localProjectMetadata.find((localProject) =>
