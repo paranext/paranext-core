@@ -40,34 +40,34 @@ function getUsjBookChapterIdentity(usj: Usj | undefined): string | undefined {
 }
 
 /**
- * Best-effort, BOUNDED description of the first place two USJ documents differ in their top-level
- * `content` — for a diagnostic log line, never a full-document dump.
- *
- * Each entry pair is compared with the SAME whitespace-insignificant equality the sync itself uses
- * (`areUsjContentsEqualExceptWhitespace`, applied to a single-entry document), so the reported
- * index points at the first SIGNIFICANT difference rather than a cosmetic whitespace one. Each side
- * is truncated so a large chapter cannot flood the log.
- *
- * Only top-level content is walked (not recursed into nested marker content): it is enough to name
- * WHICH entry diverged for an investigator to reproduce, and keeps the output bounded and cheap.
+ * A single top-level USJ content entry wrapped as its own one-entry document, so it can be
+ * whitespace-insensitively compared with `areUsjContentsEqualExceptWhitespace`. An absent entry
+ * (`undefined`, one side shorter than the other) wraps to an empty document, so it compares unequal
+ * to any present entry.
  */
-function describeFirstUsjContentDifference(
+function wrapSingleUsjEntry(entry: Usj['content'][number] | undefined): Usj {
+  return { type: 'USJ', version: '3.1', content: entry === undefined ? [] : [entry] };
+}
+
+/**
+ * The first place two USJ documents SIGNIFICANTLY differ in their top-level `content`, or
+ * `undefined` when they agree there (differing only in whitespace or in fields outside top-level
+ * content). Each entry pair is compared with the SAME whitespace-insignificant equality the sync
+ * itself uses (`areUsjContentsEqualExceptWhitespace`, applied to a single-entry document), so the
+ * result points at the first SIGNIFICANT difference rather than a cosmetic whitespace one.
+ *
+ * Only top-level content is walked (not recursed into nested marker content): it is enough to
+ * identify WHICH entry diverged both for a diagnostic log line and for keying the warn-once dedup,
+ * and it keeps the output bounded and cheap.
+ */
+function firstSignificantUsjContentDifference(
   sent: Usj | undefined,
   received: Usj | undefined,
-): string {
-  const MAX_SNIPPET_LENGTH = 200;
+):
+  | { index: number; sentEntry?: Usj['content'][number]; receivedEntry?: Usj['content'][number] }
+  | undefined {
   const sentContent = sent?.content ?? [];
   const receivedContent = received?.content ?? [];
-  const truncate = (entry: Usj['content'][number] | undefined): string => {
-    if (entry === undefined) return '(absent)';
-    const text = JSON.stringify(entry);
-    return text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text;
-  };
-  const wrapSingleEntry = (entry: Usj['content'][number]): Usj => ({
-    type: 'USJ',
-    version: sent?.version ?? received?.version ?? '3.1',
-    content: [entry],
-  });
   const length = Math.max(sentContent.length, receivedContent.length);
   for (let index = 0; index < length; index += 1) {
     const sentEntry = sentContent[index];
@@ -75,16 +75,44 @@ function describeFirstUsjContentDifference(
     const differs =
       sentEntry !== undefined && receivedEntry !== undefined
         ? !areUsjContentsEqualExceptWhitespace(
-            wrapSingleEntry(sentEntry),
-            wrapSingleEntry(receivedEntry),
+            wrapSingleUsjEntry(sentEntry),
+            wrapSingleUsjEntry(receivedEntry),
           )
         : sentEntry !== receivedEntry;
-    if (differs) {
-      return `content[${index}]: sent ${truncate(sentEntry)} vs received ${truncate(receivedEntry)}`;
-    }
+    if (differs) return { index, sentEntry, receivedEntry };
   }
-  return 'documents differ outside top-level content (or in whitespace-insignificant fields only)';
+  return undefined;
 }
+
+/**
+ * Best-effort, BOUNDED description of the first significant difference between two USJ documents'
+ * top-level `content` — for a diagnostic log line, never a full-document dump. Each side is
+ * truncated so a large chapter cannot flood the log.
+ */
+function describeFirstUsjContentDifference(
+  sent: Usj | undefined,
+  received: Usj | undefined,
+): string {
+  const MAX_SNIPPET_LENGTH = 200;
+  const truncate = (entry: Usj['content'][number] | undefined): string => {
+    if (entry === undefined) return '(absent)';
+    const text = JSON.stringify(entry);
+    return text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text;
+  };
+  const difference = firstSignificantUsjContentDifference(sent, received);
+  if (!difference) {
+    return 'documents differ outside top-level content (or in whitespace-insignificant fields only)';
+  }
+  return `content[${difference.index}]: sent ${truncate(difference.sentEntry)} vs received ${truncate(difference.receivedEntry)}`;
+}
+
+/**
+ * How many DISTINCT lossy differences the warn-once dedup remembers at a time. Bounded so a long
+ * session that surfaces many different non-convergent spots cannot grow the memory without limit;
+ * old differences fall out FIFO. Sized well above the handful of distinct spots a real chapter
+ * exhibits, so a genuine oscillation among them is never mistaken for a new difference.
+ */
+export const LOSSY_WARN_MEMORY_LIMIT = 32;
 
 /**
  * Synchronizes the editor's displayed content with data received from the PDP.
@@ -148,12 +176,23 @@ export function useEditorPdpSync({
   // wherever the editor content is replaced or the round-trip converges, alongside
   // `lastEditorUsjPushedWhileDeferring`.
   const lastIncomingUsjDeferred = useRef<Usj | undefined>(undefined);
-  // The incoming PDP echo we most recently fired the LOSSY-ROUND-TRIP warning about. The warning
-  // must fire once per distinct divergence, not once per re-delivery: a stable non-convergent
-  // round-trip re-delivers the SAME differing echo indefinitely (whichUpdates '*'), so without this
-  // the log would fill with duplicate warnings. Reset (below) wherever the round-trip converges or
-  // the editor content is replaced, so a genuinely NEW lossy divergence always warns again.
-  const lastLossyRoundTripWarned = useRef<Usj | undefined>(undefined);
+  // The DISTINCT lossy differences we have already warned about — a bounded FIFO, each entry the
+  // first significantly-differing (editor-entry, incoming-entry) pair of a stable non-convergent
+  // round-trip. The warning must fire once per distinct DIFFERENCE, not once per re-delivery and
+  // not once per whole-document echo:
+  //   - A single-slot memory of the last echo re-warns on an A→B→A oscillation (revisiting a
+  //     never-converging spot after a different one displaces the slot), spamming the log with a
+  //     warning that is not new information.
+  //   - Keying on the WHOLE incoming document re-warns the SAME difference whenever anything
+  //     ELSE in the chapter changes (an unrelated edit elsewhere), and can conversely SWALLOW a
+  //     genuinely new difference whose whole-document echo happens to match a remembered one.
+  // Keying on the specific differing entries, compared whitespace-insensitively, fixes both: an
+  // already-warned difference stays quiet however the rest of the chapter moves, while a truly new
+  // one always warns. Reset (below) wherever the round-trip converges or the editor content is
+  // replaced, so a genuinely NEW lossy divergence always warns again.
+  const warnedLossyDifferences = useRef<
+    { sentEntry?: Usj['content'][number]; receivedEntry?: Usj['content'][number] }[]
+  >([]);
   useEffect(() => {
     if (!usjFromPdp) return;
     if (!editorRef.current) {
@@ -161,7 +200,7 @@ export function useEditorPdpSync({
       usjSentToPdp.current = undefined;
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
-      lastLossyRoundTripWarned.current = undefined;
+      warnedLossyDifferences.current = [];
       return;
     }
 
@@ -211,7 +250,7 @@ export function useEditorPdpSync({
             nonConvergingDeferralCount.current = 0;
             lastEditorUsjPushedWhileDeferring.current = undefined;
             lastIncomingUsjDeferred.current = undefined;
-            lastLossyRoundTripWarned.current = undefined;
+            warnedLossyDifferences.current = [];
             logger.debug(
               'useEditorPdpSync: incoming PDP update matches the editor content; nothing to apply.',
             );
@@ -279,19 +318,41 @@ export function useEditorPdpSync({
           //   - False negative: a one-shot lossy round-trip applied immediately (editor idle or
           //     blurred — the replace branch below) never loops, so it is not flagged here; only
           //     the persistent, user-visible loops are.
-          // Deduped on the echo (the `else if` condition) so a single divergence warns once, not
-          // once per re-delivery.
-          else if (
-            !areUsjContentsEqualExceptWhitespace(usjFromPdp, lastLossyRoundTripWarned.current)
-          ) {
-            lastLossyRoundTripWarned.current = usjFromPdp;
-            logger.warn(
-              `useEditorPdpSync: our own save round-tripped through the PDP to DIFFERENT content ` +
-                `beyond insignificant whitespace and has not converged — the editor is doing ` +
-                `something lossy (a stable non-idempotent USFM round-trip of our own push, not an ` +
-                `external edit). Investigate the editor's USJ->USFM->USJ handling. First differing ` +
-                `content entry: ${describeFirstUsjContentDifference(editorUsj, usjFromPdp)}`,
-            );
+          // Deduped on the DISTINCT DIFFERENCE (the first significantly-differing entry pair), so a
+          // single divergence warns once — not once per re-delivery, and not again when the user
+          // revisits it after a DIFFERENT divergence (the A→B→A oscillation a single-slot memory
+          // would re-warn). A difference not already remembered warns and is remembered (bounded
+          // FIFO); a re-visited one stays quiet.
+          else {
+            const difference = firstSignificantUsjContentDifference(editorUsj, usjFromPdp);
+            const alreadyWarned =
+              difference !== undefined &&
+              warnedLossyDifferences.current.some(
+                (warned) =>
+                  areUsjContentsEqualExceptWhitespace(
+                    wrapSingleUsjEntry(warned.sentEntry),
+                    wrapSingleUsjEntry(difference.sentEntry),
+                  ) &&
+                  areUsjContentsEqualExceptWhitespace(
+                    wrapSingleUsjEntry(warned.receivedEntry),
+                    wrapSingleUsjEntry(difference.receivedEntry),
+                  ),
+              );
+            if (difference !== undefined && !alreadyWarned) {
+              warnedLossyDifferences.current.push({
+                sentEntry: difference.sentEntry,
+                receivedEntry: difference.receivedEntry,
+              });
+              if (warnedLossyDifferences.current.length > LOSSY_WARN_MEMORY_LIMIT)
+                warnedLossyDifferences.current.shift();
+              logger.warn(
+                `useEditorPdpSync: our own save round-tripped through the PDP to DIFFERENT content ` +
+                  `beyond insignificant whitespace and has not converged — the editor is doing ` +
+                  `something lossy (a stable non-idempotent USFM round-trip of our own push, not an ` +
+                  `external edit). Investigate the editor's USJ->USFM->USJ handling. First differing ` +
+                  `content entry: ${describeFirstUsjContentDifference(editorUsj, usjFromPdp)}`,
+              );
+            }
           }
           return;
         }
@@ -301,19 +362,19 @@ export function useEditorPdpSync({
       nonConvergingDeferralCount.current = 0;
       lastEditorUsjPushedWhileDeferring.current = undefined;
       lastIncomingUsjDeferred.current = undefined;
-      lastLossyRoundTripWarned.current = undefined;
+      warnedLossyDifferences.current = [];
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else {
       nonConvergingDeferralCount.current = 0;
-      // Note: lastLossyRoundTripWarned is deliberately NOT reset here. This branch fires when the
+      // Note: warnedLossyDifferences is deliberately NOT reset here. This branch fires when the
       // incoming matches our last-sent baseline, which a damped lossy loop passes through
       // transiently (usjSentToPdp flips between the editor content and the differing echo). Resetting
       // the dedup here would re-arm the warning on every oscillation. It is reset only where the
       // divergence is genuinely resolved — the editor content is replaced, the round-trip converges
-      // to the editor, or the editor unmounts. A genuinely NEW lossy shape still re-warns because it
-      // differs from the remembered echo.
+      // to the editor, or the editor unmounts. A genuinely NEW lossy difference still re-warns
+      // because it is absent from the remembered set.
       saveUsjToPdpIfUpdated();
     }
   }, [
