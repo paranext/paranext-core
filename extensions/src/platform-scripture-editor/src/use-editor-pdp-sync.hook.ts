@@ -67,14 +67,13 @@ export function useEditorPdpSync({
   setEditorUsj: MutableRefObject<(usj: Usj) => void>;
   saveUsjToPdpIfUpdated: () => void;
   /**
-   * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing
-   * SESSION owns the editor's content even though the editor itself is blurred — a marker-palette
-   * session (the palette overlay outside the iframe holds focus) or an open footnote-editor
-   * popover (its own inner editor holds focus while its edits haven't reached the PDP yet).
-   * Replacing the editor mid-session would regenerate every Lexical node key, killing the
-   * session (the popover's Save then targets a dead key and silently no-ops). Same-document
-   * deferral only — a different-document update (navigation) always replaces, exactly as for
-   * live typing.
+   * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
+   * owns the editor's content even though the editor itself is blurred — a marker-palette session
+   * (the palette overlay outside the iframe holds focus) or an open footnote-editor popover (its
+   * own inner editor holds focus while its edits haven't reached the PDP yet). Replacing the editor
+   * mid-session would regenerate every Lexical node key, killing the session (the popover's Save
+   * then targets a dead key and silently no-ops). Same-document deferral only — a
+   * different-document update (navigation) always replaces, exactly as for live typing.
    */
   isEditingSessionActive?: () => boolean;
 }): void {
@@ -91,12 +90,24 @@ export function useEditorPdpSync({
   // save/echo loop. Reset (below) wherever the editor's content is replaced or the round-trip
   // converges, so a genuinely new divergence always gets pushed once.
   const lastEditorUsjPushedWhileDeferring = useRef<Usj | undefined>(undefined);
+  // The incoming PDP USJ most recently DEFERRED (kept unapplied) in the branch below. The damping
+  // must key on the incoming side too, not just the editor side: an editor that stays quiescent
+  // (its own content unchanged) can still be facing a genuinely NEW incoming document — a
+  // concurrent external writer (another app on the same project) — and a save skipped purely
+  // because the editor did not change would leave disk holding the external bytes while the screen
+  // shows the editor's, silently unsaved. Remembering the last deferred incoming lets the skip fire
+  // ONLY for a true echo of our own unchanged push (incoming AND editor both unchanged); an
+  // incoming that differs is new information and re-pushes the editor's authority. Reset (below)
+  // wherever the editor content is replaced or the round-trip converges, alongside
+  // `lastEditorUsjPushedWhileDeferring`.
+  const lastIncomingUsjDeferred = useRef<Usj | undefined>(undefined);
   useEffect(() => {
     if (!usjFromPdp) return;
     if (!editorRef.current) {
       // Editor unmounted — reset so it re-initializes when it remounts (see TSDoc)
       usjSentToPdp.current = undefined;
       lastEditorUsjPushedWhileDeferring.current = undefined;
+      lastIncomingUsjDeferred.current = undefined;
       return;
     }
 
@@ -129,7 +140,8 @@ export function useEditorPdpSync({
       // focus sits in the editor), deferring would keep the editor on the OLD chapter forever —
       // and, worse, save-back would write the old chapter's content through the NEW chapter's
       // data selector. A different-document update always replaces.
-      const isActivelyEditing = editorRef.current.isFocused() || (isEditingSessionActive?.() ?? false);
+      const isActivelyEditing =
+        editorRef.current.isFocused() || (isEditingSessionActive?.() ?? false);
       if (isActivelyEditing) {
         const editorUsj = editorRef.current.getUsj();
         // Same document only when BOTH are identifiable and their identities match. An
@@ -144,6 +156,7 @@ export function useEditorPdpSync({
             // The PDP now agrees with the editor — the round-trip converged.
             nonConvergingDeferralCount.current = 0;
             lastEditorUsjPushedWhileDeferring.current = undefined;
+            lastIncomingUsjDeferred.current = undefined;
             logger.debug(
               'useEditorPdpSync: incoming PDP update matches the editor content; nothing to apply.',
             );
@@ -168,19 +181,29 @@ export function useEditorPdpSync({
                 'keeping local edits and pushing them up.',
             );
           }
-          // Idempotency damping: only push the editor's content up when it actually changed since
-          // our last deferral push. An unchanged editor means we already sent exactly these bytes,
-          // so re-saving would only feed the whichUpdates '*' echo back into this same deferral —
-          // the infinite save/echo loop a non-idempotent round-trip (e.g. a typed
-          // `\nd text|x="y"\nd*` literal that never round-trips to itself) would otherwise sustain.
-          // Genuine continued typing changes the editor content, so real edits are still pushed;
-          // deferring the APPLY of the incoming update (not clobbering the caret) is unchanged.
-          if (
-            !areUsjContentsEqualExceptWhitespace(
-              editorUsj,
-              lastEditorUsjPushedWhileDeferring.current,
-            )
-          ) {
+          // Idempotency damping: skip the re-push ONLY when this deferral is a pure echo of our own
+          // unchanged push — i.e. BOTH the editor content is unchanged since our last deferral push
+          // AND the incoming update is content-equal to the last one we deferred. That is the exact
+          // shape of the infinite save/echo loop a non-idempotent round-trip sustains (e.g. a typed
+          // `\nd text|x="y"\nd*` literal that never round-trips to itself): the editor never changes
+          // and the whichUpdates '*' subscription keeps re-delivering the SAME normalized echo, so
+          // damping it terminates the loop. But an incoming that DIFFERS from the last deferred one
+          // is new information — a concurrent external writer on the same project — even when the
+          // editor itself is quiescent; skipping the save there would leave the external bytes on
+          // disk while the screen shows the editor's content, silently unsaved. So a changed
+          // incoming re-pushes the editor's authority (the deferral of the APPLY, not clobbering the
+          // caret, is unchanged either way). Genuine continued typing changes the editor content and
+          // is likewise still pushed.
+          const editorUnchanged = areUsjContentsEqualExceptWhitespace(
+            editorUsj,
+            lastEditorUsjPushedWhileDeferring.current,
+          );
+          const incomingUnchanged = areUsjContentsEqualExceptWhitespace(
+            usjFromPdp,
+            lastIncomingUsjDeferred.current,
+          );
+          lastIncomingUsjDeferred.current = usjFromPdp;
+          if (!editorUnchanged || !incomingUnchanged) {
             lastEditorUsjPushedWhileDeferring.current = editorUsj;
             saveUsjToPdpIfUpdated();
           }
@@ -191,6 +214,7 @@ export function useEditorPdpSync({
       // so the round-trip is no longer diverging.
       nonConvergingDeferralCount.current = 0;
       lastEditorUsjPushedWhileDeferring.current = undefined;
+      lastIncomingUsjDeferred.current = undefined;
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP

@@ -217,11 +217,18 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local edits get saved instead
     expect(usjSentToPdp.current).toBe(normalizedEcho); // echo adopted as the new PDP baseline
 
-    // A confirmation echo matching the editor's live content arrives: nothing to do (no replace
-    // - which would reset the selection - and no save loop).
+    // A confirmation echo matching the editor's LIVE content (evenNewerEditorContent — the editor
+    // is still parked there) arrives: the round-trip converged, so there is nothing to do (no
+    // replace, which would reset the selection, and no save). The no-op here comes from the
+    // convergence branch — a genuine content match — not from editor-side damping: a differing
+    // incoming while the editor is unchanged is treated as new information and re-pushed instead
+    // (covered by the concurrent-external-write test below).
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
-    const confirmationEcho = { ...newerEditorContent, content: [...newerEditorContent.content] };
+    const confirmationEcho = {
+      ...evenNewerEditorContent,
+      content: [...evenNewerEditorContent.content],
+    };
     act(() => rerender({ usjFromPdp: confirmationEcho }));
     expect(setUsjSpy).not.toHaveBeenCalled();
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
@@ -484,7 +491,7 @@ describe('useEditorPdpSync', () => {
           marker: 'p',
           content: [
             { type: 'verse', marker: 'v', number: '2' },
-            'This is the law of the leper. \q1',
+            'This is the law of the leper. \\q1',
           ],
         },
       ],
@@ -925,6 +932,108 @@ describe('useEditorPdpSync', () => {
     // The incoming update is always deferred (never applied) — the editor is never clobbered, and
     // the convergence branch is never reached (that is the non-terminating condition the damping,
     // not convergence, resolves).
+    expect(setUsjSpy).not.toHaveBeenCalled();
+  });
+
+  // Concurrent external write while the editor is quiescent post-deferral. The damping must key on
+  // BOTH sides: an incoming update that DIFFERS from the last deferred incoming is new information
+  // (a genuine external writer, e.g. PT9 on the same project), so even though the editor's own
+  // content is unchanged, its authority must be re-pushed rather than silently skipped — otherwise
+  // disk keeps the external bytes while the screen shows the editor's, unsaved.
+  it('re-pushes the editor when a NEW external write arrives while the editor is unchanged', () => {
+    // What the editor holds (constant across the whole test — the editor is quiescent).
+    const editorContent: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'chapter', marker: 'c', number: '14' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'holy \\nd word|stuff="thing"\\nd* text',
+          ],
+        },
+      ],
+    };
+    // The PDP's normalized echo of the editor's own push — content-different, same book/chapter.
+    const normalizedEcho: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'chapter', marker: 'c', number: '14' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'verse', marker: 'v', number: '2' },
+            'holy ',
+            { type: 'char', marker: 'nd', content: ['word'] },
+            ' text',
+          ],
+        },
+      ],
+    };
+    // A genuinely NEW write from an external editor — differs from BOTH the editor content and the
+    // prior echo, same book/chapter (so it is deferred, not treated as navigation).
+    const externalWrite: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        { type: 'book', marker: 'id', code: 'LEV' },
+        { type: 'chapter', marker: 'c', number: '14' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '2' }, 'An external editor wrote this.'],
+        },
+      ],
+    };
+
+    const setUsjSpy = vi.fn();
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    // Faithful save mock: a real save records the editor's own USJ as the new PDP baseline.
+    const saveUsjToPdpIfUpdated = vi.fn(() => {
+      usjSentToPdp.current = editorRef.current?.getUsj();
+    });
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: normalizedEcho } },
+    );
+
+    // The mount echo is deferred and pushes the editor's content up once.
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalledTimes(1);
+    saveUsjToPdpIfUpdated.mockClear();
+
+    // Now a NEW external write arrives while the editor is quiescent (its own content unchanged).
+    act(() => rerender({ usjFromPdp: externalWrite }));
+
+    // The editor's authority must be re-pushed — the external write is new information, not an echo
+    // of our own unchanged push, so it is NOT damped.
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled();
+    // The incoming external write is still deferred (the editor is never clobbered while focused).
     expect(setUsjSpy).not.toHaveBeenCalled();
   });
 });
