@@ -47,6 +47,7 @@ import {
   waitForAtLeastOneProjectMetadata,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
+import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
@@ -92,53 +93,6 @@ function toast(page: Page, message: string) {
 
 /** Per-request timeout for one-shot PAPI calls in this spec. */
 const PAPI_CALL_TIMEOUT_MS = 30_000;
-
-/**
- * Open a read-only scripture resource viewer through the public command and wait for its iframe to
- * attach IN THE GIVEN WINDOW, returning the new web view id. The generic WebViewService routes to
- * the focused window, so callers focus the target window first; the iframe appearing in the given
- * page (and, asserted by callers, in no other window) is the placement proof — a freshly created
- * web view keeps its raw id, so the id existing in the wrong window's document could only mean
- * placement routed there.
- *
- * Modeled on `openScriptureEditorForProject` (fixtures/scripture-editor-helpers.ts) including its
- * retry loop, WITHOUT that helper's wait-for-any-iframe guard against the initial loadLayout race:
- * an empty secondary window never has an iframe to wait for, and every caller here opens only after
- * the target window's initial layout demonstrably finished loading (Home tab attached, or the
- * empty-dock probe passed).
- */
-async function openResourceViewerInWindow(page: Page, projectId: string): Promise<string> {
-  await waitForPapiMethodRegistered('command:platformScriptureEditor.openResourceViewer');
-
-  // Sequential retry loop: each attempt must await the PAPI response and iframe appearance before
-  // deciding whether to retry.
-  /* eslint-disable no-await-in-loop, no-continue */
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 1_000);
-      });
-    }
-
-    const editorId = await sendPapiRequestOnce<string | undefined>(
-      'command:platformScriptureEditor.openResourceViewer',
-      [projectId],
-      WEBSOCKET_PORT,
-      60_000,
-    );
-    if (!editorId) continue;
-
-    const editorIframeFound = await page
-      .locator(`iframe[data-web-view-id="${editorId}"]`)
-      .waitFor({ state: 'attached', timeout: attempt < 4 ? 8_000 : 20_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (editorIframeFound) return editorId;
-  }
-  /* eslint-enable no-await-in-loop, no-continue */
-
-  throw new Error(`Could not open a resource viewer for project ${projectId} after 5 attempts`);
-}
 
 /**
  * The live Frame of a web view iframe, for evaluating code inside it (frame locators cannot
@@ -332,10 +286,10 @@ test.describe('per-window UI isolation', () => {
     // Open an editor in window 1 (the generic web-view command routes to the focused window).
     await waitForAtLeastOneProjectMetadata(WEBSOCKET_PORT, 60_000);
     await focusWindowAndWaitForRouting(electronApp, window1Id);
-    const editorId1 = await openResourceViewerInWindow(mainPage, SAMPLE_WEB_PROJECT_ID);
-    // Placement proof: the new editor's iframe attached in window 1 (openResourceViewerInWindow
-    // waits for it there and would have exhausted its retries otherwise — a fresh web view keeps
-    // its raw id, so the same id cannot legitimately exist anywhere else) and is NOT in window 2.
+    const editorId1 = await openScriptureEditorForProject(mainPage, SAMPLE_WEB_PROJECT_ID);
+    // Placement proof: the new editor's iframe attached in window 1 (the helper waits for it
+    // there and would have exhausted its retries otherwise — a fresh web view keeps its raw id,
+    // so the same id cannot legitimately exist anywhere else) and is NOT in window 2.
     await expect(page2.locator(`iframe[data-web-view-id="${editorId1}"]`)).toHaveCount(0);
     // Window 1 now resolves its own editor as the navigation target…
     await expect(mainPage.locator(BCV_TRIGGER).first()).toBeEnabled({ timeout: 30_000 });
@@ -349,7 +303,12 @@ test.describe('per-window UI isolation', () => {
 
     // ── Web-view placement routes to the focused window ────────────────────────────────────────
     await focusWindowAndWaitForRouting(electronApp, window2Id);
-    const editorId2 = await openResourceViewerInWindow(page2, SAMPLE_WEB_PROJECT_ID);
+    const editorId2 = await openScriptureEditorForProject(page2, SAMPLE_WEB_PROJECT_ID, {
+      // Window 2 is an empty secondary window: it has no initial iframe for the helper's
+      // loadLayout-race guard to wait on, and the empty-dock probe above already proved its
+      // initial layout finished loading.
+      skipInitialLayoutGuard: true,
+    });
     // Placement proof, mirror-image of window 1's: the iframe attached in window 2 (enforced by
     // the helper) and did NOT land in window 1.
     await expect(mainPage.locator(`iframe[data-web-view-id="${editorId2}"]`)).toHaveCount(0);

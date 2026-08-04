@@ -79,7 +79,7 @@ import {
   getWindowIdOfPage,
   homeTabTitle,
   pollUntil,
-  quitAppAndWaitForExit,
+  quitAndExpectCleanExit,
   waitForRendererRegistered,
 } from './multi-window.util';
 
@@ -538,15 +538,12 @@ test.describe('multi-window lifecycle', () => {
     await waitForRendererRegistered(window2Id, 120_000);
     logStep('both windows up; quitting');
 
-    // Trigger a REAL quit and watch the OS process itself — see quitAppAndWaitForExit for why the
-    // process `exit` event (not Playwright's `close` event) is the right signal and why the
-    // leftover process group is reaped afterwards.
-    const exitResult = await quitAppAndWaitForExit(electronApp);
-    logStep(`process exited with code ${exitResult.code} signal ${exitResult.signal}`);
-
-    // The process must exit cleanly (exit code 0), not by signal.
-    expect(exitResult.signal).toBeUndefined();
-    expect(exitResult.code).toBe(0);
+    // Trigger a REAL quit and watch the OS process itself — see quitAppAndWaitForExit (which the
+    // shared epilogue wraps) for why the process `exit` event (not Playwright's `close` event) is
+    // the right signal and why the leftover process group is reaped afterwards. The epilogue also
+    // asserts a clean exit (code 0, no signal) and sweeps the whole captured log for fault markers
+    // and duplicate registrations.
+    await quitAndExpectCleanExit(electronApp, output, logStep, 'quit');
 
     const log = output.text();
 
@@ -564,9 +561,6 @@ test.describe('multi-window lifecycle', () => {
     // the attempt itself is the observable outcome). It does NOT prove an actual project sync —
     // that needs the S/R extension and lives beyond this repository.
     expect(countOccurrences(log, SHUTDOWN_SYNC_ATTEMPT_MARKER)).toBe(1);
-
-    // Nothing after the quit began may surface a fault.
-    const quitLog = log.slice(log.indexOf(APP_QUITTING_LOG));
-    FAULT_MARKERS.forEach((marker) => expect(quitLog).not.toContain(marker));
+    // The fault-marker sweep (whole log, so the quit window included) ran in the epilogue above.
   });
 });
