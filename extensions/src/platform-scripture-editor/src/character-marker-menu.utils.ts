@@ -1,3 +1,15 @@
+/*
+ * Web-view-only helpers for the character-marker menu.
+ *
+ * This module imports runtime UI values (a `lucide-react` icon), so it must stay out of the
+ * extension host's import graph. `main.ts` runs in the extension host, where the module shim
+ * rejects any `require` other than `papi` ("Requiring other than papi is not allowed in
+ * extensions!"), so a UI value reachable from there makes the whole extension fail to activate and
+ * no scripture editor opens. That is why these helpers live in their own module instead of in
+ * `platform-scripture-editor.utils.ts`, which `main.ts` imports. Nothing enforces the boundary at
+ * build or lint time — it fails at runtime.
+ */
+
 import { isCharacterMarker, LanguageStrings, LocalizeKey, usfmMarkers } from 'platform-bible-utils';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -32,7 +44,7 @@ export const CHARACTER_MARKER_MENU_STRING_KEYS = Object.freeze([
  *   character marker such as `nd` has no children in `usfmMarkers`, so passing the marker at the
  *   selection would produce an empty menu whenever the caret sits inside an existing character
  *   marker.
- * @param characterMarkerActions The character marker applied at the current selection plus the
+ * @param characterMarkerOptions The character marker applied at the current selection plus the
  *   optional editor operations for acting on it. Each operation is optional because the editor does
  *   not expose all of them yet; omit an operation to disable the actions that need it. With no
  *   `changeCharacterMarker`, picking a marker adds it instead of changing it.
@@ -46,7 +58,7 @@ export function generateCharacterMarkerMenuListItems(
   closeMarkersMenu: () => void,
   localizedStrings: LanguageStrings,
   parentMarker?: string,
-  characterMarkerActions?: {
+  characterMarkerOptions?: {
     /**
      * The character marker applied at the current selection, if any. Must be a character marker —
      * pass the editor's `contextMarker` filtered through `isCharacterMarker`, not the raw value
@@ -77,7 +89,7 @@ export function generateCharacterMarkerMenuListItems(
     currentCharacterMarker: rawCurrentCharacterMarker,
     changeCharacterMarker,
     removeCharacterMarker,
-  } = characterMarkerActions ?? {};
+  } = characterMarkerOptions ?? {};
   // Defense-in-depth: the caller is expected to pass an already-filtered marker (the editor's
   // `contextMarker` run through `isCharacterMarker`), so this should normally already be a
   // character marker or absent. Kept as a second layer in case a caller passes the raw
@@ -88,7 +100,7 @@ export function generateCharacterMarkerMenuListItems(
       : undefined;
 
   const markerMenuItems: MarkerMenuItem[] = [];
-  Object.entries(markerDetails.children).forEach(([, markers]) => {
+  Object.values(markerDetails.children).forEach((markers) => {
     markerMenuItems.push(
       ...markers
         .filter((marker) => isCharacterMarker(marker))

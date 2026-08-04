@@ -4,16 +4,15 @@ import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
 
-/** Build a mock editor ref exposing spies for the methods the generators call. */
+/** Build a mock editor ref exposing spies for the methods the generator calls. */
 function makeMockEditorRef() {
-  const formatPara = vi.fn();
   const insertMarker = vi.fn();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker },
+    current: { insertMarker },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker };
+  return { ref, insertMarker };
 }
 
 describe('generateCharacterMarkerMenuListItems', () => {

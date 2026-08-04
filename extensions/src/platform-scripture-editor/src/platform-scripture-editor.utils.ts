@@ -1,4 +1,13 @@
-/* Small utility helpers for the platform-scripture-editor extension. */
+/*
+ * Small utility helpers for the platform-scripture-editor extension.
+ *
+ * `main.ts` imports from this module, so it loads in the extension host, where the module shim
+ * rejects any `require` other than `papi`. Keep runtime UI values out of here: importing a
+ * `lucide-react` icon or a `platform-bible-react` component as a *value* makes the whole extension
+ * fail to activate, so no scripture editor opens. Type-only imports are erased by the compiler and
+ * are fine. Helpers that need runtime UI values belong in a module the host never reaches — see
+ * `character-marker-menu.utils.ts`. Nothing enforces this at build or lint time.
+ */
 
 import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';

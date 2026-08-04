@@ -1,3 +1,4 @@
+import { MarkerCategoryType, MarkerType } from './usfm-marker.model';
 import { isBlockMarker, isCharacterMarker, usfmMarkers } from './usfm-markers';
 
 describe('isBlockMarker', () => {
@@ -92,5 +93,23 @@ describe('isCharacterMarker and isBlockMarker invariants', () => {
     );
 
     expect(markersWithoutEndMarker).toEqual([]);
+  });
+
+  // The one direction the tests above cannot see. `isCharacterMarker` excludes numbering markers by
+  // their `DivisionMarks` category rather than by name, which rests on `DivisionMarks` being a
+  // closed structural category: chapter and verse numbering, never body-text styling. That bet
+  // fails silently — a genuine character marker filed under `DivisionMarks` is simply rejected, so
+  // it never enters either filter above, both still pass, and the marker just disappears from the
+  // menu with no error. Pinning the intersection turns that drift into a failure here, where the
+  // exclusion is decided. A new numbering marker means adding it below; a styling marker showing up
+  // in this list means the category rule no longer holds and the exclusion needs rethinking.
+  it('excludes exactly the chapter and verse numbering markers by category', () => {
+    const divisionMarkCharacterMarkers = Object.keys(usfmMarkers).filter(
+      (marker) =>
+        usfmMarkers[marker].type === MarkerType.Character &&
+        usfmMarkers[marker].category === MarkerCategoryType.DivisionMarks,
+    );
+
+    expect(divisionMarkCharacterMarkers.sort()).toEqual(['ca', 'v', 'va', 'vp']);
   });
 });
