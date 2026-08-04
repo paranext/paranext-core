@@ -439,11 +439,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Resource picker dialog
 
-  // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
+  // Pass both DblResourceReference IDs and ProjectReference IDs to the Resource Picker so that
+  // locally-installed non-DBL resources (added as ProjectReferences via selectTextConnection) are
+  // shown in the INCLUDED section rather than re-appearing in INSTALLED on the next picker open.
   const currentFilteredDblIds = useMemo(() => {
-    return filteredResources.flatMap((r) =>
-      isDblResourceReference(r.reference) ? [r.reference.id] : [],
-    );
+    return filteredResources.flatMap((r) => {
+      const { reference } = r;
+      if (isDblResourceReference(reference)) return [reference.id];
+      if (isProjectReference(reference)) return [reference.id];
+      return [];
+    });
   }, [filteredResources]);
 
   const handleResourceSelect = useCallback(
