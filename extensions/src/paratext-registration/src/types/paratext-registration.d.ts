@@ -1,5 +1,12 @@
 declare module 'paratext-registration' {
-  import { DataProviderDataType, IDataProvider } from '@papi/core';
+  import type {
+    DataProviderDataType,
+    IDataProvider,
+    // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
+    // The root tsconfig uses ./extensions/src as a typeRoot but doesn't include ./lib, so @papi/core
+    // is unresolvable in the root context. The extensions workspace resolves it via ../../../lib.
+    // This inline suppression matches the pattern in platform-scripture.d.ts, legacy-comment-manager.d.ts, etc.
+  } from '@papi/core';
 
   /**
    * Paratext registry user information as used in `ParatextData.dll`

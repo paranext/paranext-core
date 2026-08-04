@@ -8,7 +8,12 @@ import {
 } from 'platform-bible-react/experimental';
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
-import { getErrorMessage, isPlatformError, type LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  type LanguageStrings,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
@@ -85,7 +90,7 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
 
 type LoadedProps = {
   provider: NonNullable<ReturnType<typeof useDataProvider<typeof INTERNET_SETTINGS_DATA_PROVIDER>>>;
-  localizedStrings: Record<string, string>;
+  localizedStrings: LanguageStrings;
   setCanProceed: FirstRunStepProps['setCanProceed'];
   onRetry: () => void;
 };
@@ -111,7 +116,7 @@ function InternetSettingsLoaded({
   const [isSaving, setIsSaving] = useState(false);
   const isMounted = useRef(false);
   // Last value we successfully displayed, so a failed optimistic save can revert to it.
-  const lastGood = useRef<InternetSettings | undefined>();
+  const lastGood = useRef<InternetSettings | undefined>(undefined);
 
   const showConnectingMessage = useDelayedFlag(
     isLoading && !isPlatformError(value),
