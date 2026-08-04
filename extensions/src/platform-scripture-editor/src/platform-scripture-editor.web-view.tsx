@@ -128,6 +128,8 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control.component';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
+import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
+import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -343,6 +345,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /** Stores the current editor selection, updated on every selection change. */
   const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /** Reads the current editor selection. A ref read has no dependencies. */
+  const getSelection = useCallback(() => currentSelectionRef.current, []);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   // Set by the core auto-sync edit-block driver while an automatic (scheduled) Send/Receive is
@@ -1826,30 +1831,52 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
 
+    const editorTree = (
+      <TwoStepDeleteTooltipOverlay>
+        <EditorKeyboardShortcuts editorRef={editorRef}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={setScrRefNoScroll}
+            options={options}
+            logger={logger}
+            onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+            onSelectionChange={handleSelectionChange}
+            onStateChange={(state) => {
+              setCanUndo(state.canUndo);
+              setCanRedo(state.canRedo);
+              setBlockMarker(state.blockMarker);
+              setContextMarker(state.contextMarker);
+            }}
+          />
+        </EditorKeyboardShortcuts>
+      </TwoStepDeleteTooltipOverlay>
+    );
+
     return (
       <>
         {workaround}
-        <ParagraphMarkerTooltipOverlay>
-          <TwoStepDeleteTooltipOverlay>
-            <EditorKeyboardShortcuts editorRef={editorRef}>
-              <Editorial
-                ref={editorRef}
-                scrRef={scrRef}
-                onScrRefChange={setScrRefNoScroll}
-                options={options}
-                logger={logger}
-                onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-                onSelectionChange={handleSelectionChange}
-                onStateChange={(state) => {
-                  setCanUndo(state.canUndo);
-                  setCanRedo(state.canRedo);
-                  setBlockMarker(state.blockMarker);
-                  setContextMarker(state.contextMarker);
-                }}
+        {/* Gated on !isPowerMode so the overlay is ABSENT from the Power tree, not merely hidden by
+            CSS — matching how `editor-container-simple` is applied below, so the bar and its reserved
+            gutter space appear and disappear together. */}
+        {isPowerMode ? (
+          <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+        ) : (
+          <CharacterMarkerBarOverlay
+            bar={
+              <CharacterMarkerBar
+                editorRef={editorRef}
+                getSelection={getSelection}
+                blockMarker={blockMarker}
+                contextMarker={contextMarker}
+                isSyncBlocked={isSyncBlocked}
+                localizedStrings={localizedStrings}
               />
-            </EditorKeyboardShortcuts>
-          </TwoStepDeleteTooltipOverlay>
-        </ParagraphMarkerTooltipOverlay>
+            }
+          >
+            <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+          </CharacterMarkerBarOverlay>
+        )}
       </>
     );
   }
