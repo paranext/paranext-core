@@ -9,6 +9,8 @@ last_updated: 2026-03-04
 
 # Extension Development Guide
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 This document provides a concise overview of extension development for Platform.Bible. For comprehensive details, refer to the linked wiki pages.
 
 ---
@@ -50,6 +52,29 @@ Keep pure presentational React in `src/components/*.component.tsx`, separate fro
   locations. `paratext-registration`, `platform-lexical-tools`, and `platform-scripture`
   follow this layout (e.g. `platform-scripture/src/checklist.web-view.tsx` imports
   `ChecklistTool` from `./components/checklist.component`).
+
+#### Component import purity (PAPI-decoupled)
+
+A presentational `*.component.tsx` must be free of any PAPI/platform runtime coupling:
+all data flows in via props, and all platform wiring (data fetching, settings, the
+`globalThis.webViewComponent` assignment) lives in the matching `*.web-view.tsx` entry
+point or web view provider. This keeps components reusable, Storybook-renderable, and
+unit-testable without a running app.
+
+A grep helps audit this — run it scoped to component files and **review each hit**:
+
+```bash
+grep -rnE "useData\b|useDataProvider\b|useSetting\b|papi\.|globalThis\.webViewComponent" \
+  --include='*.component.tsx' extensions/src/{ext}/src/components/
+```
+
+Two categories are deliberately **not** counted as coupling: `useLocalizedStrings` from
+`@papi/frontend/react` (the documented extension localization pattern — see
+`Localization-Guide.md`) and logger imports. A data-fetching or settings hit is a coupling
+leak: move it into the web view entry point/provider and pass the result down as a prop.
+A handful of shipped components predate this rule and still carry hits (e.g.
+`registration-form`, `track-project-dropdown`, `scripture-pane`, `footnotes-pane` in
+`platform-scripture`) — treat those as legacy, not as license to add more.
 
 ---
 
@@ -135,7 +160,7 @@ WebViews are React components rendered in sandboxed iframes:
 import { useData } from '@papi/frontend/react';
 
 globalThis.webViewComponent = function MyWebView() {
-  const [data] = useData('extensionName.dataProvider').DataType('selector');
+  const [data] = useData('extensionName.dataProvider').DataType('selector', 'default value'); // defaultValue (2nd arg) is required
   return <div>{data}</div>;
 };
 ```

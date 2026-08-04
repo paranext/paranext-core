@@ -1,5 +1,7 @@
 # Log Inspector Reference
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 ## Logging Architecture
 
 Platform.Bible uses `electron-log` for unified cross-process logging.
@@ -189,7 +191,7 @@ When debugging via VS Code, logs also appear in the Debug Console.
 
 Renderer logs can be viewed in Chrome DevTools console:
 - Press F12 in the app window
-- Or use `claude --chrome` and read console via MCP
+- Or read the renderer live over CDP: `pw-interact.sh '{"cmd":"eval",...}'` (visual-verification skill); renderer logs are also forwarded into the unified main.log
 
 ### JSON-RPC Message Logging
 

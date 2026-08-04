@@ -6,6 +6,8 @@ allowed-tools: Bash, Read
 
 # Test Runner Skill
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 Run and analyze tests for Platform.Bible (paranext-core) with structured output.
 
 ## Quick Reference
@@ -14,11 +16,11 @@ Run and analyze tests for Platform.Bible (paranext-core) with structured output.
 |--------|---------|
 | All TypeScript tests | `npm test` |
 | All C# tests | `dotnet test c-sharp-tests/` |
-| Specific TS test | `npm test -- path/to/test.ts` |
-| C# by category | `dotnet test --filter "Category=Contract"` |
-| Watch mode | `npm test -- --watch` |
+| Specific TS test | `npm run test:core -- --run path/to/test.test.ts` |
+| C# by category | `dotnet test c-sharp-tests/ --filter "Category=Contract"` |
+| Watch mode | `npm run test:core -- path/to/dir` (vitest watches by default) |
 | E2E (CDP, running app) | `npx playwright test --config=e2e-tests/playwright-cdp.config.ts` |
-| E2E (standalone) | `npx playwright test --config=e2e-tests/playwright.config.ts --project=development` |
+| E2E (standalone) | `npm run test:e2e:smoke` (CI project) or `npm run test:e2e:isolated [subset]` |
 
 ## TypeScript Tests (Vitest)
 
@@ -31,17 +33,19 @@ npm test
 ### Run Specific Test File
 
 ```bash
-npm test -- path/to/test.test.ts
+# `npm test` is a compound script — extra args land on the workspaces half, NOT
+# the core run. Use test:core directly for the root suite:
+npm run test:core -- --run path/to/test.test.ts
 ```
 
 ### Run Tests Matching Pattern
 
 ```bash
 # By file name pattern
-npm test -- --testNamePattern="ComponentName"
+npm run test:core -- -t "ComponentName"
 
 # By file path pattern
-npm test -- src/renderer/components/
+npm run test:core -- src/renderer/components/
 ```
 
 ### Watch Mode
@@ -49,19 +53,19 @@ npm test -- src/renderer/components/
 Automatically re-run tests on file changes:
 
 ```bash
-npm test -- --watch
+npm run test:core -- path/to/dir   # vitest runs in watch mode by default; add --run for a single pass
 ```
 
 ### With Coverage
 
 ```bash
-npm test -- --coverage
+npm run test:core -- --run --coverage   # requires @vitest/coverage-v8 installed at the root first
 ```
 
 ### Verbose Output
 
 ```bash
-npm test -- --reporter=verbose
+npm run test:core -- --run --reporter=verbose
 ```
 
 ## C# Tests (NUnit)
@@ -85,32 +89,32 @@ See `categories.md` for the full set. The most common are:
 
 ```bash
 # Run only contract tests
-dotnet test --filter "Category=Contract"
+dotnet test c-sharp-tests/ --filter "Category=Contract"
 
 # Run multiple categories
-dotnet test --filter "Category=Contract|Category=Integration"
+dotnet test c-sharp-tests/ --filter "Category=Contract|Category=Integration"
 ```
 
 ### Filter by Test Name
 
 ```bash
 # By test method name
-dotnet test --filter "FullyQualifiedName~CreateProject"
+dotnet test c-sharp-tests/ --filter "FullyQualifiedName~CreateProject"
 
 # By class name
-dotnet test --filter "ClassName~ProjectDataProviderTests"
+dotnet test c-sharp-tests/ --filter "ClassName~ProjectDataProviderTests"
 ```
 
 ### Verbose Output
 
 ```bash
-dotnet test --logger:"console;verbosity=detailed"
+dotnet test c-sharp-tests/ --logger:"console;verbosity=detailed"
 ```
 
 ### With Coverage
 
 ```bash
-dotnet test --collect:"XPlat Code Coverage"
+dotnet test c-sharp-tests/ --collect:"XPlat Code Coverage"
 ```
 
 ## Playwright E2E Tests
@@ -138,7 +142,9 @@ Prerequisite: App running with `--remote-debugging-port=9223` (the `app-runner` 
 
 ```bash
 npm stop  # Port 8876 must be free
-npx playwright test --config=e2e-tests/playwright.config.ts --project=development
+npm run test:e2e:smoke                 # the CI smoke project
+npm run test:e2e:isolated [subset]     # per-test isolated Electron suite
+# raw invocation, if needed: npx playwright test --config=e2e-tests/playwright.config.ts --project=smoke
 ```
 
 ### Debug Failing E2E Tests
@@ -157,20 +163,20 @@ ls e2e-tests/test-results/
 
 ```bash
 # TypeScript - show full diff
-npm test -- --reporter=verbose
+npm run test:core -- --run --reporter=verbose
 
 # C# - detailed output
-dotnet test --logger:"console;verbosity=detailed" -v n
+dotnet test c-sharp-tests/ --logger:"console;verbosity=detailed" -v n
 ```
 
 ### Run Single Failing Test
 
 ```bash
 # TypeScript
-npm test -- --testNamePattern="exact test name"
+npm run test:core -- -t="exact test name"
 
 # C#
-dotnet test --filter "FullyQualifiedName=Namespace.Class.MethodName"
+dotnet test c-sharp-tests/ --filter "FullyQualifiedName=Namespace.Class.MethodName"
 ```
 
 ## TDD Workflow
@@ -180,7 +186,7 @@ dotnet test --filter "FullyQualifiedName=Namespace.Class.MethodName"
 1. Write failing tests:
    ```bash
    # Verify tests fail (expected)
-   npm test -- path/to/new.test.ts
+   npm run test:core -- --run path/to/new.test.ts
    # Should see failures
    ```
 
@@ -189,7 +195,7 @@ dotnet test --filter "FullyQualifiedName=Namespace.Class.MethodName"
 1. Implement minimum code
 2. Run tests:
    ```bash
-   npm test -- path/to/new.test.ts
+   npm run test:core -- --run path/to/new.test.ts
    # Should pass
    ```
 
@@ -207,42 +213,23 @@ dotnet test --filter "FullyQualifiedName=Namespace.Class.MethodName"
 
 Mutation testing verifies test quality by introducing small changes (mutations) to code and checking if tests catch them.
 
-### Prerequisites
+### Tooling status (verified 2026-08-03)
 
-Mutation testing requires Stryker to be installed:
+**Stryker is not set up in paranext-core** — no config files, no npm scripts, no
+dotnet tool entry (`.config/dotnet-tools.json` contains only csharpier). The
+prerequisite checks below will come up empty; stop there rather than improvising.
 
 ```bash
-# TypeScript - check if configured
+# TypeScript - check if configured (currently: no such file)
 ls stryker.config.json
 
-# C# - check if tool installed
-dotnet tool list | grep stryker
+# C# - check if tool installed (currently: not installed)
+dotnet tool list | grep -i stryker
 ```
 
-### Running Mutation Tests
-
-**TypeScript (Stryker-JS):**
-
-```bash
-# Run for entire project
-npx stryker run
-
-# Run for specific feature
-npx stryker run --mutate "src/**/{feature}*.ts"
-```
-
-**C# (Stryker.NET):**
-
-The C# tests are a single project: `c-sharp-tests/c-sharp-tests.csproj` (there is no
-per-feature `.csproj`).
-
-```bash
-# Run from the c-sharp-tests directory (it has one test project)
-cd c-sharp-tests && dotnet stryker
-
-# Run with HTML report
-cd c-sharp-tests && dotnet stryker --reporters "['html', 'progress']"
-```
+If the team adopts mutation testing, this section should be rewritten around the
+real configs (Stryker-JS via `npx --package @stryker-mutator/core stryker run`;
+Stryker.NET against `c-sharp-tests/c-sharp-tests.csproj`).
 
 ### Interpreting Mutation Results
 
@@ -280,10 +267,10 @@ For TDD workflows, run tests continuously in the background.
 **TypeScript:**
 ```bash
 # Watch all tests
-npm test -- --watch
+npm run test:core -- path/to/dir
 
 # Watch specific directory
-npm test -- --watch extensions/src/{feature}/
+npm run test:core -- path/to/dir extensions/src/{feature}/
 ```
 
 **C# (dotnet watch):**
@@ -308,17 +295,16 @@ For features with backend logic, verify coverage meets thresholds.
 ### TypeScript Coverage
 
 ```bash
-npm test -- --coverage
+npm run test:core -- --run --coverage   # requires @vitest/coverage-v8 installed at the root first
 ```
 
-Check output for:
-- Line coverage: >= 90%
-- Branch coverage: >= 80%
+No coverage thresholds are configured in this repo (no `coverage` key in
+vitest.config.ts, no CI gate) — read the numbers as information, not a gate.
 
 ### C# Coverage
 
 ```bash
-dotnet test --collect:"XPlat Code Coverage"
+dotnet test c-sharp-tests/ --collect:"XPlat Code Coverage"
 ```
 
 ### Coverage Report Locations
@@ -338,20 +324,11 @@ npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/
 
 ### TypeScript Tests
 
-```
-paranext-core/
-├── src/
-│   ├── main/__tests__/           # Main process tests
-│   ├── renderer/__tests__/       # Renderer tests
-│   ├── shared/__tests__/         # Shared code tests
-│   └── extension-host/__tests__/ # Extension host tests
-├── extensions/
-│   └── src/{ext}/
-│       └── __tests__/            # Extension tests
-└── lib/
-    └── {package}/
-        └── __tests__/            # Library tests
-```
+Tests are **colocated**: `<name>.test.ts(x)` sits beside its source file — this is
+the dominant convention across `src/`, `extensions/src/`, and `lib/`. A handful of
+service-level suites use `__tests__/` subfolders (`src/main/services/__tests__/`,
+`src/shared/models/__tests__/`, `src/shared/services/__tests__/`). Put new tests
+next to the file under test.
 
 ### C# Tests
 
