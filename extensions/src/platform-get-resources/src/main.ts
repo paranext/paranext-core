@@ -7,7 +7,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceData } from 'platform-bible-utils';
+import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -131,6 +131,68 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       return undefined;
     }
   });
+}
+
+/**
+ * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
+ * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
+ * were installed outside the DBL download flow.
+ *
+ * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
+ * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
+ * `DblResourceReference` when the user selects one.
+ */
+async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+  try {
+    const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platform.base'],
+    });
+
+    // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
+    // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
+    const dblEntries = cachedResources ?? [];
+    const nonDblMetadata = allMetadata.filter(
+      (m) =>
+        m.isEditable === false &&
+        !dblEntries.some(
+          (r) =>
+            (r.projectId !== '' && r.projectId === m.id) ||
+            m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase()),
+        ),
+    );
+
+    const results = await Promise.allSettled(
+      nonDblMetadata.map(async (m) => {
+        const pdp = await papi.projectDataProviders.get('platform.base', m.id);
+        const [displayName, fullName, language] = await Promise.all([
+          pdp.getSetting('platform.name'),
+          pdp.getSetting('platform.fullName'),
+          pdp.getSetting('platform.language'),
+        ]);
+        return {
+          // Convention: dblEntryUid === projectId marks this as a non-DBL synthetic entry.
+          // selectTextConnection detects this and creates a ProjectReference instead of a
+          // DblResourceReference so the resource is resolvable without a catalog entry.
+          dblEntryUid: m.id,
+          displayName: displayName ?? m.id,
+          fullName: fullName ?? displayName ?? m.id,
+          bestLanguageName: language ?? '',
+          type: 'ScriptureResource' as ResourceType,
+          size: 0,
+          installed: true,
+          updateAvailable: false,
+          projectId: m.id,
+        } satisfies DblResourceData;
+      }),
+    );
+
+    return results
+      .filter((r): r is PromiseFulfilledResult<DblResourceData> => r.status === 'fulfilled')
+      .map((r) => r.value);
+  } catch (error: unknown) {
+    logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
+    return [];
+  }
 }
 
 let manageExtensions: ManageExtensions;
@@ -296,6 +358,11 @@ export async function activate(context: ExecutionActivationContext) {
     getCachedResources,
   );
 
+  const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getLocalNonDblResources',
+    getLocalNonDblResources,
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
@@ -327,6 +394,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
     await getCachedResourcesCommandPromise,
+    await getLocalNonDblResourcesCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
 

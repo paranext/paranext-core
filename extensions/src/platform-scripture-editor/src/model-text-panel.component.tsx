@@ -24,7 +24,7 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference, getRefLabel } from './resource-reference.utils';
+import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
@@ -173,7 +173,9 @@ export function ModelTextPanel({
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
   const match = dblRef ? findCachedDblResource(dblRef, dblResources) : undefined;
-  const resourceProjectId = match?.installed ? match.projectId : undefined;
+  // ProjectReferences (locally-installed non-DBL resources) are resolved directly by project ID.
+  const localProjectId = isProjectReference(effectiveModelText) ? effectiveModelText.id : undefined;
+  const resourceProjectId = match?.installed ? match.projectId : localProjectId;
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)
     : undefined;
@@ -403,9 +405,12 @@ export function ModelTextPanel({
       (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
     );
     const adminDblItems = dblItems.filter((r) => r.source === 'admin');
-    const relevantItems =
+    const relevantDblItems =
       adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
-    return relevantItems.map((r) => r.id);
+    // Also include project reference IDs so locally-installed non-DBL resources (added as
+    // ProjectReferences) appear in the INCLUDED section when the picker reopens.
+    const projectIds = items.flatMap((r) => (isProjectReference(r) ? [r.id] : []));
+    return [...relevantDblItems.map((r) => r.id), ...projectIds];
   }, [effectiveModelTexts]);
 
   const handleResourceSelect = useCallback(
