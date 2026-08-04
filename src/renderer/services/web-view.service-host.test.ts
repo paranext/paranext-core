@@ -17,7 +17,12 @@ const SUPPLEMENT_TAB_ID = 'supplement-tab';
 
 const mocks = vi.hoisted(() => ({
   settingsGet: vi.fn(),
-  settingsSubscribe: vi.fn(async () => async () => true),
+  settingsSubscribe: vi.fn<
+    (
+      key: string,
+      callback: (newSetting: unknown) => Promise<void>,
+    ) => Promise<() => Promise<boolean>>
+  >(async () => async () => true),
   networkRequest: vi.fn(),
 }));
 
@@ -282,6 +287,31 @@ describe('loadLayout restores this window’s layout from the main process', () 
     expect(tabIdsIn(loaded)).toEqual(['legacy-tab-w2']);
   });
 
+  test('a legacy window prefers a window-prefixed legacy key over the stale unprefixed one', async () => {
+    // Builds that scoped localStorage per window (before layouts moved into the main process's
+    // structure) wrote the dock layout only under prefixed keys, so when one exists the unprefixed
+    // key is the older layout
+    localStorage.setItem('dock-saved-layout', serialize(layoutWithTab('stale-tab')));
+    localStorage.setItem('1_dock-saved-layout', serialize(layoutWithTab('prefixed-tab')));
+    respondToGetLayout({ kind: 'legacy' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual(['prefixed-tab-w2']);
+  });
+
+  test('with several window-prefixed legacy keys, the lowest window id wins', async () => {
+    // The lowest id was the earliest-created (main) window of the session that wrote the keys —
+    // and notably NOT this window's own id (this harness runs as window 2)
+    localStorage.setItem('3_dock-saved-layout', serialize(layoutWithTab('higher-tab')));
+    localStorage.setItem('1_dock-saved-layout', serialize(layoutWithTab('lowest-tab')));
+    respondToGetLayout({ kind: 'legacy' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual(['lowest-tab-w2']);
+  });
+
   test('a second window never receives the legacy layout — the clone fallback is gone', async () => {
     // The legacy layout is present, but main says this window has no entry: it must start empty
     // instead of cloning window 1's legacy layout
@@ -311,6 +341,103 @@ describe('loadLayout restores this window’s layout from the main process', () 
     // The dev-fresh-profile behavior: no saved entry and no legacy layout loads testLayout (which
     // here holds the anchor tab; the supplement then merges onto that anchor as usual)
     expect(tabIdsIn(loaded)).toContain('anchor-tab-w2');
+  });
+});
+
+describe('loadLayout when the saved-layout request fails', () => {
+  beforeEach(() => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    // A legacy layout is present throughout: a request FAILURE must never read it — only a
+    // main-process 'legacy' answer may (otherwise the shared legacy layout would be cloned into
+    // whichever window hit the failure)
+    localStorage.setItem('dock-saved-layout', serialize(layoutWithTab('legacy-tab')));
+  });
+
+  /** Register a dock layout under fake timers and drive the retry delays until the load lands */
+  async function registerWindowThroughRetries(simpleLayout: LayoutInfo) {
+    vi.useFakeTimers();
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
+    registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+    return { dockLayout, loadedLayouts };
+  }
+
+  test('retries a failed request and uses the answer a later attempt brings', async () => {
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem');
+    let getLayoutCalls = 0;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType !== 'windowLayout:get') return undefined;
+      getLayoutCalls += 1;
+      if (getLayoutCalls < 3) throw new Error('transport not up yet');
+      return { kind: 'entry', layout: layoutWithTab('saved-tab') };
+    });
+
+    const { dockLayout, loadedLayouts } = await registerWindowThroughRetries(layoutWithAnchor());
+
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-tab-w2']);
+    expect(getItemSpy).not.toHaveBeenCalledWith('dock-saved-layout');
+    // Pushes work normally — the load succeeded, just not on the first attempt
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('changed'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
+
+  test('when every attempt fails, the window starts empty and layout pushes are held', async () => {
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem');
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+
+    const { dockLayout, loadedLayouts } = await registerWindowThroughRetries(layoutWithAnchor());
+
+    // Empty — not the legacy layout and not the harness's testLayout (which holds the anchor tab)
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual([]);
+    expect(getItemSpy).not.toHaveBeenCalledWith('dock-saved-layout');
+
+    // A layout change must NOT be pushed: what the dock holds is a fallback, and pushing it would
+    // overwrite the user's real saved entry in the main process's structure
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('fallback-era'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toEqual([]);
+  });
+
+  test('a later successful load lifts the push hold', async () => {
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+
+    const { dockLayout } = await registerWindowThroughRetries(layoutWithAnchor());
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('held'), undefined, undefined);
+    expect(layoutPushes()).toEqual([]);
+
+    // The transport recovers, and an interface-mode round trip reloads the layout
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab') });
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    await interfaceModeCallback('simple');
+    await interfaceModeCallback('power');
+
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('after-recovery'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toHaveLength(1);
   });
 });
 

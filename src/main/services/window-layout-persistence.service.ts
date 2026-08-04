@@ -195,6 +195,14 @@ function findTrackedWindow(windowId: number): TrackedWindow | undefined {
   return trackedWindows.find((tracked) => tracked.windowId === windowId);
 }
 
+/** Cancel the pending debounced write, if any */
+function cancelScheduledWrite(): void {
+  if (writeTimeout) {
+    clearTimeout(writeTimeout);
+    writeTimeout = undefined;
+  }
+}
+
 /**
  * Read the persisted structure and report what startup should create. Resets all in-memory
  * tracking, so call it only while no windows are open (app startup, or macOS re-activation after
@@ -207,10 +215,11 @@ function findTrackedWindow(windowId: number): TrackedWindow | undefined {
  * The main entry is always kept, since the app always opens at least one window.
  */
 export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
-  if (writeTimeout) {
-    clearTimeout(writeTimeout);
-    writeTimeout = undefined;
-  }
+  cancelScheduledWrite();
+  // A flush can still be draining when this runs (macOS: re-activation right after the last
+  // window's quit-like close flushed the structure); read only after it lands, or the plan would
+  // be built from the previous file contents.
+  await writeChain;
   fileSlots = [];
   mainSlotIndex = undefined;
   trackedWindows = [];
@@ -337,6 +346,11 @@ export function updateWindowBounds(windowId: number, boundsState: WindowBoundsSt
  * already flushed with the window still in it, and must not be rewritten smaller).
  */
 export function handleWindowRemoved(windowId: number): void {
+  // A write scheduled before the removal would capture the shrunken window list when its debounce
+  // fires — after a quit-time flush that would rewrite the structure without the removed window,
+  // losing its entry — so any pending write dies with the window. A caller that wants the smaller
+  // structure written (a deliberate close) calls writeNow itself.
+  cancelScheduledWrite();
   trackedWindows = trackedWindows.filter((tracked) => tracked.windowId !== windowId);
   fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
 }
@@ -398,10 +412,16 @@ async function writeStructureToDisk(structure: WindowLayoutStructure): Promise<v
   }
 }
 
-/** Snapshot the structure now and queue it behind any write already in flight */
+/**
+ * Queue a write of the structure behind any write already in flight. The structure is built when
+ * the write EXECUTES, not when it is enqueued, so state that changes while earlier writes drain —
+ * e.g. a layout pushed while a quit-time flush waits its turn — still lands in the write. Only the
+ * window list is pinned at enqueue time: which windows a write covers is the caller's decision (see
+ * {@link writeNow}), while their state should be the freshest available.
+ */
 function enqueueWrite(windowIdsInOrder: readonly number[]): Promise<void> {
-  const structure = buildStructure(windowIdsInOrder);
-  writeChain = writeChain.then(() => writeStructureToDisk(structure));
+  const windowIds = [...windowIdsInOrder];
+  writeChain = writeChain.then(() => writeStructureToDisk(buildStructure(windowIds)));
   return writeChain;
 }
 
@@ -420,10 +440,7 @@ function scheduleWrite(): void {
  * the app is going down, or the remaining windows after one was deliberately closed.
  */
 export async function writeNow(windowIdsInOrder: readonly number[]): Promise<void> {
-  if (writeTimeout) {
-    clearTimeout(writeTimeout);
-    writeTimeout = undefined;
-  }
+  cancelScheduledWrite();
   return enqueueWrite(windowIdsInOrder);
 }
 
@@ -457,7 +474,9 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
-  tracked.layout = layoutRecord;
+  // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
+  // enter the persisted structure even when a pusher skipped its own reconciliation
+  tracked.layout = reconcileSavedLayout(layoutRecord);
   scheduleWrite();
 }
 
