@@ -65,10 +65,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   >();
 
   const provider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
-  const [dpValue, setData, isLoadingSettings] = useData(provider).InternetSettings(
-    undefined,
-    DEFAULT_INTERNET_SETTINGS,
-  );
+  const [dpValue, setData, isLoadingSettings] = useData(
+    INTERNET_SETTINGS_DATA_PROVIDER,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
 
   // Guard against overwriting an in-progress user edit if the callback were ever replaced.
   const hasSyncedFetch = useRef(false);
