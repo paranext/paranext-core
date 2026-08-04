@@ -429,4 +429,28 @@ export async function quitAppAndWaitForExit(
   return exitResult;
 }
 
+/**
+ * The graceful-quit epilogue shared by the multi-window suites: trigger a real quit and wait for
+ * the OS process to exit (see {@link quitAppAndWaitForExit}), assert the exit was clean (code 0, no
+ * signal), then sweep everything the given capture recorded for {@link FAULT_MARKERS} and for
+ * warn/error-severity duplicate registrations ({@link DUPLICATE_REGISTRATION_PATTERN}).
+ *
+ * @param label Prefix for the step-log line recording the exit (e.g. `'phase 1'`).
+ */
+export async function quitAndExpectCleanExit(
+  electronApp: ElectronApplication,
+  output: AppOutputCapture,
+  logStep: (label: string) => void,
+  label: string,
+): Promise<void> {
+  const exitResult = await quitAppAndWaitForExit(electronApp);
+  logStep(`${label}: exited with code ${exitResult.code} signal ${exitResult.signal}`);
+  expect(exitResult.signal).toBeUndefined();
+  expect(exitResult.code).toBe(0);
+
+  const log = output.text();
+  FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
+  expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
+}
+
 // #endregion
