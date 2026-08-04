@@ -41,9 +41,13 @@ frozen records or pinned-snapshot corpora with their own provenance rules.
 ## Step 1: Refresh reference state
 
 ```bash
-git fetch origin main --quiet
+git fetch origin main --quiet \
+  || echo "WARN: fetch failed — existence checks will run against the last-fetched origin/main from $(git log -1 --format=%cs origin/main 2>/dev/null || echo 'unknown date'); results may be stale"
 git -C "$(git rev-parse --show-toplevel)/../Paratext" rev-parse --short HEAD 2>/dev/null || echo "PT9 checkout absent — PT9-path checks will be skipped"
 ```
+
+If the fetch prints its WARN, carry that caveat into the final report — the sweep still runs,
+but every existence check is only as fresh as that date.
 
 The sweep reads the **doc text from the working tree** (so a PR branch's added or edited content
 is what gets gated — run it from the branch you're gating) while all **existence checks** (paths,
@@ -200,8 +204,8 @@ The sweep favors precision but still produces noise. For each candidate:
 
 ## Completion checklist
 
-- [ ] `git fetch origin main` ran; doc text was read from the working tree, existence checks ran
-      against `origin/main`
+- [ ] `git fetch origin main` succeeded (or its staleness WARN is carried into the report); doc
+      text was read from the working tree, existence checks ran against `origin/main`
 - [ ] Sweep script ran to completion; frozen-record skips listed
 - [ ] Every PR reference spot-checked with `gh`
 - [ ] Findings triaged into misleads-agent / wrong-detail / cosmetic with evidence
