@@ -132,6 +132,9 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
   }
 }
 
+/** Debounce interval for inline-mode live application of note edits to the parent editor. */
+export const INLINE_APPLY_DEBOUNCE_MS = 300;
+
 // TODO: Remove this once the new marker menu is implemented with correct logic
 /**
  * This is for a temporary fix to get the markers menu to work by having the default usj include a
@@ -319,6 +322,44 @@ export default function FootnoteEditor({
     [onChange, parentEditorRef],
   );
 
+  // Inline live-apply: schedule/flush a debounced apply-to-parent. Refs (not state) because
+  // flush must run synchronously during unmount cleanup with the latest values.
+  const pendingApplyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const callerStateRef = useRef({ callerType, customCaller });
+  useEffect(() => {
+    callerStateRef.current = { callerType, customCaller };
+  }, [callerType, customCaller]);
+
+  const saveCurrentNoteOpRef = useRef(saveCurrentNoteOp);
+  useEffect(() => {
+    saveCurrentNoteOpRef.current = saveCurrentNoteOp;
+  }, [saveCurrentNoteOp]);
+
+  const flushPendingApply = useCallback(() => {
+    if (pendingApplyTimeoutRef.current === undefined) return;
+    clearTimeout(pendingApplyTimeoutRef.current);
+    pendingApplyTimeoutRef.current = undefined;
+    const { callerType: ct, customCaller: cc } = callerStateRef.current;
+    saveCurrentNoteOpRef.current(ct, cc, true);
+  }, []);
+
+  const schedulePendingApply = useCallback(() => {
+    if (pendingApplyTimeoutRef.current !== undefined) clearTimeout(pendingApplyTimeoutRef.current);
+    pendingApplyTimeoutRef.current = setTimeout(() => {
+      pendingApplyTimeoutRef.current = undefined;
+      const { callerType: ct, customCaller: cc } = callerStateRef.current;
+      saveCurrentNoteOpRef.current(ct, cc, true);
+    }, INLINE_APPLY_DEBOUNCE_MS);
+  }, []);
+
+  // Ending an inline editing session = unmounting this component; unsaved edits must land.
+  // useLayoutEffect (not useEffect): on unmount, React detaches `editorRef` before passive-effect
+  // (useEffect) cleanups run but after layout-effect cleanups, so a useEffect-based flush would
+  // read a null editorRef and silently no-op.
+  useLayoutEffect(() => {
+    return () => flushPendingApply();
+  }, [flushPendingApply]);
+
   const closeAndSave = useCallback(() => {
     saveCurrentNoteOp(callerType, customCaller, true);
     onClose();
@@ -356,17 +397,19 @@ export default function FootnoteEditor({
   const handleCallerTypeChange = useCallback(
     (newCallerType: FootnoteCallerType) => {
       setCallerType(newCallerType);
-      saveCurrentNoteOp(newCallerType, customCaller);
+      // Caller changes are discrete actions (not continuous typing), so in inline mode they
+      // apply to the parent editor immediately rather than going through the debounce.
+      saveCurrentNoteOp(newCallerType, customCaller, inline);
     },
-    [customCaller, saveCurrentNoteOp],
+    [customCaller, inline, saveCurrentNoteOp],
   );
 
   const handleCustomCallerChange = useCallback(
     (newCustomCaller: string) => {
       setCustomCaller(newCustomCaller);
-      saveCurrentNoteOp(callerType, newCustomCaller);
+      saveCurrentNoteOp(callerType, newCustomCaller, inline);
     },
-    [callerType, saveCurrentNoteOp],
+    [callerType, inline, saveCurrentNoteOp],
   );
 
   const handleNoteTypeChange = (value: string) => {
@@ -448,12 +491,15 @@ export default function FootnoteEditor({
 
         // Auto-save on every content change (does not apply to parent editor)
         saveCurrentNoteOp(callerType, customCaller);
+        // Inline mode has no Save button - content changes apply to the parent editor live,
+        // debounced so rapid keystrokes coalesce into one replaceEmbedUpdate call.
+        if (inline) schedulePendingApply();
       } else {
         setIsTypeSwitchable(false);
         setIsAtInitialState(true);
       }
     },
-    [callerType, customCaller, saveCurrentNoteOp],
+    [callerType, customCaller, saveCurrentNoteOp, inline, schedulePendingApply],
   );
 
   const showInlineMarkersMenu = useCallback(() => {

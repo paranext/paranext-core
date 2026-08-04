@@ -176,3 +176,156 @@ describe('FootnoteEditor inline mode', () => {
     });
   });
 });
+
+describe('FootnoteEditor inline live-apply', () => {
+  function primeCurrentOps(text: string) {
+    editorRefMock.getNoteOps.mockReturnValue(makeNoteOps(text));
+  }
+
+  it('debounces replaceEmbedUpdate on content changes', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-live',
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load
+
+    primeCurrentOps('edit 1');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    // First onUsjChange after load only snapshots initial state - no save yet.
+    primeCurrentOps('edit 2');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    primeCurrentOps('edit 3');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+
+    expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledWith(
+      'key-live',
+      expect.arrayContaining([expect.objectContaining({ insert: expect.anything() })]),
+    );
+  });
+
+  it('flushes a pending apply on unmount', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    const { unmount } = renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-flush',
+    });
+    await vi.runOnlyPendingTimersAsync();
+
+    primeCurrentOps('initial'); // snapshot call
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    primeCurrentOps('unsaved edit');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+
+    unmount(); // before the 300ms debounce elapses
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not live-apply in popover mode', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    renderEditor({
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+    });
+    await vi.runOnlyPendingTimersAsync();
+    primeCurrentOps('snapshot');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    primeCurrentOps('edit');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
+  });
+
+  // Regression test (deferred from Task 1 review): noteKeyRef must track the LATEST noteKey,
+  // even when a save is triggered mid-session after the parent has re-minted the key (e.g. a
+  // previous live-apply cycle). Rerendering with a new noteKey must not require a reload
+  // (noteOps identity is unchanged), but the next apply must target the new key.
+  it('targets the latest noteKey via the ref when noteKey changes mid-session', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    const noteOps = makeNoteOps('first');
+    const { rerender, props } = renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-original',
+      noteOps,
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load
+
+    rerender(
+      <FootnoteEditor
+        {...props}
+        inline
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef={parentRef as never}
+        noteKey="key-updated"
+        noteOps={noteOps}
+      />,
+    );
+
+    primeCurrentOps('edit 1');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    // First onUsjChange after load only snapshots initial state - no save yet.
+    primeCurrentOps('edit 2');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+
+    await vi.advanceTimersByTimeAsync(300);
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledWith(
+      'key-updated',
+      expect.arrayContaining([expect.objectContaining({ insert: expect.anything() })]),
+    );
+  });
+});
