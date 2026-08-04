@@ -179,7 +179,9 @@ describe('fetchDownloadedResources', () => {
     expect(result).toEqual([
       { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
     ]);
-    expect(papi.projectLookup.getMetadataForAllProjects).toHaveBeenCalledWith();
+    expect(papi.projectLookup.getMetadataForAllProjects).toHaveBeenCalledWith({
+      includeProjectInterfaces: ['platform.base'],
+    });
   });
 
   it('returns [] and warns when enumeration throws', async () => {
