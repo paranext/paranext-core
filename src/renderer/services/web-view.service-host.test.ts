@@ -18,7 +18,7 @@ const SUPPLEMENT_TAB_ID = 'supplement-tab';
 const mocks = vi.hoisted(() => ({
   settingsGet: vi.fn(),
   settingsSubscribe: vi.fn(async () => async () => true),
-  storageGetItem: vi.fn((): string | undefined => undefined),
+  networkRequest: vi.fn(),
 }));
 
 // The supplement is product-specific data; supply our own so these tests describe the merge
@@ -46,15 +46,13 @@ vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: mocks.settingsGet, subscribe: mocks.settingsSubscribe },
 }));
-vi.mock('@renderer/services/localStorage.service', () => ({
-  default: { getItem: mocks.storageGetItem, setItem: vi.fn() },
-}));
 
 // Everything below is module-load or startup machinery the layout path does not exercise; stub it
 // so importing the service host in a test does not stand up the whole renderer service graph.
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
   getNetworkEvent: () => vi.fn(),
+  request: mocks.networkRequest,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: vi.fn() },
@@ -103,6 +101,26 @@ function layoutWithAnchor(extraTabs: SavedTabInfo[] = []): LayoutInfo {
   } as unknown as LayoutInfo;
 }
 
+/** Layout with one panel holding one web view tab with the given id */
+function layoutWithTab(tabId: string): LayoutInfo {
+  return {
+    dockbox: {
+      mode: 'horizontal',
+      children: [
+        {
+          tabs: [
+            {
+              id: tabId,
+              tabType: TAB_TYPE_WEBVIEW,
+              data: { id: tabId, webViewType: 'test.type', state: {} },
+            },
+          ],
+        },
+      ],
+    },
+  } as unknown as LayoutInfo;
+}
+
 /** Every tab id anywhere in a layout, in order */
 function tabIdsIn(layout: LayoutInfo): string[] {
   const ids: string[] = [];
@@ -136,20 +154,44 @@ function makeDockLayout(simpleLayout: LayoutInfo) {
 }
 
 /** Register a dock layout and wait for the fire-and-forget initial `loadLayout` to land */
-async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
+async function registerWindow(simpleLayout: LayoutInfo) {
   const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
   const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
   registerDockLayout(dockLayout);
   await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+  return { dockLayout, loadedLayouts };
+}
+
+/** Register a dock layout and return the layout the initial load landed on */
+async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
+  const { loadedLayouts } = await registerWindow(simpleLayout);
   return loadedLayouts[loadedLayouts.length - 1];
 }
 
+/** Answer `windowLayout:get` with the given response; every other request resolves undefined */
+function respondToGetLayout(response: unknown) {
+  mocks.networkRequest.mockImplementation(async (requestType: string) =>
+    requestType === 'windowLayout:get' ? response : undefined,
+  );
+}
+
+/** All `windowLayout:save` pushes made so far, as [windowId, layout] pairs */
+function layoutPushes() {
+  return mocks.networkRequest.mock.calls
+    .filter(([requestType]) => requestType === 'windowLayout:save')
+    .map(([, windowId, layout]) => [windowId, layout]);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.resetModules();
+  localStorage.clear();
+  globalThis.windowId = '2';
+  respondToGetLayout({ kind: 'empty' });
+});
+
 describe('loadLayout scopes web view ids to this window', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    vi.resetModules();
-    globalThis.windowId = '2';
-    mocks.storageGetItem.mockReturnValue(undefined);
     mocks.settingsGet.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'simple' : true,
     );
@@ -194,7 +236,7 @@ describe('loadLayout scopes web view ids to this window', () => {
   });
 
   test('re-scopes a restored supplement tab instead of adding a second copy', async () => {
-    // Power mode persists the merged layout, so the next load restores a supplement tab that is
+    // Power mode restores the merged layout, so the next load restores a supplement tab that is
     // already scoped — to another window's id, since window ids are not stable across restarts
     const savedSupplementTab: SavedTabInfo = {
       id: `${SUPPLEMENT_TAB_ID}-w1`,
@@ -204,12 +246,117 @@ describe('loadLayout scopes web view ids to this window', () => {
     mocks.settingsGet.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : true,
     );
-    mocks.storageGetItem.mockReturnValue(serialize(layoutWithAnchor([savedSupplementTab])));
+    respondToGetLayout({ kind: 'entry', layout: layoutWithAnchor([savedSupplementTab]) });
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
     expect(tabIdsIn(loaded).filter((id) => id.startsWith(SUPPLEMENT_TAB_ID))).toEqual([
       `${SUPPLEMENT_TAB_ID}-w2`,
     ]);
+  });
+});
+
+describe('loadLayout restores this window’s layout from the main process', () => {
+  beforeEach(() => {
+    // Power mode with the supplement flag off, so these tests see exactly the restored layout
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+  });
+
+  test('a window assigned an entry loads it, ids scoped to this window', async () => {
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab-w1') });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:get', 2);
+    expect(tabIdsIn(loaded)).toEqual(['saved-tab-w2']);
+  });
+
+  test('a legacy window loads the unprefixed legacy layout from localStorage', async () => {
+    localStorage.setItem('dock-saved-layout', serialize(layoutWithTab('legacy-tab')));
+    respondToGetLayout({ kind: 'legacy' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual(['legacy-tab-w2']);
+  });
+
+  test('a second window never receives the legacy layout — the clone fallback is gone', async () => {
+    // The legacy layout is present, but main says this window has no entry: it must start empty
+    // instead of cloning window 1's legacy layout
+    localStorage.setItem('dock-saved-layout', serialize(layoutWithTab('legacy-tab')));
+    respondToGetLayout({ kind: 'empty' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual([]);
+  });
+
+  test('a window with no entry loads an empty layout — neither testLayout nor simpleLayout', async () => {
+    respondToGetLayout({ kind: 'empty' });
+
+    // The harness's simpleLayout and testLayout both hold the anchor tab, so any tab at all would
+    // mean one of them leaked in
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual([]);
+  });
+
+  test('falls back to testLayout only when legacy storage is empty too', async () => {
+    respondToGetLayout({ kind: 'legacy' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    // The dev-fresh-profile behavior: no saved entry and no legacy layout loads testLayout (which
+    // here holds the anchor tab; the supplement then merges onto that anchor as usual)
+    expect(tabIdsIn(loaded)).toContain('anchor-tab-w2');
+  });
+});
+
+describe('saveLayout pushes this window’s layout to the main process', () => {
+  beforeEach(() => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+  });
+
+  test('a power-mode layout change pushes the reconciled layout with this window’s id', async () => {
+    const { dockLayout } = await registerWindow(layoutWithAnchor());
+
+    // A duplicated tab proves the layout is reconciled on the way out
+    const changedLayout = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [{ id: 'kept', tabType: TAB_TYPE_WEBVIEW }] },
+          { tabs: [{ id: 'kept', tabType: TAB_TYPE_WEBVIEW }] },
+        ],
+      },
+    } as unknown as LayoutInfo;
+    await dockLayout.onLayoutChangeRef.current?.(changedLayout, undefined, undefined);
+
+    expect(layoutPushes()).toEqual([
+      [
+        2,
+        {
+          dockbox: {
+            mode: 'horizontal',
+            children: [{ tabs: [{ id: 'kept', tabType: TAB_TYPE_WEBVIEW }] }],
+          },
+        },
+      ],
+    ]);
+  });
+
+  test('a simple-mode layout change pushes nothing', async () => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'simple' : false,
+    );
+    const { dockLayout } = await registerWindow(layoutWithAnchor());
+
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('ephemeral'), undefined, undefined);
+
+    expect(layoutPushes()).toEqual([]);
   });
 });

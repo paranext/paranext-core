@@ -6,7 +6,15 @@
  * using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  RenderProcessGoneDetails,
+  screen,
+  session,
+  shell,
+} from 'electron';
 import os from 'os';
 import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -50,6 +58,26 @@ import {
   getTargetWindowId,
   markWindowReady,
 } from '@main/services/window-state.service';
+import {
+  assignEntryToWindow,
+  handleWindowRemoved,
+  initializeWindowLayoutPersistence,
+  loadWindowLayouts,
+  setMainWindowId,
+  trackLegacyWindow,
+  trackNewWindow,
+  updateWindowBounds,
+  writeNow,
+} from '@main/services/window-layout-persistence.service';
+import {
+  DEFAULT_WINDOW_HEIGHT,
+  DEFAULT_WINDOW_WIDTH,
+  ensureBoundsVisibleOnSomeDisplay,
+} from '@main/window-bounds.util';
+import type {
+  WindowBoundsState,
+  WindowLayoutEntry,
+} from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
   CommandLineArgs,
@@ -83,8 +111,7 @@ import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
-import windowStateKeeper from 'electron-window-state';
-import { CommandNames, NetworkEventTypes } from 'papi-shared-types';
+import { CommandNames, NetworkEventTypes, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
@@ -190,6 +217,19 @@ if (!isFirstInstance) {
 // #endregion
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
+
+/** How long to coalesce a window's resize/move events before capturing its bounds */
+const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
+
+/**
+ * How a window being created relates to the persisted window-layouts structure: it restores a saved
+ * entry, it is the single window of a legacy startup (no structure — its renderer falls back to the
+ * pre-multi-window saved layout, placed at the previous bounds keeper's state), or — when omitted —
+ * it is a new mid-session window that starts empty.
+ */
+type WindowRestoreInfo =
+  | { kind: 'entry'; entryIndex: number; entry: WindowLayoutEntry }
+  | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
@@ -301,6 +341,10 @@ async function main() {
   await startNotificationRoutingService();
   // Reuses the same per-window lookup the input handlers use, so both share one provider cache
   await startWindowRoutingService(getWindowServiceForWindow);
+
+  // Window layout persistence must register its request handlers before any window exists so a
+  // renderer's layout load can never race the registration
+  await initializeWindowLayoutPersistence();
 
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
   // call until its renderer has registered. Its scoped window service appearing is that signal, and
@@ -506,26 +550,33 @@ async function main() {
   }
 
   /** Sets up the electron BrowserWindow renderer process */
-  const createWindow = async () => {
+  const createWindow = async (restoreInfo?: WindowRestoreInfo): Promise<BrowserWindow> => {
     // A window is being created, so the app is alive and whatever brought the last one down is
     // finished. On macOS that is not the same as process start: closing the final window runs the
     // shutdown tasks and leaves the app resident, and reactivating from the dock lands here — so
     // without this the second and every later session would come down without syncing.
     resetShutdownLatchesForNewSession();
 
-    // Load the previous state with fallback to defaults.
-    // Only use windowStateKeeper for the first window; subsequent windows are not managed by it, so
-    // their size and position are not persisted.
     const isFirstWindow = windows.length === 0;
-    const mainWindowState = isFirstWindow
-      ? windowStateKeeper({ defaultWidth: 1024, defaultHeight: 728 })
+
+    // This window's saved placement — its entry's, or the previous single-window keeper's for a
+    // legacy startup — validated against the displays connected right now so a window can never
+    // come back on a monitor that is gone. A window with no saved placement gets defaults.
+    const savedBoundsState =
+      restoreInfo?.kind === 'entry' ? restoreInfo.entry : restoreInfo?.boundsState;
+    const boundsState = savedBoundsState
+      ? ensureBoundsVisibleOnSomeDisplay(
+          savedBoundsState,
+          screen.getAllDisplays(),
+          screen.getPrimaryDisplay(),
+        )
       : undefined;
 
     // If --window-size (or --windowSize) is specified, use those dimensions instead of the saved
     // window state. Useful for automation/headless runs on Windows where xvfb is unavailable.
     const windowSizeArg = getCommandLineArgument(CommandLineArgs.WindowSize);
-    let windowWidth = mainWindowState?.width ?? 1024;
-    let windowHeight = mainWindowState?.height ?? 728;
+    let windowWidth = boundsState?.bounds?.width ?? DEFAULT_WINDOW_WIDTH;
+    let windowHeight = boundsState?.bounds?.height ?? DEFAULT_WINDOW_HEIGHT;
     let sizeMatch: RegExpExecArray | undefined;
     if (windowSizeArg) {
       sizeMatch = /^([1-9]\d*)[x,]([1-9]\d*)$/i.exec(windowSizeArg) ?? undefined;
@@ -541,7 +592,7 @@ async function main() {
 
     const newWindow = new BrowserWindow({
       show: true,
-      ...(mainWindowState ? { x: mainWindowState.x, y: mainWindowState.y } : {}),
+      ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
       minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
@@ -575,6 +626,11 @@ async function main() {
     // Track this window immediately
     addWindow(newWindow);
 
+    // Tie the window to its persisted identity so layout persistence can serve and save it
+    if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
+    else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
+    else trackNewWindow(windowId);
+
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
       setFocusedWindowId(windowId);
@@ -586,18 +642,44 @@ async function main() {
     // Set our custom protocol handler to load Enhanced Resources binary assets (papi-er://)
     enhancedResourceProtocolService.initialize();
 
-    // Register listeners on the window, so the state is updated automatically
-    // (the listeners will be removed when the window is closed)
-    // and restore the maximized or full screen state
-    if (mainWindowState) mainWindowState.manage(newWindow);
-
-    // If a valid window size was specified, override any maximized/fullscreen state that manage() restored.
-    // setSize() is ignored on a maximized/fullscreen window, so explicitly exit those states first.
-    if (windowSizeArg && sizeMatch && windowWidth && windowHeight) {
-      if (newWindow.isFullScreen()) newWindow.setFullScreen(false);
-      if (newWindow.isMaximized()) newWindow.unmaximize();
-      newWindow.setSize(windowWidth, windowHeight);
+    // Restore the saved maximized/full-screen state — unless a valid --window-size was given,
+    // which takes precedence and means "exactly this size, in the normal state"
+    if (!(windowSizeArg && sizeMatch)) {
+      if (boundsState?.isFullScreen) newWindow.setFullScreen(true);
+      else if (boundsState?.isMaximized) newWindow.maximize();
     }
+
+    /**
+     * This window's current placement for persistence. Mirrors the previous window-state keeper:
+     * the normal bounds (and the display they are on) are captured only while the window is in its
+     * normal state, so maximizing/minimizing/full-screening cannot overwrite the last normal
+     * placement — only flip the flags.
+     */
+    const captureWindowBoundsState = (): WindowBoundsState => {
+      const isMaximized = newWindow.isMaximized();
+      const isFullScreen = newWindow.isFullScreen();
+      const capturedState: WindowBoundsState = { isMaximized, isFullScreen };
+      if (!isMaximized && !isFullScreen && !newWindow.isMinimized()) {
+        const { x, y, width, height } = newWindow.getBounds();
+        capturedState.bounds = { x, y, width, height };
+        capturedState.displayBounds = { ...screen.getDisplayMatching(capturedState.bounds).bounds };
+      }
+      return capturedState;
+    };
+
+    // Feed this window's placement to layout persistence as it changes, debounced since
+    // resize/move fire continuously during a drag
+    let boundsCaptureTimeout: ReturnType<typeof setTimeout> | undefined;
+    const captureBoundsSoon = () => {
+      if (boundsCaptureTimeout) clearTimeout(boundsCaptureTimeout);
+      boundsCaptureTimeout = setTimeout(() => {
+        boundsCaptureTimeout = undefined;
+        if (newWindow.isDestroyed()) return;
+        updateWindowBounds(windowId, captureWindowBoundsState());
+      }, BOUNDS_CAPTURE_DEBOUNCE_MS);
+    };
+    newWindow.on('resize', captureBoundsSoon);
+    newWindow.on('move', captureBoundsSoon);
 
     // Add several listeners to the window to log events
     newWindow.webContents.on('unresponsive', () => logger.warn(`Window ${windowId} unresponsive`));
@@ -777,6 +859,19 @@ async function main() {
       // sync after this shutdown sync, or reach a network connection that is about to be torn down.
       startupTasksAbort.abort();
 
+      // Flush the window-layouts structure with every still-tracked window in it, before any
+      // `closed` handler trims the list — a window that is not live at save time is not written,
+      // so this is what preserves the closing windows' entries across a quit (and the final
+      // window's entry on a last-window close). Capture this window's placement first so the flush
+      // holds its freshest bounds; on a multi-window quit each window's close handler does the
+      // same, so the last flush holds everyone's.
+      if (boundsCaptureTimeout) {
+        clearTimeout(boundsCaptureTimeout);
+        boundsCaptureTimeout = undefined;
+      }
+      updateWindowBounds(windowId, captureWindowBoundsState());
+      await writeNow(windows.map((window) => window.id));
+
       try {
         // On a multi-window quit every window reaches this line, so the tasks are shared rather
         // than run once per window — each window waits on the same run before destroying itself.
@@ -795,6 +890,17 @@ async function main() {
       if (getTargetWindowId() === windowId) {
         setFocusedWindowId(windows[0]?.id);
       }
+
+      // Stop persisting this window. When the close was deliberate (the quit-like close path above
+      // did not run for this window — the app stays up), rewrite the structure without it so the
+      // window does not come back next session. During a quit the structure was already flushed
+      // with this window still in it, and must NOT be rewritten smaller here.
+      if (boundsCaptureTimeout) {
+        clearTimeout(boundsCaptureTimeout);
+        boundsCaptureTimeout = undefined;
+      }
+      handleWindowRemoved(windowId);
+      if (!isWindowClosing) await writeNow(windows.map((window) => window.id));
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
       } catch (e) {
@@ -1019,6 +1125,62 @@ async function main() {
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
     // new AppUpdater();
+
+    return newWindow;
+  };
+
+  /**
+   * Create the app's windows from the persisted window-layouts structure: one window per saved
+   * entry, in entry order — except in simple interface mode, which is single-window, so only the
+   * main entry's window is created and the other entries stay preserved in the structure. With no
+   * usable structure (first run, or an upgrade from the single-window keeper), one legacy window is
+   * created whose renderer falls back to the pre-multi-window saved layout.
+   *
+   * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
+   * close path flushed the structure when that window went down).
+   */
+  const restoreWindows = async () => {
+    const plan = await loadWindowLayouts();
+    if (plan.kind === 'legacy') {
+      const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
+      setMainWindowId(legacyWindow.id);
+      return;
+    }
+
+    // The main entry's window is created first — before the interface-mode read below, which can
+    // block on the extension host early in startup — so the first window never waits on it. The
+    // saved structure keeps entry order regardless of window creation order.
+    const { entries, mainEntryIndex } = plan;
+    const mainWindow = await createWindow({
+      kind: 'entry',
+      entryIndex: mainEntryIndex,
+      entry: entries[mainEntryIndex],
+    });
+    setMainWindowId(mainWindow.id);
+    if (entries.length <= 1) return;
+
+    // Simple mode is single-window: restore only the main window no matter how many entries the
+    // structure holds. Same when the mode cannot be read — restoring too few is recoverable
+    // because an entry not assigned to a window this session is preserved in the structure, while
+    // restoring too many would put a Power user's secondary windows on a Simple user's screen.
+    let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+    try {
+      interfaceMode = await settingsService.get('platform.interfaceMode');
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.interfaceMode; restoring only the main window: ${getErrorMessage(e)}`,
+      );
+    }
+    if (interfaceMode !== 'power') return;
+
+    for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+      if (entryIndex !== mainEntryIndex) {
+        // Sequential on purpose: creating windows one at a time keeps the tracked window order
+        // (and so the focus fallback and save order) deterministic
+        // eslint-disable-next-line no-await-in-loop
+        await createWindow({ kind: 'entry', entryIndex, entry: entries[entryIndex] });
+      }
+    }
   };
 
   app.on('window-all-closed', () => {
@@ -1100,12 +1262,17 @@ async function main() {
         }
       }
 
-      createWindow();
+      await restoreWindows();
 
-      app.on('activate', () => {
-        // On macOS it's common to re-create a window in the app when the
+      app.on('activate', async () => {
+        // On macOS it's common to re-create windows in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (windows.length === 0) createWindow();
+        if (windows.length !== 0) return;
+        try {
+          await restoreWindows();
+        } catch (e) {
+          logger.error(`Failed to restore windows on activate: ${getErrorMessage(e)}`);
+        }
       });
 
       return undefined;
