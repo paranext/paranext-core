@@ -21,17 +21,23 @@ const STRINGS = getLocalizedStrings([
 // depends on the viewer's monitor and the story can silently degrade to paragraph-level granularity
 // on a wide screen, which would not demonstrate the one thing this overlay exists to prove — that it
 // tracks the caret's LINE, not its paragraph.
-const MOCK_EDITOR_STYLE: React.CSSProperties = {
-  border: '1px solid var(--border)',
-  borderRadius: '4px',
-  height: '260px',
-  overflowY: 'auto',
-  padding: '15px 10px',
-  paddingInlineEnd: '5em',
-  fontFamily: 'serif',
-  lineHeight: 1.8,
-  maxWidth: '520px',
-};
+// The custom property is declared here for the same reason `_simple-mode.scss` declares it on
+// `.editor-container-simple`: it has two consumers — the reserved padding below and the bar
+// container's own width, which the overlay sets inline. Declaring it on the shared ancestor is what
+// keeps the reservation and the bar the same size in the story as in the app.
+const MOCK_EDITOR_STYLE: React.CSSProperties & Record<'--psc-character-marker-bar-width', string> =
+  {
+    '--psc-character-marker-bar-width': '5em',
+    border: '1px solid var(--border)',
+    borderRadius: '4px',
+    height: '260px',
+    overflowY: 'auto',
+    padding: '15px 10px',
+    paddingInlineEnd: 'var(--psc-character-marker-bar-width)',
+    fontFamily: 'serif',
+    lineHeight: 1.8,
+    maxWidth: '520px',
+  };
 
 /** Drives the real control from real state, so the story exercises the app's wiring. */
 function BarHarness() {
@@ -68,7 +74,9 @@ function BarHarness() {
         onOpen={() => {}}
         onClose={() => {}}
         localizedStrings={STRINGS}
-        className="tw:h-8 tw:px-2"
+        // Mirrors character-marker-bar.component.tsx, so the story shows the real trigger: filling
+        // and clipping inside the reserved gutter rather than shrink-wrapping its label.
+        className="tw:h-8 tw:w-full tw:min-w-0 tw:justify-between tw:overflow-hidden tw:px-2"
       />
     </CharacterMarkerToolbar>
   );

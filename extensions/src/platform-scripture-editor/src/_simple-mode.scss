@@ -13,9 +13,11 @@
 // This file is @used from _editor-overrides.scss, which all three web-view entry points already
 // @use — so it flows into every web view's compiled CSS without needing to touch each entry point.
 // (Sass hoists an @used module's CSS to the top of the compiled output regardless of source-order
-// position, but neither rule below depends on cascade order relative to any other same-specificity
-// rule, so that hoisting is harmless here — unlike the renderer's dock-layout-wrapper.component.scss,
-// which needed a plain webpack import instead of @use for that reason.)
+// position. Only ONE rule in this file has a cascade-order dependency — the RTL rule at the bottom,
+// which loses a same-specificity tie to a hoisted-below vendored rule and therefore raises its own
+// specificity deliberately; each rule notes its own situation. Contrast the renderer's
+// dock-layout-wrapper.component.scss, which needed a plain webpack import instead of @use for that
+// reason.)
 
 // Flatten .editor-container's own rounded top corners (10px, set in the vendored ./_editor.scss)
 // to match the flattened column chrome. Specificity alone wins here (two classes vs. one) — no
@@ -58,8 +60,18 @@
 // Simple-scoped on purpose. `_usj-nodes.scss` styles the editor in BOTH modes, so putting this on
 // a bare `.usfm` selector — or raising `--psc-gutter-width` — would narrow every Power user's text
 // column to make room for a control they never see. The React `!isPowerMode` gate cannot cover a
-// CSS selector, so the scoping must happen here. Because `.editor-container-simple` and the bar
-// share one condition, the space appears and disappears with the bar.
+// CSS selector, so the scoping must happen here.
+//
+// The real matching condition is `.editor-container-simple` AND `.psc-gutter-markers` — TWO gates,
+// not one. The bar itself is gated only on the first (`!isPowerMode` in
+// platform-scripture-editor.web-view.tsx). The second happens to be true throughout Simple mode
+// today only because `getViewOptionsForType` hardcodes the paragraph-structure preset — which sets
+// `hasGutterParaMarkers` — for BOTH Simple view types (see
+// platform-scripture-editor.web-view.tsx, `getViewOptionsForType`). RISK: if Simple ever gains a
+// view-option chooser and a user turns gutter paragraph markers off, this reservation disappears
+// while the bar keeps rendering, which is precisely the text overlap this design exists to
+// prevent. Whoever makes view options user-selectable in Simple must move this reservation onto a
+// selector the bar's own condition guarantees.
 //
 // Reservation is unconditional within Simple mode, not tied to whether the bar is currently drawn:
 // reserving only while visible would reflow the whole text column as the caret enters and leaves
@@ -67,9 +79,17 @@
 //
 // 5em (80px) fits the widest trigger label — "(mixed)" at tw:px-2 — where the prototype's bar is
 // 118px. Pending UX sign-off on the exact width; changing this one value is the whole change.
-.editor-container-simple .usfm.psc-gutter-markers {
+//
+// The custom property is declared on `.editor-container-simple`, not on `.usfm`, because it has TWO
+// consumers that need to inherit it and only that element is an ancestor of both: the
+// `padding-inline-end` below (the reserved space) and the bar container's own `width`, set inline in
+// character-marker-bar-overlay.component.tsx (the bar is a sibling of `.usfm`, not a descendant, so
+// a declaration on `.usfm` would not reach it). One declaration, two consumers — they cannot drift.
+.editor-container-simple {
   --psc-character-marker-bar-width: 5em;
+}
 
+.editor-container-simple .usfm.psc-gutter-markers {
   padding-inline-end: var(--psc-character-marker-bar-width);
 }
 

@@ -69,7 +69,14 @@ export function CharacterMarkerBar({
         currentMarkerLabel={undefined}
         isSyncBlocked={isSyncBlocked}
         localizedStrings={localizedStrings}
-        className="tw:h-8 tw:px-2"
+        // tw:w-full + tw:min-w-0 + tw:overflow-hidden make the trigger FILL the gutter width the
+        // overlay's container sets and clip inside it, instead of shrink-wrapping its label and
+        // growing inline-start over project text. `(mixed)`/`(none)` are localized, so their width
+        // is not knowable here; the button's own tw:shrink-0 and tw:whitespace-nowrap would
+        // otherwise let a longer translation push the bar out of the reserved gutter.
+        // tw:justify-between keeps the label at the leading edge (the chevron, not the value, is
+        // what clips first in that case).
+        className="tw:h-8 tw:w-full tw:min-w-0 tw:justify-between tw:overflow-hidden tw:px-2"
       />
     </CharacterMarkerToolbar>
   );
