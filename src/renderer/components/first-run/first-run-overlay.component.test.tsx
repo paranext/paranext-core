@@ -86,7 +86,7 @@ vi.mock('platform-bible-react', () => {
   // given refs" warning and leaving the refs null.
   const ButtonStub = forwardRef<
     HTMLButtonElement,
-    { [key: string]: unknown; children: ReactNode; onClick?: () => void; disabled?: boolean }
+    { children: ReactNode; onClick?: () => void; disabled?: boolean }
   >(function ButtonStub({ children, onClick, disabled }, ref) {
     return (
       <button ref={ref} type="button" onClick={onClick} disabled={disabled}>
