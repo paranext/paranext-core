@@ -713,8 +713,18 @@ const scrollGroupService: IScrollGroupRemoteService = {
  * and without persisting: the writing window already saved these exact values under the same
  * (deliberately unscoped, app-global) storage keys.
  *
- * The emitting window receives its own events too, which lands as a harmless re-apply of values it
- * just wrote.
+ * The emitting window receives its own events too, and that re-apply is harmless: the emitter hands
+ * an event to this process's own subscribers synchronously as part of the emit, so it arrives
+ * carrying exactly the values `writeScrRef` just stored, and the main process fans an announcement
+ * out to every connection except the one it came from, so no delayed copy of it ever comes back.
+ *
+ * HIDDEN VIEWS — this sync is data-driven, and deliberately does nothing about visibility. It only
+ * writes module state that the `*Sync` readers above serve, and reads no geometry: nothing here
+ * measures, scrolls, or focuses anything, so it behaves identically in a minimized or occluded
+ * window and in a window whose scripture tab is an inactive (display-none) pane. There is no
+ * catch-up to defer either — a hidden view re-renders from this already-current state when it is
+ * shown. Any layout-dependent reaction to a reference change belongs in the consumer that owns the
+ * layout, where it can see its own visibility.
  *
  * KNOWN DIVERGENCE — app-global here, per-window in the multi-monitor design. The secondary-window
  * design calls for each window to have its own top-level scroll group so it can follow a different
@@ -736,12 +746,17 @@ const scrollGroupService: IScrollGroupRemoteService = {
  * from the network event while its `*Sync` readers disagreed.
  */
 function subscribeToRemoteScrollGroupUpdates(): void {
+  // Both payloads are already private to this process: deserialized per event when they arrive over
+  // the network, and — for the emitting window's own synchronous delivery — freshly cloned by the
+  // code that published them. Nothing on the other side of the event holds a reference to mutate, so
+  // they are stored as they arrive; cloning again would only add work to the navigation hot path,
+  // once per event per window.
   onDidUpdateScrRef(({ scrollGroupId, scrRef, sourceProjectId }) => {
-    scrRefs[scrollGroupId] = deepClone(scrRef);
+    scrRefs[scrollGroupId] = scrRef;
     scrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
   });
   onDidChangeReferenceHistory(({ scrollGroupId, history }) => {
-    referenceHistories.set(scrollGroupId, deepClone(history));
+    referenceHistories.set(scrollGroupId, history);
   });
 }
 
@@ -767,6 +782,25 @@ export async function startScrollGroupService(): Promise<void> {
 let isPublishingScrollGroupService = false;
 
 /**
+ * Takeover run that has not settled yet, if any. A takeover can be triggered again while one is
+ * already in flight — the sweep in {@link takeOverScrollGroupServiceAfterWindowClose} fires the
+ * dispose events of the cached objects it forgets, and close announcements can arrive in quick
+ * succession. Two concurrent runs would race each other for the object name, with the loser noisily
+ * failing against a registry that rejects even the same registrant. Concurrent triggers share this
+ * pending run instead; cleared when it settles so a later close can take over again.
+ */
+let pendingTakeoverPromise: Promise<void> | undefined;
+
+/**
+ * Whether a close announcement arrived while {@link pendingTakeoverPromise} was in flight and still
+ * needs a run of its own. The in-flight run's sweep started before that window died, so it cannot
+ * have cleared the registration the dead window left behind — sharing that run would leave the
+ * stale registration in place and nothing else scheduled. Several such announcements collapse into
+ * the one re-run, since one sweep after the last of them clears them all.
+ */
+let isTakeoverQueuedAfterPendingRun = false;
+
+/**
  * Publish the scroll group network object from this window once the window that was publishing it
  * closes.
  *
@@ -783,26 +817,30 @@ let isPublishingScrollGroupService = false;
  * succeed. That is also what lets `scrollGroupService` consumers in this process stop calling into
  * the closed window.
  */
-/**
- * Takeover run that has not settled yet, if any. A takeover can be triggered again while one is
- * already in flight — the sweep in {@link takeOverScrollGroupServiceAfterWindowClose} fires the
- * dispose events of the cached objects it forgets, and close announcements can arrive in quick
- * succession. Two concurrent runs would race each other for the object name, with the loser noisily
- * failing against a registry that rejects even the same registrant. Concurrent triggers share this
- * pending run instead; cleared when it settles so a later close can take over again.
- */
-let pendingTakeoverPromise: Promise<void> | undefined;
-
 async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
   if (isPublishingScrollGroupService) return;
-  if (!pendingTakeoverPromise) {
-    pendingTakeoverPromise = (async () => {
-      await forgetUnreachableRemoteObjects();
-      await hostOrAttachToScrollGroupService();
-    })().finally(() => {
-      pendingTakeoverPromise = undefined;
-    });
+  if (pendingTakeoverPromise) {
+    isTakeoverQueuedAfterPendingRun = true;
+    await pendingTakeoverPromise;
+    return;
   }
+  pendingTakeoverPromise = (async () => {
+    await forgetUnreachableRemoteObjects();
+    await hostOrAttachToScrollGroupService();
+  })().finally(() => {
+    pendingTakeoverPromise = undefined;
+    if (!isTakeoverQueuedAfterPendingRun) return;
+    isTakeoverQueuedAfterPendingRun = false;
+    // A window that closed during that run still has its registration cached here, so sweep and
+    // race again — unless this window came out of the run publishing, in which case there is
+    // nothing left to take over.
+    if (isPublishingScrollGroupService) return;
+    takeOverScrollGroupServiceAfterWindowClose().catch((e) => {
+      logger.warn(
+        `Failed to publish the scroll group service after a window closed: ${getErrorMessage(e)}`,
+      );
+    });
+  });
   await pendingTakeoverPromise;
 }
 

@@ -532,8 +532,9 @@ describe('scroll group service publishing across windows', () => {
   // in quick succession, and the sweep fires the dispose events of the cached objects it forgets.
   // Concurrent triggers must share one takeover run: two concurrent runs would race each other for
   // the object name, with the loser noisily failing against a registry that rejects even the same
-  // registrant.
-  it('concurrent close announcements share one takeover run, and a later close still retries', async () => {
+  // registrant. Sharing it is not enough on its own, though: the running sweep started before the
+  // second window died, so it cannot have cleared what that window left cached here.
+  it('shares an in-flight takeover run and sweeps again for a window that closed during it', async () => {
     networkObjectSet.mockRejectedValueOnce(new Error('already registered'));
     const host = await import('@renderer/services/scroll-group.service-host');
     await host.startScrollGroupService();
@@ -553,17 +554,33 @@ describe('scroll group service publishing across windows', () => {
     closeWindow(2);
     await settlePendingWork();
 
-    // One registration attempt shared by both announcements, not one per announcement
+    // One sweep and one registration attempt shared by both announcements, not one per announcement
     expect(networkObjectSet).toHaveBeenCalledTimes(2);
+    expect(forgetUnreachableRemoteObjects).toHaveBeenCalledTimes(1);
 
-    // The in-flight attempt settles by losing the race to another surviving window
+    // The in-flight attempt settles by losing the race to another surviving window. Window 2's
+    // registration is still cached — the sweep that just finished predates its close — so the
+    // announcement that shared this run needs a sweep and a race of its own.
+    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
     settleTakeoverRegistration();
+
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
+    expect(forgetUnreachableRemoteObjects).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes over again when a window closes after an earlier takeover settled', async () => {
+    networkObjectSet.mockRejectedValue(new Error('already registered'));
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+
+    closeWindow(1);
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
     await settlePendingWork();
 
     // The guard must not latch: when the window that won that race closes later, this window
     // re-enters the race again.
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
-    closeWindow(3);
+    closeWindow(2);
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
   });
 

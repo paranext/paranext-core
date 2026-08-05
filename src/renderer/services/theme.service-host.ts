@@ -201,6 +201,18 @@ class ThemeDataProviderEngine
    */
   #themeFamiliesFromLastUpdate: ThemeFamiliesByIdExpanded | undefined;
   #isDisposed = false;
+  /**
+   * Whether {@link ThemeDataProviderEngine.reloadState} is rebuilding this engine's state right now.
+   *
+   * Reload is a read-only refresh: it replaces the engine's live state with what is already
+   * persisted. The persisted theme keys are app-global — every window reads and writes the same
+   * `localStorage` entries — and a reload runs in EVERY surviving window when a host closes,
+   * including the ones that go on to lose the race to host. Writing anything back from the rebuild
+   * would let those windows overwrite the shared state the reload was called to pick up (e.g.
+   * persisting `DEFAULT_THEME` because a freshly loaded family is missing from this window's last
+   * theme payload), so the save callbacks are suppressed while this is set.
+   */
+  #isReloadingState = false;
 
   // Actually private methods set in the constructor. These need to be real private methods to avoid
   // being put on the papi
@@ -320,8 +332,19 @@ class ThemeDataProviderEngine
     // payload, and reconcile the fresh current theme against the result the same way an incoming
     // update would. Before the first payload arrives there is nothing to rebuild — the
     // subscription's first event will pick the fresh user themes up when it fires.
-    if (engine.#themeFamiliesFromLastUpdate)
-      engine.#updateAllThemeFamiliesNoUpdate(engine.#themeFamiliesFromLastUpdate);
+    //
+    // The reconciliation can land on a theme other than the one just loaded (matching the system
+    // theme, or the family being absent from this window's last payload), which on the normal path
+    // persists the result. Suppress that for the length of the rebuild — see
+    // `#isReloadingState`. Synchronous throughout, so the flag cannot span an await.
+    if (engine.#themeFamiliesFromLastUpdate) {
+      engine.#isReloadingState = true;
+      try {
+        engine.#updateAllThemeFamiliesNoUpdate(engine.#themeFamiliesFromLastUpdate);
+      } finally {
+        engine.#isReloadingState = false;
+      }
+    }
   }
 
   async getCurrentTheme(): Promise<ThemeDefinitionExpanded> {
@@ -522,6 +545,7 @@ class ThemeDataProviderEngine
 
   #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
     this.currentTheme = newTheme;
+    if (this.#isReloadingState) return;
     this.#saveCurrentTheme(this.currentTheme);
   }
 
@@ -534,11 +558,13 @@ class ThemeDataProviderEngine
 
   #setShouldMatchSystemNoUpdate(newShouldMatchSystem: boolean) {
     this.shouldMatchSystem = newShouldMatchSystem;
+    if (this.#isReloadingState) return;
     this.#saveShouldMatchSystem(this.shouldMatchSystem);
   }
 
   #setUserThemesNoUpdate(newUserThemes: ThemeFamiliesById) {
     this.userThemes = newUserThemes;
+    if (this.#isReloadingState) return;
     this.#saveUserThemes(this.userThemes);
   }
 
@@ -655,8 +681,13 @@ function reloadPersistedThemeState(): void {
   );
 }
 
-/** Need to run initialize before using this */
-let dataProvider: IThemeService;
+/**
+ * The theme provider this window is talking to — its own engine while it hosts, otherwise the
+ * hosting window's over the network. `undefined` until {@link initialize} resolves, and again once
+ * that provider goes away, which is what tells {@link takeOverThemeEngineAfterWindowClose} that a
+ * closed window took something this window was using with it.
+ */
+let dataProvider: IThemeService | undefined;
 
 /**
  * Cached initializer behind {@link initialize}. Held in a mutable binding because it is re-armed
@@ -680,13 +711,30 @@ let isHostingThemeEngine = false;
 let pendingRetryPromise: Promise<void> | undefined;
 
 /**
+ * Whether a trigger arrived while {@link pendingRetryPromise} was in flight and still needs a run of
+ * its own. A trigger raised mid-run is evidence of a death the in-flight run started too early to
+ * have seen, so it cannot be dropped; several of them collapse into the one re-run, since
+ * re-running once after the last of them is enough.
+ */
+let isRetryQueuedAfterPendingRun = false;
+
+/**
  * Re-arm {@link runInitialize} and run it, so this window re-enters the host-or-attach race.
  *
- * Idempotent while a retry is in flight: concurrent triggers share the pending run instead of
- * starting another (see {@link pendingRetryPromise}).
+ * Concurrent triggers share the pending run instead of starting another (see
+ * {@link pendingRetryPromise}); one that arrives while a run is in flight is re-run afterwards
+ * rather than discarded (see {@link isRetryQueuedAfterPendingRun}).
  */
 function retryHostOrAttachToThemeEngine(): void {
-  if (pendingRetryPromise) return;
+  // Nothing to take over while this window is the host: re-entering the race here would drop the
+  // engine it is serving to everyone else, and the reload below would discard whatever the user has
+  // changed since. Checked on every entry, including the re-run below, because this window can win
+  // hosting between a trigger being raised and it being acted on.
+  if (isHostingThemeEngine) return;
+  if (pendingRetryPromise) {
+    isRetryQueuedAfterPendingRun = true;
+    return;
+  }
   // The engine still holds whatever this window loaded at startup, and the host that just went away
   // may have saved newer state since then. Refresh before re-entering the race: winning it with the
   // startup snapshot would republish — and, on the next save, persist — pre-close state, dropping
@@ -701,6 +749,13 @@ function retryHostOrAttachToThemeEngine(): void {
     })
     .finally(() => {
       pendingRetryPromise = undefined;
+      if (!isRetryQueuedAfterPendingRun) return;
+      isRetryQueuedAfterPendingRun = false;
+      // The run that just settled may already have answered what the queued trigger was about, so
+      // only run again while this window still has no engine to talk to. Re-running against a
+      // provider that is alive would resolve that same provider and leave another dispose handler
+      // on it.
+      if (!dataProvider) retryHostOrAttachToThemeEngine();
     });
 }
 
@@ -727,6 +782,7 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
     const systemThemeChangesInfo = listenToSystemThemeChanges();
     hostedEngine.onDidDispose(() => {
       isHostingThemeEngine = false;
+      dataProvider = undefined;
       systemThemeChangesInfo.unsubscribe();
     });
     return;
@@ -739,10 +795,15 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
   const hostedProvider = await dataProviderService.get(themeServiceDataProviderName);
   if (!hostedProvider) throw new Error('Theme service undefined');
   dataProvider = hostedProvider;
-  // When the hosting window closes its provider goes with it, so re-arm and take over. Every
-  // remaining window does this; the one that wins the re-registration becomes the new host and the
-  // others attach to it on their own retry.
-  hostedProvider.onDidDispose(retryHostOrAttachToThemeEngine);
+  // When the hosting window closes its provider goes with it, so drop it, re-arm, and take over.
+  // Every remaining window does this; the one that wins the re-registration becomes the new host and
+  // the others attach to it on their own retry. This runs whenever the provider is forgotten, no
+  // matter which of the window-close cleanups got there first, so it — not the outcome of this
+  // window's own sweep — is what makes the handover reliable.
+  hostedProvider.onDidDispose(() => {
+    dataProvider = undefined;
+    retryHostOrAttachToThemeEngine();
+  });
 }
 
 /**
@@ -755,14 +816,23 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
  * registration has to go before re-registering can succeed.
  *
  * Skipped in the window that is already hosting: it has nothing to take over, and re-entering the
- * race there would drop the engine it is serving to everyone else. Also skipped when the closed
- * window turns out to have been hosting nothing this window was using — re-entering the race then
- * would resolve the same live provider again and leave another dispose handler on it.
+ * race there would drop the engine it is serving to everyone else. The hosting check is repeated
+ * after the sweep because the sweep takes as long as probing every unreachable object takes, and
+ * this window can win hosting inside that gap — off the dispose the sweep itself fires.
+ *
+ * Also skipped when the closed window turns out to have been hosting nothing this window was using:
+ * the provider is still there, so re-entering the race would resolve that same live provider again
+ * and leave another dispose handler on it. Whether this window still has a provider is the question
+ * that matters, rather than whether this particular sweep forgot anything — the theme engine and
+ * the scroll group service are independent races that can land in different windows, and any of the
+ * several cleanups a close kicks off can be the one that forgets a given object.
  */
 async function takeOverThemeEngineAfterWindowClose(): Promise<void> {
   if (isHostingThemeEngine) return;
-  const forgottenIds = await forgetUnreachableRemoteObjects();
-  if (forgottenIds.length === 0 && dataProvider) return;
+  // Forgetting the closed window's objects is what fires their dispose events and frees their names
+  // for re-registration, so it has to finish before this window can decide anything.
+  await forgetUnreachableRemoteObjects();
+  if (isHostingThemeEngine || dataProvider) return;
   retryHostOrAttachToThemeEngine();
 }
 
@@ -824,5 +894,6 @@ const themeServiceEngineSyncAdditions = Object.freeze({
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 export const localThemeService = createSyncProxyForAsyncObject(async () => {
   await initialize();
+  if (!dataProvider) throw new Error('Theme service undefined');
   return dataProvider;
 }, themeServiceEngineSyncAdditions) as IThemeServiceLocal;
