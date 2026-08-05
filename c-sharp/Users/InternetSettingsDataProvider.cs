@@ -12,29 +12,30 @@ namespace Paranext.DataProvider.Users;
 internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
     : NetworkObjects.DataProvider("paratextRegistration.internetSettingsDataProvider", papiClient)
 {
-    /// <summary>
-    /// Placeholder to show instead of real passwords so we aren't giving out real passwords
-    /// </summary>
-    private const string PLACEHOLDER_PASSWORD = "********";
-
     private const string DATA_TYPE_INTERNET_SETTINGS = "InternetSettings";
 
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
         return
         [
-            ("getInternetSettings", GetInternetSettings),
-            ("setInternetSettings", SetInternetSettings),
+            ("getInternetSettings", (JsonElement _selector) => GetInternetSettings()),
+            (
+                "setInternetSettings",
+                (
+                    JsonElement _selector,
+                    InternetAccess.InternetSettingsMemento newInternetSettings
+                ) => SetInternetSettings(newInternetSettings)
+            ),
         ];
     }
 
     protected override Task StartDataProviderAsync() => Task.CompletedTask;
 
     /// <summary>
-    /// Returns information about the user's current ParatextData.dll internet settings.
+    /// Returns information about the user's current ParatextData.dll internet settings. Also backs
+    /// the deprecated <c>paratextRegistration.getParatextDataInternetSettings</c> command.
     /// </summary>
-    /// <param name="_selector">Data provider selector; unused (there is a single settings object).</param>
-    private InternetAccess.InternetSettingsMemento GetInternetSettings(JsonElement _selector)
+    public InternetAccess.InternetSettingsMemento GetInternetSettings()
     {
         try
         {
@@ -45,17 +46,13 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
                 ProxyHost = InternetAccess.ProxyHost,
                 ProxyPort = InternetAccess.ProxyPort,
                 ProxyUsername = InternetAccess.ProxyUsername,
-                ProxyPassword = !string.IsNullOrEmpty(InternetAccess.ProxyPassword)
-                    ? PLACEHOLDER_PASSWORD
-                    : null,
+                ProxyPassword = InternetSettingsLogic.MaskSecret(InternetAccess.ProxyPassword),
                 ProxyMode = InternetAccess.ProxyMode,
                 OverrideDBLServer = InternetAccess.OverrideDBLServer,
                 OverrideDBLApiServer = InternetAccess.OverrideDBLApiServer,
                 OverrideGbcServer = InternetAccess.OverrideGbcServer,
                 DBLEmail = InternetAccess.DBLEmail,
-                DBLPassword = !string.IsNullOrEmpty(InternetAccess.DBLPassword)
-                    ? PLACEHOLDER_PASSWORD
-                    : null,
+                DBLPassword = InternetSettingsLogic.MaskSecret(InternetAccess.DBLPassword),
             };
             return internetSettings;
         }
@@ -67,29 +64,31 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
     }
 
     /// <summary>
-    /// Sets the user's ParatextData.dll internet settings, then notifies subscribers.
+    /// Sets the user's ParatextData.dll internet settings, then notifies subscribers. Also backs
+    /// the deprecated <c>paratextRegistration.setParatextDataInternetSettings</c> command.
     /// </summary>
-    /// <param name="_selector">Data provider selector; unused (there is a single settings object).</param>
     /// <param name="newInternetSettings">Internet settings to persist.</param>
-    private bool SetInternetSettings(
-        JsonElement _selector,
-        InternetAccess.InternetSettingsMemento newInternetSettings
-    )
+    public bool SetInternetSettings(InternetAccess.InternetSettingsMemento newInternetSettings)
     {
         try
         {
             // Set empty strings to null (except proxy-related settings since they are handled by
             // SetProxy) so they are removed from `InternetSettings.xml` as it happens in PT9
-            if (newInternetSettings.OverrideDBLServer == "")
-                newInternetSettings.OverrideDBLServer = null;
-            if (newInternetSettings.OverrideDBLApiServer == "")
-                newInternetSettings.OverrideDBLApiServer = null;
-            if (newInternetSettings.OverrideGbcServer == "")
-                newInternetSettings.OverrideGbcServer = null;
-            if (newInternetSettings.DBLEmail == "")
-                newInternetSettings.DBLEmail = null;
-            if (newInternetSettings.DBLPassword == "")
-                newInternetSettings.DBLPassword = null;
+            newInternetSettings.OverrideDBLServer = InternetSettingsLogic.EmptyToNull(
+                newInternetSettings.OverrideDBLServer
+            );
+            newInternetSettings.OverrideDBLApiServer = InternetSettingsLogic.EmptyToNull(
+                newInternetSettings.OverrideDBLApiServer
+            );
+            newInternetSettings.OverrideGbcServer = InternetSettingsLogic.EmptyToNull(
+                newInternetSettings.OverrideGbcServer
+            );
+            newInternetSettings.DBLEmail = InternetSettingsLogic.EmptyToNull(
+                newInternetSettings.DBLEmail
+            );
+            newInternetSettings.DBLPassword = InternetSettingsLogic.EmptyToNull(
+                newInternetSettings.DBLPassword
+            );
 
             // Unfortunately, `InternetAccess.SetProxy` is the only way to set proxy properties, and
             // it does some weird stuff. Make sure `ProxyHost` is `null` if not using a proxy. Then
@@ -97,23 +96,26 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
             // set `RawStatus` to `InternetUse.Disabled`, so set that back to whatever the user
             // selected if they selected something that is not `InternetUse.ProxyOnly`. But we want
             // to leave it disabled if they selected `InternetUse.ProxyOnly` but provided no host
-            if (newInternetSettings.PermittedInternetUse != InternetUse.ProxyOnly)
+            if (
+                InternetSettingsLogic.ShouldClearProxyHost(newInternetSettings.PermittedInternetUse)
+            )
                 newInternetSettings.ProxyHost = null;
             InternetAccess.SetProxy(
                 newInternetSettings.ProxyHost,
                 newInternetSettings.ProxyPort,
                 newInternetSettings.ProxyUsername,
-                newInternetSettings.ProxyPassword != PLACEHOLDER_PASSWORD
-                    ? newInternetSettings.ProxyPassword
-                    : InternetAccess.ProxyPassword,
+                InternetSettingsLogic.ResolveSecret(
+                    newInternetSettings.ProxyPassword,
+                    InternetAccess.ProxyPassword
+                ),
                 newInternetSettings.ProxyMode
             );
-            if (
-                InternetAccess.RawStatus == InternetUse.Disabled
-                && newInternetSettings.PermittedInternetUse != InternetUse.Disabled
-                && newInternetSettings.PermittedInternetUse != InternetUse.ProxyOnly
-            )
-                InternetAccess.RawStatus = newInternetSettings.PermittedInternetUse;
+            var reassertedRawStatus = InternetSettingsLogic.ReassertedRawStatus(
+                InternetAccess.RawStatus,
+                newInternetSettings.PermittedInternetUse
+            );
+            if (reassertedRawStatus.HasValue)
+                InternetAccess.RawStatus = reassertedRawStatus.Value;
 
             InternetAccess.SelectedServers = newInternetSettings.SelectedServer;
 
@@ -121,7 +123,7 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
             InternetAccess.OverrideDBLApiServer = newInternetSettings.OverrideDBLApiServer;
             InternetAccess.OverrideGbcServer = newInternetSettings.OverrideGbcServer;
             InternetAccess.DBLEmail = newInternetSettings.DBLEmail;
-            if (newInternetSettings.DBLPassword != PLACEHOLDER_PASSWORD)
+            if (InternetSettingsLogic.IsSecretChanged(newInternetSettings.DBLPassword))
                 InternetAccess.DBLPassword = newInternetSettings.DBLPassword;
         }
         catch (Exception e)

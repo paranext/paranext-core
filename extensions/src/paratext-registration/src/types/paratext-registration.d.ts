@@ -77,7 +77,11 @@ declare module 'paratext-registration' {
 }
 
 declare module 'papi-shared-types' {
-  import type { RegistrationData, IInternetSettingsDataProvider } from 'paratext-registration';
+  import type {
+    RegistrationData,
+    InternetSettings,
+    IInternetSettingsDataProvider,
+  } from 'paratext-registration';
 
   export interface CommandHandlers {
     /**
@@ -128,6 +132,29 @@ declare module 'papi-shared-types' {
     'paratextRegistration.validateParatextRegistrationData': (
       registrationData: RegistrationData,
     ) => Promise<boolean>;
+    /**
+     * @deprecated Use the `paratextRegistration.internetSettingsDataProvider` data provider's
+     *   `getInternetSettings` instead. Retained as a thin wrapper for backward compatibility and
+     *   will be removed in a future release.
+     *
+     *   Gets information about the user's current ParatextData.dll internet settings.
+     *
+     *   Note: these settings only apply to operations ParatextData.dll performs, not the whole app.
+     *   Note that passwords are returned masked as `********`.
+     */
+    'paratextRegistration.getParatextDataInternetSettings': () => Promise<InternetSettings>;
+    /**
+     * @deprecated Use the `paratextRegistration.internetSettingsDataProvider` data provider's
+     *   `setInternetSettings` instead. Retained as a thin wrapper for backward compatibility and
+     *   will be removed in a future release.
+     *
+     *   Sets the user's ParatextData.dll internet settings.
+     *
+     *   Note: the application must be restarted after this to fully reflect changes.
+     */
+    'paratextRegistration.setParatextDataInternetSettings': (
+      newInternetSettings: InternetSettings,
+    ) => Promise<void>;
   }
 
   export interface DataProviders {
