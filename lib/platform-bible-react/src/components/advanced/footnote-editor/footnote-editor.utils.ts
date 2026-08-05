@@ -113,20 +113,25 @@ export function placeCaretAtPosition(
  * Finds the note's first top-level reference-run element (a `fr`/`xo` `.char` child of the note),
  * if any - the editor-DOM equivalent of `FootnoteItem`'s `targetRef` split, which pulls the FIRST
  * top-level content item out of the body only when it's a `fr`/`xo` marker (see
- * `footnote-item.component.tsx`'s `targetRef` destructuring). Only the true first top-level child
- * (excluding the rendered caller) is considered - a later `fr`/`xo` run is body text, not a
- * header.
+ * `footnote-item.component.tsx`'s `targetRef` destructuring).
+ *
+ * Selects structurally (`:scope > .char`, the first DIRECT `.char` child, in document order) - NOT
+ * by "first non-caller child". Lexical wraps every TextNode in its own `<span
+ * data-lexical-text="true">`, including the structural NBSP spacers `NoteNodePlugin` inserts
+ * between top-level note children (see `createNoteBodyTextNodeFilter`'s doc comment) - those
+ * spacers are themselves `.note` child ELEMENTS that sit BEFORE the `fr` run and lack the `.char`
+ * class. A "first non-caller child" lookup lands on that spacer, not the reference run; only a
+ * `.char`-typed lookup finds the actual first content run, whatever non-`.char` structural elements
+ * (caller, spacers) precede it.
  *
  * @param noteElement The note's root element (Platform Editor's `NoteNode`, class `note`).
  */
 function findFirstTopLevelReferenceRun(noteElement: Element): Element | undefined {
-  const firstContentChild = Array.from(noteElement.children).find(
-    (child) => !child.classList.contains('immutable-note-caller'),
-  );
-  if (!firstContentChild || !firstContentChild.classList.contains('char')) return undefined;
+  const firstCharChild = noteElement.querySelector(':scope > .char');
+  if (!firstCharChild) return undefined;
 
-  const marker = firstContentChild.getAttribute('data-marker');
-  return marker === 'fr' || marker === 'xo' ? firstContentChild : undefined;
+  const marker = firstCharChild.getAttribute('data-marker');
+  return marker === 'fr' || marker === 'xo' ? firstCharChild : undefined;
 }
 
 /**
@@ -137,10 +142,18 @@ function findFirstTopLevelReferenceRun(noteElement: Element): Element | undefine
  * excluded run, because the editor's flat text includes content the read-only row never renders.
  *
  * Verified against the real Platform Editor note DOM (Storybook `Demo/Scripture Editor/Footnotes
- * Pane`): a loaded note renders as `<span class="note usfm_<marker>"><span
- * class="immutable-note-caller" contenteditable="false"><button>…</button></span><!--NBSP--><span
- * class="char usfm_fr">…</span><!--NBSP--><span class="char usfm_ft">…</span><!--NBSP--></span>`.
- * This excludes:
+ * Pane`): a loaded note renders as (exact live capture, elided for brevity): `<span class="note
+ * usfm_f expanded" data-caller="+"> <span class="immutable-note-caller"
+ * data-lexical-decorator="true" contenteditable="false"> <button>+</button></span> <span
+ * data-lexical-text="true">&nbsp;</span> <span class="char usfm_fr" data-marker="fr"><span
+ * data-lexical-text="true">1:1 </span></span> <span data-lexical-text="true">&nbsp;</span> <span
+ * class="char usfm_ft" data-marker="ft"><span data-lexical-text="true">Or "sinful"</span></span>
+ * <span data-lexical-text="true">&nbsp;</span> </span>`. Critically, the structural NBSP spacers
+ * are `<span data-lexical-text="true">` ELEMENTS (Lexical wraps every TextNode, including its own
+ * structural ones), not bare text/comment nodes - a note's DIRECT element children are `[caller,
+ * nbsp-span, fr-span, nbsp-span, ft-span, nbsp-span, ...]`, so "first non-caller child" lands on
+ * the nbsp-span, not the reference run (see {@link findFirstTopLevelReferenceRun}'s doc for why this
+ * must be a `.char`-typed lookup, not a caller-exclusion lookup). This excludes:
  *
  * - Text inside a non-editable decorator wrapper (the rendered note caller button). Lexical's
  *   `DecoratorNode` reconciler sets `contenteditable="false"` on the wrapper, never on the button
@@ -148,11 +161,12 @@ function findFirstTopLevelReferenceRun(noteElement: Element): Element | undefine
  * - Text inside the note's first top-level `fr`/`xo` reference-run `.char` element (see
  *   {@link findFirstTopLevelReferenceRun}).
  * - Text that isn't inside any `.char` element at all. `NoteNodePlugin`'s
- *   `$noteCharNodeTransform`/`$noteCallerNodeTransform` insert a zero-width NBSP text node directly
- *   between each pair of top-level note children (caller/char runs) purely so the caret can
- *   enter/exit them; these are editor-DOM structural artifacts with no counterpart in the read-only
- *   row's flattened text, and would otherwise silently inflate offsets for any note with more than
- *   one body run (e.g. `fr` + `fq` + `ft`).
+ *   `$noteCharNodeTransform`/`$noteCallerNodeTransform` insert a zero-width NBSP `TextNode`
+ *   (rendered as its own `<span data-lexical-text="true">`) directly between each pair of top-level
+ *   note children (caller/char runs) purely so the caret can enter/exit them; these are editor-DOM
+ *   structural artifacts with no counterpart in the read-only row's flattened text, and would
+ *   otherwise silently inflate offsets for any note with more than one body run (e.g. `fr` + `fq` +
+ *   `ft`).
  *
  * @param container The note's rendered root (e.g. the editor's `.editor-input`).
  */

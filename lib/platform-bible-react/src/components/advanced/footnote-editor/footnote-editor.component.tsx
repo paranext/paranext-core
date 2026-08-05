@@ -381,16 +381,32 @@ export default function FootnoteEditor({
         editorRef.current?.applyUpdate([noteOp]);
         const caretPosition = initialCaretPositionRef.current;
         if (caretPosition !== undefined) {
-          // Let the editor render the applied note before measuring its DOM
+          // Let the editor render the applied note before measuring its DOM.
           caretTimeout = setTimeout(() => {
             const editorInput =
               editorParentRef.current?.querySelector<HTMLElement>('.editor-input') ?? undefined;
             if (editorInput) {
-              editorRef.current?.focus();
-              // The captured position's offset origin is the note's displayed BODY text only
-              // (see FootnoteCaretPosition); the editor's flat text also includes the rendered
-              // caller and structural spacing, so align via createNoteBodyTextNodeFilter rather
-              // than walking the editor's raw text nodes.
+              // Deliberately NOT calling editorRef.current?.focus() here (Task 4 originally did,
+              // immediately before this call). Verified live in Storybook, by patching
+              // `Selection.prototype` and tracing the call stack: Lexical's own `EditorRef.focus()`
+              // schedules an internal reconciliation of its OWN remembered selection model; that
+              // reconciliation runs microtasks later and silently overwrites a caret placed via the
+              // raw Range/Selection APIs in between (`$commitPendingUpdates` -> `updateDOMSelection`
+              // -> `Selection.setBaseAndExtent`, landing back at the position the editor's own
+              // model held BEFORE this call). The placed caret read back correctly immediately
+              // after being set, then reverted moments later - confirmed via `Selection.prototype`
+              // instrumentation, not by the naive "did it look right right away" check. Dropping
+              // this call fixes it: `placeCaretAtPosition`'s own `Selection.addRange()` already
+              // moves DOM focus onto `editorInput` as an intrinsic side effect of selecting inside
+              // a `contenteditable` (confirmed live via `document.activeElement`), and the
+              // pre-existing marker-menu-visibility effect elsewhere in this component already
+              // focuses the editor unconditionally on mount, well before this timeout fires - so no
+              // separate focus() call is needed or safe here.
+              //
+              // The captured position's offset origin is the note's displayed BODY text only (see
+              // FootnoteCaretPosition); the editor's flat text also includes the rendered caller and
+              // structural spacing, so align via createNoteBodyTextNodeFilter rather than walking
+              // the editor's raw text nodes.
               placeCaretAtPosition(
                 editorInput,
                 caretPosition,

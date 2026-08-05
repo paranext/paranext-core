@@ -460,10 +460,17 @@ describe('FootnoteEditor inline live-apply', () => {
 });
 
 describe('FootnoteEditor initial caret position', () => {
-  // The marker-menu effect also calls focus() on mount, so compare call counts between a
-  // baseline render (no caret position) and a caret-position render: the delta must be
-  // exactly the one caret-placement focus call. The DOM-level caret math itself is covered
-  // by the placeCaretAtPosition util tests; jsdom cannot exercise the real editor DOM.
+  // Review finding: caret placement must NOT call editorRef.current?.focus() itself. Verified
+  // live in Storybook (Selection.prototype instrumentation): Lexical's own EditorRef.focus()
+  // schedules an internal reconciliation of ITS remembered selection that fires a tick later and
+  // silently overwrites a caret just placed via the raw Range/Selection APIs - the caret read
+  // back correctly immediately after being set, then reverted moments later. Dropping the call
+  // fixed it: placeCaretAtPosition's own Selection.addRange() already moves DOM focus onto the
+  // editor input as an intrinsic side effect of selecting inside a contenteditable, and the
+  // pre-existing marker-menu-visibility effect elsewhere in this component already focuses the
+  // editor unconditionally on mount. So caret-position renders must NOT add any extra focus()
+  // call beyond that baseline. The DOM-level caret math itself is covered by the
+  // placeCaretAtPosition util tests; jsdom cannot exercise the real editor DOM.
   async function countFocusCalls(props: Partial<Parameters<typeof FootnoteEditor>[0]>) {
     editorRefMock.focus.mockClear();
     const { unmount } = renderEditor(props);
@@ -473,10 +480,10 @@ describe('FootnoteEditor initial caret position', () => {
     return count;
   }
 
-  it('adds exactly one focus call for caret placement, none when omitted', async () => {
+  it('does not add an extra focus call for caret placement', async () => {
     vi.useFakeTimers();
     const baseline = await countFocusCalls({ inline: true });
     const withCaret = await countFocusCalls({ inline: true, initialCaretPosition: 'end' });
-    expect(withCaret).toBe(baseline + 1);
+    expect(withCaret).toBe(baseline);
   });
 });
