@@ -13,6 +13,10 @@ vi.mock('@renderer/services/first-run-store', () => ({
   // Required by IdentifyStep when rendered via DEFAULT_STEP_COMPONENTS
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
+  continueWithoutRegistration: vi.fn(),
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
@@ -548,5 +552,21 @@ describe('FirstRunShell', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it('forwards allowContinueWithoutRegistration to the entry step component', () => {
+    let received: boolean | undefined = false;
+    const Spy = ({ allowContinueWithoutRegistration }: FirstRunStepProps) => {
+      received = allowContinueWithoutRegistration;
+      return undefined;
+    };
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        allowContinueWithoutRegistration
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: Spy }}
+      />,
+    );
+    expect(received).toBe(true);
   });
 });

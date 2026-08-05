@@ -1,10 +1,16 @@
 import * as commandService from '@shared/services/command.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { isDemoMode, markJustRegistered } from '@renderer/services/first-run-store';
-import { Alert, AlertTitle, Button, Input, Spinner } from 'platform-bible-react';
+import {
+  continueWithoutRegistration,
+  isDemoMode,
+  markJustRegistered,
+} from '@renderer/services/first-run-store';
+import { settingsService } from '@shared/services/settings.service';
+import { logger } from '@shared/services/logger.service';
+import { Alert, AlertTitle, Button, Checkbox, Input, Label, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { CircleCheck } from 'lucide-react';
-import { ChangeEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ChangeEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
 
@@ -43,6 +49,8 @@ const KEYS: LocalizeKey[] = [
   '%firstRun_step_identify_registryLink%',
   '%firstRun_step_identify_validatingCode%',
   '%firstRun_button_back%',
+  '%firstRun_button_continueWithoutRegistration%',
+  '%firstRun_step_identify_dontShowAgain%',
   '%general_error_title%',
 ];
 
@@ -78,6 +86,7 @@ export function IdentifyStep({
   setCanProceed,
   setManagesOwnFooter,
   onRestartAfterSave,
+  allowContinueWithoutRegistration,
 }: IdentifyStepProps) {
   // Suppress the shell's generic Next/Finish and the shell footer before the first paint — this
   // step owns its navigation entirely via WizardStepForm. onBack is rendered inside the form.
@@ -103,6 +112,18 @@ export function IdentifyStep({
   const [saveError, setSaveError] = useState('');
   const [saveErrorDescription, setSaveErrorDescription] = useState('');
   const [isRestarting, setIsRestarting] = useState(false);
+  const [suppressReminder, setSuppressReminder] = useState(false);
+  const onToggleSuppressReminder = async (checked: boolean) => {
+    setSuppressReminder(checked);
+    try {
+      // Setting is `true` = keep showing, so a checked "don't show again" writes `false`.
+      await settingsService.set('platform.showRegistrationReminderOnStartup', !checked);
+    } catch (e) {
+      logger.warn(
+        `Failed to persist platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
+      );
+    }
+  };
 
   const isMounted = useRef(false);
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -270,18 +291,30 @@ export function IdentifyStep({
     );
   }
 
+  // Re-register mode surfaces an escape hatch in the back-button slot; at the identify entry the
+  // shell supplies no onBack (index === entryIndex), so the slot is otherwise empty. Computed as
+  // if/else (not a nested ternary) to satisfy ESLint no-nested-ternary.
+  let backButton: ReactNode;
+  if (onBack) {
+    backButton = (
+      <Button variant="outline" onClick={onBack}>
+        {strings['%firstRun_button_back%']}
+      </Button>
+    );
+  } else if (allowContinueWithoutRegistration) {
+    backButton = (
+      <Button variant="ghost" onClick={() => continueWithoutRegistration()}>
+        {strings['%firstRun_button_continueWithoutRegistration%']}
+      </Button>
+    );
+  }
+
   return (
     <WizardStepForm
       heading={strings['%firstRun_step_identify_heading%']}
       error={activeError}
       errorDescription={activeErrorDescription}
-      backButton={
-        onBack && (
-          <Button variant="outline" onClick={onBack}>
-            {strings['%firstRun_button_back%']}
-          </Button>
-        )
-      }
+      backButton={backButton}
       primaryButton={
         <Button disabled={isSaveDisabled} onClick={saveAndRestart}>
           {strings['%paratextRegistration_button_saveAndRestart%']}
@@ -343,6 +376,22 @@ export function IdentifyStep({
             <CircleCheck className="tw:h-4 tw:w-4" />
             <AlertTitle>{strings['%paratextRegistration_alert_validRegistration%']}</AlertTitle>
           </Alert>
+        )}
+
+        {allowContinueWithoutRegistration && (
+          <div className="tw:flex tw:items-center tw:gap-2">
+            <Checkbox
+              id="identify-dont-show-again"
+              checked={suppressReminder}
+              // onToggleSuppressReminder is async but onCheckedChange expects void. Calling it
+              // directly (without void or .catch) is safe: the handler catches its own errors
+              // internally, and no-floating-promises is off in this codebase.
+              onCheckedChange={(checked) => onToggleSuppressReminder(checked === true)}
+            />
+            <Label htmlFor="identify-dont-show-again">
+              {strings['%firstRun_step_identify_dontShowAgain%']}
+            </Label>
+          </div>
         )}
       </div>
     </WizardStepForm>

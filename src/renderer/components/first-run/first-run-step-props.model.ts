@@ -40,4 +40,11 @@ export interface FirstRunStepProps {
    * button).
    */
   setManagesOwnFooter?: (managesOwnFooter: boolean) => void;
+  /**
+   * Re-register mode: set only when the wizard was raised by the background registration re-check
+   * for an already-onboarded user (not fresh onboarding). Steps use it to surface re-register-only
+   * affordances — the Identify step shows a "Continue without registration" escape hatch and a
+   * "Don't show this on startup again" suppression checkbox. Unset/false in normal first-run.
+   */
+  allowContinueWithoutRegistration?: boolean;
 }

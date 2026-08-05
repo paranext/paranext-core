@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { ChangeEvent, ReactNode } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
+import { settingsService } from '@shared/services/settings.service';
 import {
   IdentifyStep,
   INVALID_CODE_DISPLAY_DEBOUNCE_MS,
@@ -27,6 +28,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_identify_registryHelp%': "Can't find your registration code?",
       '%firstRun_step_identify_registryLink%': 'Visit Paratext Registry',
       '%firstRun_step_identify_validatingCode%': 'Checking your registration…',
+      '%firstRun_button_continueWithoutRegistration%': 'Continue without registration',
+      '%firstRun_step_identify_dontShowAgain%': "Don't show this on startup again",
       '%general_error_title%': 'Error',
     },
     false,
@@ -35,6 +38,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
+  continueWithoutRegistration: vi.fn(),
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
 vi.mock('platform-bible-react', () => ({
   Alert: ({ children, variant }: { children: ReactNode; variant?: string }) => (
@@ -80,6 +87,25 @@ vi.mock('platform-bible-react', () => ({
     />
   ),
   Spinner: () => <span data-testid="spinner" />,
+  Checkbox: ({
+    id,
+    checked,
+    onCheckedChange,
+  }: {
+    id?: string;
+    checked?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
+  }) => (
+    <input
+      type="checkbox"
+      id={id}
+      checked={!!checked}
+      onChange={(e) => onCheckedChange?.(e.target.checked)}
+    />
+  ),
+  Label: ({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) => (
+    <label htmlFor={htmlFor}>{children}</label>
+  ),
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
@@ -398,6 +424,62 @@ describe('IdentifyStep', () => {
     await waitFor(() => {
       expect(screen.getByText('Error')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled();
+    });
+  });
+
+  describe('re-register mode (allowContinueWithoutRegistration)', () => {
+    it('shows the escape hatch and suppression checkbox only in re-register mode', () => {
+      const { unmount } = render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      expect(
+        screen.getByRole('button', { name: 'Continue without registration' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('checkbox', { name: "Don't show this on startup again" }),
+      ).toBeInTheDocument();
+      unmount();
+
+      render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+      expect(
+        screen.queryByRole('button', { name: 'Continue without registration' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('checkbox', { name: "Don't show this on startup again" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('escape hatch calls continueWithoutRegistration', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue without registration' }));
+      expect(firstRunStore.continueWithoutRegistration).toHaveBeenCalledTimes(1);
+    });
+
+    it('suppression checkbox persists platform.showRegistrationReminderOnStartup = false', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      await user.click(screen.getByRole('checkbox', { name: "Don't show this on startup again" }));
+      expect(settingsService.set).toHaveBeenCalledWith(
+        'platform.showRegistrationReminderOnStartup',
+        false,
+      );
     });
   });
 
