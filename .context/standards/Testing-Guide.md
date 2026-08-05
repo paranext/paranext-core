@@ -978,8 +978,6 @@ public void ImportantFeature_HandlesEdgeCase() { }
 describe.concurrent('Smoke tests', () => {
   test('basic operation works', () => {});
 });
-
-// Or use file naming: feature.smoke.test.ts, feature.critical.test.ts
 ```
 
 ### Running by Category

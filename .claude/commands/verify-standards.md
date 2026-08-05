@@ -1,5 +1,5 @@
 ---
-description: Mechanically verify the repo's Claude-facing docs (.context/standards, .claude rules/skills/agents/commands, CLAUDE.md) against the live code — cited paths, identifiers, npm scripts, localization keys, status claims. Read-only; prints a findings report. Run before each epic's investigation phase and on any PR that adds standards content.
+description: Mechanically verify the repo's Claude-facing docs (.context/standards, .claude rules/skills/agents/commands, CLAUDE.md) against the live code — cited paths, identifiers, npm scripts, dotnet test categories, playwright projects, localization keys, status claims. Read-only; prints a findings report. Run before each epic's investigation phase and on any PR that adds standards content.
 ---
 
 # Verify Standards
@@ -33,14 +33,16 @@ frozen records or pinned-snapshot corpora with their own provenance rules.
   from that line's checks — it documents intent, not current code. The marker is the only
   recognized form; prose saying "aspirational" does not exempt anything (a mechanical gate can't
   honor prose).
-- **Fenced code blocks**: localization-key and path checks are suppressed inside ``` fences
-  (example keys and illustrative paths are legitimate there). The **command** checks — npm script,
-  dotnet test category, and playwright project — match raw line text, so they stay live inside
-  fences: a fenced command presents itself as runnable and readers execute it, so a nonexistent
-  script, category, or project in one is a finding, not noise. The **identifier** check works
-  differently: it only fires on backticked tokens, and code inside a fence is not backticked, so
-  identifiers are checked wherever they are backticked — in practice, prose. An identifier that
-  appears only inside a fenced code sample is not checked at all.
+- **Fenced code blocks**: inside ``` fences only the localization-key and path checks are
+  suppressed (example keys and illustrative paths are legitimate there); every other check is
+  fence-blind. The **command** checks — npm script, dotnet test category, playwright project — and
+  the **undated in-flight status** check match raw line text, so they stay live inside fences: a
+  fenced command presents itself as runnable and readers execute it, so a nonexistent script,
+  category, or project in one is a finding, not noise. The **identifier** check is not
+  fence-suppressed either, but it fires only on **backticked** tokens, so what it actually sees is
+  prose *and* backticks nested inside a fence — report templates, checklists, and code comments
+  that quote a symbol are checked exactly like prose. Plain unbackticked code inside a fence is the
+  one thing it never sees.
 
 ## Step 1: Refresh reference state
 
@@ -60,10 +62,14 @@ on your branch state.
 
 ## Step 2: Run the mechanical sweep
 
-Run this from the repo root. It is self-contained and read-only; it prints one `findings:` line
-per candidate issue, grouped by file at the end. **If the sweep prints `FATAL`, stop and report
-the failure to the caller — do not triage, do not tick checklist boxes; a failed run verifies
-nothing.**
+Run this from the repo root. It is self-contained and read-only: it prints a scan summary and the
+PR references to spot-check, then one indented `:line [check] message` entry per candidate grouped
+under its file, then a total count. **If the sweep prints `FATAL`, stop and report the failure to
+the caller — do not triage, do not tick checklist boxes; a failed run verifies nothing.** **If it
+prints a `WARN:` line, carry that warning into the report** — a warning means an inventory came
+back empty and its check was disabled for this run, or a file ended inside an unclosed fence and
+its path/l10n checks were suppressed from that point on. The sweep still finishes and exits 0, but
+it did not cover everything it claims to, so a run with warnings is not a clean pass.
 
 ```bash
 python3 - <<'EOF'
@@ -220,6 +226,8 @@ The sweep favors precision but still produces noise. For each candidate:
 - [ ] `git fetch origin main` succeeded (or its staleness WARN is carried into the report); doc
       text was read from the working tree, existence checks ran against `origin/main`
 - [ ] Sweep script ran to completion; frozen-record skips listed
+- [ ] No `WARN:` lines — or each one (disabled check, file left inside an unclosed fence) is
+      carried into the report as a coverage gap, not silently passed
 - [ ] Every PR reference spot-checked with `gh`
 - [ ] Findings triaged into misleads-agent / wrong-detail / cosmetic with evidence
 - [ ] No files modified, nothing posted
