@@ -527,6 +527,22 @@ describe('IdentifyStep', () => {
       expect(firstRunStore.continueWithoutRegistration).toHaveBeenCalledTimes(1);
       expect(settingsService.set).not.toHaveBeenCalled();
     });
+
+    it('reverts the suppression checkbox when the settings write fails', async () => {
+      const user = setupUser();
+      vi.mocked(settingsService.set).mockRejectedValueOnce(new Error('write failed'));
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: "Don't show this on startup again" });
+      await user.click(checkbox);
+      // Optimistic check reverted after the failed write, so the box matches the unchanged setting.
+      await waitFor(() => expect(checkbox).not.toBeChecked());
+    });
   });
 
   describe('demo mode', () => {

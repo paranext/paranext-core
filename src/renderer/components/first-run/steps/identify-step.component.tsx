@@ -9,7 +9,7 @@ import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
 import { Alert, AlertTitle, Button, Checkbox, Input, Label, Spinner } from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { CircleCheck } from 'lucide-react';
+import { AlertCircle, CircleCheck } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
@@ -120,6 +120,8 @@ export function IdentifyStep({
       // Setting is `true` = keep showing, so a checked "don't show again" writes `false`.
       await settingsService.set('platform.showRegistrationReminderOnStartup', !checked);
     } catch (e) {
+      // Revert the optimistic toggle so the checkbox reflects the (unchanged) persisted setting.
+      setSuppressReminder(!checked);
       logger.warn(
         `Failed to persist platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
       );
@@ -326,9 +328,10 @@ export function IdentifyStep({
         {/* Re-register mode only: explain why an already-onboarded user is being asked to register
             again (their previously-valid registration went invalid). Absent in fresh onboarding. */}
         {allowContinueWithoutRegistration && (
-          <p className="tw:text-sm tw:font-medium">
-            {strings['%firstRun_step_identify_reRegisterNotice%']}
-          </p>
+          <Alert>
+            <AlertCircle className="tw:h-4 tw:w-4" />
+            <AlertTitle>{strings['%firstRun_step_identify_reRegisterNotice%']}</AlertTitle>
+          </Alert>
         )}
         <div className="tw:flex tw:flex-col tw:gap-1">
           <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">

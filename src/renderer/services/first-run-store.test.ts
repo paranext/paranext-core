@@ -507,6 +507,19 @@ describe('background registration re-check (completed simple-mode user)', () => 
     );
   });
 
+  it('consumes the just-registered flag even when the reminder is suppressed', async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false });
+    mockResolveReg.mockResolvedValue('invalid');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(mockGet).toHaveBeenCalledWith('platform.showRegistrationReminderOnStartup'),
+    );
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    // Flag consumed once per startup regardless of suppression — not left stale.
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+  });
+
   it('raises the wizard on the next launch after the one-launch justRegistered guard was spent', async () => {
     // First launch: justRegistered is set → guard fires, wizard NOT raised.
     stubSettings({ firstRunComplete: true, showReminder: true });

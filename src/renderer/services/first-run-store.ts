@@ -312,6 +312,9 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
   if (backgroundRecheckStarted) return;
   backgroundRecheckStarted = true;
   try {
+    // Consume the just-registered flag once per startup, before any early return, so a suppressed
+    // launch can't leave it stale (which could later swallow a legitimate wizard raise).
+    const justRegistered = consumeJustRegisteredFlag();
     let reminderSuppressed = false;
     try {
       const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
@@ -323,9 +326,6 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
       );
     }
     if (reminderSuppressed) return;
-    // Consume the just-registered flag: a transient 'invalid' on the launch right after a
-    // re-register is almost certainly a backend fluke, not a reason to re-nag.
-    const justRegistered = consumeJustRegisteredFlag();
     const validity = await resolveRegistrationValidity();
     // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
     if (validity !== 'invalid') return;
