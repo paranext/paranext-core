@@ -2,6 +2,19 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
+/**
+ * Where the caret should land within a footnote's rendered text.
+ *
+ * - `'end'`: after the last character of the note text.
+ * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
+ *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
+ *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
+ *   boundaries, so surrogate pairs and combining sequences are never split by construction.
+ *   Consumers walk text nodes and accumulate `Text.data.length` to resolve it; an offset past the
+ *   available text resolves to `'end'`.
+ */
+export type FootnoteCaretPosition = 'end' | { utf16Offset: number };
+
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
   /**

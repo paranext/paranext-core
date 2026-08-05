@@ -401,3 +401,25 @@ describe('FootnoteEditor inline live-apply', () => {
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-race', 'latest edit');
   });
 });
+
+describe('FootnoteEditor initial caret position', () => {
+  // The marker-menu effect also calls focus() on mount, so compare call counts between a
+  // baseline render (no caret position) and a caret-position render: the delta must be
+  // exactly the one caret-placement focus call. The DOM-level caret math itself is covered
+  // by the placeCaretAtPosition util tests; jsdom cannot exercise the real editor DOM.
+  async function countFocusCalls(props: Partial<Parameters<typeof FootnoteEditor>[0]>) {
+    editorRefMock.focus.mockClear();
+    const { unmount } = renderEditor(props);
+    await vi.runAllTimersAsync();
+    const count = editorRefMock.focus.mock.calls.length;
+    unmount();
+    return count;
+  }
+
+  it('adds exactly one focus call for caret placement, none when omitted', async () => {
+    vi.useFakeTimers();
+    const baseline = await countFocusCalls({ inline: true });
+    const withCaret = await countFocusCalls({ inline: true, initialCaretPosition: 'end' });
+    expect(withCaret).toBe(baseline + 1);
+  });
+});

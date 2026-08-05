@@ -40,7 +40,8 @@ import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 import { MarkerMenu } from '../marker-menu.component';
-import { generateInlineMarkerMenuListItems } from './footnote-editor.utils';
+import { generateInlineMarkerMenuListItems, placeCaretAtPosition } from './footnote-editor.utils';
+import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
 export interface FootnoteEditorProps {
@@ -80,6 +81,12 @@ export interface FootnoteEditorProps {
    * @default false
    */
   inline?: boolean;
+  /**
+   * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
+   * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row. When
+   * omitted, the editor does not move the caret (existing popover behavior).
+   */
+  initialCaretPosition?: FootnoteCaretPosition;
 }
 
 /**
@@ -167,6 +174,7 @@ export default function FootnoteEditor({
   localizedStrings,
   parentEditorRef,
   inline = false,
+  initialCaretPosition,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -184,6 +192,14 @@ export default function FootnoteEditor({
   useEffect(() => {
     noteKeyRef.current = noteKey;
   }, [noteKey]);
+
+  // `initialCaretPosition` is a load-time-only input, like `noteKey`: it must not trigger a
+  // reload of the note, so the load effect below reads it via a ref updated per render rather
+  // than depending on it directly.
+  const initialCaretPositionRef = useRef(initialCaretPosition);
+  useEffect(() => {
+    initialCaretPositionRef.current = initialCaretPosition;
+  }, [initialCaretPosition]);
 
   // Lock the container width to its natural rendered width so content changes (e.g. switching
   // language, undo/redo enabling) don't cause the popover to resize while editing.
@@ -258,6 +274,7 @@ export default function FootnoteEditor({
   // When the component loads, applies the note ops to the current editor, gets the note ref and caller
   useEffect(() => {
     let timeout: ReturnType<typeof setTimeout>;
+    let caretTimeout: ReturnType<typeof setTimeout>;
     hasInitializedEditor.current = false;
     setIsAtInitialState(true);
     const noteOp = noteOps?.at(0);
@@ -280,12 +297,27 @@ export default function FootnoteEditor({
       timeout = setTimeout(() => {
         // Inserts the note node to be edited as an delta operation
         editorRef.current?.applyUpdate([noteOp]);
+        const caretPosition = initialCaretPositionRef.current;
+        if (caretPosition !== undefined) {
+          // Let the editor render the applied note before measuring its DOM
+          caretTimeout = setTimeout(() => {
+            const editorInput =
+              editorParentRef.current?.querySelector<HTMLElement>('.editor-input') ?? undefined;
+            if (editorInput) {
+              editorRef.current?.focus();
+              placeCaretAtPosition(editorInput, caretPosition);
+            }
+          }, 0);
+        }
       }, 0);
     }
 
     return () => {
       if (timeout) {
         clearTimeout(timeout);
+      }
+      if (caretTimeout) {
+        clearTimeout(caretTimeout);
       }
     };
   }, [noteOps]);
