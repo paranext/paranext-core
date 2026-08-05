@@ -47,4 +47,4 @@ export const RENDERER_HOSTED_DIALOG_REQUEST_NAMES = [
   'showDialog',
   'selectProject',
   'showAboutDialog',
-] as const satisfies (keyof DialogService)[];
+] as const satisfies readonly (keyof DialogService)[];

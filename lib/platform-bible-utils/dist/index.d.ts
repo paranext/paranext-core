@@ -732,23 +732,52 @@ export declare class SortedSet<T> {
 	 */
 	private findInsertionIndex;
 }
-/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+/**
+ * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
+ *
+ * A list is single-use: it collects unsubscribers until {@link runAllUnsubscribers} runs them, and
+ * that run seals it for good. Anything added to a sealed list is unsubscribed immediately instead
+ * of being stored, because whatever these clean up after is already gone. Registration is usually
+ * asynchronous, so an unsubscriber routinely arrives after the teardown that should have run it —
+ * without sealing it would be stored in a list nobody drains again and its subscription would leak
+ * for the rest of the session.
+ */
 export declare class UnsubscriberAsyncList {
 	private name;
 	readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+	/**
+	 * Whether {@link runAllUnsubscribers} has started. Set at the top of the run rather than at the
+	 * end: the run takes a snapshot of the set and then clears it, so an unsubscriber added partway
+	 * through would land in a list that is never drained again.
+	 */
+	private isSealed;
 	constructor(name?: string);
 	/**
 	 * Add unsubscribers to the list. Note that duplicates are not added twice.
+	 *
+	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
+	 * stored. Nothing can await that run, so its outcome is only reported.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
 	add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
 	/**
-	 * Run all unsubscribers added to this list and then clear the list.
+	 * Run all unsubscribers added to this list, clear the list, and seal it so anything added later
+	 * is unsubscribed on arrival.
 	 *
-	 * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+	 * An unsubscriber that throws (synchronously or asynchronously) does not make this method reject:
+	 * the error is caught and logged via `console.error`, the remaining unsubscribers still run, and
+	 * the thrower counts as a failure in the return value. An unsubscriber that arrives during the
+	 * run is not part of the returned result — nothing is waiting on it by then.
+	 *
+	 * @returns `true` if all unsubscribers succeeded, `false` if any returned `false` or threw.
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
+	/**
+	 * Run an unsubscriber that arrived after the list was sealed. `add` is synchronous and has no
+	 * caller to hand a result to, so a failure is reported here rather than thrown.
+	 */
+	private unsubscribeImmediately;
 }
 /**
  * Standard platform error codes based on gRPC status codes. These provide machine-readable,

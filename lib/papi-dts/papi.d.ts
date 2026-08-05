@@ -955,11 +955,11 @@ declare module 'shared/global-this.model' {
      * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
      * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
      * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
-     * `platform.getFocusedWindowId`). `null` until the renderer reads the URL parameter.
+     * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
      *
      * @experimental
      */
-    var windowId: string | null;
+    var windowId: string | undefined;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -4093,8 +4093,9 @@ declare module 'shared/services/web-view.service-model' {
    *
    * @experimental
    */
-  export const RENDERER_HOSTED_COMMAND_DOCS: Partial<
-    Record<(typeof RENDERER_HOSTED_COMMAND_NAMES)[number], SingleMethodDocumentation>
+  export const RENDERER_HOSTED_COMMAND_DOCS: Record<
+    (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
+    SingleMethodDocumentation
   >;
 }
 declare module 'shared/models/web-view-provider.model' {
