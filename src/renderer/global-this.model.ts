@@ -44,6 +44,6 @@ globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !=
 globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
 
 // Window id of the Electron browser window
-globalThis.windowId = searchParams.get(WINDOW_ID);
+globalThis.windowId = searchParams.get(WINDOW_ID) ?? undefined;
 
 // #endregion

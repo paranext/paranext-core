@@ -46,7 +46,7 @@ vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: mocks.settingsGet, subscribe: mocks.settingsSubscribe },
 }));
-vi.mock('@renderer/services/localStorage.service', () => ({
+vi.mock('@renderer/services/local-storage.service', () => ({
   default: { getItem: mocks.storageGetItem, setItem: vi.fn() },
 }));
 
