@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Type } from 'lucide-react';
 import {
   Button,
   MarkerMenu,
@@ -153,6 +153,10 @@ export function CharacterMarkerControl({
                   disabled={isDisabled}
                   variant="outline"
                 >
+                  {/* Decorative only — the accessible name on the button already carries both the
+                      "character marker" role and the current value, so the icon must not be
+                      announced a second time. */}
+                  <Type aria-hidden />
                   {label}
                   <ChevronDown />
                 </Button>
