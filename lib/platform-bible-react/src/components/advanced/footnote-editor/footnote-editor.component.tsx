@@ -335,22 +335,31 @@ export default function FootnoteEditor({
     saveCurrentNoteOpRef.current = saveCurrentNoteOp;
   }, [saveCurrentNoteOp]);
 
-  const flushPendingApply = useCallback(() => {
+  // Clears a pending debounced apply without firing it. Immediate-apply paths (caller/type
+  // changes, closeAndSave) call this before their own apply so the two never race - cancelling
+  // rather than flushing avoids applying the same edit to the parent twice in one tick (once
+  // with the stale flushed state, once with the immediate call's fresher state).
+  const cancelPendingApply = useCallback(() => {
     if (pendingApplyTimeoutRef.current === undefined) return;
     clearTimeout(pendingApplyTimeoutRef.current);
     pendingApplyTimeoutRef.current = undefined;
-    const { callerType: ct, customCaller: cc } = callerStateRef.current;
-    saveCurrentNoteOpRef.current(ct, cc, true);
   }, []);
 
+  const flushPendingApply = useCallback(() => {
+    if (pendingApplyTimeoutRef.current === undefined) return;
+    cancelPendingApply();
+    const { callerType: ct, customCaller: cc } = callerStateRef.current;
+    saveCurrentNoteOpRef.current(ct, cc, true);
+  }, [cancelPendingApply]);
+
   const schedulePendingApply = useCallback(() => {
-    if (pendingApplyTimeoutRef.current !== undefined) clearTimeout(pendingApplyTimeoutRef.current);
+    cancelPendingApply();
     pendingApplyTimeoutRef.current = setTimeout(() => {
       pendingApplyTimeoutRef.current = undefined;
       const { callerType: ct, customCaller: cc } = callerStateRef.current;
       saveCurrentNoteOpRef.current(ct, cc, true);
     }, INLINE_APPLY_DEBOUNCE_MS);
-  }, []);
+  }, [cancelPendingApply]);
 
   // Ending an inline editing session = unmounting this component; unsaved edits must land.
   // useLayoutEffect (not useEffect): on unmount, React detaches `editorRef` before passive-effect
@@ -361,9 +370,12 @@ export default function FootnoteEditor({
   }, [flushPendingApply]);
 
   const closeAndSave = useCallback(() => {
+    // Cancel (not flush) a pending debounced apply: it would otherwise fire moments later with
+    // stale state, redundant with this immediate apply.
+    cancelPendingApply();
     saveCurrentNoteOp(callerType, customCaller, true);
     onClose();
-  }, [callerType, customCaller, onClose, saveCurrentNoteOp]);
+  }, [callerType, customCaller, onClose, saveCurrentNoteOp, cancelPendingApply]);
 
   // Keep a stable ref to closeAndSave so the chapter-change effect below only needs to depend on
   // scrRef.book and scrRef.chapterNum (not on caller state that changes during editing).
@@ -398,18 +410,22 @@ export default function FootnoteEditor({
     (newCallerType: FootnoteCallerType) => {
       setCallerType(newCallerType);
       // Caller changes are discrete actions (not continuous typing), so in inline mode they
-      // apply to the parent editor immediately rather than going through the debounce.
+      // apply to the parent editor immediately rather than going through the debounce. Cancel
+      // any pending debounced apply first so it doesn't also fire (with stale state) moments
+      // later, redundant with this immediate apply.
+      cancelPendingApply();
       saveCurrentNoteOp(newCallerType, customCaller, inline);
     },
-    [customCaller, inline, saveCurrentNoteOp],
+    [customCaller, inline, saveCurrentNoteOp, cancelPendingApply],
   );
 
   const handleCustomCallerChange = useCallback(
     (newCustomCaller: string) => {
       setCustomCaller(newCustomCaller);
+      cancelPendingApply();
       saveCurrentNoteOp(callerType, newCustomCaller, inline);
     },
-    [callerType, inline, saveCurrentNoteOp],
+    [callerType, inline, saveCurrentNoteOp, cancelPendingApply],
   );
 
   const handleNoteTypeChange = (value: string) => {

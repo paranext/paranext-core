@@ -182,6 +182,29 @@ describe('FootnoteEditor inline live-apply', () => {
     editorRefMock.getNoteOps.mockReturnValue(makeNoteOps(text));
   }
 
+  // Asserts the applied ops actually carry `text`, not just "some insert" - a matcher like
+  // `expect.anything()` would pass even for stale or wrong-edit content.
+  function expectAppliedTextTo(
+    replaceEmbedUpdate: ReturnType<typeof vi.fn>,
+    key: string,
+    text: string,
+  ) {
+    expect(replaceEmbedUpdate).toHaveBeenCalledWith(
+      key,
+      expect.arrayContaining([
+        expect.objectContaining({
+          insert: expect.objectContaining({
+            note: expect.objectContaining({
+              contents: expect.objectContaining({
+                ops: expect.arrayContaining([expect.objectContaining({ insert: text })]),
+              }),
+            }),
+          }),
+        }),
+      ]),
+    );
+  }
+
   it('debounces replaceEmbedUpdate on content changes', async () => {
     vi.useFakeTimers();
     const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
@@ -217,10 +240,8 @@ describe('FootnoteEditor inline live-apply', () => {
     expect(parentRef.current.replaceEmbedUpdate).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(300);
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
-    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledWith(
-      'key-live',
-      expect.arrayContaining([expect.objectContaining({ insert: expect.anything() })]),
-    );
+    // Proves the debounce carried the LATEST edit ('edit 3'), not an earlier coalesced one.
+    expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-live', 'edit 3');
   });
 
   it('flushes a pending apply on unmount', async () => {
@@ -323,9 +344,60 @@ describe('FootnoteEditor inline live-apply', () => {
 
     await vi.advanceTimersByTimeAsync(300);
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
-    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledWith(
-      'key-updated',
-      expect.arrayContaining([expect.objectContaining({ insert: expect.anything() })]),
+    expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-updated', 'edit 2');
+  });
+
+  // Review finding: immediate-apply paths (caller/type changes, closeAndSave) must cancel a
+  // pending debounced apply first, or the untouched timer fires again later with a redundant
+  // duplicate replaceEmbedUpdate call for the same edit. closeAndSave is also reached via the
+  // book/chapter-change auto-close effect (not just the popover Accept button, which inline mode
+  // doesn't render), so that effect is the way to exercise it here.
+  it('cancels a pending debounced apply when an immediate-apply path fires first (book/chapter change race)', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    const { rerender, unmount, props } = renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-race',
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load
+
+    primeCurrentOps('snapshot');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    // First onUsjChange after load only snapshots initial state - no save yet.
+    primeCurrentOps('latest edit');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    }); // schedules the 300ms debounce
+
+    // Immediate-apply path, still inside the debounce window: a book/chapter change triggers
+    // closeAndSave via the component's useLayoutEffect, applying immediately.
+    rerender(
+      <FootnoteEditor
+        {...props}
+        inline
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef={parentRef as never}
+        noteKey="key-race"
+        scrRef={{ book: 'EXO', chapterNum: 1, verseNum: 1 }}
+      />,
     );
+
+    // If the pending debounce wasn't cancelled, it would fire again here - a redundant duplicate.
+    await vi.advanceTimersByTimeAsync(300);
+    // Unmounting flushes any *still*-pending apply - must not add a further redundant call either.
+    unmount();
+
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+    expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-race', 'latest edit');
   });
 });
