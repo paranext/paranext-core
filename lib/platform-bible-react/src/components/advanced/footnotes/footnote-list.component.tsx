@@ -5,6 +5,7 @@ import { getFormatCallerFunction } from 'platform-bible-utils';
 import React, { useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
+import { getCaretPositionFromClick } from './footnote-caret.utils';
 
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
 export function FootnoteList({
@@ -18,9 +19,27 @@ export function FootnoteList({
   suppressFormatting = false,
   formatCaller,
   onFootnoteSelected,
+  onFootnoteEditRequested,
 }: FootnoteListProps) {
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
-  const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
+
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+
+  const handleFootnoteClick = (
+    footnote: MarkerObject,
+    index: number,
+    event: React.MouseEvent<HTMLLIElement>,
+  ) => {
+    if (onFootnoteEditRequested) {
+      // Read the row element and click coordinates synchronously, before
+      // onFootnoteEditRequested can trigger a state update that removes this display row.
+      const row = rowRefs.current[index];
+      const caretPosition = row
+        ? getCaretPositionFromClick(event.clientX, event.clientY, row)
+        : 'end';
+      onFootnoteEditRequested(footnote, index, listId, caretPosition);
+      return;
+    }
     onFootnoteSelected?.(footnote, index, listId);
   };
 
@@ -39,6 +58,14 @@ export function FootnoteList({
 
     switch (e.key) {
       case 'Enter':
+        e.preventDefault();
+        if (onFootnoteEditRequested) {
+          onFootnoteEditRequested(footnote, index, listId, 'end');
+        } else {
+          onFootnoteSelected?.(footnote, index, listId);
+        }
+        break;
+
       case ' ':
         e.preventDefault();
         onFootnoteSelected?.(footnote, index, listId);
@@ -67,8 +94,6 @@ export function FootnoteList({
         break;
     }
   };
-
-  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
     if (focusedIndex >= 0 && focusedIndex < rowRefs.current.length) {
@@ -129,7 +154,7 @@ export function FootnoteList({
                   layout === 'horizontal' ? 'tw:col-span-3' : 'tw:col-span-2 tw:row-span-2',
                   classNameForItems,
                 )}
-                onClick={() => handleFootnoteClick(footnote, idx)}
+                onClick={(event) => handleFootnoteClick(footnote, idx, event)}
                 onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
               >
                 <FootnoteItem

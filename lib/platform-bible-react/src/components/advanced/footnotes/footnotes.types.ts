@@ -88,4 +88,16 @@ export interface FootnoteListProps {
   formatCaller?: (caller: string | undefined, index: number) => string | undefined;
   /** Callback to handle clicking/selecting a footnote in the list */
   onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
+  /**
+   * Callback requesting that a footnote open for editing (e.g. swap the row for an inline editor).
+   * When provided, a row click or Enter keypress fires this INSTEAD of `onFootnoteSelected`; Space
+   * still fires `onFootnoteSelected`. `caretPosition` maps the click point into the note text (see
+   * {@link FootnoteCaretPosition}); keyboard activation passes `'end'`.
+   */
+  onFootnoteEditRequested?: (
+    footnote: MarkerObject,
+    index: number,
+    listId: string | number,
+    caretPosition: FootnoteCaretPosition,
+  ) => void;
 }
