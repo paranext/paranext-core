@@ -428,7 +428,9 @@ async function open(
         finalDispatch.kind === 'replace-tab'
           ? { type: 'replace-tab', targetTabId: finalDispatch.targetTabId }
           : undefined,
-        openWebViewOptions,
+        finalDispatch.kind === 'replace-tab'
+          ? { ...openWebViewOptions, existingId: finalDispatch.targetTabId }
+          : openWebViewOptions,
       )
       .finally(emitDidFinish);
 

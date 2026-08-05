@@ -158,9 +158,11 @@ async function waitForProjectListReady(container: Locator) {
 test('all dialog types render correctly in modal and non-modal form', async ({ mainPage }) => {
   await waitForAppReady(mainPage);
   await waitForAtLeastOneProjectMetadata();
-  // Dock + platform.about can be registered before the dialog service finishes wiring; avoid
-  // forwarding to a closed renderer socket by waiting for the dialog RPC to appear in rpc.discover.
-  await waitForPapiMethodRegistered('dialog:showDialog');
+  // The generic dialog:showDialog name is claimed by main's routing proxy before any window's
+  // renderer exists, so waiting on it does not prove a real dialog service is ready. Wait for a
+  // window-scoped dialog:showDialog-{id} registration instead, which only appears once a
+  // renderer's own dialog service has wired up, avoiding forwarding to a closed renderer socket.
+  await waitForPapiMethodRegistered(/^dialog:showDialog-\d+$/);
 
   // =========================================================================
   // Alert Dialog

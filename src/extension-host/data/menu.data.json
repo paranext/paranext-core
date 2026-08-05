@@ -43,8 +43,8 @@
       {
         "label": "%mainMenu_openNewWindow%",
         "localizeNotes": "Application main menu > Project > Open new window",
-        "group": "platform.projectSettings",
-        "order": 0,
+        "group": "platform.projectMisc",
+        "order": 1,
         "command": "platform.createWindow"
       },
       {
