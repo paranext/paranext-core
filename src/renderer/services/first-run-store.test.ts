@@ -43,8 +43,8 @@ const mockLogger = vi.mocked(logger);
 function stubSettings({
   mode = 'simple',
   firstRunComplete = false,
-  showReminder = undefined,
-} = {}) {
+  showReminder,
+}: { mode?: string; firstRunComplete?: boolean; showReminder?: boolean } = {}) {
   // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
   mockGet.mockImplementation(async (key: string) => {
     if (key === 'platform.interfaceMode') return mode;
@@ -149,7 +149,6 @@ describe('resolveFirstRunState', () => {
   it('does not falsely gate a completed user when the setting read fails (no cache clobber)', async () => {
     localStorage.setItem('platform-bible.firstRunComplete', 'true'); // cached complete
     resetFirstRunStore(); // re-seed status from the cache we just set
-    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
     mockGet.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
       if (key === 'platform.showRegistrationReminderOnStartup') return false; // suppress background recheck; focus on cache-fallback path
