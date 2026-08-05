@@ -450,6 +450,8 @@ describe('background registration re-check (completed simple-mode user)', () => 
     await Promise.resolve();
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
     expect(mockResolveReg).not.toHaveBeenCalled();
+    // The re-check must never even have started — it should not have read the reminder setting.
+    expect(mockGet).not.toHaveBeenCalledWith('platform.showRegistrationReminderOnStartup');
   });
 
   it('never throws or leaves a broken status when the re-check errors', async () => {
@@ -458,6 +460,77 @@ describe('background registration re-check (completed simple-mode user)', () => 
     await expect(resolveFirstRunState()).resolves.toBeUndefined();
     await vi.waitFor(() => expect(mockResolveReg).toHaveBeenCalled());
     expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Background registration re-check failed'),
+    );
+  });
+
+  it('fails open and raises the wizard when the reminder setting read throws', async () => {
+    // @ts-expect-error ts(2345) - mock returns a narrower type than the full SettingTypes union
+    mockGet.mockImplementation(async (key: string) => {
+      if (key === 'platform.interfaceMode') return 'simple';
+      if (key === 'platform.firstRunComplete') return true;
+      if (key === 'platform.showRegistrationReminderOnStartup')
+        throw new Error('settings unavailable');
+      return undefined;
+    });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    // The read error is logged as a warning.
+    await vi.waitFor(() =>
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('platform.showRegistrationReminderOnStartup'),
+      ),
+    );
+    // Fail-open: the wizard IS raised (a read error is not a deliberate suppression).
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+  });
+
+  it('raises the wizard when the reminder setting is undefined (default: keep showing)', async () => {
+    // showReminder not set → get returns undefined; that is NOT an explicit `false`, so the re-check
+    // proceeds and the wizard is raised when registration is invalid.
+    stubSettings({ firstRunComplete: true }); // showReminder omitted → undefined
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+  });
+
+  it('raises the wizard on the next launch after the one-launch justRegistered guard was spent', async () => {
+    // First launch: justRegistered is set → guard fires, wizard NOT raised.
+    stubSettings({ firstRunComplete: true, showReminder: true });
+    mockResolveReg.mockResolvedValue('invalid');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    await resolveFirstRunState();
+    await vi.waitFor(() => expect(mockResolveReg).toHaveBeenCalled());
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    // Flag consumed on first launch.
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+
+    // Simulate a new launch (flag already consumed — reads false this time).
+    resetFirstRunStore();
+    stubSettings({ firstRunComplete: true, showReminder: true });
+    mockResolveReg.mockResolvedValue('invalid');
+    await resolveFirstRunState();
+    // On the second launch the guard is spent, so the wizard IS raised.
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
   });
 });
 

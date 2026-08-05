@@ -569,4 +569,19 @@ describe('FirstRunShell', () => {
     );
     expect(received).toBe(true);
   });
+
+  it('forwards allowContinueWithoutRegistration as falsy when not provided', () => {
+    let received: boolean | undefined = true; // start truthy so the assertion is meaningful
+    const Spy = ({ allowContinueWithoutRegistration }: FirstRunStepProps) => {
+      received = allowContinueWithoutRegistration;
+      return undefined;
+    };
+    render(
+      <FirstRunShell
+        entryStep="identify"
+        stepComponents={{ ...DEFAULT_STEP_COMPONENTS, identify: Spy }}
+      />,
+    );
+    expect(received).toBeFalsy();
+  });
 });

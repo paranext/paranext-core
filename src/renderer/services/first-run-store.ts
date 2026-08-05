@@ -224,8 +224,7 @@ async function resolveInternal(): Promise<void> {
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
     // Consume the just-registered flag before resolving validity: the user set it just before
     // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
-    const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
-    if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
+    const justRegistered = consumeJustRegisteredFlag();
     const registrationValidity = await resolveRegistrationValidity();
     const effectiveValidity =
       justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
@@ -290,6 +289,17 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
+ * Reads and clears the just-registered flag, returning whether it was set. The fresh-user startup
+ * path and the completed-user background re-check each consume it once per startup — a transient
+ * 'invalid' on the launch right after a re-register is treated as a backend fluke, not a re-nag.
+ */
+function consumeJustRegisteredFlag(): boolean {
+  const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
+  if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
+  return justRegistered;
+}
+
+/**
  * For an already-onboarded Simple-mode user, re-check registration validity in the background —
  * never awaited, never blocks startup. Only a definitive `'invalid'` raises the wizard at the
  * `identify` step so the user can re-register; a down/slow backend resolves to `'unknown'` and is
@@ -298,27 +308,24 @@ export async function resolveFirstRunState(): Promise<void> {
  * nothing. Runs at most once per startup and swallows all its own errors so it can never block or
  * crash startup.
  */
-export async function startBackgroundRegistrationRecheck(): Promise<void> {
+async function startBackgroundRegistrationRecheck(): Promise<void> {
   if (backgroundRecheckStarted) return;
   backgroundRecheckStarted = true;
   try {
-    let reminderEnabled = true;
+    let reminderSuppressed = false;
     try {
       const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
       // Only an explicit `false` suppresses; a missing/errored/default value keeps showing.
-      reminderEnabled = !(!isPlatformError(value) && value === false);
+      reminderSuppressed = !isPlatformError(value) && value === false;
     } catch (e) {
       logger.warn(
         `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
       );
     }
-    if (!reminderEnabled) return;
-    // Mirror the fresh-user guard: the Identify step sets JUST_REGISTERED_KEY immediately before
-    // platform.restart(). The completed-user branch of resolveInternal returns before the fresh-user
-    // path that would otherwise consume it, so consume it here — a transient 'invalid' on the launch
-    // right after a re-register is almost certainly a backend fluke, not a reason to re-nag.
-    const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
-    if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
+    if (reminderSuppressed) return;
+    // Consume the just-registered flag: a transient 'invalid' on the launch right after a
+    // re-register is almost certainly a backend fluke, not a reason to re-nag.
+    const justRegistered = consumeJustRegisteredFlag();
     const validity = await resolveRegistrationValidity();
     // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
     if (validity !== 'invalid') return;

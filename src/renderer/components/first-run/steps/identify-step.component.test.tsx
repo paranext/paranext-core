@@ -481,6 +481,44 @@ describe('IdentifyStep', () => {
         false,
       );
     });
+
+    it('un-checking the suppression checkbox re-enables the reminder (sets true)', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: "Don't show this on startup again" });
+      // First click: suppress (false)
+      await user.click(checkbox);
+      expect(settingsService.set).toHaveBeenCalledWith(
+        'platform.showRegistrationReminderOnStartup',
+        false,
+      );
+      // Second click: un-suppress (true)
+      await user.click(checkbox);
+      expect(settingsService.set).toHaveBeenCalledWith(
+        'platform.showRegistrationReminderOnStartup',
+        true,
+      );
+    });
+
+    it('escape hatch does not persist the suppression setting when checkbox is untouched', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue without registration' }));
+      expect(firstRunStore.continueWithoutRegistration).toHaveBeenCalledTimes(1);
+      expect(settingsService.set).not.toHaveBeenCalled();
+    });
   });
 
   describe('demo mode', () => {
