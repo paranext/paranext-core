@@ -5,14 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 // `_usj-nodes.scss` is a hand-maintained copy of scripture-editors'
-// packages/platform/src/usj-nodes.css. That upstream file has its own coverage test
-// (usj-nodes.test.ts); this is the equivalent guard for the downstream copy that actually
-// ships in Platform.Bible, so the two can't silently drift (which reintroduced the \li/\lim
-// gutter overlap once already). Keep the marker lists below in sync with the upstream test.
+// packages/platform/src/usj-nodes.css. The downstream copy had no guard against drifting from
+// upstream, which is how the \li/\lim gutter entries went missing and the overlap regressed. This
+// test is that guard: keep the marker lists below in sync with upstream usj-nodes.css.
 
 const dir = dirname(fileURLToPath(import.meta.url));
-// Strip CSS comments so their text can't be mistaken for selectors or declarations.
-const css = readFileSync(resolve(dir, '_usj-nodes.scss'), 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '');
+// Strip comments so their text can't be mistaken for selectors or declarations. Block comments
+// first (that also removes the `//` inside the header's URLs), then SCSS `//` line comments — so a
+// commented-out `// --para-indent: 10vw;` in a hand-edited SCSS block isn't read as a live setter.
+const css = readFileSync(resolve(dir, '_usj-nodes.scss'), 'utf-8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/\/\/.*$/gm, '');
 
 // The stylesheet is parsed as a flat list of `selector { declarations }` blocks. This regex cannot
 // reliably read a rule nested inside another block (an @media query, @keyframes, or SCSS nesting),
