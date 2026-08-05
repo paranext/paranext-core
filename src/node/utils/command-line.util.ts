@@ -30,6 +30,9 @@ type CommandLineArgumentAliases = {
  *   1920x1080). Overrides the saved window state dimensions.
  * - Maximize - Command-line switch that specifies that the renderer should be maximized on launch.
  *   Only on main process
+ * - SpikeParentWindow - PT-4276 spike only. Makes every window after the first a `parent:`-owned
+ *   child of the first window so Q3 can be observed: does an owned window keep its own OS switcher
+ *   entry? Not intended to ship. Only on main process
  */
 export enum CommandLineArgs {
   Extensions = 'extensions',
@@ -41,6 +44,7 @@ export enum CommandLineArgs {
   DidRestart = 'didRestart',
   WindowSize = 'window_size',
   Maximize = 'maximize',
+  SpikeParentWindow = 'spike_parent_window',
 }
 
 /**
@@ -57,6 +61,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [CommandLineArgs.DidRestart]: ['--didRestart'],
   [CommandLineArgs.WindowSize]: ['--windowSize', '--window-size'],
   [CommandLineArgs.Maximize]: ['--maximize'],
+  [CommandLineArgs.SpikeParentWindow]: ['--spikeParentWindow', '--spike-parent-window'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */

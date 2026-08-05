@@ -91,6 +91,14 @@ declare module 'papi-shared-types' {
      * @experimental This command is unstable and may change or disappear without notice
      */
     'platform.getFocusedWindowId': () => Promise<number | undefined>;
+    /**
+     * PT-4276 spike only. Toggle whether the focused window is a `parent:`-owned child of the first
+     * window, mirroring PT9's pin (`ParatextFloatWindow.cs:63`: `Owner = value ? mainForm : null`).
+     * Returns the new owned state. Not intended to ship.
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.spikeToggleWindowParent': () => Promise<boolean>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */

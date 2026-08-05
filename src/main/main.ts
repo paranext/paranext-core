@@ -546,6 +546,15 @@ async function main() {
       height: windowHeight,
       minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       icon: getAssetPath('icon.png'),
+      // PT-4276 spike (Q3), enabled only by --spikeParentWindow. Makes secondary windows
+      // `parent:`-owned children of the first window so we can observe whether an owned window keeps
+      // its own OS switcher entry. PT9 achieves owned + still-in-the-switcher on Windows
+      // (ParatextFloatWindow.cs:63 toggles `Owner`, :211 sets `ShowInTaskbar = true`); the open
+      // question is whether Electron reproduces that per OS, especially macOS where a `parent:`
+      // window is a true child window.
+      ...(!isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikeParentWindow)
+        ? { parent: windows[0] }
+        : {}),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
       // re-add window controls
@@ -1198,6 +1207,36 @@ async function main() {
         result: {
           name: 'return value',
           schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+        },
+      },
+    },
+  );
+
+  // PT-4276 spike (Q3). Toggling ownership at runtime IS the pin: PT9's
+  // `ParatextFloatWindow.cs:63` implements pinning as `Owner = value ? mainForm : null`. This is the
+  // Electron equivalent, so the spike can observe whether the switcher entry survives the toggle and
+  // whether the window flickers or loses state when ownership flips. Not intended to ship.
+  commandService.registerCommand(
+    'platform.spikeToggleWindowParent',
+    async () => {
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      // The first window is the prospective parent, so it can never be its own child.
+      if (!focusedWindow || focusedWindow === windows[0]) return false;
+      const isOwned = !!focusedWindow.getParentWindow();
+      // Electron clears ownership only on null here; undefined is not accepted by setParentWindow
+      // eslint-disable-next-line no-null/no-null
+      focusedWindow.setParentWindow(isOwned ? null : windows[0]);
+      return !isOwned;
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'PT-4276 spike: toggle whether the focused window is a `parent:`-owned child of the first window. Returns the new owned state',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'boolean' },
         },
       },
     },
