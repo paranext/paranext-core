@@ -20,9 +20,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
-      '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
+      '%firstRun_step_internetSettings_connecting%':
+        'Setting things up for the first time. This can take a moment…',
       '%firstRun_step_internetSettings_loadError%':
-        "We couldn't get things ready. Please try again in a moment.",
+        'Setup is taking longer than expected. Please try again — it usually works right away.',
     },
     false,
   ]),
@@ -62,6 +63,7 @@ vi.mock('platform-bible-react', () => ({
     </button>
   ),
   Spinner: () => <div data-testid="spinner" />,
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
 vi.mock('platform-bible-react/experimental', () => ({
@@ -124,7 +126,9 @@ describe('InternetSettingsStep', () => {
     mockSendCommand.mockRejectedValue(new Error('network error'));
     renderStep();
 
-    await waitFor(() => expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/taking longer than expected/i)).toBeInTheDocument(),
+    );
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     // Raw error is logged, not shown.
     expect(screen.queryByText(/network error/i)).not.toBeInTheDocument();
@@ -218,15 +222,15 @@ describe('InternetSettingsStep', () => {
       expect(setCanProceed).toHaveBeenCalledWith(true);
     });
 
-    it('shows "Getting things ready…" once the load passes the wall-clock delay', async () => {
+    it('shows the connecting message once the load passes the wall-clock delay', async () => {
       mockSendCommand.mockRejectedValue(methodNotFoundError());
       renderStep();
 
       await advance(1500); // before the 2 s connecting-message delay
-      expect(screen.queryByText(/getting things ready/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/setting things up/i)).not.toBeInTheDocument();
 
       await advance(1000); // now past 2 s
-      expect(screen.getByText(/getting things ready/i)).toBeInTheDocument();
+      expect(screen.getByText(/setting things up/i)).toBeInTheDocument();
       // Still within budget — no error yet.
       expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
     });
@@ -274,11 +278,11 @@ describe('InternetSettingsStep', () => {
       renderStep();
 
       await advance(2_500); // connecting message shows while the first attempt is still pending
-      expect(screen.getByText(/getting things ready/i)).toBeInTheDocument();
+      expect(screen.getByText(/setting things up/i)).toBeInTheDocument();
 
       await advance(7_500); // first attempt fails (~9 s), the retry resolves
       expect(screen.getByTestId('option-list')).toBeInTheDocument();
-      expect(screen.queryByText(/getting things ready/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/setting things up/i)).not.toBeInTheDocument();
     });
 
     it('surfaces the real method-not-found error and Retry once the startup budget is spent', async () => {
@@ -292,8 +296,8 @@ describe('InternetSettingsStep', () => {
       // Just past the ~30 s budget the friendly error surfaces and the connecting message clears.
       await advance(2_000);
       expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
-      expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument();
-      expect(screen.queryByText(/getting things ready/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/taking longer than expected/i)).toBeInTheDocument();
+      expect(screen.queryByText(/setting things up/i)).not.toBeInTheDocument();
       // The raw -32601 is logged for debugging, not shown to the user.
       expect(screen.queryByText(/-32601/)).not.toBeInTheDocument();
       expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('-32601'));
@@ -324,7 +328,9 @@ describe('InternetSettingsStep', () => {
     mockSendCommand.mockRejectedValue(new Error('network error'));
     renderStep();
 
-    await waitFor(() => expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/taking longer than expected/i)).toBeInTheDocument(),
+    );
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     expect(mockSendCommand).toHaveBeenCalledTimes(1);
   });
