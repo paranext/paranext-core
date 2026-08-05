@@ -1084,4 +1084,46 @@ export function buildChapterScaffoldOps(chapterNum: number, lastVerseNum: number
   return [{ insert: { chapter: { number: `${chapterNum}`, style: 'c' } } }, ...verseOps];
 }
 
+/**
+ * Whether the "Add Chapter Number" button should be enabled for a chapter with the given last verse
+ * number (as returned by `getEndVerse`). `getEndVerse` returns `0` for chapter 0 or any chapter
+ * with no versification entry — a reachable case (e.g. front-matter references use `chapterNum:
+ * 0`), not just a defensive one — and the button must not render as clickable then.
+ *
+ * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
+ * @returns `true` if the button should be enabled, `false` otherwise.
+ */
+export function canAddChapterNumber(lastVerse: number): boolean {
+  return lastVerse > 0;
+}
+
+/** Outcome of {@link resolveAddChapterNumberClick} — what a click on the button should do. */
+export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-versification';
+
+/**
+ * Decides what a click on the "Add Chapter Number" button should do, given whether a previous
+ * click's scaffold insert is still in flight and the chapter's last verse number.
+ *
+ * - `'already-in-flight'` — a previous click's insert is still working its way through the
+ *   `applyUpdate` → save → PDP-echo round trip (~300ms measured), during which the button stays
+ *   visible and enabled. Treating this click as a no-op prevents the scaffold from being inserted a
+ *   second time (which would write duplicate `\c`/`\v` markers).
+ * - `'no-versification'` — `lastVerse <= 0`. `canAddChapterNumber` should already have hidden the
+ *   button in this case, so reaching this outcome is a rare defensive fallback, not the normal
+ *   path.
+ * - `'insert'` — proceed with the scaffold insert.
+ *
+ * @param isInsertInFlight Whether a previously-triggered insert has not yet completed (i.e. the
+ *   chapter has not yet been observed to become non-blank).
+ * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
+ */
+export function resolveAddChapterNumberClick(
+  isInsertInFlight: boolean,
+  lastVerse: number,
+): AddChapterNumberClickOutcome {
+  if (isInsertInFlight) return 'already-in-flight';
+  if (!canAddChapterNumber(lastVerse)) return 'no-versification';
+  return 'insert';
+}
+
 // #endregion Chapter Scaffold Helpers

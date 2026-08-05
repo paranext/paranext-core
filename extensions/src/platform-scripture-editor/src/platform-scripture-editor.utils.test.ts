@@ -20,6 +20,8 @@ import {
   toScriptureEditorInfos,
   isChapterBlank,
   buildChapterScaffoldOps,
+  canAddChapterNumber,
+  resolveAddChapterNumberClick,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2552,11 +2554,40 @@ describe('buildChapterScaffoldOps', () => {
     ]);
   });
 
-  it('builds only the chapter-embed op when the chapter has one verse', () => {
+  it('builds one chapter-embed op and one verse-embed op when the chapter has exactly one verse', () => {
     const ops = buildChapterScaffoldOps(1, 1);
     expect(ops).toEqual([
       { insert: { chapter: { number: '1', style: 'c' } } },
       { insert: { verse: { number: '1', style: 'v' } } },
     ]);
+  });
+});
+
+describe('canAddChapterNumber', () => {
+  it('returns false when there is no versification entry for the chapter (lastVerse 0)', () => {
+    expect(canAddChapterNumber(0)).toBe(false);
+  });
+
+  it('returns false for a negative lastVerse', () => {
+    expect(canAddChapterNumber(-1)).toBe(false);
+  });
+
+  it('returns true when the chapter has at least one verse', () => {
+    expect(canAddChapterNumber(1)).toBe(true);
+  });
+});
+
+describe('resolveAddChapterNumberClick', () => {
+  it('returns "already-in-flight" when a previous insert has not yet completed, regardless of lastVerse', () => {
+    expect(resolveAddChapterNumberClick(true, 5)).toBe('already-in-flight');
+    expect(resolveAddChapterNumberClick(true, 0)).toBe('already-in-flight');
+  });
+
+  it('returns "no-versification" when not in flight but lastVerse is 0', () => {
+    expect(resolveAddChapterNumberClick(false, 0)).toBe('no-versification');
+  });
+
+  it('returns "insert" when not in flight and lastVerse is positive', () => {
+    expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
   });
 });

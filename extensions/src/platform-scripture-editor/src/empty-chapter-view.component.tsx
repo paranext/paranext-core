@@ -9,8 +9,7 @@ import {
 const MESSAGE_KEY = '%webView_platformScriptureEditor_emptyChapter_message%';
 const ADD_CHAPTER_NUMBER_BUTTON_KEY =
   '%webView_platformScriptureEditor_emptyChapter_addChapterNumberButton%';
-const PROTECTED_TOOLTIP_KEY =
-  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%';
+const PROTECTED_TOOLTIP_KEY = '%webView_platformScriptureEditor_emptyChapter_protectedTooltip%';
 
 /**
  * Localization keys used by {@link EmptyChapterView}. Spread these into the editor web-view's

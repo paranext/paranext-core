@@ -117,12 +117,14 @@ import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
   buildChapterScaffoldOps,
+  canAddChapterNumber,
   deepEqualAcrossIframes,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
   isChapterBlank,
   openCommentListAndSelectThreadSafe,
+  resolveAddChapterNumberClick,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
@@ -1298,21 +1300,62 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const isBlankChapter = useMemo(() => isChapterBlank(usjFromPdp ?? defaultUsj), [usjFromPdp]);
 
-  const handleAddChapterNumber = useCallback(() => {
-    const lastVerse = getEndVerse(scrRef.book, scrRef.chapterNum);
-    if (lastVerse <= 0) return;
-    editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
-  }, [scrRef.book, scrRef.chapterNum, getEndVerse]);
+  const lastVerse = useMemo(
+    () => getEndVerse(scrRef.book, scrRef.chapterNum),
+    [scrRef.book, scrRef.chapterNum, getEndVerse],
+  );
 
-  // `Editorial` stays mounted but visually hidden while the chapter is blank (Step 3 below), so any
-  // focus/cursor effect Lexical would normally run for newly-inserted content is a no-op while hidden
-  // (`.claude/rules/cross-view-sync-hidden-views.md`) — re-trigger focus explicitly the moment the
-  // chapter stops being blank.
-  const wasChapterBlankRef = useRef(isBlankChapter);
+  // Latches `true` for the whole applyUpdate -> save -> PDP-echo round trip triggered by a click
+  // (~300ms measured). While it's in flight, `isBlankChapter` hasn't flipped yet, so the
+  // empty-chapter button is still visible and enabled — without this guard a second click in that
+  // window would insert the scaffold a second time (duplicate `\c`/`\v` markers). Reset below once
+  // `isBlankChapter` flips to `false`.
+  const isInsertInFlightRef = useRef(false);
+  // Set right before `applyUpdate` so the refocus effect below can tell "the chapter just stopped
+  // being blank because of THIS insert" apart from any other cause of the same transition (ordinary
+  // chapter navigation away from a blank chapter, a remote/collaborative update landing content, or
+  // a Send/Receive sync completing).
+  const didInsertScaffoldRef = useRef(false);
+
+  const handleAddChapterNumber = useCallback(() => {
+    const outcome = resolveAddChapterNumberClick(isInsertInFlightRef.current, lastVerse);
+    if (outcome === 'already-in-flight') return;
+    if (outcome === 'no-versification') {
+      // `showButton` below already gates on `canAddChapterNumber(lastVerse)`, so this should be
+      // unreachable in normal use. Warn instead of silently returning so a future gap in that gate
+      // is diagnosable rather than presenting as "the button did nothing."
+      logger.warn(
+        `handleAddChapterNumber: no versification entry for ${scrRef.book} chapter ${scrRef.chapterNum}; ignoring click`,
+      );
+      return;
+    }
+    isInsertInFlightRef.current = true;
+    didInsertScaffoldRef.current = true;
+    // KNOWN CAVEAT: undo reliability for this insert depends on unreleased fixes in the vendored
+    // `@eten-tech-foundation/platform-editor` package — this extension's package.json still pins an
+    // older version, so don't assume undo works cleanly here until that pin is bumped.
+    editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
+  }, [scrRef.book, scrRef.chapterNum, lastVerse]);
+
+  // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
+  // effect Lexical would normally run for newly-inserted content is a no-op while hidden
+  // (`.claude/rules/cross-view-sync-hidden-views.md`) — re-trigger focus explicitly once the insert
+  // *this component* triggered actually lands. Gated on `didInsertScaffoldRef` so ordinary chapter
+  // navigation away from a blank chapter, a remote/collaborative update landing content, or a
+  // Send/Receive sync completing (all of which can also flip `isBlankChapter` to `false`) do not
+  // steal focus. Also gated on `!isPowerMode`: the empty-chapter-view feature (and this button) is
+  // Simple-mode only, so the button can't render in Power mode today — the guard is currently
+  // redundant but documents that invariant and protects against a future refactor.
   useEffect(() => {
-    if (wasChapterBlankRef.current && !isBlankChapter) editorRef.current?.focus();
-    wasChapterBlankRef.current = isBlankChapter;
-  }, [isBlankChapter]);
+    if (isBlankChapter) return;
+    // The round trip the in-flight guard above was waiting for has completed, regardless of what
+    // caused this transition.
+    isInsertInFlightRef.current = false;
+    if (!isPowerMode && didInsertScaffoldRef.current) {
+      editorRef.current?.focus();
+      didInsertScaffoldRef.current = false;
+    }
+  }, [isBlankChapter, isPowerMode]);
 
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
@@ -1862,7 +1905,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <EmptyChapterView
             localizedStrings={localizedStrings}
             isStructureProtected={isStructureProtected}
-            showButton={!isReadOnlyEffective && lastVersesInCurrentBook !== undefined}
+            showButton={
+              !isReadOnlyEffective &&
+              lastVersesInCurrentBook !== undefined &&
+              canAddChapterNumber(lastVerse)
+            }
             onAddChapterNumber={handleAddChapterNumber}
           />
         )}
