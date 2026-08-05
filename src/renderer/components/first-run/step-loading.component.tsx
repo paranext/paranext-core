@@ -1,4 +1,4 @@
-import { Spinner } from 'platform-bible-react';
+import { cn, Spinner } from 'platform-bible-react';
 
 interface StepLoadingProps {
   /**
@@ -18,9 +18,11 @@ export function StepLoading({ message }: StepLoadingProps) {
       <Spinner />
       {/* The live region is kept always mounted (empty until there's a message) so it exists BEFORE
           its text appears — otherwise screen readers don't announce a message that pops in later.
-          The top margin is applied only when populated so the spinner-only state stays tight. */}
+          The top margin is applied only when populated (via cn, not string concatenation — the
+          tailwind Prettier plugin strips a hand-inserted separating space) so the spinner-only
+          state stays tight. */}
       <p
-        className={`tw:text-sm tw:text-muted-foreground${message ? 'tw:mt-4' : ''}`}
+        className={cn('tw:text-sm tw:text-muted-foreground', message && 'tw:mt-4')}
         aria-live="polite"
       >
         {message ?? ''}

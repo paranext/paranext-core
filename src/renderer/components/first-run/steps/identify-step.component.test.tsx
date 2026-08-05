@@ -80,6 +80,7 @@ vi.mock('platform-bible-react', () => ({
     />
   ),
   Spinner: () => <span data-testid="spinner" />,
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,

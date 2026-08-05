@@ -41,9 +41,9 @@ export const Loading: Story = {
 
 /**
  * Startup race: the data provider hasn't registered its handlers yet, so the fetch keeps failing
- * with JSON-RPC "method not found". After the wall-clock delay the "Getting things ready…" message
- * appears below the spinner. (Retries continue in the background until they succeed or the startup
- * budget is spent, after which the error + Retry is shown.)
+ * with JSON-RPC "method not found". After the wall-clock delay the "Setting things up for the first
+ * time…" message appears below the spinner. (Retries continue in the background until they succeed
+ * or the startup budget is spent, after which the error + Retry is shown.)
  */
 export const ConnectingToService: Story = {
   beforeEach() {

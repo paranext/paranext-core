@@ -7,6 +7,7 @@ import { StepLoading } from './step-loading.component';
 
 vi.mock('platform-bible-react', () => ({
   Spinner: () => <div data-testid="spinner" />,
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
 describe('StepLoading', () => {
@@ -23,11 +24,15 @@ describe('StepLoading', () => {
     expect(liveRegion).toBeInTheDocument();
     expect(liveRegion).toHaveTextContent('');
 
-    rerender(<StepLoading message="Getting things ready…" />);
+    rerender(
+      <StepLoading message="Setting things up for the first time. This can take a moment…" />,
+    );
     // Content changed inside the pre-existing region — the announcement-triggering transition.
     expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent(
-      'Getting things ready…',
+      'Setting things up for the first time. This can take a moment…',
     );
-    expect(screen.getByText('Getting things ready…')).toBeInTheDocument();
+    expect(
+      screen.getByText('Setting things up for the first time. This can take a moment…'),
+    ).toBeInTheDocument();
   });
 });
