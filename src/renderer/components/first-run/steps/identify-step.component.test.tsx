@@ -28,6 +28,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_identify_registryHelp%': "Can't find your registration code?",
       '%firstRun_step_identify_registryLink%': 'Visit Paratext Registry',
       '%firstRun_step_identify_validatingCode%': 'Checking your registration…',
+      '%firstRun_step_identify_reRegisterNotice%':
+        'Your Paratext registration is no longer valid. Re-register to continue.',
       '%firstRun_button_continueWithoutRegistration%': 'Continue without registration',
       '%firstRun_step_identify_dontShowAgain%': "Don't show this on startup again",
       '%general_error_title%': 'Error',
@@ -118,6 +120,10 @@ const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 
 beforeEach(() => {
+  // Clear call history between tests (keeps factory/mockResolvedValue implementations) so
+  // per-test call-count assertions on continueWithoutRegistration / settingsService.set don't
+  // accumulate across the re-register-mode cases.
+  vi.clearAllMocks();
   mockSendCommand.mockReset();
   mockIsDemoMode.mockReturnValue(false);
   vi.useFakeTimers();
@@ -442,6 +448,7 @@ describe('IdentifyStep', () => {
       expect(
         screen.getByRole('checkbox', { name: "Don't show this on startup again" }),
       ).toBeInTheDocument();
+      expect(screen.getByText(/registration is no longer valid/i)).toBeInTheDocument();
       unmount();
 
       render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
@@ -451,6 +458,7 @@ describe('IdentifyStep', () => {
       expect(
         screen.queryByRole('checkbox', { name: "Don't show this on startup again" }),
       ).not.toBeInTheDocument();
+      expect(screen.queryByText(/registration is no longer valid/i)).not.toBeInTheDocument();
     });
 
     it('escape hatch calls continueWithoutRegistration', async () => {

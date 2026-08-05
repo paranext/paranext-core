@@ -45,6 +45,7 @@ const KEYS: LocalizeKey[] = [
   '%paratextRegistration_button_restarting%',
   '%paratextRegistration_warning_invalid_registration_length%',
   '%firstRun_step_identify_heading%',
+  '%firstRun_step_identify_reRegisterNotice%',
   '%firstRun_step_identify_registryHelp%',
   '%firstRun_step_identify_registryLink%',
   '%firstRun_step_identify_validatingCode%',
@@ -322,6 +323,13 @@ export function IdentifyStep({
       }
     >
       <div className="tw:flex tw:flex-col tw:gap-3">
+        {/* Re-register mode only: explain why an already-onboarded user is being asked to register
+            again (their previously-valid registration went invalid). Absent in fresh onboarding. */}
+        {allowContinueWithoutRegistration && (
+          <p className="tw:text-sm tw:font-medium">
+            {strings['%firstRun_step_identify_reRegisterNotice%']}
+          </p>
+        )}
         <div className="tw:flex tw:flex-col tw:gap-1">
           <label htmlFor="identify-name" className="tw:text-sm tw:font-medium">
             {strings['%paratextRegistration_label_registrationName%']}
@@ -378,8 +386,11 @@ export function IdentifyStep({
           </Alert>
         )}
 
+        {/* Isolate this immediate-apply preference (persists instantly on toggle) from the
+            explicit-apply "Save and restart" form above it with a divider, so the two apply models
+            don't read as sibling controls. */}
         {allowContinueWithoutRegistration && (
-          <div className="tw:flex tw:items-center tw:gap-2">
+          <div className="tw:mt-2 tw:flex tw:items-center tw:gap-2 tw:border-t tw:pt-4">
             <Checkbox
               id="identify-dont-show-again"
               checked={suppressReminder}
