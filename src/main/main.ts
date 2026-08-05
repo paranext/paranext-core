@@ -555,11 +555,13 @@ async function main() {
       ...(!isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikeParentWindow)
         ? { parent: windows[0] }
         : {}),
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
-      // re-add window controls
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+      // PT-4276 Q2: the `!== 'linux'` exclusion is removed here so Linux gets a frameless window,
+      // which is the whole point of this branch. The stale `TODO: Re-check linux support with
+      // Electron 34` this replaces predates the current Electron 39.8.8 — rechecking it IS Q2.
+      titleBarStyle: 'hidden',
+      // re-add window controls. `darwin` stays excluded (macOS draws its own traffic lights); only
+      // the linux exclusion is lifted, so macOS and Windows behavior is unchanged by this branch.
+      ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: TITLE_BAR_BUTTON_HEIGHT,
@@ -724,8 +726,10 @@ async function main() {
       }
 
       // Adjust the Window button colors based on the current theme
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      // PT-4276 Q2: linux exclusion lifted alongside the `titleBarOverlay` guard above — without
+      // this, a frameless Linux window would get overlay buttons that never follow the theme, and
+      // the tester would report a styling bug instead of an answer to Q2. `darwin` stays excluded.
+      if (process.platform !== 'darwin') {
         try {
           windowCloseUnsubscribers.add(
             await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
