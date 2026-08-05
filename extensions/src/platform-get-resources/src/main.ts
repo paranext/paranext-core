@@ -161,34 +161,25 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
         ),
     );
 
-    const results = await Promise.allSettled(
-      nonDblMetadata.map(async (m) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', m.id);
-        const [displayName, fullName, language] = await Promise.all([
-          pdp.getSetting('platform.name'),
-          pdp.getSetting('platform.fullName'),
-          pdp.getSetting('platform.language'),
-        ]);
-        return {
-          // Convention: dblEntryUid === projectId marks this as a non-DBL synthetic entry.
-          // selectTextConnection detects this and creates a ProjectReference instead of a
-          // DblResourceReference so the resource is resolvable without a catalog entry.
-          dblEntryUid: m.id,
-          displayName: displayName ?? m.id,
-          fullName: fullName ?? displayName ?? m.id,
-          bestLanguageName: language ?? '',
-          type: 'ScriptureResource' as ResourceType,
-          size: 0,
-          installed: true,
-          updateAvailable: false,
-          projectId: m.id,
-        } satisfies DblResourceData;
+    // Use name/fullName/language from the project metadata directly — the C# factory populates
+    // these at enumeration time (same values as the platform.name/fullName/language settings),
+    // so no per-project PDP call is needed.
+    return nonDblMetadata.map(
+      (m): DblResourceData => ({
+        // Convention: dblEntryUid === projectId marks this as a non-DBL synthetic entry.
+        // selectTextConnection detects this and creates a ProjectReference instead of a
+        // DblResourceReference so the resource is resolvable without a catalog entry.
+        dblEntryUid: m.id,
+        displayName: m.name ?? m.id,
+        fullName: m.fullName ?? m.name ?? m.id,
+        bestLanguageName: m.language ?? '',
+        type: 'ScriptureResource' as ResourceType,
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: m.id,
       }),
     );
-
-    return results
-      .filter((r): r is PromiseFulfilledResult<DblResourceData> => r.status === 'fulfilled')
-      .map((r) => r.value);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
     return [];
