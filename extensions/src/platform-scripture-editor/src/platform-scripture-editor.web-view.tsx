@@ -100,6 +100,7 @@ import {
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
 } from './structure-protection-button.component';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
+import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
   ShareLayoutButton,
   SHARE_LAYOUT_BUTTON_STRING_KEYS,
@@ -115,10 +116,12 @@ import { FootnotesLayout } from './platform-scripture-editor-footnotes.component
 import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
+  buildChapterScaffoldOps,
   deepEqualAcrossIframes,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
+  isChapterBlank,
   openCommentListAndSelectThreadSafe,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
@@ -155,6 +158,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...UNDO_REDO_BUTTONS_STRING_KEYS,
   ...MARKER_MENU_STRING_KEYS,
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
+  ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
   ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
@@ -1292,6 +1296,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     saveUsjToPdpRawStableRef.current = saveUsjToPdpRaw;
   }, [saveUsjToPdpRaw]);
 
+  const isBlankChapter = useMemo(() => isChapterBlank(usjFromPdp ?? defaultUsj), [usjFromPdp]);
+
+  const handleAddChapterNumber = useCallback(() => {
+    const lastVerse = getEndVerse(scrRef.book, scrRef.chapterNum);
+    if (lastVerse <= 0) return;
+    editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
+  }, [scrRef.book, scrRef.chapterNum, getEndVerse]);
+
+  // `Editorial` stays mounted but visually hidden while the chapter is blank (Step 3 below), so any
+  // focus/cursor effect Lexical would normally run for newly-inserted content is a no-op while hidden
+  // (`.claude/rules/cross-view-sync-hidden-views.md`) — re-trigger focus explicitly the moment the
+  // chapter stops being blank.
+  const wasChapterBlankRef = useRef(isBlankChapter);
+  useEffect(() => {
+    if (wasChapterBlankRef.current && !isBlankChapter) editorRef.current?.focus();
+    wasChapterBlankRef.current = isBlankChapter;
+  }, [isBlankChapter]);
+
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
    * specified thread.
@@ -1831,30 +1853,42 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
 
+    const showEmptyChapterView = !isPowerMode && isBlankChapter;
+
     return (
       <>
         {workaround}
-        <ParagraphMarkerTooltipOverlay>
-          <VerseDeleteTooltipOverlay>
-            <EditorKeyboardShortcuts editorRef={editorRef}>
-              <Editorial
-                ref={editorRef}
-                scrRef={scrRef}
-                onScrRefChange={setScrRefNoScroll}
-                options={options}
-                logger={logger}
-                onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-                onSelectionChange={handleSelectionChange}
-                onStateChange={(state) => {
-                  setCanUndo(state.canUndo);
-                  setCanRedo(state.canRedo);
-                  setBlockMarker(state.blockMarker);
-                  setContextMarker(state.contextMarker);
-                }}
-              />
-            </EditorKeyboardShortcuts>
-          </VerseDeleteTooltipOverlay>
-        </ParagraphMarkerTooltipOverlay>
+        {showEmptyChapterView && (
+          <EmptyChapterView
+            localizedStrings={localizedStrings}
+            isStructureProtected={isStructureProtected}
+            showButton={!isReadOnlyEffective && lastVersesInCurrentBook !== undefined}
+            onAddChapterNumber={handleAddChapterNumber}
+          />
+        )}
+        <div className={showEmptyChapterView ? 'tw:hidden' : undefined}>
+          <ParagraphMarkerTooltipOverlay>
+            <VerseDeleteTooltipOverlay>
+              <EditorKeyboardShortcuts editorRef={editorRef}>
+                <Editorial
+                  ref={editorRef}
+                  scrRef={scrRef}
+                  onScrRefChange={setScrRefNoScroll}
+                  options={options}
+                  logger={logger}
+                  onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+                  onSelectionChange={handleSelectionChange}
+                  onStateChange={(state) => {
+                    setCanUndo(state.canUndo);
+                    setCanRedo(state.canRedo);
+                    setBlockMarker(state.blockMarker);
+                    setContextMarker(state.contextMarker);
+                  }}
+                />
+              </EditorKeyboardShortcuts>
+            </VerseDeleteTooltipOverlay>
+          </ParagraphMarkerTooltipOverlay>
+        </div>
       </>
     );
   }
