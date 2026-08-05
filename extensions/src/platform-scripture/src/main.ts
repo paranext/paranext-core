@@ -221,11 +221,12 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
- * FN-008 (2026-05-01): Open the unified Manage Books dialog as a tab web view. The optional
- * argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal project id
- * — we probe with `papi.webViews.getOpenWebViewDefinition` and fall back to treating the value as a
- * project id when the probe returns `undefined`. When the caller provides no id (e.g. main-menu
- * invocation) the dialog opens with the project picker visible.
+ * FN-008 (2026-05-01): Open the unified Manage Books dialog as a centered floating window. The
+ * optional argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal
+ * project id — we probe with `papi.webViews.getOpenWebViewDefinition`, and if it doesn't resolve to
+ * a web view with a project (it throws, finds nothing, or finds a web view with no project), we
+ * fall back to treating the value as a literal project id. When the caller provides no id (e.g.
+ * main-menu invocation) the dialog opens with the project picker visible.
  */
 async function openManageBooks(
   webViewIdOrProjectId: string | undefined,
