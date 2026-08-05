@@ -10,6 +10,15 @@ import withWindowScopedWebViewIds, {
 // would mean asserting on something other than the ids this transform exists to rewrite.
 /* eslint-disable no-type-assertion/no-type-assertion */
 
+/** Tab shaped like a saved web view tab: id repeated inside `data` */
+function webViewTab(id: string): SavedTabInfo {
+  return {
+    id,
+    tabType: TAB_TYPE_WEBVIEW,
+    data: { id, webViewType: 'test.webView', state: {} },
+  } as unknown as SavedTabInfo;
+}
+
 /** Layout shaped like `simpleLayout`: a web view tab whose id is repeated inside `data` */
 function layoutWithWebView(id: string): LayoutInfo {
   return {
@@ -32,6 +41,21 @@ function readWebViewTab(layout: LayoutInfo) {
     dockbox: { children: { tabs: { id: string; data: { id: string } }[] }[] };
   };
   return base.dockbox.children[0].tabs[0];
+}
+
+/** Layout with one panel holding the given tabs and remembering `activeId` as its active tab */
+function layoutWithPanel(tabs: SavedTabInfo[], activeId: string): LayoutInfo {
+  return {
+    dockbox: { mode: 'horizontal', children: [{ tabs, activeId }] },
+  } as unknown as LayoutInfo;
+}
+
+/** Read the only panel back out of a transformed layout */
+function readPanel(layout: LayoutInfo) {
+  const base = layout as unknown as {
+    dockbox: { children: { tabs: { id: string }[]; activeId?: string }[] };
+  };
+  return base.dockbox.children[0];
 }
 
 describe('withWindowScopedWebViewIds', () => {
@@ -100,6 +124,43 @@ describe('withWindowScopedWebViewIds', () => {
     expect(inWindow1).not.toBe(inWindow2);
   });
 
+  test('does not modify the saved data inside the layout it is given', () => {
+    const shared = layoutWithWebView('abc-123');
+
+    withWindowScopedWebViewIds(shared);
+
+    expect(readWebViewTab(shared).data.id).toBe('abc-123');
+  });
+
+  test('keeps a panel’s active tab pointing at the tab that was active', () => {
+    // rc-dock falls back to the panel's leftmost tab when `activeId` matches none of its tabs, so an
+    // unrewritten `activeId` silently moves the user off the tab they left open
+    const layout = layoutWithPanel([webViewTab('first'), webViewTab('second')], 'second');
+
+    const scoped = withWindowScopedWebViewIds(layout);
+
+    const panel = readPanel(scoped);
+    expect(panel.activeId).toBe('second-w2');
+    expect(panel.tabs.some((tab) => tab.id === panel.activeId)).toBe(true);
+  });
+
+  test('rewrites the active tab id of a layout saved by another window', () => {
+    const layout = layoutWithPanel([webViewTab('first-w1'), webViewTab('second-w1')], 'second-w1');
+
+    const scoped = withWindowScopedWebViewIds(layout);
+
+    expect(readPanel(scoped).activeId).toBe('second-w2');
+  });
+
+  test('leaves an active tab id alone when that tab is not a web view', () => {
+    const toolTab = { id: 'some-tool', tabType: 'tool' } as unknown as SavedTabInfo;
+    const layout = layoutWithPanel([toolTab, webViewTab('a-web-view')], 'some-tool');
+
+    const scoped = withWindowScopedWebViewIds(layout);
+
+    expect(readPanel(scoped).activeId).toBe('some-tool');
+  });
+
   test('leaves tabs that are not web views alone', () => {
     const layout = {
       dockbox: { mode: 'horizontal', children: [{ tabs: [{ id: 'some-tool', tabType: 'tool' }] }] },
@@ -142,15 +203,6 @@ describe('withWindowScopedWebViewIds', () => {
     expect(base.dockbox.children[0].children[0].tabs[0].id).toBe('deep-1-w2');
   });
 });
-
-/** Tab shaped like a default layout supplement entry's tab: id repeated inside `data` */
-function webViewTab(id: string): SavedTabInfo {
-  return {
-    id,
-    tabType: TAB_TYPE_WEBVIEW,
-    data: { id, webViewType: 'test.webView', state: {} },
-  } as unknown as SavedTabInfo;
-}
 
 /** Read a transformed tab back, crossing the same opaque-data boundary the fixture crossed */
 function readIds(tab: SavedTabInfo) {
