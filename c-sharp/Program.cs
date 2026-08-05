@@ -97,7 +97,10 @@ public static class Program
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
             var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
-            var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var paratextRegistrationService = new ParatextRegistrationService(
+                papi,
+                internetSettingsDataProvider
+            );
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
                 papi,

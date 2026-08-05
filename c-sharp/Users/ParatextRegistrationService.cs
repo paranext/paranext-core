@@ -9,7 +9,10 @@ namespace Paranext.DataProvider.Users;
 /// <summary>
 /// Commands on the papi that handle Send/Receive-related operations
 /// </summary>
-internal class ParatextRegistrationService(PapiClient papiClient)
+internal class ParatextRegistrationService(
+    PapiClient papiClient,
+    InternetSettingsDataProvider internetSettingsDataProvider
+)
 {
     #region Constructors, consts, and fields
 
@@ -43,6 +46,22 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             ValidateParatextRegistrationData
         );
 
+        // Deprecated: retained as thin wrappers that delegate to InternetSettingsDataProvider so
+        // out-of-repo extensions still calling these commands keep working. New code should use the
+        // paratextRegistration.internetSettingsDataProvider data provider. Remove after a deprecation
+        // period (TODO).
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.getParatextDataInternetSettings",
+            InternetSettingsDataProvider.GetInternetSettings
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.setParatextDataInternetSettings",
+            (InternetAccess.InternetSettingsMemento newInternetSettings) =>
+            {
+                InternetSettingsDataProvider.SetInternetSettings(newInternetSettings);
+            }
+        );
+
         // Lookup localized strings where they may be needed by callers without access to PapiClient
         RegistrationRequiredException.ExceptionMessage = LocalizationService.GetLocalizedString(
             PapiClient,
@@ -56,6 +75,8 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     #region Private properties and methods
 
     private PapiClient PapiClient { get; } = papiClient;
+    private InternetSettingsDataProvider InternetSettingsDataProvider { get; } =
+        internetSettingsDataProvider;
 
     /// <summary>
     /// Returns information about user's current Paratext Registry user information in ParatextData.dll
