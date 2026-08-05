@@ -79,17 +79,27 @@ unreachable, **stop and warn the user before investigating**:
 
 **Preflight — standards freshness.** The stamped docs this investigation leans on carry
 `Verified against paranext-core origin/main` stamps. Find the **oldest** stamp date (the weakest
-link is what governs risk):
+link is what governs risk) **and** the surfaces that carry no stamp at all:
 
 ```bash
+# Oldest stamp date across the surfaces that have stamps
 grep -rh "Verified against paranext-core" .context/standards/ .claude/skills/ .claude/rules/ .claude/agents/ .claude/commands/ CLAUDE.md 2>/dev/null | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}' | sort | head -1
+# Surfaces with no stamp at all - they contribute no date, so the line above cannot reveal them.
+# The date anchor is deliberate: it ignores prose that merely quotes the stamp phrase (this file does).
+for d in .context/standards .claude/skills .claude/rules .claude/agents .claude/commands CLAUDE.md; do
+  grep -rqE "Verified against paranext-core.*20[0-9]{2}-[0-9]{2}-[0-9]{2}" "$d" 2>/dev/null || echo "UNSTAMPED: $d"
+done
 ```
 
-If it is older than ~30 days, tell the user in one line — "standards last verified {date};
-consider running `/verify-standards` first" — and proceed. If the grep returns **nothing**, that
-is a warning, not a pass: say "no verification stamps found; treat the standards as unverified
-and consider running `/verify-standards` first" — and proceed. Don't run the verification
-yourself; it's a separate, deliberate pass ([`/verify-standards`](verify-standards.md)).
+Report **both** results in the same one-line message — an unstamped surface has never been
+verified, and averaging it away behind a fresh date is exactly the false confidence this probe
+exists to prevent: "standards last verified {date}; {list of UNSTAMPED surfaces} carry no stamps"
+(drop the second clause when nothing is unstamped). Add "consider running `/verify-standards`
+first" when the date is older than ~30 days **or** any surface is unstamped, then proceed. If the
+date grep returns **nothing**, that is a warning, not a pass: say "no verification stamps found;
+treat the standards as unverified and consider running `/verify-standards` first" — and proceed.
+Don't run the verification yourself; it's a separate, deliberate pass
+([`/verify-standards`](verify-standards.md)).
 
 An unreachable **PT10** repo degrades `pt10-reuse-scout` (affects every PRD — it always runs);
 an unreachable **`{ROOT}/Paratext`** degrades `pt9-archaeologist` (only matters if the PRD ports
