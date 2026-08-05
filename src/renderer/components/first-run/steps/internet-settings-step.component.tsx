@@ -1,4 +1,4 @@
-import type { InternetSettings } from 'paratext-registration';
+import type { InternetSettings, IInternetSettingsDataProvider } from 'paratext-registration';
 import { Alert, AlertDescription, Button } from 'platform-bible-react';
 import {
   DeveloperSection,
@@ -6,19 +6,20 @@ import {
   InternetAccessOptionList,
   INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
 } from 'platform-bible-react/experimental';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
-import { sendCommand } from '@shared/services/command.service';
-import {
-  getJsonRpcRequestErrorMessagePrefix,
-  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
-} from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
-import { JSONRPCErrorCode } from 'json-rpc-2.0';
-import { getErrorMessage, wait, type LocalizeKey } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  type LanguageStrings,
+  type LocalizeKey,
+} from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
+
+const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
 // `internetSettings_*` keys come from the paratext-registration extension, `firstRun_*` from core
 // (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
@@ -30,70 +31,98 @@ const STRING_KEYS: LocalizeKey[] = [
   ...DEVELOPER_SECTION_STRING_KEYS,
 ];
 
-// A first-run cold start can mount this step before the paratext-registration handlers register, so
-// fetchInternetSettings() rejects with JSON-RPC "method not found". The command layer already retries
-// that (~10 s per call, rpc.model.ts); registration can outlast one call, so we re-issue until the
-// budget is spent. Matched via the shared producer so it can't drift from the RPC error format.
-const METHOD_NOT_FOUND_MESSAGE_PREFIX = getJsonRpcRequestErrorMessagePrefix(
-  JSONRPCErrorCode.MethodNotFound,
-);
-// Each call is bounded by the ~30 s client request timeout; method-not-found returns in ~10 s
-// (command-layer retry), so several attempts fit, while a full client timeout consumes the budget in
-// one attempt. Generous on purpose. Compare the sibling resolve-registration-validity.ts
-// (REGISTRATION_RESOLVE_TIMEOUT_MS).
-const SERVICE_STARTUP_BUDGET_MS = 30_000;
-// Backoff between re-issues; only bites when a call rejects fast (a real method-not-found call already
-// spent ~10 s upstream).
-const SERVICE_STARTUP_RETRY_DELAY_MS = 500;
-// Show the "getting ready" message after this much elapsed time — not attempt count; one attempt
-// can block ~10 s.
+// `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
+// undefined. This value is never shown to the user — the spinner covers the load. Intentionally
+// duplicated in the standalone dialog (internet-settings.web-view.tsx): the two consumers sit on
+// opposite sides of the core/extension boundary and `paratext-registration` is a types-only module,
+// so there is no shared runtime module to hoist this into.
+const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
+  permittedInternetUse: 'VpnRequired',
+  selectedServer: 'Production',
+  proxyPort: 0,
+};
+
+// Show the "getting ready" message after this much elapsed loading time.
 const CONNECTING_MESSAGE_DELAY_MS = 2_000;
-
-/**
- * A failure worth retrying within the startup budget: the handler isn't registered yet, or the
- * request timed out client-side (an overloaded provider mid-cold-start). Any other error is a real
- * failure that a retry won't fix.
- */
-function isTransientStartupError(errorMessage: string): boolean {
-  return (
-    errorMessage.includes(METHOD_NOT_FOUND_MESSAGE_PREFIX) ||
-    errorMessage.includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX)
-  );
-}
-
-async function fetchInternetSettings() {
-  return sendCommand('paratextRegistration.getParatextDataInternetSettings');
-}
-
-async function persistInternetSettings(settings: InternetSettings) {
-  return sendCommand('paratextRegistration.setParatextDataInternetSettings', settings);
-}
 
 /**
  * First-run wizard step that lets the user configure internet access before registration. Saves
  * immediately on each selection change (immediate-apply model). The identify step's restart applies
  * the chosen setting — no second restart is needed here.
  *
- * Save concurrency: only one save is in flight at a time. A second selection while a save is
- * pending is ignored (the control is disabled). This prevents out-of-order saves from leaving
- * persisted state inconsistent with the displayed state.
+ * Availability: `useDataProvider` returns `undefined` until the C# InternetSettingsDataProvider
+ * registers, giving a natural spinner without any startup-race retry heuristics.
  */
-export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
+export function InternetSettingsStep(props: FirstRunStepProps) {
+  const { setCanProceed } = props;
+  const provider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
+  // Bumped by Retry to remount the loaded subcomponent and re-subscribe from scratch.
+  const [retryCount, setRetryCount] = useState(0);
+
+  // While the provider is not yet registered, show the loading panel. Disable Next here so the
+  // wizard can't advance before settings are readable.
+  const showConnectingMessage = useDelayedFlag(provider === undefined, CONNECTING_MESSAGE_DELAY_MS);
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
+
+  useEffect(() => {
+    if (provider === undefined) setCanProceed?.(false);
+  }, [provider, setCanProceed]);
+
+  if (provider === undefined) {
+    return (
+      <StepLoading
+        message={
+          showConnectingMessage
+            ? localizedStrings['%firstRun_step_internetSettings_connecting%']
+            : undefined
+        }
+      />
+    );
+  }
+
+  return (
+    <InternetSettingsLoaded
+      key={retryCount}
+      provider={provider}
+      localizedStrings={localizedStrings}
+      setCanProceed={setCanProceed}
+      onRetry={() => setRetryCount((c) => c + 1)}
+    />
+  );
+}
+
+type LoadedProps = {
+  provider: IInternetSettingsDataProvider;
+  localizedStrings: LanguageStrings;
+  setCanProceed: FirstRunStepProps['setCanProceed'];
+  onRetry: () => void;
+};
+
+/**
+ * Rendered only once the provider is available. Reads via `useData` (live cross-window updates) and
+ * keeps a thin local mirror so the radio responds instantly on selection (optimistic apply), while
+ * the actual persist goes through `setData`.
+ */
+function InternetSettingsLoaded({
+  provider,
+  localizedStrings,
+  setCanProceed,
+  onRetry,
+}: LoadedProps) {
+  const [value, setData, isLoading] = useData(provider).InternetSettings(
+    undefined,
+    DEFAULT_INTERNET_SETTINGS,
+  );
+
   const [settings, setSettings] = useState<InternetSettings | undefined>();
-  const [loadFailed, setLoadFailed] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isMounted = useRef(false);
-  // Bumped on each load() so a stale run (e.g. a superseded retry) can't write state over a newer one.
-  const loadGeneration = useRef(0);
+  // Last value we successfully displayed, so a failed optimistic save can revert to it.
+  const lastGood = useRef<InternetSettings | undefined>(undefined);
 
-  // Reveal the "getting ready" message only once the load has been slow for a beat — active whenever
-  // we're still loading (no settings yet, not failed). Declarative timer; no manual setTimeout here.
-  const showConnectingMessage = useDelayedFlag(
-    !settings && !loadFailed,
-    CONNECTING_MESSAGE_DELAY_MS,
-  );
+  // When loading, value is the default placeholder, never a PlatformError — so gate on isLoading alone.
+  const showConnectingMessage = useDelayedFlag(isLoading, CONNECTING_MESSAGE_DELAY_MS);
 
   useEffect(() => {
     isMounted.current = true;
@@ -102,71 +131,52 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
     };
   }, []);
 
-  const load = useCallback(async () => {
-    loadGeneration.current += 1;
-    const generation = loadGeneration.current;
-    const isStale = () => !isMounted.current || loadGeneration.current !== generation;
-
-    setCanProceed?.(false);
-    setLoadFailed(false);
-
-    const deadline = Date.now() + SERVICE_STARTUP_BUDGET_MS;
-    let lastErrorMessage = '';
-    while (Date.now() < deadline) {
-      try {
-        // Attempts are inherently sequential — each must finish before we decide to retry.
-        // eslint-disable-next-line no-await-in-loop
-        const loaded = await fetchInternetSettings();
-        if (isStale()) return;
-        setSettings(loaded);
-        setCanProceed?.(true);
-        return;
-      } catch (err: unknown) {
-        if (isStale()) return;
-        lastErrorMessage = getErrorMessage(err);
-        if (!isTransientStartupError(lastErrorMessage)) break;
-        // Small backoff so a fast-rejecting handler can't spin the loop.
-        // eslint-disable-next-line no-await-in-loop
-        await wait(SERVICE_STARTUP_RETRY_DELAY_MS);
-      }
-    }
-    // Fell through: a non-transient error, or the budget ran out while still unregistered.
-    if (isStale()) return;
-    // Show a friendly message; keep the raw RPC error in the log for debugging. A generic message is
-    // right here: GetParatextDataInternetSettings (ParatextRegistrationService.cs) only reads local
-    // config, so it can't surface the actionable internet-blocked / auth-failure errors other data
-    // loads classify — its failures are startup/internal, and a Retry is the right affordance.
-    logger.warn(`Could not load internet settings: ${lastErrorMessage}`);
-    setLoadFailed(true);
-  }, [setCanProceed]);
-
+  // Sync the local mirror from the provider value. While loading (value is still the default) or
+  // while a save is pending/failed, handleChange and the loading render own the state — defer. Once
+  // a real value is in, enable Next; if the read is an error, keep Next disabled so the wizard can't
+  // advance past an unloaded step.
   useEffect(() => {
-    load();
-  }, [load]);
+    if (isLoading || isSaving || saveError) return;
+    if (isPlatformError(value)) {
+      setCanProceed?.(false);
+      return;
+    }
+    setSettings(value);
+    lastGood.current = value;
+    setCanProceed?.(true);
+  }, [value, isLoading, isSaving, saveError, setCanProceed]);
 
   const handleChange = useCallback(
     async (next: InternetSettings) => {
       if (isSaving) return;
-      setSettings(next);
+      if (!setData) {
+        // Defensive: InternetSettingsLoaded renders only once `provider` is defined, so `setData` is
+        // always defined here. Bail rather than reporting a save that never actually persisted.
+        logger.warn('Internet settings provider unavailable; ignoring selection change.');
+        return;
+      }
+      setSettings(next); // optimistic
       setSaveError('');
       setIsSaving(true);
       setCanProceed?.(false);
       try {
-        await persistInternetSettings(next);
+        await setData(next);
         if (!isMounted.current) return;
+        lastGood.current = next;
         setIsSaving(false);
         setCanProceed?.(true);
       } catch (err: unknown) {
         if (!isMounted.current) return;
+        setSettings(lastGood.current); // revert
         setIsSaving(false);
         setSaveError(getErrorMessage(err));
         setCanProceed?.(false);
       }
     },
-    [setCanProceed, isSaving],
+    [isSaving, setData, setCanProceed],
   );
 
-  if (loadFailed) {
+  if (isPlatformError(value)) {
     return (
       <div className="tw:flex tw:flex-col tw:gap-4">
         <Alert variant="destructive">
@@ -174,14 +184,14 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
             {localizedStrings['%firstRun_step_internetSettings_loadError%']}
           </AlertDescription>
         </Alert>
-        <Button variant="outline" onClick={load}>
+        <Button variant="outline" onClick={onRetry}>
           {localizedStrings['%internetSettings_button_retry%']}
         </Button>
       </div>
     );
   }
 
-  if (!settings) {
+  if (isLoading || !settings) {
     return (
       <StepLoading
         message={
