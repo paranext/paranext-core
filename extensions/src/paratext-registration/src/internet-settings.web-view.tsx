@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import { InternetSettings } from 'paratext-registration';
 import { getErrorMessage, isPlatformError, wait } from 'platform-bible-utils';
 import { useEffect, useRef, useState } from 'react';
@@ -12,6 +12,9 @@ const INTERNET_SETTINGS_RESTART_DELAY_MS = 5 * 1000;
 
 const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
+// Intentionally duplicated in the first-run wizard (internet-settings-step.component.tsx): the two
+// consumers sit on opposite sides of the core/extension boundary and `paratext-registration` is a
+// types-only module, so there is no shared runtime module to hoist this into.
 const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
   permittedInternetUse: 'VpnRequired',
   selectedServer: 'Production',
@@ -64,19 +67,21 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     InternetSettings | undefined
   >();
 
-  const provider = useDataProvider(INTERNET_SETTINGS_DATA_PROVIDER);
   const [dpValue, setData, isLoadingSettings] = useData(
     INTERNET_SETTINGS_DATA_PROVIDER,
   ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
 
-  // Guard against overwriting an in-progress user edit if the callback were ever replaced.
+  // Once the staged draft + saved baseline have been synced from the first successful read.
   const hasSyncedFetch = useRef(false);
 
-  // Treat as unresolved while the provider is registering or the first read is in flight; surface a
-  // load error via saveError; otherwise sync the staged + saved baselines (guarding an in-progress
-  // user edit with hasSyncedFetch).
+  // `setData` is undefined until the provider resolves, so it doubles as the readiness signal (no
+  // separate useDataProvider needed). While unresolved or the first read is in flight, defer. On a
+  // load error, surface it via saveError. Otherwise sync the staged draft AND the saved baseline
+  // exactly once: this is a stage-then-commit dialog, so the Reset target and dirty-state must stay
+  // anchored to what was loaded (or last saved locally, via handleSaveAndRestart) rather than
+  // shifting under the user when another window changes settings via a live provider push.
   useEffect(() => {
-    if (provider === undefined || isLoadingSettings) return;
+    if (!setData || isLoadingSettings) return;
     if (isPlatformError(dpValue)) {
       if (isMounted.current) setSaveError(getErrorMessage(dpValue));
       return;
@@ -84,9 +89,9 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     if (!hasSyncedFetch.current) {
       hasSyncedFetch.current = true;
       setInternetSettings(dpValue);
+      setSavedInternetSettings(dpValue);
     }
-    setSavedInternetSettings(dpValue);
-  }, [provider, isLoadingSettings, dpValue, setInternetSettings]);
+  }, [setData, isLoadingSettings, dpValue, setInternetSettings]);
 
   const isFormDisabled =
     savedInternetSettings === undefined ||
@@ -95,12 +100,10 @@ globalThis.webViewComponent = function InternetSettingsComponent({
 
   const handleSaveAndRestart = async () => {
     if (!setData) {
-      // Provider not registered yet — do not mark saved or restart without persisting.
-      setSaveError(
-        getErrorMessage(
-          new Error('Internet settings are not available yet. Please try again in a moment.'),
-        ),
-      );
+      // Defensive: the Save button is disabled (isFormDisabled) until the provider is ready, so this
+      // is unreachable via the UI. Bail without restarting or marking saved rather than persisting
+      // nothing; log for the theoretical programmatic caller.
+      logger.warn('Internet settings provider unavailable; ignoring Save and restart.');
       setSaveState(SaveState.HasNotSaved);
       return;
     }

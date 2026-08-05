@@ -6,6 +6,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { useDataProvider, useData } from '@renderer/hooks/papi-hooks';
+import { logger } from '@shared/services/logger.service';
 import { newPlatformError } from 'platform-bible-utils';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { InternetSettingsStep } from './internet-settings-step.component';
@@ -25,6 +26,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useDataProvider: vi.fn(),
   useData: vi.fn(),
+}));
+
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: vi.fn() },
 }));
 
 vi.mock('platform-bible-react', () => ({
@@ -49,8 +54,19 @@ vi.mock('platform-bible-react', () => ({
 }));
 
 vi.mock('platform-bible-react/experimental', () => ({
-  InternetAccessOptionList: ({ onChange }: { onChange: (value: string) => void }) => (
-    <button data-testid="option-list" type="button" onClick={() => onChange('Enabled')}>
+  InternetAccessOptionList: ({
+    value,
+    onChange,
+  }: {
+    value: string;
+    onChange: (value: string) => void;
+  }) => (
+    <button
+      data-testid="option-list"
+      data-value={value}
+      type="button"
+      onClick={() => onChange('Enabled')}
+    >
       option list
     </button>
   ),
@@ -82,7 +98,9 @@ function configureHooks(opts: {
   isLoading?: boolean;
   setData?: ReturnType<typeof vi.fn>;
 }) {
-  const setData = opts.setData ?? vi.fn().mockResolvedValue(undefined);
+  // `'setData' in opts` so a caller can force setData === undefined (provider not yet resolved);
+  // omitting it defaults to a resolving spy.
+  const setData = 'setData' in opts ? opts.setData : vi.fn().mockResolvedValue(undefined);
   vi.mocked(useDataProvider).mockReturnValue(
     // opts.provider is `unknown` by design so the helper can accept both undefined and a branded
     // object; typing this precisely would require a complex generic that adds no test value.
@@ -117,12 +135,14 @@ describe('InternetSettingsStep', () => {
     expect(setCanProceed).toHaveBeenCalledWith(false);
   });
 
-  it('shows a spinner while the provider is available but data is still loading', () => {
+  it('shows a spinner and keeps Next disabled while the provider is available but data is still loading', () => {
     configureHooks({ isLoading: true });
-    renderStep();
+    const { setCanProceed } = renderStep();
 
     expect(screen.getByTestId('spinner')).toBeInTheDocument();
     expect(screen.queryByTestId('option-list')).not.toBeInTheDocument();
+    // Next must NOT be enabled while the first read is still loading and the spinner is showing.
+    expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
   it('renders the settings form and enables Next once data has loaded', async () => {
@@ -156,13 +176,44 @@ describe('InternetSettingsStep', () => {
     expect(calls.at(-1)).toBe(false);
   });
 
-  it('shows a friendly error and a Retry button when the read is a PlatformError', () => {
-    configureHooks({ value: newPlatformError('boom'), isLoading: false });
+  it('reverts the displayed selection to the last-good value when a save fails', async () => {
+    const setData = vi.fn().mockRejectedValue(new Error('save failed'));
+    configureHooks({ value: MOCK_SETTINGS, setData });
     renderStep();
+
+    // Loaded value is VpnRequired; the click optimistically switches to Enabled, then the failed
+    // save must revert the displayed value back to VpnRequired (lastGood).
+    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired');
+    await userEvent.click(screen.getByTestId('option-list'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired'),
+    );
+  });
+
+  it('bails without persisting or reporting success when setData is unavailable', async () => {
+    // A defined provider whose useData has not yet produced a setter (setData === undefined).
+    configureHooks({ value: MOCK_SETTINGS, setData: undefined });
+    renderStep();
+
+    await userEvent.click(screen.getByTestId('option-list'));
+
+    // The guard warns and returns before the optimistic update, so the selection does not change and
+    // no false "saved" state is reported.
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('unavailable'));
+    expect(screen.getByTestId('option-list')).toHaveAttribute('data-value', 'VpnRequired');
+  });
+
+  it('shows a friendly error, a Retry button, and keeps Next disabled when the read is a PlatformError', () => {
+    configureHooks({ value: newPlatformError('boom'), isLoading: false });
+    const { setCanProceed } = renderStep();
 
     expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     expect(screen.queryByText(/boom/i)).not.toBeInTheDocument();
+    // Next must be disabled on the error screen so the wizard can't advance past an unloaded step.
+    expect(setCanProceed).toHaveBeenCalledWith(false);
+    expect(setCanProceed).not.toHaveBeenCalledWith(true);
   });
 
   it('recovers when Retry remounts the subscription and the read then succeeds', async () => {

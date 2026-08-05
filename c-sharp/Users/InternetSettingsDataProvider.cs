@@ -127,7 +127,7 @@ internal sealed class InternetSettingsDataProvider(PapiClient papiClient)
         catch (Exception e)
         {
             Console.WriteLine($"Setting ParatextData InternetSettings failed! {e}");
-            throw new Exception($"Setting Paratext Registration data failed! {e.Message}");
+            throw new Exception($"Setting ParatextData InternetSettings failed! {e.Message}");
         }
 
         SendDataUpdateEvent(DATA_TYPE_INTERNET_SETTINGS, "updated internet settings");

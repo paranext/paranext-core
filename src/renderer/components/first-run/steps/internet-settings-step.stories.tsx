@@ -1,8 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { spyOn, restoreAllMocks } from 'storybook/test';
-import * as commandService from '@shared/services/command.service';
-import { getJsonRpcRequestErrorMessagePrefix } from '@shared/data/rpc.model';
-import { JSONRPCErrorCode } from 'json-rpc-2.0';
+import { newPlatformError } from 'platform-bible-utils';
+import * as papiHooks from '@renderer/hooks/papi-hooks';
 import { InternetSettingsStep } from './internet-settings-step.component';
 
 const MOCK_SETTINGS = {
@@ -10,6 +9,32 @@ const MOCK_SETTINGS = {
   selectedServer: 'Production' as const,
   proxyPort: 0,
 };
+
+// Stands in for the resolved data-provider object; the component only forwards it to useData, which
+// is mocked here and ignores it.
+const PROVIDER = { __brand: 'internetSettingsDataProvider' };
+
+/**
+ * Point useDataProvider/useData at a chosen state, mirroring how the component consumes them.
+ * `provider: undefined` simulates the provider not yet registered (the outer spinner); otherwise
+ * useData yields `[value, setData, isLoading]`. Returns a cleanup that restores the spies.
+ */
+function mockHooks(config: { provider?: unknown; value?: unknown; isLoading?: boolean } = {}) {
+  // `'provider' in config` so a story can force provider === undefined (not-yet-registered).
+  const provider = 'provider' in config ? config.provider : PROVIDER;
+  const value = config.value ?? MOCK_SETTINGS;
+  const isLoading = config.isLoading ?? false;
+  // Storybook mock stand-ins; the precise curried useDataProvider/useData types add no value here
+  // and would couple the story to internal hook shapes.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion -- Storybook mock stand-in
+  spyOn(papiHooks, 'useDataProvider').mockReturnValue(provider as never);
+  // Same rationale as the useDataProvider mock above.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion -- Storybook mock stand-in
+  spyOn(papiHooks, 'useData').mockReturnValue({
+    InternetSettings: () => [value, async () => undefined, isLoading],
+  } as never);
+  return () => restoreAllMocks();
+}
 
 const meta: Meta<typeof InternetSettingsStep> = {
   title: 'First Run/InternetSettingsStep',
@@ -20,40 +45,29 @@ const meta: Meta<typeof InternetSettingsStep> = {
     setCanProceed: () => {},
   },
   beforeEach() {
-    // Default: fetch resolves with production/vpn-required settings.
-    spyOn(commandService, 'sendCommand').mockResolvedValue(MOCK_SETTINGS);
-    return () => restoreAllMocks();
+    // Default: provider available, settings loaded (VPN Required).
+    return mockHooks();
   },
 };
 export default meta;
 
 type Story = StoryObj<typeof InternetSettingsStep>;
 
-/** Spinner is shown while settings are loading; Next is disabled. */
-export const Loading: Story = {
+/**
+ * The data provider hasn't registered yet (`useDataProvider` returns `undefined`) — the natural
+ * availability signal. The spinner shows and Next is disabled; after a short delay the "Getting
+ * things ready…" message appears below it.
+ */
+export const ProviderRegistering: Story = {
   beforeEach() {
-    spyOn(commandService, 'sendCommand').mockImplementation(
-      () => new Promise(() => {}), // never resolves — keeps component in loading state
-    );
-    return () => restoreAllMocks();
+    return mockHooks({ provider: undefined });
   },
 };
 
-/**
- * Startup race: the data provider hasn't registered its handlers yet, so the fetch keeps failing
- * with JSON-RPC "method not found". After the wall-clock delay the "Getting things ready…" message
- * appears below the spinner. (Retries continue in the background until they succeed or the startup
- * budget is spent, after which the error + Retry is shown.)
- */
-export const ConnectingToService: Story = {
+/** Provider registered but the first read is still in flight (`isLoading`): spinner, Next disabled. */
+export const Loading: Story = {
   beforeEach() {
-    spyOn(commandService, 'sendCommand').mockRejectedValue(
-      // Same message shape the RPC layer actually throws, built from its own producer.
-      new Error(
-        `${getJsonRpcRequestErrorMessagePrefix(JSONRPCErrorCode.MethodNotFound)}: not found`,
-      ),
-    );
-    return () => restoreAllMocks();
+    return mockHooks({ isLoading: true });
   },
 };
 
@@ -63,18 +77,13 @@ export const Default: Story = {};
 /** Enabled (unrestricted internet) option pre-selected. */
 export const Enabled: Story = {
   beforeEach() {
-    spyOn(commandService, 'sendCommand').mockResolvedValue({
-      ...MOCK_SETTINGS,
-      permittedInternetUse: 'Enabled',
-    });
-    return () => restoreAllMocks();
+    return mockHooks({ value: { ...MOCK_SETTINGS, permittedInternetUse: 'Enabled' } });
   },
 };
 
-/** Error alert shown and Retry button visible when the initial fetch fails. */
-export const FetchError: Story = {
+/** The read failed (a `PlatformError` from the provider): friendly error alert and a Retry button. */
+export const LoadError: Story = {
   beforeEach() {
-    spyOn(commandService, 'sendCommand').mockRejectedValue(new Error('Connection refused'));
-    return () => restoreAllMocks();
+    return mockHooks({ value: newPlatformError('Connection refused') });
   },
 };
