@@ -181,6 +181,25 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
 }
 
 /**
+ * What one specific window has open, rather than the merged picture the proxy serves.
+ *
+ * A window is the only thing that knows what it has open, so this is the only way to ask about a
+ * window that is on its way out — the merged read asks the windows that can answer, and by the time
+ * anything notices a window has gone it is no longer one of them.
+ *
+ * @param windowId Window to ask. It must still be alive; its scoped service goes with it.
+ * @returns Everything that window has open, or an empty list if it has no scoped service registered
+ * @throws If the window has a scoped service but fails to answer, since "could not ask" is not
+ *   "answered none"
+ */
+export async function getOpenWebViewDefinitionsForWindow(
+  windowId: number,
+): Promise<SavedWebViewDefinition[]> {
+  const webViewService = await getScopedWebViewService(windowId);
+  return (await webViewService?.getAllOpenWebViewDefinitions()) ?? [];
+}
+
+/**
  * Every open web view across all windows.
  *
  * A window that fails to answer makes this throw rather than silently shrink the list: callers read

@@ -338,8 +338,14 @@ class WindowDataProviderEngine
     newSetFocusSpecifierPossiblyUndefinedSelector: SetFocusSpecifier | undefined,
     newSetFocusSpecifierPossiblyNotProvided?: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    // The trailing `?? undefined` collapses a `null` arriving in the specifier position. The types
+    // say that cannot happen, but arguments cross the process boundary as JSON, where an `undefined`
+    // becomes `null` — and "deselect" is recognized further down by being strictly `undefined`, so a
+    // `null` reaching there is taken for a subject to focus and has an id read off it.
     const newSetFocusSpecifier: SetFocusSpecifier | FocusSubjectElement | undefined =
-      newSetFocusSpecifierPossiblyUndefinedSelector ?? newSetFocusSpecifierPossiblyNotProvided;
+      newSetFocusSpecifierPossiblyUndefinedSelector ??
+      newSetFocusSpecifierPossiblyNotProvided ??
+      undefined;
 
     // Update the tracked focus in this service based on what is actually focused
     if (newSetFocusSpecifier === 'detect') {

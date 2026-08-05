@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import {
   addWindow,
+  areAllWindowsClosing,
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
   getWindows,
   isWindowReady,
+  markWindowClosing,
   markWindowNotReady,
   markWindowReady,
   onDidChangeRoutingTarget,
@@ -27,10 +29,38 @@ function fakeWindow(id: number): BrowserWindow {
   return { id } as BrowserWindow;
 }
 
+/**
+ * Stand-in for a BrowserWindow that can be destroyed the way Electron destroys one: once
+ * `destroyForTest` has run, every property access throws instead of answering.
+ */
+function destroyableWindow(id: number): { window: BrowserWindow; destroyForTest: () => void } {
+  let isDestroyed = false;
+  const window = new Proxy(
+    { id },
+    {
+      get(target, key) {
+        if (isDestroyed) throw new TypeError('Object has been destroyed');
+        // Indexing the stub by the proxied key, which is only ever `id` here
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return target[key as keyof typeof target];
+      },
+    },
+  );
+  return {
+    // Constructing a real BrowserWindow needs the Electron runtime; `id` is the only member the
+    // service under test touches
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    window: window as BrowserWindow,
+    destroyForTest: () => {
+      isDestroyed = true;
+    },
+  };
+}
+
 describe('window state tracking', () => {
   beforeEach(() => {
     // The module holds process-wide state, so unwind it between tests
-    [...getWindows()].forEach(removeWindow);
+    [...getWindows()].forEach((window) => removeWindow(window, window.id));
     setFocusedWindowId(undefined);
   });
 
@@ -59,7 +89,7 @@ describe('window state tracking', () => {
     addWindow(only);
     setFocusedWindowId(1);
 
-    removeWindow(only);
+    removeWindow(only, 1);
 
     expect(getTargetWindowId()).toBeUndefined();
   });
@@ -70,7 +100,7 @@ describe('window state tracking', () => {
     addWindow(first);
     addWindow(second);
 
-    removeWindow(first);
+    removeWindow(first, 1);
 
     expect(getWindows().map((w) => w.id)).toEqual([2]);
   });
@@ -78,9 +108,29 @@ describe('window state tracking', () => {
   test('removing a window that was never tracked leaves the list untouched', () => {
     addWindow(fakeWindow(1));
 
-    removeWindow(fakeWindow(99));
+    removeWindow(fakeWindow(99), 99);
 
     expect(getWindows().map((w) => w.id)).toEqual([1]);
+  });
+
+  test('removes a window whose properties can no longer be read', () => {
+    // This runs from the `closed` handler, where Electron has already destroyed the window and
+    // rejects every property access on it. A throw here escapes before the close is announced and
+    // before the window leaves the tracked list, so no process ever hears the close and every later
+    // count of open windows includes one that is gone.
+    const closing = destroyableWindow(1);
+    addWindow(closing.window);
+    markWindowReady(1);
+    setFocusedWindowId(1);
+    addWindow(fakeWindow(2));
+    markWindowReady(2);
+    closing.destroyForTest();
+
+    expect(() => removeWindow(closing.window, 1)).not.toThrow();
+
+    expect(getWindows().map((window) => window.id)).toEqual([2]);
+    expect(getReadyWindowIds()).toEqual([2]);
+    expect(getFocusedWindowId()).toBeUndefined();
   });
 
   test('exposes the live window list, which the close handler relies on to count windows', () => {
@@ -117,7 +167,7 @@ describe('window state tracking', () => {
       addWindow(only);
       setFocusedWindowId(1);
 
-      removeWindow(only);
+      removeWindow(only, 1);
 
       expect(getFocusedWindowId()).toBeUndefined();
     });
@@ -178,7 +228,7 @@ describe('window state tracking', () => {
       const heard: (number | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      removeWindow(only);
+      removeWindow(only, 3);
       unsubscribe();
 
       expect(heard).toEqual([undefined]);
@@ -197,7 +247,7 @@ describe('window state tracking', () => {
       const heard: (number | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      removeWindow(closing);
+      removeWindow(closing, 1);
       unsubscribe();
 
       expect(getTargetWindowId()).toBe(2);
@@ -415,7 +465,7 @@ describe('window state tracking', () => {
       const closed = fakeWindow(1);
       addWindow(closed);
       markWindowReady(1);
-      removeWindow(closed);
+      removeWindow(closed, 1);
 
       addWindow(fakeWindow(1));
       const serving = fakeWindow(2);
@@ -444,9 +494,60 @@ describe('window state tracking', () => {
       addWindow(closing);
       markWindowReady(1);
 
-      removeWindow(closing);
+      removeWindow(closing, 1);
 
       expect(getReadyWindowIds()).toEqual([]);
+    });
+  });
+
+  describe('windows on their way out', () => {
+    test('reports the app going down when the only window closes', () => {
+      addWindow(fakeWindow(1));
+
+      markWindowClosing(1);
+
+      expect(areAllWindowsClosing()).toBe(true);
+    });
+
+    test('reports the app staying up while another window is not closing', () => {
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+
+      markWindowClosing(1);
+
+      expect(areAllWindowsClosing()).toBe(false);
+    });
+
+    test('reports the app going down once every window has begun closing', () => {
+      // Two windows closed at the same moment: neither is removed from the tracked list until both
+      // handlers are long finished, so counting windows alone makes each of them believe the other
+      // one is staying and leave the shutdown tasks to it — and neither runs them
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+
+      markWindowClosing(1);
+      const isAppGoingDownForFirstWindow = areAllWindowsClosing();
+      markWindowClosing(2);
+      const isAppGoingDownForSecondWindow = areAllWindowsClosing();
+
+      expect(isAppGoingDownForFirstWindow).toBe(false);
+      expect(isAppGoingDownForSecondWindow).toBe(true);
+    });
+
+    test('forgets that a window was closing once it is gone, since ids are reused', () => {
+      // Electron reuses BrowserWindow ids. A leftover mark would tell the next window opened with
+      // that id that it is already on its way out, and its close would run the whole app's shutdown
+      // while other windows were still open.
+      const closing = fakeWindow(1);
+      addWindow(closing);
+      markWindowClosing(1);
+      removeWindow(closing, 1);
+
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowClosing(2);
+
+      expect(areAllWindowsClosing()).toBe(false);
     });
   });
 });

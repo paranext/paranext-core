@@ -40,6 +40,17 @@ const mostRecentlyFocusedWindowIds: number[] = [];
 const readyWindowIds = new Set<number>();
 
 /**
+ * IDs of the windows whose close has begun but which are still tracked.
+ *
+ * A window stays tracked until Electron reports it as actually gone, which is long after every
+ * window's close handler has run. Telling "the last window is closing" from "two of several windows
+ * are closing at the same moment" is impossible from the tracked list alone: each of the two closes
+ * sees the other window still there, decides the app is staying up, and leaves the shutdown work to
+ * the other one — so neither does it.
+ */
+const closingWindowIds = new Set<number>();
+
+/**
  * Where routed calls currently go: the window ID, plus whether that window is actually serving
  * requests. Readiness is part of the target because a window that goes from unready to ready serves
  * its calls from a brand new set of scoped services — consumers holding a resolved service have to
@@ -164,17 +175,21 @@ export function addWindow(window: BrowserWindow): void {
  * the target was the closing window and re-point focus itself would be one ordering mistake away
  * from leaving routing pinned to a destroyed window.
  *
- * Reads the window's ID once, at the top: this runs from the `closed` handler, where the
- * BrowserWindow is already destroyed and every property read is a chance to throw.
+ * @param window Window to stop tracking. Matched by identity, never read from: this runs from the
+ *   `closed` handler, where the BrowserWindow is already destroyed and every property read is a
+ *   chance to throw — which here would abandon the rest of the closing window's teardown.
+ * @param windowId The window's ID, captured while it was still alive.
  */
-export function removeWindow(window: BrowserWindow): void {
-  const removedWindowId = window.id;
+export function removeWindow(window: BrowserWindow, windowId: number): void {
   const trackedIndex = windows.indexOf(window);
   if (trackedIndex >= 0) windows.splice(trackedIndex, 1);
-  readyWindowIds.delete(removedWindowId);
-  const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(removedWindowId);
+  readyWindowIds.delete(windowId);
+  // Electron reuses window IDs, so leaving this behind would tell a future window's close that a
+  // window which no longer exists is on its way out
+  closingWindowIds.delete(windowId);
+  const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
   if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
-  if (focusedWindowId === removedWindowId) focusedWindowId = undefined;
+  if (focusedWindowId === windowId) focusedWindowId = undefined;
   announceRoutingTargetIfChanged();
 }
 
@@ -201,6 +216,27 @@ export function setFocusedWindowId(windowId: number | undefined): void {
 export function markWindowReady(windowId: number): void {
   readyWindowIds.add(windowId);
   announceRoutingTargetIfChanged();
+}
+
+/**
+ * Record that a window has begun closing. Call this at the top of a window's close handling, before
+ * anything reads {@link areAllWindowsClosing}.
+ *
+ * @param windowId Window that is on its way out
+ */
+export function markWindowClosing(windowId: number): void {
+  closingWindowIds.add(windowId);
+}
+
+/**
+ * Whether every tracked window is on its way out, so the app is going down rather than one window
+ * going away.
+ *
+ * Answered from what every window's close handler has recorded rather than from the tracked list
+ * alone, which nothing trims until a window is actually gone. See {@link markWindowClosing}.
+ */
+export function areAllWindowsClosing(): boolean {
+  return windows.every((window) => closingWindowIds.has(window.id));
 }
 
 /**

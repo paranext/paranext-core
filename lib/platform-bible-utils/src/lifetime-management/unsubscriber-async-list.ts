@@ -1,35 +1,58 @@
 import { Dispose } from './disposal.model';
 import { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 
-/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+/**
+ * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
+ *
+ * A list is single-use: it collects unsubscribers until {@link runAllUnsubscribers} runs them, and
+ * that run seals it for good. Anything added to a sealed list is unsubscribed immediately instead
+ * of being stored, because whatever these clean up after is already gone. Registration is usually
+ * asynchronous, so an unsubscriber routinely arrives after the teardown that should have run it —
+ * without sealing it would be stored in a list nobody drains again and its subscription would leak
+ * for the rest of the session.
+ */
 export class UnsubscriberAsyncList {
   readonly unsubscribers = new Set<UnsubscriberAsync | Unsubscriber>();
+
+  /**
+   * Whether {@link runAllUnsubscribers} has started. Set at the top of the run rather than at the
+   * end: the run takes a snapshot of the set and then clears it, so an unsubscriber added partway
+   * through would land in a list that is never drained again.
+   */
+  private isSealed = false;
 
   constructor(private name = 'Anonymous') {}
 
   /**
    * Add unsubscribers to the list. Note that duplicates are not added twice.
    *
+   * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
+   * stored. Nothing can await that run, so its outcome is only reported.
+   *
    * @param unsubscribers - Objects that were returned from a registration process.
    */
   add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]) {
     unsubscribers.forEach((unsubscriber) => {
-      if ('dispose' in unsubscriber)
-        this.unsubscribers.add(unsubscriber.dispose.bind(unsubscriber));
-      else this.unsubscribers.add(unsubscriber);
+      const unsubscribe =
+        'dispose' in unsubscriber ? unsubscriber.dispose.bind(unsubscriber) : unsubscriber;
+      if (this.isSealed) this.unsubscribeImmediately(unsubscribe);
+      else this.unsubscribers.add(unsubscribe);
     });
   }
 
   /**
-   * Run all unsubscribers added to this list and then clear the list.
+   * Run all unsubscribers added to this list, clear the list, and seal it so anything added later
+   * is unsubscribed on arrival.
    *
    * An unsubscriber that throws (synchronously or asynchronously) does not make this method reject:
    * the error is caught and logged via `console.error`, the remaining unsubscribers still run, and
-   * the thrower counts as a failure in the return value.
+   * the thrower counts as a failure in the return value. An unsubscriber that arrives during the
+   * run is not part of the returned result — nothing is waiting on it by then.
    *
    * @returns `true` if all unsubscribers succeeded, `false` if any returned `false` or threw.
    */
   async runAllUnsubscribers(): Promise<boolean> {
+    this.isSealed = true;
     // Each unsubscriber is invoked and awaited independently so one that throws — synchronously or
     // otherwise — cannot stop the rest from running. This list is what cleans up after a window
     // closes, which happens repeatedly once more than one window can be open rather than only once
@@ -51,6 +74,26 @@ export class UnsubscriberAsyncList {
 
       return unsubscriberSucceeded;
     });
+  }
+
+  /**
+   * Run an unsubscriber that arrived after the list was sealed. `add` is synchronous and has no
+   * caller to hand a result to, so a failure is reported here rather than thrown.
+   */
+  private unsubscribeImmediately(unsubscriber: UnsubscriberAsync | Unsubscriber): void {
+    (async () => {
+      try {
+        const unsubscriberSucceeded = await unsubscriber();
+        if (!unsubscriberSucceeded)
+          console.error(
+            `UnsubscriberAsyncList ${this.name}: Unsubscriber added after the list was run failed!`,
+          );
+      } catch (error) {
+        console.error(
+          `UnsubscriberAsyncList ${this.name}: Unsubscriber added after the list was run threw! ${error}`,
+        );
+      }
+    })();
   }
 }
 

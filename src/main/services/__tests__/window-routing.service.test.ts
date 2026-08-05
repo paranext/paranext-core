@@ -392,6 +392,66 @@ describe('window service routing proxy', () => {
     expect(mocks.routingTargetChangeHandlers.size).toBe(0);
   });
 
+  test('finishes the re-point when the previous window refuses to unsubscribe', async () => {
+    // A window that has just closed rejects the unsubscribe rather than answering it, which is the
+    // common case for the re-point the close itself triggers. That failure belongs to the window
+    // that is already gone; the relay has to hold on to the subscription it just made rather than
+    // abandoning the rest of the handover
+    const first = windowService('a');
+    const second = windowService('b');
+    first.unsubscribe.mockRejectedValue(new Error('previous window socket is gone'));
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === 1 ? first : second) as never,
+    );
+    await engine.getFocus();
+
+    moveRoutingTargetTo(2);
+    await settle();
+
+    // Still relaying window 2, and it knows it — a second read must not subscribe all over again
+    await engine.getFocus();
+    expect(second.subscribeFocus).toHaveBeenCalledTimes(1);
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+    await second.emitUpdate();
+    await settle();
+    expect(notifyUpdate).toHaveBeenCalledWith('Focus');
+
+    // And disposal still reaches the subscription the failed handover left behind
+    await engine.dispose();
+    expect(second.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  test('tears down the new subscription when disposal races a rejecting unsubscribe', async () => {
+    // The re-point commits its bookkeeping, then unsubscribes the previous window. A rejection there
+    // must not skip the disposal compensation below it and strand a live subscription on an engine
+    // that is already disposed
+    const first = windowService('a');
+    const second = windowService('b');
+    first.unsubscribe.mockRejectedValue(new Error('previous window socket is gone'));
+    let releaseSubscribe: (() => void) | undefined;
+    const attachToUpdates = second.subscribeFocus.getMockImplementation();
+    second.subscribeFocus.mockImplementation(async (...args) => {
+      await new Promise<void>((resolve) => {
+        releaseSubscribe = resolve;
+      });
+      return attachToUpdates?.(...args) ?? second.unsubscribe;
+    });
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === 1 ? first : second) as never,
+    );
+    await engine.getFocus();
+
+    moveRoutingTargetTo(2);
+    await settle();
+    const disposal = engine.dispose();
+    releaseSubscribe?.();
+    await disposal;
+
+    expect(second.unsubscribe).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(second.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
   test('leaves nothing subscribed when disposal races an in-flight relay', async () => {
     // Without a fence, the re-point completes after disposal, subscribes to a window nothing will
     // ever unsubscribe, and its callback notifies an engine whose emitter is already disposed

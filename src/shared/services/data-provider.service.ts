@@ -831,6 +831,13 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     | PlatformEventEmitter<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>
     | undefined;
 
+  /**
+   * The provider once it is on the network. Declared outside the `try` for the same reason as the
+   * emitter: a failure after this point has to unregister it, or a registration that threw would
+   * still leave a provider published under this name that nothing holds a disposable for.
+   */
+  let disposableDataProvider: DisposableDataProviders[DataProviderName] | undefined;
+
   try {
     // Create a networked update event
     const dynamicEventName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);
@@ -873,7 +880,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
     // messing up all the string template types when it runs it through `DisposableNetworkObject`
     // which has `Omit`. So we need to pass through `unknown` to get to the correct type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const disposableDataProvider = (await networkObjectService.set(
+    disposableDataProvider = (await networkObjectService.set(
       dataProviderObjectId,
       dataProviderInternal,
       dataProviderType,
@@ -895,11 +902,28 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 
     return disposableDataProvider;
   } catch (e) {
-    // If the update event was already registered, unregister it (disposing the emitter sends the
-    // unregister); otherwise the event name would stay centrally registered under this live
-    // connection and reject every future attempt to host this provider. Wrapped so a dispose
-    // failure cannot mask the registration error that actually caused this.
-    if (onDidUpdateEmitter) {
+    // Unwind everything this registration managed to put on the network, so a caller that saw it
+    // throw is left with nothing half-published. Which step to undo depends on how far it got, and
+    // the two are not independent: disposing the published provider also disposes its update emitter
+    // (layered on in `buildDataProvider`), and the emitter throws if it is disposed twice.
+    //
+    // Both branches are wrapped so a cleanup failure cannot mask the registration error that
+    // actually caused this.
+    if (disposableDataProvider) {
+      // The provider is on the network. Unregistering it is what makes this a full rollback: leaving
+      // it published while unregistering only its update event would leave a provider consumers can
+      // resolve and subscribe to but that can never notify them of anything.
+      try {
+        await disposableDataProvider.dispose();
+      } catch (disposeError) {
+        logger.warn(
+          `Failed to unregister the network object while cleaning up the failed registration of data provider ${providerName}: ${getErrorMessage(disposeError)}`,
+        );
+      }
+    } else if (onDidUpdateEmitter) {
+      // The update event was registered but the object never was, so the emitter is on its own.
+      // Disposing it sends the unregister; otherwise the event name would stay centrally registered
+      // under this live connection and reject every future attempt to host this provider.
       try {
         onDidUpdateEmitter.dispose();
       } catch (disposeError) {
