@@ -34,9 +34,13 @@ frozen records or pinned-snapshot corpora with their own provenance rules.
   recognized form; prose saying "aspirational" does not exempt anything (a mechanical gate can't
   honor prose).
 - **Fenced code blocks**: localization-key and path checks are suppressed inside ``` fences
-  (example keys and illustrative paths are legitimate there), but identifier, npm-script, dotnet
-  category, and playwright project checks stay live — a fenced command or code sample presents
-  itself as real and readers execute it, so a nonexistent name in one is a finding, not noise.
+  (example keys and illustrative paths are legitimate there). The **command** checks — npm script,
+  dotnet test category, and playwright project — match raw line text, so they stay live inside
+  fences: a fenced command presents itself as runnable and readers execute it, so a nonexistent
+  script, category, or project in one is a finding, not noise. The **identifier** check works
+  differently: it only fires on backticked tokens, and code inside a fence is not backticked, so
+  identifiers are checked wherever they are backticked — in practice, prose. An identifier that
+  appears only inside a fenced code sample is not checked at all.
 
 ## Step 1: Refresh reference state
 
@@ -96,9 +100,13 @@ for lf in [p for p in main_files if p == "assets/localization/en.json" or p.ends
     try: loc_keys |= set(re.findall(r'"(%[^"%]+%)"', sh(["git", "-C", REPO, "show", f"origin/main:{lf}"])))
     except Exception: pass
 
-pw_cfg = sh(["git", "-C", REPO, "show", "origin/main:e2e-tests/playwright-cdp.config.ts"])
+pw_cfg = sh_ck(["git", "-C", REPO, "show", "origin/main:e2e-tests/playwright.config.ts"])
 pw_projects = set(re.findall(r"name:\s*['\"]([^'\"]+)['\"]", pw_cfg))
 cats = set(re.findall(r'\[Category\("([^"]+)"\)\]', sh(["git", "-C", REPO, "grep", "-h", r"\[Category(", "origin/main", "--", "c-sharp-tests"])))
+# Both inventories gate their own check (`if cats and ...` / `if pw_projects and ...`), so an empty
+# one would silently disable it. Say so instead.
+for label, inv in (("dotnet test categories (c-sharp-tests)", cats), ("playwright projects (playwright.config.ts)", pw_projects)):
+    if not inv: print(f"WARN: {label} inventory is empty - that check is disabled this run")
 
 RE_PATHTOK = re.compile(r'(?<![\w/.])((?:[A-Za-z0-9_@-]+/)+[A-Za-z0-9_@.-]+\.[A-Za-z]{1,5})(?![\w/])')
 RE_TICK = re.compile(r'`([^`\n]{2,80})`')
@@ -122,7 +130,10 @@ targets = [f for f in wt_files if any(f == s or f.startswith(s + "/") for s in S
 if not targets: raise SystemExit(f"FATAL: no in-scope .md files found under {SCOPE}")
 pr_refs = set()
 for rel in sorted(targets):
-    with open(os.path.join(REPO, rel), encoding="utf-8") as fh: text = fh.read()
+    try:
+        with open(os.path.join(REPO, rel), encoding="utf-8") as fh: text = fh.read()
+    except FileNotFoundError:
+        raise SystemExit(f"FATAL: {rel} is tracked but missing from the working tree - commit, restore, or stash before running the gate")
     fm = frozen_marker(text)
     if fm: skipped.append(f'{rel} - matched "{fm}"'); continue
     pr_refs |= set(int(n) for n in RE_PRREF.findall(text))
@@ -165,9 +176,11 @@ for rel in sorted(targets):
         for cat in re.findall(r'--filter[= ]"?Category=([A-Za-z0-9]+)', ln):
             if cats and cat not in cats:
                 findings[rel].append(f":{i} [dotnet] test category `{cat}` not found in c-sharp-tests")
-        for m in re.findall(r'--project[= ]([A-Za-z0-9-]+)', ln):
-            if pw_projects and m not in pw_projects:
-                findings[rel].append(f":{i} [playwright] project `{m}` not in playwright-cdp.config.ts")
+        if "playwright test" in ln:  # `--project` is also tsc's and dotnet's flag - don't match those
+            for m in re.findall(r'--project[= ]([A-Za-z0-9-]+)', ln):
+                if pw_projects and m not in pw_projects:
+                    findings[rel].append(f":{i} [playwright] project `{m}` not in playwright.config.ts")
+    if in_fence: print(f"WARN: {rel} ends inside an unclosed fence - path/l10n checks were suppressed from the last ``` onward")
 
 print(f"scanned {len(targets)} files; skipped {len(skipped)} frozen records: {skipped}")
 print(f"PR refs to spot-check with gh (state vs claim): {sorted(pr_refs)}")
