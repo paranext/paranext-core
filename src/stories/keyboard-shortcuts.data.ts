@@ -18,35 +18,43 @@ import { KeyboardShortcutEntry } from './keyboard-shortcuts-catalog/keyboard-sho
 export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'next-tab',
-    purpose: 'Switch to the next tab',
+    purpose: 'Switch to the next tab in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tabs, not app-wide.
+    context: 'Main process (per window)',
     keys: { macOS: '⌃⇥ / ⌘⇧]', windows: 'Ctrl+Tab', linux: 'Ctrl+Tab' },
     locations: ['src/main/main.ts'],
   },
   {
     id: 'previous-tab',
-    purpose: 'Switch to the previous tab',
+    purpose: 'Switch to the previous tab in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tabs, not app-wide.
+    context: 'Main process (per window)',
     keys: { macOS: '⌃⇧⇥ / ⌘⇧[', windows: 'Ctrl+Shift+Tab', linux: 'Ctrl+Shift+Tab' },
     locations: ['src/main/main.ts'],
   },
   {
     id: 'next-tab-group',
-    purpose: 'Switch to the next tab group',
+    purpose: 'Switch to the next tab group in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tab groups, not app-wide.
     // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
+    context: 'Main process (per window)',
     keys: { macOS: '⌘⌥↓', windows: 'Ctrl+PageDown', linux: 'Ctrl+PageDown' },
     locations: ['src/main/main.ts'],
   },
   {
     id: 'previous-tab-group',
-    purpose: 'Switch to the previous tab group',
+    purpose: 'Switch to the previous tab group in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tab groups, not app-wide.
     // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
+    context: 'Main process (per window)',
     keys: { macOS: '⌘⌥↑', windows: 'Ctrl+PageUp', linux: 'Ctrl+PageUp' },
     locations: ['src/main/main.ts'],
   },

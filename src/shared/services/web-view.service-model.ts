@@ -313,9 +313,145 @@ export const RENDERER_HOSTED_COMMAND_NAMES = [
  *
  * @experimental
  */
-export const RENDERER_HOSTED_COMMAND_DOCS: Partial<
-  Record<(typeof RENDERER_HOSTED_COMMAND_NAMES)[number], SingleMethodDocumentation>
+export const RENDERER_HOSTED_COMMAND_DOCS: Record<
+  (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
+  SingleMethodDocumentation
 > = {
+  'platform.about': {
+    method: {
+      summary: 'Open a dialog that displays essential information about the application',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openSettings': {
+    method: {
+      summary: 'Open a Settings tab, optionally limited to the project shown in a given web view',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'Web view whose project the Settings tab should be limited to, if any',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openProjectSettings': {
+    method: {
+      deprecated: true,
+      summary:
+        'Open the Settings tab limited to the project shown in the given web view. Renamed to ' +
+        'platform.openSettings',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view whose project the Settings tab should be limited to',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openUserSettings': {
+    method: {
+      deprecated: true,
+      summary:
+        'Open the Settings tab without limiting it to any particular project. Renamed to ' +
+        'platform.openSettings',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.usersnapSubmitIdea': {
+    method: {
+      summary: 'Open Usersnap feedback form to submit an idea',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.usersnapReportIssue': {
+    method: {
+      summary: 'Open Usersnap feedback form to report an issue',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.isUsersnapFormCurrentlyOpen': {
+    method: {
+      summary: 'Check if a Usersnap form is currently open',
+      params: [],
+      result: { name: 'isOpen', schema: { type: 'boolean' } },
+    },
+  },
+  'platform.closeOpenUsersnapForm': {
+    method: {
+      summary: 'Call close function for Usersnap forms known to the application',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToNextChapter': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the next chapter (rolls into the next book)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToPreviousChapter': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Navigate the active scroll group to the previous chapter (rolls into the previous book)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToNextBook': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the next book (chapter 1, verse 1)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToPreviousBook': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the previous book (chapter 1, verse 1)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToNextVerse': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the next verse',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToPreviousVerse': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the previous verse',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openBookChapterControl': {
+    method: {
+      'x-experimental': true,
+      summary:
+        "Open the appropriate Book Chapter Control (the active tab's if it shows one, else the " +
+        "top toolbar's) and focus its input, ready for typing a reference",
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
   'platform.navigateLeftInReferenceHistory': {
     method: {
       'x-experimental': true,
