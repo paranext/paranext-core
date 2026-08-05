@@ -111,4 +111,83 @@ describe('FootnoteList row swap', () => {
     render(<FootnoteList footnotes={footnotes} listId="t" editingFootnoteIndex={0} />);
     expect(screen.getByText('first note text')).toBeInTheDocument();
   });
+
+  it('skips the editing row when navigating with ArrowDown', async () => {
+    const user = userEvent.setup();
+    const threeFootnotes: MarkerObject[] = [
+      ...footnotes,
+      {
+        type: 'note',
+        marker: 'f',
+        caller: '+',
+        content: [{ type: 'char', marker: 'ft', content: ['third note text'] }],
+      },
+    ];
+    render(
+      <FootnoteList
+        footnotes={threeFootnotes}
+        listId="t"
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <div data-testid="editor-slot">editor</div>}
+      />,
+    );
+    // Only non-editing rows carry role="option"; index 1 (the editing row) is excluded, so
+    // rows[0] is footnote 0 and rows[1] is footnote 2. Drive focus via real keyboard navigation
+    // (rather than a manual .focus() call) so `focusedIndex` state advances the same way a user's
+    // keystrokes would.
+    const rows = screen.getAllByRole('option');
+    screen.getByRole('listbox').focus();
+    await user.keyboard('{ArrowDown}'); // -1 -> 0 (footnote 0)
+    expect(rows[0]).toHaveFocus();
+    await user.keyboard('{ArrowDown}'); // 0 -> hops over the editing row (1) -> 2 (footnote 2)
+    expect(rows[1]).toHaveFocus();
+  });
+
+  it('renders the separator after the editing row in vertical layout', () => {
+    const { container } = render(
+      <FootnoteList
+        footnotes={footnotes}
+        listId="t"
+        layout="vertical"
+        editingFootnoteIndex={0}
+        renderEditingFootnote={() => <div>editor</div>}
+      />,
+    );
+    const editingRow = container.querySelector('li[data-state="editing"]');
+    expect(editingRow?.nextElementSibling).toHaveAttribute('data-slot', 'separator');
+  });
+
+  it('does not let ArrowDown from inside the editing row drive list navigation', async () => {
+    const user = userEvent.setup();
+    const threeFootnotes: MarkerObject[] = [
+      ...footnotes,
+      {
+        type: 'note',
+        marker: 'f',
+        caller: '+',
+        content: [{ type: 'char', marker: 'ft', content: ['third note text'] }],
+      },
+    ];
+    render(
+      <FootnoteList
+        footnotes={threeFootnotes}
+        listId="t"
+        selectedFootnote={threeFootnotes[0]}
+        editingFootnoteIndex={1}
+        renderEditingFootnote={() => <input data-testid="editor-input" />}
+      />,
+    );
+    // Footnote 0 is the initial roving tabIndex target (via selectedFootnote).
+    const rows = screen.getAllByRole('option');
+    expect(rows[0]).toHaveAttribute('tabindex', '0');
+
+    const editorInput = screen.getByTestId('editor-input');
+    editorInput.focus();
+    await user.keyboard('{ArrowDown}');
+
+    // The keystroke originated inside the editing row's content, so it must not have driven list
+    // navigation: the roving tabIndex must stay put, and focus must stay in the editor input.
+    expect(rows[0]).toHaveAttribute('tabindex', '0');
+    expect(editorInput).toHaveFocus();
+  });
 });
