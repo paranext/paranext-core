@@ -862,7 +862,17 @@ export type FootnoteLayout = "horizontal" | "vertical";
 /**
  * Where the caret should land within a footnote's rendered text.
  *
- * - `'end'`: after the last character of the note text.
+ * The offset origin is the note BODY text as displayed by `FootnoteItem` in a row's
+ * `.textual-note-body` - i.e. it EXCLUDES the caller and the first top-level `fr`/`xo` reference
+ * run (`FootnoteItem` splits both of those into header divs, separately from the body; see
+ * `footnote-item.component.tsx`'s `footnoteCaller`/`targetRef`). A later `fr`/`xo` run (not the
+ * first top-level item) IS body text. A consumer that resolves this offset against a DIFFERENT text
+ * flattening - e.g. the editor's raw DOM, which also renders the caller and inserts structural
+ * spacing text nodes between top-level runs - must first align to this same origin (see
+ * `createNoteBodyTextNodeFilter` in `footnote-editor.utils.ts`).
+ *
+ * - `'end'`: after the last character of the note BODY text (not the raw editor DOM's last text node,
+ *   which may include trailing non-body text - see `createNoteBodyTextNodeFilter`).
  * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
  *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
  *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
@@ -1046,7 +1056,10 @@ export interface FootnoteEditorProps {
 	/**
 	 * When true, renders for in-place embedding (e.g. inside a footnotes pane row) instead of a
 	 * popover: fluid width (no width-lock), no Save/Cancel buttons, and edits apply live to the
-	 * parent editor (debounced) rather than on explicit save.
+	 * parent editor (debounced) rather than on explicit save. This mode is fixed for the component's
+	 * lifetime - toggling it on a mounted instance is unsupported (e.g. the popover width-lock effect
+	 * never clears a previously-locked `style.width` when `inline` flips to `true`, so the container
+	 * stays stuck at its old fixed width instead of going fluid).
 	 *
 	 * @default false
 	 */
@@ -1068,7 +1081,12 @@ export declare const INLINE_APPLY_DEBOUNCE_MS = 300;
 export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, initialCaretPosition, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
-/** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
+/**
+ * `FootnoteList` is a component that displays a list of USFM/JSX footnotes. Rows are read-only by
+ * default; a consumer can make one row editable in place at a time via `editingFootnoteIndex` +
+ * `renderEditingFootnote` (see those props), which swaps that row's display for a rendered editor
+ * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
+ */
 export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, onFootnoteEditRequested, editingFootnoteIndex, renderEditingFootnote, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type ScopeWithRange = Scope | "range";

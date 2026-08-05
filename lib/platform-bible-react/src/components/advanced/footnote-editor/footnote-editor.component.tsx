@@ -40,7 +40,11 @@ import { FootnoteCallerDropdown } from './footnote-caller-dropdown.component';
 import { FootnoteTypeDropdown } from './footnote-type-dropdown.component';
 import { FootnoteCallerType, FootnoteEditorLocalizedStrings } from './footnote-editor.types';
 import { MarkerMenu } from '../marker-menu.component';
-import { generateInlineMarkerMenuListItems, placeCaretAtPosition } from './footnote-editor.utils';
+import {
+  createNoteBodyTextNodeFilter,
+  generateInlineMarkerMenuListItems,
+  placeCaretAtPosition,
+} from './footnote-editor.utils';
 import { FootnoteCaretPosition } from '../footnotes/footnotes.types';
 
 /** Interface containing the types of the properties that are passed to the `FootnoteEditor` */
@@ -76,7 +80,10 @@ export interface FootnoteEditorProps {
   /**
    * When true, renders for in-place embedding (e.g. inside a footnotes pane row) instead of a
    * popover: fluid width (no width-lock), no Save/Cancel buttons, and edits apply live to the
-   * parent editor (debounced) rather than on explicit save.
+   * parent editor (debounced) rather than on explicit save. This mode is fixed for the component's
+   * lifetime - toggling it on a mounted instance is unsupported (e.g. the popover width-lock effect
+   * never clears a previously-locked `style.width` when `inline` flips to `true`, so the container
+   * stays stuck at its old fixed width instead of going fluid).
    *
    * @default false
    */
@@ -271,57 +278,6 @@ export default function FootnoteEditor({
     if (!showMarkersMenu) editorRef.current?.focus();
   }, [noteType, showMarkersMenu]);
 
-  // When the component loads, applies the note ops to the current editor, gets the note ref and caller
-  useEffect(() => {
-    let timeout: ReturnType<typeof setTimeout>;
-    let caretTimeout: ReturnType<typeof setTimeout>;
-    hasInitializedEditor.current = false;
-    setIsAtInitialState(true);
-    const noteOp = noteOps?.at(0);
-    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
-      const rawCaller = noteOp.insert.note?.caller;
-      // Parses the current caller
-      let parsedCallerType: FootnoteCallerType = 'custom';
-      if (rawCaller === GENERATOR_NOTE_CALLER) {
-        parsedCallerType = 'generated';
-      } else if (rawCaller === HIDDEN_NOTE_CALLER) {
-        parsedCallerType = 'hidden';
-      } else if (rawCaller) {
-        setCustomCaller(rawCaller);
-        setOriginalCustomCaller(rawCaller);
-      }
-      setCallerType(parsedCallerType);
-      setOriginalCallerType(parsedCallerType);
-      // Assigns note type
-      setNoteType(noteOp.insert.note?.style ?? 'f');
-      timeout = setTimeout(() => {
-        // Inserts the note node to be edited as an delta operation
-        editorRef.current?.applyUpdate([noteOp]);
-        const caretPosition = initialCaretPositionRef.current;
-        if (caretPosition !== undefined) {
-          // Let the editor render the applied note before measuring its DOM
-          caretTimeout = setTimeout(() => {
-            const editorInput =
-              editorParentRef.current?.querySelector<HTMLElement>('.editor-input') ?? undefined;
-            if (editorInput) {
-              editorRef.current?.focus();
-              placeCaretAtPosition(editorInput, caretPosition);
-            }
-          }, 0);
-        }
-      }, 0);
-    }
-
-    return () => {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
-      if (caretTimeout) {
-        clearTimeout(caretTimeout);
-      }
-    };
-  }, [noteOps]);
-
   /**
    * Gets the current note op from the editor, applies the given caller, calls onChange, and
    * optionally applies the change to the parent editor via replaceEmbedUpdate.
@@ -377,6 +333,10 @@ export default function FootnoteEditor({
     pendingApplyTimeoutRef.current = undefined;
   }, []);
 
+  // Declared BEFORE the load effect below (which calls it from its cleanup) so it can be listed
+  // in that effect's dependency array without a temporal-dead-zone reference. Its own dependency
+  // (cancelPendingApply) never changes identity, so flushPendingApply's identity is stable too;
+  // moving it earlier doesn't change when it's created.
   const flushPendingApply = useCallback(() => {
     if (pendingApplyTimeoutRef.current === undefined) return;
     cancelPendingApply();
@@ -392,6 +352,74 @@ export default function FootnoteEditor({
       saveCurrentNoteOpRef.current(ct, cc, true);
     }, INLINE_APPLY_DEBOUNCE_MS);
   }, [cancelPendingApply]);
+
+  // When the component loads, applies the note ops to the current editor, gets the note ref and caller
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    let caretTimeout: ReturnType<typeof setTimeout>;
+    hasInitializedEditor.current = false;
+    setIsAtInitialState(true);
+    const noteOp = noteOps?.at(0);
+    if (noteOp && isInsertEmbedOpOfType('note', noteOp)) {
+      const rawCaller = noteOp.insert.note?.caller;
+      // Parses the current caller
+      let parsedCallerType: FootnoteCallerType = 'custom';
+      if (rawCaller === GENERATOR_NOTE_CALLER) {
+        parsedCallerType = 'generated';
+      } else if (rawCaller === HIDDEN_NOTE_CALLER) {
+        parsedCallerType = 'hidden';
+      } else if (rawCaller) {
+        setCustomCaller(rawCaller);
+        setOriginalCustomCaller(rawCaller);
+      }
+      setCallerType(parsedCallerType);
+      setOriginalCallerType(parsedCallerType);
+      // Assigns note type
+      setNoteType(noteOp.insert.note?.style ?? 'f');
+      timeout = setTimeout(() => {
+        // Inserts the note node to be edited as an delta operation
+        editorRef.current?.applyUpdate([noteOp]);
+        const caretPosition = initialCaretPositionRef.current;
+        if (caretPosition !== undefined) {
+          // Let the editor render the applied note before measuring its DOM
+          caretTimeout = setTimeout(() => {
+            const editorInput =
+              editorParentRef.current?.querySelector<HTMLElement>('.editor-input') ?? undefined;
+            if (editorInput) {
+              editorRef.current?.focus();
+              // The captured position's offset origin is the note's displayed BODY text only
+              // (see FootnoteCaretPosition); the editor's flat text also includes the rendered
+              // caller and structural spacing, so align via createNoteBodyTextNodeFilter rather
+              // than walking the editor's raw text nodes.
+              placeCaretAtPosition(
+                editorInput,
+                caretPosition,
+                createNoteBodyTextNodeFilter(editorInput),
+              );
+            }
+          }, 0);
+        }
+      }, 0);
+    }
+
+    return () => {
+      // Flush FIRST, before clearing the load timers: a consumer can swap in a different note's
+      // noteOps (a new identity) while a debounced apply from the OUTGOING note is still
+      // pending. React runs every effect's cleanup (this one included) before any effect's setup
+      // for the same commit, so at this point noteKeyRef/callerStateRef (mirrored by their own,
+      // later-declared effects) still hold the OUTGOING note's key/caller, and editorRef still
+      // holds its rendered content (applying the NEW note is itself deferred to a setTimeout(0)
+      // in this same effect's setup, which hasn't run yet) - so the flush targets the note that's
+      // actually unloading, not the one about to load.
+      flushPendingApply();
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      if (caretTimeout) {
+        clearTimeout(caretTimeout);
+      }
+    };
+  }, [noteOps, flushPendingApply]);
 
   // Ending an inline editing session = unmounting this component; unsaved edits must land.
   // useLayoutEffect (not useEffect): on unmount, React detaches `editorRef` before passive-effect

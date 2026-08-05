@@ -19,7 +19,6 @@ import type { FootnoteEditorLocalizedStrings } from '@/components/advanced/footn
 const editorRefMock = {
   applyUpdate: vi.fn(),
   getNoteOps: vi.fn(),
-  replaceEmbedUpdate: vi.fn(),
   focus: vi.fn(),
   undo: vi.fn(),
   redo: vi.fn(),
@@ -400,6 +399,63 @@ describe('FootnoteEditor inline live-apply', () => {
 
     expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
     expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-race', 'latest edit');
+  });
+
+  // Review finding: the load effect's cleanup (which fires when a consumer swaps in a different
+  // note's noteOps on a MOUNTED inline editor) must flush a still-pending debounced apply before
+  // the reload - otherwise the pending timer would later fire against note B's just-loaded
+  // content, silently discarding note A's last edit.
+  it('flushes a pending apply for the OUTGOING note before an in-place noteOps reload', async () => {
+    vi.useFakeTimers();
+    const parentRef = { current: { replaceEmbedUpdate: vi.fn() } };
+    const noteOpsA = makeNoteOps('note A first');
+    const { rerender, props } = renderEditor({
+      inline: true,
+      // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      parentEditorRef: parentRef as never,
+      noteKey: 'key-A',
+      noteOps: noteOpsA,
+    });
+    await vi.runOnlyPendingTimersAsync(); // initial load of note A
+
+    primeCurrentOps('note A snapshot');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    });
+    // First onUsjChange after load only snapshots initial state - no save yet.
+    primeCurrentOps('note A latest edit');
+    latestEditorialProps.onUsjChange?.({
+      type: 'USJ',
+      version: '3.1',
+      content: [{ type: 'para' }],
+    }); // schedules the 300ms debounce for note A's edit
+
+    // Still inside the debounce window: the consumer swaps in note B (new noteOps identity, new
+    // noteKey) on this SAME mounted instance - the load effect reloads in place.
+    rerender(
+      <FootnoteEditor
+        {...props}
+        inline
+        // The test stub only implements replaceEmbedUpdate, not the full EditorRef surface.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        parentEditorRef={parentRef as never}
+        noteKey="key-B"
+        noteOps={makeNoteOps('note B first')}
+      />,
+    );
+
+    // The flush must have happened synchronously as part of the reload's cleanup - before note
+    // B's own load timers even run - targeting note A's key and its LATEST (not snapshot) edit.
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
+    expectAppliedTextTo(parentRef.current.replaceEmbedUpdate, 'key-A', 'note A latest edit');
+
+    // If the old pending timer had survived the reload uncancelled, it would fire again here -
+    // a redundant duplicate call (possibly against note B's content).
+    await vi.runAllTimersAsync();
+    expect(parentRef.current.replaceEmbedUpdate).toHaveBeenCalledTimes(1);
   });
 });
 

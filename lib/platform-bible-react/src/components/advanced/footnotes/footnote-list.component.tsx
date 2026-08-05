@@ -2,7 +2,7 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { getFormatCallerFunction } from 'platform-bible-utils';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
 import { getCaretPositionFromClick } from './footnote-caret.utils';
@@ -27,7 +27,12 @@ function getAdjacentFocusableIndex(
   return next === editingIndex ? from : next;
 }
 
-/** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
+/**
+ * `FootnoteList` is a component that displays a list of USFM/JSX footnotes. Rows are read-only by
+ * default; a consumer can make one row editable in place at a time via `editingFootnoteIndex` +
+ * `renderEditingFootnote` (see those props), which swaps that row's display for a rendered editor
+ * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
+ */
 export function FootnoteList({
   className,
   classNameForItems,
@@ -190,9 +195,8 @@ export function FootnoteList({
 
           if (isEditing) {
             return (
-              <>
+              <Fragment key={key}>
                 <li
-                  key={key}
                   data-state="editing"
                   className={cn(
                     'tw:gap-x-3 tw:gap-y-1 tw:p-2',
@@ -207,18 +211,17 @@ export function FootnoteList({
                   {renderEditingFootnote(footnote, idx)}
                 </li>
                 {separator}
-              </>
+              </Fragment>
             );
           }
           return (
-            <>
+            <Fragment key={key}>
               <li
                 ref={(el) => {
                   rowRefs.current[idx] = el;
                 }}
                 role="option"
                 aria-selected={isSelected}
-                key={key}
                 data-marker={footnote.marker}
                 data-state={isSelected ? 'selected' : undefined}
                 tabIndex={idx === focusedIndex ? 0 : -1}
@@ -248,7 +251,7 @@ export function FootnoteList({
                 />
               </li>
               {separator}
-            </>
+            </Fragment>
           );
         })}
       </ul>

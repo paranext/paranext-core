@@ -6,7 +6,17 @@ export type FootnoteLayout = 'horizontal' | 'vertical';
 /**
  * Where the caret should land within a footnote's rendered text.
  *
- * - `'end'`: after the last character of the note text.
+ * The offset origin is the note BODY text as displayed by `FootnoteItem` in a row's
+ * `.textual-note-body` - i.e. it EXCLUDES the caller and the first top-level `fr`/`xo` reference
+ * run (`FootnoteItem` splits both of those into header divs, separately from the body; see
+ * `footnote-item.component.tsx`'s `footnoteCaller`/`targetRef`). A later `fr`/`xo` run (not the
+ * first top-level item) IS body text. A consumer that resolves this offset against a DIFFERENT text
+ * flattening - e.g. the editor's raw DOM, which also renders the caller and inserts structural
+ * spacing text nodes between top-level runs - must first align to this same origin (see
+ * `createNoteBodyTextNodeFilter` in `footnote-editor.utils.ts`).
+ *
+ * - `'end'`: after the last character of the note BODY text (not the raw editor DOM's last text node,
+ *   which may include trailing non-body text - see `createNoteBodyTextNodeFilter`).
  * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
  *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
  *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
