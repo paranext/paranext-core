@@ -675,7 +675,10 @@ async function main() {
     // on all three platforms so the spike's OS columns stay comparable. Not intended to ship.
     newWindow.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return;
-      if (!input.control || !input.alt || input.key.toLowerCase() !== 'p') return;
+      // Match on `code` (the physical key) rather than `key` (the character produced). On macOS,
+      // Option is a character-composing modifier: Option+P reports `key === 'π'`, so a `key` match
+      // silently never fires there. `code` is unaffected by modifiers and keyboard layout.
+      if (!input.control || !input.alt || input.code !== 'KeyP') return;
       event.preventDefault();
       // The first window is the prospective parent, so it can never be its own child.
       if (isFirstWindow) {
