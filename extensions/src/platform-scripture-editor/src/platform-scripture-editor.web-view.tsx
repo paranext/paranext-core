@@ -123,6 +123,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
+import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import {
@@ -157,6 +158,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
+  // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
+  // gets its remove row localized through the `localizedStrings` this web view already resolves.
+  ...CHARACTER_MARKER_MENU_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)

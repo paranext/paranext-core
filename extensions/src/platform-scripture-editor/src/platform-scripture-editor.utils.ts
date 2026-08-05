@@ -1,4 +1,15 @@
-/* Small utility helpers for the platform-scripture-editor extension. */
+/*
+ * Small utility helpers for the platform-scripture-editor extension.
+ *
+ * `main.ts` imports from this module, so it loads in the extension host, where the module shim
+ * rejects any `require` other than `papi`. Keep runtime UI values out of here: importing a
+ * `lucide-react` icon or a `platform-bible-react` component as a *value* makes the whole extension
+ * fail to activate, so no scripture editor opens. Type-only imports are erased by the compiler and
+ * are fine. Helpers that need runtime UI values belong in a module the host never reaches — see
+ * `character-marker-menu.utils.ts`. Neither the build nor lint catches a violation, so
+ * `extension-host-import-boundary.test.ts` walks `main.ts`'s transitive value-import graph and fails
+ * on any module the host's `require` shim does not supply.
+ */
 
 import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
@@ -20,11 +31,11 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ScriptureRange } from 'platform-scripture-editor';
+import type { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { MarkerMenuItem } from 'platform-bible-react';
+import type { MutableRefObject } from 'react';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';

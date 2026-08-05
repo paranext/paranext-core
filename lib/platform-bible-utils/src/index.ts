@@ -52,7 +52,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers, isBlockMarker } from './markers/usfm-markers';
+export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -275,7 +275,8 @@ export type {
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
-export type { MarkerCategoryType as CategoryType, Marker } from './markers/usfm-marker.model';
-// MarkerType is a (string) enum used as a runtime value (e.g. comparing `marker.type ===
-// MarkerType.Paragraph`), so it must be a value export, not a type-only export.
-export { MarkerType } from './markers/usfm-marker.model';
+export type { Marker } from './markers/usfm-marker.model';
+// MarkerType and CategoryType are (string) enums used as runtime values (e.g. comparing
+// `marker.type === MarkerType.Paragraph` or `marker.category === CategoryType.DivisionMarks`), so
+// they must be value exports, not type-only exports.
+export { MarkerType, MarkerCategoryType as CategoryType } from './markers/usfm-marker.model';
