@@ -1026,6 +1026,41 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     expect(mockWarn).not.toHaveBeenCalled();
   });
 
+  it('fires a scoped sync for the S/R-fallback project it opens', async () => {
+    // Same rationale as the recents-path case: the picker knows exactly which project it just
+    // opened, so it (not some upstream guesser) is the right place to trigger a scoped sync.
+    const { papi, mockGetSetting, mockGetAllOpenWebViewDefinitions, mockSendCommand } =
+      createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSharedProjects') {
+        return {
+          proj1: {
+            id: 'proj1',
+            name: 'P1',
+            fullName: 'Project 1',
+            language: 'en',
+            editedStatus: 'edited',
+            lastSendReceiveDate: '2025-06-01T00:00:00Z',
+          },
+        };
+      }
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return 'opened-webview-id';
+      if (commandName === 'paratextBibleSendReceive.syncProjects') return undefined;
+      return undefined;
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj1',
+    ]);
+  });
+
   it('picks the editable project even when an Observer-only project has a newer lastSendReceiveDate', async () => {
     const {
       papi,
@@ -1717,6 +1752,7 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     setRecentProjects(['proj-recent']);
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      if (commandName === 'paratextBibleSendReceive.syncProjects') return undefined;
       throw new Error(`Unexpected command in test: ${commandName}`);
     });
 
@@ -1729,6 +1765,36 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     );
     expect(mockSendCommand).not.toHaveBeenCalledWith('paratextBibleSendReceive.getSharedProjects');
     expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-recent');
+  });
+
+  it('fires a scoped sync for the project opened from recents', async () => {
+    // The picker knows, with certainty, exactly which project just became Simple mode's active
+    // project — so it should sync exactly that one, the same way syncOnProjectSwitch does for an
+    // interactive project switch, rather than a caller upstream guessing from a candidate list.
+    const {
+      papi,
+      mockGetSetting,
+      mockGetAllOpenWebViewDefinitions,
+      mockSendCommand,
+      setRecentProjects,
+    } = createPickerMocks();
+    mockGetSetting.mockResolvedValue('simple');
+    mockGetAllOpenWebViewDefinitions.mockResolvedValue(
+      asWebViews([{ webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, projectId: undefined }]),
+    );
+    setRecentProjects(['proj-recent']);
+    mockSendCommand.mockImplementation(async (commandName: string) => {
+      if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      if (commandName === 'paratextBibleSendReceive.syncProjects') return undefined;
+      throw new Error(`Unexpected command in test: ${commandName}`);
+    });
+
+    const outcome = await openDefaultActiveProjectIfApplicable(papi);
+
+    expect(outcome).toBe('filled');
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-recent',
+    ]);
   });
 
   it('tries each recent project in order and opens the first one that succeeds', async () => {
@@ -1750,13 +1816,16 @@ describe('openDefaultActiveProjectIfApplicable', () => {
         if (projectId === 'proj-gone') throw new Error('Project not found');
         return undefined;
       }
+      if (commandName === 'paratextBibleSendReceive.syncProjects') return undefined;
       throw new Error(`Unexpected command in test: ${commandName}`);
     });
 
     const outcome = await openDefaultActiveProjectIfApplicable(papi);
 
     expect(outcome).toBe('filled');
-    expect(mockSendCommand).toHaveBeenCalledTimes(2);
+    // Two openScriptureEditor attempts (proj-gone fails, proj-alive succeeds) plus one scoped sync
+    // for the project that actually opened.
+    expect(mockSendCommand).toHaveBeenCalledTimes(3);
     expect(mockSendCommand).toHaveBeenCalledWith(
       'platformScriptureEditor.openScriptureEditor',
       'proj-gone',
@@ -1862,6 +1931,7 @@ describe('openDefaultActiveProjectIfApplicable', () => {
     setRecentProjects(['proj-recent']);
     mockSendCommand.mockImplementation(async (commandName: string) => {
       if (commandName === 'platformScriptureEditor.openScriptureEditor') return undefined;
+      if (commandName === 'paratextBibleSendReceive.syncProjects') return undefined;
       throw new Error(`Unexpected command in test: ${commandName}`);
     });
     mockRecordProjectOpened.mockRejectedValue(new Error('Storage write failed'));
