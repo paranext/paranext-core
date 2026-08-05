@@ -952,16 +952,11 @@ For more thorough invariant verification with random input generation, see [Prop
 
 ## Test Categorization
 
-Test categorization enables fast feedback during development by running subsets of tests based on speed requirements.
+Test categorization enables fast feedback during development: run the subset of tests that covers what you just changed instead of the whole suite.
 
 ### Categories
 
-| Category        | Time Budget | When to Run     | Scope               |
-| --------------- | ----------- | --------------- | ------------------- |
-| **Smoke**       | < 10s       | After each edit | Core functionality  |
-| **Critical**    | < 60s       | Every 3–5 edits | Feature tests       |
-| **Full**        | < 5 min     | Before commit   | Complete suite      |
-| **Integration** | No limit    | CI only         | Cross-process tests |
+C# categories describe **what a test verifies**, not a speed tier. The ones that exist in `c-sharp-tests/` are `Contract` (API/behavior contracts — the bulk of the suite), `Acceptance`, `GoldenMaster`, `Integration`, `Critical`, `Invariant`, `Regression`, `EdgeCase`, `Infrastructure`, `ErrorPath`, and `DiskVerification`. There is no `Smoke`, `Full`, `Unit`, `Fast`, or `Slow` category — confirm a name with `git grep '\[Category(' c-sharp-tests/` before filtering on it. `.claude/skills/test-runner/categories.md` documents what each category covers and the full filter syntax; during TDD the useful order is `Contract`, then `Integration`, then `Acceptance`, then the whole suite.
 
 ### Tagging Tests
 
@@ -969,7 +964,7 @@ Test categorization enables fast feedback during development by running subsets 
 
 ```csharp
 [Test]
-[Category("Smoke")]
+[Category("Contract")]
 public void BasicOperation_Works() { }
 
 [Test]
@@ -990,11 +985,11 @@ describe.concurrent('Smoke tests', () => {
 ### Running by Category
 
 ```bash
-# C# — run only smoke tests
-dotnet test --filter "Category=Smoke"
+# C# — run one category (there is no root solution, so name the test project)
+dotnet test c-sharp-tests/ --filter "Category=Critical"
 
 # TypeScript — run a specific test name pattern
-npm test -- --testNamePattern="Smoke"
+npm run test:core -- --run -t "Smoke"
 ```
 
 ---
