@@ -144,9 +144,32 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
-    const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+    // Retry until at least one isEditable=false project appears — mirrors the reasoning in
+    // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
+    // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capping
+    // at 5 attempts (each with a 500 ms back-off) avoids blocking forever during tests or when the
+    // data provider is genuinely absent.
+    let allMetadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platform.base'],
     });
+    const MAX_RETRIES = 5;
+    for (
+      let attempt = 0;
+      attempt < MAX_RETRIES && !allMetadata.some((m) => m.isEditable === false);
+      attempt++
+    ) {
+      // eslint-disable-next-line no-await-in-loop
+      await wait(500);
+      // eslint-disable-next-line no-await-in-loop
+      allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platform.base'],
+      });
+    }
+
+    logger.warn(
+      `getLocalNonDblResources: ${allMetadata.length} total projects, ` +
+        `${allMetadata.filter((m) => m.isEditable === false).length} with isEditable=false`,
+    );
 
     // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
     // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
@@ -159,6 +182,10 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
             (r.projectId !== '' && r.projectId === m.id) ||
             m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase()),
         ),
+    );
+
+    logger.warn(
+      `getLocalNonDblResources: ${nonDblMetadata.length} non-DBL resources (${dblEntries.length} DBL entries checked): ${nonDblMetadata.map((m) => m.id).join(', ')}`,
     );
 
     // Use name/fullName/language from the project metadata directly — the C# factory populates
