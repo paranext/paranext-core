@@ -12,7 +12,7 @@ import { pickBestSetupLanguage } from './pick-best-setup-language';
 export type FirstRunStatus =
   | { kind: 'loading' }
   | { kind: 'app' }
-  | { kind: 'wizard'; step: FirstRunStep }
+  | { kind: 'wizard'; step: FirstRunStep; allowContinueWithoutRegistration?: boolean }
   | { kind: 'error' };
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
@@ -32,6 +32,10 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
+
+// Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
+// startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
+let backgroundRecheckStarted = false;
 
 function readBooleanFlag(key: string): boolean {
   try {
@@ -210,6 +214,10 @@ async function resolveInternal(): Promise<void> {
         }
       }
       setStatus({ kind: 'app' });
+      // Completed Simple-mode user: re-check registration in the background (not awaited) so a
+      // registration that has since become invalid can re-raise the wizard without regressing
+      // startup latency. Simple-mode is guaranteed here (non-simple returned early above).
+      startBackgroundRegistrationRecheck();
       return;
     }
 
@@ -282,6 +290,47 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
+ * For an already-onboarded Simple-mode user, re-check registration validity in the background —
+ * never awaited, never blocks startup. Only a definitive `'invalid'` raises the wizard at the
+ * `identify` step so the user can re-register; a down/slow backend resolves to `'unknown'` and is
+ * ignored, so an outage never re-onboards an established user (the key safety property). Honors
+ * `platform.showRegistrationReminderOnStartup` (default `true`): when explicitly `false`, does
+ * nothing. Runs at most once per startup and swallows all its own errors so it can never block or
+ * crash startup.
+ */
+export async function startBackgroundRegistrationRecheck(): Promise<void> {
+  if (backgroundRecheckStarted) return;
+  backgroundRecheckStarted = true;
+  try {
+    let reminderEnabled = true;
+    try {
+      const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
+      // Only an explicit `false` suppresses; a missing/errored/default value keeps showing.
+      reminderEnabled = !(!isPlatformError(value) && value === false);
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
+      );
+    }
+    if (!reminderEnabled) return;
+    // Mirror the fresh-user guard: the Identify step sets JUST_REGISTERED_KEY immediately before
+    // platform.restart(). The completed-user branch of resolveInternal returns before the fresh-user
+    // path that would otherwise consume it, so consume it here — a transient 'invalid' on the launch
+    // right after a re-register is almost certainly a backend fluke, not a reason to re-nag.
+    const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
+    if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
+    const validity = await resolveRegistrationValidity();
+    // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
+    if (validity !== 'invalid') return;
+    // Suppress a single post-re-register transient 'invalid'; a still-invalid next launch re-raises.
+    if (justRegistered) return;
+    setStatus({ kind: 'wizard', step: 'identify', allowContinueWithoutRegistration: true });
+  } catch (e) {
+    logger.warn(`Background registration re-check failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
  * Finish the wizard: persist completion, clear the active marker, reveal the app.
  *
  * @param options.skippedStep - The step that was skipped to end the wizard early (e.g.
@@ -342,5 +391,6 @@ export function resetFirstRunStore(): void {
   status = computeInitialStatus();
   resolvePromise = undefined;
   resolving = false;
+  backgroundRecheckStarted = false;
   listeners.clear();
 }
