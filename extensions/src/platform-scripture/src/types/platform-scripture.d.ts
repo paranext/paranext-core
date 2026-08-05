@@ -2458,13 +2458,15 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Find / Replace UI for a project.
+     * Open the Find / Replace UI for a project. Reuses an existing find web view rather than
+     * opening a new one when possible, reloading it if the resolved project differs from the
+     * existing web view's project, and brings the web view to front.
      *
-     * @param editorWebViewId Id of the triggering editor's web view — not a project id. When
-     *   invoked from an editor's menu, the Find UI inherits that editor's project and scroll group,
-     *   resolved from it internally via `papi.webViews.getOpenWebViewDefinition`.
-     * @returns Id of the find web view, or `undefined` if no editor web view id was provided or the
-     *   web view has no project (nothing is opened in that case).
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The project
+     *   and scroll group for the Find / Replace UI are resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the find web view (existing or newly opened), or `undefined` if no editor web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,

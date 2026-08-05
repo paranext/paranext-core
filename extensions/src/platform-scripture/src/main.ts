@@ -593,8 +593,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened markers checklist web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened markers checklist web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -642,8 +642,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The id of the opened Manage Books web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened Manage Books web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
