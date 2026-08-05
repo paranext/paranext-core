@@ -1,7 +1,11 @@
-/* Based on https://github.com/eten-tech-foundation/scripture-editors/packages/platform/src/usj-nodes.css
-   (originally synced from commit ba0e846b3f1). Local additions: li/lim --para-indent and
-   --verse-text-start entries in .psc-gutter-markers.text-spacing, mirroring scripture-editors
-   commit 846ad99 (PT-4021 \li/\lim gutter overlap fix). */
+/* Based on scripture-editors' packages/platform/src/usj-nodes.css:
+   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   (originally synced from commit ba0e846b3f1:
+   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1).
+   Local additions: li/lim --para-indent and --verse-text-start entries in
+   .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
+   (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
+   \li/\lim gutter overlap fix). */
 
 /* stylelint-disable */
 

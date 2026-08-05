@@ -14,122 +14,134 @@ const dir = dirname(fileURLToPath(import.meta.url));
 // Strip CSS comments so their text can't be mistaken for selectors or declarations.
 const css = readFileSync(resolve(dir, '_usj-nodes.scss'), 'utf-8').replace(/\/\*[\s\S]*?\*\//g, '');
 
+// The stylesheet is parsed as a flat list of `selector { declarations }` blocks. This regex cannot
+// reliably read a rule nested inside another block (an @media query, @keyframes, or SCSS nesting),
+// so a gutter rule wrapped in one could be mis-parsed and its markers silently uncovered.
+// `nestingProblems()` catches that by brace depth before the coverage checks run.
+const RULE_BLOCK = /([^{}]+)\{([^}]+)\}/g;
+const blocks = [...css.matchAll(RULE_BLOCK)].map(([, selectors, declarations]) => ({
+  selectors,
+  declarations,
+}));
+
+/** Brace nesting depth at a character offset: 1 inside a top-level rule, >1 inside a nested one. */
+function braceDepthAt(index: number): number {
+  const before = css.slice(0, index);
+  return (before.match(/\{/g) ?? []).length - (before.match(/\}/g) ?? []).length;
+}
+
 /**
- * Collects all `.usfm_<marker>` names that appear in a `.psc-gutter-markers` rule block that SETS
- * `property` (a `${property}:` declaration, not a `var(--property)` read).
+ * Reports `property` setters that sit deeper than one block — i.e. nested inside an at-rule/SCSS
+ * block, where a browser would scope them away but the flat block parser below cannot reliably see
+ * them. A setter declaration normally lives at depth 1 (inside its own rule); depth >1 means a rule
+ * was nested and the coverage checks can no longer be trusted. (Unrelated pre-existing media-query
+ * and keyframes at-rules don't contain these setters, so they don't trip this.)
  */
-function getGutterMarkers(property: string): Set<string> {
-  const markers = new Set<string>();
-  const ruleBlock = /([^{}]+)\{([^}]+)\}/g;
-  for (let match = ruleBlock.exec(css); match; match = ruleBlock.exec(css)) {
-    const [, selectors, declarations] = match;
-    // `${property}:` matches a rule that SETS the custom property, not one that only reads it
-    // via var(--property).
-    if (selectors.includes('psc-gutter-markers') && declarations.includes(`${property}:`)) {
-      const markerName = /\.usfm_([a-z0-9]+)/g;
-      for (let m = markerName.exec(selectors); m; m = markerName.exec(selectors)) markers.add(m[1]);
-    }
-  }
-  return markers;
+function nestingProblems(property: string): string[] {
+  const setter = new RegExp(`${property}\\s*:`, 'g');
+  const nested = [...css.matchAll(setter)].filter((match) => braceDepthAt(match.index ?? 0) > 1);
+  return nested.length === 0
+    ? []
+    : [
+        `${property}: ${nested.length} setter(s) are nested inside an @media/@keyframes/SCSS ` +
+          `block; the flat parser below cannot reliably see them. Update the parser.`,
+      ];
+}
+
+/**
+ * Maps each `.usfm_<marker>` to the value it is given for `property`, but only within a rule whose
+ * selector carries BOTH `.psc-gutter-markers` and `.text-spacing` — the exact scope where the real
+ * indent overrides live. A `${property}:` setter (not a `var(--property)` read) is required.
+ * Requiring `.text-spacing` means a marker whose setter was moved out of that group reads as
+ * uncovered rather than silently passing.
+ */
+function getGutterMarkerValues(property: string): Map<string, string> {
+  const declaration = new RegExp(`${property}\\s*:\\s*([^;]+)`);
+  const values = new Map<string, string>();
+  blocks
+    .filter(
+      (block) =>
+        block.selectors.includes('psc-gutter-markers') && block.selectors.includes('text-spacing'),
+    )
+    .forEach((block) => {
+      const match = declaration.exec(block.declarations);
+      if (!match) return;
+      const value = match[1].trim();
+      [...block.selectors.matchAll(/\.usfm_([a-z0-9]+)/g)].forEach(([, marker]) =>
+        values.set(marker, value),
+      );
+    });
+  return values;
+}
+
+/** Flattens a `value -> markers` grouping into a `marker -> value` lookup. */
+function markersByValue(grouped: Record<string, string[]>): Map<string, string> {
+  const map = new Map<string, string>();
+  Object.entries(grouped).forEach(([value, markers]) =>
+    markers.forEach((marker) => map.set(marker, value)),
+  );
+  return map;
+}
+
+/** Reports each expected marker whose actual `property` value is missing or wrong. */
+function valueMismatches(property: string, expected: Map<string, string>): string[] {
+  const actual = getGutterMarkerValues(property);
+  return [...expected]
+    .filter(([marker, value]) => actual.get(marker) !== value)
+    .map(
+      ([marker, value]) =>
+        `.usfm_${marker}: expected ${value}, got ${actual.get(marker) ?? 'none'}`,
+    );
 }
 
 // USFM standard LeftMargin values -> vw (formula: inches x 20).
 // Source: https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty
-// Every marker here must have a --para-indent entry in .psc-gutter-markers.text-spacing.
-const PARA_INDENT_MARKERS = new Set([
-  // 0.25" -> 5vw
-  'ipi',
-  'imi',
-  'pmo',
-  'pm',
-  'pmc',
-  'pmr',
-  'pi',
-  'pi1',
-  'mi',
-  // 0.5" -> 10vw
-  'io',
-  'io1',
-  'ili',
-  'ili1',
-  'li',
-  'li1',
-  'pi2',
-  // 0.75" -> 15vw
-  'q',
-  'q1',
-  'q2',
-  'q3',
-  'q4',
-  'io2',
-  'ili2',
-  'li2',
-  'lim',
-  'lim1',
-  'pi3',
-  // 1.0" -> 20vw
-  'qm',
-  'qm1',
-  'io3',
-  'li3',
-  'lim2',
-  // 1.25" -> 25vw
-  'io4',
-  'li4',
-  'lim3',
-  // 1.5" -> 30vw
-  'lim4',
-]);
+// Every marker must set --para-indent to the listed value in .psc-gutter-markers.text-spacing.
+const EXPECTED_PARA_INDENT = markersByValue({
+  '5vw': ['ipi', 'imi', 'pmo', 'pm', 'pmc', 'pmr', 'pi', 'pi1', 'mi'], // 0.25"
+  '10vw': ['io', 'io1', 'ili', 'ili1', 'li', 'li1', 'pi2'], // 0.5"
+  '15vw': ['q', 'q1', 'q2', 'q3', 'q4', 'io2', 'ili2', 'li2', 'lim', 'lim1', 'pi3'], // 0.75"
+  '20vw': ['qm', 'qm1', 'io3', 'li3', 'lim2'], // 1.0"
+  '25vw': ['io4', 'li4', 'lim3'], // 1.25"
+  '30vw': ['lim4'], // 1.5"
+});
 
 // Markers with a negative FirstLineIndent (hanging indent) -> --verse-text-start.
 // Source: https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty
-const VERSE_TEXT_START_MARKERS = new Set([
-  'q',
-  'q1',
-  'q2',
-  'q3',
-  'q4',
-  'qm',
-  'qm1',
-  'qm2',
-  'qm3',
-  'iq',
-  'iq1',
-  'iq2',
-  'iq3',
-  'ili',
-  'ili1',
-  'ili2',
-  'li',
-  'li1',
-  'li2',
-  'li3',
-  'li4',
-  'lim',
-  'lim1',
-  'lim2',
-  'lim3',
-  'lim4',
-]);
+const EXPECTED_VERSE_TEXT_START = markersByValue({
+  '-15vw': ['qm', 'qm1', 'iq', 'iq1'],
+  '-10vw': ['q', 'q1', 'qm2', 'iq2'],
+  '-7.5vw': [
+    'q2',
+    'ili',
+    'ili1',
+    'ili2',
+    'li',
+    'li1',
+    'li2',
+    'li3',
+    'li4',
+    'lim',
+    'lim1',
+    'lim2',
+    'lim3',
+    'lim4',
+  ],
+  '-5vw': ['q3', 'qm3', 'iq3'],
+  '-2.5vw': ['q4'],
+});
 
 describe('_usj-nodes.scss .psc-gutter-markers.text-spacing coverage', () => {
-  it('every USFM indented marker has a --para-indent entry', () => {
-    const covered = getGutterMarkers('--para-indent');
-    // Guard against a silently-broken parser (no matches -> every marker would look "missing").
-    expect(covered.size).toBeGreaterThan(0);
-    // Any USFM indented marker lacking a --para-indent entry in .psc-gutter-markers.text-spacing;
-    // the toEqual diff names them on failure.
-    const missing = [...PARA_INDENT_MARKERS].filter((m) => !covered.has(m));
-    expect(missing).toEqual([]);
+  it('every USFM indented marker sets the expected --para-indent', () => {
+    // Fails loudly if a gutter rule was nested where the flat parser can't see it.
+    expect(nestingProblems('--para-indent')).toEqual([]);
+    // Names each marker whose --para-indent is missing or wrong (an empty actual map surfaces here
+    // too, since every expected marker then reports "got none").
+    expect(valueMismatches('--para-indent', EXPECTED_PARA_INDENT)).toEqual([]);
   });
 
-  it('every hanging-indent marker has a --verse-text-start entry', () => {
-    const covered = getGutterMarkers('--verse-text-start');
-    // Guard against a silently-broken parser (no matches -> every marker would look "missing").
-    expect(covered.size).toBeGreaterThan(0);
-    // Any hanging-indent marker lacking a --verse-text-start entry in .psc-gutter-markers.text-spacing;
-    // the toEqual diff names them on failure.
-    const missing = [...VERSE_TEXT_START_MARKERS].filter((m) => !covered.has(m));
-    expect(missing).toEqual([]);
+  it('every hanging-indent marker sets the expected --verse-text-start', () => {
+    expect(nestingProblems('--verse-text-start')).toEqual([]);
+    expect(valueMismatches('--verse-text-start', EXPECTED_VERSE_TEXT_START)).toEqual([]);
   });
 });
