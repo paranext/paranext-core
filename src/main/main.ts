@@ -667,6 +667,28 @@ async function main() {
       }
     });
 
+    // PT-4276 spike (Q3): Ctrl+Alt+P (Control-Option-P on macOS) toggles this window between
+    // `parent:`-owned and independent, which is what PT9's pin does
+    // (ParatextFloatWindow.cs:63: `Owner = value ? mainForm : null`). Bound per window rather than
+    // through globalShortcut so the key is not captured while the app is unfocused, and without a
+    // menu item so no LocalizeKey/localization entry is needed for a throwaway harness. Same chord
+    // on all three platforms so the spike's OS columns stay comparable. Not intended to ship.
+    newWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return;
+      if (!input.control || !input.alt || input.key.toLowerCase() !== 'p') return;
+      event.preventDefault();
+      // The first window is the prospective parent, so it can never be its own child.
+      if (isFirstWindow) {
+        logger.info('PT-4276 spike: ignoring parent toggle on the first window');
+        return;
+      }
+      const isOwned = !!newWindow.getParentWindow();
+      // Electron clears ownership only on null here; undefined is not accepted by setParentWindow
+      // eslint-disable-next-line no-null/no-null
+      newWindow.setParentWindow(isOwned ? null : windows[0]);
+      logger.info(`PT-4276 spike: window ${windowId} is now ${isOwned ? 'independent' : 'owned'}`);
+    });
+
     /**
      * Unsubscribers to run when the window closes. The app doesn't shut down when the window closes
      * on Mac, so we need to unsubscribe some things
