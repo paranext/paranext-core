@@ -1330,8 +1330,11 @@ npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp
 npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
 npx playwright show-report e2e-tests/playwright-report
 
-# Standalone mode (CI — launches own Electron, port 8876 must be free)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright.config.ts --project=development --reporter=list
+# Standalone mode (launches its own Electron, port 8876 must be free). Each project in
+# playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
+# tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
+# `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
+npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
 ```
 
 ### Failure Analysis
