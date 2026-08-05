@@ -1,4 +1,4 @@
-import type { InternetSettings } from 'paratext-registration';
+import type { InternetSettings, IInternetSettingsDataProvider } from 'paratext-registration';
 import { Alert, AlertDescription, Button } from 'platform-bible-react';
 import {
   DeveloperSection,
@@ -8,6 +8,7 @@ import {
 } from 'platform-bible-react/experimental';
 import { useData, useDataProvider, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useDelayedFlag } from '@renderer/hooks/use-delayed-flag.hook';
+import { logger } from '@shared/services/logger.service';
 import {
   getErrorMessage,
   isPlatformError,
@@ -31,8 +32,10 @@ const STRING_KEYS: LocalizeKey[] = [
 ];
 
 // `useData`'s defaultValue is typed as the data type's getData (InternetSettings), so it cannot be
-// undefined. This value is never shown to the user — the spinner covers the load. Mirrors the
-// standalone dialog's default.
+// undefined. This value is never shown to the user — the spinner covers the load. Intentionally
+// duplicated in the standalone dialog (internet-settings.web-view.tsx): the two consumers sit on
+// opposite sides of the core/extension boundary and `paratext-registration` is a types-only module,
+// so there is no shared runtime module to hoist this into.
 const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
   permittedInternetUse: 'VpnRequired',
   selectedServer: 'Production',
@@ -89,7 +92,7 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
 }
 
 type LoadedProps = {
-  provider: NonNullable<ReturnType<typeof useDataProvider<typeof INTERNET_SETTINGS_DATA_PROVIDER>>>;
+  provider: IInternetSettingsDataProvider;
   localizedStrings: LanguageStrings;
   setCanProceed: FirstRunStepProps['setCanProceed'];
   onRetry: () => void;
@@ -118,10 +121,8 @@ function InternetSettingsLoaded({
   // Last value we successfully displayed, so a failed optimistic save can revert to it.
   const lastGood = useRef<InternetSettings | undefined>(undefined);
 
-  const showConnectingMessage = useDelayedFlag(
-    isLoading && !isPlatformError(value),
-    CONNECTING_MESSAGE_DELAY_MS,
-  );
+  // When loading, value is the default placeholder, never a PlatformError — so gate on isLoading alone.
+  const showConnectingMessage = useDelayedFlag(isLoading, CONNECTING_MESSAGE_DELAY_MS);
 
   useEffect(() => {
     isMounted.current = true;
@@ -130,23 +131,36 @@ function InternetSettingsLoaded({
     };
   }, []);
 
-  // Sync the local mirror from the provider value whenever it changes and no save is pending/failed.
+  // Sync the local mirror from the provider value. While loading (value is still the default) or
+  // while a save is pending/failed, handleChange and the loading render own the state — defer. Once
+  // a real value is in, enable Next; if the read is an error, keep Next disabled so the wizard can't
+  // advance past an unloaded step.
   useEffect(() => {
-    if (isPlatformError(value) || isSaving || saveError) return;
+    if (isLoading || isSaving || saveError) return;
+    if (isPlatformError(value)) {
+      setCanProceed?.(false);
+      return;
+    }
     setSettings(value);
     lastGood.current = value;
     setCanProceed?.(true);
-  }, [value, isSaving, saveError, setCanProceed]);
+  }, [value, isLoading, isSaving, saveError, setCanProceed]);
 
   const handleChange = useCallback(
     async (next: InternetSettings) => {
       if (isSaving) return;
+      if (!setData) {
+        // Defensive: InternetSettingsLoaded renders only once `provider` is defined, so `setData` is
+        // always defined here. Bail rather than reporting a save that never actually persisted.
+        logger.warn('Internet settings provider unavailable; ignoring selection change.');
+        return;
+      }
       setSettings(next); // optimistic
       setSaveError('');
       setIsSaving(true);
       setCanProceed?.(false);
       try {
-        await setData?.(next);
+        await setData(next);
         if (!isMounted.current) return;
         lastGood.current = next;
         setIsSaving(false);
