@@ -7,7 +7,7 @@
  * (see {@link WEB_VIEW_ID_COMMAND_NAMES}).
  */
 
-import { getTargetWindowId, getWindows } from '@main/services/window-state.service';
+import { getReadyWindowIds, getTargetWindowId } from '@main/services/window-state.service';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -47,20 +47,27 @@ const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Search all windows for the one whose scoped WebViewService knows the given web view id, the same
- * way `web-view-routing.service.ts` finds a web view's owning service. Returns `undefined` when no
- * window claims it (including when a window could not be reached — the caller falls back to the
- * focused window, which is what a web view id that no longer exists anywhere would want anyway).
+ * Search the windows that can answer for the one whose scoped WebViewService knows the given web
+ * view id, the same way `web-view-routing.service.ts` finds a web view's owning service — including
+ * how it treats a window that could not be asked. Returns `undefined` when every window answered
+ * and none claims the id; the caller then falls back to the focused window, which is what a web
+ * view id that no longer exists anywhere would want anyway.
+ *
+ * Only ready windows are asked: a window that has not registered its services cannot own a web
+ * view, and asking it stalls the call for the network service's whole registration retry.
  *
  * @param webViewId Web view id the call named
  * @param requestName Request being routed, for logging
+ * @throws If no window claimed the web view and some window could not be asked, since the owner may
+ *   be the window that did not answer
  */
 async function findWebViewOwnerWindowId(
   webViewId: WebViewId,
   requestName: string,
 ): Promise<number | undefined> {
+  let hadServiceErrors = false;
   const ownerWindowIds = await Promise.all(
-    getWindows().map(async ({ id }) => {
+    getReadyWindowIds().map(async (id) => {
       try {
         const service = await networkObjectService.get<WebViewServiceType>(
           `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${id}`,
@@ -71,11 +78,22 @@ async function findWebViewOwnerWindowId(
         logger.warn(
           `Failed to query web view ${webViewId} in window ${id} while routing ${requestName}: ${getErrorMessage(e)}`,
         );
+        hadServiceErrors = true;
         return undefined;
       }
     }),
   );
-  return ownerWindowIds.find((id) => id !== undefined);
+  const ownerWindowId = ownerWindowIds.find((id) => id !== undefined);
+  if (ownerWindowId !== undefined) return ownerWindowId;
+
+  // "Could not ask" is not "answered no". Falling back to the focused window here would run the
+  // call against whatever that window is showing instead of the web view it named.
+  if (hadServiceErrors)
+    throw new Error(
+      `Could not route ${requestName} for web view ${webViewId}: some windows were unreachable.`,
+    );
+
+  return undefined;
 }
 
 /**

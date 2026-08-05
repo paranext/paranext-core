@@ -4,7 +4,7 @@
  * multi-window support by ensuring that operations like openWebView execute in the correct window.
  */
 
-import { getTargetWindowId, getWindows } from '@main/services/window-state.service';
+import { getReadyWindowIds, getTargetWindowId } from '@main/services/window-state.service';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -43,51 +43,61 @@ async function getScopedWebViewService(windowId: number): Promise<WebViewService
 
 /** Get the scoped WebViewService for the currently focused window, throwing if none is available. */
 async function getTargetWebViewService(): Promise<WebViewServiceType> {
-  const targetId = getTargetWindowId();
-  if (targetId === undefined) throw new Error('No windows available to route WebViewService call');
-  const svc = await getScopedWebViewService(targetId);
-  if (!svc)
+  const targetWindowId = getTargetWindowId();
+  if (targetWindowId === undefined)
+    throw new Error('No windows available to route WebViewService call');
+  const webViewService = await getScopedWebViewService(targetWindowId);
+  if (!webViewService)
     throw new Error(
-      `WebViewService for window ${targetId} is not available. The renderer may not have started yet.`,
+      `WebViewService for window ${targetWindowId} is not available. The renderer may not have started yet.`,
     );
-  return svc;
+  return webViewService;
 }
 
-/** Get all window IDs from the tracked windows list. */
-function getAllWindowIds(): number[] {
-  return getWindows().map((w) => w.id);
-}
+/** The window that owns a web view, and the definition the ownership search already fetched */
+type WebViewOwner = { service: WebViewServiceType; definition: SavedWebViewDefinition };
 
 /**
- * Search all windows to find which one owns a given webview. Returns the scoped WebViewService for
- * the owning window, or undefined if not found. Throws if some windows were unreachable.
+ * Search the windows that can answer for the one that owns a given web view, returning its scoped
+ * WebViewService along with the definition the search fetched — callers that want the definition
+ * already have it here, and a second fetch would be another cross-process round trip that can come
+ * back with something different.
+ *
+ * Only ready windows are asked: a window that has not registered its services cannot own a web
+ * view, and asking it stalls the search for the network service's whole registration retry.
+ *
+ * Returns undefined when every window answered and none owns it.
+ *
+ * @throws If no window claimed the web view and some window could not be asked, since the owner may
+ *   be the window that did not answer
  */
-async function findOwnerService(
+async function findOwner(
   webViewId: WebViewId,
   operation: string,
-): Promise<WebViewServiceType | undefined> {
-  const windowIds = getAllWindowIds();
+): Promise<WebViewOwner | undefined> {
   let hadServiceErrors = false;
-  const ownerServices = await Promise.all(
-    windowIds.map(async (winId) => {
+  const owners = await Promise.all(
+    getReadyWindowIds().map(async (windowId) => {
       try {
-        const svc = await getScopedWebViewService(winId);
-        if (!svc) return undefined;
-        const def = await svc.getOpenWebViewDefinition(webViewId);
-        if (def) return svc;
+        const webViewService = await getScopedWebViewService(windowId);
+        if (!webViewService) return undefined;
+        const definition = await webViewService.getOpenWebViewDefinition(webViewId);
+        if (definition) return { service: webViewService, definition };
         return undefined;
       } catch (e) {
         logger.warn(
-          `Failed to query webview ${webViewId} in window ${winId} for ${operation}: ${getErrorMessage(e)}`,
+          `Failed to query webview ${webViewId} in window ${windowId} for ${operation}: ${getErrorMessage(e)}`,
         );
         hadServiceErrors = true;
         return undefined;
       }
     }),
   );
-  const ownerSvc = ownerServices.find((svc) => svc !== undefined);
-  if (ownerSvc) return ownerSvc;
+  const owner = owners.find((candidate) => candidate !== undefined);
+  if (owner) return owner;
 
+  // "Could not ask" is not "answered no": the window that failed may be the one holding this web
+  // view, and treating it as an unowned id sends the operation to the focused window instead
   if (hadServiceErrors)
     throw new Error(`Could not ${operation} webview ${webViewId}: some windows were unreachable.`);
 
@@ -103,12 +113,12 @@ async function openWebView(
 ): Promise<WebViewId | undefined> {
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
-    const ownerSvc = await findOwnerService(options.existingId, 'openWebView');
-    if (ownerSvc) return ownerSvc.openWebView(webViewType, layout, options);
+    const owner = await findOwner(options.existingId, 'openWebView');
+    if (owner) return owner.service.openWebView(webViewType, layout, options);
   }
   // No existingId or not found in any window — route to focused window
-  const svc = await getTargetWebViewService();
-  return svc.openWebView(webViewType, layout, options);
+  const webViewService = await getTargetWebViewService();
+  return webViewService.openWebView(webViewType, layout, options);
 }
 
 async function reloadWebView(
@@ -116,44 +126,77 @@ async function reloadWebView(
   webViewId: WebViewId,
   options?: ReloadWebViewOptions,
 ): Promise<WebViewId | undefined> {
-  const ownerSvc = await findOwnerService(webViewId, 'reload');
-  if (ownerSvc) return ownerSvc.reloadWebView(webViewType, webViewId, options);
+  const owner = await findOwner(webViewId, 'reload');
+  if (owner) return owner.service.reloadWebView(webViewType, webViewId, options);
 
   // Webview not found in any window — fall back to focused window (may be a new webview)
-  const svc = await getTargetWebViewService();
-  return svc.reloadWebView(webViewType, webViewId, options);
+  const webViewService = await getTargetWebViewService();
+  return webViewService.reloadWebView(webViewType, webViewId, options);
 }
 
 async function getOpenWebViewDefinition(
   webViewId: string,
 ): Promise<SavedWebViewDefinition | undefined> {
-  const ownerSvc = await findOwnerService(webViewId, 'getOpenWebViewDefinition');
-  if (ownerSvc) return ownerSvc.getOpenWebViewDefinition(webViewId);
-  return undefined;
+  return (await findOwner(webViewId, 'getOpenWebViewDefinition'))?.definition;
 }
 
+/** Everything the windows that answered have open, and the ready windows that did not answer */
+export type OpenWebViewDefinitionsByReachability = {
+  /** Open web view definitions merged from every window that answered */
+  definitions: SavedWebViewDefinition[];
+  /** Ready windows that failed to answer, so their web views are missing from `definitions` */
+  unreachableWindowIds: number[];
+};
+
 /**
- * Unlike the other proxy methods, this one fans out rather than routing: callers use it to seed
- * their picture of the whole WebView landscape, so restricting it to the focused window would make
- * every other window's tabs invisible. A window that fails to answer is logged and skipped — a
- * partial list is more useful here than an error, since the caller is building an initial snapshot
- * and the event stream will correct it.
+ * Gather what every window has open, keeping track of the ones that could not be asked.
+ *
+ * Unlike the other proxy methods, this fans out rather than routing: callers use it to seed their
+ * picture of the whole WebView landscape, so restricting it to the focused window would make every
+ * other window's tabs invisible.
+ *
+ * Exported for the callers that can do something sensible with an incomplete answer — the shutdown
+ * sync has one shot at this and no event stream to correct it later, so it syncs what it can find
+ * and says plainly that the coverage is partial. Everyone else should use the proxy's
+ * {@link getAllOpenWebViewDefinitions}, which refuses to answer at all rather than pass a partial
+ * list off as the whole picture.
  */
-async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
+export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<OpenWebViewDefinitionsByReachability> {
+  const unreachableWindowIds: number[] = [];
   const definitionsPerWindow = await Promise.all(
-    getAllWindowIds().map(async (winId) => {
+    getReadyWindowIds().map(async (windowId) => {
       try {
-        const svc = await getScopedWebViewService(winId);
-        return (await svc?.getAllOpenWebViewDefinitions()) ?? [];
+        const webViewService = await getScopedWebViewService(windowId);
+        return (await webViewService?.getAllOpenWebViewDefinitions()) ?? [];
       } catch (e) {
         logger.warn(
-          `Failed to get open webview definitions from window ${winId}: ${getErrorMessage(e)}`,
+          `Failed to get open webview definitions from window ${windowId}: ${getErrorMessage(e)}`,
         );
+        unreachableWindowIds.push(windowId);
         return [];
       }
     }),
   );
-  return definitionsPerWindow.flat();
+  return { definitions: definitionsPerWindow.flat(), unreachableWindowIds };
+}
+
+/**
+ * Every open web view across all windows.
+ *
+ * A window that fails to answer makes this throw rather than silently shrink the list: callers read
+ * it as the complete picture — deciding whether a tab already exists, which project is open — and a
+ * window that could not be asked is indistinguishable in the result from one with nothing open. A
+ * ready window failing is exceptional, so failing loudly is better than acting on tabs whose
+ * existence was never established.
+ */
+async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
+  const { definitions, unreachableWindowIds } =
+    await getAllOpenWebViewDefinitionsWithReachability();
+  if (unreachableWindowIds.length > 0)
+    throw new Error(
+      `Could not get open webview definitions: windows ${unreachableWindowIds.join(', ')} were unreachable.`,
+    );
+  return definitions;
 }
 
 /** @deprecated Alias for getOpenWebViewDefinition */
