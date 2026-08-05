@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 import { settingsService } from '@shared/services/settings.service';
 import * as networkService from '@shared/services/network.service';
-import { networkObjectService } from '@shared/services/network-object.service';
+import { getAllOpenWebViewDefinitionsWithReachability } from '@main/services/web-view-routing.service';
 import { logger } from '@shared/services/logger.service';
 import { performShutdownTasks } from './shutdown-tasks';
 
@@ -14,8 +14,8 @@ vi.mock('@shared/services/network.service', () => ({
   requestNoRetry: vi.fn(),
 }));
 
-vi.mock('@shared/services/network-object.service', () => ({
-  networkObjectService: { get: vi.fn() },
+vi.mock('@main/services/web-view-routing.service', () => ({
+  getAllOpenWebViewDefinitionsWithReachability: vi.fn(),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -26,17 +26,23 @@ vi.mock('@shared/services/logger.service', () => ({
 
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
-const mockNetworkObjectGet = vi.mocked(networkObjectService.get);
+const mockGetOpenWebViews = vi.mocked(getAllOpenWebViewDefinitionsWithReachability);
 const mockLoggerDebug = vi.mocked(logger.debug);
 const mockLoggerInfo = vi.mocked(logger.info);
 const mockLoggerWarn = vi.mocked(logger.warn);
 const mockLoggerError = vi.mocked(logger.error);
 
-function makeWebViewService(defs: object[]) {
-  return {
-    getAllOpenWebViewDefinitions: vi.fn().mockResolvedValue(defs),
-    onDidDispose: vi.fn(),
-  };
+/**
+ * What the WebView fan-out answers: the definitions the windows that answered reported, and the
+ * windows that could not be asked (whose editors are therefore missing from the list).
+ */
+function openWebViews(definitions: object[], unreachableWindowIds: number[] = []) {
+  // The fan-out's real definitions are `SavedWebViewDefinition`s; these fixtures carry only the
+  // three fields the shutdown selection reads
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { definitions, unreachableWindowIds } as Awaited<
+    ReturnType<typeof getAllOpenWebViewDefinitionsWithReachability>
+  >;
 }
 
 beforeEach(() => {
@@ -57,7 +63,7 @@ describe('performShutdownTasks', () => {
     expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('cancelSync'),
     );
-    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    expect(mockGetOpenWebViews).not.toHaveBeenCalled();
     // A reported "synced" is the only thing that produces the truthful "complete" log.
     expect(mockLoggerInfo).toHaveBeenCalledWith('Sync on shutdown complete');
   });
@@ -117,7 +123,7 @@ describe('performShutdownTasks', () => {
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(makeWebViewService([]));
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
     await performShutdownTasks();
     expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
     expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
@@ -127,8 +133,8 @@ describe('performShutdownTasks', () => {
 
   it('skips S/R when the only open Scripture Editor is read-only', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         {
           webViewType: 'platformScriptureEditor.react',
           state: { isReadOnly: true },
@@ -144,8 +150,8 @@ describe('performShutdownTasks', () => {
 
   it('calls sendReceiveProjects with the writable editor project id', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         {
           webViewType: 'platformScriptureEditor.react',
           state: { isReadOnly: false },
@@ -164,8 +170,8 @@ describe('performShutdownTasks', () => {
     mockSettingsGet.mockResolvedValue('simple');
     // The main-process WebView service proxy fans getAllOpenWebViewDefinitions out across every
     // window and merges the results, so this one list represents two windows' editors.
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         {
           webViewType: 'platformScriptureEditor.react',
           state: { isReadOnly: false },
@@ -193,8 +199,8 @@ describe('performShutdownTasks', () => {
 
   it('sends a project shared by two windows only once', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         {
           webViewType: 'platformScriptureEditor.react',
           state: { isReadOnly: false },
@@ -216,8 +222,8 @@ describe('performShutdownTasks', () => {
 
   it('ignores a writable editor with no project id', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
         {
           webViewType: 'platformScriptureEditor.react',
@@ -235,8 +241,8 @@ describe('performShutdownTasks', () => {
 
   it('skips S/R when every writable editor lacks a project id', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
       ]),
     );
@@ -246,9 +252,45 @@ describe('performShutdownTasks', () => {
     );
   });
 
+  it('warns that the sync covers only part of the app when a window could not be asked', async () => {
+    // This read happens once, at quit, with no event stream to correct it afterwards. A window that
+    // failed to answer looks exactly like one with nothing open, so the projects it was editing
+    // drop out of the sync silently — reporting that as a completed sync is the dangerous part.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews(
+        [
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'answered-project',
+          },
+        ],
+        [2],
+      ),
+    );
+    await performShutdownTasks();
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['answered-project'],
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('2'));
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('warns when the window that did not answer was the only one that could have had editors', async () => {
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([], [1]));
+    await performShutdownTasks();
+    expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+      expect.stringContaining('sendReceiveProjects'),
+    );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('1'));
+  });
+
   it('skips S/R when the WebView service is unavailable', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    mockNetworkObjectGet.mockRejectedValue(new Error('service unavailable'));
+    mockGetOpenWebViews.mockRejectedValue(new Error('service unavailable'));
     await performShutdownTasks();
     expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('sendReceiveProjects'),
@@ -259,8 +301,8 @@ describe('performShutdownTasks', () => {
     // Symmetric with startup: an unreadable mode must not fall through to Simple's open-editor S/R,
     // which could sync a project a Power user excluded from their schedule. Do nothing and warn.
     mockSettingsGet.mockRejectedValue(new Error('settings unavailable'));
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         {
           webViewType: 'platformScriptureEditor.react',
           state: { isReadOnly: false },
@@ -270,7 +312,7 @@ describe('performShutdownTasks', () => {
     );
     await performShutdownTasks();
     expect(mockRequestNoRetry).not.toHaveBeenCalled();
-    expect(mockNetworkObjectGet).not.toHaveBeenCalled();
+    expect(mockGetOpenWebViews).not.toHaveBeenCalled();
     expect(mockLoggerWarn).toHaveBeenCalledWith(
       expect.stringContaining('Could not read platform.interfaceMode'),
     );
@@ -281,8 +323,8 @@ describe('performShutdownTasks', () => {
     // A WRITABLE editor so the flow runs past the `if (!projectId) return` early return and into
     // performSimpleModeShutdownSync's unguarded region (an empty list would return early and never
     // exercise the outer catch — the whole point of this test).
-    mockNetworkObjectGet.mockResolvedValue(
-      makeWebViewService([
+    mockGetOpenWebViews.mockResolvedValue(
+      openWebViews([
         {
           webViewType: 'platformScriptureEditor.react',
           state: { isReadOnly: false },

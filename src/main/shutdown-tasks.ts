@@ -1,13 +1,9 @@
 import { AUTO_SYNC_MAX_DURATION_MS } from '@shared/data/platform.data';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
-import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
-import {
-  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  WebViewServiceType,
-} from '@shared/services/web-view.service-model';
+import { getAllOpenWebViewDefinitionsWithReachability } from '@main/services/web-view-routing.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import {
@@ -25,13 +21,21 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  *
  * - `synced`: the sync ran and completed (Simple: the S/R resolved; Power: the command returned
  *   `'synced'`).
+ * - `partial`: the sync ran and completed, but for only part of the app — a window did not report its
+ *   open editors, so whatever it was editing was never in the selection. Warned.
  * - `failed`: the sync ran but did not succeed (Power: the command returned `'failed'`). Warned.
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`).
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
  */
-type ShutdownSyncOutcome = 'synced' | 'failed' | 'skipped' | 'unreachable' | 'timed-out';
+type ShutdownSyncOutcome =
+  | 'synced'
+  | 'partial'
+  | 'failed'
+  | 'skipped'
+  | 'unreachable'
+  | 'timed-out';
 
 /**
  * How a {@link runBoundedShutdownSync} bounded wait settled, before the mode-specific caller maps it
@@ -110,11 +114,12 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   // S/R the project of every open writable Scripture Editor.
   // If only read-only Resource Viewers are open (no local changes possible), skip S/R.
   let projectIds: string[] = [];
+  /** Windows whose editors are missing from the selection below, so the sync cannot cover them */
+  let unreachableWindowIdsForSync: number[] = [];
   try {
-    const webViewService = await networkObjectService.get<WebViewServiceType>(
-      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-    );
-    const openDefs = await webViewService?.getAllOpenWebViewDefinitions();
+    const { definitions: openDefs, unreachableWindowIds } =
+      await getAllOpenWebViewDefinitionsWithReachability();
+    unreachableWindowIdsForSync = unreachableWindowIds;
     // Only genuine Simple mode reaches here — Power mode selects by schedule (see
     // performPowerModeShutdownSync) and an unreadable mode returns early above rather than falling
     // through. The main-process WebView service fans this call out across every open window and
@@ -123,13 +128,23 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     // edits unsynced. Deduplicate by project id, since two windows may have editors on the same
     // project and `sendReceiveProjects` should not be asked to sync it twice.
     const writableEditorProjectIds = openDefs
-      ?.filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly)
+      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly)
       .map((def) => def.projectId)
       .filter((id) => id !== undefined);
     projectIds = [...new Set(writableEditorProjectIds)];
   } catch {
     /* WebView service unavailable */
   }
+
+  // Said before the sync runs, and said even when nothing is left to sync: a window that could not
+  // report its open editors is indistinguishable from one with nothing open, so whatever it was
+  // editing is simply absent from the selection below. The sync goes ahead with the projects that
+  // did surface — some coverage beats none while the app is closing — but it is not the whole app,
+  // and "Sync on shutdown complete" must not be the last word on it.
+  if (unreachableWindowIdsForSync.length > 0)
+    logger.warn(
+      `Shutdown sync coverage is incomplete: windows ${unreachableWindowIdsForSync.join(', ')} did not report their open editors, so anything unsynced in them is not covered by this sync.`,
+    );
 
   if (projectIds.length === 0) return;
 
@@ -143,10 +158,12 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     ),
   );
   // Simple mode has no "skipped" state: reaching here means at least one writable project was
-  // selected, so a resolution is a completed S/R.
+  // selected, so a resolution is a completed S/R — of the projects that were found. A window that
+  // never answered keeps this from being reported as a clean, complete sync.
   let outcome: ShutdownSyncOutcome;
   if (settlement.status === 'timedOut') outcome = 'timed-out';
   else if (settlement.status === 'failed') outcome = 'unreachable';
+  else if (unreachableWindowIdsForSync.length > 0) outcome = 'partial';
   else outcome = 'synced';
   logShutdownSyncOutcome(outcome);
 }
@@ -198,6 +215,9 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
   switch (outcome) {
     case 'synced':
       logger.info('Sync on shutdown complete');
+      break;
+    case 'partial':
+      logger.warn('Sync on shutdown completed for only the projects that could be found');
       break;
     case 'failed':
       logger.warn('Sync on shutdown ran but reported failure');

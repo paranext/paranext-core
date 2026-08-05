@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
-import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
+import {
+  getAllOpenWebViewDefinitionsWithReachability,
+  startWebViewRoutingService,
+} from '@main/services/web-view-routing.service';
+import { getRegisteredProxy, withWindows } from '@main/services/__tests__/routing-proxy-test.util';
+import type { WebViewServiceType } from '@shared/services/web-view.service-model';
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
   getWindows: vi.fn(),
+  getReadyWindowIds: vi.fn(),
   networkObjectGet: vi.fn(),
   networkObjectSet: vi.fn(),
 }));
@@ -12,24 +18,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getWindows: mocks.getWindows,
+  getReadyWindowIds: mocks.getReadyWindowIds,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
 }));
 vi.mock('@shared/services/network.service', () => ({ getNetworkEvent: () => vi.fn() }));
-vi.mock('@shared/services/web-view.service-model', () => ({
-  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: 'webView:onDidCloseWebView',
-  EVENT_NAME_ON_DID_OPEN_WEB_VIEW: 'webView:onDidOpenWebView',
-  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: 'webView:onDidUpdateWebView',
-  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE: 'WebViewService',
-  getWebViewController: vi.fn(),
-}));
 
 /** Capture the proxy the service registers under the generic name */
 async function getProxy() {
-  mocks.networkObjectSet.mockResolvedValue(undefined);
-  await startWebViewRoutingService();
-  return mocks.networkObjectSet.mock.calls[0][1];
+  return getRegisteredProxy<WebViewServiceType>(mocks.networkObjectSet, startWebViewRoutingService);
 }
 
 /** A scoped per-window WebViewService whose web views are the given ids */
@@ -44,47 +42,68 @@ function windowService(openWebViewIds: string[]) {
   };
 }
 
-/** Wire windows 1..n, each serving the scoped service given for it */
-function withWindows(servicesByWindowId: Record<number, ReturnType<typeof windowService>>) {
-  const ids = Object.keys(servicesByWindowId).map(Number);
-  mocks.getWindows.mockReturnValue(ids.map((id) => ({ id })));
-  mocks.networkObjectGet.mockImplementation(async (name: string) => {
-    const windowId = Number(name.split('-').pop());
-    return servicesByWindowId[windowId];
-  });
-}
-
 describe('web view routing proxy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getWindows.mockReturnValue([]);
+    mocks.getReadyWindowIds.mockReturnValue([]);
   });
 
   test('gathers open web views from every window, not just the focused one', async () => {
-    withWindows({ 1: windowService(['a']), 2: windowService(['b', 'c']) });
+    withWindows(mocks, { 1: windowService(['a']), 2: windowService(['b', 'c']) });
     const proxy = await getProxy();
 
     const all = await proxy.getAllOpenWebViewDefinitions();
 
-    expect(all.map((d: { id: string }) => d.id).sort()).toEqual(['a', 'b', 'c']);
+    expect(all.map((definition) => definition.id).sort()).toEqual(['a', 'b', 'c']);
   });
 
-  test('returns the windows it could reach when one window fails, rather than failing entirely', async () => {
+  test('does not ask a window that has not registered its services yet', async () => {
+    // A window is tracked from the moment it is shown; asking it before its renderer registers
+    // stalls the whole fan-out for the network service's registration retry to learn nothing
+    const serving = windowService(['a']);
+    const starting = windowService([]);
+    withWindows(mocks, { 1: serving, 2: starting }, { unreadyWindowIds: [2] });
+    const proxy = await getProxy();
+
+    const all = await proxy.getAllOpenWebViewDefinitions();
+
+    expect(starting.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
+    expect(all.map((definition) => definition.id)).toEqual(['a']);
+  });
+
+  test('refuses to answer with a partial list when a ready window could not be asked', async () => {
+    // Callers treat this as the whole picture. A window that failed to answer is indistinguishable
+    // from one with nothing open, so quietly dropping it makes them act on tabs that do exist.
     const healthy = windowService(['a']);
     const broken = windowService([]);
     broken.getAllOpenWebViewDefinitions.mockRejectedValue(new Error('window went away'));
-    withWindows({ 1: healthy, 2: broken });
+    withWindows(mocks, { 1: healthy, 2: broken });
     const proxy = await getProxy();
 
-    const all = await proxy.getAllOpenWebViewDefinitions();
+    await expect(proxy.getAllOpenWebViewDefinitions()).rejects.toThrow('unreachable');
+  });
 
-    expect(all.map((d: { id: string }) => d.id)).toEqual(['a']);
+  test('reports which windows did not answer to callers that can act on a partial list', async () => {
+    // Shutdown has one shot at this and no event stream to correct it later, so it takes what it
+    // can get — but it has to know the answer is incomplete rather than reading it as "nothing open"
+    const healthy = windowService(['a']);
+    const broken = windowService([]);
+    broken.getAllOpenWebViewDefinitions.mockRejectedValue(new Error('window went away'));
+    withWindows(mocks, { 1: healthy, 2: broken });
+
+    const { definitions, unreachableWindowIds } =
+      await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions.map((definition) => definition.id)).toEqual(['a']);
+    expect(unreachableWindowIds).toEqual([2]);
   });
 
   test('reloads a web view in the window that actually owns it, not the focused one', async () => {
     const focused = windowService([]);
     const owner = windowService(['owned-view']);
-    withWindows({ 1: focused, 2: owner });
+    withWindows(mocks, { 1: focused, 2: owner });
     const proxy = await getProxy();
 
     await proxy.reloadWebView('someType', 'owned-view');
@@ -95,7 +114,7 @@ describe('web view routing proxy', () => {
 
   test('falls back to the focused window when no window owns the web view', async () => {
     const focused = windowService([]);
-    withWindows({ 1: focused, 2: windowService([]) });
+    withWindows(mocks, { 1: focused, 2: windowService([]) });
     const proxy = await getProxy();
 
     await proxy.reloadWebView('someType', 'unknown-view');
@@ -106,7 +125,7 @@ describe('web view routing proxy', () => {
   test('opens an existing web view in its owning window when given an existingId', async () => {
     const focused = windowService([]);
     const owner = windowService(['existing-view']);
-    withWindows({ 1: focused, 2: owner });
+    withWindows(mocks, { 1: focused, 2: owner });
     const proxy = await getProxy();
 
     await proxy.openWebView('someType', undefined, { existingId: 'existing-view' });
@@ -118,7 +137,7 @@ describe('web view routing proxy', () => {
   test('opens a brand new web view in the focused window', async () => {
     const focused = windowService([]);
     const other = windowService([]);
-    withWindows({ 1: focused, 2: other });
+    withWindows(mocks, { 1: focused, 2: other });
     const proxy = await getProxy();
 
     await proxy.openWebView('someType');
@@ -127,9 +146,34 @@ describe('web view routing proxy', () => {
     expect(other.openWebView).not.toHaveBeenCalled();
   });
 
+  test('asks the owning window for a definition once, and answers with what it already fetched', async () => {
+    // Finding the owner means fetching the definition, so fetching it again to return it is a
+    // second cross-process round trip for an answer already in hand — and the two can disagree
+    const owner = windowService(['owned-view']);
+    withWindows(mocks, { 1: windowService([]), 2: owner });
+    const proxy = await getProxy();
+
+    const definition = await proxy.getOpenWebViewDefinition('owned-view');
+
+    expect(definition?.id).toBe('owned-view');
+    expect(owner.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not ask a window that has not registered its services yet who owns a web view', async () => {
+    const focused = windowService([]);
+    const starting = windowService(['owned-view']);
+    withWindows(mocks, { 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+    const proxy = await getProxy();
+
+    await proxy.reloadWebView('someType', 'owned-view');
+
+    expect(starting.getOpenWebViewDefinition).not.toHaveBeenCalled();
+    expect(focused.reloadWebView).toHaveBeenCalled();
+  });
+
   test('refuses to route rather than guessing when no window is available', async () => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
-    mocks.getWindows.mockReturnValue([]);
+    withWindows(mocks, {});
     const proxy = await getProxy();
 
     await expect(proxy.openWebView('someType')).rejects.toThrow('No windows available');

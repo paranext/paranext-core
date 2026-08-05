@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import {
   addWindow,
+  getFocusedWindowId,
+  getReadyWindowIds,
   getTargetWindowId,
   getWindows,
+  isWindowReady,
+  markWindowNotReady,
   markWindowReady,
-  onDidChangeFocusedWindowId,
+  onDidChangeRoutingTarget,
   removeWindow,
   setFocusedWindowId,
 } from '@main/services/window-state.service';
@@ -56,7 +60,6 @@ describe('window state tracking', () => {
     setFocusedWindowId(1);
 
     removeWindow(only);
-    setFocusedWindowId(undefined);
 
     expect(getTargetWindowId()).toBeUndefined();
   });
@@ -88,10 +91,47 @@ describe('window state tracking', () => {
     expect(live.length).toBe(1);
   });
 
-  describe('focus change event', () => {
+  describe('focus', () => {
+    test('answers which window is focused, even when routing goes elsewhere', () => {
+      // Consumers that mean "the window the user is looking at" must not be handed the routing
+      // target, which deliberately prefers a window that can answer over the focused one
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+
+      setFocusedWindowId(2);
+
+      expect(getFocusedWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe(1);
+    });
+
+    test('reports no focused window when none has focus', () => {
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+
+      expect(getFocusedWindowId()).toBeUndefined();
+    });
+
+    test('forgets the focused window when it closes', () => {
+      const only = fakeWindow(1);
+      addWindow(only);
+      setFocusedWindowId(1);
+
+      removeWindow(only);
+
+      expect(getFocusedWindowId()).toBeUndefined();
+    });
+  });
+
+  describe('routing target change event', () => {
     test('announces the window that took focus', () => {
       const heard: (number | undefined)[] = [];
-      const unsubscribe = onDidChangeFocusedWindowId((windowId) => heard.push(windowId));
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      addWindow(fakeWindow(3));
+      markWindowReady(3);
+      setFocusedWindowId(2);
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       setFocusedWindowId(3);
       unsubscribe();
@@ -103,8 +143,9 @@ describe('window state tracking', () => {
       // Electron re-fires `focus` in situations that do not change which window is focused; routing
       // proxies re-point their update relay on every emission, so a repeat is real work for nothing
       const heard: (number | undefined)[] = [];
+      addWindow(fakeWindow(3));
       setFocusedWindowId(3);
-      const unsubscribe = onDidChangeFocusedWindowId((windowId) => heard.push(windowId));
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       setFocusedWindowId(3);
       setFocusedWindowId(3);
@@ -113,15 +154,54 @@ describe('window state tracking', () => {
       expect(heard).toEqual([]);
     });
 
-    test('announces focus being cleared when the last window goes away', () => {
+    test('stays quiet when focus moves between windows that route to the same place', () => {
+      // Two windows that are both unready while a third serves the calls: focus churn between them
+      // does not change where anything is routed, so subscribers have nothing to re-resolve
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      addWindow(fakeWindow(3));
+      setFocusedWindowId(2);
       const heard: (number | undefined)[] = [];
-      setFocusedWindowId(3);
-      const unsubscribe = onDidChangeFocusedWindowId((windowId) => heard.push(windowId));
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      setFocusedWindowId(undefined);
+      setFocusedWindowId(3);
+      unsubscribe();
+
+      expect(heard).toEqual([]);
+    });
+
+    test('announces focus being cleared when the last window goes away', () => {
+      const only = fakeWindow(3);
+      addWindow(only);
+      setFocusedWindowId(3);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      removeWindow(only);
       unsubscribe();
 
       expect(heard).toEqual([undefined]);
+    });
+
+    test('announces the re-point when the focused window closes', () => {
+      // Routing has to leave the destroyed window on its own: a caller that has to notice the
+      // target was the closing window and re-point focus itself is one ordering mistake away from
+      // routing to a window that no longer exists
+      const closing = fakeWindow(1);
+      addWindow(closing);
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      removeWindow(closing);
+      unsubscribe();
+
+      expect(getTargetWindowId()).toBe(2);
+      expect(heard).toEqual([2]);
     });
 
     test('has already updated the target by the time listeners run', () => {
@@ -131,7 +211,7 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
       setFocusedWindowId(1);
-      const unsubscribe = onDidChangeFocusedWindowId(() =>
+      const unsubscribe = onDidChangeRoutingTarget(() =>
         targetsSeenByListener.push(getTargetWindowId()),
       );
 
@@ -143,7 +223,8 @@ describe('window state tracking', () => {
 
     test('stops calling a listener that unsubscribed', () => {
       const heard: (number | undefined)[] = [];
-      const unsubscribe = onDidChangeFocusedWindowId((windowId) => heard.push(windowId));
+      addWindow(fakeWindow(4));
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       unsubscribe();
       setFocusedWindowId(4);
@@ -168,6 +249,32 @@ describe('window state tracking', () => {
       expect(getTargetWindowId()).toBe(1);
     });
 
+    test('routes to the window the user was last working in, not the oldest one', () => {
+      // Two windows the user has used and a third still starting: the answer is the one they were
+      // just in, which creation order cannot tell you
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      setFocusedWindowId(2);
+
+      addWindow(fakeWindow(3));
+      setFocusedWindowId(3);
+
+      expect(getTargetWindowId()).toBe(2);
+    });
+
+    test('routes to a ready window the user has never focused', () => {
+      // Focus history is empty at startup under a window manager that never reports focus, so the
+      // tracked windows are still the fallback
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+
+      expect(getTargetWindowId()).toBe(2);
+    });
+
     test('hands routing over once the new window is serving requests', () => {
       addWindow(fakeWindow(1));
       markWindowReady(1);
@@ -187,7 +294,7 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(2));
       setFocusedWindowId(2);
       const heard: (number | undefined)[] = [];
-      const unsubscribe = onDidChangeFocusedWindowId((windowId) => heard.push(windowId));
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       markWindowReady(2);
       unsubscribe();
@@ -195,17 +302,102 @@ describe('window state tracking', () => {
       expect(heard).toEqual([2]);
     });
 
-    test('stays quiet when a window that is not focused becomes ready', () => {
+    test('stays quiet when a window becomes ready without taking the routing target', () => {
       addWindow(fakeWindow(1));
-      addWindow(fakeWindow(2));
+      markWindowReady(1);
       setFocusedWindowId(1);
+      addWindow(fakeWindow(2));
       const heard: (number | undefined)[] = [];
-      const unsubscribe = onDidChangeFocusedWindowId((windowId) => heard.push(windowId));
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       markWindowReady(2);
       unsubscribe();
 
       expect(heard).toEqual([]);
+    });
+
+    test('announces when an unready window that was holding the target starts serving', () => {
+      // Startup with one window: nothing else can take the target, so the ID never changes — but
+      // the calls that were failing now succeed, and anything that gave up has to try again
+      addWindow(fakeWindow(1));
+      setFocusedWindowId(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowReady(1);
+      unsubscribe();
+
+      expect(heard).toEqual([1]);
+    });
+
+    test('stays quiet when a window that is already ready is marked ready again', () => {
+      addWindow(fakeWindow(1));
+      setFocusedWindowId(1);
+      markWindowReady(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowReady(1);
+      unsubscribe();
+
+      expect(heard).toEqual([]);
+    });
+
+    test('stays quiet when a window that was never ready is marked not ready', () => {
+      // The renderer lifecycle events that report a window as unable to serve requests also fire
+      // during its first load, before it ever registered anything
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      setFocusedWindowId(1);
+      addWindow(fakeWindow(2));
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowNotReady(2);
+      unsubscribe();
+
+      expect(heard).toEqual([]);
+    });
+
+    test('routes elsewhere when a window stops serving requests', () => {
+      // A crashed or reloading renderer keeps its BrowserWindow, but every call routed to it now
+      // waits out the network service's registration retry against handlers that are gone
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+
+      markWindowNotReady(1);
+
+      expect(getTargetWindowId()).toBe(2);
+    });
+
+    test('re-announces when a window recovers, so consumers drop the services that died with it', () => {
+      // A reloaded renderer registers brand new scoped services under the same window ID. Consumers
+      // compare what they hold by identity, so the recovery has to reach them even though the ID
+      // they would route to never changed.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      setFocusedWindowId(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowNotReady(1);
+      markWindowReady(1);
+      unsubscribe();
+
+      expect(heard).toEqual([1, 1]);
+    });
+
+    test('keeps a window that stopped serving requests tracked, since it is still a window', () => {
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+
+      markWindowNotReady(1);
+
+      expect(getWindows().map((w) => w.id)).toEqual([1]);
+      expect(isWindowReady(1)).toBe(false);
     });
 
     test('falls back to the focused window before any window is ready', () => {
@@ -232,6 +424,29 @@ describe('window state tracking', () => {
       setFocusedWindowId(1);
 
       expect(getTargetWindowId()).toBe(2);
+    });
+
+    test('lists only the windows a fan-out can get an answer from', () => {
+      // A window that has not registered its services cannot own a web view or be showing a
+      // notification, so asking it costs a registration-retry wait and a warning to learn nothing
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      addWindow(fakeWindow(3));
+      markWindowReady(1);
+      markWindowReady(3);
+
+      expect(getReadyWindowIds()).toEqual([1, 3]);
+      expect(isWindowReady(2)).toBe(false);
+    });
+
+    test('drops a closed window from the fan-out list', () => {
+      const closing = fakeWindow(1);
+      addWindow(closing);
+      markWindowReady(1);
+
+      removeWindow(closing);
+
+      expect(getReadyWindowIds()).toEqual([]);
     });
   });
 });

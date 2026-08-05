@@ -6,21 +6,22 @@ import {
   testingWindowRoutingService,
 } from '@main/services/window-routing.service';
 import { windowServiceProviderName } from '@shared/services/window.service-model';
+import { settle } from '@main/services/__tests__/routing-proxy-test.util';
 import { dataProviderService } from '@shared/services/data-provider.service';
 
-/** Handler the engine registers against the focus-change event, so tests can fire it */
-type FocusChangeHandler = (windowId: number | undefined) => void;
+/** Handler the engine registers against the routing-target-change event, so tests can fire it */
+type RoutingTargetChangeHandler = (windowId: number | undefined) => void;
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
-  focusChangeHandlers: new Set<(windowId: number | undefined) => void>(),
+  routingTargetChangeHandlers: new Set<(windowId: number | undefined) => void>(),
 }));
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
-  onDidChangeFocusedWindowId: (handler: FocusChangeHandler) => {
-    mocks.focusChangeHandlers.add(handler);
-    return () => mocks.focusChangeHandlers.delete(handler);
+  onDidChangeRoutingTarget: (handler: RoutingTargetChangeHandler) => {
+    mocks.routingTargetChangeHandlers.add(handler);
+    return () => mocks.routingTargetChangeHandlers.delete(handler);
   },
 }));
 vi.mock('@shared/services/data-provider.service', () => ({
@@ -33,20 +34,26 @@ vi.mock('@shared/services/data-provider.service', () => ({
 }));
 
 // The engine only ever calls getFocus / setFocus / subscribeFocus on what it resolves, so the stubs
-// above implement just those. Asserting them to the full IWindowService is what lets the tests stay
+// below implement just those. Asserting them to the full IWindowService is what lets the tests stay
 // that small; widening the stubs to the real interface would add surface no test exercises.
 /* eslint-disable no-type-assertion/no-type-assertion */
 
 const { FocusedWindowDataProviderEngine } = testingWindowRoutingService;
 
-/** A scoped per-window window service that records the relay callback the engine hands it */
+/** Stands in for the placeholder a fresh data provider subscription compares its first update to */
+const SUBSCRIBER_HAS_NO_PREVIOUS_VALUE = Symbol('no previous value');
+
+/**
+ * A scoped per-window window service whose `subscribeFocus` is faithful to a real data provider
+ * subscription: on every update it re-fetches the focus value, and unless the subscriber asked for
+ * all updates it drops the ones whose value matches what it saw last (see
+ * `createDataProviderSubscriber`). `emitUpdate` makes the window report an update, so a test can
+ * see what reaches subscribers rather than how the relay is wired.
+ */
 function windowService(focusSubject: unknown) {
   const unsubscribe = vi.fn(async () => true);
-  const relay: {
-    fire?: (focusSubject: unknown) => void;
-    options?: { retrieveDataImmediately?: boolean };
-  } = {};
-  return {
+  let notifyOfUpdate: (() => Promise<void>) | undefined;
+  const service = {
     getFocus: vi.fn(async () => focusSubject),
     // Widened past `true` because the engine forwards whatever the scoped provider answers, and
     // `DataProviderUpdateInstructions` includes the data-type-name array form
@@ -55,36 +62,36 @@ function windowService(focusSubject: unknown) {
       async (
         _: undefined,
         callback: (focusSubject: unknown) => void,
-        options?: { retrieveDataImmediately?: boolean },
+        options?: { retrieveDataImmediately?: boolean; whichUpdates?: 'deeply-equal' | '*' },
       ) => {
-        relay.fire = callback;
-        relay.options = options;
+        let previousFocusSubject: unknown = SUBSCRIBER_HAS_NO_PREVIOUS_VALUE;
+        notifyOfUpdate = async () => {
+          const currentFocusSubject = await service.getFocus();
+          const isUnchanged = previousFocusSubject === currentFocusSubject;
+          previousFocusSubject = currentFocusSubject;
+          if (isUnchanged && options?.whichUpdates !== '*') return;
+          callback(currentFocusSubject);
+        };
         return unsubscribe;
       },
     ),
     unsubscribe,
-    /** Simulate this window reporting its own focus change */
-    relay,
+    /** Simulate this window reporting that its focus data changed */
+    emitUpdate: async () => notifyOfUpdate?.(),
   };
+  return service;
 }
 
-/** Fire the focus-change event the way window-state.service would */
-function moveFocusTo(windowId: number | undefined) {
+/** Fire the routing-target-change event the way window-state.service would */
+function moveRoutingTargetTo(windowId: number | undefined) {
   mocks.getTargetWindowId.mockReturnValue(windowId);
-  mocks.focusChangeHandlers.forEach((handler) => handler(windowId));
-}
-
-/** Let queued relay work settle — re-points are serialized, so they land a microtask or two later */
-async function settle() {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
+  mocks.routingTargetChangeHandlers.forEach((handler) => handler(windowId));
 }
 
 describe('window service routing proxy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.focusChangeHandlers.clear();
+    mocks.routingTargetChangeHandlers.clear();
     mocks.getTargetWindowId.mockReturnValue(1);
   });
 
@@ -118,7 +125,7 @@ describe('window service routing proxy', () => {
     );
 
     const beforeMove = await engine.getFocus();
-    moveFocusTo(2);
+    moveRoutingTargetTo(2);
     const afterMove = await engine.getFocus();
 
     expect(beforeMove).toBe('focus-in-window-1');
@@ -148,6 +155,26 @@ describe('window service routing proxy', () => {
     expect(only.setFocus).toHaveBeenCalledWith(undefined, 'detect');
   });
 
+  test('deselects with one argument, the only form that survives the trip to the renderer', async () => {
+    // A trailing argument the caller left off arrives at the renderer as `null`, which its
+    // "deselect" check (`=== undefined`) does not match — it then reads the id off that `null`
+    const only = windowService('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+
+    await engine.setFocus(undefined, undefined);
+
+    expect(only.setFocus.mock.calls[0]).toEqual([undefined]);
+  });
+
+  test('deselects the same way when the caller passes no specifier at all', async () => {
+    const only = windowService('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+
+    await engine.setFocus(undefined);
+
+    expect(only.setFocus.mock.calls[0]).toEqual([undefined]);
+  });
+
   test('reports the scoped provider’s real result rather than a blanket failure', async () => {
     // Callers use this to tell "focus moved" from "no such tab"; flattening it to a constant would
     // make every caller take the failure path
@@ -166,7 +193,7 @@ describe('window service routing proxy', () => {
     const engine = new FocusedWindowDataProviderEngine(async () => windowService('a') as never);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
-    moveFocusTo(2);
+    moveRoutingTargetTo(2);
 
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
   });
@@ -177,9 +204,9 @@ describe('window service routing proxy', () => {
     await engine.getFocus();
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
-    expect(only.relay.fire).toBeDefined();
-    // Fire the callback the engine handed to the window's subscribeFocus
-    only.relay.fire?.(undefined);
+    // Fire the callback the engine handed to the window's update event
+    await only.emitUpdate();
+    await settle();
 
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
   });
@@ -189,10 +216,27 @@ describe('window service routing proxy', () => {
     // duplicate for every subscriber on every re-point
     const only = windowService('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
     await engine.getFocus();
 
-    expect(only.relay.options).toEqual({ retrieveDataImmediately: false });
+    expect(notifyUpdate).not.toHaveBeenCalled();
+  });
+
+  test('tells subscribers about every update the window reports, not only value changes', async () => {
+    // The relay's own view of the value is not what subscribers of the generic name compare
+    // against: they each hold their own last value, and one of them re-pointed from another window
+    // has a different one. Deciding here that an update is not worth forwarding strands them.
+    const only = windowService('a');
+    const engine = new FocusedWindowDataProviderEngine(async () => only as never);
+    await engine.getFocus();
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+
+    await only.emitUpdate();
+    await only.emitUpdate();
+    await settle();
+
+    expect(notifyUpdate).toHaveBeenCalledTimes(2);
   });
 
   test('stops relaying from a window once focus has left it', async () => {
@@ -203,7 +247,7 @@ describe('window service routing proxy', () => {
     );
     await engine.getFocus();
 
-    moveFocusTo(2);
+    moveRoutingTargetTo(2);
     await engine.getFocus();
 
     expect(first.unsubscribe).toHaveBeenCalled();
@@ -217,9 +261,9 @@ describe('window service routing proxy', () => {
     );
 
     await engine.getFocus();
-    moveFocusTo(2);
+    moveRoutingTargetTo(2);
     await engine.getFocus();
-    moveFocusTo(1);
+    moveRoutingTargetTo(1);
     await engine.getFocus();
 
     expect(first.subscribeFocus).toHaveBeenCalledTimes(2);
@@ -249,7 +293,8 @@ describe('window service routing proxy', () => {
 
     expect(replacement.subscribeFocus).toHaveBeenCalledTimes(1);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
-    replacement.relay.fire?.(undefined);
+    await replacement.emitUpdate();
+    await settle();
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
   });
 
@@ -272,16 +317,14 @@ describe('window service routing proxy', () => {
     // relays a window it holds no subscription to, and the short-circuit would block every retry
     const only = windowService('a');
     let failNext = true;
-    only.subscribeFocus.mockImplementation(
-      async (_: undefined, callback: (focusSubject: unknown) => void) => {
-        if (failNext) {
-          failNext = false;
-          throw new Error('transient subscribe failure');
-        }
-        only.relay.fire = callback;
-        return only.unsubscribe;
-      },
-    );
+    const attachToUpdates = only.subscribeFocus.getMockImplementation();
+    only.subscribeFocus.mockImplementation(async (...args) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('transient subscribe failure');
+      }
+      return attachToUpdates?.(...args) ?? only.unsubscribe;
+    });
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
     // The read still succeeds — the window answered; only the relay setup failed
@@ -290,7 +333,8 @@ describe('window service routing proxy', () => {
 
     expect(only.subscribeFocus).toHaveBeenCalledTimes(2);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
-    only.relay.fire?.(undefined);
+    await only.emitUpdate();
+    await settle();
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
   });
 
@@ -315,7 +359,7 @@ describe('window service routing proxy', () => {
       throw new Error('Emitter is disposed');
     });
 
-    expect(() => moveFocusTo(2)).not.toThrow();
+    expect(() => moveRoutingTargetTo(2)).not.toThrow();
   });
 
   test('exposes exactly one matched get/set pair, which is what registration validates', () => {
@@ -345,7 +389,7 @@ describe('window service routing proxy', () => {
     await engine.dispose();
 
     expect(only.unsubscribe).toHaveBeenCalled();
-    expect(mocks.focusChangeHandlers.size).toBe(0);
+    expect(mocks.routingTargetChangeHandlers.size).toBe(0);
   });
 
   test('leaves nothing subscribed when disposal races an in-flight relay', async () => {
@@ -360,7 +404,7 @@ describe('window service routing proxy', () => {
       return only as never;
     });
 
-    moveFocusTo(2);
+    moveRoutingTargetTo(2);
     await settle();
     const disposal = engine.dispose();
     releaseLookup?.();
