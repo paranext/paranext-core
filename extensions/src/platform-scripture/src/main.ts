@@ -417,8 +417,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened characters inventory web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened characters inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -452,8 +452,9 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened repeated words inventory web view',
-          schema: { type: 'string' },
+          summary:
+            'The ID of the opened repeated words inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -488,8 +489,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the new open markers inventory web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened markers inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -535,8 +536,9 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened punctuation inventory web view',
-          schema: { type: 'string' },
+          summary:
+            'The ID of the opened punctuation inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -562,8 +564,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the new checks side panel web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened checks side panel web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -631,7 +633,7 @@ export async function activate(context: ExecutionActivationContext) {
         summary: 'Open the unified Manage Books dialog (FN-008)',
         params: [
           {
-            name: 'projectIdOrWebViewId',
+            name: 'webViewIdOrProjectId',
             required: false,
             summary:
               'Either the active editor web view id (resolves its project) or a literal project id; omit to open with the project picker visible.',
@@ -668,8 +670,8 @@ export async function activate(context: ExecutionActivationContext) {
       ],
       result: {
         name: 'return value',
-        summary: 'The ID of the new find web view',
-        schema: { type: 'string' },
+        summary: 'The ID of the find web view, or undefined if not opened',
+        schema: { type: ['string', 'null'] },
       },
     },
   });
