@@ -2473,9 +2473,14 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Markers Checklist web view. Resolves the target project from the supplied
-     * `webViewId` (of an editor tab) when provided.
+     * Open the Markers Checklist web view.
      *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. When provided, the target project is resolved from it internally
+     *   via `papi.webViews.getOpenWebViewDefinition`; the checklist opens regardless of whether a
+     *   project could be resolved.
+     * @returns Id of the opened markers checklist web view, or `undefined` if the provider did not
+     *   create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -2491,18 +2496,20 @@ declare module 'papi-shared-types' {
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
 
     /**
-     * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
-     * Opens the dialog as a tab web view; the dialog itself supports View / Create / Delete / Copy
-     * / Import action modes and an inline book-chooser grid.
+     * Open the unified Manage Books dialog (FN-008, 2026-05-01) as a centered floating window. The
+     * dialog supports View / Create / Delete / Copy / Import action modes and an inline
+     * book-chooser grid. Only one Manage Books dialog is open at a time (FN-003): if one is already
+     * open, it is reloaded with the newly resolved project and brought to front instead of opening
+     * a second window.
      *
-     * The single optional argument is either an editor's `webViewId` (when invoked from a
-     * scripture-editor menu) or a literal project id (when invoked from the main menu or from
-     * another extension). The handler probes the value with
-     * `papi.webViews.getOpenWebViewDefinition` — if it resolves, the dialog opens pre-targeted at
-     * that web view's project; otherwise the value is treated as a project id and the dialog opens
-     * for that project directly. Pass `undefined` to open the dialog with the project picker
-     * visible.
-     *
+     * @param webViewIdOrProjectId Either an editor's `webViewId` (when invoked from a
+     *   scripture-editor menu) or a literal project id (when invoked from the main menu or from
+     *   another extension). The handler probes the value with
+     *   `papi.webViews.getOpenWebViewDefinition` — if it resolves to a web view with a project, the
+     *   dialog opens pre-targeted at that project; otherwise the value itself is treated as the
+     *   project id. Omit to open the dialog with the project picker visible.
+     * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
+     *   — or `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (
