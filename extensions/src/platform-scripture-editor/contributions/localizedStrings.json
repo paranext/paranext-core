@@ -69,7 +69,7 @@
       "%webView_platformScriptureEditor_configureChecks%": "Configure Checks...",
       "%webView_platformScriptureEditor_copyrightInfo%": "Copyright Info",
       "%webView_platformScriptureEditor_edit%": "Edit",
-      "%webView_platformScriptureEditor_emptyChapter_addChapterNumberButton%": "Add Chapter Number",
+      "%webView_platformScriptureEditor_emptyChapter_addChapterNumberButton%": "Add chapter number",
       "%webView_platformScriptureEditor_emptyChapter_message%": "This chapter is empty.",
       "%webView_platformScriptureEditor_emptyChapter_protectedTooltip%": "Structure is locked. Chapter and verse markers cannot be added.",
       "%webView_platformScriptureEditor_emptyState_noProject%": "No project selected",

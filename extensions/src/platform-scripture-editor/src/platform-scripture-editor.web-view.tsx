@@ -1312,6 +1312,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const didInsertScaffoldRef = useRef(false);
 
   const handleAddChapterNumber = useCallback(() => {
+    // Defense-in-depth: unreachable while the button is disabled (`disabled={isStructureProtected}`
+    // in `EmptyChapterView`), mirroring the same second-layer check already used for the paragraph
+    // and inline marker menus in this file — a structural insert like this one should never fire
+    // solely because a disabled-state prop drifted out of sync with the action in some future
+    // refactor.
+    if (isStructureProtected) {
+      notifyStructureProtected();
+      return;
+    }
     const outcome = resolveAddChapterNumberClick(isInsertInFlightRef.current, lastVerse);
     if (outcome === 'already-in-flight') return;
     if (outcome === 'no-versification') {
@@ -1329,7 +1338,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // `@eten-tech-foundation/platform-editor` package — this extension's package.json still pins an
     // older version, so don't assume undo works cleanly here until that pin is bumped.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
-  }, [scrRef.book, scrRef.chapterNum, lastVerse]);
+  }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
   // effect Lexical would normally run for newly-inserted content is a no-op while hidden
