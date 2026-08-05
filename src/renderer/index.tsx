@@ -9,6 +9,7 @@ import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-b
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
+import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
@@ -117,6 +118,12 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       initializeThemeService(),
       initializeWindowService(),
     );
+
+    // Every command in RENDERER_HOSTED_COMMAND_NAMES must have been registered by one of the
+    // services started above (startWebViewService, startDialogService,
+    // startScrollGroupNavigationCommands) — otherwise the main process's routing proxy for it has
+    // nothing to forward to.
+    assertAllRendererHostedCommandsRegistered();
 
     // Drives the auto-sync edit-block banner on Scripture editors during a Send/Receive. Needs the
     // network service (already up above) for the blocking event and the web view service (already

@@ -47,7 +47,6 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
@@ -66,14 +65,12 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
-  RENDERER_HOSTED_COMMAND_NAMES,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
 import memoizeOne from 'memoize-one';
-import { CommandNames } from 'papi-shared-types';
 import {
   AsyncVariable,
   deserialize,
@@ -96,6 +93,10 @@ import withWindowScopedWebViewIds, {
   withWindowScopedWebViewIdInTab,
 } from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import {
+  registerScopedCommands,
+  RendererHostedCommandHandlers,
+} from '@renderer/services/renderer-hosted-command-registry';
+import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
   openUsersnapForm,
@@ -106,7 +107,7 @@ import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
-import localWindowStorage from './localStorage.service';
+import localWindowStorage from './local-storage.service';
 
 // These web view lifecycle emitters are created at module load as buffered emitters so they're
 // usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
@@ -2213,10 +2214,13 @@ export async function startWebViewService(): Promise<void> {
     papiWebViewService,
   );
 
-  // Map command names to their handlers
-  // This map should allow any functions because commands can be any function type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
+  // renderers can coexist. The main process registers proxies under the generic names. Typing this
+  // against RendererHostedCommandHandlers makes an unrecognized or misspelled key a compile error;
+  // registerScopedCommands records each name so a command that is on RENDERER_HOSTED_COMMAND_NAMES
+  // but never registered anywhere is caught too, at startup (see
+  // assertAllRendererHostedCommandsRegistered).
+  const commandHandlers: RendererHostedCommandHandlers = {
     'platform.openSettings': openSettingsTab,
     'platform.openProjectSettings': openSettingsTab,
     'platform.openUserSettings': openSettingsTab,
@@ -2225,30 +2229,5 @@ export async function startWebViewService(): Promise<void> {
     'platform.isUsersnapFormCurrentlyOpen': () => isUsersnapFormCurrentlyOpen(),
     'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
-
-  // Validate that commandHandlers keys match RENDERER_HOSTED_COMMAND_NAMES
-  const handlerKeys = Object.keys(commandHandlers);
-  const routedCommands: string[] = [...RENDERER_HOSTED_COMMAND_NAMES];
-  const missing = handlerKeys.filter((k) => !routedCommands.includes(k));
-  const extra = routedCommands.filter((k) => !handlerKeys.includes(k));
-  if (missing.length > 0) {
-    const msg = `Commands registered in renderer but not in RENDERER_HOSTED_COMMAND_NAMES: ${missing.join(', ')}`;
-    if (!globalThis.isPackaged) throw new Error(msg);
-    logger.warn(msg);
-  }
-  // Note: RENDERER_HOSTED_COMMAND_NAMES may include commands registered in other renderer files
-  // (e.g. platform.about in dialog.service-host.ts), so we only warn about extras rather than throw
-  if (extra.length > 0) {
-    logger.debug(
-      `Commands in RENDERER_HOSTED_COMMAND_NAMES but not in web-view commandHandlers (registered elsewhere): ${extra.join(', ')}`,
-    );
-  }
-
-  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
-  // renderers can coexist. The main process registers proxies under the generic names.
-  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    // Re-assert type after passing through `forEach`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    registerCommand(`${commandName}-${globalThis.windowId}` as CommandNames, handler);
-  });
+  registerScopedCommands(commandHandlers);
 }

@@ -2,6 +2,7 @@ import {
   getBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
 } from '@renderer/services/book-chapter-control.registry';
+import { registerScopedCommands } from '@renderer/services/renderer-hosted-command-registry';
 import {
   getScrRefForProject,
   getScrRefSync,
@@ -27,7 +28,6 @@ import {
 import { WebViewId } from '@shared/models/web-view.model';
 import { getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
-import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
@@ -334,48 +334,35 @@ export const navigationCommandHandlers: {
   'platform.openBookChapterControl': openBookChapterControl,
 };
 
-/**
- * Register a navigation command under this window's scoped name (e.g.
- * `platform.goToNextChapter-1`). Every one of these acts on the window's own navigation target, so
- * each renderer owns its own handler and the main process's routing proxy forwards the generic name
- * to whichever window is focused. The OpenRPC docs live with the proxy, on the generic name, since
- * that is the name consumers call.
- */
-function registerScopedNavigationCommand(
-  commandName: CommandNames,
-  handler: () => Promise<unknown>,
-) {
-  // The scoped name is built at runtime, so it can't be one of the literal CommandNames
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return registerCommand(`${commandName}-${globalThis.windowId}` as CommandNames, handler);
-}
-
-/** Registers the PT-4032 navigation commands. Call once at renderer startup */
+/** Registers the scroll-group navigation commands. Call once at renderer startup */
 export async function startScrollGroupNavigationCommands(): Promise<void> {
   await Promise.all([
-    ...Object.entries(navigationCommandHandlers).map(([commandName, handler]) =>
-      // Object.entries widens the key to string; the map above pins each name to its handler type
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      registerScopedNavigationCommand(commandName as CommandNames, handler),
-    ),
-    // Reference-history keyboard commands (PT-4033) live here with the other active-target
-    // navigation commands: they resolve the scroll group to act on from the shared navigation target
+    // Every one of these acts on the window's own navigation target, so each renderer owns its own
+    // handler and the main process's routing proxy forwards the generic name to whichever window is
+    // focused. The OpenRPC docs live with the proxy, on the generic name, since that is the name
+    // consumers call. registerScopedCommands records each name so a missing registration is caught
+    // at startup (see assertAllRendererHostedCommandsRegistered) rather than only at call time.
+    ...registerScopedCommands(navigationCommandHandlers),
+    // Reference-history keyboard commands live here with the other active-target navigation
+    // commands: they resolve the scroll group to act on from the shared navigation target
     // (getActiveReferenceHistoryScrollGroupId) — the one the top toolbar follows — so a keyboard
     // shortcut and the on-screen history buttons can never disagree. The renderer also resolves the
     // physical→logical RTL swap (in navigateReferenceHistoryPhysicalSync), so the main-process
     // keyboard handler dispatches the physical key with no arguments. No-op (`false`) when the
     // active web view has no numbered scroll group (a detached ref).
-    registerScopedNavigationCommand('platform.navigateLeftInReferenceHistory', async () => {
-      const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
-      return scrollGroupId === undefined
-        ? false
-        : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left');
-    }),
-    registerScopedNavigationCommand('platform.navigateRightInReferenceHistory', async () => {
-      const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
-      return scrollGroupId === undefined
-        ? false
-        : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right');
+    ...registerScopedCommands({
+      'platform.navigateLeftInReferenceHistory': async () => {
+        const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
+        return scrollGroupId === undefined
+          ? false
+          : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left');
+      },
+      'platform.navigateRightInReferenceHistory': async () => {
+        const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
+        return scrollGroupId === undefined
+          ? false
+          : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right');
+      },
     }),
   ]);
 }

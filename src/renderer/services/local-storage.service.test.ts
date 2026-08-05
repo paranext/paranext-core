@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import localWindowStorage from '@renderer/services/localStorage.service';
+import localWindowStorage from '@renderer/services/local-storage.service';
 
 const KEY = 'some.storage.key';
 
@@ -58,10 +58,7 @@ describe('localWindowStorage', () => {
   });
 
   test('refuses to guess at a key when the window ID is missing', () => {
-    // `null` is the real absent value here: the renderer sets windowId from a URL search param,
-    // and URLSearchParams.get returns null when the parameter is missing
-    // eslint-disable-next-line no-null/no-null
-    globalThis.windowId = null;
+    globalThis.windowId = undefined;
 
     expect(() => localWindowStorage.getItem(KEY)).toThrow('windowId is not set');
     expect(() => localWindowStorage.setItem(KEY, 'value')).toThrow('windowId is not set');
