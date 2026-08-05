@@ -18,9 +18,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
-      '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
+      '%firstRun_step_internetSettings_connecting%':
+        'Setting things up for the first time. This can take a moment…',
       '%firstRun_step_internetSettings_loadError%':
-        "We couldn't get things ready. Please try again in a moment.",
+        'Setup is taking longer than expected. Please try again — it usually works right away.',
     },
     false,
   ]),
@@ -51,6 +52,7 @@ vi.mock('platform-bible-react', () => ({
     </button>
   ),
   Spinner: () => <div data-testid="spinner" />,
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
 vi.mock('platform-bible-react/experimental', () => ({
@@ -208,7 +210,7 @@ describe('InternetSettingsStep', () => {
     configureHooks({ value: newPlatformError('boom'), isLoading: false });
     const { setCanProceed } = renderStep();
 
-    expect(screen.getByText(/couldn't get things ready/i)).toBeInTheDocument();
+    expect(screen.getByText(/taking longer than expected/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
     expect(screen.queryByText(/boom/i)).not.toBeInTheDocument();
     // Next must be disabled on the error screen so the wizard can't advance past an unloaded step.
