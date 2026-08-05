@@ -262,4 +262,58 @@ describe('dataProviderService.registerEngine — failure disposes the update eve
 
     expect(mockEmitter.dispose).not.toHaveBeenCalled();
   });
+
+  it('unregisters the published object when it cannot be resolved back', async () => {
+    // `set` publishing the object and the follow-up `get` answering `undefined` is the one failure
+    // that arrives with the provider already on the network. Unregistering the update event and
+    // leaving the object published would make it resolvable and subscribable but unable to ever
+    // notify, so the whole registration is unwound instead — the object's own disposal is what takes
+    // the update event down with it (layered on in `buildDataProvider`).
+    const disposable = { dispose: vi.fn(async () => true) };
+    // The mocks stand in for the full disposable/proxy types; cast the minimal test doubles.
+    /* eslint-disable no-type-assertion/no-type-assertion */
+    vi.mocked(networkObjectService.set).mockResolvedValue(disposable as never);
+    vi.mocked(networkObjectService.get).mockResolvedValue(undefined as never);
+    /* eslint-enable no-type-assertion/no-type-assertion */
+
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        /* eslint-disable no-type-assertion/no-type-assertion */
+        'test.publishedButUnresolvable' as never,
+        engine as never,
+        /* eslint-enable no-type-assertion/no-type-assertion */
+      ),
+    ).rejects.toThrow('Unable to get network object');
+
+    expect(disposable.dispose).toHaveBeenCalledTimes(1);
+    expect(mockEmitter.dispose).not.toHaveBeenCalled();
+  });
+
+  it('still propagates the registration error when unwinding the published object fails', async () => {
+    const disposable = {
+      dispose: vi.fn(async () => {
+        throw new Error('unregister exploded');
+      }),
+    };
+    // The mocks stand in for the full disposable/proxy types; cast the minimal test doubles.
+    /* eslint-disable no-type-assertion/no-type-assertion */
+    vi.mocked(networkObjectService.set).mockResolvedValue(disposable as never);
+    vi.mocked(networkObjectService.get).mockResolvedValue(undefined as never);
+    /* eslint-enable no-type-assertion/no-type-assertion */
+
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        /* eslint-disable no-type-assertion/no-type-assertion */
+        'test.unwindFailure' as never,
+        engine as never,
+        /* eslint-enable no-type-assertion/no-type-assertion */
+      ),
+    ).rejects.toThrow('Unable to get network object');
+
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('unregister exploded'),
+    );
+  });
 });

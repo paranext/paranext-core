@@ -75,4 +75,59 @@ describe('UnsubscriberAsyncList', () => {
 
     expect(unsubscriber).toHaveBeenCalledTimes(1);
   });
+
+  test('unsubscribes something added while the list is being run', async () => {
+    // Registration is asynchronous, so an unsubscriber can arrive while the thing it belongs to is
+    // already being torn down. The run snapshots the set and then clears it, so storing a late
+    // arrival would drop it and leak the subscription for the rest of the session.
+    const list = new UnsubscriberAsyncList('test');
+    const lateUnsubscriber = vi.fn(async () => true);
+    let addTheLateOne = () => {};
+    list.add(async () => {
+      addTheLateOne();
+      return true;
+    });
+    addTheLateOne = () => list.add(lateUnsubscriber);
+
+    await list.runAllUnsubscribers();
+
+    expect(lateUnsubscriber).toHaveBeenCalledTimes(1);
+  });
+
+  test('unsubscribes something added after the list has been run', async () => {
+    const list = new UnsubscriberAsyncList('test');
+    await list.runAllUnsubscribers();
+    const lateUnsubscriber = vi.fn(async () => true);
+
+    list.add(lateUnsubscriber);
+    // `add` cannot await the unsubscriber it runs, so let the microtask it queued settle
+    await Promise.resolve();
+
+    expect(lateUnsubscriber).toHaveBeenCalledTimes(1);
+    expect(list.unsubscribers.size).toBe(0);
+  });
+
+  test('unsubscribes a late disposable by calling its dispose', async () => {
+    const list = new UnsubscriberAsyncList('test');
+    await list.runAllUnsubscribers();
+    const disposable = { dispose: vi.fn(async () => true) };
+
+    list.add(disposable);
+    await Promise.resolve();
+
+    expect(disposable.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  test('reports a late unsubscriber that throws instead of leaving it unhandled', async () => {
+    const list = new UnsubscriberAsyncList('test');
+    await list.runAllUnsubscribers();
+
+    list.add(async () => {
+      throw new Error('late boom');
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(vi.mocked(console.error)).toHaveBeenCalledWith(expect.stringContaining('late boom'));
+  });
 });

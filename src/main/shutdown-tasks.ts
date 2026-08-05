@@ -3,9 +3,15 @@ import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { settingsService } from '@shared/services/settings.service';
-import { getAllOpenWebViewDefinitionsWithReachability } from '@main/services/web-view-routing.service';
+import {
+  getAllOpenWebViewDefinitionsWithReachability,
+  getOpenWebViewDefinitionsForWindow,
+} from '@main/services/web-view-routing.service';
 import { serializeRequestType } from '@shared/utils/util';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+  type SavedWebViewDefinition,
+} from '@shared/models/web-view.model';
 import {
   RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
   type ScheduledSessionSyncResult,
@@ -101,6 +107,99 @@ async function performShutdownTasksInternal(): Promise<void> {
   await performSimpleModeShutdownSync();
 }
 
+/**
+ * Send/Receive what a single window had open, because that window is going away while the app stays
+ * up.
+ *
+ * A window's editors are only visible through that window's own services, so once it is gone
+ * nothing can tell that anything was open in it: the shutdown sync fans out over the windows that
+ * are still there, and whatever the user was editing in this one would never be sent. The window
+ * has to still be alive when this runs.
+ *
+ * Simple mode only. Power mode syncs the projects the user scheduled for session boundaries, and
+ * one window of several closing is not the end of a session — running the session sync here would
+ * sync a set of projects that has nothing to do with the window going away, on an event the user
+ * never asked to sync on.
+ *
+ * Nothing is cancelled first, unlike {@link performShutdownTasks}: the app is not going down, so a
+ * sync already in progress belongs to a window that is staying.
+ *
+ * Same error-swallowing contract as {@link performShutdownTasks} — a window must never be left
+ * un-closable because the S/R extension is missing or failing.
+ *
+ * @param closingWindowId Window that is closing
+ */
+export async function performWindowCloseTasks(closingWindowId: number): Promise<void> {
+  try {
+    await performWindowCloseTasksInternal(closingWindowId);
+  } catch (e) {
+    logger.error(`Unexpected error while syncing the projects of a closing window:`, e);
+  }
+}
+
+async function performWindowCloseTasksInternal(closingWindowId: number): Promise<void> {
+  // An unreadable mode skips the sync rather than falling through to Simple mode's behavior, for the
+  // same reason performShutdownTasksInternal does: Simple mode would S/R whichever writable editors
+  // are open, which for a Power user may be projects they deliberately excluded from their schedule.
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await settingsService.get('platform.interfaceMode');
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode; skipping the sync for closing window ${closingWindowId}: ${getErrorMessage(e)}`,
+    );
+    return;
+  }
+  if (interfaceMode !== 'simple') return;
+
+  let projectIds: string[];
+  try {
+    projectIds = getWritableEditorProjectIds(
+      await getOpenWebViewDefinitionsForWindow(closingWindowId),
+    );
+  } catch (e) {
+    // Said plainly rather than swallowed: this is the last moment anything can know what this
+    // window had open, so a failure here means those edits go unsynced with nothing to correct it
+    // later.
+    logger.warn(
+      `Could not read what closing window ${closingWindowId} had open, so anything unsynced in it is not covered by a sync: ${getErrorMessage(e)}`,
+    );
+    return;
+  }
+  if (projectIds.length === 0) return;
+
+  logger.info(
+    `Syncing the projects of closing window ${closingWindowId}: ${projectIds.join(', ')}`,
+  );
+  const settlement = await runBoundedShutdownSync(`window ${closingWindowId} close sync`, () =>
+    networkService.requestNoRetry(
+      serializeRequestType(CATEGORY_COMMAND, 'paratextBibleSendReceive.sendReceiveProjects'),
+      projectIds,
+    ),
+  );
+  // The already-warned settlements (`failed`, `timedOut`) add nothing here
+  if (settlement.status === 'completed')
+    logger.info(`Sync for closing window ${closingWindowId} complete`);
+}
+
+/**
+ * The projects of the writable Scripture Editors among a set of open web views, without duplicates.
+ *
+ * Read-only Resource Viewers are left out because no local change is possible in them. Duplicates
+ * are dropped because two windows may have editors on the same project and `sendReceiveProjects`
+ * should not be asked to sync it twice.
+ */
+function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): string[] {
+  const writableEditorProjectIds = definitions
+    .filter(
+      (definition) =>
+        definition.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !definition.state?.isReadOnly,
+    )
+    .map((definition) => definition.projectId)
+    .filter((id) => id !== undefined);
+  return [...new Set(writableEditorProjectIds)];
+}
+
 async function performSimpleModeShutdownSync(): Promise<void> {
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
   try {
@@ -117,7 +216,7 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   /** Windows whose editors are missing from the selection below, so the sync cannot cover them */
   let unreachableWindowIdsForSync: number[] = [];
   try {
-    const { definitions: openDefs, unreachableWindowIds } =
+    const { definitions: openWebViewDefinitions, unreachableWindowIds } =
       await getAllOpenWebViewDefinitionsWithReachability();
     unreachableWindowIdsForSync = unreachableWindowIds;
     // Only genuine Simple mode reaches here — Power mode selects by schedule (see
@@ -125,13 +224,8 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     // through. The main-process WebView service fans this call out across every open window and
     // merges the results, so more than one writable Scripture Editor can appear here even in Simple
     // mode — one per window. Take them all: picking a single one would leave the other windows'
-    // edits unsynced. Deduplicate by project id, since two windows may have editors on the same
-    // project and `sendReceiveProjects` should not be asked to sync it twice.
-    const writableEditorProjectIds = openDefs
-      .filter((def) => def.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE && !def.state?.isReadOnly)
-      .map((def) => def.projectId)
-      .filter((id) => id !== undefined);
-    projectIds = [...new Set(writableEditorProjectIds)];
+    // edits unsynced.
+    projectIds = getWritableEditorProjectIds(openWebViewDefinitions);
   } catch {
     /* WebView service unavailable */
   }

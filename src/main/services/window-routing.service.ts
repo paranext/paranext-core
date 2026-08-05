@@ -189,7 +189,17 @@ class FocusedWindowDataProviderEngine
     // short-circuiting on a relay it does not actually hold.
     this.#relayedWindowService = windowService;
     this.#unsubscribeFromWindowUpdates = unsubscribeFromNewWindow;
-    await unsubscribeFromPreviousWindow?.();
+    // The window this re-point is leaving is often one that just closed, which rejects the
+    // unsubscribe instead of answering it. That belongs to the window that is already gone: the
+    // handover to the new window has succeeded by this point, so it is reported and swallowed rather
+    // than thrown past the compensation below and out to callers as a failed re-point.
+    try {
+      await unsubscribeFromPreviousWindow?.();
+    } catch (e) {
+      logger.warn(
+        `Window routing could not unsubscribe from the window it stopped relaying: ${getErrorMessage(e)}`,
+      );
+    }
 
     // Disposed while we were attaching: `dispose` has already run its own teardown, so undo ours
     if (this.#isDisposed) {

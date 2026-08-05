@@ -48,6 +48,11 @@ export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>):
  * settled. A stale quit flag is the same class of problem pointed the other way — it would make an
  * ordinary window close look like a quit for the rest of the process, running the shutdown tasks
  * when only one of several windows was being closed.
+ *
+ * Must not be called while a quit is under way — every window is sitting in `preventDefault()`
+ * waiting on the shared run at that point, and dropping it would let a window closing afterwards
+ * start a second one while the windows still waiting stop waiting for anything. The one caller
+ * refuses to create a window during a quit for exactly this reason.
  */
 export function resetShutdownLatchesForNewSession(): void {
   isQuitRequested = false;
