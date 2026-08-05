@@ -60,3 +60,55 @@ describe('FootnoteList edit requests', () => {
     expect(onEditRequested).toHaveBeenCalledWith(footnotes[0], 0, 't', 'end');
   });
 });
+
+describe('FootnoteList row swap', () => {
+  it('renders the editor slot in place of the editing row', () => {
+    render(
+      <FootnoteList
+        footnotes={footnotes}
+        listId="t"
+        editingFootnoteIndex={1}
+        renderEditingFootnote={(_footnote, index) => (
+          <div data-testid="editor-slot">{`editing ${index}`}</div>
+        )}
+      />,
+    );
+    expect(screen.getByTestId('editor-slot')).toHaveTextContent('editing 1');
+    expect(screen.queryByText('second note text')).not.toBeInTheDocument(); // display row replaced
+    expect(screen.getByText('first note text')).toBeInTheDocument(); // others untouched
+  });
+
+  it('marks the editing row with data-state="editing"', () => {
+    const { container } = render(
+      <FootnoteList
+        footnotes={footnotes}
+        listId="t"
+        editingFootnoteIndex={0}
+        renderEditingFootnote={() => <div>editor</div>}
+      />,
+    );
+    const editingRow = container.querySelector('li[data-state="editing"]');
+    expect(editingRow).toBeInTheDocument();
+  });
+
+  it('does not fire edit requests from clicks inside the editing row', async () => {
+    const user = userEvent.setup();
+    const onEditRequested = vi.fn();
+    render(
+      <FootnoteList
+        footnotes={footnotes}
+        listId="t"
+        editingFootnoteIndex={0}
+        renderEditingFootnote={() => <div data-testid="editor-slot">editor</div>}
+        onFootnoteEditRequested={onEditRequested}
+      />,
+    );
+    await user.click(screen.getByTestId('editor-slot'));
+    expect(onEditRequested).not.toHaveBeenCalled();
+  });
+
+  it('ignores editingFootnoteIndex without renderEditingFootnote', () => {
+    render(<FootnoteList footnotes={footnotes} listId="t" editingFootnoteIndex={0} />);
+    expect(screen.getByText('first note text')).toBeInTheDocument();
+  });
+});

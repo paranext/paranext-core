@@ -20,6 +20,8 @@ export function FootnoteList({
   formatCaller,
   onFootnoteSelected,
   onFootnoteEditRequested,
+  editingFootnoteIndex,
+  renderEditingFootnote,
 }: FootnoteListProps) {
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
 
@@ -127,6 +129,26 @@ export function FootnoteList({
         {footnotes.map((footnote, idx) => {
           const isSelected = footnote === selectedFootnote;
           const key = `${listId}-${idx}`;
+          const isEditing = idx === editingFootnoteIndex && !!renderEditingFootnote;
+          if (isEditing) {
+            return (
+              <li
+                key={key}
+                data-state="editing"
+                className={cn(
+                  'tw:gap-x-3 tw:gap-y-1 tw:p-2',
+                  'tw:w-full tw:rounded-sm tw:border-0 tw:shadow-none',
+                  // PT9 highlights the entry being edited (light yellow); warning is the theme's
+                  // amber-family token so this stays theme-aware in dark mode.
+                  'tw:bg-warning/15',
+                  layout === 'horizontal' ? 'tw:col-span-3' : 'tw:col-span-2 tw:row-span-2',
+                  classNameForItems,
+                )}
+              >
+                {renderEditingFootnote(footnote, idx)}
+              </li>
+            );
+          }
           return (
             <>
               <li

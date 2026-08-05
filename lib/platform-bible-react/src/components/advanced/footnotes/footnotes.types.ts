@@ -1,4 +1,5 @@
 import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
+import { ReactNode } from 'react';
 
 export type FootnoteLayout = 'horizontal' | 'vertical';
 
@@ -100,4 +101,16 @@ export interface FootnoteListProps {
     listId: string | number,
     caretPosition: FootnoteCaretPosition,
   ) => void;
+  /**
+   * Index of the footnote currently being edited in place, if any. When set (and
+   * `renderEditingFootnote` is provided), that row renders the editor slot instead of its read-only
+   * display and is highlighted as the active editing row.
+   */
+  editingFootnoteIndex?: number;
+  /**
+   * Render prop for the in-place editor shown for `editingFootnoteIndex`'s row. The list stays
+   * presentation-only: it never imports an editor component; the consumer supplies one (e.g. an
+   * inline `FootnoteEditor`).
+   */
+  renderEditingFootnote?: (footnote: MarkerObject, index: number) => ReactNode;
 }
