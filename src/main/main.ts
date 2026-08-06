@@ -852,6 +852,20 @@ async function main() {
     // Note that webviews can get to this handler with window.open and anchor tags with
     // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
     newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
+      // PT-4276 spike (Q5), enabled only by --spikeAllowWindowOpen. Q5 asks whether the 2023
+      // "newWindow crashes" TODO still reproduces on Electron 39.8.8, and therefore whether rc-dock's
+      // `windowbox` is usable as layout bookkeeping. It cannot be observed on stock code: this
+      // handler denies every request and diverts it to the default browser, so renderer-initiated
+      // window creation never reaches Electron at all and cannot crash. Returning 'allow' lets a
+      // real child window be attempted so the question can actually be answered.
+      // Not intended to ship — denying by default is a deliberate security posture.
+      if (getCommandLineSwitch(CommandLineArgs.SpikeAllowWindowOpen)) {
+        logger.info(
+          `PT-4276 spike: allowing window.open for "${handlerDetails.url}" instead of denying it`,
+        );
+        return { action: 'allow' };
+      }
+
       // Only allow https urls
       (async () => {
         try {

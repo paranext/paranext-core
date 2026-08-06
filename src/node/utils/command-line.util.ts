@@ -33,6 +33,10 @@ type CommandLineArgumentAliases = {
  * - SpikeParentWindow - PT-4276 spike only. Makes every window after the first a `parent:`-owned
  *   child of the first window so Q3 can be observed: does an owned window keep its own OS switcher
  *   entry? Not intended to ship. Only on main process
+ * - SpikeAllowWindowOpen - PT-4276 spike only. Makes `setWindowOpenHandler` return 'allow' instead of
+ *   denying and diverting to the default browser, so Q5 can be observed: does renderer-initiated
+ *   window creation still crash on Electron 39.8.8? Not intended to ship — denying is a deliberate
+ *   security posture. Only on main process
  */
 export enum CommandLineArgs {
   Extensions = 'extensions',
@@ -45,6 +49,7 @@ export enum CommandLineArgs {
   WindowSize = 'window_size',
   Maximize = 'maximize',
   SpikeParentWindow = 'spike_parent_window',
+  SpikeAllowWindowOpen = 'spike_allow_window_open',
 }
 
 /**
@@ -62,6 +67,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [CommandLineArgs.WindowSize]: ['--windowSize', '--window-size'],
   [CommandLineArgs.Maximize]: ['--maximize'],
   [CommandLineArgs.SpikeParentWindow]: ['--spikeParentWindow', '--spike-parent-window'],
+  [CommandLineArgs.SpikeAllowWindowOpen]: ['--spikeAllowWindowOpen', '--spike-allow-window-open'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */
