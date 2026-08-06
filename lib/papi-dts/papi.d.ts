@@ -2486,6 +2486,9 @@ declare module 'shared/services/network-object.service' {
    * Drop every cached registration for a network object living in another process that can no longer
    * be reached, as if that object had been disposed.
    *
+   * This is platform-internal core plumbing between the process that hosted a departed network
+   * object and the processes still holding registrations for it, not part of the `@papi/*` surface.
+   *
    * Disposal is normally announced by the process that owns the object, but a process that goes away
    * abruptly — most commonly a window the user closed — never gets to announce anything. Its
    * registered methods are dropped from the central registry, yet every other process still holds a
