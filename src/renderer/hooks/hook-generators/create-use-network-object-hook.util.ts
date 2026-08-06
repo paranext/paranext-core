@@ -1,7 +1,8 @@
-import { NetworkObject } from '@shared/models/network-object.model';
+import { NetworkObject, NetworkObjectDetails } from '@shared/models/network-object.model';
 import { useMemo, useState, useCallback } from 'react';
 import { isString } from 'platform-bible-utils';
 import { usePromise, useEvent } from 'platform-bible-react';
+import { onDidCreateNetworkObject } from '@shared/services/network-object.service';
 
 /**
  * Takes the parameters passed into the hook and returns the `networkObjectSource` associated with
@@ -65,9 +66,20 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
       NetworkObject<object> | undefined
     >(undefined);
 
+    // Bumped to ask for another look at the name. The disposal of what this hook was holding is not
+    // the last moment the answer can change: the window taking an app-global object over may not
+    // have published it yet when the lookup a disposal triggers runs.
+    // Note: do nothing if we already received a network object, but still run this hook.
+    // (We must make sure to run the same number of hooks in all code paths.)
+    const [lookupAttempt, setLookupAttempt] = useState(0);
+
     // Get the network object for this network object name
     // Note: do nothing if we already have a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
+    // We need to spread `args` in here since we don't know how many members it has, which is
+    // something the dependency rule cannot check either way — so it is off for this call and you
+    // must be VERY CAREFUL when editing this `usePromise`.
+    /* eslint-disable react-hooks/exhaustive-deps */
     const [networkObject] = usePromise(
       useMemo(() => {
         return didReceiveNetworkObject
@@ -76,14 +88,25 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
           : async () =>
               // We have the network object's type, so we need to get the provider
               networkObjectSource ? getNetworkObject(...args) : undefined;
-        // We need to spread `args` in here since we don't know how many members it has. Be VERY
-        // CAREFUL when editing this `usePromise` since we don't have dependency checking on
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [didReceiveNetworkObject, networkObjectSource, disposedNetworkObject, ...args]),
+      }, [
+        didReceiveNetworkObject,
+        networkObjectSource,
+        disposedNetworkObject,
+        lookupAttempt,
+        ...args,
+      ]),
       undefined,
     );
+    /* eslint-enable react-hooks/exhaustive-deps */
 
-    const isNetworkObjectDisposed = networkObject === disposedNetworkObject;
+    // `!!disposedNetworkObject` is what keeps the first render — where both are `undefined` and so
+    // trivially equal — from reading as "the object we are holding is dead" before this hook has
+    // held anything.
+    const isNetworkObjectDisposed =
+      !!disposedNetworkObject && networkObject === disposedNetworkObject;
+
+    /** Whether this hook has nothing it can hand back: it found nothing, or what it found is dead */
+    const isServingNothing = !networkObject || isNetworkObjectDisposed;
 
     // Look the network object up again when the one we are serving is disposed
     // Note: do nothing if we already received a network object, but still run this hook.
@@ -93,6 +116,31 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
         ? networkObject.onDidDispose
         : undefined,
       useCallback(() => setDisposedNetworkObject(networkObject), [networkObject]),
+    );
+
+    // A disposal drives exactly one re-lookup. If that lookup lands in the gap before a surviving
+    // window has re-published the name — or fails outright — nothing else would ever change a
+    // dependency above, and the component would serve nothing for the rest of its life over a gap
+    // that closed a second later. So while this hook is holding nothing after a disposal, listen for
+    // something being published under the name it wants and look again when it is.
+    //
+    // Only armed after a disposal: before that, every network object the app creates at startup
+    // would trigger a fresh lookup for a name whose first lookup is still in flight. Objects whose
+    // name is not what the hook was asked for (a project data provider is looked up by project id,
+    // not by the id its network object is registered under) fall back to the single re-lookup.
+    // Note: do nothing if we already received a network object, but still run this hook.
+    // (We must make sure to run the same number of hooks in all code paths.)
+    useEvent(
+      !didReceiveNetworkObject && !!disposedNetworkObject && isServingNothing
+        ? onDidCreateNetworkObject
+        : undefined,
+      useCallback(
+        (networkObjectDetails: NetworkObjectDetails) => {
+          if (networkObjectDetails.id === networkObjectSource)
+            setLookupAttempt((previousAttempt) => previousAttempt + 1);
+        },
+        [networkObjectSource],
+      ),
     );
 
     // If we received a network object or undefined, return it
