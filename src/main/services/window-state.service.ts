@@ -88,6 +88,26 @@ export function isWindowReady(windowId: number): boolean {
 }
 
 /**
+ * Whether a navigation replaces the page a window's renderer registered its scoped services from,
+ * so everything that window registered is gone until the new page registers again.
+ *
+ * Only a main-frame navigation to a new document does that. Every web view in the app is an in-page
+ * `<iframe srcdoc>` inside the renderer's own page, so subframe navigations happen constantly for
+ * as long as a window is open and touch nothing the renderer registered; treating one as the page
+ * going away would take a fully working window out of the routable set with nothing to put it back.
+ * Same-document navigations (fragment changes, `pushState`/`replaceState`, same-page history) keep
+ * the document and every script in it alive, so they leave the registrations alone too.
+ *
+ * @param navigation Navigation details from Electron's `did-start-navigation`
+ */
+export function doesNavigationReplaceRendererRegistrations(navigation: {
+  isMainFrame: boolean;
+  isSameDocument: boolean;
+}): boolean {
+  return navigation.isMainFrame && !navigation.isSameDocument;
+}
+
+/**
  * IDs of the windows that can currently answer a routed call, in creation order.
  *
  * Fan-outs that ask every window a question use this rather than {@link getWindows}: a window that

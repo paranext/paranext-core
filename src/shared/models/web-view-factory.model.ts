@@ -43,6 +43,17 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
     DisposableNetworkObject<WebViewControllers[WebViewType]>
   >();
 
+  /**
+   * Whether {@link dispose} has run, so nothing this factory registers will ever be cleaned up
+   * again.
+   *
+   * `dispose` cannot take the per-web-view locks — it is not about any one web view — so a
+   * controller already being created can finish after it and land on a cleanup list that has
+   * already been drained, which tears that controller down on arrival. Returning a web view
+   * definition at that point would produce a web view whose controller is already dead.
+   */
+  private isDisposed = false;
+
   constructor(readonly webViewType: WebViewType) {
     this.webViewControllersCleanupList = new UnsubscriberAsyncList(
       `WebViewFactory for webViewType ${webViewType}`,
@@ -119,6 +130,19 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
         unregisteredWebViewController,
       );
 
+      // Disposed while this controller was being created: the cleanup list has already been drained
+      // and will never run again, so nothing else is going to take this controller down. Registered
+      // in the map first so the controller's own dispose bookkeeping finds it, then disposed, and
+      // the web view is declined — a definition here would open a web view with a dead controller.
+      if (this.isDisposed) {
+        this.webViewControllersById.set(webViewDefinition.id, webViewController);
+        await webViewController.dispose();
+        logger.warn(
+          `${this.webViewType} WebViewFactory was disposed while creating the web view controller for ${webViewDefinition.id}, so that web view is not being provided.`,
+        );
+        return undefined;
+      }
+
       this.webViewControllersCleanupList.add(webViewController);
       this.webViewControllersById.set(webViewDefinition.id, webViewController);
 
@@ -128,6 +152,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
 
   /** Disposes of all WVCs that were created by this provider */
   async dispose(): Promise<boolean> {
+    this.isDisposed = true;
     return this.webViewControllersCleanupList.runAllUnsubscribers();
   }
 

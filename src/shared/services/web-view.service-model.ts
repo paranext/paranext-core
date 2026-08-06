@@ -108,6 +108,9 @@ export interface WebViewServiceType {
    * @param webViewId The ID of the WebView whose saved properties to get
    * @returns Saved properties of the WebView definition with the specified ID or undefined if not
    *   found
+   * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+   *   in the window that did not answer, so `undefined` there would be indistinguishable from the
+   *   WebView genuinely not existing.
    */
   getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 
@@ -125,6 +128,9 @@ export interface WebViewServiceType {
    * actual WebView definitions.
    *
    * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+   * @throws If any window could not be asked what it has open. Callers read this as the complete
+   *   picture, and a window that could not answer is indistinguishable in the result from one with
+   *   nothing open, so a short list is refused rather than passed off as the whole landscape.
    */
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 

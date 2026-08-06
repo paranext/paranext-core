@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
   getAllOpenWebViewDefinitionsWithReachability,
+  getOpenWebViewDefinitionsForWindow,
   startWebViewRoutingService,
 } from '@main/services/web-view-routing.service';
 import { getRegisteredProxy, withWindows } from '@main/services/__tests__/routing-proxy-test.util';
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
   getWindows: vi.fn(),
   getReadyWindowIds: vi.fn(),
+  isWindowReady: vi.fn(),
   networkObjectGet: vi.fn(),
   networkObjectSet: vi.fn(),
 }));
@@ -19,6 +21,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getWindows: mocks.getWindows,
   getReadyWindowIds: mocks.getReadyWindowIds,
+  isWindowReady: mocks.isWindowReady,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -48,6 +51,7 @@ describe('web view routing proxy', () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getWindows.mockReturnValue([]);
     mocks.getReadyWindowIds.mockReturnValue([]);
+    mocks.isWindowReady.mockReturnValue(true);
   });
 
   test('gathers open web views from every window, not just the focused one', async () => {
@@ -177,5 +181,74 @@ describe('web view routing proxy', () => {
     const proxy = await getProxy();
 
     await expect(proxy.openWebView('someType')).rejects.toThrow('No windows available');
+  });
+
+  describe('a ready window whose WebView service has not registered yet', () => {
+    // Readiness is keyed on the WINDOW service. A renderer starts its window, web view, notification
+    // and dialog services concurrently, so a window can be ready while its WebView service is still
+    // moments away — a window that cannot be asked, which is not a window that answered "nothing".
+
+    test('refuses to answer with a list that leaves it out', async () => {
+      withWindows(mocks, { 1: windowService(['a']), 2: undefined });
+      const proxy = await getProxy();
+
+      await expect(proxy.getAllOpenWebViewDefinitions()).rejects.toThrow('unreachable');
+    });
+
+    test('reports it as unreachable to callers that can act on a partial list', async () => {
+      withWindows(mocks, { 1: windowService(['a']), 2: undefined });
+
+      const { definitions, unreachableWindowIds } =
+        await getAllOpenWebViewDefinitionsWithReachability();
+
+      expect(definitions.map((definition) => definition.id)).toEqual(['a']);
+      expect(unreachableWindowIds).toEqual([2]);
+    });
+
+    test('refuses to route an operation to the focused window as if nobody owned the web view', async () => {
+      // Falling back would reload whatever the focused window happens to be showing instead of the
+      // web view the caller named — which may well be in the window that could not be asked
+      withWindows(mocks, { 1: windowService([]), 2: undefined });
+      const proxy = await getProxy();
+
+      await expect(proxy.reloadWebView('someType', 'owned-view')).rejects.toThrow('unreachable');
+    });
+
+    test('still answers when another window claims the web view', async () => {
+      // A window that could not be asked only matters when nobody claimed the id
+      const owner = windowService(['owned-view']);
+      withWindows(mocks, { 1: owner, 2: undefined });
+      const proxy = await getProxy();
+
+      await expect(proxy.reloadWebView('someType', 'owned-view')).resolves.toBe('reloaded');
+    });
+  });
+
+  describe('asking one specific window what it has open', () => {
+    test('answers with what that window has open', async () => {
+      withWindows(mocks, { 1: windowService(['a', 'b']) });
+
+      const definitions = await getOpenWebViewDefinitionsForWindow(1);
+
+      expect(definitions.map((definition) => definition.id)).toEqual(['a', 'b']);
+    });
+
+    test('refuses to answer "nothing open" for a window that was serving requests', async () => {
+      // This is the read a closing window's sync depends on, and that window's own service is the
+      // only thing that could ever list its editors. An empty answer here is indistinguishable from
+      // the truth, so its unsynced work would be dropped with nothing to correct it later.
+      withWindows(mocks, { 1: undefined });
+      mocks.isWindowReady.mockReturnValue(true);
+
+      await expect(getOpenWebViewDefinitionsForWindow(1)).rejects.toThrow('could not be read');
+    });
+
+    test('answers nothing open for a window whose renderer never registered', async () => {
+      // A window that was never ready never had a web view in it, so there is nothing to warn about
+      withWindows(mocks, { 1: undefined });
+      mocks.isWindowReady.mockReturnValue(false);
+
+      await expect(getOpenWebViewDefinitionsForWindow(1)).resolves.toEqual([]);
+    });
   });
 });

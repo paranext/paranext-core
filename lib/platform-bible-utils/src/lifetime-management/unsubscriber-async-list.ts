@@ -27,7 +27,7 @@ export class UnsubscriberAsyncList {
    * Add unsubscribers to the list. Note that duplicates are not added twice.
    *
    * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
-   * stored. Nothing can await that run, so its outcome is only reported.
+   * stored. Nothing can await that run, so its outcome — success included — is only reported.
    *
    * @param unsubscribers - Objects that were returned from a registration process.
    */
@@ -78,13 +78,20 @@ export class UnsubscriberAsyncList {
 
   /**
    * Run an unsubscriber that arrived after the list was sealed. `add` is synchronous and has no
-   * caller to hand a result to, so a failure is reported here rather than thrown.
+   * caller to hand a result to, so the outcome is reported here rather than thrown.
+   *
+   * The success path is reported too: from the caller's point of view a subscription it just set up
+   * has been undone, and without a line here that happens with no record anywhere.
    */
   private unsubscribeImmediately(unsubscriber: UnsubscriberAsync | Unsubscriber): void {
     (async () => {
       try {
         const unsubscriberSucceeded = await unsubscriber();
-        if (!unsubscriberSucceeded)
+        if (unsubscriberSucceeded)
+          console.warn(
+            `UnsubscriberAsyncList ${this.name}: Unsubscriber arrived after the list was run, so it was unsubscribed immediately instead of being stored.`,
+          );
+        else
           console.error(
             `UnsubscriberAsyncList ${this.name}: Unsubscriber added after the list was run failed!`,
           );

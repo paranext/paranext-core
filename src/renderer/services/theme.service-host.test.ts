@@ -502,6 +502,8 @@ describe('theme service host across multiple windows', () => {
 
     const { initialize } = await import('@renderer/services/theme.service-host');
 
-    await expect(initialize()).rejects.toThrow('Theme service undefined');
+    // The message says which state this is — lost the race, and could not find the window that won
+    // it — rather than only that something was undefined
+    await expect(initialize()).rejects.toThrow('no theme service to attach to');
   });
 });

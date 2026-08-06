@@ -228,6 +228,24 @@ describe('networkObjectService.forgetUnreachableRemoteObjects', () => {
     expect(networkObjectService.hasKnown('object-in-open-window')).toBe(true);
   });
 
+  it('keeps serving a cached remote object whose host re-registered, because calls go by name', async () => {
+    setupNetworkServiceMocks();
+    vi.mocked(networkService.request).mockResolvedValue(true);
+    const remoteObject = await networkObjectService.get<{ doThing: () => Promise<string> }>(
+      'object-in-reloading-window',
+    );
+
+    // A window that reloads never disposes what it hosted, so nothing is announced and this process
+    // keeps the registration it cached. That is not a dead endpoint, which is why the reload path
+    // needs no cache invalidation: the main process drops the old page's method registrations when
+    // its socket closes and the new page registers the same names, and a remote proxy captures no
+    // connection — every call is a request by name, dispatched to whoever currently answers it.
+    vi.mocked(networkService.request).mockResolvedValue('answer from the new page');
+
+    await expect(remoteObject?.doThing()).resolves.toBe('answer from the new page');
+    expect(networkObjectService.hasKnown('object-in-reloading-window')).toBe(true);
+  });
+
   it('leaves objects hosted in this process alone even when the network cannot be reached', async () => {
     setupNetworkServiceMocks();
     await networkObjectService.set('object-hosted-here', { doThing: async () => 1 });

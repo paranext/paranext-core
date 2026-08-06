@@ -234,7 +234,9 @@ describe('dataProviderService.registerEngine — failure disposes the update eve
     ).rejects.toThrow('object name is already registered');
 
     expect(mockEmitter.dispose).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+    // An error rather than a warning: the event name stays claimed under this connection, so this
+    // provider can never be hosted again for the rest of the session
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
       expect.stringContaining('dispose exploded'),
     );
   });
@@ -312,7 +314,9 @@ describe('dataProviderService.registerEngine — failure disposes the update eve
       ),
     ).rejects.toThrow('Unable to get network object');
 
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+    // An error rather than a warning: the provider stays published under a name nothing holds a
+    // disposable for, which nothing can undo short of a restart
+    expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
       expect.stringContaining('unregister exploded'),
     );
   });

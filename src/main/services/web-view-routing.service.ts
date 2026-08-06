@@ -4,7 +4,11 @@
  * multi-window support by ensuring that operations like openWebView execute in the correct window.
  */
 
-import { getReadyWindowIds, getTargetWindowId } from '@main/services/window-state.service';
+import {
+  getReadyWindowIds,
+  getTargetWindowId,
+  isWindowReady,
+} from '@main/services/window-state.service';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -80,7 +84,16 @@ async function findOwner(
     getReadyWindowIds().map(async (windowId) => {
       try {
         const webViewService = await getScopedWebViewService(windowId);
-        if (!webViewService) return undefined;
+        // A ready window is one whose renderer registered its WINDOW service; the others register
+        // moments apart, so its WebView service can still be missing. That is a window that could
+        // not be asked, not one that answered no — see the reachability note below.
+        if (!webViewService) {
+          logger.warn(
+            `WebView service for window ${windowId} is not registered, so it could not be asked about webview ${webViewId} for ${operation}`,
+          );
+          hadServiceErrors = true;
+          return undefined;
+        }
         const definition = await webViewService.getOpenWebViewDefinition(webViewId);
         if (definition) return { service: webViewService, definition };
         return undefined;
@@ -167,7 +180,17 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
     getReadyWindowIds().map(async (windowId) => {
       try {
         const webViewService = await getScopedWebViewService(windowId);
-        return (await webViewService?.getAllOpenWebViewDefinitions()) ?? [];
+        // A ready window whose WebView service has not registered yet is a window that could not be
+        // asked. Answering `[]` for it would put it in the result as a window with nothing open,
+        // which is the one thing this function exists to keep apart from the truth.
+        if (!webViewService) {
+          logger.warn(
+            `WebView service for window ${windowId} is not registered, so its open webviews could not be read`,
+          );
+          unreachableWindowIds.push(windowId);
+          return [];
+        }
+        return await webViewService.getAllOpenWebViewDefinitions();
       } catch (e) {
         logger.warn(
           `Failed to get open webview definitions from window ${windowId}: ${getErrorMessage(e)}`,
@@ -188,15 +211,26 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
  * anything notices a window has gone it is no longer one of them.
  *
  * @param windowId Window to ask. It must still be alive; its scoped service goes with it.
- * @returns Everything that window has open, or an empty list if it has no scoped service registered
- * @throws If the window has a scoped service but fails to answer, since "could not ask" is not
+ * @returns Everything that window has open, or an empty list if its renderer never got as far as
+ *   registering its services — a window that was never ready never had anything open
+ * @throws If the window was serving requests but could not be asked, since "could not ask" is not
  *   "answered none"
  */
 export async function getOpenWebViewDefinitionsForWindow(
   windowId: number,
 ): Promise<SavedWebViewDefinition[]> {
   const webViewService = await getScopedWebViewService(windowId);
-  return (await webViewService?.getAllOpenWebViewDefinitions()) ?? [];
+  if (webViewService) return webViewService.getAllOpenWebViewDefinitions();
+
+  // Readiness is what tells the two empty answers apart. A window whose renderer never registered
+  // genuinely had nothing open. One that was serving requests a moment ago may have had editors
+  // with unsaved work in it, and its own service is the only thing that could have listed them, so
+  // the caller has to hear that the question went unanswered rather than that the answer was none.
+  if (isWindowReady(windowId))
+    throw new Error(
+      `WebView service for window ${windowId} is not available, so what it had open could not be read.`,
+    );
+  return [];
 }
 
 /**

@@ -13,6 +13,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Topic                   | File                                                                      | Key Content                                                  |
 | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Architecture            | [Architecture.md](.context/standards/Architecture.md)                     | Multi-process architecture, core services, IPC, key patterns |
+| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Numbered ADRs: the decision, the alternatives rejected, and the consequences accepted |
 | Code Style              | [Code-Style-Guide.md](.context/standards/Code-Style-Guide.md)             | TypeScript/C# conventions, API-surface TSDoc, localization, components, shadcn/ui |
 | Implementation Patterns | [Paranext-Core-Patterns.md](.context/standards/Paranext-Core-Patterns.md) | C# service/DataProvider/NetworkObject patterns, PAPI event registration, concurrency, extension structure, command naming |
 | Testing                 | [Testing-Guide.md](.context/standards/Testing-Guide.md)                   | Vitest/NUnit, TDD (outside-in), testing trophy, mutation/coverage, E2E, mocking, CI, platform gotchas |

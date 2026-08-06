@@ -45,6 +45,7 @@ import { startWebViewRoutingService } from '@main/services/web-view-routing.serv
 import {
   addWindow,
   areAllWindowsClosing,
+  doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getWindows,
   markWindowClosing,
@@ -194,6 +195,15 @@ if (!isFirstInstance) {
 
 const PROCESS_CLOSE_TIME_OUT_MS = 2000;
 
+/**
+ * How long a window gets to finish closing on its own before it is destroyed outright.
+ *
+ * Generous next to the page teardown it is waiting for — pruning this window's stored web view
+ * state — because the only cost of waiting is a window that is already on its way out staying on
+ * screen a moment longer.
+ */
+const WINDOW_CLOSE_TIME_OUT_MS = 10000;
+
 /** Height of the custom title bar buttons on Windows */
 const TITLE_BAR_BUTTON_HEIGHT = 47;
 /** Background color of the window buttons in the custom title bar on Windows */
@@ -275,13 +285,35 @@ async function main() {
   // Started together rather than one after another: each claims its own set of names and none reads
   // anything another one registers, so serializing them only adds their round trips together on the
   // startup path every window is waiting behind.
-  await Promise.all([
-    startWebViewRoutingService(),
-    startCommandRoutingService(),
-    startNotificationRoutingService(),
+  // Settled rather than raced to the first rejection: they run together, so `Promise.all` would
+  // report whichever failed first and discard what the others went on to say. Startup still stops
+  // here — a routing proxy that never registered leaves a name nothing answers for the rest of the
+  // session — it just stops naming everything that went wrong instead of one thing.
+  const routingServiceStarts = [
+    { name: 'WebView routing service', started: startWebViewRoutingService() },
+    { name: 'command routing service', started: startCommandRoutingService() },
+    { name: 'notification routing service', started: startNotificationRoutingService() },
     // Reuses the same per-window lookup the input handlers use
-    startWindowRoutingService(getWindowServiceForWindow),
-  ]);
+    {
+      name: 'window routing service',
+      started: startWindowRoutingService(getWindowServiceForWindow),
+    },
+  ];
+  const routingServiceOutcomes = await Promise.allSettled(
+    routingServiceStarts.map(({ started }) => started),
+  );
+  const failedRoutingServiceNames = routingServiceOutcomes
+    .map((outcome, index) => {
+      if (outcome.status === 'fulfilled') return undefined;
+      const { name } = routingServiceStarts[index];
+      logger.error(`Failed to start the ${name}: ${getErrorMessage(outcome.reason)}`);
+      return name;
+    })
+    .filter((name) => name !== undefined);
+  if (failedRoutingServiceNames.length > 0)
+    throw new Error(
+      `Could not start the multi-window routing proxies: ${failedRoutingServiceNames.join(', ')}. Each failure is logged above.`,
+    );
 
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
   // call until its renderer has registered. Its scoped window service appearing is that signal, and
@@ -493,10 +525,10 @@ async function main() {
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
     // the latch reset below would clear the shared run mid-flight, so a window closing afterwards
     // would start a second one and the windows still waiting would stop waiting for anything.
-    if (isAppQuitRequested()) {
-      logger.warn('Not creating a window because the application is quitting');
-      return;
-    }
+    // Thrown rather than returned quietly: `platform.createWindow` and the menu item both await
+    // this, and resolving with nothing would report a window that does not exist as created.
+    if (isAppQuitRequested())
+      throw new Error('Cannot create a window while the application is quitting');
 
     // A window is being created, so the app is alive and whatever brought the last one down is
     // finished. On macOS that is not the same as process start: closing the final window runs the
@@ -603,7 +635,14 @@ async function main() {
     });
     // A reload replaces the page and everything it registered, the same as a crash does. This also
     // fires for the very first load, before the window was ever ready, which changes nothing.
-    newWindow.webContents.on('did-start-loading', () => markWindowNotReady(windowId));
+    //
+    // Deliberately NOT `did-start-loading`: that is a whole-tab signal with no frame information,
+    // and every web view in the app is an in-page iframe in this page, so it fires again every time
+    // the user opens a tab — which would strip a fully working window of its readiness with nothing
+    // to restore it. See `doesNavigationReplaceRendererRegistrations` for which navigations count.
+    newWindow.webContents.on('did-start-navigation', (details) => {
+      if (doesNavigationReplaceRendererRegistrations(details)) markWindowNotReady(windowId);
+    });
     newWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
@@ -811,18 +850,33 @@ async function main() {
         markWindowNotReady(windowId);
         // The escape hatch above takes the window down on a second close click, which can happen
         // any time during the wait this handler just came out of
-        if (!newWindow.isDestroyed()) {
-          if (isAppGoingDown) {
-            // `event.preventDefault()` above suppresses Electron's default close; destroy() here
-            // triggers the 'closed' event and allows the app to quit.
+        if (newWindow.isDestroyed()) {
+          logger.debug(
+            `Window ${windowId} was already destroyed by the time its shutdown work finished`,
+          );
+        } else if (isAppGoingDown) {
+          // `event.preventDefault()` above suppresses Electron's default close; destroy() here
+          // triggers the 'closed' event and allows the app to quit.
+          newWindow.destroy();
+        } else {
+          // Closed rather than destroyed, because the app is staying up and the page still has
+          // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
+          // this window's stored web view state. The second pass through this handler stops at
+          // the `isWindowClosing` guard above, leaving Electron's default close to run.
+          newWindow.close();
+          // A renderer that never finishes that teardown would otherwise leave the window on screen
+          // and in limbo for the rest of the session: it is out of the routable set and recorded as
+          // closing, and only the window actually going away puts either back — so every fan-out
+          // skips it silently and the app treats the next window close as the last one. Bounded so
+          // the close always completes; losing the page teardown is the smaller loss.
+          const forceCloseTimeout = setTimeout(() => {
+            if (newWindow.isDestroyed()) return;
+            logger.warn(
+              `Window ${windowId} did not finish closing within ${WINDOW_CLOSE_TIME_OUT_MS} ms; destroying it`,
+            );
             newWindow.destroy();
-          } else {
-            // Closed rather than destroyed, because the app is staying up and the page still has
-            // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
-            // this window's stored web view state. The second pass through this handler stops at
-            // the `isWindowClosing` guard above, leaving Electron's default close to run.
-            newWindow.close();
-          }
+          }, WINDOW_CLOSE_TIME_OUT_MS);
+          newWindow.once('closed', () => clearTimeout(forceCloseTimeout));
         }
       }
     });
@@ -840,7 +894,15 @@ async function main() {
       // state the listeners read, and ahead of the unsubscribers below: those are RPC to a renderer
       // that is already gone, so they take the network service's whole registration retry to fail,
       // and no surviving window would start taking over until they did.
-      onDidCloseWindowEmitter.emit(windowId);
+      // `PlatformEventEmitter` runs its subscribers synchronously and does not isolate them, so one
+      // that throws would take the rest of the announcement — and everything below — with it.
+      try {
+        onDidCloseWindowEmitter.emit(windowId);
+      } catch (e) {
+        logger.error(
+          `A subscriber threw while being told window ${windowId} closed, so the rest of them were not told: ${getErrorMessage(e)}`,
+        );
+      }
 
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
@@ -1138,12 +1200,23 @@ async function main() {
         }
       }
 
-      createWindow();
+      // Neither call below is awaited — startup carries on and the `activate` handler is
+      // synchronous — so a refusal or failure is reported here rather than becoming an unhandled
+      // rejection
+      const createWindowReportingFailures = async (occasion: string) => {
+        try {
+          await createWindow();
+        } catch (e) {
+          logger.error(`Failed to create a window ${occasion}: ${getErrorMessage(e)}`);
+        }
+      };
+
+      createWindowReportingFailures('at startup');
 
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (windows.length === 0) createWindow();
+        if (windows.length === 0) createWindowReportingFailures('on activate');
       });
 
       return undefined;
