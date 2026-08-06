@@ -79,7 +79,7 @@ describe('notification service host', () => {
     vi.resetModules();
     mockSendCommand.mockResolvedValue(undefined);
     const { startNotificationService } = await import(
-      '@renderer/services/notification.service-host'
+      '@renderer/services/notification.service-shard'
     );
     await startNotificationService();
   });
