@@ -8,7 +8,7 @@ import {
   navigateHistory,
   recordNavigation,
   REFERENCE_HISTORY_MAX_DEPTH,
-} from '@renderer/services/reference-history.util';
+} from '@shared/services/reference-history.util';
 
 function entry(book: string, chapterNum: number, verseNum = 1): ReferenceHistoryEntry {
   return { scrRef: { book, chapterNum, verseNum } };

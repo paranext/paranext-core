@@ -108,6 +108,36 @@ export type ReferenceHistoryUpdateInfo = {
   history: ReferenceHistory;
 };
 
+/**
+ * Per-scroll-group values keyed by {@link ScrollGroupId}. Serialized as a plain object, so a group
+ * that has never been touched is simply absent rather than present-and-`undefined`.
+ *
+ * @experimental
+ */
+export type ScrollGroupMap<T> = { [scrollGroupId: ScrollGroupId]: T | undefined };
+
+/**
+ * The scroll group state that survives an app restart: each group's Scripture reference and the
+ * project whose versification that reference is expressed in. Reference history is deliberately NOT
+ * here — it is session-only (see {@link ReferenceHistory}).
+ *
+ * @experimental
+ */
+export type PersistedScrollGroupState = {
+  scrRefs: ScrollGroupMap<SerializedVerseRef>;
+  scrRefSourceProjectIds: ScrollGroupMap<string>;
+};
+
+/**
+ * The whole scroll group state at one instant, for a consumer that keeps a local cache of it and
+ * needs to (re)seed that cache in one round trip rather than asking per group.
+ *
+ * @experimental
+ */
+export type ScrollGroupSnapshot = PersistedScrollGroupState & {
+  referenceHistories: ScrollGroupMap<ReferenceHistory>;
+};
+
 /** Parts of the Scroll Group Service that are exposed through the network object */
 export interface IScrollGroupRemoteService {
   /**
@@ -174,6 +204,41 @@ export interface IScrollGroupRemoteService {
    */
   navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
 }
+
+/**
+ * Scroll group operations that exist for the platform's own cache-keeping rather than for
+ * consumers. They ride on the same network object as {@link IScrollGroupRemoteService} but are
+ * deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does not offer them.
+ *
+ * @experimental
+ */
+export interface IScrollGroupInternalService {
+  /**
+   * Get every scroll group's current reference, source project, and reference history at once, so a
+   * process keeping a local cache can (re)seed it in one round trip rather than one per group.
+   *
+   * @returns Copy of the whole scroll group state, safe to keep
+   * @experimental
+   */
+  getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
+  /**
+   * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
+   * into its own store. Idempotent: the first call wins and every later one is a no-op, so several
+   * callers offering their own copies cannot interleave into a mixture of them.
+   *
+   * @param state Previously persisted scroll group state
+   * @experimental
+   */
+  migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<void>;
+}
+
+/**
+ * Everything the scroll group service host registers on its network object: what consumers call
+ * plus the platform's own cache-keeping operations.
+ *
+ * @experimental
+ */
+export type IScrollGroupHostService = IScrollGroupRemoteService & IScrollGroupInternalService;
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object
 /** JSDOC DESTINATION scrollGroupService */
