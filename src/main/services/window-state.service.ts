@@ -152,6 +152,24 @@ export function getReadyWindowIds(): number[] {
 }
 
 /**
+ * IDs of the windows that are tracked but cannot currently answer a routed call, in creation order.
+ *
+ * The other half of {@link getReadyWindowIds}, and the half a fan-out has to say something about:
+ * skipping these windows leaves them out of the answer entirely, so a window that is alive with
+ * work open in it comes back indistinguishable from a window that does not exist. A fan-out reports
+ * them as windows it could not ask rather than as windows with nothing to say.
+ *
+ * A window is in here while its renderer is still starting, and again if that renderer stops
+ * serving requests — see {@link markWindowNotReady}. Those two cannot be told apart from here, and a
+ * fan-out must not try: the second is exactly the case where the window had something open.
+ */
+export function getNotReadyWindowIds(): number[] {
+  return trackedWindows
+    .map(({ windowId }) => windowId)
+    .filter((windowId) => !readyWindowIds.has(windowId));
+}
+
+/**
  * The window Electron reports as focused, or `undefined` when no window has focus.
  *
  * This is the honest answer about focus, which is not always where calls are routed — see
