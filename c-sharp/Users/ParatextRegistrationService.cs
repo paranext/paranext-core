@@ -61,6 +61,10 @@ internal class ParatextRegistrationService(
                 InternetSettingsDataProvider.SetInternetSettings(newInternetSettings);
             }
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.getParatextRegistryUrl",
+            GetParatextRegistryUrl
+        );
 
         // Lookup localized strings where they may be needed by callers without access to PapiClient
         RegistrationRequiredException.ExceptionMessage = LocalizationService.GetLocalizedString(
@@ -224,6 +228,25 @@ internal class ParatextRegistrationService(
             );
         }
     }
+
+    /// <summary>
+    /// Maps a registry <see cref="ServerType"/> to the Paratext Registry website URL for that
+    /// environment. Development/Test/QA get their own sites; everything else uses Production.
+    /// </summary>
+    internal static string GetRegistryUrl(ServerType server) =>
+        server switch
+        {
+            ServerType.Development => "https://registry-dev.paratext.org/",
+            ServerType.Test => "https://registry-test.paratext.org/",
+            ServerType.QualityAssurance => "https://registry-qa.paratext.org/",
+            _ => "https://registry.paratext.org/",
+        };
+
+    /// <summary>
+    /// Returns the Paratext Registry website URL for the server currently selected in ParatextData
+    /// internet settings.
+    /// </summary>
+    private string GetParatextRegistryUrl() => GetRegistryUrl(InternetAccess.SelectedServers);
 
     /// <summary>
     /// For any project with uncommitted changes on this machine, marks a point in project history in

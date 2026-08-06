@@ -155,11 +155,17 @@ declare module 'papi-shared-types' {
     'paratextRegistration.setParatextDataInternetSettings': (
       newInternetSettings: InternetSettings,
     ) => Promise<void>;
+    /**
+     * Gets the Paratext Registry website URL for the currently-selected registry server.
+     *
+     * @returns The registry site URL (e.g. `https://registry.paratext.org/`) for the server
+     *   currently selected in ParatextData internet settings.
+     */
+    'paratextRegistration.getParatextRegistryUrl': () => Promise<string>;
   }
 
   export interface DataProviders {
     'paratextRegistration.internetSettingsDataProvider': IInternetSettingsDataProvider;
-  }
 
   export interface SettingTypes {
     /**
