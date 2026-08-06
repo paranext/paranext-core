@@ -120,6 +120,10 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * Event that fires when a process disconnects from the network, carrying the method names its
    * departure removed from the central registry.
    *
+   * This is platform-internal core plumbing between the process that owns the websocket server and
+   * the services that know how their own registered names are formed, not part of the `@papi/*`
+   * surface.
+   *
    * This is a local, in-process event: only the process that owns the connections can observe one
    * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
    * else it is a real event that simply never fires.
