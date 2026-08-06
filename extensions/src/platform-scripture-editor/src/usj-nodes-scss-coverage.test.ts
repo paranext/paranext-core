@@ -13,9 +13,12 @@ const dir = dirname(fileURLToPath(import.meta.url));
 // Strip comments so their text can't be mistaken for selectors or declarations. Block comments
 // first (that also removes the `//` inside the header's URLs), then SCSS `//` line comments — so a
 // commented-out `// --para-indent: 10vw;` in a hand-edited SCSS block isn't read as a live setter.
+// The line-comment strip only fires at line start or after whitespace, so a `//` inside a value
+// (a future `url(https://…)` or protocol-relative `url(//…)`) is left intact rather than deleting
+// the rest of that declaration's line and silently shifting brace depth.
 const css = readFileSync(resolve(dir, '_usj-nodes.scss'), 'utf-8')
   .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/\/\/.*$/gm, '');
+  .replace(/(^|\s)\/\/.*$/gm, '$1');
 
 // The stylesheet is parsed as a flat list of `selector { declarations }` blocks. This regex cannot
 // reliably read a rule nested inside another block (an @media query, @keyframes, or SCSS nesting),
@@ -97,6 +100,39 @@ function valueMismatches(property: string, expected: Map<string, string>): strin
     );
 }
 
+/**
+ * Reports gutter markers that set `property` but aren't in the expected map — the reverse of
+ * `valueMismatches`. This makes the drift guard symmetric: an indent that the USFM spec doesn't
+ * call for, or a stale entry left behind after upstream removes a marker, is flagged rather than
+ * silently passing because the expected list never mentioned it.
+ */
+function unexpectedMarkers(property: string, expected: Map<string, string>): string[] {
+  const actual = getGutterMarkerValues(property);
+  return [...actual]
+    .filter(([marker]) => !expected.has(marker))
+    .map(([marker, value]) => `.usfm_${marker}: sets ${property} ${value} but is not expected`);
+}
+
+/**
+ * Reports gutter `property` rules qualified by writing direction (`[dir=…]`). Upstream keeps the
+ * gutter --para-indent/--verse-text-start values identical for LTR and RTL, so a `[dir=…]`
+ * qualifier would leave one direction with no indent compensation while the coverage filter — which
+ * matches on the `psc-gutter-markers` and `text-spacing` substrings and ignores the qualifier —
+ * still counted the marker as covered. This keeps that asymmetry from slipping back in silently.
+ */
+function directionQualifiedGutterRules(property: string): string[] {
+  const setter = new RegExp(`${property}\\s*:`);
+  return blocks
+    .filter(
+      (block) =>
+        block.selectors.includes('psc-gutter-markers') &&
+        block.selectors.includes('text-spacing') &&
+        setter.test(block.declarations) &&
+        block.selectors.includes('[dir='),
+    )
+    .map((block) => `${property}: direction-qualified selector "${block.selectors.trim()}"`);
+}
+
 // USFM standard LeftMargin values -> vw (formula: inches x 20).
 // Source: https://github.com/ubsicap/usfm/blob/master/sty/usfm.sty
 // Every marker must set --para-indent to the listed value in .psc-gutter-markers.text-spacing.
@@ -138,13 +174,20 @@ describe('_usj-nodes.scss .psc-gutter-markers.text-spacing coverage', () => {
   it('every USFM indented marker sets the expected --para-indent', () => {
     // Fails loudly if a gutter rule was nested where the flat parser can't see it.
     expect(nestingProblems('--para-indent')).toEqual([]);
+    // Fails loudly if a gutter --para-indent rule is direction-qualified (LTR/RTL must match).
+    expect(directionQualifiedGutterRules('--para-indent')).toEqual([]);
     // Names each marker whose --para-indent is missing or wrong (an empty actual map surfaces here
     // too, since every expected marker then reports "got none").
     expect(valueMismatches('--para-indent', EXPECTED_PARA_INDENT)).toEqual([]);
+    // Names any gutter marker that sets --para-indent but isn't expected (drift in the other
+    // direction: an unexpected indent or a stale entry after upstream removes a marker).
+    expect(unexpectedMarkers('--para-indent', EXPECTED_PARA_INDENT)).toEqual([]);
   });
 
   it('every hanging-indent marker sets the expected --verse-text-start', () => {
     expect(nestingProblems('--verse-text-start')).toEqual([]);
+    expect(directionQualifiedGutterRules('--verse-text-start')).toEqual([]);
     expect(valueMismatches('--verse-text-start', EXPECTED_VERSE_TEXT_START)).toEqual([]);
+    expect(unexpectedMarkers('--verse-text-start', EXPECTED_VERSE_TEXT_START)).toEqual([]);
   });
 });

@@ -2569,14 +2569,16 @@ span.read img {
 }
 
 /* Indent compensation — mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules). */
+   Only active when .text-spacing is present (same condition as the source rules).
+   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
+   respectively), so no direction restriction is needed here. */
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
 .psc-gutter-markers.text-spacing .usfm_li,
 .psc-gutter-markers.text-spacing .usfm_li1,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2589,7 +2591,7 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_li2,
 .psc-gutter-markers.text-spacing .usfm_lim,
 .psc-gutter-markers.text-spacing .usfm_lim1,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
