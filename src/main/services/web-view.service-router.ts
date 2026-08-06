@@ -9,10 +9,7 @@
  */
 
 import { getReadyWindowIds, isWindowReady } from '@main/services/window-state.service';
-import {
-  createTargetShardResolver,
-  registerServiceRouter,
-} from '@main/services/service-router.factory';
+import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -65,7 +62,7 @@ export async function getWebViewShard(windowId: number): Promise<WebViewServiceT
 /** Get the WebView service shard for the currently focused window, throwing if none is available. */
 const getTargetWebViewShard = createTargetShardResolver(
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  getWebViewShard,
+  webViewShards,
 );
 
 /** The window that owns a web view, and the definition the ownership search already fetched */
@@ -284,29 +281,35 @@ const onDidUpdateWebView = getNetworkEvent<UpdateWebViewEvent>(EVENT_NAME_ON_DID
 const onDidCloseWebView = getNetworkEvent<CloseWebViewEvent>(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 /**
+ * The router object registered under the generic "WebViewService" name. Every method either routes
+ * to the window that owns a named web view or asks every window and merges the answers; none of
+ * them is a plain forward to the focused window.
+ *
+ * Declared as the service it claims the name of, so a member added to `WebViewServiceType` cannot
+ * silently become a name the router does not answer for.
+ */
+const webViewServiceRouter: WebViewServiceType = {
+  onDidAddWebView: onDidOpenWebView,
+  onDidOpenWebView,
+  onDidUpdateWebView,
+  onDidCloseWebView,
+  getWebView,
+  openWebView,
+  reloadWebView,
+  getSavedWebViewDefinition,
+  getOpenWebViewDefinition,
+  getAllOpenWebViewDefinitions,
+  getWebViewController,
+};
+
+/**
  * Register the WebView service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startWebViewServiceRouter(): Promise<void> {
-  await registerServiceRouter({
-    genericName: NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-    // Nothing on this service is a plain forward to the focused window: every method either routes
-    // to the window that owns a named web view or asks every window and merges the answers, which
-    // is behaviour of its own rather than boilerplate. They stay hand-written below.
-    forwardedMethodNames: [],
-    resolveTargetShard: getTargetWebViewShard,
-    overrides: {
-      onDidAddWebView: onDidOpenWebView,
-      onDidOpenWebView,
-      onDidUpdateWebView,
-      onDidCloseWebView,
-      getWebView,
-      openWebView,
-      reloadWebView,
-      getSavedWebViewDefinition,
-      getOpenWebViewDefinition,
-      getAllOpenWebViewDefinitions,
-      getWebViewController,
-    },
-  });
+  await networkObjectService.set<WebViewServiceType>(
+    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+    webViewServiceRouter,
+  );
+  logger.info('WebView service router registered');
 }
