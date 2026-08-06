@@ -42,7 +42,11 @@ import { startProjectLookupService } from '@main/services/project-lookup.service
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
-import { startWindowServiceRouter } from '@main/services/window.service-router';
+import {
+  getWindowServiceShard,
+  onDidRegisterWindowServiceShard,
+  startWindowServiceRouter,
+} from '@main/services/window.service-router';
 import {
   isAppQuitRequested,
   isAppShuttingDown,
@@ -105,10 +109,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import {
-  networkObjectService,
-  onDidCreateNetworkObject,
-} from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
@@ -124,27 +125,9 @@ import {
   wait,
   waitForDuration,
 } from 'platform-bible-utils';
-import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
 import { themeService } from '@shared/services/theme.service';
-import { IWindowService, windowServiceProviderName } from '@shared/services/window.service-model';
 
 // #region Helper functions
-
-/**
- * Pull the window ID out of a scoped window service's network object id, e.g.
- * "platform.windowServiceDataProvider-2-data" gives 2. Returns undefined for anything else,
- * including the generic name the main-process service router publishes, whose remainder does not
- * start with a number.
- *
- * @param networkObjectId Id of a network object that was just created
- * @returns Window whose renderer registered it, or undefined if this is not a scoped window service
- */
-function getWindowIdFromScopedWindowServiceId(networkObjectId: string): number | undefined {
-  const scopedPrefix = `${windowServiceProviderName}-`;
-  if (!networkObjectId.startsWith(scopedPrefix)) return undefined;
-  const windowId = Number.parseInt(networkObjectId.slice(scopedPrefix.length), 10);
-  return Number.isNaN(windowId) ? undefined : windowId;
-}
 
 /**
  * Get the zoom factor from settings or return the default value
@@ -255,21 +238,6 @@ const TITLE_BAR_BUTTON_BACKGROUND_COLOR = 'hsla(0, 0%, 100%, 0)'; // transparent
  */
 let willRestart = false;
 
-/**
- * Get the window service data provider for a specific window by its ID. Each renderer registers its
- * own scoped data provider (e.g. "platform.windowServiceDataProvider-1").
- *
- * Deliberately a plain lookup rather than a caching layer, even though the input handlers below
- * call it on every keystroke and mouse press: the network object service already keeps what it
- * resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it holds
- * when the object is disposed or its window closes. A second cache here could only go stale — and
- * because Electron reuses `BrowserWindow.id`, a stale entry would be handed to the next window
- * opened with that ID rather than merely being useless.
- */
-async function getWindowServiceForWindow(windowId: number): Promise<IWindowService | undefined> {
-  return getDataProviderByType<IWindowService>(`${windowServiceProviderName}-${windowId}`);
-}
-
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
   logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
@@ -337,7 +305,7 @@ async function main() {
     // Reuses the same per-window lookup the input handlers use
     {
       name: 'window service router',
-      started: startWindowServiceRouter(getWindowServiceForWindow),
+      started: startWindowServiceRouter(getWindowServiceShard),
     },
   ];
   const routerOutcomes = await Promise.allSettled(routerStarts.map(({ started }) => started));
@@ -359,12 +327,9 @@ async function main() {
   await initializeWindowLayoutPersistence();
 
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
-  // call until its renderer has registered. Its scoped window service appearing is that signal, and
+  // call until its renderer has registered. Its window service shard appearing is that signal, and
   // routing waits for it rather than following focus alone — see `getTargetWindowId`.
-  onDidCreateNetworkObject(({ id }) => {
-    const readyWindowId = getWindowIdFromScopedWindowServiceId(id);
-    if (readyWindowId !== undefined) markWindowReady(readyWindowId);
-  });
+  onDidRegisterWindowServiceShard((readyWindowId) => markWindowReady(readyWindowId));
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -744,7 +709,7 @@ async function main() {
     const setWindowFocus = async (
       specifier: import('@shared/services/window.service-model').SetFocusSpecifier,
     ) => {
-      const windowService = await getWindowServiceForWindow(windowId);
+      const windowService = await getWindowServiceShard(windowId);
       if (windowService) await windowService.setFocus(specifier);
       else logger.debug(`Window service for window ${windowId} not available yet`);
     };
