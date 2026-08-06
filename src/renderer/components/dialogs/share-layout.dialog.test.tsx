@@ -20,7 +20,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
     getAllOpenWebViewDefinitions: vi.fn(async () => []),
   },
 }));
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
 }));
 

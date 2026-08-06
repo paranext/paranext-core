@@ -40,7 +40,7 @@ import {
 import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';

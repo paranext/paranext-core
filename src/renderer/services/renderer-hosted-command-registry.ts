@@ -6,7 +6,7 @@
  * The canonical list of renderer-hosted command names is declared centrally, but which module
  * registers each one is a design choice no type can check across module boundaries: a command added
  * to the list without a matching registration call anywhere would otherwise go unnoticed until a
- * caller hits the routing proxy's timeout. Routing every registration through
+ * caller hits the service router's timeout. Routing every registration through
  * {@link registerScopedCommands} makes that omission visible at startup instead — see
  * {@link assertAllRendererHostedCommandsRegistered}.
  */
@@ -54,7 +54,7 @@ export function registerScopedCommands(
     registerCommand(`${commandName}-${globalThis.windowId}` as CommandNames, handler).then(
       (unsubscribe) => {
         // Recorded once the registration has landed, not when it was attempted. The check this
-        // feeds is meant to prove there is a handler for the routing proxy to forward to, and a
+        // feeds is meant to prove there is a handler for the service router to forward to, and a
         // name recorded up front would report a registration that rejected — a name collision after
         // a reload, a network failure during startup — as covered.
         // Object.entries widens the key to string; the RendererHostedCommandHandlers parameter type
@@ -74,9 +74,9 @@ export function registerScopedCommands(
  * been.
  *
  * A name in `RENDERER_HOSTED_COMMAND_NAMES` that no {@link registerScopedCommands} call registered
- * means the main process's routing proxy has nothing to forward calls to for that command — without
- * this check, that surfaces only as the proxy's request timing out, with nothing pointing at the
- * missing registration as the cause.
+ * means the main process's service router has nothing to forward calls to for that command —
+ * without this check, that surfaces only as the proxy's request timing out, with nothing pointing
+ * at the missing registration as the cause.
  */
 export function assertAllRendererHostedCommandsRegistered(): void {
   const missingCommandNames = RENDERER_HOSTED_COMMAND_NAMES.filter(
@@ -86,7 +86,7 @@ export function assertAllRendererHostedCommandsRegistered(): void {
 
   // Says what a reader of the log will see happen rather than only naming constants: whatever menu
   // item, toolbar button, or keyboard shortcut invokes one of these commands in this window does
-  // nothing, after the routing proxy spends its request timeout looking for a handler.
+  // nothing, after the service router spends its request timeout looking for a handler.
   const message = `Renderer-hosted commands have no registered handler in this window, so the menu items, buttons, and keyboard shortcuts that invoke them will silently do nothing here: ${missingCommandNames.join(', ')}`;
   // In dev/test, fail loudly and immediately so the gap cannot ship. In production, a thrown error
   // here would take down renderer startup over one unroutable command; log it instead so the rest of

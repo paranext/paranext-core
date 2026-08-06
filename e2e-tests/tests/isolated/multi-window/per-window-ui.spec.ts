@@ -148,7 +148,7 @@ async function dismissPopoverFromWebView(frame: Frame, overlayId: string): Promi
 
 /**
  * Show a modal alert dialog through the GENERIC `dialog:showDialog` request — the name the main
- * process serves with a routing proxy that forwards to the focused window. The returned promise
+ * process serves with a service router that forwards to the focused window. The returned promise
  * stays pending until the user answers or dismisses the dialog (the request is registered with its
  * timeout disabled), so callers must NOT await it until after driving the dialog; it resolves
  * `null` when the dialog is dismissed without an answer.
@@ -198,7 +198,7 @@ function showModalAlertViaWebSocket(prompt: string): Promise<unknown> {
 
 /**
  * Send a notification through the GENERIC notification service — the name the main process serves
- * with a routing proxy that forwards `send` to the focused window. `duration: 0` means the toast
+ * with a service router that forwards `send` to the focused window. `duration: 0` means the toast
  * never auto-closes, so assertions cannot race an auto-dismiss; tests dismiss explicitly.
  */
 async function sendNotification(message: string): Promise<string | number> {

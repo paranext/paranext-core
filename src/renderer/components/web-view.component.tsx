@@ -13,7 +13,7 @@ import {
   isWebViewNonceCorrect,
   reloadWebView,
   updateTabPartialSync,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,

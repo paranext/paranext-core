@@ -6,7 +6,7 @@ import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
-import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
@@ -63,7 +63,7 @@ vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
   useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
 }));
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   updateWebViewDefinitionSync: vi.fn(() => true),
 }));
 

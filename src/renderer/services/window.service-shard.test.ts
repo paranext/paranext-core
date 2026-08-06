@@ -7,7 +7,7 @@ import {
   onDidChangeLastSelectedScriptureNavigableWebViewId,
   onDidChangeNavigationTargetWebView,
   testingWindowService,
-} from '@renderer/services/window.service-host';
+} from '@renderer/services/window.service-shard';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 
 type CloseWebViewCallback = (event: { webView: { id: string } }) => void;
@@ -57,7 +57,7 @@ const {
   };
 });
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   getDockLayout: vi.fn(async () => ({
     focusTab: vi.fn(),
     getTabInfoByElement: vi.fn(() => undefined),
