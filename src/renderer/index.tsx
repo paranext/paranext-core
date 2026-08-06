@@ -6,8 +6,8 @@ import '@renderer/global-this.model';
 import { App } from '@renderer/app.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
-import { startDialogService } from '@renderer/services/dialog.service-shard';
-import { startNotificationService } from '@renderer/services/notification.service-shard';
+import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
+import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
@@ -19,7 +19,7 @@ import {
 } from '@renderer/services/theme.service-host';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { startWebViewService } from '@renderer/services/web-view.service-shard';
+import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
 import { initialize as initializeWindowService } from '@renderer/services/window.service-shard';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
@@ -109,11 +109,11 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
-      startWebViewService(),
-      startDialogService(),
+      startWebViewServiceShard(),
+      startDialogServiceShard(),
       startScrollGroupService(),
       startScrollGroupNavigationCommands(),
-      startNotificationService(),
+      startNotificationServiceShard(),
       startOverlayService(),
       initializeThemeService(),
       initializeWindowService(),
@@ -138,7 +138,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     });
 
     // Every command in RENDERER_HOSTED_COMMAND_NAMES must have been registered by one of the
-    // services started above (startWebViewService, startDialogService,
+    // services started above (startWebViewServiceShard, startDialogServiceShard,
     // startScrollGroupNavigationCommands) — otherwise the main process's service router for it has
     // nothing to forward to. Checked last so the dev-mode throw it uses to make a gap impossible to
     // miss cannot cost this renderer any of the startup work above; what the app ends up with is

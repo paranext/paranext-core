@@ -154,7 +154,7 @@ describe('dialog.service-shard', () => {
     vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
 
     const mod = await import('./dialog.service-shard');
-    await mod.startDialogService();
+    await mod.startDialogServiceShard();
   });
 
   describe('modal dialog routing', () => {

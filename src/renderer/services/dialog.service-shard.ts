@@ -348,7 +348,7 @@ function scopedDialogRequestType(
 }
 
 /** Register the commands that back the PAPI dialog service */
-export async function startDialogService(): Promise<void> {
+export async function startDialogServiceShard(): Promise<void> {
   await initialize();
   const complexArrayDescription =
     'String representation of RegExp pattern(s) to match against projects’ projectInterfaces (using https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) to determine if they should be included. Each array entry is handled based on its type (at least one entry must match for this filter condition to pass). If the entry is a string, it will be matched against each projectInterface. If any match, the project will pass this filter condition. If the entry is an array of strings, each will be matched against each projectInterface. If every string matches against at least one projectInterface, the project will pass this filter condition. In other words, each entry in the first-level array is OR’ed together. Each entry in second-level arrays (arrays within the first-level array) are AND’ed together.';
