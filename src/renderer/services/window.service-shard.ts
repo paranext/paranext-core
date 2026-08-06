@@ -534,13 +534,17 @@ let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IWindowService;
 export async function initialize(): Promise<void> {
-  const { windowId } = globalThis;
-  if (!windowId) throw new Error('Cannot start the window service: windowId is not set');
-
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
+          const { windowId } = globalThis;
+          if (!windowId) throw new Error('Cannot start the window service: windowId is not set');
+          // What a usable window id is gets decided in exactly one place. Building the scoped name
+          // below from an id the router would then reject as an attribute would register a shard
+          // under a name nothing looks for, so the check that decides that runs first.
+          const shardAttributes = getServiceShardAttributes(windowId);
+
           // Register this window's shard under a window-scoped name (e.g.
           // "platform.windowServiceDataProvider-1") so multiple renderers can coexist. The main
           // process's window service router registers the generic name and relays from whichever
@@ -556,7 +560,7 @@ export async function initialize(): Promise<void> {
             `${windowServiceProviderName}-${windowId}` as typeof windowServiceProviderName,
             new WindowDataProviderEngine(),
             WINDOW_SERVICE_SHARD_OBJECT_TYPE,
-            getServiceShardAttributes(windowId),
+            shardAttributes,
           );
           resolve();
         } catch (error) {
