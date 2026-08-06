@@ -76,6 +76,63 @@ Extension Host Process              Main Process
 > Authoring". This section covers the cross-process host/proxy axis; that one covers how to structure
 > the implementation.
 
+### Service router and service shard
+
+The host/service pair above assumes the implementation lives in exactly ONE process. Several
+services are per-window instead: open web views, notification toasts, dialogs, and focus are each
+one window's business, and the app can have several windows. Those services use a third shape.
+
+| Term | File suffix | Lives | Role |
+| ---- | ----------- | ----- | ---- |
+| **Service router** | `*.service-router.ts` | main | Registers the generic global name. Holds no logic; resolves a target window and forwards. Fans out only where the operation is inherently cross-window |
+| **Service shard** | `*.service-shard.ts` | each renderer | The real implementation for **one** window. Registered under a window-scoped network object id with an `objectType` of its own |
+
+```
+Renderer (window 1)          Main Process                  Renderer (window 2)
+┌──────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐
+│ web-view.service-    │    │ web-view.service-      │    │ web-view.service-    │
+│ shard.ts             │◄──►│ router.ts              │◄──►│ shard.ts             │
+│ id: WebViewService-1 │    │ id: WebViewService     │    │ id: WebViewService-2 │
+│ objectType:          │    │ (the generic name      │    │ objectType:          │
+│  webViewServiceShard │    │  consumers call)       │    │  webViewServiceShard │
+└──────────────────────┘    └────────────────────────┘    └──────────────────────┘
+```
+
+Consumers never see any of this: they call the generic name, exactly as they did before there was
+more than one window.
+
+**Rules of the pattern:**
+
+- **Platform code in the renderer registers zero globally-unique names.** Every global name is
+  registered by main; a renderer only ever registers window-scoped objects. That makes "a second
+  window cannot start because the name is taken" structurally impossible rather than fixed case by
+  case.
+- **A shard declares what it is, and which window it is for.** It registers with a distinct
+  `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
+  `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
+  (`object:{id}.{method}` derives from it), but nothing DISCOVERS a shard by rebuilding that id.
+- **A router keeps an index, not a scan.** `createServiceShardIndex`
+  (`src/main/services/service-shard-index.ts`) subscribes once to the network object create/dispose
+  announcements, filters on the object type, and maintains a `windowId → shard` map. Lookups are
+  O(1), and a window closing removes its shard for free.
+- **Boilerplate goes through the factory.** `registerServiceRouter`
+  (`src/main/services/service-router.factory.ts`) builds the methods that plainly forward to the
+  target window's shard and publishes the router under the generic name. Methods with behaviour of
+  their own — events, operations that must ask every window, operations routed by who owns a named
+  web view — are passed as overrides. A compile-time coverage check refuses to build a router that
+  does not cover every member of the service.
+- **The pattern does not depend on the transport.** Most routers and shards are plain network
+  objects; the window service's are data providers, because it has subscription semantics.
+  `registerEngine` passes `dataProviderType` / `dataProviderAttributes` straight through to
+  `networkObjectService.set`, so a data provider shard is discovered exactly like any other.
+
+"Router", not "aggregator": a router selects ONE shard by policy and forwards; the check aggregator
+(`extensions/src/platform-scripture/src/checks/check-aggregator.service.ts`) is a different shape —
+N sources holding different data, combined into one view.
+
+`theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global
+(one current theme, one scroll group 0) and keep the service-host name.
+
 ### Main Process Services (`src/main/services/`)
 
 | Service | Purpose |
