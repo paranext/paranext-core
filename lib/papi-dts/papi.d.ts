@@ -4161,7 +4161,7 @@ declare module 'shared/services/web-view.service-model' {
    * The documentation belongs to the generic name because that is the command consumers call; the
    * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
    * an implementation detail of multi-window routing and are deliberately left undocumented. The main
-   * process attaches these when it registers the routing proxies.
+   * process attaches these when it registers the service routers.
    *
    * @experimental
    */
@@ -5671,7 +5671,7 @@ declare module 'shared/models/notification.service-model' {
    *
    * Attached in two places: each window's renderer registers its window-scoped name (e.g.
    * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
-   * registers its routing proxy under the generic {@link NotificationServiceNetworkObjectName} — the
+   * registers its service router under the generic {@link NotificationServiceNetworkObjectName} — the
    * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
    *
    * @experimental
@@ -7273,7 +7273,7 @@ declare module 'shared/models/dialog-options.model' {
     'okLabel',
     'cancelLabel',
   ];
-  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
+  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-shard.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
   };
@@ -7349,7 +7349,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   };
   /**
    * Set the functionality of submitting and canceling dialogs. This should be called specifically by
-   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
+   * `dialog.service-shard.ts` immediately on startup and by nothing else. This is only here to
    * mitigate a dependency cycle
    *
    * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
