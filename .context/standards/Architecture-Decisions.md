@@ -1846,4 +1846,5 @@ step, no automation. Just a record.
   and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
-- **Source:** multi-window follow-up (plan step 2).
+- **Source:** multi-window architecture plan step 2 (PT-4275 epic; branch
+  `pt-4275-router-shard-discovery`).
