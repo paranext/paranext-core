@@ -1,10 +1,11 @@
 import { WebViewProps } from '@papi/core';
+import papi from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MarkdownRenderer } from 'platform-bible-react';
 import { RegistrationForm } from './components/registration-form.component';
-import { PARATEXT_REGISTRY_LINK } from './utils';
+import { PRODUCTION_REGISTRY_URL } from './utils';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_app_startup_description%',
@@ -15,12 +16,32 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 
 globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  // The registry link follows the selected server. Default to (and fall back on) the production
+  // URL so the link is never blank or broken. The view reads the server on mount; a server change
+  // requires an app restart to take effect, after which the view reopens fresh.
+  const [registryLink, setRegistryLink] = useState(PRODUCTION_REGISTRY_URL);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
+        if (!cancelled && url) setRegistryLink(url);
+      } catch {
+        // Keep the production fallback so the link is never broken.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const registrationDetails = useMemo(
     () =>
       formatReplacementString(localizedStrings['%paratextRegistration_registration_details%'], {
-        registryLink: PARATEXT_REGISTRY_LINK,
+        registryLink,
       }),
-    [localizedStrings],
+    [localizedStrings, registryLink],
   );
   const markdownComponent = useMemo(
     () => <MarkdownRenderer anchorTarget="_blank" markdown={registrationDetails} />,

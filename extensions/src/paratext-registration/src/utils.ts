@@ -13,4 +13,4 @@ export enum SaveState {
   HasSaved,
 }
 
-export const PARATEXT_REGISTRY_LINK = 'https://registry.paratext.org/';
+export const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org/';
