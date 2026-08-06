@@ -21,13 +21,14 @@ export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_developer_section_label%',
   '%paratextRegistration_label_serverType_option_Production%',
   '%paratextRegistration_label_serverType_option_Development%',
+  '%paratextRegistration_label_serverType_option_Test%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export type DeveloperSectionProps = {
   /** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
-  /** The currently selected server type. QA and Test values display as Production. */
+  /** The currently selected server type. QA values display as Production; Test displays as Test. */
   selectedServer: ServerType;
   /** Called when the user switches to Production or Development. */
   onServerChange: (server: ServerType) => void;
@@ -43,8 +44,10 @@ export function DeveloperSection({
   disabled,
 }: DeveloperSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  // QA and Test are not surfaced in this UI; they display as Production.
-  const displayValue = selectedServer === 'Development' ? 'Development' : 'Production';
+  // QA (and any unknown value) is not surfaced in this UI; it displays as Production.
+  // Development and Test are shown directly.
+  const displayValue =
+    selectedServer === 'Development' || selectedServer === 'Test' ? selectedServer : 'Production';
 
   return (
     <div className="tw:border-t tw:pt-2">
@@ -66,14 +69,15 @@ export function DeveloperSection({
           type="single"
           value={displayValue}
           onValueChange={(v) => {
-            if (v === 'Production' || v === 'Development') onServerChange(v);
+            if (v === 'Production' || v === 'Development' || v === 'Test') onServerChange(v);
             // Radix single-toggle fires '' when the already-selected item is clicked (deselect).
-            // If the user is on QA/Test (displayed as Production), that click should switch them
-            // to actual Production so they're not stranded with no escape route.
+            // If the user is on a hidden value (QA/unknown, displayed as Production), that click
+            // should switch them to actual Production so they're not stranded.
             else if (
               v === '' &&
               selectedServer !== 'Production' &&
-              selectedServer !== 'Development'
+              selectedServer !== 'Development' &&
+              selectedServer !== 'Test'
             )
               onServerChange('Production');
           }}
@@ -92,6 +96,9 @@ export function DeveloperSection({
             data-testid="server-type-development"
           >
             {localizedStrings['%paratextRegistration_label_serverType_option_Development%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="Test" variant="outline" data-testid="server-type-test">
+            {localizedStrings['%paratextRegistration_label_serverType_option_Test%']}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
