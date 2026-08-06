@@ -816,7 +816,15 @@ const set = async <T extends NetworkableObject>(
       throw new Error(
         'network-object.service not initialized — call initialize() before emitting onDidCreateNetworkObject',
       );
-    onDidCreateNetworkObjectEmitter.emit(netObjDetails);
+    // The one and only time anyone is told this object exists: nothing re-announces an object that
+    // is already registered, and network events have no replay. A subscriber that throws must not
+    // cost the subscribers after it the news, nor cost the caller a registration that has already
+    // fully succeeded by this point.
+    onDidCreateNetworkObjectEmitter.emitIsolated(netObjDetails, (error) => {
+      logger.error(
+        `A subscriber threw while being told network object '${id}' was registered; the rest were still told: ${getErrorMessage(error)}`,
+      );
+    });
 
     // Override objectToShare's type's force-undefined onDidDispose to DisposableNetworkObject's
     // onDidDispose type because it had an onDidDispose added in overrideOnDidDispose.
