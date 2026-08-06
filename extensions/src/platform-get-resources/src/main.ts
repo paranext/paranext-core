@@ -86,7 +86,9 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
           // If the `projectId` is defined then tries to use that
           resource.projectId
             ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id
+            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
+              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+              resource.dblEntryUid !== '' &&
               localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
         );
 
@@ -174,15 +176,22 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
     // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
     const dblEntries = cachedResources ?? [];
-    const nonDblMetadata = allMetadata.filter(
-      (m) =>
-        m.isEditable === false &&
-        !dblEntries.some(
-          (r) =>
-            (r.projectId !== '' && r.projectId === m.id) ||
-            m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase()),
-        ),
-    );
+    const nonDblMetadata = allMetadata.filter((m) => {
+      if (m.isEditable !== false) return false;
+      const matchingDblEntry = dblEntries.find(
+        (r) =>
+          (r.projectId !== '' && r.projectId === m.id) ||
+          // Guard against empty dblEntryUid: ''.startsWith('') is true for every string
+          (r.dblEntryUid !== '' && m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
+      );
+      if (matchingDblEntry) {
+        logger.warn(
+          `getLocalNonDblResources: excluding ${m.id} — matched DBL entry uid="${matchingDblEntry.dblEntryUid}" projectId="${matchingDblEntry.projectId}" (${matchingDblEntry.projectId !== '' && matchingDblEntry.projectId === m.id ? 'exact projectId' : 'startsWith uid'})`,
+        );
+        return false;
+      }
+      return true;
+    });
 
     logger.warn(
       `getLocalNonDblResources: ${nonDblMetadata.length} non-DBL resources (${dblEntries.length} DBL entries checked): ${nonDblMetadata.map((m) => m.id).join(', ')}`,
