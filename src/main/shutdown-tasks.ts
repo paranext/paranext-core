@@ -6,7 +6,7 @@ import { settingsService } from '@shared/services/settings.service';
 import {
   getAllOpenWebViewDefinitionsWithReachability,
   getOpenWebViewDefinitionsForWindow,
-} from '@main/services/web-view-routing.service';
+} from '@main/services/web-view.service-router';
 import { serializeRequestType } from '@shared/utils/util';
 import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,

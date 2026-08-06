@@ -186,7 +186,7 @@ export const NotificationServiceNetworkObjectName = 'NotificationService';
  *
  * Attached in two places: each window's renderer registers its window-scoped name (e.g.
  * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
- * registers its routing proxy under the generic {@link NotificationServiceNetworkObjectName} — the
+ * registers its service router under the generic {@link NotificationServiceNetworkObjectName} — the
  * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
  *
  * @experimental

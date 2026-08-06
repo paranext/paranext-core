@@ -21,8 +21,8 @@ import { DialogData } from '@shared/models/dialog-options.model';
 
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
-import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
-import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
+import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-shard';
+import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-shard';
 import { logger } from '@shared/services/logger.service';
 
 import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';

@@ -1,3 +1,13 @@
+/**
+ * Window service shard — the window service implementation for THIS window. Registered as a data
+ * provider under a window-scoped name (e.g. "platform.windowServiceDataProvider-1") so several
+ * windows can coexist; the main process's `window.service-router.ts` publishes the generic name and
+ * relays reads and updates from whichever window is the current routing target.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
 import {
   WindowDataTypes,
   IWindowService,
@@ -28,7 +38,7 @@ import {
   onDidCloseWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import {
   isScriptureNavigableWebViewDefinition,
   ResolvedWebView,
@@ -151,7 +161,7 @@ function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
     return !!definition && isScriptureNavigableWebViewDefinition(definition);
   } catch (e) {
     logger.warn(
-      `window.service-host could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
+      `window.service-shard could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
     );
     return false;
   }
@@ -264,7 +274,7 @@ onDidCloseWebView(({ webView }) => {
       (newMode) => {
         if (isPlatformError(newMode)) {
           logger.warn(
-            `window.service-host failed to read platform.interfaceMode: ${getErrorMessage(newMode)}`,
+            `window.service-shard failed to read platform.interfaceMode: ${getErrorMessage(newMode)}`,
           );
           return;
         }
@@ -276,7 +286,7 @@ onDidCloseWebView(({ webView }) => {
     );
   } catch (e) {
     logger.warn(
-      `window.service-host failed to subscribe to platform.interfaceMode: ${getErrorMessage(e)}`,
+      `window.service-shard failed to subscribe to platform.interfaceMode: ${getErrorMessage(e)}`,
     );
   }
 })();
@@ -384,7 +394,7 @@ class WindowDataProviderEngine
         };
       } catch (e) {
         throw new Error(
-          `window.service-host.setFocus threw while getting tab info by direction from tab ${this.#focusSubject.id} in direction ${newSetFocusSpecifier}: ${getErrorMessage(e)}`,
+          `window.service-shard.setFocus threw while getting tab info by direction from tab ${this.#focusSubject.id} in direction ${newSetFocusSpecifier}: ${getErrorMessage(e)}`,
         );
       }
 
@@ -403,7 +413,7 @@ class WindowDataProviderEngine
         newFocusSubject = { ...newSetFocusSpecifier, tabType: tabInfo.tabType };
       } catch (e) {
         throw new Error(
-          `window.service-host.setFocus threw while getting tab info for id ${newSetFocusSpecifier.id}: ${getErrorMessage(e)}`,
+          `window.service-shard.setFocus threw while getting tab info for id ${newSetFocusSpecifier.id}: ${getErrorMessage(e)}`,
         );
       }
     }

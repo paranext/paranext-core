@@ -272,7 +272,7 @@ function readSavedWindowEntries(userDataDir: string): SavedWindowEntry[] {
  * The legacy `localStorage` key the dock layout was saved under before per-window persistence moved
  * layouts into the main process's window-layouts structure. The renderer still READS this key
  * (never writes it) for the one window of a legacy pre-multi-window startup — see
- * `getLegacySavedLayout` in `src/renderer/services/web-view.service-host.ts`.
+ * `getLegacySavedLayout` in `src/renderer/services/web-view.service-shard.ts`.
  */
 const LEGACY_DOCK_LAYOUT_STORAGE_KEY = 'dock-saved-layout';
 

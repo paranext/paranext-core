@@ -2,7 +2,7 @@ import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-host';
+import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
 import {

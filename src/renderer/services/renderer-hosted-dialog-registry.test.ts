@@ -110,10 +110,10 @@ describe('renderer-hosted dialog registry', () => {
  * importing it for real pulls in a large slice of renderer startup machinery to read off a set of
  * string keys.
  */
-const REGISTERING_SOURCE_FILE = resolve(__dirname, 'dialog.service-host.ts');
+const REGISTERING_SOURCE_FILE = resolve(__dirname, 'dialog.service-shard.ts');
 
 describe('renderer-hosted dialog registration coverage (static)', () => {
-  test('every name in RENDERER_HOSTED_DIALOG_REQUEST_NAMES is registered by the dialog service host', () => {
+  test('every name in RENDERER_HOSTED_DIALOG_REQUEST_NAMES is registered by the dialog service shard', () => {
     const source = readFileSync(REGISTERING_SOURCE_FILE, 'utf-8');
     // Tolerates the line break the formatter puts between the call and its first argument
     const registeredNames = new Set(

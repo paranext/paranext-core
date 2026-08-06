@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 
 /**
- * Separate from `window-routing.service.test.ts` because that suite mocks
+ * Separate from `window.service-router.test.ts` because that suite mocks
  * `@shared/services/data-provider.service` wholesale, and what matters here is the behaviour
  * against the REAL one — both at module-load time and at registration.
  *
@@ -44,7 +44,7 @@ vi.mock('@shared/services/network-object.service', async (importOriginal) => ({
   },
 }));
 
-describe('window routing proxy module load', () => {
+describe('window service router module load', () => {
   test('registers a provider whose focus writes do not emit an update the relay already sends', async () => {
     const updateEmitter = new PlatformEventEmitter<unknown>();
     mocks.createNetworkEventEmitterAsync.mockResolvedValue(updateEmitter);
@@ -62,7 +62,7 @@ describe('window routing proxy module load', () => {
       subscribeFocus: async () => async () => true,
     };
 
-    // The real window state service, so the proxy has a window to route the write to
+    // The real window state service, so the router has a window to route the write to
     const { addWindow, markWindowReady } = await import('@main/services/window-state.service');
     // Constructing a real BrowserWindow needs the Electron runtime; `id` is the only member the
     // window state service touches
@@ -70,11 +70,11 @@ describe('window routing proxy module load', () => {
     addWindow({ id: 1 } as never);
     markWindowReady(1);
 
-    const { startWindowRoutingService } = await import('@main/services/window-routing.service');
+    const { startWindowServiceRouter } = await import('@main/services/window.service-router');
     // The engine only ever calls getFocus / setFocus / subscribeFocus on what it resolves, so the
     // stub above implements just those rather than the whole IWindowService
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    await startWindowRoutingService(async () => scopedWindowService as never);
+    await startWindowServiceRouter(async () => scopedWindowService as never);
     const registeredProvider = mocks.networkObjectSet.mock.calls[0][1];
     await registeredProvider.setFocus(undefined, 'detect');
 
