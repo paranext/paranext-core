@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     getTargetWindowId: vi.fn(),
     getWindows: vi.fn(),
     getReadyWindowIds: vi.fn(),
+    getNotReadyWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getWindows: mocks.getWindows,
   getReadyWindowIds: mocks.getReadyWindowIds,
+  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
   isWindowReady: mocks.isWindowReady,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
@@ -83,6 +85,7 @@ describe('web view service router', () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getWindows.mockReturnValue([]);
     mocks.getReadyWindowIds.mockReturnValue([]);
+    mocks.getNotReadyWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
   });
 
@@ -139,18 +142,30 @@ describe('web view service router', () => {
     expect(all.map((definition) => definition.id).sort()).toEqual(['a', 'b', 'c']);
   });
 
-  test('does not ask a window that has not registered its services yet', async () => {
+  test('does not ask a window that has not registered its services yet, but says it could not', async () => {
     // A window is tracked from the moment it is shown; asking it before its renderer registers
-    // stalls the whole fan-out for the network service's registration retry to learn nothing
+    // stalls the whole fan-out for the network service's registration retry to learn nothing. Not
+    // asking it is not the same as it answering "nothing open" — a window also leaves the ready set
+    // by crashing or reloading, and that one may have had editors with unsaved work in it.
     const serving = windowShard(['a']);
     const starting = windowShard([]);
     withWindows({ 1: serving, 2: starting }, { unreadyWindowIds: [2] });
-    const router = await getRouter();
 
-    const all = await router.getAllOpenWebViewDefinitions();
+    const { definitions, unreachableWindowIds } =
+      await getAllOpenWebViewDefinitionsWithReachability();
 
     expect(starting.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
-    expect(all.map((definition) => definition.id)).toEqual(['a']);
+    expect(definitions.map((definition) => definition.id)).toEqual(['a']);
+    expect(unreachableWindowIds).toEqual([2]);
+  });
+
+  test('refuses to answer with a list that leaves out a window that has not registered yet', async () => {
+    // The merged read is treated as the whole picture, and a window that could not be asked is
+    // indistinguishable in it from a window with nothing open
+    withWindows({ 1: windowShard(['a']), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(router.getAllOpenWebViewDefinitions()).rejects.toThrow('unreachable');
   });
 
   test('refuses to answer with a partial list when a ready window could not be asked', async () => {
@@ -239,16 +254,17 @@ describe('web view service router', () => {
     expect(owner.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
   });
 
-  test('does not ask a window that has not registered its services yet who owns a web view', async () => {
+  test('does not ask a window that has not registered its services yet who owns a web view, and will not fall back to focus', async () => {
+    // The window that could not be asked is the one holding the web view here, which is exactly why
+    // falling back to focus is wrong: it would reload whatever the focused window is showing
     const focused = windowShard([]);
     const starting = windowShard(['owned-view']);
     withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
     const router = await getRouter();
 
-    await router.reloadWebView('someType', 'owned-view');
-
+    await expect(router.reloadWebView('someType', 'owned-view')).rejects.toThrow('unreachable');
     expect(starting.getOpenWebViewDefinition).not.toHaveBeenCalled();
-    expect(focused.reloadWebView).toHaveBeenCalled();
+    expect(focused.reloadWebView).not.toHaveBeenCalled();
   });
 
   test('refuses to route rather than guessing when no window is available', async () => {

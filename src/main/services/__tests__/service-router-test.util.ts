@@ -31,6 +31,8 @@ export interface RoutingWindowMocks {
   getWindows: Mock;
   /** Mock of `getReadyWindowIds`, which reports only the windows a fan-out can get an answer from */
   getReadyWindowIds: Mock;
+  /** Mock of `getNotReadyWindowIds`, which reports the tracked windows a fan-out cannot ask */
+  getNotReadyWindowIds: Mock;
   /** Mock of `networkObjectService.get`, which resolves a window's shard by network object id */
   networkObjectGet: Mock;
   /** Where the router's shard index parked its subscriptions, so tests can announce to it */
@@ -77,6 +79,9 @@ export function withWindows(
   const unreadyWindowIds = options?.unreadyWindowIds ?? [];
   mocks.getWindows.mockReturnValue(windowIds.map((id) => ({ id })));
   mocks.getReadyWindowIds.mockReturnValue(windowIds.filter((id) => !unreadyWindowIds.includes(id)));
+  mocks.getNotReadyWindowIds.mockReturnValue(
+    windowIds.filter((id) => unreadyWindowIds.includes(id)),
+  );
   mocks.networkObjectGet.mockImplementation(async (networkObjectId: string) => {
     const windowId = Number(networkObjectId.split('-').pop());
     return shardsByWindowId[windowId];

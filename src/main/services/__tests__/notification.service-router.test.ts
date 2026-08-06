@@ -20,8 +20,10 @@ const mocks = vi.hoisted(() => {
     getTargetWindowId: vi.fn(),
     getWindows: vi.fn(),
     getReadyWindowIds: vi.fn(),
+    getNotReadyWindowIds: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
+    loggerWarn: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -51,11 +53,15 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getWindows: mocks.getWindows,
   getReadyWindowIds: mocks.getReadyWindowIds,
+  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
   onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
+}));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { info: vi.fn(), warn: mocks.loggerWarn, error: vi.fn() },
 }));
 
 /** Capture the router object registered under the generic name */
@@ -87,6 +93,7 @@ describe('notification service router', () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getWindows.mockReturnValue([]);
     mocks.getReadyWindowIds.mockReturnValue([]);
+    mocks.getNotReadyWindowIds.mockReturnValue([]);
   });
 
   test('sends to a window that registered its shard after the router started', async () => {
@@ -165,6 +172,21 @@ describe('notification service router', () => {
 
     expect(starting.dismiss).not.toHaveBeenCalled();
     expect(showing.dismissed).toEqual(['notification-1']);
+  });
+
+  test('says which window it could not dismiss in rather than skipping it in silence', async () => {
+    // Readiness is keyed on the WINDOW service, so a ready window's notification service can still
+    // be moments away. Skipping it silently is the one case that matters: the window that could not
+    // be asked may be the one showing the toast, and the caller is told the dismissal succeeded
+    // while it stays on screen with nothing in the log.
+    const showing = windowShard([]);
+    withWindows({ 1: showing, 2: undefined });
+    const router = await getRouter();
+
+    await router.dismiss('notification-1');
+
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('window 2'));
+    expect(showing.dismiss).toHaveBeenCalledWith('notification-1');
   });
 
   test('dismisses quietly when there is no window to dismiss in', async () => {
