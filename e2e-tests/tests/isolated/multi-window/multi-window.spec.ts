@@ -102,10 +102,11 @@ const THEME_STEP_ASIDE_LOG = 'Another window is already hosting the theme servic
 const SCROLL_GROUP_STEP_ASIDE_LOG = 'Another window is already publishing the scroll group service';
 
 /**
- * A process drops its cached registration of a network object hosted by a window that closed — the
- * observable start of a hosting handover. `src/shared/services/network-object.service.ts`
+ * The main process announces the network objects a departed window was hosting, naming each of them
+ * — the observable start of a hosting handover. `src/shared/services/network-object.service.ts`
  */
-const FORGET_THEME_OBJECT_PATTERN = /Forgetting network object '[^']*themeServiceDataProvider/;
+const ANNOUNCE_THEME_OBJECT_PATTERN =
+  /Announcing the network objects a departed process took with it:[^\n]*themeServiceDataProvider/;
 
 /**
  * The bounded shutdown-sync wait for power mode is named `power-mode shutdown session sync`, and
@@ -471,11 +472,10 @@ test.describe('multi-window lifecycle', () => {
     await page1Closed;
     logStep('window 1 (the host) closed');
 
-    // Both services must recover, served by the survivor. Budget: confirming the dead host is
-    // unreachable takes ~10 seconds (the reachability probe retries about 10 times, 1 second
-    // apart), each poll attempt can itself burn ~9 seconds in the main process's handler-lookup
-    // retry while nothing is registered (see PAPI_ATTEMPT_TIMEOUT_MS), and the survivor then has to
-    // win the re-registration race — so 90 seconds gives a couple of full poll cycles of headroom.
+    // Both services must recover, served by the survivor. The handover itself starts as soon as
+    // the dead host's connection is torn down, but a poll attempt that lands in the moment before
+    // the survivor has re-registered can burn ~9 seconds in the main process's handler-lookup retry
+    // (see PAPI_ATTEMPT_TIMEOUT_MS), so 90 seconds gives several full poll cycles of headroom.
     const recoveredTheme = await pollUntil(
       getCurrentTheme,
       isThemeShaped,
@@ -512,11 +512,11 @@ test.describe('multi-window lifecycle', () => {
     );
     logStep('scroll-group write round-trip verified against the survivor');
 
-    // The handover is recorded in the log: the survivor drops its now-unreachable cached
-    // registration of the theme provider before re-hosting it. (Successful re-hosting itself is
+    // The handover is recorded in the log: the theme provider the closed window hosted is announced
+    // as gone, which is what every process holding it acts on. (Successful re-hosting itself is
     // proven behaviourally by the reads and the write round-trip above.)
     await expect(() => {
-      expect(output.textFrom(beforeHostCloseMark)).toMatch(FORGET_THEME_OBJECT_PATTERN);
+      expect(output.textFrom(beforeHostCloseMark)).toMatch(ANNOUNCE_THEME_OBJECT_PATTERN);
     }).toPass({ timeout: 30_000, intervals: [1_000] });
 
     // The whole flow — second window start, host close, takeover — must complete without faults.
