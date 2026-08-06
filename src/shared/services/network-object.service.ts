@@ -10,7 +10,6 @@ import {
   serialize,
   UnsubscriberAsync,
   getAllObjectFunctionNames,
-  getErrorMessage,
   isString,
   CanHaveOnDidDispose,
   MutexMap,
@@ -27,7 +26,6 @@ import {
 } from '@shared/models/network-object.model';
 import { logger } from '@shared/services/logger.service';
 import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 import { isServer } from '@shared/utils/internal-util';
 
 // #endregion
@@ -144,22 +142,6 @@ const initialize = (): Promise<void> => {
         `Announcing the network objects a departed process took with it: ${lostNetworkObjectIds.join(', ')}`,
       );
       lostNetworkObjectIds.forEach((id) => disposeEmitterForLostObjects.emit(id));
-    });
-
-    // A closing window takes its RPC connection down without disposing the objects it hosted, so no
-    // dispose event is ever emitted for them. Every process that had fetched one of those objects
-    // would otherwise keep serving the dead proxy forever, and — because a cached registration also
-    // makes `set` reject the name as taken — no surviving window could re-host it either. The main
-    // process announces the close; each process then drops what it can prove is gone.
-    networkService.getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
-      // sweepUnreachableRemoteObjectsAfterWindowClose is defined later in the module; safe at
-      // runtime since this handler can only run after module evaluation.
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      sweepUnreachableRemoteObjectsAfterWindowClose().catch((e) => {
-        logger.warn(
-          `Failed to clean up network objects after a window closed: ${getErrorMessage(e)}`,
-        );
-      });
     });
 
     isInitialized = true;
@@ -338,106 +320,6 @@ export const onDidDisposeNetworkObject = networkService.getNetworkEvent(
 // We need this to protect simultaneous calls to get and/or set the same network objects
 const getterMutexMap = new MutexMap();
 const setterMutexMap = new MutexMap();
-
-/**
- * Drop every cached registration for a network object living in another process that can no longer
- * be reached, as if that object had been disposed.
- *
- * This is platform-internal core plumbing between the process that hosted a departed network object
- * and the processes still holding registrations for it, not part of the `@papi/*` surface.
- *
- * Disposal is normally announced by the process that owns the object, but a process that goes away
- * abruptly — most commonly a window the user closed — never gets to announce anything. Its
- * registered methods are dropped from the central registry, yet every other process still holds a
- * registration pointing at it. That cached registration is why the name looks taken to
- * {@link set}/`registerEngine`, so app-global services hosted by one window can only be re-hosted
- * elsewhere once it is cleared.
- *
- * Only remote registrations are considered, and only ones the network confirms are gone, so a call
- * made while every object is still alive changes nothing. Runs under the same per-ID lock as
- * {@link get} so a concurrent lookup cannot resurrect the registration mid-sweep.
- *
- * Reachability is decided with the same probe {@link get} uses, which retries a missing handler on
- * the main process's registration-race cadence. Confirming a genuinely gone object therefore takes
- * a few seconds — deliberately, since erring the other way would revoke a proxy that consumers are
- * still legitimately using. Objects that are alive answer on the first attempt, so a sweep costs
- * nothing when nothing has gone away.
- *
- * @returns IDs of the network objects that were forgotten
- * @experimental
- */
-export const forgetUnreachableRemoteObjects = async (): Promise<string[]> => {
-  await initialize();
-
-  const remoteIds = [...networkObjectRegistrations.entries()]
-    .filter(
-      ([, registration]) => registration.registrationType === NetworkObjectRegistrationType.Remote,
-    )
-    .map(([id]) => id);
-
-  const forgottenIds = await Promise.all(
-    remoteIds.map(async (id) => {
-      const lock = getterMutexMap.get(id);
-      return lock.runExclusive(async () => {
-        // Another sweep or a dispose event may have removed it while we waited for the lock
-        if (!networkObjectRegistrations.has(id)) return undefined;
-        if (await getRemoteNetworkObjectFunctions(id)) return undefined;
-        logger.info(`Forgetting network object '${id}'; it is no longer reachable on the network`);
-        return forgetRegistration(id) ? id : undefined;
-      });
-    }),
-  );
-
-  return forgottenIds.filter((id) => id !== undefined);
-};
-
-/**
- * How long after a close announcement whose sweep confirmed nothing to sweep again. Long enough for
- * a closing renderer's connection to be torn down and its methods dropped from the central
- * registry, short enough that a window taking an app-global service over is not a visible stall.
- */
-const RETRY_SWEEP_AFTER_WINDOW_CLOSE_DELAY_MS = 2000;
-
-/** The one retry sweep a close announcement has scheduled, while it is still pending */
-let retrySweepAfterWindowCloseTimeout: ReturnType<typeof setTimeout> | undefined;
-
-/**
- * Drop what a closed window left behind, and — if nothing turned out to be droppable yet — sweep
- * once more shortly after.
- *
- * The close is announced from the closing window's `closed` handler, which can run before the
- * socket teardown that removes that renderer's methods from the central registry. A sweep landing
- * inside that millisecond-wide gap still gets its reachability probes answered, so it confirms
- * nothing is gone. The announcement is the only signal there is and it has been consumed by then,
- * so nothing would ever probe again: every process would keep serving the dead window's proxies,
- * and the app-global services exactly one window publishes — the theme engine, the scroll group
- * service — would be left with no host for the rest of the session. The retry runs once the
- * connection is certainly gone, and the disposals it raises are what those service hosts re-enter
- * their races on.
- *
- * Scheduled only when the sweep forgot nothing, so a close that cleaned up normally costs no extra
- * probing. At most one retry is ever pending: a newer announcement takes the pending one over,
- * since it sweeps immediately and schedules its own retry if it still needs one.
- */
-const sweepUnreachableRemoteObjectsAfterWindowClose = async (): Promise<void> => {
-  // Cleared before the first await so the announcement that supersedes a pending retry cancels it
-  // synchronously, whatever else is in flight
-  if (retrySweepAfterWindowCloseTimeout !== undefined)
-    clearTimeout(retrySweepAfterWindowCloseTimeout);
-  retrySweepAfterWindowCloseTimeout = undefined;
-
-  const forgottenIds = await forgetUnreachableRemoteObjects();
-  if (forgottenIds.length > 0) return;
-
-  retrySweepAfterWindowCloseTimeout = setTimeout(() => {
-    retrySweepAfterWindowCloseTimeout = undefined;
-    forgetUnreachableRemoteObjects().catch((e) => {
-      logger.warn(
-        `Failed to clean up network objects on the retry after a window closed: ${getErrorMessage(e)}`,
-      );
-    });
-  }, RETRY_SWEEP_AFTER_WINDOW_CLOSE_DELAY_MS);
-};
 
 /** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (
