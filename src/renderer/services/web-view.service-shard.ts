@@ -2368,6 +2368,10 @@ export async function startWebViewServiceShard(): Promise<void> {
     papiWebViewService,
     WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
     getServiceShardAttributes(globalThis.windowId),
+    // Experimental at the object level, which fans out over every method: this is a window-scoped
+    // name that only the main process's router is meant to call, and both the name and the split
+    // between what a shard answers and what its router answers are still moving.
+    { 'x-experimental': true },
   );
 
   // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple

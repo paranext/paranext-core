@@ -361,6 +361,9 @@ export async function startDialogServiceShard(): Promise<void> {
       showDialog,
       {
         method: {
+          // Experimental: this is a window-scoped name, and which window a dialog opens in is part
+          // of what the multi-window work is still settling.
+          'x-experimental': true,
           summary: 'Shows a dialog to the user and prompts the user to respond',
           params: [
             {
@@ -433,6 +436,8 @@ export async function startDialogServiceShard(): Promise<void> {
       selectProject,
       {
         method: {
+          // Experimental for the same reason as `showDialog` above
+          'x-experimental': true,
           summary:
             'Shows a select project dialog to the user and prompts the user to select a project',
           params: [
@@ -488,6 +493,8 @@ export async function startDialogServiceShard(): Promise<void> {
       showAboutDialog,
       {
         method: {
+          // Experimental for the same reason as `showDialog` above
+          'x-experimental': true,
           summary: 'Shows a dialog with essential information about the application.',
           params: [],
           result: {

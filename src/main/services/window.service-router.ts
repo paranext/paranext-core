@@ -302,6 +302,12 @@ export async function startWindowServiceRouter(): Promise<void> {
   await dataProviderService.registerEngine(
     windowServiceProviderName,
     new FocusedWindowDataProviderEngine(getWindowServiceShard),
+    undefined,
+    undefined,
+    // Experimental at the object level, which fans out over the provider's methods and its update
+    // notification. The generic name is not new, but it now answers from whichever window is the
+    // routing target rather than from the only one there was.
+    { 'x-experimental': true },
   );
   logger.info('Window service router registered');
 }
