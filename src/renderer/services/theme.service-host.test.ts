@@ -474,4 +474,67 @@ describe('theme service host across multiple windows', () => {
     // it — rather than only that something was undefined
     await expect(initialize()).rejects.toThrow('no theme service to attach to');
   });
+
+  /**
+   * Drive a window from attached, through a takeover attempt that comes up empty-handed — it loses
+   * the name to a window that goes away before it can be found — and return the provider the window
+   * will be handed when it eventually wins.
+   */
+  async function attachThenLoseTheEngineToNobody() {
+    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
+    const hosted = makeProvider();
+    mocks.get.mockResolvedValue(hosted.provider);
+
+    const { initialize } = await import('@renderer/services/theme.service-host');
+    await initialize();
+
+    // The hosting window closes. This window's re-race loses the name, and by the time it looks for
+    // the window that took it, that window is gone too — so this run ends with no engine at all.
+    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
+    mocks.get.mockResolvedValue(undefined);
+    hosted.dispose();
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
+
+    return makeProvider().provider;
+  }
+
+  // Coming out of a takeover with nothing is the one state nothing else re-enters the race from:
+  // the trigger is the disposal of the provider this window holds, and it holds none. If every
+  // surviving window lands here — which is what an interleaved re-race does — the app has no theme
+  // engine at all, while `getCurrentThemeSync` keeps every screen looking right.
+  test('races again after a takeover attempt that neither hosted nor attached', async () => {
+    const ownProvider = await attachThenLoseTheEngineToNobody();
+
+    mocks.registerEngine.mockResolvedValue(ownProvider);
+
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3), {
+      timeout: 4000,
+    });
+  });
+
+  // The persisted theme keys are app-global, so the engine a window publishes has to be built from
+  // what is persisted at the moment it wins — on every route into the race, not only the one route
+  // that reloads on its way in. A window that wins on a later attempt would otherwise republish the
+  // snapshot it read at window load and persist it over everything saved since.
+  test('serves the state persisted by the time a later attempt wins the engine', async () => {
+    localStorage.setItem(
+      'theme.service-host.currentTheme',
+      JSON.stringify({ themeFamilyId: 'user-stale', type: 'light', cssVariables: {} }),
+    );
+    const ownProvider = await attachThenLoseTheEngineToNobody();
+
+    // Whoever briefly held the name saved newer state before going away too
+    localStorage.setItem(
+      'theme.service-host.currentTheme',
+      JSON.stringify({ themeFamilyId: 'user-fresh', type: 'light', cssVariables: {} }),
+    );
+    mocks.registerEngine.mockResolvedValue(ownProvider);
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3), {
+      timeout: 4000,
+    });
+
+    const engineTakingOver: { getCurrentTheme: () => Promise<{ themeFamilyId: string }> } =
+      mocks.registerEngine.mock.calls[2][1];
+    expect((await engineTakingOver.getCurrentTheme()).themeFamilyId).toBe('user-fresh');
+  });
 });
