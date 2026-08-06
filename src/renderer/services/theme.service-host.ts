@@ -683,8 +683,8 @@ function reloadPersistedThemeState(): void {
 /**
  * The theme provider this window is talking to — its own engine while it hosts, otherwise the
  * hosting window's over the network. `undefined` until {@link initialize} resolves, and again once
- * that provider goes away, which is what tells {@link takeOverThemeEngineAfterWindowClose} that a
- * closed window took something this window was using with it.
+ * that provider goes away, which is what tells {@link retryHostOrAttachToThemeEngine} that the
+ * window hosting the engine took it with it.
  */
 let dataProvider: IThemeService | undefined;
 
@@ -891,8 +891,8 @@ async function getThemeProvider(): Promise<IThemeService> {
   await initialize();
   // Names the state rather than the symptom: this is the gap between the window that was hosting
   // the theme engine going away and one of the surviving windows winning it back (see
-  // `takeOverThemeEngineAfterWindowClose`), which the retry closes on its own. Callers that can
-  // wait should retry rather than treat this as the theme service being gone.
+  // `retryHostOrAttachToThemeEngine`), which the retry closes on its own. Callers that can wait
+  // should retry rather than treat this as the theme service being gone.
   if (!dataProvider)
     throw new Error(
       `Window ${globalThis.windowId} has no theme service while the theme engine is being handed over from the window that closed; retry once a window has taken it over`,
