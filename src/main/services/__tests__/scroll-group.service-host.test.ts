@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY } from '@shared/services/scroll-group.service-model';
+import {
+  EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
+  EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+} from '@shared/services/scroll-group.service-model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 // The host reads localStorage and creates network emitters at import time; stub those. Emitters are
 // captured by event name so a test can assert on one specific event.
@@ -278,5 +282,76 @@ describe('registration', () => {
       'getScrollGroupSnapshot',
       'migrateStoredScrollGroupState',
     ]);
+  });
+});
+
+// Before the host existed, this state lived in a renderer's own localStorage, which this process
+// cannot read. A window that still has it offers it once at startup.
+describe('adopting previously stored state', () => {
+  const previouslyStored = {
+    scrRefs: { 0: { book: 'MRK', chapterNum: 4, verseNum: 1 } },
+    scrRefSourceProjectIds: { 0: 'projOld' },
+  };
+
+  it('adopts an offer when it has nothing of its own', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+
+    await host.migrateStoredScrollGroupState(previouslyStored);
+
+    expect(await host.getScrRef(0)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+    expect((await host.getScrollGroupSnapshot()).scrRefSourceProjectIds[0]).toBe('projOld');
+  });
+
+  it('adopts without recording it as navigation or announcing it as a change', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    const scrRefEmit = emitters[EVENT_NAME_ON_DID_UPDATE_SCR_REF].emit;
+    const historyEmit = emitters[EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY].emit;
+
+    await host.migrateStoredScrollGroupState(previouslyStored);
+
+    expect(scrRefEmit).not.toHaveBeenCalled();
+    expect(historyEmit).not.toHaveBeenCalled();
+    // The adopted reference is where the history starts, not somewhere it was navigated to
+    const history = await host.getReferenceHistory(0);
+    expect(history.back).toEqual([]);
+    expect(history.current).toEqual({
+      scrRef: { book: 'MRK', chapterNum: 4, verseNum: 1 },
+      sourceProjectId: 'projOld',
+    });
+  });
+
+  it('ignores every offer after the first', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+
+    await host.migrateStoredScrollGroupState(previouslyStored);
+    await host.migrateStoredScrollGroupState({
+      scrRefs: { 0: { book: 'LUK', chapterNum: 2, verseNum: 1 } },
+      scrRefSourceProjectIds: { 0: 'projOther' },
+    });
+
+    expect(await host.getScrRef(0)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+  });
+
+  it('refuses an offer once it has state of its own, even having never adopted one', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    // The app has been used since the offer that never arrived
+    await host.setScrRef(0, { book: 'LUK', chapterNum: 2, verseNum: 1 }, 'projNew');
+
+    await host.migrateStoredScrollGroupState(previouslyStored);
+
+    expect(await host.getScrRef(0)).toEqual({ book: 'LUK', chapterNum: 2, verseNum: 1 });
+  });
+
+  it('brings a reference forward from the older bookNum shape', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+
+    await host.migrateStoredScrollGroupState({
+      // The shape stored before references carried a book id
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      scrRefs: { 0: { bookNum: 41, chapterNum: 4, verseNum: 1 } as unknown as SerializedVerseRef },
+      scrRefSourceProjectIds: {},
+    });
+
+    expect(await host.getScrRef(0)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
   });
 });
