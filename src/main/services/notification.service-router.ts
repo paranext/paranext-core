@@ -9,7 +9,11 @@
  * service shard".
  */
 
-import { getReadyWindowIds, getTargetWindowId } from '@main/services/window-state.service';
+import { getReadyWindowIds } from '@main/services/window-state.service';
+import {
+  createTargetShardResolver,
+  registerServiceRouter,
+} from '@main/services/service-router.factory';
 import {
   INotificationService,
   NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
@@ -37,17 +41,10 @@ async function getNotificationShard(windowId: number): Promise<INotificationServ
 }
 
 /** Get the notification service shard for the focused window, throwing if none is available */
-async function getTargetNotificationShard(): Promise<INotificationService> {
-  const targetId = getTargetWindowId();
-  if (targetId === undefined)
-    throw new Error('No windows available to route NotificationService call');
-  const shard = await getNotificationShard(targetId);
-  if (!shard)
-    throw new Error(
-      `NotificationService for window ${targetId} is not available. The renderer may not have started yet.`,
-    );
-  return shard;
-}
+const getTargetNotificationShard = createTargetShardResolver(
+  NotificationServiceNetworkObjectName,
+  getNotificationShard,
+);
 
 /**
  * Dismiss a notification in the window(s) that own it — the ones whose renderers are showing it,
@@ -92,24 +89,18 @@ async function dismissInOwningWindows(notificationId: string | number): Promise<
   );
 }
 
-const notificationServiceRouter: INotificationService = {
-  send: async (...args) => (await getTargetNotificationShard()).send(...args),
-  dismiss: async (notificationId) => dismissInOwningWindows(notificationId),
-};
-
 /**
  * Register the notification service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startNotificationServiceRouter(): Promise<void> {
-  await networkObjectService.set<INotificationService>(
-    NotificationServiceNetworkObjectName,
-    notificationServiceRouter,
-    undefined,
-    undefined,
+  await registerServiceRouter({
+    genericName: NotificationServiceNetworkObjectName,
+    forwardedMethodNames: ['send'],
+    resolveTargetShard: getTargetNotificationShard,
+    overrides: { dismiss: dismissInOwningWindows },
     // The generic name is the one consumers actually call, so it carries the same OpenRPC docs the
     // renderers attach to their window-scoped registrations
-    NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
-  );
-  logger.info('Notification service router registered');
+    docs: NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
+  });
 }

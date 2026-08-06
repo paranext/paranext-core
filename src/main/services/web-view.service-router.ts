@@ -8,11 +8,11 @@
  * service shard".
  */
 
+import { getReadyWindowIds, isWindowReady } from '@main/services/window-state.service';
 import {
-  getReadyWindowIds,
-  getTargetWindowId,
-  isWindowReady,
-} from '@main/services/window-state.service';
+  createTargetShardResolver,
+  registerServiceRouter,
+} from '@main/services/service-router.factory';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -63,17 +63,10 @@ export async function getWebViewShard(windowId: number): Promise<WebViewServiceT
 }
 
 /** Get the WebView service shard for the currently focused window, throwing if none is available. */
-async function getTargetWebViewShard(): Promise<WebViewServiceType> {
-  const targetWindowId = getTargetWindowId();
-  if (targetWindowId === undefined)
-    throw new Error('No windows available to route WebViewService call');
-  const webViewShard = await getWebViewShard(targetWindowId);
-  if (!webViewShard)
-    throw new Error(
-      `WebViewService for window ${targetWindowId} is not available. The renderer may not have started yet.`,
-    );
-  return webViewShard;
-}
+const getTargetWebViewShard = createTargetShardResolver(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  getWebViewShard,
+);
 
 /** The window that owns a web view, and the definition the ownership search already fetched */
 type WebViewOwner = { shard: WebViewServiceType; definition: SavedWebViewDefinition };
@@ -291,31 +284,29 @@ const onDidUpdateWebView = getNetworkEvent<UpdateWebViewEvent>(EVENT_NAME_ON_DID
 const onDidCloseWebView = getNetworkEvent<CloseWebViewEvent>(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 /**
- * The router object registered under the generic "WebViewService" name. All method calls are
- * forwarded to the shard of the window that should handle them.
- */
-const webViewServiceRouter: WebViewServiceType = {
-  onDidAddWebView: onDidOpenWebView,
-  onDidOpenWebView,
-  onDidUpdateWebView,
-  onDidCloseWebView,
-  getWebView,
-  openWebView,
-  reloadWebView,
-  getSavedWebViewDefinition,
-  getOpenWebViewDefinition,
-  getAllOpenWebViewDefinitions,
-  getWebViewController,
-};
-
-/**
  * Register the WebView service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startWebViewServiceRouter(): Promise<void> {
-  await networkObjectService.set<WebViewServiceType>(
-    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-    webViewServiceRouter,
-  );
-  logger.info('WebView service router registered');
+  await registerServiceRouter({
+    genericName: NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+    // Nothing on this service is a plain forward to the focused window: every method either routes
+    // to the window that owns a named web view or asks every window and merges the answers, which
+    // is behaviour of its own rather than boilerplate. They stay hand-written below.
+    forwardedMethodNames: [],
+    resolveTargetShard: getTargetWebViewShard,
+    overrides: {
+      onDidAddWebView: onDidOpenWebView,
+      onDidOpenWebView,
+      onDidUpdateWebView,
+      onDidCloseWebView,
+      getWebView,
+      openWebView,
+      reloadWebView,
+      getSavedWebViewDefinition,
+      getOpenWebViewDefinition,
+      getAllOpenWebViewDefinitions,
+      getWebViewController,
+    },
+  });
 }
