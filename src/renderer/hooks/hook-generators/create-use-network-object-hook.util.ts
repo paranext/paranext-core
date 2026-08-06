@@ -53,6 +53,18 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
     // Check to see if they passed in the results of a useNetworkObject hook or undefined
     const didReceiveNetworkObject = !isString(networkObjectSource);
 
+    // The network object this hook was handed that has since been disposed, if any. Objects are
+    // looked up by name, and the process hosting a name can change — an app-global object whose
+    // host window goes away is re-published elsewhere under the same name — so a disposal is a
+    // reason to look the name up again rather than to give up on it. Held as the object itself
+    // rather than a flag so the answer to "is what we are holding dead?" survives the lookup that
+    // follows it: `usePromise` keeps serving the value it has while the next one resolves.
+    // Note: do nothing if we already received a network object, but still run this hook.
+    // (We must make sure to run the same number of hooks in all code paths.)
+    const [disposedNetworkObject, setDisposedNetworkObject] = useState<
+      NetworkObject<object> | undefined
+    >(undefined);
+
     // Get the network object for this network object name
     // Note: do nothing if we already have a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
@@ -67,26 +79,27 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
         // We need to spread `args` in here since we don't know how many members it has. Be VERY
         // CAREFUL when editing this `usePromise` since we don't have dependency checking on
         // eslint-disable-next-line react-hooks/exhaustive-deps
-      }, [didReceiveNetworkObject, networkObjectSource, ...args]),
+      }, [didReceiveNetworkObject, networkObjectSource, disposedNetworkObject, ...args]),
       undefined,
     );
 
-    // Disable this hook when the network object is disposed
+    const isNetworkObjectDisposed = networkObject === disposedNetworkObject;
+
+    // Look the network object up again when the one we are serving is disposed
     // Note: do nothing if we already received a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
-    const [isDisposed, setIsDisposed] = useState<boolean>(false);
     useEvent(
-      !didReceiveNetworkObject && networkObject && !isDisposed
+      !didReceiveNetworkObject && networkObject && !isNetworkObjectDisposed
         ? networkObject.onDidDispose
         : undefined,
-      useCallback(() => setIsDisposed(true), []),
+      useCallback(() => setDisposedNetworkObject(networkObject), [networkObject]),
     );
 
     // If we received a network object or undefined, return it
     if (didReceiveNetworkObject) return networkObjectSource;
 
     // If we had to get a network object, return it if it is not disposed
-    return networkObject && !isDisposed ? networkObject : undefined;
+    return networkObject && !isNetworkObjectDisposed ? networkObject : undefined;
   };
 }
 
