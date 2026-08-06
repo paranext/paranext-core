@@ -37,9 +37,6 @@ import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.
 import { themeDataService } from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
-import { getNetworkEvent } from '@shared/services/network.service';
-import { forgetUnreachableRemoteObjects } from '@shared/services/network-object.service';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 
 /** Raw un-expanded themes that are built into the software */
 // We know this is the right data type because we write this data
@@ -702,13 +699,13 @@ let isHostingThemeEngine = false;
 
 /**
  * Host-or-attach run started by {@link retryHostOrAttachToThemeEngine} that has not settled yet, if
- * any. A takeover fires from two triggers at once: clearing the unreachable provider fires its
- * `onDidDispose` (wired to the retry), and the sweep that cleared it retries again on its own
- * completion. Each retry builds a fresh cached initializer, so without this guard the two triggers
- * would run `registerEngine` concurrently and race each other for the engine name — the loser's
- * event registration is rejected by the central registry (single-source names reject even the same
+ * any. A window can lose the engine's host again while it is still re-entering the race for the
+ * last one — it attaches to a new host inside that run, and that host can go away in the same
+ * instant. Each retry builds a fresh cached initializer, so without this guard two triggers would
+ * run `registerEngine` concurrently and race each other for the engine name — the loser's event
+ * registration is rejected by the central registry (single-source names reject even the same
  * handler) and it noisily falls into the attach path. Cleared when the run settles so a later host
- * close can retry again.
+ * going away can retry again.
  */
 let pendingRetryPromise: Promise<void> | undefined;
 
@@ -833,11 +830,12 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
     );
   }
 
-  // When the hosting window closes its provider goes with it, so drop it, re-arm, and take over.
+  // When the hosting window goes away its provider goes with it, so drop it, re-arm, and take over.
   // Every remaining window does this; the one that wins the re-registration becomes the new host and
-  // the others attach to it on their own retry. This runs whenever the provider is forgotten, no
-  // matter which of the window-close cleanups got there first, so it — not the outcome of this
-  // window's own sweep — is what makes the handover reliable.
+  // the others attach to it on their own retry. A window that closes never disposes anything itself,
+  // so what fires this in that case is the disposal the process owning the connections announces
+  // once that window's registrations are gone — which is every bit as reliable a signal, and cannot
+  // arrive before the window is actually unreachable.
   hostedProvider.onDidDispose(() => {
     dataProvider = undefined;
     // The mirror above is over either way: if this window wins the re-registration its own engine
@@ -853,44 +851,6 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
     retryHostOrAttachToThemeEngine();
   });
 }
-
-/**
- * Take the theme engine over when the window hosting it closes.
- *
- * The `onDidDispose` hook above only covers a host that disposed its provider deliberately; a
- * closing window never gets that far, so this close announcement from the main process is what
- * actually drives the handover in practice. The provider this window attached to is dead but still
- * cached locally, and a cached registration makes the engine's name look taken, so the stale
- * registration has to go before re-registering can succeed.
- *
- * Skipped in the window that is already hosting: it has nothing to take over, and re-entering the
- * race there would drop the engine it is serving to everyone else. The hosting check is repeated
- * after the sweep because the sweep takes as long as probing every unreachable object takes, and
- * this window can win hosting inside that gap — off the dispose the sweep itself fires.
- *
- * Also skipped when the closed window turns out to have been hosting nothing this window was using:
- * the provider is still there, so re-entering the race would resolve that same live provider again
- * and leave another dispose handler on it. Whether this window still has a provider is the question
- * that matters, rather than whether this particular sweep forgot anything — the theme engine and
- * the scroll group service are independent races that can land in different windows, and any of the
- * several cleanups a close kicks off can be the one that forgets a given object.
- */
-async function takeOverThemeEngineAfterWindowClose(): Promise<void> {
-  if (isHostingThemeEngine) return;
-  // Forgetting the closed window's objects is what fires their dispose events and frees their names
-  // for re-registration, so it has to finish before this window can decide anything.
-  await forgetUnreachableRemoteObjects();
-  if (isHostingThemeEngine || dataProvider) return;
-  retryHostOrAttachToThemeEngine();
-}
-
-getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
-  takeOverThemeEngineAfterWindowClose().catch((e) => {
-    logger.warn(
-      `Failed to take the theme service over after a window closed: ${getErrorMessage(e)}`,
-    );
-  });
-});
 
 runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
 
