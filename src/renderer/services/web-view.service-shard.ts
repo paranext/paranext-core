@@ -2355,7 +2355,7 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
 
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
-export async function startWebViewService(): Promise<void> {
+export async function startWebViewServiceShard(): Promise<void> {
   await initialize();
   if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
 
