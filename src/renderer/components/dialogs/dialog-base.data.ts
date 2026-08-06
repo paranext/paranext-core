@@ -131,7 +131,7 @@ function rejectDialogRequest(id: string, message: string) {
  * `dialog.service-shard.ts` immediately on startup and by nothing else. This is only here to
  * mitigate a dependency cycle
  *
- * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+ * @param dialogServiceFunctions Functions from the dialog service shard for resolving and rejecting
  *   dialogs
  */
 export function hookUpDialogService({
