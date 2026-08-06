@@ -70,11 +70,23 @@ describe('window service router module load', () => {
     addWindow({ id: 1 } as never);
     markWindowReady(1);
 
-    const { startWindowServiceRouter } = await import('@main/services/window.service-router');
+    const { testingWindowServiceRouter } = await import('@main/services/window.service-router');
+    const { dataProviderService } = await import('@shared/services/data-provider.service');
+    const { windowServiceProviderName } = await import('@shared/services/window.service-model');
+    // What `startWindowServiceRouter` does, with the shard lookup stubbed. It resolves shards
+    // through this module's own index, which learns them from network object announcements that
+    // this suite's stubbed network layer never delivers — so the engine is built here with a
+    // resolver instead, which is the seam `testingWindowServiceRouter` exists for. Everything under
+    // test is still the real thing: the module was loaded (decorator evaluated) and the provider is
+    // registered through the real data provider service.
     // The engine only ever calls getFocus / setFocus / subscribeFocus on what it resolves, so the
     // stub above implements just those rather than the whole IWindowService
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    await startWindowServiceRouter(async () => scopedWindowService as never);
+    const resolveStubShard = async () => scopedWindowService as never;
+    await dataProviderService.registerEngine(
+      windowServiceProviderName,
+      new testingWindowServiceRouter.FocusedWindowDataProviderEngine(resolveStubShard),
+    );
     const registeredProvider = mocks.networkObjectSet.mock.calls[0][1];
     await registeredProvider.setFocus(undefined, 'detect');
 
