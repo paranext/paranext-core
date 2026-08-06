@@ -9,11 +9,11 @@ import {
   navigateReferenceHistoryPhysicalSync,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
-import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import {
   getLastSelectedScriptureNavigableWebViewId,
   getNavigationTargetWebView,
-} from '@renderer/services/window.service-host';
+} from '@renderer/services/window.service-shard';
 import {
   findAdjacentPresentBook,
   getBookIdsFromBooksPresent,
@@ -338,7 +338,7 @@ export const navigationCommandHandlers: {
 export async function startScrollGroupNavigationCommands(): Promise<void> {
   await Promise.all([
     // Every one of these acts on the window's own navigation target, so each renderer owns its own
-    // handler and the main process's routing proxy forwards the generic name to whichever window is
+    // handler and the main process's service router forwards the generic name to whichever window is
     // focused. The OpenRPC docs live with the proxy, on the generic name, since that is the name
     // consumers call. registerScopedCommands records each name so a missing registration is caught
     // at startup (see assertAllRendererHostedCommandsRegistered) rather than only at call time.

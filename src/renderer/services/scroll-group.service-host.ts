@@ -734,8 +734,8 @@ const scrollGroupService: IScrollGroupRemoteService = {
  * other direction, and needs all three of:
  *
  * - Scoping the `scrollGroup:*` events per window (or carrying a window id and filtering)
- * - Scoping the `ScrollGroupService` network object, with a main-process routing proxy like
- *   `web-view-routing.service.ts`
+ * - Scoping the `ScrollGroupService` network object, with a main-process service router like
+ *   `web-view.service-router.ts`
  * - Moving `SCR_REFS_STORAGE_KEY` / `SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY` onto
  *   `localWindowStorage`
  *

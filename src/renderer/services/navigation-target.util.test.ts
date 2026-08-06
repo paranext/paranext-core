@@ -4,7 +4,7 @@ import { resolveTargetWebView } from '@renderer/services/navigation-target.util'
 
 // vi.mock is hoisted above these imports at transform time, so the static imports can be written
 // first (satisfying import/first). navigation-target.util reads the tracked definition and the open
-// definition list from web-view.service-host; mock just those two synchronous getters and let the
+// definition list from web-view.service-shard; mock just those two synchronous getters and let the
 // util (and the real findFirstEditorWebViewDefinition) run.
 const { getSavedWebViewDefinitionSyncMock, getAllOpenWebViewDefinitionsSyncMock } = vi.hoisted(
   () => ({
@@ -13,7 +13,7 @@ const { getSavedWebViewDefinitionSyncMock, getAllOpenWebViewDefinitionsSyncMock 
   }),
 );
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
   getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
 }));

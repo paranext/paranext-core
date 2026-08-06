@@ -2,7 +2,7 @@ import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
-import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-host';
+import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';

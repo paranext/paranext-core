@@ -1,3 +1,13 @@
+/**
+ * Dialog service shard — the dialog service implementation for THIS window. Its request handlers
+ * are registered under window-scoped request names (e.g. "dialog:showDialog-1") so several windows
+ * can coexist; the main process's `command.service-router.ts` publishes the generic names and
+ * forwards each request to the window that should show the dialog.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
 import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
@@ -10,7 +20,7 @@ import {
 } from '@renderer/services/overlays/overlay-store';
 import { ReactElement } from 'react';
 import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
-import * as webViewService from '@renderer/services/web-view.service-host';
+import * as webViewService from '@renderer/services/web-view.service-shard';
 import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
@@ -476,7 +486,7 @@ export async function startDialogService(): Promise<void> {
     ),
   );
   // Register under a window-scoped name so multiple windows can coexist. The main process command
-  // routing proxy handles forwarding the generic name to the focused window.
+  // service router handles forwarding the generic name to the focused window.
   unsubPromises.push(...registerScopedCommands({ 'platform.about': showAboutDialog }));
 
   // Wait to successfully register all requests

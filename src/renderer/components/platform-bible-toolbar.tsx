@@ -18,7 +18,7 @@ import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-ov
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
+import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import {
   registerBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
