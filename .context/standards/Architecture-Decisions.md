@@ -276,7 +276,7 @@ step, no automation. Just a record.
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
   After ADR-0007 scoped each window's copy under its own name, nothing answers the generic name.
 - **Decision:** Main registers one service router per generic name (`command.service-router.ts` —
-  which also registers the dialog-request proxies, `notification.service-router.ts`,
+  which also registers the dialog-request routes, `notification.service-router.ts`,
   `web-view.service-router.ts`, `window.service-router.ts`) that forwards to the scoped service of
   the window that should handle it: the owning window when ownership is determinable (e.g. a command
   whose first argument names a web view routes to the window that owns that web view), otherwise the
@@ -332,7 +332,7 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** A window's `BrowserWindow` exists (and is enumerable) well before its renderer has
   registered any window-scoped service, because window creation and renderer service startup are
-  asynchronous. Routing proxies (ADR-0008) need to avoid picking a window that can't yet answer.
+  asynchronous. Service routers (ADR-0008) need to avoid picking a window that can't yet answer.
 - **Decision:** Main tracks a `readyWindowIds` set (`window-state.service.ts`); a window is marked
   ready when its `platform.windowServiceDataProvider-{id}-data` registration appears (observed via
   `onDidCreateNetworkObject`), used as a single proxy signal for "this window's services are up," and
@@ -1303,5 +1303,9 @@ step, no automation. Just a record.
   immediately instead of after a retry; a shard leaves its router's view the moment its network
   object is announced as disposed, which is what happens when its window closes. The index is built
   from announcements, so a router MUST start before any window is created — the same assumption
-  `network-object-status.service-host.ts` already makes.
+  `network-object-status.service-host.ts` already makes. This does not yet apply to
+  `command.service-router.ts`, which forwards request names rather than resolving a network object
+  and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
+  transitional — each of its commands moves into the router for its own service — so it is expected
+  to go away rather than to be converted.
 - **Source:** multi-window follow-up (plan step 2).

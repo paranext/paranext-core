@@ -2503,7 +2503,7 @@ export async function startWebViewServiceShard(): Promise<void> {
   );
 
   // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
-  // renderers can coexist. The main process registers proxies under the generic names. Typing this
+  // renderers can coexist. The main process registers routers under the generic names. Typing this
   // against RendererHostedCommandHandlers makes an unrecognized or misspelled key a compile error;
   // registerScopedCommands records each name so a command that is on RENDERER_HOSTED_COMMAND_NAMES
   // but never registered anywhere is caught too, at startup (see
