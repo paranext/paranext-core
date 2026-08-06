@@ -55,6 +55,7 @@ import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-stor
 import {
   getLastOpenedProject,
   setLastOpenedProject,
+  LastOpenedProject,
 } from '@renderer/services/last-opened-project-cache';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
@@ -1032,18 +1033,20 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * layout — same code path power mode uses on restore — and renders project content immediately,
  * with no empty-placeholder → reload round-trip.
  *
- * Fast path: `getLastOpenedProject` returns the cached id + editability (populated reactively from
- * `useProjectPickerData`), and no `await` precedes the layout swap.
+ * Fast path: `getLastOpenedProject` returns the cached id synchronously (populated reactively from
+ * `useProjectPickerData`), then a tightly-bounded re-check of its editability runs before the
+ * layout swap (see {@link resolveFastPathIsEditable} for why this exists and why it's cheap - it's
+ * defense-in-depth, not expected to change the cached value in practice).
  *
  * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup, plus one
  * more await to resolve the resolved project's real editability (see `resolveProjectIsEditable`).
+ * Both lookups are bounded by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
  *
  * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
  * let the picker do the slow legacy path.
  *
  * Both paths resolve real editability rather than assuming the target project is editable: the
- * cached/most-recent project can be a read-only Resource Viewer, or a project whose editability
- * changed since it was cached (e.g. a Send/Receive that revoked edit permission). See
+ * cached/most-recent project can be a read-only Resource Viewer. See
  * {@link buildSimpleLayoutForProject}'s `isReadOnly` param.
  */
 /**
@@ -1056,48 +1059,90 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
 
 /**
+ * Bound on the fast path's editability re-check (see {@link resolveFastPathIsEditable}). Tighter
+ * than {@link COLD_START_LOOKUP_TIMEOUT_MS} since this is defense-in-depth on the path that's
+ * supposed to be fast, not a lookup this path fundamentally needs to wait on.
+ */
+export const FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS = 1000;
+
+/**
  * Sentinel distinguishing "timed out" from a lookup that legitimately resolved to `undefined` (e.g.
  * no recent project on a fresh profile) - the two need different log treatment, since the latter is
  * an expected, non-warning-worthy outcome.
  */
-const COLD_START_TIMED_OUT = Symbol('cold-start-lookup-timed-out');
+const LOOKUP_TIMED_OUT = Symbol('lookup-timed-out');
 
 /**
- * Races an async cold-start lookup against {@link COLD_START_LOOKUP_TIMEOUT_MS}. Both
- * `getMostRecentProjectId` and `resolveProjectIsEditable` already catch their own errors internally
- * and never reject, so a plain `Promise.race` (rather than `waitForDuration` from
- * `platform-bible-utils`, which collapses a timeout and a resolved `undefined` to the same result)
- * is enough to distinguish the two outcomes for logging.
+ * Races an async lookup against a bound. Both `getMostRecentProjectId` and
+ * `resolveProjectIsEditable` already catch their own errors internally and never reject, so a plain
+ * `Promise.race` (rather than `waitForDuration` from `platform-bible-utils`, which collapses a
+ * timeout and a resolved `undefined` to the same result) is enough to distinguish the two outcomes
+ * for logging.
  */
-async function withColdStartTimeout<T>(
+async function withTimeout<T>(
   fn: () => Promise<T>,
-): Promise<T | typeof COLD_START_TIMED_OUT> {
-  const timedOut: Promise<typeof COLD_START_TIMED_OUT> = wait(COLD_START_LOOKUP_TIMEOUT_MS).then(
-    () => COLD_START_TIMED_OUT,
-  );
+  timeoutMs: number,
+): Promise<T | typeof LOOKUP_TIMED_OUT> {
+  const timedOut: Promise<typeof LOOKUP_TIMED_OUT> = wait(timeoutMs).then(() => LOOKUP_TIMED_OUT);
   return Promise.race([fn(), timedOut]);
+}
+
+/**
+ * Re-checks a cached project's editability against live metadata, with a tight bound. This is
+ * defense-in-depth, not a load-bearing correctness fix: `platform.isEditable` reflects whether a
+ * project is a resource vs. a normal translation project (essentially fixed at creation), not a
+ * per-session permission that Send/Receive can revoke - a repo-wide grep of the Paratext data model
+ * found no Send/Receive path that changes it for an already-cached project. This check exists only
+ * in case that assumption is wrong in some case this investigation missed, so on error or timeout
+ * it falls back to the cached value (not a hardcoded default) and logs a warning - a recurring
+ * warning here is a signal to revisit the assumption above, not routine/expected noise.
+ */
+async function resolveFastPathIsEditable(cached: LastOpenedProject): Promise<boolean> {
+  const cachedIsEditable = cached.isEditable !== false;
+  try {
+    const result = await withTimeout(async () => {
+      const metadata = await projectLookupService.getMetadataForProject(cached.id);
+      return metadata.isEditable !== false;
+    }, FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS);
+    if (result === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `Timed out after ${FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS}ms re-checking editability for cached project ${cached.id} on the fast Simple-mode switch path; trusting the cached value (${cachedIsEditable}). If this recurs, see the comment on resolveFastPathIsEditable.`,
+      );
+      return cachedIsEditable;
+    }
+    return result;
+  } catch (err) {
+    logger.warn(
+      `Could not re-check editability for cached project ${cached.id} on the fast Simple-mode switch path (${getErrorMessage(err)}); trusting the cached value (${cachedIsEditable}). If this recurs, see the comment on resolveFastPathIsEditable.`,
+    );
+    return cachedIsEditable;
+  }
 }
 
 export async function handleSwitchToSimpleMode(): Promise<void> {
   const cached = getLastOpenedProject();
   if (cached) {
-    await runProjectBoundSimpleSwitch(cached.id, cached.isEditable === false);
+    const isEditable = await resolveFastPathIsEditable(cached);
+    await runProjectBoundSimpleSwitch(cached.id, !isEditable);
     return;
   }
 
-  const resolvedId = await withColdStartTimeout(getMostRecentProjectId);
-  if (resolvedId === COLD_START_TIMED_OUT) {
+  const resolvedId = await withTimeout(getMostRecentProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
+  if (resolvedId === LOOKUP_TIMED_OUT) {
     logger.warn(
       `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving the most recent project while switching to Simple mode; loading the bare layout instead.`,
     );
   }
-  if (!resolvedId || resolvedId === COLD_START_TIMED_OUT) {
+  if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
     await loadLayoutWithWarning();
     return;
   }
 
-  const isEditable = await withColdStartTimeout(() => resolveProjectIsEditable(resolvedId));
-  if (isEditable === COLD_START_TIMED_OUT) {
+  const isEditable = await withTimeout(
+    () => resolveProjectIsEditable(resolvedId),
+    COLD_START_LOOKUP_TIMEOUT_MS,
+  );
+  if (isEditable === LOOKUP_TIMED_OUT) {
     logger.warn(
       `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
     );
