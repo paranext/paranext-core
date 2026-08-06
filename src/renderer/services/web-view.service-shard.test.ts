@@ -8,7 +8,7 @@ import type {
 } from '@shared/models/docking-framework.model';
 import { serialize } from 'platform-bible-utils';
 
-// The service host logs through the shared logger, which warns on every call when it cannot tell
+// The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
 globalThis.processType = ProcessType.Renderer;
 
@@ -53,7 +53,7 @@ vi.mock('@shared/services/settings.service', () => ({
 }));
 
 // Everything below is module-load or startup machinery the layout path does not exercise; stub it
-// so importing the service host in a test does not stand up the whole renderer service graph.
+// so importing the service shard in a test does not stand up the whole renderer service graph.
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
   getNetworkEvent: () => vi.fn(),

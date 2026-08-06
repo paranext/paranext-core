@@ -1,6 +1,6 @@
 /**
  * Registers this renderer's window-scoped handlers for the dialog requests the main process's
- * routing proxy expects to find under a `dialog:${requestName}-${windowId}` name (see
+ * service router expects to find under a `dialog:${requestName}-${windowId}` name (see
  * `RENDERER_HOSTED_DIALOG_REQUEST_NAMES`), and tracks which of them this renderer actually
  * registered.
  *
@@ -8,7 +8,7 @@
  * against `DialogService`'s keys, but that only proves the listed names are real methods — nothing
  * checks that a name on the list was ever registered. A `DialogService` method that gets a caller
  * and a list entry but no registration call would otherwise go unnoticed until something invokes
- * it, which surfaces as the routing proxy spending its request retries and answering
+ * it, which surfaces as the service router spending its request retries and answering
  * `MethodNotFound`, with only a debug line naming the request type. Routing every registration
  * through {@link registerScopedDialogRequest} makes that omission visible at startup instead — see
  * {@link assertAllRendererHostedDialogRequestsRegistered}.
@@ -32,8 +32,8 @@ const registeredRequestNames = new Set<RendererHostedDialogRequestName>();
 
 /**
  * Serialize a dialog request type under this window's scoped name (e.g. `dialog:showDialog-1`).
- * Dialogs open in a window, so each renderer serves its own; the main process registers proxies
- * under the generic names that forward to whichever window has focus.
+ * Dialogs open in a window, so each renderer serves its own; the main process registers service
+ * routers under the generic names that forward to whichever window has focus.
  */
 function scopedDialogRequestType(requestName: RendererHostedDialogRequestName) {
   return serializeRequestType(CATEGORY_DIALOG, `${requestName}-${globalThis.windowId}`);
@@ -43,7 +43,7 @@ function scopedDialogRequestType(requestName: RendererHostedDialogRequestName) {
  * Register this window's scoped handler (e.g. `dialog:showDialog-1`) for a dialog request, and
  * record that this renderer registered it.
  *
- * @param requestName Generic (unscoped) dialog request name the main process proxies
+ * @param requestName Generic (unscoped) dialog request name the main process routes
  * @param handler Handler to serve the request with
  * @param docs OpenRPC documentation for the request, if it has any
  * @param options Handler options, such as disabling the timeout while a dialog waits for the user
@@ -65,7 +65,7 @@ export async function registerScopedDialogRequest(
     options,
   );
   // Recorded once the registration has landed, not when it was attempted. The check this feeds is
-  // meant to prove there is a handler for the routing proxy to forward to, and a name recorded up
+  // meant to prove there is a handler for the service router to forward to, and a name recorded up
   // front would report a registration that rejected — a name collision after a reload, a network
   // failure during startup — as covered.
   registeredRequestNames.add(requestName);
@@ -77,7 +77,7 @@ export async function registerScopedDialogRequest(
  * Call once at startup, after the dialog service has finished registering.
  *
  * A name in `RENDERER_HOSTED_DIALOG_REQUEST_NAMES` that no {@link registerScopedDialogRequest} call
- * registered means the main process's routing proxy has nothing to forward calls to for that
+ * registered means the main process's service router has nothing to forward calls to for that
  * request.
  */
 export function assertAllRendererHostedDialogRequestsRegistered(): void {
