@@ -37,6 +37,26 @@ export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
   };
 
   /**
+   * Sends the event to the other processes and runs this process's subscriptions for it, keeping
+   * each of those subscribers' failures to itself. See {@link PlatformEventEmitter.emitIsolated}.
+   *
+   * @param event Event data to provide to subscribed callbacks
+   * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+   *   position in the subscription order. Must not throw. Only local subscribers are reported here;
+   *   a failure to reach the network is reported where the network callback was supplied.
+   * @experimental
+   */
+  override emitIsolated = (
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) => {
+    this.assertNotDisposed();
+
+    if (this.networkSubscriber) this.networkSubscriber(event);
+    this.emitLocalIsolated(event, handleSubscriberError);
+  };
+
+  /**
    * Runs only the subscriptions for the event that are on this process. Does not send over network
    *
    * @param event Event data to provide to subscribed callbacks
@@ -45,6 +65,24 @@ export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
     this.assertNotDisposed();
 
     super.emitFn(event);
+  }
+
+  /**
+   * Runs only the subscriptions for the event that are on this process, keeping each subscriber's
+   * failure to itself. Does not send over network. See {@link PlatformEventEmitter.emitIsolated}.
+   *
+   * @param event Event data to provide to subscribed callbacks
+   * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+   *   position in the subscription order. Must not throw.
+   * @experimental
+   */
+  emitLocalIsolated(
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) {
+    this.assertNotDisposed();
+
+    super.emitIsolatedFn(event, handleSubscriberError);
   }
 
   override dispose = () => {
