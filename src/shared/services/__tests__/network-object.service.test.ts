@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { ProcessType } from '@shared/global-this.model';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -20,9 +21,13 @@ import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names
 // Mock the network service so set() can run without the RPC/WebSocket layer. vitest hoists these
 // vi.mock calls above the imports above, so the mocks are in place before the service is imported.
 /** Handlers the service subscribed to each network event, keyed by event name */
-const { networkEventHandlers } = vi.hoisted(() => {
+const { networkEventHandlers, clientDisconnectHandlers } = vi.hoisted(() => {
   const hoistedNetworkEventHandlers: Record<string, ((payload: unknown) => void)[]> = {};
-  return { networkEventHandlers: hoistedNetworkEventHandlers };
+  const hoistedClientDisconnectHandlers: ((event: { removedMethodNames: string[] }) => void)[] = [];
+  return {
+    networkEventHandlers: hoistedNetworkEventHandlers,
+    clientDisconnectHandlers: hoistedClientDisconnectHandlers,
+  };
 });
 
 vi.mock('@shared/services/network.service', () => ({
@@ -37,11 +42,23 @@ vi.mock('@shared/services/network.service', () => ({
     networkEventHandlers[eventName] = [...(networkEventHandlers[eventName] ?? []), handler];
     return () => true;
   },
+  // Subscribed to inside initialize. A plain function for the same reason as getNetworkEvent.
+  onDidDisconnectClient: (handler: (event: { removedMethodNames: string[] }) => void) => {
+    clientDisconnectHandlers.push(handler);
+    return () => true;
+  },
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+
+/**
+ * The core multi-source emitters the service holds, keyed by event name. The service resolves them
+ * once, inside its one-shot `initialize`, so the mock has to hand out the same emitter for a given
+ * event name every time — otherwise a later test would inspect an emitter the service never took.
+ */
+const coreEventEmittersByEventName: Record<string, { emit: Mock; event: Mock; dispose: Mock }> = {};
 
 /** Method documentation as captured from a registerRequestHandler call. */
 type RegisteredMethodDocs = { method?: { [key: string]: unknown; 'x-experimental'?: boolean } };
@@ -65,19 +82,21 @@ function methodDoc(name: string, extra?: Partial<Method>): Method {
 function setupNetworkServiceMocks(): RegisteredDocs {
   const registeredDocs: RegisteredDocs = new Map();
 
-  const mockEmitter = {
-    emit: vi.fn(),
-    event: vi.fn(() => () => {}),
-    dispose: vi.fn(),
-  };
-  vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+  vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockImplementation((eventName) => {
+    if (!coreEventEmittersByEventName[eventName])
+      coreEventEmittersByEventName[eventName] = {
+        emit: vi.fn(),
+        event: vi.fn(() => () => {}),
+        dispose: vi.fn(),
+      };
+    const mockEmitter = coreEventEmittersByEventName[eventName];
     // Needed for testing — the real return type carries the full emitter surface.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    {
+    return {
       emitter: mockEmitter,
       registeredEmitterPromise: Promise.resolve(mockEmitter),
-    } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
-  );
+    } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>;
+  });
 
   vi.mocked(networkService.registerRequestHandler).mockImplementation(
     // Capture the docs for this request type, then resolve to a no-op unsubscriber.
@@ -353,5 +372,112 @@ describe('networkObjectService.forgetUnreachableRemoteObjects', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+/**
+ * Tests for the dispose events the process owning the connections announces on behalf of a process
+ * that went away without disposing what it hosted.
+ *
+ * The RPC layer reports the method names a departed process took with it and interprets none of
+ * them. Network objects register a bare `object:{id}` existence method plus one
+ * `object:{id}.{functionName}` per exposed function, and ids can themselves contain dots, so which
+ * of those names is an object id is a question only this service can answer.
+ */
+describe('networkObjectService — network objects lost with a departed process', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    globalThis.processType = ProcessType.Main;
+  });
+
+  /** Stand in for the RPC layer reporting what a departed process took off the registry */
+  function announceClientDisconnect(removedMethodNames: string[]) {
+    clientDisconnectHandlers.forEach((handler) => handler({ removedMethodNames }));
+  }
+
+  /** The network object ids announced as disposed since the last reset */
+  function announcedDisposedIds(): unknown[] {
+    return (
+      coreEventEmittersByEventName['object:onDidDisposeNetworkObject']?.emit.mock.calls ?? []
+    ).map(([id]) => id);
+  }
+
+  /** Cache a registration for an object hosted in another process, as `get` does */
+  async function fetchRemoteObject(id: string) {
+    setupNetworkServiceMocks();
+    vi.mocked(networkService.request).mockResolvedValue(true);
+    await networkObjectService.get(id);
+    expect(networkObjectService.hasKnown(id)).toBe(true);
+  }
+
+  it('announces one dispose per object, not one per registered method', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('object-that-initializes-the-service', {});
+
+    announceClientDisconnect([
+      'object:ObjectInTheClosedWindow',
+      'object:ObjectInTheClosedWindow.doThing',
+      'object:ObjectInTheClosedWindow.doOtherThing',
+    ]);
+
+    expect(announcedDisposedIds()).toEqual(['ObjectInTheClosedWindow']);
+  });
+
+  it('announces objects this process never fetched, since other processes hold them', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('another-object-that-initializes-the-service', {});
+    expect(networkObjectService.hasKnown('ObjectNobodyHereEverFetched')).toBe(false);
+
+    announceClientDisconnect(['object:ObjectNobodyHereEverFetched']);
+
+    // Whoever was using it is the process that has to hear about it, and that is rarely this one
+    expect(announcedDisposedIds()).toEqual(['ObjectNobodyHereEverFetched']);
+  });
+
+  it('keeps the dots in an id that contains them rather than splitting on the first one', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('a-third-object-that-initializes-the-service', {});
+
+    announceClientDisconnect([
+      'object:platform.themeServiceDataProvider',
+      'object:platform.themeServiceDataProvider.getCurrentTheme',
+      'object:platform.themeServiceDataProvider.setCurrentTheme',
+    ]);
+
+    expect(announcedDisposedIds()).toEqual(['platform.themeServiceDataProvider']);
+  });
+
+  it('announces a nested id that this process holds, even though it reads as a method name', async () => {
+    // `parent.child` is indistinguishable from a `child` function on the object `parent` by reading
+    // the names alone. This process holds a registration under that exact id, which settles it.
+    await fetchRemoteObject('parent.child');
+
+    announceClientDisconnect(['object:parent', 'object:parent.child']);
+
+    expect(announcedDisposedIds()).toEqual(['parent', 'parent.child']);
+  });
+
+  it('ignores removed method names that are not network object registrations', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('a-fourth-object-that-initializes-the-service', {});
+
+    announceClientDisconnect([
+      'command:platform.openSettings',
+      'network:registerMethod',
+      'object:TheOneRealObject',
+    ]);
+
+    expect(announcedDisposedIds()).toEqual(['TheOneRealObject']);
+  });
+
+  it('announces nothing from a process that does not own the connections', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('a-fifth-object-that-initializes-the-service', {});
+    globalThis.processType = ProcessType.Renderer;
+
+    announceClientDisconnect(['object:ObjectInTheClosedWindow']);
+
+    // Every process hears the resulting network event; exactly one process may raise it
+    expect(announcedDisposedIds()).toEqual([]);
   });
 });
