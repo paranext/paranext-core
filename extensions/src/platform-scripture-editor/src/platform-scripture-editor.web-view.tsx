@@ -40,6 +40,7 @@ import {
   Button,
   COMMENT_EDITOR_STRING_KEYS,
   CommentEditor,
+  DisabledActionTooltip,
   EditorKeyboardShortcuts,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
@@ -54,10 +55,6 @@ import {
   SelectMenuItemHandler,
   Spinner,
   TabToolbar,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
@@ -448,7 +445,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return undefined;
     }
   }, [versificationPdp, currentBookNum]);
-  const [lastVersesInCurrentBook] = usePromise(fetchLastVersesInCurrentBook, undefined);
+  // `preserveValue: false` clears the value the instant `currentBookNum` changes (rather than
+  // waiting for the new book's fetch to resolve). Without this, `usePromise`'s default of
+  // preserving the previous value would let `getEndVerse` briefly return the OLD book's verse
+  // counts for the NEW book — `currentBookNum` updates synchronously with `scrRef.book`, but this
+  // array would otherwise lag behind until the refetch lands, and a click during that window would
+  // scaffold the wrong number of `\v` markers.
+  const [lastVersesInCurrentBook] = usePromise(fetchLastVersesInCurrentBook, undefined, {
+    preserveValue: false,
+  });
   const getEndVerse = useCallback(
     (bookId: string, chapterNum: number): number => {
       // Only serve verse counts for the current book. Other books (e.g. when the user types a
@@ -1266,7 +1271,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usjFromPdpPossiblyError, saveUsjToPdpRaw] = useProjectData(
+  const [usjFromPdpPossiblyError, saveUsjToPdpRaw, isUsjFromPdpLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
@@ -1302,24 +1307,43 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     saveUsjToPdpRawStableRef.current = saveUsjToPdpRaw;
   }, [saveUsjToPdpRaw]);
 
-  const isBlankChapter = useMemo(() => isChapterBlank(usjFromPdp ?? defaultUsj), [usjFromPdp]);
+  // `useProjectData`'s underlying `useData` hook doesn't reset its value back to the default when
+  // the selector (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new
+  // subscription's first update lands. Gating on `isUsjFromPdpLoading` (which DOES flip `true` as
+  // soon as the chapter changes, ahead of the round trip) prevents `isBlankChapter` from being
+  // computed against stale content: without this, navigating from a blank chapter into a populated
+  // one could briefly show the empty-chapter view (and its live, clickable button) over the
+  // still-loading real content.
+  const isBlankChapter = useMemo(
+    () => !isUsjFromPdpLoading && isChapterBlank(usjFromPdp ?? defaultUsj),
+    [usjFromPdp, isUsjFromPdpLoading],
+  );
 
   const lastVerse = useMemo(
     () => getEndVerse(scrRef.book, scrRef.chapterNum),
     [scrRef.book, scrRef.chapterNum, getEndVerse],
   );
 
-  // Latches `true` for the whole applyUpdate -> save -> PDP-echo round trip triggered by a click
-  // (~300ms measured). While it's in flight, `isBlankChapter` hasn't flipped yet, so the
-  // empty-chapter button is still visible and enabled — without this guard a second click in that
-  // window would insert the scaffold a second time (duplicate `\c`/`\v` markers). Reset below once
-  // `isBlankChapter` flips to `false`.
-  const isInsertInFlightRef = useRef(false);
-  // Set right before `applyUpdate` so the refocus effect below can tell "the chapter just stopped
-  // being blank because of THIS insert" apart from any other cause of the same transition (ordinary
-  // chapter navigation away from a blank chapter, a remote/collaborative update landing content, or
-  // a Send/Receive sync completing).
-  const didInsertScaffoldRef = useRef(false);
+  // Tracks a scaffold insert this component triggered that hasn't yet been observed to land
+  // (`isBlankChapter` flipping to `false`) or been superseded by navigating away. Serves two roles
+  // that are always set and reset together: (1) re-entrancy guard for the whole applyUpdate -> save
+  // -> PDP-echo round trip (~300ms measured) — while `true`, a second click is a no-op instead of
+  // inserting the scaffold twice; (2) "the chapter just stopped being blank because of THIS insert"
+  // signal for the refocus effect below, distinguishing that from any other cause of the same
+  // transition (ordinary navigation, a remote/collaborative update, a Send/Receive sync landing).
+  const pendingScaffoldInsertRef = useRef(false);
+
+  // Scopes `pendingScaffoldInsertRef` to the chapter it was set in: without this, the ref is
+  // component-wide, so it leaks across navigation. Two concrete bugs that caused: clicking Add on a
+  // blank chapter then navigating to a DIFFERENT blank chapter left the ref stuck `true` forever
+  // (since that chapter's `isBlankChapter` never flips `false` to trigger the reset below), making
+  // every future click on it silently resolve to `'already-in-flight'`; and navigating mid-flight to
+  // a different, already-populated chapter could fire the refocus effect's `.focus()` on THAT
+  // chapter instead, stealing focus from wherever the user's navigation put it. Declared before the
+  // refocus effect so its reset always lands in an earlier commit than that effect's check.
+  useEffect(() => {
+    pendingScaffoldInsertRef.current = false;
+  }, [scrRef.book, scrRef.chapterNum]);
 
   const handleAddChapterNumber = useCallback(() => {
     // Defense-in-depth: unreachable while the button is disabled (`disabled={isStructureProtected}`
@@ -1331,7 +1355,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       notifyStructureProtected();
       return;
     }
-    const outcome = resolveAddChapterNumberClick(isInsertInFlightRef.current, lastVerse);
+    const outcome = resolveAddChapterNumberClick(pendingScaffoldInsertRef.current, lastVerse);
     if (outcome === 'already-in-flight') return;
     if (outcome === 'no-versification') {
       // `showButton` below already gates on `canAddChapterNumber(lastVerse)`, so this should be
@@ -1342,8 +1366,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
       return;
     }
-    isInsertInFlightRef.current = true;
-    didInsertScaffoldRef.current = true;
+    pendingScaffoldInsertRef.current = true;
     // KNOWN CAVEAT: undo reliability for this insert depends on unreleased fixes in the vendored
     // `@eten-tech-foundation/platform-editor` package — this extension's package.json still pins an
     // older version, so don't assume undo works cleanly here until that pin is bumped.
@@ -1353,9 +1376,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
   // effect Lexical would normally run for newly-inserted content is a no-op while hidden
   // (`.claude/rules/cross-view-sync-hidden-views.md`) — re-trigger focus explicitly once the insert
-  // *this component* triggered actually lands. Gated on `didInsertScaffoldRef` so ordinary chapter
-  // navigation away from a blank chapter, a remote/collaborative update landing content, or a
-  // Send/Receive sync completing (all of which can also flip `isBlankChapter` to `false`) do not
+  // *this component* triggered actually lands. Gated on `pendingScaffoldInsertRef` so ordinary
+  // chapter navigation away from a blank chapter, a remote/collaborative update landing content, or
+  // a Send/Receive sync completing (all of which can also flip `isBlankChapter` to `false`) do not
   // steal focus. Also gated on `!isPowerMode`: the empty-chapter-view feature (and this button) is
   // Simple-mode only, so the button can't render in Power mode today — the guard is currently
   // redundant but documents that invariant and protects against a future refactor.
@@ -1363,11 +1386,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (isBlankChapter) return;
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
-    isInsertInFlightRef.current = false;
-    if (!isPowerMode && didInsertScaffoldRef.current) {
+    if (!isPowerMode && pendingScaffoldInsertRef.current) {
       editorRef.current?.focus();
-      didInsertScaffoldRef.current = false;
     }
+    pendingScaffoldInsertRef.current = false;
   }, [isBlankChapter, isPowerMode]);
 
   /**
@@ -1997,69 +2019,44 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 />
 
                 {blockMarker !== undefined && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        {/* When the button is disabled for structure protection it is not focusable,
-                            so make the wrapper focusable and named while disabled to keep the
-                            explanatory tooltip reachable for keyboard and screen-reader users. */}
-                        <div
-                          role={isStructureProtected ? 'group' : undefined}
-                          // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to surface the structure-protection explanation to keyboard and screen-reader users
-                          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                          tabIndex={isStructureProtected ? 0 : undefined}
-                          aria-label={
-                            isStructureProtected
-                              ? localizedStrings[
-                                  '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
-                                ]
-                              : undefined
-                          }
+                  <DisabledActionTooltip
+                    disabled={isStructureProtected}
+                    tooltipText={
+                      localizedStrings[
+                        '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
+                      ]
+                    }
+                  >
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          className="tw:h-8"
+                          aria-label="Paragraph Selection"
+                          title={isStructureProtected ? undefined : 'Paragraph Selection'}
+                          disabled={isStructureProtected}
+                          variant="outline"
                         >
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                className="tw:h-8"
-                                aria-label="Paragraph Selection"
-                                title={isStructureProtected ? undefined : 'Paragraph Selection'}
-                                disabled={isStructureProtected}
-                                variant="outline"
-                              >
-                                {blockMarker ? `${blockMarker} - ` : ''}
-                                {blockMarker &&
-                                Object.entries(blockMarkerToBlockNames).some(
-                                  ([marker]) => marker === blockMarker,
-                                )
-                                  ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-                                  : localizedStrings['%paragraphMenu_misc_markerDescription%']}
-                                <ChevronDown />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="tw:p-0 tw:w-96">
-                              <MarkerMenu
-                                localizedStrings={localizedStrings}
-                                markerMenuItems={paragraphSwitcherMenuItems}
-                                searchPlaceholder={
-                                  localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
-                                }
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </TooltipTrigger>
-                      {isStructureProtected && (
-                        <TooltipContent>
-                          <p className="tw:max-w-xs tw:whitespace-pre-line">
-                            {
-                              localizedStrings[
-                                '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
-                              ]
-                            }
-                          </p>
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
-                  </TooltipProvider>
+                          {blockMarker ? `${blockMarker} - ` : ''}
+                          {blockMarker &&
+                          Object.entries(blockMarkerToBlockNames).some(
+                            ([marker]) => marker === blockMarker,
+                          )
+                            ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+                            : localizedStrings['%paragraphMenu_misc_markerDescription%']}
+                          <ChevronDown />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="tw:p-0 tw:w-96">
+                        <MarkerMenu
+                          localizedStrings={localizedStrings}
+                          markerMenuItems={paragraphSwitcherMenuItems}
+                          searchPlaceholder={
+                            localizedStrings['%markerMenu_searchPlaceholder_paragraph%']
+                          }
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </DisabledActionTooltip>
                 )}
               </>
             )}

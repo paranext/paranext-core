@@ -206,6 +206,8 @@ export type {
 } from './components/basics/cancel-accept-buttons.component';
 export { default as DestructiveKeyConfirmation } from './components/basics/destructive-key-confirmation.component';
 export type { DestructiveKeyConfirmationProps } from './components/basics/destructive-key-confirmation.component';
+export { default as DisabledActionTooltip } from './components/basics/disabled-action-tooltip.component';
+export type { DisabledActionTooltipProps } from './components/basics/disabled-action-tooltip.component';
 export { default as UndoRedoButtons } from './components/basics/undo-redo-buttons.component';
 export { UNDO_REDO_BUTTONS_STRING_KEYS } from './components/basics/undo-redo-buttons.component';
 export type {

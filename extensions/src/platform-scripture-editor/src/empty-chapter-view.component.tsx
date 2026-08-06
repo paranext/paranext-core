@@ -1,10 +1,4 @@
-import {
-  Button,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from 'platform-bible-react';
+import { Button, DisabledActionTooltip } from 'platform-bible-react';
 
 const MESSAGE_KEY = '%webView_platformScriptureEditor_emptyChapter_message%';
 const ADD_CHAPTER_NUMBER_BUTTON_KEY =
@@ -60,39 +54,14 @@ export function EmptyChapterView({
       <div className="tw:flex tw:items-center tw:gap-2">
         <span>{localize(localizedStrings, MESSAGE_KEY)}</span>
         {showButton && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  role={isStructureProtected ? 'group' : undefined}
-                  // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to
-                  // surface the structure-protection explanation to keyboard and screen-reader users.
-                  // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                  tabIndex={isStructureProtected ? 0 : undefined}
-                  aria-label={
-                    isStructureProtected
-                      ? localize(localizedStrings, PROTECTED_TOOLTIP_KEY)
-                      : undefined
-                  }
-                >
-                  <Button
-                    className="tw:h-8"
-                    disabled={isStructureProtected}
-                    onClick={onAddChapterNumber}
-                  >
-                    {localize(localizedStrings, ADD_CHAPTER_NUMBER_BUTTON_KEY)}
-                  </Button>
-                </div>
-              </TooltipTrigger>
-              {isStructureProtected && (
-                <TooltipContent>
-                  <p className="tw:max-w-xs tw:whitespace-pre-line">
-                    {localize(localizedStrings, PROTECTED_TOOLTIP_KEY)}
-                  </p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
+          <DisabledActionTooltip
+            disabled={isStructureProtected}
+            tooltipText={localize(localizedStrings, PROTECTED_TOOLTIP_KEY)}
+          >
+            <Button className="tw:h-8" disabled={isStructureProtected} onClick={onAddChapterNumber}>
+              {localize(localizedStrings, ADD_CHAPTER_NUMBER_BUTTON_KEY)}
+            </Button>
+          </DisabledActionTooltip>
         )}
       </div>
     </div>
