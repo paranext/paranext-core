@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  networkObjectService,
+  onDidDisposeNetworkObject,
+} from '@shared/services/network-object.service';
 import type { Method } from '@shared/models/openrpc.model';
 
 /**
@@ -31,14 +34,20 @@ vi.mock('@shared/services/network.service', () => ({
   createCoreMultiSourceEventEmitter: vi.fn(),
   registerRequestHandler: vi.fn(),
   request: vi.fn(),
-  // Evaluated at module load by the service for onDidCreateNetworkObject, and inside initialize for
-  // the window-close announcement. A plain function rather than a mock so `vi.resetAllMocks` cannot
-  // strip the recording the window-close tests rely on.
+  // Evaluated at module load by the service for both of its network events. A plain function rather
+  // than a mock so `vi.resetAllMocks` cannot strip the recording the announcement tests rely on.
   getNetworkEvent: (eventName: string) => (handler: (payload: unknown) => void) => {
     networkEventHandlers[eventName] = [...(networkEventHandlers[eventName] ?? []), handler];
-    return () => true;
+    return () => {
+      const handlers = networkEventHandlers[eventName] ?? [];
+      const handlerIndex = handlers.indexOf(handler);
+      if (handlerIndex < 0) return false;
+      handlers.splice(handlerIndex, 1);
+      return true;
+    };
   },
-  // Subscribed to inside initialize. A plain function for the same reason as getNetworkEvent.
+  // Subscribed to at module scope by the service. A plain function for the same reason as
+  // getNetworkEvent.
   onDidDisconnectClient: (handler: (event: { removedMethodNames: string[] }) => void) => {
     clientDisconnectHandlers.push(handler);
     return () => true;
@@ -54,7 +63,39 @@ vi.mock('@shared/services/logger.service', () => ({
  * once, inside its one-shot `initialize`, so the mock has to hand out the same emitter for a given
  * event name every time — otherwise a later test would inspect an emitter the service never took.
  */
-const coreEventEmittersByEventName: Record<string, { emit: Mock; event: Mock; dispose: Mock }> = {};
+const coreEventEmittersByEventName: Record<
+  string,
+  { emit: Mock; emitIsolated: Mock; event: Mock; dispose: Mock }
+> = {};
+
+/**
+ * Give a core emitter the delivery behaviour of the real one: `emit` runs the subscribers of that
+ * event name and lets a throw out, `emitIsolated` runs them all and hands each failure to the
+ * caller's handler. Re-applied on every setup because `vi.resetAllMocks` strips implementations
+ * from the emitters that outlive a test.
+ */
+function giveCoreEmitterRealDeliveryBehavior(
+  eventName: string,
+  emitter: { emit: Mock; emitIsolated: Mock },
+) {
+  emitter.emit.mockImplementation((payload: unknown) => {
+    [...(networkEventHandlers[eventName] ?? [])].forEach((handler) => handler(payload));
+  });
+  emitter.emitIsolated.mockImplementation(
+    (
+      payload: unknown,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ) => {
+      [...(networkEventHandlers[eventName] ?? [])].forEach((handler, subscriberIndex) => {
+        try {
+          handler(payload);
+        } catch (error) {
+          handleSubscriberError(error, subscriberIndex);
+        }
+      });
+    },
+  );
+}
 
 /** Method documentation as captured from a registerRequestHandler call. */
 type RegisteredMethodDocs = { method?: { [key: string]: unknown; 'x-experimental'?: boolean } };
@@ -78,13 +119,20 @@ function methodDoc(name: string, extra?: Partial<Method>): Method {
 function setupNetworkServiceMocks(): RegisteredDocs {
   const registeredDocs: RegisteredDocs = new Map();
 
+  Object.entries(coreEventEmittersByEventName).forEach(([eventName, emitter]) =>
+    giveCoreEmitterRealDeliveryBehavior(eventName, emitter),
+  );
+
   vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockImplementation((eventName) => {
-    if (!coreEventEmittersByEventName[eventName])
+    if (!coreEventEmittersByEventName[eventName]) {
       coreEventEmittersByEventName[eventName] = {
         emit: vi.fn(),
+        emitIsolated: vi.fn(),
         event: vi.fn(() => () => {}),
         dispose: vi.fn(),
       };
+      giveCoreEmitterRealDeliveryBehavior(eventName, coreEventEmittersByEventName[eventName]);
+    }
     const mockEmitter = coreEventEmittersByEventName[eventName];
     // Needed for testing — the real return type carries the full emitter surface.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -204,7 +252,8 @@ describe('networkObjectService — network objects lost with a departed process'
   /** The network object ids announced as disposed since the last reset */
   function announcedDisposedIds(): unknown[] {
     return (
-      coreEventEmittersByEventName['object:onDidDisposeNetworkObject']?.emit.mock.calls ?? []
+      coreEventEmittersByEventName['object:onDidDisposeNetworkObject']?.emitIsolated.mock.calls ??
+      []
     ).map(([id]) => id);
   }
 
@@ -297,5 +346,75 @@ describe('networkObjectService — network objects lost with a departed process'
 
     // Every process hears the resulting network event; exactly one process may raise it
     expect(announcedDisposedIds()).toEqual([]);
+  });
+
+  // Announcing is only the means. The point is that everyone holding the object stops holding it and
+  // the name it was registered under is free for whichever process takes the object over.
+  it('forgets the registration and frees the name so the object can be hosted again', async () => {
+    await fetchRemoteObject('ObjectFromTheWindowThatClosed');
+
+    announceClientDisconnect(['object:ObjectFromTheWindowThatClosed']);
+
+    expect(networkObjectService.hasKnown('ObjectFromTheWindowThatClosed')).toBe(false);
+    await expect(
+      networkObjectService.set('ObjectFromTheWindowThatClosed', { doThing: async () => 1 }),
+    ).resolves.toBeDefined();
+  });
+
+  // A window that closes can take several objects with it, and the announcement for each is the only
+  // notice anyone gets that that object is gone. One consumer that throws over one of them must cost
+  // that consumer and nothing else — not the objects announced after it, whose holders would
+  // otherwise keep dead proxies under names nothing can reclaim.
+  it('announces the objects after one a consumer threw over', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('a-sixth-object-that-initializes-the-service', {});
+    const stopThrowing = onDidDisposeNetworkObject((id) => {
+      if (id === 'FirstObjectInTheClosedWindow') throw new Error('consumer blew up');
+    });
+
+    try {
+      announceClientDisconnect([
+        'object:FirstObjectInTheClosedWindow',
+        'object:SecondObjectInTheClosedWindow',
+      ]);
+
+      expect(announcedDisposedIds()).toEqual([
+        'FirstObjectInTheClosedWindow',
+        'SecondObjectInTheClosedWindow',
+      ]);
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+        expect.stringContaining('FirstObjectInTheClosedWindow'),
+      );
+    } finally {
+      stopThrowing();
+    }
+  });
+
+  // The only route that unregisters an object's RPC handlers is its own `dispose`. A process told
+  // that an object it still has registered is gone never ran that, so without unregistering here it
+  // would keep answering requests for an object every other process has already forgotten.
+  it('stops answering requests for a locally registered object announced as gone', async () => {
+    setupNetworkServiceMocks();
+    const unregisteredRequestTypes: string[] = [];
+    vi.mocked(networkService.registerRequestHandler).mockImplementation((requestType) =>
+      Promise.resolve(async () => {
+        unregisteredRequestTypes.push(requestType);
+        return true;
+      }),
+    );
+    await networkObjectService.set('LocallyRegisteredObjectAnnouncedGone', {
+      doThing: async () => 1,
+    });
+
+    announceClientDisconnect(['object:LocallyRegisteredObjectAnnouncedGone']);
+
+    await vi.waitFor(() =>
+      expect(unregisteredRequestTypes).toEqual(
+        expect.arrayContaining([
+          'object:LocallyRegisteredObjectAnnouncedGone',
+          'object:LocallyRegisteredObjectAnnouncedGone.doThing',
+        ]),
+      ),
+    );
   });
 });

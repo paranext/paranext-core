@@ -14,6 +14,9 @@ vi.mock('@shared/services/network.service', async () => {
   const { PlatformEventEmitter } = await import('platform-bible-utils');
   return {
     getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+    // network-object.service subscribes to this at module load so a process that leaves during
+    // startup is still announced, and this test reaches that module on its import path.
+    onDidDisconnectClient: vi.fn(() => vi.fn()),
     createNetworkEventEmitter: vi.fn(() => new PlatformEventEmitter()),
     papiNetworkService: {
       createNetworkEventEmitter: vi.fn(() => new PlatformEventEmitter()),
