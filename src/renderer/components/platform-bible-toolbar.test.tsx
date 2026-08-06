@@ -127,6 +127,9 @@ vi.mock('@shared/services/command.service', () => ({
 
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+  // network-object.service subscribes to this at module load so a process that leaves during
+  // startup is still announced, and this test reaches that module on its import path.
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({

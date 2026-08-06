@@ -29,6 +29,9 @@ vi.mock('@shared/services/network.service', () => ({
   initialize: vi.fn(async () => {}),
   createNetworkEventEmitterAsync: mocks.createNetworkEventEmitterAsync,
   getNetworkEvent: () => vi.fn(),
+  // network-object.service subscribes to this at module load so a process that leaves during
+  // startup is still announced, and this test reaches that module on its import path.
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 vi.mock('@shared/services/network-object.service', async (importOriginal) => ({
   // `overrideDispose` and friends are plain helpers the data provider service uses on its way to
