@@ -46,6 +46,7 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   compareScrRefs,
   deepClone,
+  deserialize,
   getErrorMessage,
   isPlatformError,
   PlatformEvent,
@@ -761,13 +762,61 @@ async function seedCacheFromHost(): Promise<void> {
 }
 
 /**
- * Start this window's scroll group service: subscribe to the host's announcements, then seed from
- * the host. Subscribing first so a change made while the seed is in flight is not lost.
+ * Where the scroll group state used to be persisted, back when a renderer held it: this window's
+ * own `localStorage`. The host cannot read it — main's `localStorage` polyfill is a different store
+ * in a different place — so a profile that predates the host has to hand it over.
+ *
+ * This module never reads these keys as its own state; they exist only to be offered once. Both
+ * they and {@link handOverPreviouslyStoredState} can be deleted in a later release, once every
+ * profile that could still be carrying them has started the app at least once.
+ */
+const PREVIOUSLY_STORED_SCR_REFS_KEY = 'scroll-group.service-host.scrRefs';
+const PREVIOUSLY_STORED_SCR_REF_SOURCE_PROJECT_IDS_KEY =
+  'scroll-group.service-host.scrRefSourceProjectIds';
+
+/**
+ * Offer this window's previously stored scroll group state to the host, which adopts it only if it
+ * has none of its own (see `migrateStoredScrollGroupState`). Every window offers, and the host
+ * takes the first — they are all offering the same state, since these keys were app-global even
+ * while a renderer held them.
+ *
+ * Best-effort: a failed offer costs the user their last reference for this session, which
+ * navigating fixes, and it leaves the host with nothing adopted so a later start can offer again.
+ * Failing startup over it would cost far more.
+ */
+async function handOverPreviouslyStoredState(): Promise<void> {
+  const storedScrRefs = localStorage.getItem(PREVIOUSLY_STORED_SCR_REFS_KEY);
+  const storedSourceProjectIds = localStorage.getItem(
+    PREVIOUSLY_STORED_SCR_REF_SOURCE_PROJECT_IDS_KEY,
+  );
+  if (!storedScrRefs && !storedSourceProjectIds) return;
+  try {
+    const host = await getScrollGroupHost();
+    await host.migrateStoredScrollGroupState({
+      scrRefs: storedScrRefs ? (deserialize(storedScrRefs) ?? {}) : {},
+      scrRefSourceProjectIds: storedSourceProjectIds
+        ? (deserialize(storedSourceProjectIds) ?? {})
+        : {},
+    });
+  } catch (e) {
+    logger.warn(
+      `Could not hand this window's previously stored scroll group state to the scroll group service host. ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
+ * Start this window's scroll group service: subscribe to the host's announcements, hand over any
+ * state stored before the host existed, then seed from the host.
+ *
+ * Subscribing first so a change made while the rest is in flight is not lost, and handing over
+ * before seeding so the first seed after an upgrade carries the reference the user left off at.
  *
  * Call once at renderer startup.
  */
 export async function startScrollGroupService(): Promise<void> {
   subscribeToScrollGroupUpdates();
+  await handOverPreviouslyStoredState();
   await seedCacheFromHost();
 }
 
