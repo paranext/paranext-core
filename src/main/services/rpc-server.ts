@@ -39,6 +39,9 @@ import { getErrorMessage } from 'platform-bible-utils';
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
+/** Called by an RpcServer with the method names its client's departure removed from the registry */
+type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
+
 /**
  * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
  * intended to be instantiated by anything other than RpcWebSocketListener.
@@ -60,6 +63,8 @@ export class RpcServer implements IRpcHandler {
   private readonly rpcEventDetailsByEventName: IRpcEventRegistry;
   /** Called by an RpcServer when all other RpcServers should emit an event over the network */
   private readonly propagateEventMethod: PropagateEventMethod;
+  /** Called by an RpcServer once its client's methods have been removed from the registry */
+  private readonly announceClientDisconnectMethod: AnnounceClientDisconnectMethod;
 
   constructor(
     name: string,
@@ -67,11 +72,13 @@ export class RpcServer implements IRpcHandler {
     propagateEventMethod: PropagateEventMethod,
     rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     rpcEventDetailsByEventName: IRpcEventRegistry,
+    announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
   ) {
     bindClassMethods.call(this);
     this.name = name;
     this.ws = webSocket;
     this.propagateEventMethod = propagateEventMethod;
+    this.announceClientDisconnectMethod = announceClientDisconnectMethod;
 
     // Uncomment the following to log every message sent
     /*
@@ -220,16 +227,23 @@ export class RpcServer implements IRpcHandler {
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
-    logger.info(
-      `Websocket ${this.name} closed. Removing ${this.rpcMethodDetailsByMethodName.size} methods`,
-    );
+    const removedMethodNames: string[] = [];
     this.rpcMethodDetailsByMethodName.forEach(({ handler }, methodName) => {
       if (handler !== this) return;
 
       logger.debug(`Method '${methodName}' removed since websocket ${this.name} closed`);
       this.rpcMethodDetailsByMethodName.delete(methodName);
+      removedMethodNames.push(methodName);
     });
+    // The registry is shared by every connected process, so count what this socket actually took
+    // with it rather than what is in the registry
+    logger.info(`Websocket ${this.name} closed. Removed ${removedMethodNames.length} methods`);
     this.rpcEventDetailsByEventName.unregisterAll(this);
+    // Announced only after the registry no longer holds any of this client's methods, so a
+    // subscriber acting on the news can never be told about a death that has not happened yet. That
+    // ordering is why the announcement exists here at all: it is derived from the teardown rather
+    // than from a message the departing process sent before it, which can outrun its own socket.
+    this.announceClientDisconnectMethod(removedMethodNames);
   }
 
   private onWebSocketError(ev: Event): void {
