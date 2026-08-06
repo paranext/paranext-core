@@ -192,6 +192,11 @@ export const NotificationServiceNetworkObjectName = 'NotificationService';
  * @experimental
  */
 export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation = {
+  // Marked at the object level rather than per method, which fans the marker out over every method
+  // and the object's own existence method: the whole surface is experimental, including what
+  // dismissing means now that a notification is shown by one window out of several. Matches the
+  // `@experimental` tag above, which says the same thing to TypeScript consumers.
+  'x-experimental': true,
   summary: 'Service that sends notifications to users in the UI',
   methods: [
     {

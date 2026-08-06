@@ -337,6 +337,13 @@ export async function startWebViewServiceRouter(): Promise<void> {
   await networkObjectService.set<WebViewServiceType>(
     NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     webViewServiceRouter,
+    undefined,
+    undefined,
+    // Experimental at the object level, which fans out over every method. The generic name is not
+    // new, but what it now answers with is: several of its methods ask every window and merge, or
+    // route by which window owns a named web view, and both of those can now fail in ways a
+    // single-window caller never had to handle.
+    { 'x-experimental': true },
   );
   logger.info('WebView service router registered');
 }
