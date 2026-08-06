@@ -32,7 +32,7 @@ export const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 export const VALIDATION_DEBOUNCE_MS = 1000;
 export const INVALID_CODE_DISPLAY_DEBOUNCE_MS = 1000;
 
-const PARATEXT_REGISTRY_LINK = 'https://registry.paratext.org/';
+const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org/';
 
 // Eight %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
 // extension's localizedStrings.json via PAPI — they will not appear in en.json.
@@ -128,6 +128,27 @@ export function IdentifyStep({
       );
     }
   };
+
+  // The registry link follows the server selected in Internet Settings. Default to (and fall back
+  // on) the production URL so the link is never blank or broken while the lookup runs or if it
+  // fails. This step remounts each time the wizard navigates to it, so the URL re-reads the latest
+  // selection (including a change made on the preceding Internet Settings step).
+  const [registryUrl, setRegistryUrl] = useState(PRODUCTION_REGISTRY_URL);
+  useEffect(() => {
+    if (isDemoMode()) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const url = await commandService.sendCommand('paratextRegistration.getParatextRegistryUrl');
+        if (!cancelled && url) setRegistryUrl(url);
+      } catch {
+        // Keep the production fallback so the link is never broken.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const isMounted = useRef(false);
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -366,12 +387,7 @@ export function IdentifyStep({
 
         <p className="tw:text-sm tw:text-muted-foreground">
           {strings['%firstRun_step_identify_registryHelp%']}{' '}
-          <a
-            href={PARATEXT_REGISTRY_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="tw:underline"
-          >
+          <a href={registryUrl} target="_blank" rel="noopener noreferrer" className="tw:underline">
             {strings['%firstRun_step_identify_registryLink%']}
           </a>
         </p>

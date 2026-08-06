@@ -315,9 +315,22 @@ describe('IdentifyStep', () => {
     expect(screen.getByLabelText(/registration code/i)).toBeInTheDocument();
   });
 
-  it('renders a Paratext Registry link', () => {
+  it('renders a Paratext Registry link pointing at the selected server', async () => {
+    mockCommands({ url: 'https://registry-dev.paratext.org/' });
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     const link = screen.getByRole('link', { name: /visit paratext registry/i });
+    await waitFor(() => expect(link).toHaveAttribute('href', 'https://registry-dev.paratext.org/'));
+  });
+
+  it('falls back to the production registry link when the URL lookup fails', async () => {
+    mockSendCommand.mockImplementation((command: string) =>
+      command === 'paratextRegistration.getParatextRegistryUrl'
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve(undefined),
+    );
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    const link = screen.getByRole('link', { name: /visit paratext registry/i });
+    // Never blank/broken: stays on the production fallback.
     expect(link).toHaveAttribute('href', 'https://registry.paratext.org/');
   });
 
