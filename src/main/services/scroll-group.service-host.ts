@@ -164,6 +164,8 @@ function normalizeStoredScrRefs(refs: ScrollGroupMap<SerializedVerseRef>): boole
   let didNormalize = false;
   Object.values(refs).forEach((value) => {
     if (!value || value.book) return;
+    // The whole point of this function is to handle a stored value that is NOT the type it is
+    // declared as, so there is no type-safe way to look at its old shape.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const valuePossibleScrRef = value as unknown as {
       bookNum?: number;
