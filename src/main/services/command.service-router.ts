@@ -11,7 +11,11 @@
  * "Service router and service shard".
  */
 
-import { getReadyWindowIds, getTargetWindowId } from '@main/services/window-state.service';
+import {
+  getNotReadyWindowIds,
+  getReadyWindowIds,
+  getTargetWindowId,
+} from '@main/services/window-state.service';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -82,8 +86,9 @@ const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set(webViewIdCommandN
  * and none claims the id; the caller then falls back to the focused window, which is what a web
  * view id that no longer exists anywhere would want anyway.
  *
- * Only ready windows are asked: a window that has not registered its services cannot own a web
- * view, and asking it stalls the call for the network service's whole registration retry.
+ * Only ready windows are asked: a window that has not registered its services cannot answer, and
+ * asking it stalls the call for the network service's whole registration retry. It still counts as
+ * a window that could not be asked — see below.
  *
  * @param webViewId Web view id the call named
  * @param requestName Request being routed, for logging
@@ -94,7 +99,16 @@ async function findWebViewOwnerWindowId(
   webViewId: WebViewId,
   requestName: string,
 ): Promise<number | undefined> {
-  let hadServiceErrors = false;
+  // A tracked window that has not registered its services is skipped by the search below rather
+  // than answering it, so it is a window that could not be asked. It has to count as one, or the
+  // fallback runs the call in the focused window while the web view it named sits in the window
+  // nothing asked.
+  const notReadyWindowIds = getNotReadyWindowIds();
+  let hadServiceErrors = notReadyWindowIds.length > 0;
+  if (hadServiceErrors)
+    logger.warn(
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about web view ${webViewId} while routing ${requestName}`,
+    );
   const ownerWindowIds = await Promise.all(
     getReadyWindowIds().map(async (id) => {
       try {

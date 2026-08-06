@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
+    getNotReadyWindowIds: vi.fn(),
     registerRequestHandler: vi.fn(),
     request: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -46,6 +47,7 @@ function withWindows(
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
+  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
 }));
 vi.mock('@shared/services/network.service', () => ({
   registerRequestHandler: mocks.registerRequestHandler,
@@ -103,6 +105,7 @@ describe('renderer-hosted request service routers', () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(2);
     mocks.getReadyWindowIds.mockReturnValue([]);
+    mocks.getNotReadyWindowIds.mockReturnValue([]);
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
     mocks.request.mockResolvedValue('result');
@@ -218,16 +221,19 @@ describe('renderer-hosted request service routers', () => {
     expect(mocks.request).toHaveBeenCalledWith('command:platform.goToNextChapter-2', 'owned-view');
   });
 
-  test('does not ask a window that has not registered its services yet', async () => {
+  test('does not ask a window that has not registered its services yet, and will not fall back to focus', async () => {
     // A window is tracked from the moment it is shown, and asking one that cannot answer costs the
     // network service's whole registration retry — seconds of stall on a user's click — to learn
-    // nothing, since a window with no services cannot own a web view
+    // nothing. Not asking it does not make it a window that answered: the web view named here is
+    // the one sitting in it, and falling back to focus would open the settings against whatever
+    // project the focused window happens to be showing.
     const services = withWindowsOwning({ 2: [], 3: ['owned-view'] }, { unreadyWindowIds: [3] });
 
-    await registrations().get('command:platform.openSettings')?.handler('owned-view');
-
+    await expect(
+      registrations().get('command:platform.openSettings')?.handler('owned-view'),
+    ).rejects.toThrow('unreachable');
     expect(services[3].getOpenWebViewDefinition).not.toHaveBeenCalled();
-    expect(mocks.request).toHaveBeenCalledWith('command:platform.openSettings-2', 'owned-view');
+    expect(mocks.request).not.toHaveBeenCalled();
   });
 
   test('fails the call rather than running it in the wrong window when a window cannot be asked', async () => {
