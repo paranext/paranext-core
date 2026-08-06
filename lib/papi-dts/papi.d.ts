@@ -1666,11 +1666,38 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     );
     emit: (event: T) => void;
     /**
+     * Sends the event to the other processes and runs this process's subscriptions for it, keeping
+     * each of those subscribers' failures to itself. See {@link PlatformEventEmitter.emitIsolated}.
+     *
+     * @param event Event data to provide to subscribed callbacks
+     * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+     *   position in the subscription order. Must not throw. Only local subscribers are reported here;
+     *   a failure to reach the network is reported where the network callback was supplied.
+     * @experimental
+     */
+    emitIsolated: (
+      event: T,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ) => void;
+    /**
      * Runs only the subscriptions for the event that are on this process. Does not send over network
      *
      * @param event Event data to provide to subscribed callbacks
      */
     emitLocal(event: T): void;
+    /**
+     * Runs only the subscriptions for the event that are on this process, keeping each subscriber's
+     * failure to itself. Does not send over network. See {@link PlatformEventEmitter.emitIsolated}.
+     *
+     * @param event Event data to provide to subscribed callbacks
+     * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+     *   position in the subscription order. Must not throw.
+     * @experimental
+     */
+    emitLocalIsolated(
+      event: T,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ): void;
     dispose: () => Promise<boolean>;
   }
   export default PapiNetworkEventEmitter;
@@ -1794,6 +1821,10 @@ declare module 'shared/models/rpc.interface' {
     /**
      * Event that fires when a process disconnects from the network, carrying the method names its
      * departure removed from the central registry.
+     *
+     * This is platform-internal core plumbing between the process that owns the websocket server and
+     * the services that know how their own registered names are formed, not part of the `@papi/*`
+     * surface.
      *
      * This is a local, in-process event: only the process that owns the connections can observe one
      * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
@@ -8469,6 +8500,28 @@ declare module 'renderer/services/reference-history.util' {
     history: ReferenceHistory,
     offset: number,
   ): ReferenceHistoryEntry | undefined;
+}
+declare module 'renderer/services/name-taken-error.util' {
+  /**
+   * Whether a failure to register something under a name says that the name is already taken, as
+   * opposed to saying that the registration itself went wrong.
+   *
+   * The app-global service hosts (the theme engine, the scroll group service) let every window race
+   * for the same name and treat losing as the routine outcome. That is only true for this one kind of
+   * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
+   * service that has already shut down all arrive at the same `catch` and would otherwise be reported
+   * as the expected result at a severity nothing reads.
+   *
+   * Recognized by message text because that is all the throw sites give — see
+   * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards
+   * "not taken" only ever adds a warning to a step-aside that still happens; erring the other way
+   * would report a real failure as the routine outcome, so the list is deliberately exact rather than
+   * generous.
+   *
+   * @experimental
+   */
+  export function isNameTakenError(errorMessage: string): boolean;
+  export default isNameTakenError;
 }
 declare module 'renderer/services/scroll-group.service-host' {
   import {
