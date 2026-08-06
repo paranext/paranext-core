@@ -2,12 +2,8 @@ import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
-import {
-  forgetUnreachableRemoteObjects,
-  networkObjectService,
-} from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import type { Method } from '@shared/models/openrpc.model';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 
 /**
  * Tests for networkObjectService.set — x-experimental fanout behavior.
@@ -186,196 +182,6 @@ describe('networkObjectService.set — x-experimental fanout', () => {
 });
 
 /**
- * Tests for networkObjectService.forgetUnreachableRemoteObjects.
- *
- * A window that closes never disposes the objects it hosted — it just drops its RPC connection — so
- * no dispose event is ever announced for them. Every other process keeps a registration pointing at
- * the dead window, which both serves a dead proxy to consumers and makes the object's name look
- * taken to `set`, so no surviving window can re-host it.
- */
-describe('networkObjectService.forgetUnreachableRemoteObjects', () => {
-  // Not cleared between tests: the service subscribes once, inside its own one-shot `initialize`
-  beforeEach(() => {
-    vi.resetAllMocks();
-  });
-
-  /** Cache a registration for an object hosted in another process, as `get` does */
-  async function fetchRemoteObject(id: string) {
-    setupNetworkServiceMocks();
-    // The existence probe finds it, so `get` caches a remote registration
-    vi.mocked(networkService.request).mockResolvedValue(true);
-    const remoteObject = await networkObjectService.get(id);
-    expect(networkObjectService.hasKnown(id)).toBe(true);
-    return remoteObject;
-  }
-
-  /** Stand in for the window hosting an object going away: main no longer routes requests to it */
-  function makeUnreachable() {
-    vi.mocked(networkService.request).mockRejectedValue(new Error('No handler registered'));
-  }
-
-  it('drops an unreachable remote object, disposes it, and frees its ID for a new host', async () => {
-    const remoteObject = await fetchRemoteObject('object-in-closed-window');
-    const onDidDispose = vi.fn();
-    remoteObject?.onDidDispose(onDidDispose);
-
-    makeUnreachable();
-    const forgotten = await forgetUnreachableRemoteObjects();
-
-    expect(forgotten).toEqual(['object-in-closed-window']);
-    // Consumers holding the dead proxy hear about it through the disposal they already listen for
-    expect(onDidDispose).toHaveBeenCalledTimes(1);
-    expect(networkObjectService.hasKnown('object-in-closed-window')).toBe(false);
-
-    // The point of all of it: a surviving process can now host the object under the same name
-    setupNetworkServiceMocks();
-    await expect(
-      networkObjectService.set('object-in-closed-window', { doThing: async () => 1 }),
-    ).resolves.toBeDefined();
-  });
-
-  it('leaves a remote object that is still reachable alone', async () => {
-    const remoteObject = await fetchRemoteObject('object-in-open-window');
-    const onDidDispose = vi.fn();
-    remoteObject?.onDidDispose(onDidDispose);
-
-    // Some other window closed; this object's host is still running
-    const forgotten = await forgetUnreachableRemoteObjects();
-
-    expect(forgotten).not.toContain('object-in-open-window');
-    expect(onDidDispose).not.toHaveBeenCalled();
-    expect(networkObjectService.hasKnown('object-in-open-window')).toBe(true);
-  });
-
-  it('keeps serving a cached remote object whose host re-registered, because calls go by name', async () => {
-    setupNetworkServiceMocks();
-    vi.mocked(networkService.request).mockResolvedValue(true);
-    const remoteObject = await networkObjectService.get<{ doThing: () => Promise<string> }>(
-      'object-in-reloading-window',
-    );
-
-    // A window that reloads never disposes what it hosted, so nothing is announced and this process
-    // keeps the registration it cached. That is not a dead endpoint, which is why the reload path
-    // needs no cache invalidation: the main process drops the old page's method registrations when
-    // its socket closes and the new page registers the same names, and a remote proxy captures no
-    // connection — every call is a request by name, dispatched to whoever currently answers it.
-    vi.mocked(networkService.request).mockResolvedValue('answer from the new page');
-
-    await expect(remoteObject?.doThing()).resolves.toBe('answer from the new page');
-    expect(networkObjectService.hasKnown('object-in-reloading-window')).toBe(true);
-  });
-
-  it('leaves objects hosted in this process alone even when the network cannot be reached', async () => {
-    setupNetworkServiceMocks();
-    await networkObjectService.set('object-hosted-here', { doThing: async () => 1 });
-    expect(networkObjectService.hasKnown('object-hosted-here')).toBe(true);
-
-    makeUnreachable();
-    const forgotten = await forgetUnreachableRemoteObjects();
-
-    // This process owns it; only the owner may dispose it
-    expect(forgotten).not.toContain('object-hosted-here');
-    expect(networkObjectService.hasKnown('object-hosted-here')).toBe(true);
-  });
-
-  it('runs when the main process announces that a window closed', async () => {
-    await fetchRemoteObject('object-forgotten-on-window-close');
-    makeUnreachable();
-
-    // The payload is the closed window's id
-    networkEventHandlers[EVENT_NAME_ON_DID_CLOSE_WINDOW]?.forEach((handler) => handler(7));
-
-    await vi.waitFor(() =>
-      expect(networkObjectService.hasKnown('object-forgotten-on-window-close')).toBe(false),
-    );
-  });
-
-  /** Stand in for the main process announcing that a window closed */
-  function announceWindowClose(windowId: number) {
-    networkEventHandlers[EVENT_NAME_ON_DID_CLOSE_WINDOW]?.forEach((handler) => handler(windowId));
-  }
-
-  // The announcement is emitted from the closing window's `closed` handler, which can run before the
-  // socket teardown that removes the dead renderer's methods from the central registry. A sweep
-  // inside that gap still gets its probes answered, and the announcement is the only signal there
-  // is, so without a retry nothing would ever probe again.
-  it('sweeps once more when the close-triggered sweep found everything still reachable', async () => {
-    vi.useFakeTimers();
-    try {
-      // `fetchRemoteObject` leaves the probe answering, standing in for the closing window still
-      // being reachable when its close is announced
-      await fetchRemoteObject('object-still-answering-when-the-close-was-announced');
-
-      announceWindowClose(7);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(
-        networkObjectService.hasKnown('object-still-answering-when-the-close-was-announced'),
-      ).toBe(true);
-
-      // The closing window's connection finally goes down
-      makeUnreachable();
-      await vi.advanceTimersByTimeAsync(5000);
-
-      expect(
-        networkObjectService.hasKnown('object-still-answering-when-the-close-was-announced'),
-      ).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('does not sweep again when the close-triggered sweep already dropped something', async () => {
-    vi.useFakeTimers();
-    try {
-      await fetchRemoteObject('object-in-the-window-that-closed');
-      // A second process's object, still answering, so a retry sweep would have something to probe
-      await fetchRemoteObject('object-in-a-window-that-stayed');
-      vi.mocked(networkService.request).mockImplementation(async (requestType: string) =>
-        requestType.includes('object-in-a-window-that-stayed')
-          ? true
-          : Promise.reject(new Error('No handler registered')),
-      );
-
-      announceWindowClose(7);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(networkObjectService.hasKnown('object-in-the-window-that-closed')).toBe(false);
-
-      // The close cleaned up normally, so it costs no further probing
-      const probeCountAfterSweep = vi.mocked(networkService.request).mock.calls.length;
-      await vi.advanceTimersByTimeAsync(5000);
-
-      expect(vi.mocked(networkService.request).mock.calls.length).toBe(probeCountAfterSweep);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('replaces a pending retry when another window closes before it runs', async () => {
-    vi.useFakeTimers();
-    try {
-      await fetchRemoteObject('object-outliving-the-first-retry');
-
-      // Both announcements land while the object still answers, so each schedules a retry
-      announceWindowClose(7);
-      await vi.advanceTimersByTimeAsync(1000);
-      announceWindowClose(8);
-      await vi.advanceTimersByTimeAsync(500);
-      makeUnreachable();
-
-      // Past when the first announcement's retry would have run: the second announcement took it
-      // over rather than leaving two retries pending
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(networkObjectService.hasKnown('object-outliving-the-first-retry')).toBe(true);
-
-      await vi.advanceTimersByTimeAsync(5000);
-      expect(networkObjectService.hasKnown('object-outliving-the-first-retry')).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-});
-
-/**
  * Tests for the dispose events the process owning the connections announces on behalf of a process
  * that went away without disposing what it hosted.
  *
@@ -455,6 +261,18 @@ describe('networkObjectService — network objects lost with a departed process'
     announceClientDisconnect(['object:parent', 'object:parent.child']);
 
     expect(announcedDisposedIds()).toEqual(['parent', 'parent.child']);
+  });
+
+  // A page that reloads takes its socket down like any other departure and comes back registering
+  // the same names. Every holder is told the objects went away and resolves the new page's objects
+  // on its next call, rather than keeping proxies whose registration is a page old.
+  it('announces the objects of a process that is only reloading', async () => {
+    setupNetworkServiceMocks();
+    await networkObjectService.set('an-object-that-initializes-the-service-for-reloads', {});
+
+    announceClientDisconnect(['object:WebViewService-1', 'object:WebViewService-1.openWebView']);
+
+    expect(announcedDisposedIds()).toEqual(['WebViewService-1']);
   });
 
   it('ignores removed method names that are not network object registrations', async () => {
