@@ -59,6 +59,8 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
    * removed from the registry. Local to this process: it is announced as part of tearing the
    * connection down, so it cannot outrun the teardown the way anything the departing process sent
    * can.
+   *
+   * @experimental
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   private localEventHandler: EventHandler | undefined;
