@@ -21,6 +21,10 @@ import {
   getWebViewIdFromFocusSubject,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import {
+  getServiceShardAttributes,
+  WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
@@ -528,20 +532,29 @@ let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IWindowService;
 export async function initialize(): Promise<void> {
+  const { windowId } = globalThis;
+  if (!windowId) throw new Error('Cannot start the window service: windowId is not set');
+
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          // Register under this window's scoped name (e.g. "platform.windowServiceDataProvider-1")
-          // so multiple renderers can coexist. The main process routes the generic name to the
-          // focused window.
+          // Register this window's shard under a window-scoped name (e.g.
+          // "platform.windowServiceDataProvider-1") so multiple renderers can coexist. The main
+          // process's window service router registers the generic name and relays from whichever
+          // window is the current routing target.
+          //
+          // The object type and window id are how the router finds this shard, so the
+          // window-scoped name stays an internal detail of the registration.
           dataProvider = await dataProviderService.registerEngine(
             // Only the name needs asserting — it is built at runtime, but registerEngine expects
             // the literal provider name and infers the right provider type from it, the same way
             // window.service.ts resolves it on the consuming side
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            `${windowServiceProviderName}-${globalThis.windowId}` as typeof windowServiceProviderName,
+            `${windowServiceProviderName}-${windowId}` as typeof windowServiceProviderName,
             new WindowDataProviderEngine(),
+            WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+            getServiceShardAttributes(windowId),
           );
           resolve();
         } catch (error) {

@@ -25,6 +25,8 @@ import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   CloseWebViewEvent,
@@ -39,14 +41,25 @@ import {
 } from '@shared/services/web-view.service-model';
 
 /**
- * Get the WebView service shard for a specific window. Returns undefined if not yet registered.
+ * The WebView service shard each window registers, found by network object type and window
+ * attribute rather than by rebuilding the window-scoped name the window registered under.
+ */
+const webViewShards = createServiceShardIndex<WebViewServiceType>({
+  objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+  resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceType>(networkObjectId),
+});
+
+/**
+ * Get the WebView service shard for a specific window. Returns undefined if that window has not
+ * registered one — its renderer has not got that far, or the window is gone.
+ *
+ * Exported for `command.service-router.ts`, which routes the requests that name a web view to the
+ * window that owns it and so has to ask the same shards this router does.
  *
  * @param windowId The Electron BrowserWindow ID
  */
-async function getWebViewShard(windowId: number): Promise<WebViewServiceType | undefined> {
-  return networkObjectService.get<WebViewServiceType>(
-    `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${windowId}`,
-  );
+export async function getWebViewShard(windowId: number): Promise<WebViewServiceType | undefined> {
+  return webViewShards.getShard(windowId);
 }
 
 /** Get the WebView service shard for the currently focused window, throwing if none is available. */

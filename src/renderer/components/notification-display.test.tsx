@@ -90,6 +90,8 @@ describe('NotificationDisplay with real Sonner', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     vi.resetModules();
+    // The notification service shard registers per window, so it needs a window id
+    globalThis.windowId = '1';
     mockCurrentThemeType = 'light';
     mockSendCommand.mockResolvedValue(undefined);
     stubMatchMedia();
