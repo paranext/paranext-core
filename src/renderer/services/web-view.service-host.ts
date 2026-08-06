@@ -2104,6 +2104,22 @@ export const initialize = () => {
     // @ts-expect-error we want to remove the ability to create popups
     delete globalThis.showModalDialog;
 
+    // PT-4276 spike (Q5). The question — does renderer-initiated window creation still crash on
+    // Electron 39.8.8, and is rc-dock's `windowbox` therefore usable — cannot be asked from a
+    // console, because the renderer is hardened against it three separate ways: the main process
+    // denies every request in `setWindowOpenHandler`, `globalThis.open` is deleted just above, and
+    // `document.createElement` is patched below to reject iframes (so borrowing `open` from another
+    // realm fails too). `openWindow` is captured at module load, before any of that, which is
+    // exactly what it is preserved for. Expose it so the question can be asked.
+    //
+    // Deliberately not gated on --spikeAllowWindowOpen: exposing the alias on its own creates no
+    // window. The main-process handler still decides that, and it is what the flag controls. So the
+    // security posture is unchanged unless the flag is also passed.
+    //
+    // Not intended to ship.
+    // @ts-expect-error PT-4276 spike only; globalThis is not typed for this
+    globalThis.spikeOpenWindow = openWindow;
+
     // #endregion
 
     // #region monkey patches on `window` to prevent same-origin child iframes like HTML and React
