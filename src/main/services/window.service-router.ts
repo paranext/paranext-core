@@ -1,12 +1,17 @@
 /**
- * Publishes a data provider under the generic "platform.windowServiceDataProvider" name that
- * forwards to the focused window's scoped provider (e.g. "platform.windowServiceDataProvider-1").
+ * Service router for the window service. Publishes a data provider under the generic
+ * "platform.windowServiceDataProvider" name that forwards to the focused window's shard (e.g.
+ * "platform.windowServiceDataProvider-1").
  *
- * Each renderer registers its window service under a window-scoped name so several windows can
- * coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and used
- * by `useData('platform.windowServiceDataProvider', …)` — registered by nobody. This restores it,
- * matching what `web-view-routing.service.ts`, `notification-routing.service.ts`, and
- * `command-routing.service.ts` do for their own services.
+ * Each renderer registers its window service shard under a window-scoped name so several windows
+ * can coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and
+ * used by `useData('platform.windowServiceDataProvider', …)` — registered by nobody. This restores
+ * it, matching what `web-view.service-router.ts`, `notification.service-router.ts`, and
+ * `command.service-router.ts` do for their own services.
+ *
+ * The router/shard pattern does not depend on the transport: this one is a data provider on both
+ * sides because the window service has subscription semantics, while the others are plain network
+ * objects. See `.context/standards/Architecture.md` § "Service router and service shard".
  *
  * Unlike those three, a data provider also has to keep subscribers current, which means re-emitting
  * updates from two sources: the window it currently routes to, and the routing target moving to
@@ -28,8 +33,8 @@ import {
 import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platform-bible-utils';
 
 /**
- * Resolve the scoped window service for a given window. Injected so the engine can be tested
- * without the Electron window plumbing that owns the real lookup.
+ * Resolve the window service shard for a given window. Injected so the engine can be tested without
+ * the Electron window plumbing that owns the real lookup.
  */
 export type GetWindowService = (windowId: number) => Promise<IWindowService | undefined>;
 
@@ -48,13 +53,13 @@ class FocusedWindowDataProviderEngine
   #unsubscribeFromWindowUpdates: UnsubscriberAsync | undefined;
 
   /**
-   * Scoped service we are currently relaying from.
+   * Shard we are currently relaying from.
    *
    * Compared by identity rather than by window ID: a renderer that reloads registers a brand new
    * provider under the same window ID, and the resolver's cache drops the old one on disposal, so
    * an ID match would leave the relay bound to a dead provider that can never emit again.
    */
-  #relayedWindowService: IWindowService | undefined;
+  #relayedWindowShard: IWindowService | undefined;
 
   /**
    * Serializes relay re-points. Each one both reads and replaces the subscription bookkeeping — two
@@ -69,7 +74,7 @@ class FocusedWindowDataProviderEngine
   #unsubscribeFromRoutingTargetChanges: Unsubscriber;
 
   /**
-   * Resolves a window's scoped service. Held in a `#`-private field on purpose: `buildDataProvider`
+   * Resolves a window's shard. Held in a `#`-private field on purpose: `buildDataProvider`
    * classifies every visible function on an engine by prefix, so a normal `getWindowService`
    * property would be read as a getter for a `WindowService` data type with no matching setter, and
    * registration would fail the get/set matching check.
@@ -99,9 +104,9 @@ class FocusedWindowDataProviderEngine
     });
   }
 
-  // The scoped provider emits its own update and the relay forwards it, so layering a second
+  // The shard emits its own update and the relay forwards it, so layering a second
   // automatic emit on top of this one would notify every subscriber twice for one change. Doing it
-  // this way rather than returning a constant `false` keeps the scoped provider's real answer —
+  // this way rather than returning a constant `false` keeps the shard's real answer —
   // which callers use to tell "focus moved" from "no such tab" — reaching the caller intact.
   @dataProviderService.decorators.doNotNotify
   async setFocus(
@@ -122,7 +127,7 @@ class FocusedWindowDataProviderEngine
     return (await this.#getTargetWindowService()).getFocus();
   }
 
-  /** Drop both subscriptions. Called when the proxy provider itself is disposed */
+  /** Drop both subscriptions. Called when the router's provider itself is disposed */
   async dispose(): Promise<boolean> {
     this.#isDisposed = true;
     this.#unsubscribeFromRoutingTargetChanges();
@@ -132,7 +137,7 @@ class FocusedWindowDataProviderEngine
     await this.#relayMutex.runExclusive(async () => {
       await this.#unsubscribeFromWindowUpdates?.();
       this.#unsubscribeFromWindowUpdates = undefined;
-      this.#relayedWindowService = undefined;
+      this.#relayedWindowShard = undefined;
     });
     return true;
   }
@@ -152,11 +157,11 @@ class FocusedWindowDataProviderEngine
    * has not registered yet simply leaves the relay idle; the next routing target change or read
    * tries again.
    *
-   * A window that is opened takes OS focus well before its renderer registers a scoped provider, so
-   * the relay stays on the window that can answer until the new one is ready. The routing target
-   * change that readiness fires lands here and re-points, which is also what re-attaches the relay
-   * to a renderer that reloaded: the target announcement repeats for the same window ID and the
-   * service is resolved again, replacing the provider that died with the old page.
+   * A window that is opened takes OS focus well before its renderer registers a shard, so the relay
+   * stays on the window that can answer until the new one is ready. The routing target change that
+   * readiness fires lands here and re-points, which is also what re-attaches the relay to a
+   * renderer that reloaded: the target announcement repeats for the same window ID and the service
+   * is resolved again, replacing the provider that died with the old page.
    */
   async #repointRelay(): Promise<void> {
     if (this.#isDisposed) return;
@@ -164,7 +169,7 @@ class FocusedWindowDataProviderEngine
     const targetWindowId = getTargetWindowId();
     const windowService =
       targetWindowId === undefined ? undefined : await this.#resolveWindowService(targetWindowId);
-    if (windowService === this.#relayedWindowService) return;
+    if (windowService === this.#relayedWindowShard) return;
 
     // Attach before detaching, so an update arriving in the newly targeted window during the
     // handover still reaches subscribers. A brief overlap costs at most one redundant notify, where
@@ -187,7 +192,7 @@ class FocusedWindowDataProviderEngine
     // Committed only now that the new subscription exists. If the subscribe above threw, the
     // bookkeeping still points at the previous window, so the next attempt retries rather than
     // short-circuiting on a relay it does not actually hold.
-    this.#relayedWindowService = windowService;
+    this.#relayedWindowShard = windowService;
     this.#unsubscribeFromWindowUpdates = unsubscribeFromNewWindow;
     // The window this re-point is leaving is often one that just closed, which rejects the
     // unsubscribe instead of answering it. That belongs to the window that is already gone: the
@@ -203,7 +208,7 @@ class FocusedWindowDataProviderEngine
 
     // Disposed while we were attaching: `dispose` has already run its own teardown, so undo ours
     if (this.#isDisposed) {
-      this.#relayedWindowService = undefined;
+      this.#relayedWindowShard = undefined;
       this.#unsubscribeFromWindowUpdates = undefined;
       await unsubscribeFromNewWindow?.();
     }
@@ -232,18 +237,18 @@ class FocusedWindowDataProviderEngine
 }
 
 /**
- * Register the window service routing proxy under the generic name so it claims the name before any
+ * Register the window service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  *
- * @param getWindowService Resolves a window's scoped window service by window ID
+ * @param getWindowService Resolves a window's window service shard by window ID
  */
-export async function startWindowRoutingService(getWindowService: GetWindowService): Promise<void> {
+export async function startWindowServiceRouter(getWindowService: GetWindowService): Promise<void> {
   await dataProviderService.registerEngine(
     windowServiceProviderName,
     new FocusedWindowDataProviderEngine(getWindowService),
   );
-  logger.info('Window service routing proxy registered');
+  logger.info('Window service router registered');
 }
 
 /** Internal-only export for testing; not for use in development */
-export const testingWindowRoutingService = { FocusedWindowDataProviderEngine };
+export const testingWindowServiceRouter = { FocusedWindowDataProviderEngine };
