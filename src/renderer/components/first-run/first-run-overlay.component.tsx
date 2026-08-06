@@ -122,7 +122,11 @@ export function FirstRunGate({
         )}
 
         {status.kind === 'wizard' && (
-          <FirstRunShell entryStep={status.step} stepComponents={stepComponents} />
+          <FirstRunShell
+            entryStep={status.step}
+            stepComponents={stepComponents}
+            allowContinueWithoutRegistration={status.allowContinueWithoutRegistration}
+          />
         )}
       </DialogContent>
     </Dialog>

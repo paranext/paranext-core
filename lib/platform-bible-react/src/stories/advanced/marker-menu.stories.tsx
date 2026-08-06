@@ -3,7 +3,7 @@ import {
   MarkerMenuLocalizedStrings,
 } from '@/components/advanced/marker-menu.component';
 import { Meta, StoryObj } from '@storybook/react-vite';
-import { ClipboardPaste } from 'lucide-react';
+import { ClipboardPaste, RemoveFormatting } from 'lucide-react';
 import { expect } from 'storybook/test';
 
 const meta: Meta<typeof MarkerMenu> = {
@@ -106,6 +106,52 @@ export const DisallowedMarker: Story = {
       const item = await canvas.findByRole('option', { name: /Indented Paragraph/ });
       await expect(item).toHaveAttribute('aria-disabled', 'true');
       await expect(canvas.getByText('Disallowed')).toBeInTheDocument();
+    });
+  },
+};
+
+/**
+ * The character-marker menu leads with a remove row: an icon-and-title command row with no marker
+ * code, which takes the character marker off the selected text and leaves the text itself in place.
+ * It appears only while a character marker is applied to the selection, ahead of the marker rows,
+ * which are sorted by marker code.
+ *
+ * Note that the row's icon must be passed explicitly. With `icon` absent, `MarkerMenu` falls back
+ * to a `Ban` glyph, which reads as "disallowed" rather than "remove" in a menu that already renders
+ * a disallowed affordance.
+ */
+export const CharacterMarkerRemoveRow: Story = {
+  args: {
+    localizedStrings: defaultLocalizedStrings,
+    markerMenuItems: [
+      {
+        icon: RemoveFormatting,
+        title: 'Remove character marker',
+        // Story action callback - alert is intentional to demonstrate command selection feedback
+        // eslint-disable-next-line no-alert
+        action: () => alert('Remove character marker selected!'),
+      },
+      {
+        marker: 'bd',
+        title: 'A character style, use bold text',
+        // Story action callback - alert is intentional to demonstrate marker selection feedback
+        // eslint-disable-next-line no-alert
+        action: () => alert('bd marker selected!'),
+      },
+      {
+        marker: 'nd',
+        title: 'For name of deity (basic)',
+        // Story action callback - alert is intentional to demonstrate marker selection feedback
+        // eslint-disable-next-line no-alert
+        action: () => alert('nd marker selected!'),
+      },
+    ],
+  },
+  play: async ({ canvas, step }) => {
+    await step('Verify the remove row renders first and is selectable', async () => {
+      const options = await canvas.findAllByRole('option');
+      await expect(options[0]).toHaveTextContent('Remove character marker');
+      await expect(options[0]).not.toHaveAttribute('aria-disabled', 'true');
     });
   },
 };

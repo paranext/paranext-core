@@ -50,6 +50,11 @@ export const platformSettings: SettingsContribution = [
         default: true,
         isHidden: true,
       },
+      'platform.showRegistrationReminderOnStartup': {
+        label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+        description: '%settings_platform_showRegistrationReminderOnStartup_description%',
+        default: true,
+      },
     },
   },
 ];
@@ -77,7 +82,10 @@ const serializableStringDictionarySettingValidator: SettingValidator<
 };
 
 const booleanValidator: SettingValidator<
-  'platform.commentsEnabled' | 'platform.firstRunComplete' | 'platform.syncOnStartup'
+  | 'platform.commentsEnabled'
+  | 'platform.firstRunComplete'
+  | 'platform.syncOnStartup'
+  | 'platform.showRegistrationReminderOnStartup'
 > = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
@@ -133,4 +141,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.interfaceMode': interfaceModeValidator,
   'platform.firstRunComplete': booleanValidator,
   'platform.syncOnStartup': booleanValidator,
+  'platform.showRegistrationReminderOnStartup': booleanValidator,
 };

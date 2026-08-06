@@ -286,6 +286,13 @@ declare module 'papi-shared-types' {
      * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
      */
     'platform.syncOnStartup': boolean;
+    /**
+     * Whether to re-show the registration reminder at startup for an already-onboarded Simple-mode
+     * user whose Paratext registration has become invalid. `true` (default) keeps showing the
+     * reminder; `false` suppresses it (set by the wizard's "Don't show this on startup again"
+     * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
+     */
+    'platform.showRegistrationReminderOnStartup': boolean;
   }
 
   /**

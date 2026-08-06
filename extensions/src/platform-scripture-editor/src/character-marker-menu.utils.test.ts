@@ -4,16 +4,15 @@ import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
 
-/** Build a mock editor ref exposing spies for the methods the generators call. */
+/** Build a mock editor ref exposing spies for the methods the generator calls. */
 function makeMockEditorRef() {
-  const formatPara = vi.fn();
   const insertMarker = vi.fn();
   // Mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { formatPara, insertMarker },
+    current: { insertMarker },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, formatPara, insertMarker };
+  return { ref, insertMarker };
 }
 
 describe('generateCharacterMarkerMenuListItems', () => {
@@ -103,19 +102,24 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(generateCharacterMarkerMenuListItems(ref, noop, {}, 'c')).toEqual([]);
   });
 
-  it('returns [] for a childless parent even when a marker is applied and remove is available', () => {
-    // The `parentMarker` early returns run before the remove row is built, so a childless parent
-    // (here 'c', a real blockMarker with no `usfmMarkers` children) must win over the remove row
-    // rather than surfacing it alone. Pinned so a future refactor can't silently reorder this.
+  it('returns [] for a parent with no character children even when remove is available', () => {
+    // A parent that contributes no character markers must win over the remove row rather than
+    // surfacing it alone: a menu offering only "Remove" and nothing to add is not a UX we have
+    // designed, and it would be inconsistent for it to appear for 'mt' but not 'c'. Both shapes are
+    // pinned so a future refactor can't silently reorder this — 'c' has no `usfmMarkers` children at
+    // all (caught by the early return), while 'mt' has children of which none is a character marker
+    // (caught after the filter).
     const { ref } = makeMockEditorRef();
     const removeCharacterMarker = vi.fn();
 
-    const items = generateCharacterMarkerMenuListItems(ref, noop, {}, 'c', {
-      currentCharacterMarker: 'nd',
-      removeCharacterMarker,
-    });
+    ['c', 'mt'].forEach((parentMarker) => {
+      const items = generateCharacterMarkerMenuListItems(ref, noop, {}, parentMarker, {
+        currentCharacterMarker: 'nd',
+        removeCharacterMarker,
+      });
 
-    expect(items).toEqual([]);
+      expect(items).toEqual([]);
+    });
     expect(removeCharacterMarker).not.toHaveBeenCalled();
   });
 
@@ -135,17 +139,22 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it('adds the marker when one is applied but change is not available yet', () => {
+  it('does not add the marker when one is applied but change is not available yet', () => {
     // `EditorRef` exposes no replace-character-marker operation, so a caller has no
-    // `changeCharacterMarker` to pass. Picking a marker must still add it rather than doing nothing.
+    // `changeCharacterMarker` to pass. Picking a marker must NOT fall back to `insertMarker`:
+    // inserting over an existing character marker nests it (verified against the editor package —
+    // `getUsjMarkerAction('bd')` over a selection inside a `\nd` CharNode yields
+    // `char:nd > char:bd`), and nesting survives into the saved USJ. Inert is the safe behavior.
     const { ref, insertMarker } = makeMockEditorRef();
-    const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT, {
+    const close = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
       currentCharacterMarker: 'nd',
     });
 
     items.find((item) => item.marker === 'bd')?.action();
 
-    expect(insertMarker).toHaveBeenCalledWith('bd');
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing but close when the picked marker is already applied', () => {
