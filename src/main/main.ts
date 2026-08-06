@@ -538,7 +538,7 @@ async function main() {
 
     // Load the previous state with fallback to defaults.
     // Only use windowStateKeeper for the first window; subsequent windows are not managed by it, so
-    // their size and position are not persisted.
+    // their size and position are not persisted (per-window bounds persistence is PT-4285's scope).
     const isFirstWindow = windows.length === 0;
     const mainWindowState = isFirstWindow
       ? windowStateKeeper({ defaultWidth: 1024, defaultHeight: 728 })
@@ -807,7 +807,7 @@ async function main() {
       // default close on purpose: with the sync's request timeout disabled by the extension, the
       // bounded wait below can hold the window up to AUTO_SYNC_MAX_DURATION_MS with no feedback,
       // and this fall-through is the user's only escape hatch until a real feedback/cancel UX
-      // exists (tracked on the shutdown-cancel follow-up ticket). It abandons the in-flight sync
+      // exists (PT-4001 tracks the missing shutdown-sync feedback). It abandons the in-flight sync
       // mid-flight — same risk profile as force-quitting the app.
       if (isWindowClosing) return;
 
