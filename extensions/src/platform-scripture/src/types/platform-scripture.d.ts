@@ -2476,11 +2476,11 @@ declare module 'papi-shared-types' {
      * Open the Markers Checklist web view.
      *
      * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
-     *   from) — not a project id. When provided, the target project is resolved from it internally
-     *   via `papi.webViews.getOpenWebViewDefinition`; the checklist opens regardless of whether a
-     *   project could be resolved.
-     * @returns Id of the opened markers checklist web view, or `undefined` if the provider did not
-     *   create one.
+     *   from) — not a project id. The target project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
+     *   provided or the web view has no project (nothing is opened in that case), or if the
+     *   provider did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (

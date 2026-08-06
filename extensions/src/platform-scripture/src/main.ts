@@ -187,6 +187,11 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
     projectId = webViewDefinition?.projectId;
   }
 
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
   const options: ChecklistWebViewOptions = { projectId };
   return papi.webViews.openWebView(
     markersChecklistWebViewType,
