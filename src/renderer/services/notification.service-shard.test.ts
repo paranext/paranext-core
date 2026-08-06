@@ -80,10 +80,10 @@ describe('notification service shard', () => {
     // The shard registers under this window's scoped name and attributes, so it needs a window id
     globalThis.windowId = '1';
     mockSendCommand.mockResolvedValue(undefined);
-    const { startNotificationService } = await import(
+    const { startNotificationServiceShard } = await import(
       '@renderer/services/notification.service-shard'
     );
-    await startNotificationService();
+    await startNotificationServiceShard();
   });
 
   describe('send with duration', () => {
