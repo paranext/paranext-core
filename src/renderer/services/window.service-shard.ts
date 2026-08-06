@@ -559,6 +559,10 @@ export async function initialize(): Promise<void> {
             new WindowDataProviderEngine(),
             WINDOW_SERVICE_SHARD_OBJECT_TYPE,
             shardAttributes,
+            // Experimental at the object level, which fans out over the provider's methods and its
+            // update notification: this is a window-scoped name only the main process's router is
+            // meant to resolve.
+            { 'x-experimental': true },
           );
           resolve();
         } catch (error) {
