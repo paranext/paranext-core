@@ -42,6 +42,7 @@ import { startProjectLookupService } from '@main/services/project-lookup.service
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
+import { startScrollGroupServiceHost } from '@main/services/scroll-group.service-host';
 import {
   getWindowIdsWithServiceShard,
   getWindowServiceShard,
@@ -295,35 +296,39 @@ async function main() {
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
-  // Register the multi-window service routers before any windows are created. These claim generic
-  // names (e.g. "WebViewService", "platform.openSettings") so renderers register shards under scoped
-  // names (e.g. "WebViewService-1", "platform.openSettings-1") and the routers forward to the window
-  // that should handle the call.
+  // Claim every app-global network name before any window is created, so a renderer never has to
+  // race for one. The service routers claim generic names (e.g. "WebViewService",
+  // "platform.openSettings") that renderers answer for behind window-scoped shards; the scroll group
+  // service host claims a name it answers for itself, since a scroll group is app-global rather than
+  // per window.
   // Started together rather than one after another: each claims its own set of names and none reads
   // anything another one registers, so serializing them only adds their round trips together on the
   // startup path every window is waiting behind.
   // Settled rather than raced to the first rejection: they run together, so `Promise.all` would
   // report whichever failed first and discard what the others went on to say. Startup still stops
-  // here — a router that never registered leaves a name nothing answers for the rest of the
-  // session — it just stops naming everything that went wrong instead of one thing.
-  const routerStarts = [
+  // here — a name that never registered is one nothing answers for the rest of the session — it just
+  // stops naming everything that went wrong instead of one thing.
+  const globalServiceStarts = [
     { name: 'WebView service router', started: startWebViewServiceRouter() },
     { name: 'command service router', started: startCommandServiceRouter() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
+    { name: 'scroll group service host', started: startScrollGroupServiceHost() },
   ];
-  const routerOutcomes = await Promise.allSettled(routerStarts.map(({ started }) => started));
-  const failedRouterNames = routerOutcomes
+  const globalServiceOutcomes = await Promise.allSettled(
+    globalServiceStarts.map(({ started }) => started),
+  );
+  const failedGlobalServiceNames = globalServiceOutcomes
     .map((outcome, index) => {
       if (outcome.status === 'fulfilled') return undefined;
-      const { name } = routerStarts[index];
+      const { name } = globalServiceStarts[index];
       logger.error(`Failed to start the ${name}: ${getErrorMessage(outcome.reason)}`);
       return name;
     })
     .filter((name) => name !== undefined);
-  if (failedRouterNames.length > 0)
+  if (failedGlobalServiceNames.length > 0)
     throw new Error(
-      `Could not start the multi-window service routers: ${failedRouterNames.join(', ')}. Each failure is logged above.`,
+      `Could not start the app-global services in main: ${failedGlobalServiceNames.join(', ')}. Each failure is logged above.`,
     );
 
   // Window layout persistence must register its request handlers before any window exists so a
