@@ -66,6 +66,25 @@ export const InvalidCode: Story = {
 };
 
 /**
+ * Re-register mode (background re-check re-raised the wizard for an already-onboarded user whose
+ * registration went invalid). Adds two affordances not present in fresh onboarding: a "Continue
+ * without registration" escape hatch and a "Don't show this on startup again" suppression
+ * checkbox.
+ */
+export const ReRegisterMode: Story = {
+  args: { allowContinueWithoutRegistration: true },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByRole('button', { name: /continue without registration/i }),
+    ).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('checkbox', { name: /don't show this on startup again/i }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
  * Registration saved and platform.restart called — the form is replaced by a restart indicator. The
  * restart promise never resolves (the real process reboots here), so the restart view stays visible
  * until the story is reset.

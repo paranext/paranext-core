@@ -12,7 +12,7 @@ import { pickBestSetupLanguage } from './pick-best-setup-language';
 export type FirstRunStatus =
   | { kind: 'loading' }
   | { kind: 'app' }
-  | { kind: 'wizard'; step: FirstRunStep }
+  | { kind: 'wizard'; step: FirstRunStep; allowContinueWithoutRegistration?: boolean }
   | { kind: 'error' };
 
 const FIRST_RUN_COMPLETE_CACHE_KEY = 'platform-bible.firstRunComplete';
@@ -32,6 +32,10 @@ const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
 // resolveInternal reads and consumes it to guard against transient 'invalid' responses from the
 // registration backend: the user just registered, so 'invalid' is almost certainly a server fluke.
 const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
+
+// Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
+// startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
+let backgroundRecheckStarted = false;
 
 function readBooleanFlag(key: string): boolean {
   try {
@@ -210,14 +214,17 @@ async function resolveInternal(): Promise<void> {
         }
       }
       setStatus({ kind: 'app' });
+      // Completed Simple-mode user: re-check registration in the background (not awaited) so a
+      // registration that has since become invalid can re-raise the wizard without regressing
+      // startup latency. Simple-mode is guaranteed here (non-simple returned early above).
+      startBackgroundRegistrationRecheck();
       return;
     }
 
     const wizardActive = readBooleanFlag(WIZARD_ACTIVE_KEY);
     // Consume the just-registered flag before resolving validity: the user set it just before
     // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
-    const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
-    if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
+    const justRegistered = consumeJustRegisteredFlag();
     const registrationValidity = await resolveRegistrationValidity();
     const effectiveValidity =
       justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
@@ -282,6 +289,55 @@ export async function resolveFirstRunState(): Promise<void> {
 }
 
 /**
+ * Reads and clears the just-registered flag, returning whether it was set. The fresh-user startup
+ * path and the completed-user background re-check each consume it once per startup — a transient
+ * 'invalid' on the launch right after a re-register is treated as a backend fluke, not a re-nag.
+ */
+function consumeJustRegisteredFlag(): boolean {
+  const justRegistered = readBooleanFlag(JUST_REGISTERED_KEY);
+  if (justRegistered) writeBooleanFlag(JUST_REGISTERED_KEY, false);
+  return justRegistered;
+}
+
+/**
+ * For an already-onboarded Simple-mode user, re-check registration validity in the background —
+ * never awaited, never blocks startup. Only a definitive `'invalid'` raises the wizard at the
+ * `identify` step so the user can re-register; a down/slow backend resolves to `'unknown'` and is
+ * ignored, so an outage never re-onboards an established user (the key safety property). Honors
+ * `platform.showRegistrationReminderOnStartup` (default `true`): when explicitly `false`, does
+ * nothing. Runs at most once per startup and swallows all its own errors so it can never block or
+ * crash startup.
+ */
+async function startBackgroundRegistrationRecheck(): Promise<void> {
+  if (backgroundRecheckStarted) return;
+  backgroundRecheckStarted = true;
+  try {
+    // Consume the just-registered flag once per startup, before any early return, so a suppressed
+    // launch can't leave it stale (which could later swallow a legitimate wizard raise).
+    const justRegistered = consumeJustRegisteredFlag();
+    let reminderSuppressed = false;
+    try {
+      const value = await settingsService.get('platform.showRegistrationReminderOnStartup');
+      // Only an explicit `false` suppresses; a missing/errored/default value keeps showing.
+      reminderSuppressed = !isPlatformError(value) && value === false;
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
+      );
+    }
+    if (reminderSuppressed) return;
+    const validity = await resolveRegistrationValidity();
+    // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
+    if (validity !== 'invalid') return;
+    // Suppress a single post-re-register transient 'invalid'; a still-invalid next launch re-raises.
+    if (justRegistered) return;
+    setStatus({ kind: 'wizard', step: 'identify', allowContinueWithoutRegistration: true });
+  } catch (e) {
+    logger.warn(`Background registration re-check failed: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
  * Finish the wizard: persist completion, clear the active marker, reveal the app.
  *
  * @param options.skippedStep - The step that was skipped to end the wizard early (e.g.
@@ -342,5 +398,6 @@ export function resetFirstRunStore(): void {
   status = computeInitialStatus();
   resolvePromise = undefined;
   resolving = false;
+  backgroundRecheckStarted = false;
   listeners.clear();
 }

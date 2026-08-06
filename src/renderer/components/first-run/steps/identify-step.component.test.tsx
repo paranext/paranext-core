@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { ChangeEvent, ReactNode } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
+import { settingsService } from '@shared/services/settings.service';
 import {
   IdentifyStep,
   INVALID_CODE_DISPLAY_DEBOUNCE_MS,
@@ -27,6 +28,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_identify_registryHelp%': "Can't find your registration code?",
       '%firstRun_step_identify_registryLink%': 'Visit Paratext Registry',
       '%firstRun_step_identify_validatingCode%': 'Checking your registration…',
+      '%firstRun_step_identify_reRegisterNotice%':
+        'Your Paratext registration is no longer valid. Re-register to continue.',
+      '%firstRun_button_continueWithoutRegistration%': 'Continue without registration',
+      '%firstRun_step_identify_dontShowAgain%': "Don't show this on startup again",
       '%general_error_title%': 'Error',
     },
     false,
@@ -35,6 +40,10 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
 vi.mock('@renderer/services/first-run-store', () => ({
   isDemoMode: vi.fn(() => false),
   markJustRegistered: vi.fn(),
+  continueWithoutRegistration: vi.fn(),
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
 }));
 vi.mock('platform-bible-react', () => ({
   Alert: ({ children, variant }: { children: ReactNode; variant?: string }) => (
@@ -80,6 +89,25 @@ vi.mock('platform-bible-react', () => ({
     />
   ),
   Spinner: () => <span data-testid="spinner" />,
+  Checkbox: ({
+    id,
+    checked,
+    onCheckedChange,
+  }: {
+    id?: string;
+    checked?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
+  }) => (
+    <input
+      type="checkbox"
+      id={id}
+      checked={!!checked}
+      onChange={(e) => onCheckedChange?.(e.target.checked)}
+    />
+  ),
+  Label: ({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) => (
+    <label htmlFor={htmlFor}>{children}</label>
+  ),
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
@@ -92,6 +120,10 @@ const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 
 beforeEach(() => {
+  // Clear call history between tests (keeps factory/mockResolvedValue implementations) so
+  // per-test call-count assertions on continueWithoutRegistration / settingsService.set don't
+  // accumulate across the re-register-mode cases.
+  vi.clearAllMocks();
   mockSendCommand.mockReset();
   mockIsDemoMode.mockReturnValue(false);
   vi.useFakeTimers();
@@ -398,6 +430,118 @@ describe('IdentifyStep', () => {
     await waitFor(() => {
       expect(screen.getByText('Error')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled();
+    });
+  });
+
+  describe('re-register mode (allowContinueWithoutRegistration)', () => {
+    it('shows the escape hatch and suppression checkbox only in re-register mode', () => {
+      const { unmount } = render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      expect(
+        screen.getByRole('button', { name: 'Continue without registration' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('checkbox', { name: "Don't show this on startup again" }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/registration is no longer valid/i)).toBeInTheDocument();
+      unmount();
+
+      render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+      expect(
+        screen.queryByRole('button', { name: 'Continue without registration' }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('checkbox', { name: "Don't show this on startup again" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/registration is no longer valid/i)).not.toBeInTheDocument();
+    });
+
+    it('escape hatch calls continueWithoutRegistration', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue without registration' }));
+      expect(firstRunStore.continueWithoutRegistration).toHaveBeenCalledTimes(1);
+    });
+
+    it('suppression checkbox persists platform.showRegistrationReminderOnStartup = false', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      await user.click(screen.getByRole('checkbox', { name: "Don't show this on startup again" }));
+      expect(settingsService.set).toHaveBeenCalledWith(
+        'platform.showRegistrationReminderOnStartup',
+        false,
+      );
+    });
+
+    it('un-checking the suppression checkbox re-enables the reminder (sets true)', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: "Don't show this on startup again" });
+      // First click: suppress (false)
+      await user.click(checkbox);
+      expect(settingsService.set).toHaveBeenCalledWith(
+        'platform.showRegistrationReminderOnStartup',
+        false,
+      );
+      // Second click: un-suppress (true)
+      await user.click(checkbox);
+      expect(settingsService.set).toHaveBeenCalledWith(
+        'platform.showRegistrationReminderOnStartup',
+        true,
+      );
+    });
+
+    it('escape hatch does not persist the suppression setting when checkbox is untouched', async () => {
+      const user = setupUser();
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      await user.click(screen.getByRole('button', { name: 'Continue without registration' }));
+      expect(firstRunStore.continueWithoutRegistration).toHaveBeenCalledTimes(1);
+      expect(settingsService.set).not.toHaveBeenCalled();
+    });
+
+    it('reverts the suppression checkbox when the settings write fails', async () => {
+      const user = setupUser();
+      vi.mocked(settingsService.set).mockRejectedValueOnce(new Error('write failed'));
+      render(
+        <IdentifyStep
+          onNext={onNext}
+          setCanProceed={setCanProceed}
+          allowContinueWithoutRegistration
+        />,
+      );
+      const checkbox = screen.getByRole('checkbox', { name: "Don't show this on startup again" });
+      await user.click(checkbox);
+      // Optimistic check reverted after the failed write, so the box matches the unchanged setting.
+      await waitFor(() => expect(checkbox).not.toBeChecked());
     });
   });
 
