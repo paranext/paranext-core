@@ -34,7 +34,7 @@ vi.mock('@renderer/services/window.service-shard', () => ({
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   updateWebViewDefinitionSync: mocks.updateWebViewDefinitionSync,
 }));
-vi.mock('@renderer/services/scroll-group.service-host', () => ({
+vi.mock('@renderer/services/scroll-group.service', () => ({
   getScrRefSync: mocks.getScrRefSync,
   getScrRefForProject: mocks.getScrRefForProject,
   setScrRefSync: mocks.setScrRefSync,

@@ -3,10 +3,10 @@ import { EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY } from '@shared/services/scr
 
 // The host reads localStorage and creates network emitters at import time; stub those. Emitters are
 // captured by event name so a test can assert on one specific event.
-const { emitters, networkObjectSet } = vi.hoisted(() => ({
-  emitters: {} as Record<string, { emit: ReturnType<typeof vi.fn> }>,
-  networkObjectSet: vi.fn(),
-}));
+const { emitters, networkObjectSet } = vi.hoisted(() => {
+  const hoistedEmitters: Record<string, { emit: ReturnType<typeof vi.fn> }> = {};
+  return { emitters: hoistedEmitters, networkObjectSet: vi.fn() };
+});
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: (eventName: string) => {
     const emitter = { emit: vi.fn() };
