@@ -31,6 +31,7 @@ const { networkEventHandlers, networkObjectGet, waitForNetworkObject, host } = v
   };
 });
 vi.mock('@shared/services/network.service', () => ({
+  createBufferedNetworkEventEmitter: () => ({ emit: vi.fn() }),
   getNetworkEvent: (eventName: string) => (handler: (payload: unknown) => void) => {
     networkEventHandlers[eventName] = [...(networkEventHandlers[eventName] ?? []), handler];
     return () => true;

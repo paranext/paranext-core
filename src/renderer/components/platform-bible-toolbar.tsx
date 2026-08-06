@@ -17,7 +17,7 @@ import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-targe
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { PROJECT_PICKER_DIALOG_TYPE } from '@renderer/components/dialogs/dialog-definition.model';
 import { app, dataProviders } from '@renderer/services/papi-frontend.service';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import {
   registerBookChapterControlHandle,
