@@ -102,7 +102,15 @@ const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) =>
     }
     return;
   }
-  emitterRecord.emitter.emitLocal(event);
+  // Isolated, because this hop is the only delivery an event raised in another process ever gets in
+  // this one. There is no replay, and nothing above this frame could act on a throw — the RPC layer
+  // is what called it. Left unisolated, one subscriber throwing costs every subscriber registered
+  // after it an event that will never be sent again.
+  emitterRecord.emitter.emitLocalIsolated(event, (error, subscriberIndex) => {
+    logger.error(
+      `Subscriber ${subscriberIndex} threw while handling a network event of type "${eventType}"; the rest were still told: ${getErrorMessage(error)}`,
+    );
+  });
 };
 
 // #endregion
