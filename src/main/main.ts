@@ -43,6 +43,7 @@ import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-ta
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
+  getWindowIdsWithServiceShard,
   getWindowServiceShard,
   onDidRegisterWindowServiceShard,
   startWindowServiceRouter,
@@ -301,11 +302,7 @@ async function main() {
     { name: 'WebView service router', started: startWebViewServiceRouter() },
     { name: 'command service router', started: startCommandServiceRouter() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
-    // Reuses the same per-window lookup the input handlers use
-    {
-      name: 'window service router',
-      started: startWindowServiceRouter(getWindowServiceShard),
-    },
+    { name: 'window service router', started: startWindowServiceRouter() },
   ];
   const routerOutcomes = await Promise.allSettled(routerStarts.map(({ started }) => started));
   const failedRouterNames = routerOutcomes
@@ -329,6 +326,11 @@ async function main() {
   // call until its renderer has registered. Its window service shard appearing is that signal, and
   // routing waits for it rather than following focus alone — see `getTargetWindowId`.
   onDidRegisterWindowServiceShard((readyWindowId) => markWindowReady(readyWindowId));
+  // The index has been listening since its module was evaluated, which is well before this line,
+  // and the announcement it heard is never repeated. Reconciling here is what makes the two
+  // orderings equivalent, so a window that registered in the meantime is not left unroutable for
+  // the rest of the session.
+  getWindowIdsWithServiceShard().forEach((readyWindowId) => markWindowReady(readyWindowId));
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
