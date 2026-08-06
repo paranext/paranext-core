@@ -12,7 +12,11 @@ import { SerializedRequestType } from '@shared/utils/util';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 import { PlatformEvent } from 'platform-bible-utils';
 
-/** What a process took with it when its connection to the network went away */
+/**
+ * What a process took with it when its connection to the network went away
+ *
+ * @experimental
+ */
 export type RpcClientDisconnectEvent = {
   /**
    * Names of the methods that were registered by the departed process and have now been removed
@@ -119,6 +123,8 @@ export interface IRpcMethodRegistrar extends IRpcHandler {
    * This is a local, in-process event: only the process that owns the connections can observe one
    * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
    * else it is a real event that simply never fires.
+   *
+   * @experimental
    */
   onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
 }

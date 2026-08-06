@@ -50,6 +50,8 @@ export class RpcClient implements IRpcMethodRegistrar {
    * Never fires here. Only the process that owns the websocket server sees a connection being lost;
    * this end of the seam exists so shared code can subscribe in any process without asking which
    * one it is running in.
+   *
+   * @experimental
    */
   readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   private ws: WebSocket | undefined;
