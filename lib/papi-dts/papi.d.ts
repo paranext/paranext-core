@@ -138,6 +138,35 @@ declare module 'shared/services/scroll-group.service-model' {
     /** The new history state (a copy, safe to keep) */
     history: ReferenceHistory;
   };
+  /**
+   * Per-scroll-group values keyed by {@link ScrollGroupId}. Serialized as a plain object, so a group
+   * that has never been touched is simply absent rather than present-and-`undefined`.
+   *
+   * @experimental
+   */
+  export type ScrollGroupMap<T> = {
+    [scrollGroupId: ScrollGroupId]: T | undefined;
+  };
+  /**
+   * The scroll group state that survives an app restart: each group's Scripture reference and the
+   * project whose versification that reference is expressed in. Reference history is deliberately NOT
+   * here — it is session-only (see {@link ReferenceHistory}).
+   *
+   * @experimental
+   */
+  export type PersistedScrollGroupState = {
+    scrRefs: ScrollGroupMap<SerializedVerseRef>;
+    scrRefSourceProjectIds: ScrollGroupMap<string>;
+  };
+  /**
+   * The whole scroll group state at one instant, for a consumer that keeps a local cache of it and
+   * needs to (re)seed that cache in one round trip rather than asking per group.
+   *
+   * @experimental
+   */
+  export type ScrollGroupSnapshot = PersistedScrollGroupState & {
+    referenceHistories: ScrollGroupMap<ReferenceHistory>;
+  };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
     /**
@@ -204,6 +233,39 @@ declare module 'shared/services/scroll-group.service-model' {
      */
     navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
   }
+  /**
+   * Scroll group operations that exist for the platform's own cache-keeping rather than for
+   * consumers. They ride on the same network object as {@link IScrollGroupRemoteService} but are
+   * deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does not offer them.
+   *
+   * @experimental
+   */
+  export interface IScrollGroupInternalService {
+    /**
+     * Get every scroll group's current reference, source project, and reference history at once, so a
+     * process keeping a local cache can (re)seed it in one round trip rather than one per group.
+     *
+     * @returns Copy of the whole scroll group state, safe to keep
+     * @experimental
+     */
+    getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
+    /**
+     * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
+     * into its own store. Idempotent: the first call wins and every later one is a no-op, so several
+     * callers offering their own copies cannot interleave into a mixture of them.
+     *
+     * @param state Previously persisted scroll group state
+     * @experimental
+     */
+    migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<void>;
+  }
+  /**
+   * Everything the scroll group service host registers on its network object: what consumers call
+   * plus the platform's own cache-keeping operations.
+   *
+   * @experimental
+   */
+  export type IScrollGroupHostService = IScrollGroupRemoteService & IScrollGroupInternalService;
   /**
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
@@ -8467,7 +8529,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export const useData: UseDataHook;
   export default useData;
 }
-declare module 'renderer/services/reference-history.util' {
+declare module 'shared/services/reference-history.util' {
   import {
     ReferenceHistory,
     ReferenceHistoryEntry,
@@ -8501,36 +8563,14 @@ declare module 'renderer/services/reference-history.util' {
     offset: number,
   ): ReferenceHistoryEntry | undefined;
 }
-declare module 'renderer/services/name-taken-error.util' {
-  /**
-   * Whether a failure to register something under a name says that the name is already taken, as
-   * opposed to saying that the registration itself went wrong.
-   *
-   * The app-global service hosts (the theme engine, the scroll group service) let every window race
-   * for the same name and treat losing as the routine outcome. That is only true for this one kind of
-   * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
-   * service that has already shut down all arrive at the same `catch` and would otherwise be reported
-   * as the expected result at a severity nothing reads.
-   *
-   * Recognized by message text because that is all the throw sites give — see
-   * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards
-   * "not taken" only ever adds a warning to a step-aside that still happens; erring the other way
-   * would report a real failure as the routine outcome, so the list is deliberately exact rather than
-   * generous.
-   *
-   * @experimental
-   */
-  export function isNameTakenError(errorMessage: string): boolean;
-  export default isNameTakenError;
-}
-declare module 'renderer/services/scroll-group.service-host' {
+declare module 'renderer/services/scroll-group.service' {
   import {
     ReferenceHistory,
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
+  import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -8545,19 +8585,46 @@ declare module 'renderer/services/scroll-group.service-host' {
    * frame change from a verse change.
    */
   export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
-  /**
-   * Event that emits when a tracked project's versification changes mid-session (see
-   * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
-   * a genuine change.
-   */
-  export const onDidChangeVersification: PlatformEvent<{
-    projectId: string;
-  }>;
   /** Event that emits when a scroll group's reference history changes */
   export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getScrRef} */
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
+  /**
+   * Get the id of the project whose versification the scroll group's `scrRef` is expressed in.
+   *
+   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
+   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
+   *   was never set with a source, or its ref came from an external writer whose versification is not
+   *   known
+   */
+  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
   /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
   export function getReferenceHistorySync(scrollGroupId?: ScrollGroupId): ReferenceHistory;
-  /** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
+  /**
+   * See {@link IScrollGroupRemoteService.setScrRef}
+   *
+   * Predicts the host's answer from this window's copy and returns it immediately, so a caller that
+   * branches on "did it change" (e.g. `use-scroll-group-scr-ref.hook.ts`) does not have to await. The
+   * prediction can only be wrong while a change from another window is still in flight — the same
+   * instant-race the single host has always resolved by arrival order — and the loser converges on
+   * the host's next event either way.
+   *
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown / canonical English.
+   */
+  export function setScrRefSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): boolean;
+  /**
+   * See {@link IScrollGroupRemoteService.navigateReferenceHistory}
+   *
+   * Predicted from this window's copy of the history the same way {@link setScrRefSync} predicts a
+   * reference change, so the back/forward buttons move the moment they are clicked. The host runs the
+   * same navigation against the authoritative history and announces the result; if it declines the
+   * move — its history is not where this window thought it was — the group is resynced from it.
+   */
   export function navigateReferenceHistorySync(
     scrollGroupId: ScrollGroupId | undefined,
     offset: number,
@@ -8568,22 +8635,22 @@ declare module 'renderer/services/scroll-group.service-host' {
    * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
    * commands so the main-process keyboard handler can dispatch the physical key directly and stay
    * direction-agnostic.
+   *
+   * The mapping lives in the renderer because layout direction is renderer state: `readDirection`
+   * reads the document, which only this process has. The host exposes logical back/forward only.
    */
   export function navigateReferenceHistoryPhysicalSync(
     scrollGroupId: ScrollGroupId | undefined,
     physicalDirection: 'left' | 'right',
   ): boolean;
-  /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
-   * Get the id of the project whose versification the scroll group's stored `scrRef` is expressed in.
-   *
-   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
-   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
-   *   was never set with a source, or its ref came from an external writer whose versification is not
-   *   known
+   * Event that emits when a tracked project's versification changes mid-session (see
+   * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
+   * a genuine change.
    */
-  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
+  export const onDidChangeVersification: PlatformEvent<{
+    projectId: string;
+  }>;
   /**
    * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
    * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
@@ -8605,11 +8672,15 @@ declare module 'renderer/services/scroll-group.service-host' {
    *
    * The group stores its reference in the versification of whichever project last set it (see
    * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
-   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
-   * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
-   * when no conversion is needed: the source frame is unknown, or already matches `projectId`. On any
-   * conversion failure it falls back to the raw reference (and does not permanently suppress the
-   * project — the failure may be transient).
+   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer
+   * gets a reference it can use directly. Returns the raw reference unchanged when no conversion is
+   * needed: the source frame is unknown, or already matches `projectId`. On any conversion failure it
+   * falls back to the raw reference (and does not permanently suppress the project — the failure may
+   * be transient).
+   *
+   * Converts the reference this window currently holds, so a conversion started right after a
+   * predicted navigation describes the verse actually on screen rather than one the host has not
+   * caught up to yet.
    *
    * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
    * @param projectId Project into whose versification to convert the reference
@@ -8620,29 +8691,13 @@ declare module 'renderer/services/scroll-group.service-host' {
     projectId: string,
   ): Promise<SerializedVerseRef>;
   /**
-   * See {@link IScrollGroupRemoteService.setScrRef}
+   * Start this window's scroll group service: subscribe to the host's announcements, hand over any
+   * state stored before the host existed, then seed from the host.
    *
-   * The user-facing setter: writes the ref (via {@link writeScrRef}) AND records the change in the
-   * scroll group's reference history. Reference-history navigation itself does NOT go through here —
-   * it calls {@link writeScrRef} directly, since its stacks already reflect the move.
+   * Subscribing first so a change made while the rest is in flight is not lost, and handing over
+   * before seeding so the first seed after an upgrade carries the reference the user left off at.
    *
-   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
-   *   unknown / canonical English.
-   */
-  export function setScrRefSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    scrRef: SerializedVerseRef,
-    sourceProjectId?: string,
-  ): boolean;
-  /**
-   * Register the network object that backs the scroll group service.
-   *
-   * The reference-history navigation commands are NOT registered here: the physical left/right
-   * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
-   * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
-   * the window service this state module deliberately does not import). Programmatic offset
-   * navigation is exposed through this network object's `navigateReferenceHistory` method below
-   * rather than a duplicate command.
+   * Call once at renderer startup.
    */
   export function startScrollGroupService(): Promise<void>;
 }
@@ -12301,6 +12356,28 @@ declare module 'shared/services/theme-data.service' {
   import { IThemeDataService } from 'shared/services/theme-data.service-model';
   export const themeDataService: IThemeDataService;
   export default themeDataService;
+}
+declare module 'renderer/services/name-taken-error.util' {
+  /**
+   * Whether a failure to register something under a name says that the name is already taken, as
+   * opposed to saying that the registration itself went wrong.
+   *
+   * The app-global service hosts (the theme engine, the scroll group service) let every window race
+   * for the same name and treat losing as the routine outcome. That is only true for this one kind of
+   * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
+   * service that has already shut down all arrive at the same `catch` and would otherwise be reported
+   * as the expected result at a severity nothing reads.
+   *
+   * Recognized by message text because that is all the throw sites give — see
+   * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards
+   * "not taken" only ever adds a warning to a step-aside that still happens; erring the other way
+   * would report a real failure as the routine outcome, so the list is deliberately exact rather than
+   * generous.
+   *
+   * @experimental
+   */
+  export function isNameTakenError(errorMessage: string): boolean;
+  export default isNameTakenError;
 }
 declare module 'renderer/services/theme.service-host' {
   import {
