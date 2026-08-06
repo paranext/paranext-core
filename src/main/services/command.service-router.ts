@@ -204,6 +204,54 @@ async function registerRoutedRequestHandler(
 }
 
 /**
+ * OpenRPC documentation for the generic dialog request names, which are the ones consumers call.
+ *
+ * Summaries only, where the window-scoped names the renderers register carry full parameter and
+ * result documentation. Those doc objects describe `options` against the dialog-type enum in
+ * `dialog-definition.model`, which is renderer-only and read at runtime rather than as a type, so
+ * they cannot move to a shared module the way `RENDERER_HOSTED_COMMAND_DOCS` did without relocating
+ * that model into `@shared` first. Doing that would let these names carry the full documentation
+ * instead of a summary.
+ */
+const RENDERER_HOSTED_DIALOG_DOCS: Record<
+  (typeof RENDERER_HOSTED_DIALOG_REQUEST_NAMES)[number],
+  SingleMethodDocumentation
+> = {
+  showDialog: {
+    method: {
+      // Experimental: which window a dialog opens in is part of what the multi-window work is still
+      // settling, and it is what this name now decides on the caller's behalf.
+      'x-experimental': true,
+      summary: 'Shows a dialog to the user in the window they are working in',
+      params: [],
+      result: { name: 'return value', summary: 'Response from user', schema: {} },
+    },
+  },
+  selectProject: {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Shows a select project dialog to the user in the window they are working in, and prompts them to select a project',
+      params: [],
+      result: {
+        name: 'return value',
+        summary: "The user's selected project id, or nothing if the user cancels",
+        schema: {},
+      },
+    },
+  },
+  showAboutDialog: {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Shows a dialog with essential information about the application in the window the user is working in',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+};
+
+/**
  * Register routes for everything the renderers host per window — the renderer-hosted commands and
  * the dialog requests. Each route forwards to a window's scoped handler (see
  * {@link resolveRoutingWindowId}). Must be called during main process startup, before
@@ -228,18 +276,15 @@ export async function startCommandServiceRouter(): Promise<void> {
       ),
     ),
     ...RENDERER_HOSTED_DIALOG_REQUEST_NAMES.map((requestName) =>
-      // No OpenRPC docs on the generic dialog names. The renderer's doc objects reference
-      // `dialog-definition.model` (renderer-only) for the dialog-type enum, so they cannot move to
-      // the shared model the way RENDERER_HOSTED_COMMAND_DOCS did without relocating that model
-      // too. The docs still appear in the OpenRPC document under the scoped names. Move
-      // `dialog-definition.model` to `@shared` if the public names need documenting.
-      //
       // A dialog waits for the user, so the router must disable its timeout the same way the
       // renderer's registration does — otherwise the generic request gives up while the dialog is
       // still open.
-      registerRoutedRequestHandler(CATEGORY_DIALOG, requestName, undefined, {
-        timeoutMilliseconds: 0,
-      }),
+      registerRoutedRequestHandler(
+        CATEGORY_DIALOG,
+        requestName,
+        RENDERER_HOSTED_DIALOG_DOCS[requestName],
+        { timeoutMilliseconds: 0 },
+      ),
     ),
   ]);
 
