@@ -31,6 +31,16 @@ vi.mock('@shared/services/data-provider.service', () => ({
     // mock before the module under test is imported
     decorators: { doNotNotify: () => {} },
   },
+  // How the router's shard index resolves a window's shard. These tests inject their own resolver
+  // instead, so it is only here to keep the module load hermetic.
+  getByType: vi.fn(),
+}));
+// The router's shard index subscribes to these at module load. These tests hand the engine its
+// windows directly, so nothing is ever announced to it here.
+vi.mock('@shared/services/network-object.service', () => ({
+  networkObjectService: { get: vi.fn() },
+  onDidCreateNetworkObject: vi.fn(() => vi.fn()),
+  onDidDisposeNetworkObject: vi.fn(() => vi.fn()),
 }));
 
 // The engine only ever calls getFocus / setFocus / subscribeFocus on what it resolves, so the stubs

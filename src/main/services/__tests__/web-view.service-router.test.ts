@@ -7,18 +7,45 @@ import {
 } from '@main/services/web-view.service-router';
 import {
   getRegisteredRouter,
-  withWindows,
+  withoutWindowShard,
+  withWindows as withWindowsServingShards,
+  type ShardAnnouncementListeners,
 } from '@main/services/__tests__/service-router-test.util';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import type { WebViewServiceType } from '@shared/services/web-view.service-model';
 
-const mocks = vi.hoisted(() => ({
-  getTargetWindowId: vi.fn(),
-  getWindows: vi.fn(),
-  getReadyWindowIds: vi.fn(),
-  isWindowReady: vi.fn(),
-  networkObjectGet: vi.fn(),
-  networkObjectSet: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  // Where the router's shard index parks its subscriptions. Plain arrays rather than the subscribe
+  // mocks' recorded calls, which `vi.clearAllMocks()` wipes between tests while the index — module
+  // state that subscribes once at load — keeps listening.
+  const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
+  return {
+    getTargetWindowId: vi.fn(),
+    getWindows: vi.fn(),
+    getReadyWindowIds: vi.fn(),
+    isWindowReady: vi.fn(),
+    networkObjectGet: vi.fn(),
+    networkObjectSet: vi.fn(),
+    shardAnnouncementListeners,
+    onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
+      shardAnnouncementListeners.create.push(listener);
+      return () => {};
+    }),
+    onDidDisposeNetworkObject: vi.fn((listener: (networkObjectId: string) => void) => {
+      shardAnnouncementListeners.dispose.push(listener);
+      return () => {};
+    }),
+  };
+});
+
+/** Wire windows whose WebView service shards are the given objects */
+function withWindows(
+  shardsByWindowId: Record<number, unknown>,
+  options?: { unreadyWindowIds?: number[] },
+) {
+  withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
+}
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
@@ -28,6 +55,8 @@ vi.mock('@main/services/window-state.service', () => ({
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
+  onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
+  onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
 vi.mock('@shared/services/network.service', () => ({ getNetworkEvent: () => vi.fn() }));
 
@@ -57,8 +86,52 @@ describe('web view service router', () => {
     mocks.isWindowReady.mockReturnValue(true);
   });
 
+  describe('finding a window`s shard', () => {
+    test('asks the shard by the id its window announced, not by a name built from the window id', async () => {
+      // The router never spells a window-scoped name: it resolves whatever id the shard announced
+      // itself under, which is why the ids the shards register here look nothing like the generic
+      // service name plus a window id
+      withWindows({ 1: windowShard(['a']) });
+      const router = await getRouter();
+
+      await router.getAllOpenWebViewDefinitions();
+
+      expect(mocks.networkObjectGet).toHaveBeenCalledWith('shard-of-window-1');
+    });
+
+    test('routes to a window that registered its shard after the router started', async () => {
+      // Routers start before any window exists, so every window they ever route to is one that
+      // announced itself later
+      withWindows({ 1: windowShard(['a']) });
+      const router = await getRouter();
+      expect((await router.getAllOpenWebViewDefinitions()).map(({ id }) => id)).toEqual(['a']);
+
+      withWindows({ 1: windowShard(['a']), 2: windowShard(['b']) });
+
+      expect((await router.getAllOpenWebViewDefinitions()).map(({ id }) => id).sort()).toEqual([
+        'a',
+        'b',
+      ]);
+    });
+
+    test('stops asking a window once its shard has announced that it is gone', async () => {
+      // A window's shard dies with the window, and the disposal announcement is the only thing that
+      // says so. Asking it anyway routes a call into a window that is no longer there.
+      const closing = windowShard(['owned-view']);
+      withWindows({ 1: windowShard([]), 2: closing });
+      const router = await getRouter();
+
+      withoutWindowShard(mocks, 2);
+
+      // Still a ready window as far as window state is concerned, so it counts as one that could
+      // not be asked rather than one that answered that it does not own the web view
+      await expect(router.reloadWebView('someType', 'owned-view')).rejects.toThrow('unreachable');
+      expect(closing.getOpenWebViewDefinition).not.toHaveBeenCalled();
+    });
+  });
+
   test('gathers open web views from every window, not just the focused one', async () => {
-    withWindows(mocks, { 1: windowShard(['a']), 2: windowShard(['b', 'c']) });
+    withWindows({ 1: windowShard(['a']), 2: windowShard(['b', 'c']) });
     const router = await getRouter();
 
     const all = await router.getAllOpenWebViewDefinitions();
@@ -71,7 +144,7 @@ describe('web view service router', () => {
     // stalls the whole fan-out for the network service's registration retry to learn nothing
     const serving = windowShard(['a']);
     const starting = windowShard([]);
-    withWindows(mocks, { 1: serving, 2: starting }, { unreadyWindowIds: [2] });
+    withWindows({ 1: serving, 2: starting }, { unreadyWindowIds: [2] });
     const router = await getRouter();
 
     const all = await router.getAllOpenWebViewDefinitions();
@@ -86,7 +159,7 @@ describe('web view service router', () => {
     const healthy = windowShard(['a']);
     const broken = windowShard([]);
     broken.getAllOpenWebViewDefinitions.mockRejectedValue(new Error('window went away'));
-    withWindows(mocks, { 1: healthy, 2: broken });
+    withWindows({ 1: healthy, 2: broken });
     const router = await getRouter();
 
     await expect(router.getAllOpenWebViewDefinitions()).rejects.toThrow('unreachable');
@@ -98,7 +171,7 @@ describe('web view service router', () => {
     const healthy = windowShard(['a']);
     const broken = windowShard([]);
     broken.getAllOpenWebViewDefinitions.mockRejectedValue(new Error('window went away'));
-    withWindows(mocks, { 1: healthy, 2: broken });
+    withWindows({ 1: healthy, 2: broken });
 
     const { definitions, unreachableWindowIds } =
       await getAllOpenWebViewDefinitionsWithReachability();
@@ -110,7 +183,7 @@ describe('web view service router', () => {
   test('reloads a web view in the window that actually owns it, not the focused one', async () => {
     const focused = windowShard([]);
     const owner = windowShard(['owned-view']);
-    withWindows(mocks, { 1: focused, 2: owner });
+    withWindows({ 1: focused, 2: owner });
     const router = await getRouter();
 
     await router.reloadWebView('someType', 'owned-view');
@@ -121,7 +194,7 @@ describe('web view service router', () => {
 
   test('falls back to the focused window when no window owns the web view', async () => {
     const focused = windowShard([]);
-    withWindows(mocks, { 1: focused, 2: windowShard([]) });
+    withWindows({ 1: focused, 2: windowShard([]) });
     const router = await getRouter();
 
     await router.reloadWebView('someType', 'unknown-view');
@@ -132,7 +205,7 @@ describe('web view service router', () => {
   test('opens an existing web view in its owning window when given an existingId', async () => {
     const focused = windowShard([]);
     const owner = windowShard(['existing-view']);
-    withWindows(mocks, { 1: focused, 2: owner });
+    withWindows({ 1: focused, 2: owner });
     const router = await getRouter();
 
     await router.openWebView('someType', undefined, { existingId: 'existing-view' });
@@ -144,7 +217,7 @@ describe('web view service router', () => {
   test('opens a brand new web view in the focused window', async () => {
     const focused = windowShard([]);
     const other = windowShard([]);
-    withWindows(mocks, { 1: focused, 2: other });
+    withWindows({ 1: focused, 2: other });
     const router = await getRouter();
 
     await router.openWebView('someType');
@@ -157,7 +230,7 @@ describe('web view service router', () => {
     // Finding the owner means fetching the definition, so fetching it again to return it is a
     // second cross-process round trip for an answer already in hand — and the two can disagree
     const owner = windowShard(['owned-view']);
-    withWindows(mocks, { 1: windowShard([]), 2: owner });
+    withWindows({ 1: windowShard([]), 2: owner });
     const router = await getRouter();
 
     const definition = await router.getOpenWebViewDefinition('owned-view');
@@ -169,7 +242,7 @@ describe('web view service router', () => {
   test('does not ask a window that has not registered its services yet who owns a web view', async () => {
     const focused = windowShard([]);
     const starting = windowShard(['owned-view']);
-    withWindows(mocks, { 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+    withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
     const router = await getRouter();
 
     await router.reloadWebView('someType', 'owned-view');
@@ -180,7 +253,7 @@ describe('web view service router', () => {
 
   test('refuses to route rather than guessing when no window is available', async () => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
-    withWindows(mocks, {});
+    withWindows({});
     const router = await getRouter();
 
     await expect(router.openWebView('someType')).rejects.toThrow('No windows available');
@@ -192,14 +265,14 @@ describe('web view service router', () => {
     // moments away — a window that cannot be asked, which is not a window that answered "nothing".
 
     test('refuses to answer with a list that leaves it out', async () => {
-      withWindows(mocks, { 1: windowShard(['a']), 2: undefined });
+      withWindows({ 1: windowShard(['a']), 2: undefined });
       const router = await getRouter();
 
       await expect(router.getAllOpenWebViewDefinitions()).rejects.toThrow('unreachable');
     });
 
     test('reports it as unreachable to callers that can act on a partial list', async () => {
-      withWindows(mocks, { 1: windowShard(['a']), 2: undefined });
+      withWindows({ 1: windowShard(['a']), 2: undefined });
 
       const { definitions, unreachableWindowIds } =
         await getAllOpenWebViewDefinitionsWithReachability();
@@ -211,7 +284,7 @@ describe('web view service router', () => {
     test('refuses to route an operation to the focused window as if nobody owned the web view', async () => {
       // Falling back would reload whatever the focused window happens to be showing instead of the
       // web view the caller named — which may well be in the window that could not be asked
-      withWindows(mocks, { 1: windowShard([]), 2: undefined });
+      withWindows({ 1: windowShard([]), 2: undefined });
       const router = await getRouter();
 
       await expect(router.reloadWebView('someType', 'owned-view')).rejects.toThrow('unreachable');
@@ -220,7 +293,7 @@ describe('web view service router', () => {
     test('still answers when another window claims the web view', async () => {
       // A window that could not be asked only matters when nobody claimed the id
       const owner = windowShard(['owned-view']);
-      withWindows(mocks, { 1: owner, 2: undefined });
+      withWindows({ 1: owner, 2: undefined });
       const router = await getRouter();
 
       await expect(router.reloadWebView('someType', 'owned-view')).resolves.toBe('reloaded');
@@ -229,7 +302,7 @@ describe('web view service router', () => {
 
   describe('asking one specific window what it has open', () => {
     test('answers with what that window has open', async () => {
-      withWindows(mocks, { 1: windowShard(['a', 'b']) });
+      withWindows({ 1: windowShard(['a', 'b']) });
 
       const definitions = await getOpenWebViewDefinitionsForWindow(1);
 
@@ -240,7 +313,7 @@ describe('web view service router', () => {
       // This is the read a closing window's sync depends on, and that window's own service is the
       // only thing that could ever list its editors. An empty answer here is indistinguishable from
       // the truth, so its unsynced work would be dropped with nothing to correct it later.
-      withWindows(mocks, { 1: undefined });
+      withWindows({ 1: undefined });
       mocks.isWindowReady.mockReturnValue(true);
 
       await expect(getOpenWebViewDefinitionsForWindow(1)).rejects.toThrow('could not be read');
@@ -248,7 +321,7 @@ describe('web view service router', () => {
 
     test('answers nothing open for a window whose renderer never registered', async () => {
       // A window that was never ready never had a web view in it, so there is nothing to warn about
-      withWindows(mocks, { 1: undefined });
+      withWindows({ 1: undefined });
       mocks.isWindowReady.mockReturnValue(false);
 
       await expect(getOpenWebViewDefinitionsForWindow(1)).resolves.toEqual([]);

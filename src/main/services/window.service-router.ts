@@ -19,9 +19,14 @@
  */
 
 import { getTargetWindowId, onDidChangeRoutingTarget } from '@main/services/window-state.service';
+import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { WINDOW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import { dataProviderService } from '@shared/services/data-provider.service';
+import {
+  dataProviderService,
+  getByType as getDataProviderByType,
+} from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import {
   FocusSubject,
@@ -37,6 +42,45 @@ import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platfor
  * the Electron window plumbing that owns the real lookup.
  */
 export type GetWindowService = (windowId: number) => Promise<IWindowService | undefined>;
+
+/**
+ * The window service shard each window registers, found by network object type and window attribute
+ * rather than by rebuilding the window-scoped provider name the window registered under.
+ *
+ * These shards are data providers rather than plain network objects, which changes only how they
+ * are resolved; they are discovered exactly like every other shard.
+ */
+const windowServiceShards = createServiceShardIndex<IWindowService>({
+  objectType: WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+  // What the index holds is the shard's network object id, which for a data provider already ends
+  // in the suffix `getByType` would otherwise append (see `getDataProviderObjectId`)
+  resolveShard: (networkObjectId) => getDataProviderByType<IWindowService>(networkObjectId),
+});
+
+/**
+ * Get the window service shard for a specific window, or `undefined` if that window has not
+ * registered one.
+ *
+ * Deliberately a plain lookup rather than a caching layer, even though the main process's input
+ * handlers call it on every keystroke and mouse press: the network object service already keeps
+ * what it resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it
+ * holds when the object is disposed or its window closes. A second cache of resolved providers
+ * could only go stale — and because Electron reuses `BrowserWindow.id`, a stale entry would be
+ * handed to the next window opened with that ID rather than merely being useless.
+ *
+ * @param windowId The Electron BrowserWindow ID
+ */
+export async function getWindowServiceShard(windowId: number): Promise<IWindowService | undefined> {
+  return windowServiceShards.getShard(windowId);
+}
+
+/**
+ * Fires with a window id when that window registers its window service shard.
+ *
+ * A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed call
+ * until its renderer has registered. Its shard appearing is that signal.
+ */
+export const onDidRegisterWindowServiceShard = windowServiceShards.onDidAddShard;
 
 /**
  * Forwards to whichever window is currently the routing target.

@@ -17,13 +17,23 @@ import {
 } from '@shared/models/notification.service-model';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { getErrorMessage } from 'platform-bible-utils';
 
-/** Get the notification service shard for a specific window. Undefined if not yet registered. */
+/**
+ * The notification service shard each window registers, found by network object type and window
+ * attribute rather than by rebuilding the window-scoped name the window registered under.
+ */
+const notificationShards = createServiceShardIndex<INotificationService>({
+  objectType: NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE,
+  resolveShard: (networkObjectId) =>
+    networkObjectService.get<INotificationService>(networkObjectId),
+});
+
+/** Get the notification service shard for a specific window. Undefined if it has not registered. */
 async function getNotificationShard(windowId: number): Promise<INotificationService | undefined> {
-  return networkObjectService.get<INotificationService>(
-    `${NotificationServiceNetworkObjectName}-${windowId}`,
-  );
+  return notificationShards.getShard(windowId);
 }
 
 /** Get the notification service shard for the focused window, throwing if none is available */
