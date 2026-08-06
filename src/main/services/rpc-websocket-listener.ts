@@ -507,16 +507,16 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
 
   // Run by an RpcServer once it has removed its client's methods from the registry
   private announceClientDisconnect(removedMethodNames: string[]): void {
-    // `PlatformEventEmitter` runs its subscribers synchronously without isolating them, and this
-    // runs inside a socket's close handler, so one subscriber throwing would take the rest of the
-    // announcement — and the rest of the teardown — with it.
-    try {
-      this.clientDisconnectEmitter.emit({ removedMethodNames });
-    } catch (error) {
+    // This is the only time subscribers are told a process went away — nothing replays it and
+    // nothing reconciles afterwards — and it runs inside a socket's close handler, so a subscriber
+    // that throws must cost only itself, not the rest of the subscribers or the rest of the
+    // teardown. Name what was lost too: "a subscriber threw" alone leaves whoever reads the log
+    // unable to tell which process died or which of its methods went with it.
+    this.clientDisconnectEmitter.emitIsolated({ removedMethodNames }, (error, subscriberIndex) => {
       logger.error(
-        `A subscriber threw while being told a client disconnected, so the rest of them were not told: ${getErrorMessage(error)}`,
+        `Subscriber ${subscriberIndex} threw while being told a client disconnected, taking ${removedMethodNames.length} methods with it (${removedMethodNames.join(', ')}); the rest were still told: ${getErrorMessage(error)}`,
       );
-    }
+    });
   }
 
   private onClientDisconnect(ev: CloseEvent): void {
