@@ -20,8 +20,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
 
-// `internetSettings_*` keys come from the paratext-registration extension, `firstRun_*` from core
-// (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
+// `%internetSettings_button_retry%` is localized by the paratext-registration extension itself; the
+// `%firstRun_*%` keys live in core's assets/localization. The combiner merges both sets at runtime,
+// so this step doesn't need to add the extension's key to core's localization.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
   '%firstRun_step_internetSettings_connecting%',
@@ -37,17 +38,15 @@ const STRING_KEYS: LocalizeKey[] = [
 const METHOD_NOT_FOUND_MESSAGE_PREFIX = getJsonRpcRequestErrorMessagePrefix(
   JSONRPCErrorCode.MethodNotFound,
 );
-// Each call is bounded by the ~30 s client request timeout; method-not-found returns in ~10 s
-// (command-layer retry), so several attempts fit, while a full client timeout consumes the budget in
-// one attempt. Generous on purpose. Compare the sibling resolve-registration-validity.ts
+// Wall-clock budget for the whole retry loop below. A method-not-found rejection returns in ~10 s
+// (the command layer's own retry), so roughly two or three outer re-issues fit within this budget;
+// a call that instead hits the full ~30 s client timeout consumes the budget in a single attempt.
+// Generous on purpose. Compare the sibling resolve-registration-validity.ts
 // (REGISTRATION_RESOLVE_TIMEOUT_MS).
 const SERVICE_STARTUP_BUDGET_MS = 30_000;
 // Backoff between re-issues; only bites when a call rejects fast (a real method-not-found call already
 // spent ~10 s upstream).
 const SERVICE_STARTUP_RETRY_DELAY_MS = 500;
-// Show the "getting ready" message after this much elapsed time — not attempt count; one attempt
-// can block ~10 s.
-const CONNECTING_MESSAGE_DELAY_MS = 2_000;
 
 /**
  * A failure worth retrying within the startup budget: the handler isn't registered yet, or the
@@ -88,12 +87,11 @@ export function InternetSettingsStep({ setCanProceed }: FirstRunStepProps) {
   // Bumped on each load() so a stale run (e.g. a superseded retry) can't write state over a newer one.
   const loadGeneration = useRef(0);
 
-  // Reveal the "getting ready" message only once the load has been slow for a beat — active whenever
-  // we're still loading (no settings yet, not failed). Declarative timer; no manual setTimeout here.
-  const showConnectingMessage = useDelayedFlag(
-    !settings && !loadFailed,
-    CONNECTING_MESSAGE_DELAY_MS,
-  );
+  // Reveal the "getting ready" message only once the load has been slow for a beat (the hook's
+  // default delay) — active whenever we're still loading (no settings yet, not failed). This is
+  // elapsed time, not attempt count; a single attempt can block ~10 s. Declarative timer; no manual
+  // setTimeout here.
+  const showConnectingMessage = useDelayedFlag(!settings && !loadFailed);
 
   useEffect(() => {
     isMounted.current = true;

@@ -25,14 +25,14 @@ describe('StepLoading', () => {
     expect(liveRegion).toHaveTextContent('');
 
     rerender(
-      <StepLoading message="Setting things up for the first time. This can take a moment…" />,
+      <StepLoading message="Setting things up for the first time. This can take a few moments…" />,
     );
     // Content changed inside the pre-existing region — the announcement-triggering transition.
     expect(container.querySelector('[aria-live="polite"]')).toHaveTextContent(
-      'Setting things up for the first time. This can take a moment…',
+      'Setting things up for the first time. This can take a few moments…',
     );
     expect(
-      screen.getByText('Setting things up for the first time. This can take a moment…'),
+      screen.getByText('Setting things up for the first time. This can take a few moments…'),
     ).toBeInTheDocument();
   });
 });

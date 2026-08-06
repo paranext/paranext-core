@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useDelayedFlag } from './use-delayed-flag.hook';
+import { useDelayedFlag, DEFAULT_DELAY_MS } from './use-delayed-flag.hook';
 
 describe('useDelayedFlag', () => {
   beforeEach(() => {
@@ -11,12 +11,40 @@ describe('useDelayedFlag', () => {
     vi.useRealTimers();
   });
 
-  it('stays false until active has been true for the full delay', () => {
-    const { result } = renderHook(() => useDelayedFlag(true, 2000));
+  // Uses a non-default delay so a hard-coded implementation (ignoring delayMs) would fail here.
+  it('stays false until active has been true for the caller-supplied delay', () => {
+    const { result } = renderHook(() => useDelayedFlag(true, 500));
 
     expect(result.current).toBe(false);
     act(() => {
-      vi.advanceTimersByTime(1999);
+      vi.advanceTimersByTime(499);
+    });
+    expect(result.current).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current).toBe(true);
+  });
+
+  // A second distinct delay pins the behavior to delayMs, not any single constant.
+  it('honors a larger caller-supplied delay', () => {
+    const { result } = renderHook(() => useDelayedFlag(true, 5000));
+
+    act(() => {
+      vi.advanceTimersByTime(4999);
+    });
+    expect(result.current).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(result.current).toBe(true);
+  });
+
+  it('falls back to DEFAULT_DELAY_MS when delayMs is omitted', () => {
+    const { result } = renderHook(() => useDelayedFlag(true));
+
+    act(() => {
+      vi.advanceTimersByTime(DEFAULT_DELAY_MS - 1);
     });
     expect(result.current).toBe(false);
     act(() => {
@@ -26,7 +54,7 @@ describe('useDelayedFlag', () => {
   });
 
   it('never becomes true while active is false', () => {
-    const { result } = renderHook(() => useDelayedFlag(false, 2000));
+    const { result } = renderHook(() => useDelayedFlag(false, 500));
 
     act(() => {
       vi.advanceTimersByTime(5000);

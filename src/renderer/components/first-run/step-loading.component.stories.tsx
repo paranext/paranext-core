@@ -15,5 +15,5 @@ export const SpinnerOnly: Story = {};
 
 /** Spinner with a status line — shown once a step's load is slow enough to warrant a message. */
 export const WithMessage: Story = {
-  args: { message: 'Setting things up for the first time. This can take a moment…' },
+  args: { message: 'Setting things up for the first time. This can take a few moments…' },
 };

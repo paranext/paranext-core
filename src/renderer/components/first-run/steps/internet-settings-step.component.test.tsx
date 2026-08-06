@@ -21,7 +21,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
     {
       '%internetSettings_button_retry%': 'Retry',
       '%firstRun_step_internetSettings_connecting%':
-        'Setting things up for the first time. This can take a moment…',
+        'Setting things up for the first time. This can take a few moments…',
       '%firstRun_step_internetSettings_loadError%':
         'Setup is taking longer than expected. Please try again — it usually works right away.',
     },

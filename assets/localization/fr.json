@@ -147,7 +147,7 @@
   "%firstRun_step_identify_registryHelp%": "Vous ne trouvez pas votre code d'enregistrement ?",
   "%firstRun_step_identify_registryLink%": "Visiter le registre Paratext",
   "%firstRun_step_identify_validatingCode%": "Vérification de votre enregistrement…",
-  "%firstRun_step_internetSettings_connecting%": "Configuration initiale en cours. Cela peut prendre un moment…",
+  "%firstRun_step_internetSettings_connecting%": "Configuration initiale en cours. Cela peut prendre quelques instants…",
   "%firstRun_step_internetSettings_loadError%": "La préparation prend plus de temps que prévu. Veuillez réessayer ; cela fonctionne généralement tout de suite.",
   "%firstRun_step_syncConsent_body%": "Lors du travail sur des projets partagés, la synchronisation met à jour votre copie locale et partage vos modifications avec les autres.",
   "%firstRun_step_syncConsent_heading%": "Synchroniser vos projets",
