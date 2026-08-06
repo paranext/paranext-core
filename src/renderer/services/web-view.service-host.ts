@@ -96,6 +96,7 @@ import {
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
+  wait,
 } from 'platform-bible-utils';
 import withWindowScopedWebViewIds, {
   withWindowScopedWebViewIdInTab,
@@ -1066,6 +1067,38 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * changed since it was cached (e.g. a Send/Receive that revoked edit permission). See
  * {@link buildSimpleLayoutForProject}'s `isReadOnly` param.
  */
+/**
+ * Bound on `getMostRecentProjectId`/`resolveProjectIsEditable` while resolving the Simple-mode
+ * cold-start path (no cached last-opened project). Without this, a slow or not-yet-registered PDP
+ * factory can leave `projectLookupService.getMetadataForProject` waiting up to 20s for a factory
+ * plus a further startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the
+ * whole switch for tens of seconds - defeating the point of this being the "fast" switch path.
+ */
+export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
+
+/**
+ * Sentinel distinguishing "timed out" from a lookup that legitimately resolved to `undefined` (e.g.
+ * no recent project on a fresh profile) - the two need different log treatment, since the latter is
+ * an expected, non-warning-worthy outcome.
+ */
+const COLD_START_TIMED_OUT = Symbol('cold-start-lookup-timed-out');
+
+/**
+ * Races an async cold-start lookup against {@link COLD_START_LOOKUP_TIMEOUT_MS}. Both
+ * `getMostRecentProjectId` and `resolveProjectIsEditable` already catch their own errors internally
+ * and never reject, so a plain `Promise.race` (rather than `waitForDuration` from
+ * `platform-bible-utils`, which collapses a timeout and a resolved `undefined` to the same result)
+ * is enough to distinguish the two outcomes for logging.
+ */
+async function withColdStartTimeout<T>(
+  fn: () => Promise<T>,
+): Promise<T | typeof COLD_START_TIMED_OUT> {
+  const timedOut: Promise<typeof COLD_START_TIMED_OUT> = wait(COLD_START_LOOKUP_TIMEOUT_MS).then(
+    () => COLD_START_TIMED_OUT,
+  );
+  return Promise.race([fn(), timedOut]);
+}
+
 export async function handleSwitchToSimpleMode(): Promise<void> {
   const cached = getLastOpenedProject();
   if (cached) {
@@ -1073,14 +1106,25 @@ export async function handleSwitchToSimpleMode(): Promise<void> {
     return;
   }
 
-  const resolvedId = await getMostRecentProjectId();
-
-  if (!resolvedId) {
+  const resolvedId = await withColdStartTimeout(getMostRecentProjectId);
+  if (resolvedId === COLD_START_TIMED_OUT) {
+    logger.warn(
+      `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving the most recent project while switching to Simple mode; loading the bare layout instead.`,
+    );
+  }
+  if (!resolvedId || resolvedId === COLD_START_TIMED_OUT) {
     await loadLayoutWithWarning();
     return;
   }
 
-  const isEditable = await resolveProjectIsEditable(resolvedId);
+  const isEditable = await withColdStartTimeout(() => resolveProjectIsEditable(resolvedId));
+  if (isEditable === COLD_START_TIMED_OUT) {
+    logger.warn(
+      `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
+    );
+    await loadLayoutWithWarning();
+    return;
+  }
   // Populate the cache so the next switch can take the fast path.
   setLastOpenedProject({ id: resolvedId, isEditable });
   await runProjectBoundSimpleSwitch(resolvedId, !isEditable);
