@@ -4131,7 +4131,7 @@ declare module 'shared/services/web-view.service-model' {
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
   /**
    * Command names that are hosted by the renderer process and need to be registered with
-   * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+   * window-scoped suffixes in a multi-window setup. The main process registers service routers under
    * the generic names that forward to the focused window's scoped handler.
    *
    * @experimental
@@ -7352,7 +7352,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
    * `dialog.service-shard.ts` immediately on startup and by nothing else. This is only here to
    * mitigate a dependency cycle
    *
-   * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+   * @param dialogServiceFunctions Functions from the dialog service shard for resolving and rejecting
    *   dialogs
    */
   export function hookUpDialogService({
@@ -7598,7 +7598,7 @@ declare module 'shared/services/dialog.service-model' {
   /**
    * Dialog requests served by the renderer process. A dialog belongs to the window the user is
    * working in, so each renderer registers these under window-scoped names and the main process
-   * registers proxies under the generic names that forward to the focused window.
+   * registers service routers under the generic names that forward to the focused window.
    *
    * @experimental
    */
