@@ -303,7 +303,7 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 /**
  * Wait until a window's renderer has registered its window-scoped services with the main process:
  * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the routing proxies forward to). Only then can generic-name
+ * and its scoped window service (what the service routers forward to). Only then can generic-name
  * calls be routed to this window.
  */
 export async function waitForRendererRegistered(

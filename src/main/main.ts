@@ -31,7 +31,7 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
-import { startCommandRoutingService } from '@main/services/command-routing.service';
+import { startCommandServiceRouter } from '@main/services/command.service-router';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
@@ -41,15 +41,15 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
-import { startNotificationRoutingService } from '@main/services/notification-routing.service';
-import { startWindowRoutingService } from '@main/services/window-routing.service';
+import { startNotificationServiceRouter } from '@main/services/notification.service-router';
+import { startWindowServiceRouter } from '@main/services/window.service-router';
 import {
   isAppQuitRequested,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
-import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
+import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
 import {
   addWindow,
   areAllWindowsClosing,
@@ -131,7 +131,7 @@ import { IWindowService, windowServiceProviderName } from '@shared/services/wind
 /**
  * Pull the window ID out of a scoped window service's network object id, e.g.
  * "platform.windowServiceDataProvider-2-data" gives 2. Returns undefined for anything else,
- * including the generic name the main-process routing proxy publishes, whose remainder does not
+ * including the generic name the main-process service router publishes, whose remainder does not
  * start with a number.
  *
  * @param networkObjectId Id of a network object that was just created
@@ -317,40 +317,39 @@ async function main() {
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
-  // Register multi-window routing proxies before any windows are created. These claim generic names
-  // (e.g. "WebViewService", "platform.openSettings") so renderers register under scoped names
-  // (e.g. "WebViewService-1", "platform.openSettings-1") and the proxies route to the focused window.
+  // Register the multi-window service routers before any windows are created. These claim generic
+  // names (e.g. "WebViewService", "platform.openSettings") so renderers register shards under scoped
+  // names (e.g. "WebViewService-1", "platform.openSettings-1") and the routers forward to the window
+  // that should handle the call.
   // Started together rather than one after another: each claims its own set of names and none reads
   // anything another one registers, so serializing them only adds their round trips together on the
   // startup path every window is waiting behind.
   // Settled rather than raced to the first rejection: they run together, so `Promise.all` would
   // report whichever failed first and discard what the others went on to say. Startup still stops
-  // here — a routing proxy that never registered leaves a name nothing answers for the rest of the
+  // here — a router that never registered leaves a name nothing answers for the rest of the
   // session — it just stops naming everything that went wrong instead of one thing.
-  const routingServiceStarts = [
-    { name: 'WebView routing service', started: startWebViewRoutingService() },
-    { name: 'command routing service', started: startCommandRoutingService() },
-    { name: 'notification routing service', started: startNotificationRoutingService() },
+  const routerStarts = [
+    { name: 'WebView service router', started: startWebViewServiceRouter() },
+    { name: 'command service router', started: startCommandServiceRouter() },
+    { name: 'notification service router', started: startNotificationServiceRouter() },
     // Reuses the same per-window lookup the input handlers use
     {
-      name: 'window routing service',
-      started: startWindowRoutingService(getWindowServiceForWindow),
+      name: 'window service router',
+      started: startWindowServiceRouter(getWindowServiceForWindow),
     },
   ];
-  const routingServiceOutcomes = await Promise.allSettled(
-    routingServiceStarts.map(({ started }) => started),
-  );
-  const failedRoutingServiceNames = routingServiceOutcomes
+  const routerOutcomes = await Promise.allSettled(routerStarts.map(({ started }) => started));
+  const failedRouterNames = routerOutcomes
     .map((outcome, index) => {
       if (outcome.status === 'fulfilled') return undefined;
-      const { name } = routingServiceStarts[index];
+      const { name } = routerStarts[index];
       logger.error(`Failed to start the ${name}: ${getErrorMessage(outcome.reason)}`);
       return name;
     })
     .filter((name) => name !== undefined);
-  if (failedRoutingServiceNames.length > 0)
+  if (failedRouterNames.length > 0)
     throw new Error(
-      `Could not start the multi-window routing proxies: ${failedRoutingServiceNames.join(', ')}. Each failure is logged above.`,
+      `Could not start the multi-window service routers: ${failedRouterNames.join(', ')}. Each failure is logged above.`,
     );
 
   // Window layout persistence must register its request handlers before any window exists so a
@@ -990,7 +989,7 @@ async function main() {
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with
-    // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
+    // target="_blank". Please revise web-view.service-shard.ts as necessary if you make changes here
     newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
       (async () => {

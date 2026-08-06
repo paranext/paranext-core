@@ -14,10 +14,10 @@ const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
  * A renderer's window-scoped `platform.about` command (`command:platform.about-{windowId}`, see
- * `dialog.service-host.ts`).
+ * `dialog.service-shard.ts`).
  *
  * The gate matches the SCOPED name rather than the generic `command:platform.about`: the main
- * process registers routing proxies under the generic names before it creates any window, so the
+ * process registers service routers under the generic names before it creates any window, so the
  * generic name appears in `rpc.discover` while no renderer exists to serve it. A scoped name can
  * only come from a live renderer that finished registering its commands. The window id is an
  * Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.

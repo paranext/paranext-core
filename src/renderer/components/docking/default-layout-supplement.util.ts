@@ -85,7 +85,7 @@ export async function filterEnabledSupplementEntries(
  * Append each supplement entry's tab to the panel containing its `anchorWebViewType`. Pure and
  * idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id already
  * exists or whose anchor is absent. `entries` should already be filtered by any `flagSetting` (see
- * {@link filterEnabledSupplementEntries} and the caller in `web-view.service-host.ts`).
+ * {@link filterEnabledSupplementEntries} and the caller in `web-view.service-shard.ts`).
  */
 export function mergeDefaultLayoutSupplement(
   baseLayout: LayoutBase,

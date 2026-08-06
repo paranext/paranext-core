@@ -252,7 +252,7 @@ async function openManageBooks(
   //
   // Open as a floating panel rather than a docked tab so the user gets a
   // properly-sized window from the start. Mirrors the Settings pattern at
-  // src/renderer/services/web-view.service-host.ts:1805. We keep the
+  // src/renderer/services/web-view.service-shard.ts:1805. We keep the
   // existing-tab reuse path so an already-floating Manage Books window is
   // brought to the front instead of opening a new one.
   const floatingLayout = {

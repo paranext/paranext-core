@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { getAllObjectFunctionNames } from 'platform-bible-utils';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
-  startWindowRoutingService,
-  testingWindowRoutingService,
-} from '@main/services/window-routing.service';
+  startWindowServiceRouter,
+  testingWindowServiceRouter,
+} from '@main/services/window.service-router';
 import { windowServiceProviderName } from '@shared/services/window.service-model';
-import { settle } from '@main/services/__tests__/routing-proxy-test.util';
+import { settle } from '@main/services/__tests__/service-router-test.util';
 import { dataProviderService } from '@shared/services/data-provider.service';
 
 /** Handler the engine registers against the routing-target-change event, so tests can fire it */
@@ -38,7 +38,7 @@ vi.mock('@shared/services/data-provider.service', () => ({
 // that small; widening the stubs to the real interface would add surface no test exercises.
 /* eslint-disable no-type-assertion/no-type-assertion */
 
-const { FocusedWindowDataProviderEngine } = testingWindowRoutingService;
+const { FocusedWindowDataProviderEngine } = testingWindowServiceRouter;
 
 /** Stands in for the placeholder a fresh data provider subscription compares its first update to */
 const SUBSCRIBER_HAS_NO_PREVIOUS_VALUE = Symbol('no previous value');
@@ -50,7 +50,7 @@ const SUBSCRIBER_HAS_NO_PREVIOUS_VALUE = Symbol('no previous value');
  * `createDataProviderSubscriber`). `emitUpdate` makes the window report an update, so a test can
  * see what reaches subscribers rather than how the relay is wired.
  */
-function windowService(focusSubject: unknown) {
+function windowShard(focusSubject: unknown) {
   const unsubscribe = vi.fn(async () => true);
   let notifyOfUpdate: (() => Promise<void>) | undefined;
   const service = {
@@ -88,7 +88,7 @@ function moveRoutingTargetTo(windowId: number | undefined) {
   mocks.routingTargetChangeHandlers.forEach((handler) => handler(windowId));
 }
 
-describe('window service routing proxy', () => {
+describe('window service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.routingTargetChangeHandlers.clear();
@@ -98,7 +98,7 @@ describe('window service routing proxy', () => {
   test('claims the generic provider name so callers of it reach a live provider', async () => {
     const resolve = async () => undefined;
 
-    await startWindowRoutingService(resolve);
+    await startWindowServiceRouter(resolve);
 
     expect(dataProviderService.registerEngine).toHaveBeenCalledTimes(1);
     expect(vi.mocked(dataProviderService.registerEngine).mock.calls[0][0]).toBe(
@@ -107,8 +107,8 @@ describe('window service routing proxy', () => {
   });
 
   test('reads focus from the focused window', async () => {
-    const first = windowService('focus-in-window-1');
-    const second = windowService('focus-in-window-2');
+    const first = windowShard('focus-in-window-1');
+    const second = windowShard('focus-in-window-2');
     const engine = new FocusedWindowDataProviderEngine(
       async (id) => (id === 1 ? first : second) as never,
     );
@@ -118,8 +118,8 @@ describe('window service routing proxy', () => {
   });
 
   test('follows focus rather than pinning the first window it resolved', async () => {
-    const first = windowService('focus-in-window-1');
-    const second = windowService('focus-in-window-2');
+    const first = windowShard('focus-in-window-1');
+    const second = windowShard('focus-in-window-2');
     const engine = new FocusedWindowDataProviderEngine(
       async (id) => (id === 1 ? first : second) as never,
     );
@@ -133,8 +133,8 @@ describe('window service routing proxy', () => {
   });
 
   test('writes focus to the focused window and not to the others', async () => {
-    const first = windowService('a');
-    const second = windowService('b');
+    const first = windowShard('a');
+    const second = windowShard('b');
     const engine = new FocusedWindowDataProviderEngine(
       async (id) => (id === 1 ? first : second) as never,
     );
@@ -147,7 +147,7 @@ describe('window service routing proxy', () => {
   });
 
   test('writes focus through the single-argument form callers actually use', async () => {
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
     await engine.setFocus('detect');
@@ -158,7 +158,7 @@ describe('window service routing proxy', () => {
   test('deselects with one argument, the only form that survives the trip to the renderer', async () => {
     // A trailing argument the caller left off arrives at the renderer as `null`, which its
     // "deselect" check (`=== undefined`) does not match — it then reads the id off that `null`
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
     await engine.setFocus(undefined, undefined);
@@ -167,7 +167,7 @@ describe('window service routing proxy', () => {
   });
 
   test('deselects the same way when the caller passes no specifier at all', async () => {
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
     await engine.setFocus(undefined);
@@ -178,7 +178,7 @@ describe('window service routing proxy', () => {
   test('reports the scoped provider’s real result rather than a blanket failure', async () => {
     // Callers use this to tell "focus moved" from "no such tab"; flattening it to a constant would
     // make every caller take the failure path
-    const only = windowService('a');
+    const only = windowShard('a');
     only.setFocus.mockResolvedValue(['Focus']);
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
@@ -190,7 +190,7 @@ describe('window service routing proxy', () => {
 
   test('tells subscribers the answer changed when focus moves between windows', async () => {
     // Nothing about either window's own focus changed, but what this provider answers did
-    const engine = new FocusedWindowDataProviderEngine(async () => windowService('a') as never);
+    const engine = new FocusedWindowDataProviderEngine(async () => windowShard('a') as never);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
     moveRoutingTargetTo(2);
@@ -199,7 +199,7 @@ describe('window service routing proxy', () => {
   });
 
   test('relays the focused window’s own focus updates', async () => {
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
     await engine.getFocus();
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
@@ -214,7 +214,7 @@ describe('window service routing proxy', () => {
   test('does not replay the relayed window’s current value as an update', async () => {
     // A subscriber gets its initial value from its own retrieval, so replaying it here would emit a
     // duplicate for every subscriber on every re-point
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
 
@@ -227,7 +227,7 @@ describe('window service routing proxy', () => {
     // The relay's own view of the value is not what subscribers of the generic name compare
     // against: they each hold their own last value, and one of them re-pointed from another window
     // has a different one. Deciding here that an update is not worth forwarding strands them.
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
     await engine.getFocus();
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
@@ -240,8 +240,8 @@ describe('window service routing proxy', () => {
   });
 
   test('stops relaying from a window once focus has left it', async () => {
-    const first = windowService('a');
-    const second = windowService('b');
+    const first = windowShard('a');
+    const second = windowShard('b');
     const engine = new FocusedWindowDataProviderEngine(
       async (id) => (id === 1 ? first : second) as never,
     );
@@ -254,8 +254,8 @@ describe('window service routing proxy', () => {
   });
 
   test('re-subscribes when focus leaves a window and comes back to it', async () => {
-    const first = windowService('a');
-    const second = windowService('b');
+    const first = windowShard('a');
+    const second = windowShard('b');
     const engine = new FocusedWindowDataProviderEngine(
       async (id) => (id === 1 ? first : second) as never,
     );
@@ -270,7 +270,7 @@ describe('window service routing proxy', () => {
   });
 
   test('does not re-subscribe while focus stays on the window it is already relaying', async () => {
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
     await engine.getFocus();
@@ -282,8 +282,8 @@ describe('window service routing proxy', () => {
   test('re-subscribes when a reloaded renderer replaces the provider for the same window', async () => {
     // A renderer reload registers a brand new provider under the same window ID. Keying the relay on
     // the ID alone would leave it bound to the dead provider, which can never emit again.
-    const original = windowService('a');
-    const replacement = windowService('b');
+    const original = windowShard('a');
+    const replacement = windowShard('b');
     let current = original;
     const engine = new FocusedWindowDataProviderEngine(async () => current as never);
     await engine.getFocus();
@@ -302,7 +302,7 @@ describe('window service routing proxy', () => {
     // Every subscriber's initial retrieval lands as its own concurrent getFocus at startup. Two
     // re-points in flight together would each subscribe, and only the last would be remembered —
     // orphaning a live subscription that disposal can never reach.
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
     await Promise.all([engine.getFocus(), engine.getFocus(), engine.getFocus()]);
@@ -315,7 +315,7 @@ describe('window service routing proxy', () => {
   test('retries the relay after a failed subscribe instead of wedging', async () => {
     // Committing the bookkeeping before the subscribe resolved would leave the engine believing it
     // relays a window it holds no subscription to, and the short-circuit would block every retry
-    const only = windowService('a');
+    const only = windowShard('a');
     let failNext = true;
     const attachToUpdates = only.subscribeFocus.getMockImplementation();
     only.subscribeFocus.mockImplementation(async (...args) => {
@@ -354,7 +354,7 @@ describe('window service routing proxy', () => {
   test('keeps a failing notify from breaking the window teardown it runs inside', async () => {
     // The focus-change handler runs inside a synchronous emit on the window `closed` path, where the
     // emitter does not isolate subscribers — a throw escaping here would skip the rest of teardown
-    const engine = new FocusedWindowDataProviderEngine(async () => windowService('a') as never);
+    const engine = new FocusedWindowDataProviderEngine(async () => windowShard('a') as never);
     vi.spyOn(engine, 'notifyUpdate').mockImplementation(() => {
       throw new Error('Emitter is disposed');
     });
@@ -382,7 +382,7 @@ describe('window service routing proxy', () => {
   });
 
   test('drops both subscriptions when disposed', async () => {
-    const only = windowService('a');
+    const only = windowShard('a');
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
     await engine.getFocus();
 
@@ -397,8 +397,8 @@ describe('window service routing proxy', () => {
     // common case for the re-point the close itself triggers. That failure belongs to the window
     // that is already gone; the relay has to hold on to the subscription it just made rather than
     // abandoning the rest of the handover
-    const first = windowService('a');
-    const second = windowService('b');
+    const first = windowShard('a');
+    const second = windowShard('b');
     first.unsubscribe.mockRejectedValue(new Error('previous window socket is gone'));
     const engine = new FocusedWindowDataProviderEngine(
       async (id) => (id === 1 ? first : second) as never,
@@ -425,8 +425,8 @@ describe('window service routing proxy', () => {
     // The re-point commits its bookkeeping, then unsubscribes the previous window. A rejection there
     // must not skip the disposal compensation below it and strand a live subscription on an engine
     // that is already disposed
-    const first = windowService('a');
-    const second = windowService('b');
+    const first = windowShard('a');
+    const second = windowShard('b');
     first.unsubscribe.mockRejectedValue(new Error('previous window socket is gone'));
     let releaseSubscribe: (() => void) | undefined;
     const attachToUpdates = second.subscribeFocus.getMockImplementation();
@@ -455,7 +455,7 @@ describe('window service routing proxy', () => {
   test('leaves nothing subscribed when disposal races an in-flight relay', async () => {
     // Without a fence, the re-point completes after disposal, subscribes to a window nothing will
     // ever unsubscribe, and its callback notifies an engine whose emitter is already disposed
-    const only = windowService('a');
+    const only = windowShard('a');
     let releaseLookup: (() => void) | undefined;
     const engine = new FocusedWindowDataProviderEngine(async () => {
       await new Promise<void>((resolve) => {

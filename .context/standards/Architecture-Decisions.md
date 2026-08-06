@@ -240,26 +240,26 @@ step, no automation. Just a record.
 - **Decision:** Each window's renderer registers its own copy of these services under its own
   `globalThis.windowId` suffix (e.g. `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${windowId}`,
   `${NotificationServiceNetworkObjectName}-${windowId}`, per-window dialog request names, per-window
-  command names). The pre-existing generic name is kept working via a routing proxy (ADR-0008).
+  command names). The pre-existing generic name is kept working via a service router (ADR-0008).
 - **Alternatives:** One shared instance for all windows — rejected: state (open web views, toasts,
   dialogs) is inherently per-window. A single object internally keyed by window id under the old
   generic name only — rejected: reinvents what `networkObjectService`'s per-name registration and
   `rpc.discover` already give for free.
 - **Consequences:** every window-scoped service now has a scoped identity and (via the proxy) a
-  generic one; new window-scoped services must follow the same convention and get a routing proxy if
+  generic one; new window-scoped services must follow the same convention and get a service router if
   generic-name callers exist. Registrations must be disposed per window at window close.
 - **Source:** multi-window PR.
 
-## ADR-0008: Generic-name routing proxies in main forward to the focused/owning window's scoped service
+## ADR-0008: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** Existing PAPI consumers call services by their historical generic name
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
   After ADR-0007 scoped each window's copy under its own name, nothing answers the generic name.
-- **Decision:** Main registers one routing proxy per generic name (`command-routing.service.ts` —
-  which also registers the dialog-request proxies, `notification-routing.service.ts`,
-  `web-view-routing.service.ts`, `window-routing.service.ts`) that forwards to the scoped service of
+- **Decision:** Main registers one service router per generic name (`command.service-router.ts` —
+  which also registers the dialog-request proxies, `notification.service-router.ts`,
+  `web-view.service-router.ts`, `window.service-router.ts`) that forwards to the scoped service of
   the window that should handle it: the owning window when ownership is determinable (e.g. a command
   whose first argument names a web view routes to the window that owns that web view), otherwise the
   routing target (ADR-0010). A few read-only queries fan out and merge across all windows instead,
@@ -316,7 +316,7 @@ step, no automation. Just a record.
   that, the most recently focused window that is still ready (an MRU list, since a window can lose
   its "ready" status without losing focus); failing that, the first ready window in creation order. A
   dedicated `onDidChangeRoutingTarget` event fires whenever this computed target actually changes —
-  either the target window id, or the same window flipping ready/not-ready — so routing proxies and
+  either the target window id, or the same window flipping ready/not-ready — so service routers and
   other consumers can react without polling.
 - **Alternatives:** Wait for every window-scoped service to individually confirm registration before
   considering a window ready — more correct but heavier; the window service starts reliably early and
@@ -324,7 +324,7 @@ step, no automation. Just a record.
   can be ready while its other services are still registering). No readiness tracking, always try the
   target and eat the retry cost — rejected: this is exactly where the ~9s registration-race retries in
   `network.service.ts` come from.
-- **Consequences:** routing proxies get a cheap way to skip an unready window in the common case, at
+- **Consequences:** service routers get a cheap way to skip an unready window in the common case, at
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** multi-window PR.

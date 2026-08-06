@@ -1,10 +1,14 @@
 /**
- * Registers proxies under the generic request names that renderer-hosted commands and dialogs are
- * called by (e.g. "platform.openSettings", "dialog:showDialog") and forwards each call to a
- * window's scoped handler (e.g. "platform.openSettings-1"). This enables multi-window support by
- * ensuring that renderer-hosted work executes in the right window: the focused one for work that
- * acts on the window the user is looking at, and the OWNING one for a call that names a web view
- * (see {@link WEB_VIEW_ID_COMMAND_NAMES}).
+ * Service router for the renderer-hosted commands and dialog requests. Registers under the generic
+ * request names they are called by (e.g. "platform.openSettings", "dialog:showDialog") and forwards
+ * each call to a window's scoped handler (e.g. "platform.openSettings-1"). This enables
+ * multi-window support by ensuring that renderer-hosted work executes in the right window: the
+ * focused one for work that acts on the window the user is looking at, and the OWNING one for a
+ * call that names a web view (see {@link WEB_VIEW_ID_COMMAND_NAMES}).
+ *
+ * Transitional: each of these commands moves into the router for its own service, at which point
+ * this module goes away. See the router/shard pattern in `.context/standards/Architecture.md` §
+ * "Service router and service shard".
  */
 
 import { getReadyWindowIds, getTargetWindowId } from '@main/services/window-state.service';
@@ -47,8 +51,8 @@ const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Search the windows that can answer for the one whose scoped WebViewService knows the given web
- * view id, the same way `web-view-routing.service.ts` finds a web view's owning service — including
+ * Search the windows that can answer for the one whose WebView service shard knows the given web
+ * view id, the same way `web-view.service-router.ts` finds a web view's owning shard — including
  * how it treats a window that could not be asked. Returns `undefined` when every window answered
  * and none claims the id; the caller then falls back to the focused window, which is what a web
  * view id that no longer exists anywhere would want anyway.
@@ -132,7 +136,7 @@ async function resolveRoutingWindowId(
 }
 
 /**
- * Register one proxy that forwards `category:name` to the scoped `category:name-{windowId}` of the
+ * Register one route that forwards `category:name` to the scoped `category:name-{windowId}` of the
  * window that should handle it — the web view's owning window for the requests that name one, the
  * focused window otherwise.
  *
@@ -140,7 +144,7 @@ async function resolveRoutingWindowId(
  * @param name Generic (unscoped) request name consumers call
  * @param docs OpenRPC documentation for the generic name, if it has any
  */
-async function registerWindowRoutingProxy(
+async function registerRoutedRequestHandler(
   category: string,
   name: string,
   docs?: SingleMethodDocumentation,
@@ -156,22 +160,22 @@ async function registerWindowRoutingProxy(
       );
     },
     // The generic name is the documented public API; the scoped names the renderers register under
-    // are internal, so this proxy is where the OpenRPC docs belong
+    // are internal, so this router is where the OpenRPC docs belong
     docs,
     options,
   );
 }
 
 /**
- * Register proxies for everything the renderers host per window — the renderer-hosted commands and
- * the dialog requests. Each proxy forwards to a window's scoped handler (see
+ * Register routes for everything the renderers host per window — the renderer-hosted commands and
+ * the dialog requests. Each route forwards to a window's scoped handler (see
  * {@link resolveRoutingWindowId}). Must be called during main process startup, before
  * createWindow().
  */
-export async function startCommandRoutingService(): Promise<void> {
+export async function startCommandServiceRouter(): Promise<void> {
   await Promise.all([
     ...RENDERER_HOSTED_COMMAND_NAMES.map((commandName) =>
-      registerWindowRoutingProxy(
+      registerRoutedRequestHandler(
         CATEGORY_COMMAND,
         commandName,
         RENDERER_HOSTED_COMMAND_DOCS[commandName],
@@ -184,16 +188,16 @@ export async function startCommandRoutingService(): Promise<void> {
       // too. The docs still appear in the OpenRPC document under the scoped names. Move
       // `dialog-definition.model` to `@shared` if the public names need documenting.
       //
-      // A dialog waits for the user, so the proxy must disable its timeout the same way the
+      // A dialog waits for the user, so the router must disable its timeout the same way the
       // renderer's registration does — otherwise the generic request gives up while the dialog is
       // still open.
-      registerWindowRoutingProxy(CATEGORY_DIALOG, requestName, undefined, {
+      registerRoutedRequestHandler(CATEGORY_DIALOG, requestName, undefined, {
         timeoutMilliseconds: 0,
       }),
     ),
   ]);
 
   logger.info(
-    `Routing proxies registered for ${RENDERER_HOSTED_COMMAND_NAMES.length} commands and ${RENDERER_HOSTED_DIALOG_REQUEST_NAMES.length} dialog requests`,
+    `Routes registered for ${RENDERER_HOSTED_COMMAND_NAMES.length} commands and ${RENDERER_HOSTED_DIALOG_REQUEST_NAMES.length} dialog requests`,
   );
 }
