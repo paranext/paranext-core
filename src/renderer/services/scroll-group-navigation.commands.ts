@@ -8,7 +8,7 @@ import {
   getScrRefSync,
   navigateReferenceHistoryPhysicalSync,
   setScrRefSync,
-} from '@renderer/services/scroll-group.service-host';
+} from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
 import {
   getLastSelectedScriptureNavigableWebViewId,
