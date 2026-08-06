@@ -69,12 +69,36 @@ const configuration: webpack.Configuration = {
   /** Determine the array of extensions that should be used to resolve modules. */
   resolve: {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
+    // NOTE: naming the directories here REPLACES webpack's default node-style lookup, which walks up
+    // from the importing file. A package's own nested `node_modules` is therefore never searched,
+    // and every bare request in the whole graph resolves against the repo root — so a package that
+    // depends on a version other than the hoisted one silently gets the hoisted one. See the
+    // `signal-exit` alias below for what that costs when the two versions differ in shape.
     modules: [
       webpackPaths.srcPath,
       webpackPaths.rootNodeModulesPath,
       webpackPaths.appNodeModulesPath,
     ],
-    // There is no need to add aliases here, the paths in tsconfig get mirrored
+    alias: {
+      // `write-file-atomic@5` destructures a NAMED `onExit` from `signal-exit@4`, which it declares
+      // and has installed under itself. `signal-exit@3` — hoisted to the root by other packages —
+      // exports a bare function instead, so the destructure yields `undefined` and every call
+      // through it throws "onExit is not a function". `modules` above is why the hoisted copy wins.
+      //
+      // This is not obscure: `write-file-atomic` is how `node-localstorage` writes, which is what
+      // backs the `localStorage` polyfill in main and the extension host, so without this every
+      // `localStorage.setItem` in a bundled Node process fails. Resolved from `write-file-atomic`
+      // itself rather than written out as a path, so it fails loudly if the tree is ever hoisted
+      // differently instead of silently going back to being wrong.
+      //
+      // Safe as a blanket alias: `write-file-atomic` is the only `signal-exit` consumer in any of
+      // these bundles. Everything else that depends on it is build/test tooling that is never
+      // bundled. Exact-match (`$`) so nothing deep-importing `signal-exit/...` is redirected.
+      'signal-exit$': require.resolve('signal-exit', {
+        paths: [require.resolve('write-file-atomic')],
+      }),
+    },
+    // There is no need to add other aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
     fallback: {
       crypto: false,
