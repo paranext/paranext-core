@@ -150,6 +150,50 @@ describe('startup seed', () => {
   });
 });
 
+// Before the host existed, this state lived in this window's own localStorage. The host cannot read
+// that store, so a profile that predates it has to offer what it has.
+describe('handing over previously stored state', () => {
+  it('offers what this window has stored before seeding from the host', async () => {
+    localStorage.setItem('scroll-group.service-host.scrRefs', JSON.stringify({ 0: MARK }));
+    localStorage.setItem(
+      'scroll-group.service-host.scrRefSourceProjectIds',
+      JSON.stringify({ 0: 'projOld' }),
+    );
+
+    await startService();
+
+    expect(host.migrateStoredScrollGroupState).toHaveBeenCalledWith({
+      scrRefs: { 0: MARK },
+      scrRefSourceProjectIds: { 0: 'projOld' },
+    });
+    // The offer has to land before the snapshot, or the first seed misses what was just adopted
+    expect(host.migrateStoredScrollGroupState.mock.invocationCallOrder[0]).toBeLessThan(
+      host.getScrollGroupSnapshot.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('offers nothing when this window has nothing stored', async () => {
+    await startService();
+
+    expect(host.migrateStoredScrollGroupState).not.toHaveBeenCalled();
+  });
+
+  it('still starts when the offer fails', async () => {
+    localStorage.setItem('scroll-group.service-host.scrRefs', JSON.stringify({ 0: MARK }));
+    host.migrateStoredScrollGroupState.mockRejectedValue(new Error('host unreachable'));
+    host.getScrollGroupSnapshot.mockResolvedValue({
+      scrRefs: { 0: LUKE },
+      scrRefSourceProjectIds: {},
+      referenceHistories: {},
+    });
+
+    const service = await import('@renderer/services/scroll-group.service');
+    await expect(service.startScrollGroupService()).resolves.toBeUndefined();
+
+    expect(service.getScrRefSync(0)).toEqual(LUKE);
+  });
+});
+
 describe('optimistic scr ref writes', () => {
   it('returns the cache-based prediction and forwards the write to the host', async () => {
     const service = await startService();
