@@ -243,6 +243,16 @@ export class RpcServer implements IRpcHandler {
     // subscriber acting on the news can never be told about a death that has not happened yet. That
     // ordering is why the announcement exists here at all: it is derived from the teardown rather
     // than from a message the departing process sent before it, which can outrun its own socket.
+    //
+    // A second ordering makes the announcement safe to act on blindly, and it is load-bearing: the
+    // disposal names an object by id, and whoever receives it drops whatever it holds under that id
+    // without checking whether that is still the registration the announcement was about. What rules
+    // out dropping a NEWER registration is that this announcement's `ws.send` reaches every surviving
+    // socket before any registration request that arrives after this teardown can be answered on the
+    // same socket — the announcement path from here to the send awaits nothing real (an
+    // already-resolved initialize at most), and a process only records a local registration once its
+    // register request has been answered. Introduce a genuine `await` anywhere between here and the
+    // send and a re-registration can slip in front of the disposal, which will then revoke it.
     this.announceClientDisconnectMethod(removedMethodNames);
   }
 
