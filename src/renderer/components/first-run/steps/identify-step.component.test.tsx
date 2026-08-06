@@ -109,6 +109,25 @@ vi.mock('platform-bible-react', () => ({
     <label htmlFor={htmlFor}>{children}</label>
   ),
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
+  // Faithful stand-in for the real usePromise (platform-bible-react is fully mocked here): returns
+  // the default, then the callback's resolved value so `waitFor` assertions see the update.
+  usePromise: (callback?: () => Promise<unknown>, defaultValue?: unknown) => {
+    // A vi.mock factory can't close over hoisted ESM imports, so require pulls the real React hooks.
+    // eslint-disable-next-line global-require
+    const { useState, useEffect } = require('react');
+    const [value, setValue] = useState(defaultValue);
+    useEffect(() => {
+      let current = true;
+      (async () => {
+        const result = await callback?.();
+        if (current && result !== undefined) setValue(result);
+      })();
+      return () => {
+        current = false;
+      };
+    }, [callback]);
+    return [value, false];
+  },
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
@@ -330,7 +349,12 @@ describe('IdentifyStep', () => {
     );
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     const link = screen.getByRole('link', { name: /visit paratext registry/i });
-    // Never blank/broken: stays on the production fallback.
+    // Prove the fetch actually ran (and rejected) — without this the test would pass even if the
+    // effect never fired, since the initial href is already the production URL.
+    await waitFor(() =>
+      expect(mockSendCommand).toHaveBeenCalledWith('paratextRegistration.getParatextRegistryUrl'),
+    );
+    // Never blank/broken: the failed lookup leaves the link on the production fallback.
     expect(link).toHaveAttribute('href', 'https://registry.paratext.org/');
   });
 
