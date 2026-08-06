@@ -76,7 +76,17 @@ async function dismissInOwningWindows(notificationId: string | number): Promise<
     getReadyWindowIds().map(async (windowId) => {
       try {
         const shard = await getNotificationShard(windowId);
-        await shard?.dismiss(notificationId);
+        // Readiness is keyed on the window service; a renderer registers its notification service
+        // moments apart from that one, so a ready window can still be missing it. That window could
+        // not be asked, which is not the same as it having nothing to dismiss — and the one window
+        // that cannot be asked may be the one showing the notification.
+        if (!shard) {
+          logger.warn(
+            `Notification service for window ${windowId} is not registered, so notification ${notificationId} could not be dismissed there. If that window is showing it, it stays on screen.`,
+          );
+          return;
+        }
+        await shard.dismiss(notificationId);
       } catch (e) {
         logger.warn(
           `Failed to dismiss notification ${notificationId} in window ${windowId}: ${getErrorMessage(e)}`,

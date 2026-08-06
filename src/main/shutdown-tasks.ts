@@ -27,14 +27,16 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  *
  * - `synced`: the sync ran and completed (Simple: the S/R resolved; Power: the command returned
  *   `'synced'`).
- * - `partial`: the sync ran and completed, but for only part of the app — a window did not report its
- *   open editors, so whatever it was editing was never in the selection. Warned.
+ * - `partial`: only part of the app was covered — a window did not report its open editors, so
+ *   whatever it was editing was never in the selection. Covers both a sync that ran for the
+ *   projects that did surface and one that had nothing to run because only some windows could be
+ *   read. Warned.
  * - `failed`: the sync ran but did not succeed (Power: the command returned `'failed'`). Warned.
  * - `selection-failed`: nothing ran because what the app had open could not be established at all, so
  *   no project could be selected (Simple mode only). The failure detail was already warned where it
  *   was caught. Warned.
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`), or
- *   nothing writable was open anywhere (Simple).
+ *   every window answered and nothing writable was open anywhere (Simple).
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
@@ -286,7 +288,11 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     return;
   }
   if (projectIds.length === 0) {
-    logShutdownSyncOutcome('skipped');
+    // "Nothing writable was open" is only what was established if every window said so. When one
+    // could not be asked, this is the coverage gap the selection just ran into, and recording it as
+    // a deliberate skip would put the quietest line in the log on the run most likely to have
+    // dropped someone's unsynced work.
+    logShutdownSyncOutcome(unreachableWindowIdsForSync.length > 0 ? 'partial' : 'skipped');
     return;
   }
 
@@ -359,7 +365,7 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
       logger.info('Sync on shutdown complete');
       break;
     case 'partial':
-      logger.warn('Sync on shutdown completed for only the projects that could be found');
+      logger.warn('Sync on shutdown covered only the part of the app that could be read');
       break;
     case 'failed':
       logger.warn('Sync on shutdown ran but reported failure');
