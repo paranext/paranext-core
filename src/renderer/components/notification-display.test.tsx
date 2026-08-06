@@ -95,10 +95,10 @@ describe('NotificationDisplay with real Sonner', () => {
     mockCurrentThemeType = 'light';
     mockSendCommand.mockResolvedValue(undefined);
     stubMatchMedia();
-    const { startNotificationService } = await import(
+    const { startNotificationServiceShard } = await import(
       '@renderer/services/notification.service-shard'
     );
-    await startNotificationService();
+    await startNotificationServiceShard();
   });
 
   afterEach(() => {
