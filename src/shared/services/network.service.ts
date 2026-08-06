@@ -25,6 +25,7 @@ import {
   PlatformEvent,
   PlatformEventEmitter,
   stringLength,
+  Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
@@ -34,7 +35,7 @@ import {
 } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
-import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -88,6 +89,29 @@ const handleEventFromNetwork: EventHandler = <T>(eventType: string, event: T) =>
 
 const connectionMutex = new Mutex();
 let jsonRpc: IRpcMethodRegistrar | undefined;
+const clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
+/** Stops relaying the RPC handler's client disconnects, once there is a handler to stop relaying */
+let unsubscribeFromClientDisconnects: Unsubscriber | undefined;
+
+/**
+ * Event that fires when a process disconnects from the network, carrying the names of the methods
+ * its departure removed from the central registry.
+ *
+ * This is platform-internal core plumbing between the process that owns the websocket server and
+ * the services that know how their own registered names are formed, not part of the `@papi/*`
+ * surface.
+ *
+ * A process that goes away abruptly — most commonly a window the user closed — announces nothing on
+ * its way out, so this is derived from the connection teardown itself: it is emitted only once the
+ * departed process's methods are out of the registry, and therefore cannot report a death that has
+ * not finished happening. Only the process holding the websocket server can observe a connection
+ * being lost, so this only ever fires there; elsewhere it is a real event that never fires, which
+ * lets shared code subscribe without knowing which process it is running in.
+ *
+ * @experimental
+ */
+export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent> =
+  clientDisconnectEmitter.event;
 // Set once {@link shutdown} has begun so {@link initialize} refuses to re-open a torn-down
 // connection. `jsonRpc` alone can't distinguish "not initialized yet" from "already shut down" —
 // both leave it `undefined` — so a late request after shutdown would otherwise re-connect.
@@ -112,6 +136,12 @@ export async function initialize(): Promise<void> {
       throw new Error(`ConnectionService: Failed to create NetworkConnector object: ${e}`);
     }
 
+    // Relayed through this service's own emitter so subscribers can subscribe before there is an
+    // RPC handler to subscribe to
+    unsubscribeFromClientDisconnects = jsonRpc.onDidDisconnectClient((clientDisconnect) =>
+      clientDisconnectEmitter.emit(clientDisconnect),
+    );
+
     const connected = await jsonRpc.connect(handleEventFromNetwork);
     if (!connected) throw new Error(`Unable to connect protocol handler`);
   });
@@ -130,6 +160,8 @@ export const shutdown = async () => {
     // Tear down the handler reference before disposing emitters so their disposers skip the
     // now-pointless per-event unregister call — the whole connection is already going away.
     jsonRpc = undefined;
+    unsubscribeFromClientDisconnects?.();
+    unsubscribeFromClientDisconnects = undefined;
     await Promise.all(
       [...eventEmittersByEventType.values()].map(async (emitter) => {
         await emitter.emitter.dispose();
