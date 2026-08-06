@@ -83,6 +83,18 @@ export async function getWindowServiceShard(windowId: number): Promise<IWindowSe
 export const onDidRegisterWindowServiceShard = windowServiceShards.onDidAddShard;
 
 /**
+ * Windows that have already registered their window service shard.
+ *
+ * {@link onDidRegisterWindowServiceShard} has no replay, so anything that reacts to windows becoming
+ * able to serve calls has to reconcile against this once when it subscribes. Without that, a window
+ * that registered before the subscription is never marked ready and stays unroutable for the rest
+ * of the session.
+ */
+export function getWindowIdsWithServiceShard(): number[] {
+  return windowServiceShards.getShardWindowIds();
+}
+
+/**
  * Forwards to whichever window is currently the routing target.
  *
  * Holds no state of its own — every call re-resolves the target, so it follows focus without a
@@ -282,12 +294,14 @@ class FocusedWindowDataProviderEngine
  * Register the window service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  *
- * @param getWindowService Resolves a window's window service shard by window ID
+ * The engine resolves shards through this module's own index. It takes a resolver rather than
+ * reaching for that index itself only so a test can stand it up without the Electron window
+ * plumbing — see {@link testingWindowServiceRouter}.
  */
-export async function startWindowServiceRouter(getWindowService: GetWindowService): Promise<void> {
+export async function startWindowServiceRouter(): Promise<void> {
   await dataProviderService.registerEngine(
     windowServiceProviderName,
-    new FocusedWindowDataProviderEngine(getWindowService),
+    new FocusedWindowDataProviderEngine(getWindowServiceShard),
   );
   logger.info('Window service router registered');
 }

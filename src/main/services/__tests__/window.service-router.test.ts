@@ -106,9 +106,7 @@ describe('window service router', () => {
   });
 
   test('claims the generic provider name so callers of it reach a live provider', async () => {
-    const resolve = async () => undefined;
-
-    await startWindowServiceRouter(resolve);
+    await startWindowServiceRouter();
 
     expect(dataProviderService.registerEngine).toHaveBeenCalledTimes(1);
     expect(vi.mocked(dataProviderService.registerEngine).mock.calls[0][0]).toBe(
