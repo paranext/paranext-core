@@ -428,7 +428,12 @@ export async function migrateStoredScrollGroupState(
   // First one wins. Deliberately no locking: the offers all describe the same app's state from
   // before it had one store, so taking the first and ignoring the rest cannot lose anything the
   // others would have added, and a mixture of two of them is the only outcome worth ruling out.
-  if (localStorage.getItem(MIGRATED_STORED_STATE_KEY)) return;
+  //
+  // State this process has already stored also refuses an offer, even if the flag was never set:
+  // that means an earlier offer failed to arrive but the app has been used since, and the reference
+  // the user last navigated to has to beat the one they left behind before any of this.
+  if (localStorage.getItem(MIGRATED_STORED_STATE_KEY) || localStorage.getItem(SCR_REFS_STORAGE_KEY))
+    return;
   localStorage.setItem(MIGRATED_STORED_STATE_KEY, 'true');
 
   const offeredScrRefs = state?.scrRefs ?? {};
