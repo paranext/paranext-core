@@ -107,6 +107,9 @@ vi.mock('platform-bible-react', () => {
     AlertTitle: ({ children }: { children: ReactNode }) => <strong>{children}</strong>,
     AlertDescription: ({ children }: { children: ReactNode }) => <span>{children}</span>,
     Button: ButtonStub,
+    // IdentifyStep calls usePromise for its registry link; this test doesn't exercise that value,
+    // so return the default without running the callback.
+    usePromise: (_callback: unknown, defaultValue: unknown) => [defaultValue, false],
     Input: ({
       id,
       value,
