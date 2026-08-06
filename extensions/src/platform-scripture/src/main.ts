@@ -187,6 +187,11 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
     projectId = webViewDefinition?.projectId;
   }
 
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
   const options: ChecklistWebViewOptions = { projectId };
   return papi.webViews.openWebView(
     markersChecklistWebViewType,
@@ -221,11 +226,12 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
- * FN-008 (2026-05-01): Open the unified Manage Books dialog as a tab web view. The optional
- * argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal project id
- * — we probe with `papi.webViews.getOpenWebViewDefinition` and fall back to treating the value as a
- * project id when the probe returns `undefined`. When the caller provides no id (e.g. main-menu
- * invocation) the dialog opens with the project picker visible.
+ * FN-008 (2026-05-01): Open the unified Manage Books dialog as a centered floating window. The
+ * optional argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal
+ * project id — we probe with `papi.webViews.getOpenWebViewDefinition`, and if it doesn't resolve to
+ * a web view with a project (it throws, finds nothing, or finds a web view with no project), we
+ * fall back to treating the value as a literal project id. When the caller provides no id (e.g.
+ * main-menu invocation) the dialog opens with the project picker visible.
  */
 async function openManageBooks(
   webViewIdOrProjectId: string | undefined,
@@ -410,14 +416,15 @@ export async function activate(context: ExecutionActivationContext) {
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the inventory is for',
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
             schema: { type: 'string' },
           },
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened characters inventory web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened characters inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -444,14 +451,16 @@ export async function activate(context: ExecutionActivationContext) {
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the inventory is for',
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
             schema: { type: 'string' },
           },
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened repeated words inventory web view',
-          schema: { type: 'string' },
+          summary:
+            'The ID of the opened repeated words inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -479,14 +488,15 @@ export async function activate(context: ExecutionActivationContext) {
           {
             name: 'webViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the inventory is for',
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
             schema: { type: 'string' },
           },
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the new open markers inventory web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened markers inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -518,6 +528,26 @@ export async function activate(context: ExecutionActivationContext) {
   const openPunctuationInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openPunctuationInventory',
     openPlatformPunctuationInventory,
+    {
+      method: {
+        summary: 'Open the punctuation inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary:
+              'The ID of the triggering web view; the project the inventory is for is resolved from it',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'The ID of the opened punctuation inventory web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
+        },
+      },
+    },
   );
   const punctuationInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     punctuationInventoryWebViewType,
@@ -531,16 +561,17 @@ export async function activate(context: ExecutionActivationContext) {
         summary: 'Open the checks side panel',
         params: [
           {
-            name: 'webViewId',
+            name: 'editorWebViewId',
             required: false,
-            summary: 'The ID of the web view tied to the project that the checks are for',
+            summary:
+              'The ID of the editor web view the checks side panel is opened for; the project and scroll group are resolved from it',
             schema: { type: 'string' },
           },
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the new checks side panel web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened checks side panel web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -568,8 +599,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The ID of the opened markers checklist web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened markers checklist web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -608,7 +639,7 @@ export async function activate(context: ExecutionActivationContext) {
         summary: 'Open the unified Manage Books dialog (FN-008)',
         params: [
           {
-            name: 'projectIdOrWebViewId',
+            name: 'webViewIdOrProjectId',
             required: false,
             summary:
               'Either the active editor web view id (resolves its project) or a literal project id; omit to open with the project picker visible.',
@@ -617,8 +648,8 @@ export async function activate(context: ExecutionActivationContext) {
         ],
         result: {
           name: 'return value',
-          summary: 'The id of the opened Manage Books web view',
-          schema: { type: 'string' },
+          summary: 'The ID of the opened Manage Books web view, or undefined if not opened',
+          schema: { type: ['string', 'null'] },
         },
       },
     },
@@ -636,16 +667,17 @@ export async function activate(context: ExecutionActivationContext) {
       summary: 'Open the find UI',
       params: [
         {
-          name: 'webViewId',
+          name: 'editorWebViewId',
           required: false,
-          summary: 'The ID of the web view tied to the project that we are searching in',
+          summary:
+            'The ID of the triggering editor web view; the project to search in is resolved from it',
           schema: { type: 'string' },
         },
       ],
       result: {
         name: 'return value',
-        summary: 'The ID of the new find web view',
-        schema: { type: 'string' },
+        summary: 'The ID of the find web view, or undefined if not opened',
+        schema: { type: ['string', 'null'] },
       },
     },
   });
