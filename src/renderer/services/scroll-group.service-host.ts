@@ -3,6 +3,7 @@ import {
   navigateHistory,
   recordNavigation,
 } from '@renderer/services/reference-history.util';
+import { isNameTakenError } from '@renderer/services/name-taken-error.util';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -806,6 +807,25 @@ let pendingTakeoverPromise: Promise<void> | undefined;
 let isTakeoverQueuedAfterPendingRun = false;
 
 /**
+ * How long to wait before racing again after a run that came out of it with nothing — neither
+ * publishing the object nor finding the window that did. Every surviving window is in the same
+ * state, so the wait is what keeps them from retrying in lockstep forever; short enough that
+ * `papi.scrollGroups` is unanswerable for a moment rather than for the session.
+ */
+const RACE_AGAIN_AFTER_EMPTY_HANDED_RUN_DELAY_MS = 1000;
+
+/**
+ * How many times in a row to race again after coming out of a run empty-handed. Bounded so a window
+ * whose registrations are failing for some reason other than the name being taken does not retry
+ * for the life of the session; reset the moment a run ends with this window publishing or
+ * attached.
+ */
+const MAX_CONSECUTIVE_EMPTY_HANDED_RUNS = 5;
+
+/** How many runs in a row have ended with this window neither publishing nor attached */
+let consecutiveEmptyHandedRuns = 0;
+
+/**
  * Publish the scroll group network object from this window once the object it stepped aside for
  * goes away.
  *
@@ -918,14 +938,26 @@ async function hostOrAttachToScrollGroupService(): Promise<void> {
     );
     isPublishingScrollGroupService = true;
     attachedScrollGroupService = undefined;
+    consecutiveEmptyHandedRuns = 0;
     publishedObject.onDidDispose(() => {
       isPublishingScrollGroupService = false;
     });
     return;
   } catch (e) {
-    logger.debug(
-      `Another window is already publishing the scroll group service. ${getErrorMessage(e)}`,
-    );
+    // Losing the name is the expected outcome in every window but one, and the only thing this
+    // `try` is written to survive. Anything else — a request that timed out, a registration rolled
+    // back because one of the object's methods collided, a network service that has shut down —
+    // reaches here too and looks identical from the code's point of view, so say which one it was
+    // rather than reporting a bug as the routine outcome at a severity nothing reads.
+    const errorMessage = getErrorMessage(e);
+    if (isNameTakenError(errorMessage))
+      logger.debug(
+        `Another window is already publishing the scroll group service. ${errorMessage}`,
+      );
+    else
+      logger.warn(
+        `Window ${globalThis.windowId} failed to publish the scroll group service for a reason other than the name being taken; attaching to whatever holds it instead. ${errorMessage}`,
+      );
   }
 
   // Step aside, but hold on to what this window stepped aside for. A window that closes will not
@@ -937,14 +969,33 @@ async function hostOrAttachToScrollGroupService(): Promise<void> {
     NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   );
   if (!publishedElsewhere) {
-    // The name was taken when this window tried for it and is gone by now, so the window that had it
-    // died in between. Nothing to watch; the next close announcement re-enters the race.
-    logger.warn(
-      `Window ${globalThis.windowId} did not win publishing the scroll group service and could not resolve the window that did`,
+    // The name was taken when this window tried for it and nothing answers to it now, so the window
+    // that had it died in between. There is no object to watch and nothing else re-enters the race:
+    // a takeover is driven by the disposal of an object this window is holding, and it is holding
+    // none. Every surviving window can land here at once — that is what an interleaved re-race
+    // looks like — which would leave the app with no scroll group service at all while every screen
+    // kept navigating correctly off the mirrored events, so this has to schedule its own re-entry.
+    consecutiveEmptyHandedRuns += 1;
+    if (consecutiveEmptyHandedRuns > MAX_CONSECUTIVE_EMPTY_HANDED_RUNS) {
+      logger.error(
+        `Window ${globalThis.windowId} gave up racing for the scroll group service after ${MAX_CONSECUTIVE_EMPTY_HANDED_RUNS} attempts that neither published it nor found the window that did; remote papi.scrollGroups calls will fail until a window publishes it`,
+      );
+      return;
+    }
+    logger.error(
+      `Window ${globalThis.windowId} neither published the scroll group service nor could resolve the window that did; racing again in ${RACE_AGAIN_AFTER_EMPTY_HANDED_RUN_DELAY_MS}ms (attempt ${consecutiveEmptyHandedRuns} of ${MAX_CONSECUTIVE_EMPTY_HANDED_RUNS})`,
     );
+    setTimeout(() => {
+      retryHostOrAttachToScrollGroupService().catch((e) => {
+        logger.error(
+          `Failed to publish the scroll group service while racing for it again: ${getErrorMessage(e)}`,
+        );
+      });
+    }, RACE_AGAIN_AFTER_EMPTY_HANDED_RUN_DELAY_MS);
     return;
   }
   attachedScrollGroupService = publishedElsewhere;
+  consecutiveEmptyHandedRuns = 0;
   publishedElsewhere.onDidDispose(() => {
     attachedScrollGroupService = undefined;
     retryHostOrAttachToScrollGroupService().catch((e) => {
