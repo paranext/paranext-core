@@ -2391,6 +2391,27 @@ export type DestructiveKeyConfirmationProps = {
  * this component only renders the hint.
  */
 export declare function DestructiveKeyConfirmation({ open, anchorRect, message, confirmingKeyLabel, side, align, showArrow, }: DestructiveKeyConfirmationProps): import("react/jsx-runtime").JSX.Element;
+export type DisabledActionTooltipProps = {
+	/**
+	 * Whether the wrapped action(s) are currently disabled. While `true`, the wrapper becomes
+	 * focusable and labeled with `tooltipText` so the explanation stays reachable for keyboard and
+	 * screen-reader users.
+	 */
+	disabled: boolean;
+	/** Explanation shown in the tooltip, and used as the wrapper's `aria-label`, while `disabled`. */
+	tooltipText: string;
+	/** The action(s) to render — one or more buttons, a popover trigger, etc. */
+	children: React$1.ReactNode;
+	/** Optional class name for the focusable wrapper `div`. */
+	className?: string;
+};
+/**
+ * Wraps one or more actions (buttons, a popover trigger, etc.) that may be disabled, surfacing a
+ * tooltip explanation while they are. A disabled `<button>` cannot itself host a tooltip or receive
+ * focus, so this renders a focusable, labeled wrapper around the content instead — reachable via
+ * keyboard/screen reader exactly while `disabled` is true.
+ */
+export declare function DisabledActionTooltip({ disabled, tooltipText, children, className, }: DisabledActionTooltipProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the

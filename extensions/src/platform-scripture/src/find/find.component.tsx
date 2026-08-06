@@ -15,6 +15,7 @@ import {
   Card,
   CardContent,
   Checkbox,
+  DisabledActionTooltip,
   Input,
   Label,
   Popover,
@@ -580,66 +581,39 @@ export function Find({
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {/* When the buttons are disabled for structure protection they are not focusable,
-                        so make the wrapper focusable and named while disabled to keep the explanatory
-                        tooltip reachable for keyboard and screen-reader users. */}
-                    <div
-                      className="tw:flex tw:gap-2"
-                      role={
-                        isStructureProtected && isReplacementStructureChanging ? 'group' : undefined
-                      }
-                      // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to surface the structure-protection explanation to keyboard and screen-reader users
-                      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                      tabIndex={
-                        isStructureProtected && isReplacementStructureChanging ? 0 : undefined
-                      }
-                      aria-label={
-                        isStructureProtected && isReplacementStructureChanging
-                          ? localizedStrings[
-                              '%webView_find_replace_structureProtectedMarkerTooltip%'
-                            ]
-                          : undefined
-                      }
-                    >
-                      <Button
-                        variant="outline"
-                        onClick={onReplaceAll}
-                        disabled={
-                          visibleResults.length === 0 ||
-                          searchStatus === 'running' ||
-                          isReplacing ||
-                          (isStructureProtected && isReplacementStructureChanging)
-                        }
-                      >
-                        <ReplaceAll className="tw:h-4 tw:w-4" />
-                        {localizedStrings['%webView_find_replaceAll%']}
-                      </Button>
-                      <Button
-                        onClick={() => onReplace()}
-                        disabled={
-                          focusedResultIndex === undefined ||
-                          searchStatus === 'running' ||
-                          isReplacing ||
-                          (isStructureProtected && isReplacementStructureChanging)
-                        }
-                      >
-                        <Replace className="tw:h-4 tw:w-4" />
-                        {localizedStrings['%webView_find_replace%']}
-                      </Button>
-                    </div>
-                  </TooltipTrigger>
-                  {isStructureProtected && isReplacementStructureChanging && (
-                    <TooltipContent>
-                      <p className="tw:max-w-xs tw:whitespace-pre-line">
-                        {localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']}
-                      </p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
+              <DisabledActionTooltip
+                className="tw:flex tw:gap-2"
+                disabled={isStructureProtected && isReplacementStructureChanging}
+                tooltipText={
+                  localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']
+                }
+              >
+                <Button
+                  variant="outline"
+                  onClick={onReplaceAll}
+                  disabled={
+                    visibleResults.length === 0 ||
+                    searchStatus === 'running' ||
+                    isReplacing ||
+                    (isStructureProtected && isReplacementStructureChanging)
+                  }
+                >
+                  <ReplaceAll className="tw:h-4 tw:w-4" />
+                  {localizedStrings['%webView_find_replaceAll%']}
+                </Button>
+                <Button
+                  onClick={() => onReplace()}
+                  disabled={
+                    focusedResultIndex === undefined ||
+                    searchStatus === 'running' ||
+                    isReplacing ||
+                    (isStructureProtected && isReplacementStructureChanging)
+                  }
+                >
+                  <Replace className="tw:h-4 tw:w-4" />
+                  {localizedStrings['%webView_find_replace%']}
+                </Button>
+              </DisabledActionTooltip>
             </div>
           </>
         )}
