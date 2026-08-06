@@ -118,10 +118,10 @@ const initialize = (): Promise<void> => {
     // makes `set` reject the name as taken — no surviving window could re-host it either. The main
     // process announces the close; each process then drops what it can prove is gone.
     networkService.getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
-      // forgetUnreachableRemoteObjects is defined later in the module; safe at runtime since this
-      // handler can only run after module evaluation.
+      // sweepUnreachableRemoteObjectsAfterWindowClose is defined later in the module; safe at
+      // runtime since this handler can only run after module evaluation.
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
-      forgetUnreachableRemoteObjects().catch((e) => {
+      sweepUnreachableRemoteObjectsAfterWindowClose().catch((e) => {
         logger.warn(
           `Failed to clean up network objects after a window closed: ${getErrorMessage(e)}`,
         );
@@ -310,6 +310,54 @@ export const forgetUnreachableRemoteObjects = async (): Promise<string[]> => {
   );
 
   return forgottenIds.filter((id) => id !== undefined);
+};
+
+/**
+ * How long after a close announcement whose sweep confirmed nothing to sweep again. Long enough for
+ * a closing renderer's connection to be torn down and its methods dropped from the central
+ * registry, short enough that a window taking an app-global service over is not a visible stall.
+ */
+const RETRY_SWEEP_AFTER_WINDOW_CLOSE_DELAY_MS = 2000;
+
+/** The one retry sweep a close announcement has scheduled, while it is still pending */
+let retrySweepAfterWindowCloseTimeout: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * Drop what a closed window left behind, and — if nothing turned out to be droppable yet — sweep
+ * once more shortly after.
+ *
+ * The close is announced from the closing window's `closed` handler, which can run before the
+ * socket teardown that removes that renderer's methods from the central registry. A sweep landing
+ * inside that millisecond-wide gap still gets its reachability probes answered, so it confirms
+ * nothing is gone. The announcement is the only signal there is and it has been consumed by then,
+ * so nothing would ever probe again: every process would keep serving the dead window's proxies,
+ * and the app-global services exactly one window publishes — the theme engine, the scroll group
+ * service — would be left with no host for the rest of the session. The retry runs once the
+ * connection is certainly gone, and the disposals it raises are what those service hosts re-enter
+ * their races on.
+ *
+ * Scheduled only when the sweep forgot nothing, so a close that cleaned up normally costs no extra
+ * probing. At most one retry is ever pending: a newer announcement takes the pending one over,
+ * since it sweeps immediately and schedules its own retry if it still needs one.
+ */
+const sweepUnreachableRemoteObjectsAfterWindowClose = async (): Promise<void> => {
+  // Cleared before the first await so the announcement that supersedes a pending retry cancels it
+  // synchronously, whatever else is in flight
+  if (retrySweepAfterWindowCloseTimeout !== undefined)
+    clearTimeout(retrySweepAfterWindowCloseTimeout);
+  retrySweepAfterWindowCloseTimeout = undefined;
+
+  const forgottenIds = await forgetUnreachableRemoteObjects();
+  if (forgottenIds.length > 0) return;
+
+  retrySweepAfterWindowCloseTimeout = setTimeout(() => {
+    retrySweepAfterWindowCloseTimeout = undefined;
+    forgetUnreachableRemoteObjects().catch((e) => {
+      logger.warn(
+        `Failed to clean up network objects on the retry after a window closed: ${getErrorMessage(e)}`,
+      );
+    });
+  }, RETRY_SWEEP_AFTER_WINDOW_CLOSE_DELAY_MS);
 };
 
 /** This proxy enables calling functions on a network object that exists in a different process */
