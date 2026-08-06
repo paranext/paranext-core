@@ -1,3 +1,13 @@
+/**
+ * Notification service shard — the notification service implementation for THIS window. Registered
+ * under a window-scoped network object id (e.g. "NotificationService-1") so every window can serve
+ * its own notification UI; the main process's `notification.service-router.ts` publishes the
+ * generic name and forwards to the window that should show (or stop showing) a notification.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
 import { toast } from 'sonner';
 import { CommandHandlers } from 'papi-shared-types';
 import {

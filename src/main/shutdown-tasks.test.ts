@@ -5,7 +5,7 @@ import * as networkService from '@shared/services/network.service';
 import {
   getAllOpenWebViewDefinitionsWithReachability,
   getOpenWebViewDefinitionsForWindow,
-} from '@main/services/web-view-routing.service';
+} from '@main/services/web-view.service-router';
 import { logger } from '@shared/services/logger.service';
 import { performShutdownTasks, performWindowCloseTasks } from './shutdown-tasks';
 
@@ -17,7 +17,7 @@ vi.mock('@shared/services/network.service', () => ({
   requestNoRetry: vi.fn(),
 }));
 
-vi.mock('@main/services/web-view-routing.service', () => ({
+vi.mock('@main/services/web-view.service-router', () => ({
   getAllOpenWebViewDefinitionsWithReachability: vi.fn(),
   getOpenWebViewDefinitionsForWindow: vi.fn(),
 }));
@@ -173,7 +173,7 @@ describe('performShutdownTasks', () => {
 
   it('syncs every distinct writable editor project when several windows are open', async () => {
     mockSettingsGet.mockResolvedValue('simple');
-    // The main-process WebView service proxy fans getAllOpenWebViewDefinitions out across every
+    // The main-process WebView service router fans getAllOpenWebViewDefinitions out across every
     // window and merges the results, so this one list represents two windows' editors.
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([

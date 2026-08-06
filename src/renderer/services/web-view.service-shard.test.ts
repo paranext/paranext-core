@@ -160,7 +160,7 @@ function makeDockLayout(simpleLayout: LayoutInfo) {
 
 /** Register a dock layout and wait for the fire-and-forget initial `loadLayout` to land */
 async function registerWindow(simpleLayout: LayoutInfo) {
-  const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+  const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
   const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
   registerDockLayout(dockLayout);
   await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
@@ -358,7 +358,7 @@ describe('loadLayout when the saved-layout request fails', () => {
   /** Register a dock layout under fake timers and drive the retry delays until the load lands */
   async function registerWindowThroughRetries(simpleLayout: LayoutInfo) {
     vi.useFakeTimers();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
     registerDockLayout(dockLayout);
     await vi.advanceTimersByTimeAsync(60_000);

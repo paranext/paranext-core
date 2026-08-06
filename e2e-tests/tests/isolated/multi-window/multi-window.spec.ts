@@ -2,7 +2,7 @@
  * Multi-window lifecycle e2e tests.
  *
  * These are behaviour-level safety nets for the multi-window plumbing (window-scoped services with
- * main-process routing proxies, app-global service hosting with takeover, and the shared
+ * main-process service routers, app-global service hosting with takeover, and the shared
  * shutdown-task latch). They deliberately assert only what an outside observer can see — PAPI
  * responses over the WebSocket, page content, and log lines describing user-visible outcomes — so
  * the implementation underneath can be refactored while these tests keep guarding the behaviour.
@@ -156,7 +156,7 @@ type ThemeLike = { type?: string; cssVariables?: Record<string, string> } | unde
 
 /**
  * Call the GENERIC window service's `getFocus` — the name declared in `papi.d.ts` that consumers
- * use. The main process serves it via a routing proxy that forwards to whichever window has focus,
+ * use. The main process serves it via a service router that forwards to whichever window has focus,
  * which is exactly the routing behaviour under test.
  */
 async function getGenericWindowFocus(): Promise<FocusSubjectLike> {
@@ -170,8 +170,8 @@ async function getGenericWindowFocus(): Promise<FocusSubjectLike> {
 
 /**
  * Ask a SPECIFIC window's scoped window service for its own current focus subject, bypassing the
- * routing proxy. This is the ground truth of what that window would answer if the generic call were
- * routed to it.
+ * service router. This is the ground truth of what that window would answer if the generic call
+ * were routed to it.
  */
 async function getScopedWindowFocus(windowId: number): Promise<FocusSubjectLike> {
   return sendPapiRequestOnce<FocusSubjectLike>(
@@ -252,7 +252,7 @@ async function clickIntoHomeWebView(page: Page, windowId: number): Promise<void>
 /**
  * Wait for the generic window service's `getFocus` to answer with a focus subject belonging to the
  * given window (id suffixed `-w{windowId}`), then return that subject. Polled because focus
- * detection in the renderer is debounced and the routing proxy re-resolves its target on focus
+ * detection in the renderer is debounced and the service router re-resolves its target on focus
  * changes.
  */
 async function waitForGenericFocusToReportWindow(windowId: number): Promise<FocusSubjectLike> {
@@ -349,7 +349,7 @@ test.describe('multi-window lifecycle', () => {
     // Focus routing: with window 2 focused, generic window-service calls must be answered by
     // window 2. A tab-less window has no tab or web view to focus, so its genuine focus report is
     // the tab-less subject `{ focusType: 'other' }` (the window's focus rests on the document
-    // body, which belongs to no tab). Reaching that answer proves the routing proxy re-pointed to
+    // body, which belongs to no tab). Reaching that answer proves the service router re-pointed to
     // window 2: window 1's subject remains the Home web view pinned above (`focusType: 'webView'`
     // with a `-w1` id), which can never satisfy this poll.
     await focusWindowAndWaitForRouting(electronApp, window2Id);
@@ -365,7 +365,7 @@ test.describe('multi-window lifecycle', () => {
     // Discriminate "routed to window 2" from "still answering window 1": window 1's own scoped
     // service must still hold its Home web view subject (a background window's focused element is
     // retained while the window is inactive), so the 'other' answer above cannot have come from
-    // window 1 — only from the routing proxy genuinely forwarding to window 2.
+    // window 1 — only from the service router genuinely forwarding to window 2.
     const window1OwnFocus = await getScopedWindowFocus(window1Id);
     expect(window1OwnFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
     logStep(`generic getFocus answered for window ${window2Id}`);

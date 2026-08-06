@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
   findWebViewIdCommandNames,
-  startCommandRoutingService,
-} from '@main/services/command-routing.service';
-import { withWindows } from '@main/services/__tests__/routing-proxy-test.util';
+  startCommandServiceRouter,
+} from '@main/services/command.service-router';
+import { withWindows } from '@main/services/__tests__/service-router-test.util';
 import type { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 const mocks = vi.hoisted(() => ({
@@ -22,7 +22,7 @@ vi.mock('@main/services/window-state.service', () => ({
 vi.mock('@shared/services/network.service', () => ({
   registerRequestHandler: mocks.registerRequestHandler,
   request: mocks.request,
-  // Pulled in transitively by the network object service; unused by the routing proxies
+  // Pulled in transitively by the network object service; unused by the service routers
   getNetworkEvent: () => vi.fn(),
   createNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
 }));
@@ -31,7 +31,7 @@ vi.mock('@shared/services/network-object.service', () => ({
 }));
 
 /** A scoped per-window WebViewService whose web views are the given ids */
-function windowService(openWebViewIds: string[]) {
+function windowShard(openWebViewIds: string[]) {
   return {
     getOpenWebViewDefinition: vi.fn(async (webViewId: string) =>
       openWebViewIds.includes(webViewId) ? { id: webViewId } : undefined,
@@ -51,7 +51,7 @@ function withWindowsOwning(
   const servicesByWindowId = Object.fromEntries(
     Object.entries(webViewIdsByWindowId).map(([windowId, ownedIds]) => [
       windowId,
-      windowService(ownedIds),
+      windowShard(ownedIds),
     ]),
   );
   withWindows(mocks, servicesByWindowId, options);
@@ -68,7 +68,7 @@ function registrations() {
   );
 }
 
-describe('renderer-hosted request routing proxies', () => {
+describe('renderer-hosted request service routers', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(2);
@@ -76,7 +76,7 @@ describe('renderer-hosted request routing proxies', () => {
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
     mocks.request.mockResolvedValue('result');
-    await startCommandRoutingService();
+    await startCommandServiceRouter();
   });
 
   test('claims the generic command names so callers never address a window directly', () => {
@@ -226,7 +226,7 @@ describe('renderer-hosted request routing proxies', () => {
     // moments apart, so a ready window can still be missing the one this asks. That window could
     // not be asked, which is not the same as it answering that it does not own the web view —
     // falling back to focus would run the call against whatever the focused window is showing.
-    withWindows(mocks, { 2: windowService([]), 3: undefined });
+    withWindows(mocks, { 2: windowShard([]), 3: undefined });
 
     await expect(
       registrations().get('command:platform.openSettings')?.handler('owned-view'),
