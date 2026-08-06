@@ -8,7 +8,11 @@
  * service shard".
  */
 
-import { getReadyWindowIds, isWindowReady } from '@main/services/window-state.service';
+import {
+  getNotReadyWindowIds,
+  getReadyWindowIds,
+  isWindowReady,
+} from '@main/services/window-state.service';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
@@ -74,8 +78,9 @@ type WebViewOwner = { shard: WebViewServiceType; definition: SavedWebViewDefinit
  * already have it here, and a second fetch would be another cross-process round trip that can come
  * back with something different.
  *
- * Only ready windows are asked: a window that has not registered its services cannot own a web
- * view, and asking it stalls the search for the network service's whole registration retry.
+ * Only ready windows are asked: a window that has not registered its services cannot answer, and
+ * asking it stalls the search for the network service's whole registration retry. It still counts
+ * as a window that could not be asked — see below.
  *
  * Returns undefined when every window answered and none owns it.
  *
@@ -86,7 +91,16 @@ async function findOwner(
   webViewId: WebViewId,
   operation: string,
 ): Promise<WebViewOwner | undefined> {
-  let hadServiceErrors = false;
+  // A tracked window that has not registered its services is skipped by the search below rather
+  // than answering it, which makes it a window that could not be asked. Letting the search come
+  // back "nobody owns this" while such a window exists would send the operation to the focused
+  // window, and the web view it named may be sitting in the window that never got asked.
+  const notReadyWindowIds = getNotReadyWindowIds();
+  let hadServiceErrors = notReadyWindowIds.length > 0;
+  if (hadServiceErrors)
+    logger.warn(
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about webview ${webViewId} for ${operation}`,
+    );
   const owners = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
       try {
@@ -183,6 +197,19 @@ export type OpenWebViewDefinitionsByReachability = {
  */
 export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<OpenWebViewDefinitionsByReachability> {
   const unreachableWindowIds: number[] = [];
+
+  // A tracked window that has not registered its services is not in the list fanned out to below,
+  // so nothing else here would ever mention it. Leaving it out entirely makes a window that is
+  // alive with a dozen editors in it come back identical to a window that does not exist — and a
+  // window drops out of the ready set by crashing or reloading, not only by still starting up.
+  const notReadyWindowIds = getNotReadyWindowIds();
+  if (notReadyWindowIds.length > 0) {
+    logger.warn(
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so what they have open could not be read. They are reported as unreachable rather than as having nothing open.`,
+    );
+    unreachableWindowIds.push(...notReadyWindowIds);
+  }
+
   const definitionsPerWindow = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
       try {
