@@ -27,11 +27,11 @@ const { registeredCommandHandlers } = vi.hoisted(() => ({
   registeredCommandHandlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
 }));
 
-vi.mock('@renderer/services/window.service-host', () => ({
+vi.mock('@renderer/services/window.service-shard', () => ({
   getLastSelectedScriptureNavigableWebViewId: mocks.getLastSelectedScriptureNavigableWebViewId,
   getNavigationTargetWebView: mocks.getNavigationTargetWebView,
 }));
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   updateWebViewDefinitionSync: mocks.updateWebViewDefinitionSync,
 }));
 vi.mock('@renderer/services/scroll-group.service-host', () => ({
@@ -154,8 +154,8 @@ describe('go-to commands with a tracked web view target', () => {
 
 describe('go-to commands with a main-editor target', () => {
   // The resolution chain that picks the main project editor when no web view is tracked lives in
-  // window.service-host (`getNavigationTargetWebView`) — resolution-order coverage lives in
-  // window.service-host.test.ts. These tests cover the command behavior once an editor IS the
+  // window.service-shard (`getNavigationTargetWebView`) — resolution-order coverage lives in
+  // window.service-shard.test.ts. These tests cover the command behavior once an editor IS the
   // resolved target.
 
   test("uses the editor's own scroll group and project", async () => {

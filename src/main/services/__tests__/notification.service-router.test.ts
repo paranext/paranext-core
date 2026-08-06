@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
-import { startNotificationRoutingService } from '@main/services/notification-routing.service';
-import { getRegisteredProxy, withWindows } from '@main/services/__tests__/routing-proxy-test.util';
+import { startNotificationServiceRouter } from '@main/services/notification.service-router';
+import {
+  getRegisteredRouter,
+  withWindows,
+} from '@main/services/__tests__/service-router-test.util';
 import type { INotificationService } from '@shared/models/notification.service-model';
 
 const mocks = vi.hoisted(() => ({
@@ -19,19 +22,19 @@ vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
 }));
 
-/** Capture the proxy the service registers under the generic name */
-async function getProxy() {
-  return getRegisteredProxy<INotificationService>(
+/** Capture the router object registered under the generic name */
+async function getRouter() {
+  return getRegisteredRouter<INotificationService>(
     mocks.networkObjectSet,
-    startNotificationRoutingService,
+    startNotificationServiceRouter,
   );
 }
 
 /**
- * A scoped per-window NotificationService showing the given notification ids. `dismiss` mirrors the
+ * A per-window notification service shard showing the given notification ids. `dismiss` mirrors the
  * renderer's contract: it is a no-op for an id this window is not showing.
  */
-function windowService(showingNotificationIds: (string | number)[]) {
+function windowShard(showingNotificationIds: (string | number)[]) {
   const dismissed: (string | number)[] = [];
   return {
     dismissed,
@@ -42,7 +45,7 @@ function windowService(showingNotificationIds: (string | number)[]) {
   };
 }
 
-describe('notification routing proxy', () => {
+describe('notification service router', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
@@ -50,37 +53,37 @@ describe('notification routing proxy', () => {
   });
 
   test('sends a new notification to the focused window, where the user is looking', async () => {
-    const focused = windowService([]);
-    const other = windowService([]);
+    const focused = windowShard([]);
+    const other = windowShard([]);
     withWindows(mocks, { 1: focused, 2: other });
-    const proxy = await getProxy();
+    const router = await getRouter();
 
-    await proxy.send({ message: 'hi', severity: 'info' });
+    await router.send({ message: 'hi', severity: 'info' });
 
     expect(focused.send).toHaveBeenCalled();
     expect(other.send).not.toHaveBeenCalled();
   });
 
   test('dismisses in the window showing the notification, not the focused one', async () => {
-    const focused = windowService([]);
-    const owner = windowService(['notification-1']);
+    const focused = windowShard([]);
+    const owner = windowShard(['notification-1']);
     withWindows(mocks, { 1: focused, 2: owner });
-    const proxy = await getProxy();
+    const router = await getRouter();
 
-    await proxy.dismiss('notification-1');
+    await router.dismiss('notification-1');
 
     expect(owner.dismissed).toEqual(['notification-1']);
     expect(focused.dismissed).toEqual([]);
   });
 
   test('still dismisses in the reachable windows when one window fails', async () => {
-    const broken = windowService([]);
+    const broken = windowShard([]);
     broken.dismiss.mockRejectedValue(new Error('window went away'));
-    const owner = windowService(['notification-1']);
+    const owner = windowShard(['notification-1']);
     withWindows(mocks, { 1: broken, 2: owner });
-    const proxy = await getProxy();
+    const router = await getRouter();
 
-    await proxy.dismiss('notification-1');
+    await router.dismiss('notification-1');
 
     expect(owner.dismissed).toEqual(['notification-1']);
   });
@@ -88,12 +91,12 @@ describe('notification routing proxy', () => {
   test('does not ask a window that has not registered its services yet', async () => {
     // A window that has not started cannot be showing a notification, and asking it stalls a
     // background task's fire-and-forget dismissal for the network service's registration retry
-    const showing = windowService(['notification-1']);
-    const starting = windowService([]);
+    const showing = windowShard(['notification-1']);
+    const starting = windowShard([]);
     withWindows(mocks, { 1: showing, 2: starting }, { unreadyWindowIds: [2] });
-    const proxy = await getProxy();
+    const router = await getRouter();
 
-    await proxy.dismiss('notification-1');
+    await router.dismiss('notification-1');
 
     expect(starting.dismiss).not.toHaveBeenCalled();
     expect(showing.dismissed).toEqual(['notification-1']);
@@ -104,17 +107,17 @@ describe('notification routing proxy', () => {
     // treat it as fire-and-forget cleanup. During shutdown, or on macOS after the last window
     // closes, throwing here turns that cleanup into an unhandled rejection.
     withWindows(mocks, {});
-    const proxy = await getProxy();
+    const router = await getRouter();
 
-    await expect(proxy.dismiss('notification-1')).resolves.toBeUndefined();
+    await expect(router.dismiss('notification-1')).resolves.toBeUndefined();
   });
 
   test('refuses to send rather than guessing when no window is available', async () => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
     withWindows(mocks, {});
-    const proxy = await getProxy();
+    const router = await getRouter();
 
-    await expect(proxy.send({ message: 'hi', severity: 'info' })).rejects.toThrow(
+    await expect(router.send({ message: 'hi', severity: 'info' })).rejects.toThrow(
       'No windows available',
     );
   });

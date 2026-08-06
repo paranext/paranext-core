@@ -315,7 +315,7 @@ export const RENDERER_HOSTED_COMMAND_NAMES = [
  * The documentation belongs to the generic name because that is the command consumers call; the
  * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
  * an implementation detail of multi-window routing and are deliberately left undocumented. The main
- * process attaches these when it registers the routing proxies.
+ * process attaches these when it registers the service routers.
  *
  * @experimental
  */

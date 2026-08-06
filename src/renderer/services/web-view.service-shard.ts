@@ -1,5 +1,11 @@
 /**
- * Service that handles WebView-related operations
+ * WebView service shard — the WebView service implementation for THIS window. Registered under a
+ * window-scoped network object id (e.g. "WebViewService-1") so several windows can coexist; the
+ * main process's `web-view.service-router.ts` publishes the generic name and forwards each call to
+ * the window that should handle it.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
  *
  * Don't expose this whole service on papi, just specific operations. The remaining exports are only
  * for services in the renderer to call.
@@ -633,7 +639,7 @@ let currentInterfaceMode: 'simple' | 'power' | undefined;
 
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
-  return new AsyncVariable<PapiDockLayout>('web-view.service-host.platformDockLayout');
+  return new AsyncVariable<PapiDockLayout>('web-view.service-shard.platformDockLayout');
 }
 
 /**
@@ -2289,7 +2295,7 @@ export function waitForInitialize(): Promise<void> {
   if (isInitialized) return Promise.resolve();
 
   if (!initializeAsyncVariable) {
-    initializeAsyncVariable = new AsyncVariable<void>('web-view.service-host.initialize');
+    initializeAsyncVariable = new AsyncVariable<void>('web-view.service-shard.initialize');
   }
 
   return initializeAsyncVariable.promise;
