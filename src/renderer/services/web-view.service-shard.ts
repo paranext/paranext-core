@@ -56,6 +56,10 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
+  getServiceShardAttributes,
+  WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
+import {
   createBufferedNetworkEventEmitter,
   getNetworkEvent,
   request as sendNetworkRequest,
@@ -2355,11 +2359,15 @@ export async function startWebViewService(): Promise<void> {
   await initialize();
   if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
 
-  // Register network object under a window-scoped name (e.g. "WebViewService-1") so multiple
-  // renderers can coexist. The main process registers a proxy under the generic name.
+  // Register this window's shard under a window-scoped name (e.g. "WebViewService-1") so multiple
+  // renderers can coexist. The main process's WebView service router registers the generic name and
+  // forwards to the shard that should handle each call. The object type and window id are how the
+  // router finds this shard; the name it is registered under is nobody else's business.
   await networkObjectService.set<WebViewServiceType>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     papiWebViewService,
+    WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+    getServiceShardAttributes(globalThis.windowId),
   );
 
   // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
