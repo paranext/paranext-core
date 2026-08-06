@@ -15,8 +15,10 @@
  *    services register under scoped names with no collisions, generic window-service calls route to
  *    whichever window has focus, and closing the secondary window neither quits the app nor runs
  *    shutdown tasks.
- * 2. Hosting takeover: window 1 hosts the app-global theme and scroll-group services; closing it hands
- *    hosting to window 2, proven by live PAPI reads AND a write round-trip against the survivor.
+ * 2. Surviving the host window: window 1 hosts the app-global theme service, and closing it hands
+ *    hosting to window 2; the scroll group service is hosted in main, so closing window 1 must not
+ *    disturb it at all. Both are proven by live PAPI reads after the close, and the scroll group by
+ *    a write round-trip as well.
  * 3. Quit with two windows: the shutdown tasks run exactly once (not once per window, not zero times)
  *    and the process exits cleanly.
  *
@@ -94,12 +96,6 @@ import {
  * `src/renderer/services/theme.service-host.ts`
  */
 const THEME_STEP_ASIDE_LOG = 'Another window is already hosting the theme service';
-
-/**
- * A renderer that lost the scroll-group race steps aside.
- * `src/renderer/services/scroll-group.service-host.ts`
- */
-const SCROLL_GROUP_STEP_ASIDE_LOG = 'Another window is already publishing the scroll group service';
 
 /**
  * The main process announces the network objects a departed window was hosting, naming each of them
@@ -418,7 +414,7 @@ test.describe('multi-window lifecycle', () => {
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
   });
 
-  test('closing the window hosting the app-global services hands hosting to the surviving window', async ({
+  test('closing the window hosting the theme hands it over, and the scroll group service is unaffected', async ({
     electronApp,
     mainPage,
   }) => {
@@ -454,14 +450,14 @@ test.describe('multi-window lifecycle', () => {
     await expect(page2.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
     await waitForOverlayGone(page2, 120_000);
 
-    // Window 1 hosts both app-global services, so window 2 steps aside for each — the log records
-    // that explicitly. Renderer log lines reach the captured stream asynchronously, hence the poll.
+    // Window 1 hosts the theme service, so window 2 steps aside for it — the log records that
+    // explicitly. Renderer log lines reach the captured stream asynchronously, hence the poll.
+    // Nothing equivalent exists for the scroll group service: main hosts it, so no window ever
+    // races for it.
     await expect(() => {
-      const sinceCreate = output.textFrom(beforeCreateMark);
-      expect(sinceCreate).toContain(THEME_STEP_ASIDE_LOG);
-      expect(sinceCreate).toContain(SCROLL_GROUP_STEP_ASIDE_LOG);
+      expect(output.textFrom(beforeCreateMark)).toContain(THEME_STEP_ASIDE_LOG);
     }).toPass({ timeout: 60_000, intervals: [1_000] });
-    logStep(`window ${window2Id} up and stepped aside for both app-global services`);
+    logStep(`window ${window2Id} up and stepped aside for the theme service`);
 
     // Close WINDOW 1 — the host — the way a user does.
     const beforeHostCloseMark = output.mark();
@@ -472,7 +468,7 @@ test.describe('multi-window lifecycle', () => {
     await page1Closed;
     logStep('window 1 (the host) closed');
 
-    // Both services must recover, served by the survivor. The handover itself starts as soon as
+    // The theme service must recover, served by the survivor. The handover itself starts as soon as
     // the dead host's connection is torn down, but a poll attempt that lands in the moment before
     // the survivor has re-registered can burn ~9 seconds in the main process's handler-lookup retry
     // (see PAPI_ATTEMPT_TIMEOUT_MS), so 90 seconds gives several full poll cycles of headroom.
@@ -485,18 +481,20 @@ test.describe('multi-window lifecycle', () => {
     );
     expect(typeof recoveredTheme?.type).toBe('string');
     logStep('theme service recovered');
-    const recoveredRef = await pollUntil(
+    // The scroll group service is hosted in main, which did not go anywhere, so it must keep
+    // answering across the close with no handover at all.
+    const refAfterClose = await pollUntil(
       getScrollGroupRef,
       isVerseRefShaped,
       90_000,
-      'scroll group service to be re-hosted by the surviving window',
+      'scroll group service to keep answering after the host window closed',
       2_000,
     );
-    expect(isVerseRefShaped(recoveredRef)).toBe(true);
-    logStep('scroll group service recovered');
+    expect(isVerseRefShaped(refAfterClose)).toBe(true);
+    logStep('scroll group service still answering');
 
-    // A write round-trip proves the takeover serves writes, not just cached reads: set scroll
-    // group 0's reference on the re-hosted service and read the same value back.
+    // A write round-trip proves it serves writes, not just cached reads: set scroll group 0's
+    // reference and read the same value back.
     const targetRef = { book: 'JHN', chapterNum: 3, verseNum: 16 };
     await pollUntil(
       async () => {
@@ -508,9 +506,9 @@ test.describe('multi-window lifecycle', () => {
         ref.chapterNum === targetRef.chapterNum &&
         ref.verseNum === targetRef.verseNum,
       30_000,
-      'a scroll-group write round-trip against the re-hosted service',
+      'a scroll-group write round-trip after the host window closed',
     );
-    logStep('scroll-group write round-trip verified against the survivor');
+    logStep('scroll-group write round-trip verified after the host window closed');
 
     // The handover is recorded in the log: the theme provider the closed window hosted is announced
     // as gone, which is what every process holding it acts on. (Successful re-hosting itself is
@@ -519,7 +517,8 @@ test.describe('multi-window lifecycle', () => {
       expect(output.textFrom(beforeHostCloseMark)).toMatch(ANNOUNCE_THEME_OBJECT_PATTERN);
     }).toPass({ timeout: 30_000, intervals: [1_000] });
 
-    // The whole flow — second window start, host close, takeover — must complete without faults.
+    // The whole flow — second window start, host window close, theme takeover — must complete
+    // without faults.
     const wholeLog = output.text();
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
   });
