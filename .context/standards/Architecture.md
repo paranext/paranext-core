@@ -103,10 +103,14 @@ more than one window.
 
 **Rules of the pattern:**
 
-- **Platform code in the renderer registers zero globally-unique names.** Every global name is
-  registered by main; a renderer only ever registers window-scoped objects. That makes "a second
-  window cannot start because the name is taken" structurally impossible rather than fixed case by
-  case.
+- **Target state: platform code in the renderer registers zero globally-unique names.** Every global
+  name is registered by main, and a renderer only ever registers window-scoped objects, which makes
+  "a second window cannot start because the name is taken" structurally impossible rather than fixed
+  case by case. That is where the window-scoped services have arrived. Two app-global hosts have not
+  moved yet and are the exceptions: `theme.service-host.ts` and `scroll-group.service-host.ts` still
+  register their global names from whichever renderer gets there first, and the collision is handled
+  by host election with takeover instead — see ADR-0009. The invariant holds outright once those
+  hosts move to main.
 - **A shard declares what it is, and which window it is for.** It registers with a distinct
   `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
   `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
@@ -115,12 +119,13 @@ more than one window.
   (`src/main/services/service-shard-index.ts`) subscribes once to the network object create/dispose
   announcements, filters on the object type, and maintains a `windowId → shard` map. Lookups are
   O(1), and a window closing removes its shard for free.
-- **Boilerplate goes through the factory.** `registerServiceRouter`
-  (`src/main/services/service-router.factory.ts`) builds the methods that plainly forward to the
-  target window's shard and publishes the router under the generic name. Methods with behaviour of
-  their own — events, operations that must ask every window, operations routed by who owns a named
-  web view — are passed as overrides. A compile-time coverage check refuses to build a router that
-  does not cover every member of the service.
+- **A router is a plain object declared as the service it answers for.**
+  `const router: WebViewServiceType = { ... }` plus `networkObjectService.set`, so a member added to
+  the service interface fails to compile until the router publishes it. The one piece that is shared
+  is `createTargetShardResolver` (`src/main/services/target-shard-resolver.util.ts`), which resolves
+  the shard of whichever window a call should currently run in. There is no router factory: with one
+  genuinely plain forward across four routers, generating them costs more than it saves and gives up
+  the free coverage the type annotation provides.
 - **The pattern does not depend on the transport.** Most routers and shards are plain network
   objects; the window service's are data providers, because it has subscription semantics.
   `registerEngine` passes `dataProviderType` / `dataProviderAttributes` straight through to
@@ -399,6 +404,7 @@ For complete security documentation, see [Security-Guide.md](Security-Guide.md).
 | Pattern | Description | Used For |
 |---------|-------------|----------|
 | Service Host/Proxy | Implementation in one process, proxy in others | Settings, menu data, themes |
+| Service Router/Shard | One shard per window in the renderer, one router in main that selects a shard by policy and forwards | Web view, window, notification, dialog, renderer-hosted commands |
 | Data Provider | Subscription-based data access | Project data, resources |
 | Network Object | Cross-process object exposure | Commands, services |
 | Event Emitter | Pub/sub pattern for notifications | Data updates, lifecycle events |

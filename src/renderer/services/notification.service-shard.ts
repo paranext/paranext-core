@@ -62,7 +62,7 @@ async function send(notification: PlatformNotification): Promise<string | number
   } catch (e) {
     notificationString = `<error stringifying notification: ${e}>`;
   }
-  logger.info(`Notification service host received notification: ${notificationString}`);
+  logger.info(`Notification service shard received notification: ${notificationString}`);
 
   const { notificationId } = notification;
   // Merge an update-send over the last notification we sent for this id, so a field the caller omits
@@ -142,7 +142,7 @@ async function send(notification: PlatformNotification): Promise<string | number
         .sendCommand(command, effectiveNotificationId)
         .catch((e) =>
           logger.warn(
-            `Notification service host ${description} command '${command}' failed: ${getErrorMessage(e)}`,
+            `Notification service shard ${description} command '${command}' failed: ${getErrorMessage(e)}`,
           ),
         );
     };
