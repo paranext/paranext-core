@@ -487,11 +487,57 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
  */
 export async function initializeWindowLayoutPersistence(): Promise<void> {
   await Promise.all([
-    networkService.registerRequestHandler(GET_WINDOW_LAYOUT_REQUEST_TYPE, async (...args) =>
-      handleGetLayoutRequest(args[0]),
+    networkService.registerRequestHandler(
+      GET_WINDOW_LAYOUT_REQUEST_TYPE,
+      async (...args) => handleGetLayoutRequest(args[0]),
+      {
+        method: {
+          // Internal plumbing between the main process and each renderer, but it is a registered
+          // name and appears in the OpenRPC document either way. Experimental: how a window's
+          // layout is addressed and what it is told to restore are both still moving.
+          'x-experimental': true,
+          summary: 'Get the dock layout saved for a window, or what it should start with instead',
+          params: [
+            {
+              name: 'windowId',
+              required: true,
+              summary: 'Electron BrowserWindow ID of the window asking what to restore',
+              schema: { type: 'number' },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary:
+              "The window's saved layout, the pre-multi-window layout to fall back to, or nothing to restore",
+            schema: { type: 'object' },
+          },
+        },
+      },
     ),
-    networkService.registerRequestHandler(SAVE_WINDOW_LAYOUT_REQUEST_TYPE, async (...args) =>
-      handleSaveLayoutRequest(args[0], args[1]),
+    networkService.registerRequestHandler(
+      SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
+      async (...args) => handleSaveLayoutRequest(args[0], args[1]),
+      {
+        method: {
+          'x-experimental': true,
+          summary: "Push a window's current dock layout to the main process to be persisted",
+          params: [
+            {
+              name: 'windowId',
+              required: true,
+              summary: 'Electron BrowserWindow ID of the window whose layout this is',
+              schema: { type: 'number' },
+            },
+            {
+              name: 'layout',
+              required: true,
+              summary: "The window's serialized dock layout",
+              schema: { type: 'object' },
+            },
+          ],
+          result: { name: 'return value', schema: { type: 'null' } },
+        },
+      },
     ),
   ]);
 }
