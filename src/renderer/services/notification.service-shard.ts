@@ -221,7 +221,7 @@ const notificationService: INotificationService = {
  * serve its own notification UI. The main process publishes the generic name and forwards to the
  * focused window, so a notification raised by a background task lands where the user is looking.
  */
-export async function startNotificationService(): Promise<void> {
+export async function startNotificationServiceShard(): Promise<void> {
   if (!globalThis.windowId)
     throw new Error('Cannot start NotificationService: windowId is not set');
 
@@ -236,4 +236,4 @@ export async function startNotificationService(): Promise<void> {
   );
 }
 
-export default startNotificationService;
+export default startNotificationServiceShard;
