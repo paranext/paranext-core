@@ -43,4 +43,19 @@ describe('_simple-mode.scss', () => {
     );
     expect(escaped).toEqual([]);
   });
+
+  it('reserves exactly 64px for the character-marker bar, in absolute units', () => {
+    // Pinned because this single value is the whole text-column cost of the feature, and because the
+    // bar container's inline `width` reads the same custom property — a change here silently resizes
+    // both. 64px fits an icon-only trigger exactly, with no slack: the icon, chevron, `gap-1.5`,
+    // padding, and border are ~56px, plus the toolbar's own 8px margin. The 5em it replaces left
+    // ~16px for a label after the same chrome, which clipped even `bd`.
+    const scss = readFileSync(SIMPLE_MODE_SCSS_PATH, 'utf8');
+
+    expect(scss).toContain('--psc-character-marker-bar-width: 64px;');
+    // The UNIT is the point, not just the number: every term in the 56px of chrome is a fixed pixel
+    // amount, so a font-relative reservation under-reserves at any base font size below 16px and the
+    // trigger spills inline-start over project text.
+    expect(scss).not.toMatch(/--psc-character-marker-bar-width:\s*[\d.]+(em|rem|%|ch|ex)/);
+  });
 });

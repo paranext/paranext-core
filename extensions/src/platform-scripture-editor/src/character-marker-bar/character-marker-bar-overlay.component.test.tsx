@@ -2,7 +2,9 @@
 
 import '@testing-library/jest-dom';
 import { act, cleanup, render, screen } from '@testing-library/react';
+import { CSSProperties } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { BASELINE_PROBE_ATTRIBUTE } from '../editor-dom.util';
 
 // jsdom ships no ResizeObserver; the overlay observes the editor so a panel resize repositions it.
 const resizeCallbacks: ResizeObserverCallback[] = [];
@@ -98,8 +100,14 @@ const flushAnimationFrame = async () => {
   });
 };
 
-const putCaretInParagraph = async () => {
-  const para = document.querySelector('.para');
+/**
+ * Puts the caret in `para`, defaulting to the first paragraph in the document — which is the only
+ * paragraph in most of the fixtures here. A test with more than one paragraph passes the one it
+ * means.
+ */
+const putCaretInParagraph = async (
+  para: Element | undefined = document.querySelector('.para') ?? undefined,
+) => {
   if (!para?.firstChild) throw new Error('expected a paragraph text node');
   const selection = window.getSelection();
   if (!selection) throw new Error('jsdom provided no Selection');
@@ -115,6 +123,122 @@ const putCaretInParagraph = async () => {
 };
 
 const barContainer = () => screen.getByTestId('character-marker-bar-container');
+
+/**
+ * A bar with an icon, unlike the shared `overlayTree()` — the alignment needs something to measure.
+ * Kept separate on purpose: giving the shared tree an icon would make the shared `stubRects` report
+ * an incoherent baseline and break the tests above.
+ */
+const alignedOverlayTree = () => (
+  <CharacterMarkerBarOverlay
+    bar={
+      <button type="button" aria-label="Character marker">
+        <svg aria-hidden="true" />
+      </button>
+    }
+  >
+    <div className="editor-input usfm">
+      <p className="para usfm_p">The LORD is my shepherd</p>
+    </div>
+  </CharacterMarkerBarOverlay>
+);
+
+/**
+ * Coherent geometry for the alignment path: the probe (now appended to the hidden off-editor
+ * measuring element, never to the `.para` itself) sits `probeOffset` (default 14) px below the
+ * line's top edge, and the trigger's 16px icon is centred 16px below the bar container's top edge.
+ * With the default offset, the bar's baseline term is 14 - 16 = -2, so the bar sits 2px above the
+ * line's top.
+ *
+ * `probeOffset` is a parameter (not hardcoded) so a test can vary the BASELINE the stub reports
+ * while leaving `fontSize`/`lineHeight` (read via `getComputedStyle`, which this stub does not
+ * touch) identical — the only way to prove the cache, rather than a coincidentally-stable stub
+ * value, is what keeps the offset from being re-derived on every caret move.
+ */
+const stubAlignmentRects = (caretTop: number, probeOffset = 14) => {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function stub(
+    this: Element,
+  ) {
+    // The probe is checked FIRST: it is appended inside the hidden measuring element, so the `.para`
+    // check below would not distinguish it.
+    if (this.hasAttribute(BASELINE_PROBE_ATTRIBUTE))
+      return new DOMRect(0, caretTop + probeOffset, 0, 0);
+    if (this instanceof SVGElement) return new DOMRect(0, 8, 16, 16);
+    const isPara = this instanceof HTMLElement && this.classList.contains('para');
+    // The measuring element itself (the probe's container) also needs a coherent rect: its top is
+    // the same line-top the paragraph reports, since it is styled with the paragraph's own metrics.
+    const isMeasuringElement =
+      this.getAttribute('aria-hidden') === 'true' && this.tagName === 'SPAN';
+    return new DOMRect(0, isPara || isMeasuringElement ? caretTop : 0, 200, 20);
+  });
+};
+
+/** The viewport top BOTH paragraphs in {@link twoParagraphOverlayTree} report. */
+const TWO_PARAGRAPH_LINE_TOP = 200;
+
+/**
+ * Two paragraphs whose text metrics differ, so a test can move the caret between them and assert on
+ * WHICH one the baseline was measured against. Modelled on a chapter opening: an `\mt1` major title
+ * (`.formatted-font .usfm_mt1` is `font-size: 166%` in `_usj-nodes.scss`) above body text. The
+ * metrics are inline styles so jsdom's `getComputedStyle` actually reports them.
+ */
+const twoParagraphOverlayTree = (firstStyle: CSSProperties, secondStyle: CSSProperties) => (
+  <CharacterMarkerBarOverlay
+    bar={
+      <button type="button" aria-label="Character marker">
+        <svg aria-hidden="true" />
+      </button>
+    }
+  >
+    <div className="editor-input usfm">
+      <p className="para usfm_mt1" style={firstStyle}>
+        Psalm 23
+      </p>
+      <p className="para usfm_p" style={secondStyle}>
+        The LORD is my shepherd
+      </p>
+    </div>
+  </CharacterMarkerBarOverlay>
+);
+
+/**
+ * The baseline the stub below reports for a measuring element carrying these metrics.
+ *
+ * Depends on a SIZE metric and a non-size one on purpose: a cache keyed only on the obvious
+ * `fontFamily`/`fontSize`/`lineHeight` trio would reuse an offset measured at a different
+ * `font-weight`, so the weight term is what makes that failure observable.
+ */
+const stubbedBaselineFor = (style: CSSStyleDeclaration) =>
+  Number.parseFloat(style.fontSize || '0') + (style.fontWeight === '700' ? 4 : 0);
+
+/**
+ * Geometry whose measured baseline DEPENDS ON WHICH PARAGRAPH'S METRICS were copied onto the hidden
+ * measuring element (see {@link stubbedBaselineFor}). That is what lets a test tell "measured the
+ * caret's paragraph" from "measured the first paragraph", which is invisible to
+ * `stubAlignmentRects` — it reports one fixed baseline for every element.
+ *
+ * Both paragraphs report the SAME line top, so the caret's target position is identical in both;
+ * the only thing that can move the bar is the metrics the baseline was measured under.
+ *
+ * @param iconHeight The trigger icon's height. Defaults to a normal 16px icon centred at 16; pass 0
+ *   for the "container is laid out but the icon is not" case.
+ */
+const stubMetricsDependentRects = (iconHeight = 16) => {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function stub(
+    this: Element,
+  ) {
+    if (this.hasAttribute(BASELINE_PROBE_ATTRIBUTE)) {
+      const container = this.parentElement;
+      const baseline = container instanceof HTMLElement ? stubbedBaselineFor(container.style) : 0;
+      return new DOMRect(0, TWO_PARAGRAPH_LINE_TOP + baseline, 0, 0);
+    }
+    if (this instanceof SVGElement) return new DOMRect(0, 8, 16, iconHeight);
+    const isPara = this instanceof HTMLElement && this.classList.contains('para');
+    const isMeasuringElement =
+      this.getAttribute('aria-hidden') === 'true' && this.tagName === 'SPAN';
+    return new DOMRect(0, isPara || isMeasuringElement ? TWO_PARAGRAPH_LINE_TOP : 0, 200, 20);
+  });
+};
 
 // The overlay's resize callback ignores both ResizeObserverCallback arguments (it only calls
 // recompute()), so a minimal object satisfying the ResizeObserver interface stands in for the
@@ -275,5 +399,189 @@ describe('CharacterMarkerBarOverlay', () => {
     });
 
     expect(barContainer().style.top).toBe('220px');
+  });
+
+  it('offsets the bar so the trigger icon lines up with the line, not the line box top', () => {
+    stubAlignmentRects(120);
+    render(alignedOverlayTree());
+
+    // 120 + (14 - 16) = 118. Without the alignment term this is a bare 120.
+    expect(barContainer().style.top).toBe('118px');
+  });
+
+  it("measures the baseline against the caret's own paragraph, not the editor's first one", async () => {
+    stubMetricsDependentRects();
+    render(twoParagraphOverlayTree({ fontSize: '26px' }, { fontSize: '16px' }));
+    const [heading, body] = Array.from(document.querySelectorAll('.para'));
+
+    await putCaretInParagraph(heading);
+    // 26px heading: the baseline sits 26px below the line top, the icon's centre 16px below the bar
+    // container's top, so the alignment term is +10.
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP + 10}px`);
+
+    await putCaretInParagraph(body);
+    // 16px body text: baseline 16 - icon centre 16 = 0. Measuring the editor's FIRST paragraph
+    // (`\mt1`, 166% font-size on a real chapter opening) would keep the heading's +10 on every body
+    // line — over half a line low, the same misalignment this alignment exists to fix.
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP}px`);
+  });
+
+  it('re-measures when a metric outside the font-family/size/line-height trio changes', async () => {
+    // Same font size in both paragraphs, differing only in weight — so the ONLY thing that can
+    // invalidate the cached offset is `font-weight` being part of the cache key. It is copied onto
+    // the measuring element, so leaving it out of the key reuses a baseline measured under a
+    // different face.
+    stubMetricsDependentRects();
+    render(twoParagraphOverlayTree({ fontSize: '16px' }, { fontSize: '16px', fontWeight: '700' }));
+    const [normal, bold] = Array.from(document.querySelectorAll('.para'));
+
+    await putCaretInParagraph(normal);
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP}px`);
+
+    await putCaretInParagraph(bold);
+    // Bold adds 4 to the stubbed baseline: 20 - 16 = +4.
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP + 4}px`);
+  });
+
+  it('stores no alignment at all when the icon has no height, even inside a laid-out container', async () => {
+    // A zero-height icon in a laid-out container is NOT a partial measurement to salvage: its
+    // "centre" is just its top edge, and that garbage would be cached as the alignment term for the
+    // life of the web view. Leaving the offset unset (bar top-aligned, retried next recompute) is
+    // the correct outcome.
+    stubMetricsDependentRects(0);
+    render(twoParagraphOverlayTree({ fontSize: '16px' }, { fontSize: '16px' }));
+
+    await putCaretInParagraph();
+
+    expect(barContainer().style.top).toBe(`${TWO_PARAGRAPH_LINE_TOP}px`);
+  });
+
+  it('measures the alignment once and reuses it as the caret moves', async () => {
+    stubAlignmentRects(120);
+    render(alignedOverlayTree());
+    expect(barContainer().style.top).toBe('118px');
+
+    // A different line, AND a probe offset (20 instead of 14) that would yield a different baseline
+    // term (20 - 16 = +4 instead of -2) if re-measured — while `fontSize`/`lineHeight` (read via
+    // `getComputedStyle`, untouched by this stub) stay identical. This is what makes the test
+    // falsifying: re-deriving the offset per move would land on 250 + 4 = 254px, not 248px. A stub
+    // that reported the SAME baseline term at both caret positions would pass whether or not the
+    // cache existed, since 248px would result either way.
+    stubAlignmentRects(250, 20);
+    await putCaretInParagraph();
+
+    // Still -2 (118 - 120), not the +4 the new stub would produce if re-measured: proves the cached
+    // offset was reused rather than re-derived. Re-probing on every keystroke would also mutate the
+    // editor's DOM at typing rate, which is the cost the cache exists to avoid.
+    expect(barContainer().style.top).toBe('248px');
+  });
+
+  it('leaves no baseline probe attached to the editor', () => {
+    stubAlignmentRects(120);
+    render(alignedOverlayTree());
+
+    // A leaked probe is a zero-width invisible span that would accumulate one per measurement.
+    expect(document.querySelector(`[${BASELINE_PROBE_ATTRIBUTE}]`)).toBeNull();
+  });
+
+  it("never mutates the editor's contenteditable while measuring the baseline", async () => {
+    // Watched from `document.body`, not `.editor-input` directly: the editor element does not exist
+    // until `render()` runs below, but the FIRST measurement happens synchronously inside that same
+    // render (the mount effect calls `recompute()` before `render()` returns) — so attaching to
+    // `.editor-input` only after render would already be too late to catch a regression in that
+    // first measurement. RTL mounts its tree under `document.body`, so observing there from before
+    // render captures every mutation for the whole test, and the assertion below narrows to
+    // mutations inside the editor specifically.
+    const records: MutationRecord[] = [];
+    const observer = new MutationObserver((mutationList) => records.push(...mutationList));
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    stubAlignmentRects(120);
+    render(alignedOverlayTree());
+    await putCaretInParagraph();
+
+    // MutationObserver delivers its records as a microtask, not synchronously — flush one turn
+    // before asserting.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    observer.disconnect();
+
+    const editorRoot = document.querySelector('.editor-input');
+    const mutationsInsideEditor = records.filter(
+      (record) => editorRoot === record.target || editorRoot?.contains(record.target),
+    );
+
+    // This is what pins the off-editor fix: appending (and removing) a probe span inside
+    // `.editor-input` — i.e. a revert back to `measureBaselineOffset(para)` — would add two records
+    // here (one for the append, one for the removal). Without this test, `stubAlignmentRects` gives
+    // the measuring element the SAME rect the `.para` reports, so such a revert would leave every
+    // other alignment test green.
+    expect(mutationsInsideEditor).toHaveLength(0);
+  });
+
+  it('re-measures the alignment once a webfont finishes loading', async () => {
+    // document.fonts is unimplemented in jsdom, so it must be stubbed with a minimal FontFaceSet-like
+    // object for the overlay's `loadingdone` effect to subscribe to at all. Captures the listener the
+    // same way `resizeCallbacks` captures the ResizeObserver callback above.
+    const loadingDoneListeners: Array<() => void> = [];
+    const stubFontFaceSet = {
+      addEventListener: (eventName: string, listener: () => void) => {
+        if (eventName === 'loadingdone') loadingDoneListeners.push(listener);
+      },
+      removeEventListener: (eventName: string, listener: () => void) => {
+        if (eventName !== 'loadingdone') return;
+        const index = loadingDoneListeners.indexOf(listener);
+        if (index !== -1) loadingDoneListeners.splice(index, 1);
+      },
+    };
+    Object.defineProperty(document, 'fonts', { value: stubFontFaceSet, configurable: true });
+
+    try {
+      stubAlignmentRects(120);
+      render(alignedOverlayTree());
+      await putCaretInParagraph();
+      expect(barContainer().style.top).toBe('118px');
+
+      // A different probe offset (30 instead of 14) at the SAME caret position: `caretTop` stays
+      // 120, so the caret's own target position (resolved from the `.para` fallback, since jsdom's
+      // Range never reports real client rects) does not move — only a genuine re-measurement of the
+      // baseline would change the result.
+      stubAlignmentRects(120, 30);
+      act(() => {
+        loadingDoneListeners.forEach((listener) => listener());
+      });
+
+      // 30 - 16 = 14, so 120 + 14 = 134. Staying at 118px would mean the webfont-load signal never
+      // invalidated the cache.
+      expect(barContainer().style.top).toBe('134px');
+    } finally {
+      // Deletes the stub rather than leaving it in place for later tests in this file, since
+      // `document` is shared across tests and `afterEach`'s `vi.restoreAllMocks()` does not undo a
+      // plain property assignment. `Reflect.deleteProperty` avoids a type assertion just to satisfy
+      // `delete`'s "must be optional" requirement on a property (`fonts`) that `lib.dom.d.ts` types
+      // as required.
+      Reflect.deleteProperty(document, 'fonts');
+    }
+  });
+
+  it('applies the alignment on the way back from hidden, having cached nothing while hidden', async () => {
+    // Mounting hidden never reaches the measurement at all: `recompute`'s visibility guard returns
+    // before any rect is read (see the sibling `rectReadCount === 0` assertion in the pre-existing
+    // hidden-view tests above), so nothing is cached while hidden and the measurement happens for the
+    // first time on the visibility flip instead — if it had cached a stale 0 here, the bar would stay
+    // top-aligned for the life of the web view. (`measureBaselineOffset`'s own `undefined`-not-`0`
+    // contract for the no-layout case is covered by its unit tests in `editor-dom.util.test.ts`, not
+    // here.)
+    mockVisibility.isVisible = false;
+    stubAlignmentRects(120);
+    const { rerender } = render(alignedOverlayTree());
+
+    mockVisibility.isVisible = true;
+    await act(async () => {
+      rerender(alignedOverlayTree());
+    });
+
+    expect(barContainer().style.top).toBe('118px');
   });
 });

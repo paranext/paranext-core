@@ -77,8 +77,25 @@
 // reserving only while visible would reflow the whole text column as the caret enters and leaves
 // the editor.
 //
-// 5em (80px) fits the widest trigger label — "(mixed)" at tw:px-2 — where the prototype's bar is
-// 118px. Pending UX sign-off on the exact width; changing this one value is the whole change.
+// 64px fits the ICON-ONLY trigger EXACTLY, with no slack: the `Type` icon (16px) + the Button's
+// `gap-1.5` (6px, not the `gap-2`/8px this comment previously assumed) + the `ChevronDown` (16px) +
+// the mount's `tw:px-2` padding (16px, 8px per side) + the Button's border (2px) is ~56px of chrome,
+// plus `CharacterMarkerToolbar`'s `tw:m-1` margin (8px, 4px per side) = 64px. The 5em (80px) this
+// replaces was chosen to "fit the widest trigger label" and did not — that same chrome left ~16px
+// for the label, less than `bd` needs, and `tw:overflow-hidden` cut the rest against the column
+// border. So 5em paid 80px of every Simple user's text column for a label that could not be read;
+// 64px keeps the icon-only trigger legible at 20% narrower than 5em (not half — the earlier 2.5em
+// estimate undercounted the chrome). The current-marker readout moved to the trigger's tooltip and
+// the menu's tri-state rows instead. Changing this one value is still the whole change; see
+// ADR-0007's 2026-08-05 amendment.
+//
+// PIXELS, deliberately, not `em`. Every term in that 64px is a FIXED pixel amount — Lucide icons are
+// 16px, and the Button's gap/padding/border are Tailwind pixel utilities — none of which scale with
+// the editor's font size. An `em` reservation is resolved against whatever font-size
+// `.editor-container-simple` inherits, so at any base below 16px it would reserve LESS than the
+// chrome needs and the trigger would spill inline-start over project text. A px reservation cannot
+// under-reserve. (The trigger also carries `tw:overflow-hidden` as the structural backstop — see
+// character-marker-bar.component.tsx.)
 //
 // The custom property is declared on `.editor-container-simple`, not on `.usfm`, because it has TWO
 // consumers that need to inherit it and only that element is an ancestor of both: the
@@ -86,7 +103,7 @@
 // character-marker-bar-overlay.component.tsx (the bar is a sibling of `.usfm`, not a descendant, so
 // a declaration on `.usfm` would not reach it). One declaration, two consumers — they cannot drift.
 .editor-container-simple {
-  --psc-character-marker-bar-width: 5em;
+  --psc-character-marker-bar-width: 64px;
 }
 
 .editor-container-simple .usfm.psc-gutter-markers {

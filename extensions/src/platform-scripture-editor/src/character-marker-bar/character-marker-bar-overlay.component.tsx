@@ -1,6 +1,6 @@
 import { useViewVisibility, Z_INDEX_OVERLAY } from 'platform-bible-react';
 import { ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { findScrollContainer } from '../editor-dom.util';
+import { findScrollContainer, measureBaselineOffset } from '../editor-dom.util';
 import {
   computeBarTop,
   EDITOR_PARA_SELECTOR,
@@ -10,6 +10,32 @@ import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
 
 /** The editor element the caret must be inside for the bar to track it. */
 const EDITOR_ROOT_SELECTOR = '.editor-input';
+
+/**
+ * The vertical center of the trigger's icon, in pixels below the bar container's top edge.
+ *
+ * This is the trigger side of the alignment, and it is deliberately NOT a text baseline. The
+ * trigger is icon-only (there is no label to probe) and `Button` is `inline-flex` (flex items
+ * ignore `vertical-align`, so a baseline probe would be meaningless inside it). The icon's optical
+ * center is the analogue that matters: it is the mark the eye lines up with the scripture text.
+ *
+ * @param barContainer The absolutely-positioned container whose `top` is being computed
+ * @returns Pixels from the container's top to the icon's vertical center, or `undefined` when there
+ *   is no layout or no icon yet
+ */
+function measureTriggerIconCenter(barContainer: HTMLElement): number | undefined {
+  const icon = barContainer.querySelector('svg');
+  if (!icon) return undefined;
+
+  const iconRect = icon.getBoundingClientRect();
+  const containerRect = barContainer.getBoundingClientRect();
+  // `||`, not `&&`: EITHER zero height means there is nothing meaningful to centre on. A zero-height
+  // icon inside a laid-out container is not "partially measurable" — it yields a centre equal to the
+  // icon's top edge, which is garbage that would then be CACHED as the alignment term.
+  if (iconRect.height === 0 || containerRect.height === 0) return undefined;
+
+  return iconRect.top + iconRect.height / 2 - containerRect.top;
+}
 
 export type CharacterMarkerBarOverlayProps = {
   /** The editor this overlay positions a bar beside. */
@@ -39,6 +65,11 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   // The ref needs to start out with null for it to work as an element ref
   // eslint-disable-next-line no-null/no-null
   const positionAnchorRef = useRef<HTMLDivElement>(null);
+  // The bar container, so the trigger's icon can be measured in the same coordinate space its `top`
+  // is expressed in.
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const barContainerRef = useRef<HTMLDivElement>(null);
   // The scrolling ancestor, resolved once on mount (see the requireOverflow note below).
   const scrollContainerRef = useRef<HTMLElement | undefined>(undefined);
   const rafIdRef = useRef<number>(0);
@@ -47,6 +78,47 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   // Distinguishes "no caret yet, show me at the first paragraph" from "the caret left the editor,
   // hold the last position" — both reach the same branch but want opposite behavior.
   const hasPositionedRef = useRef(false);
+  // The alignment term, measured once and reused (and re-measured on a font-metrics change — see
+  // `fontMetricsRef` below). `undefined` means "not measured yet" — which is also what a measurement
+  // taken while hidden yields, so a hidden mount leaves this unset and the next visible recompute
+  // fills it in. See `measureBaselineOffset`'s note on why it never returns 0 for the no-layout case.
+  const baselineOffsetRef = useRef<number | undefined>(undefined);
+  // The paragraph's computed font metrics `baselineOffsetRef` was last measured against. Caching on
+  // "is the offset set yet" alone would go stale on an explicit font-size/zoom change or a
+  // `font-family` swap (e.g. a class or theme change) — both scenarios the ResizeObserver below
+  // exists to catch — so the cache is keyed on the metrics themselves instead, and a mismatch
+  // triggers a re-measurement.
+  //
+  // The key holds EVERY metric copied onto the measuring element, not just the obvious three: a
+  // `font-weight`/`font-style`/`letter-spacing` change (a theme or class swap, or simply moving the
+  // caret from body text into a bold heading) changes the measured baseline too, so keying on a
+  // subset would silently reuse an offset measured under different metrics.
+  //
+  // This key does NOT catch a webfont finishing an asynchronous load: `getComputedStyle().fontFamily`
+  // reports the SPECIFIED font-family stack (e.g. `'Gentium Plus', serif`), not which face in that
+  // stack is actually being painted, so it stays identical before and after the swap — as do
+  // `fontSize` and (for `line-height: normal`) `lineHeight`. That case is instead handled by the
+  // `document.fonts` `loadingdone` listener below, which invalidates this cache directly rather than
+  // trying to detect the swap through a computed-style diff.
+  const fontMetricsRef = useRef<
+    | {
+        fontFamily: string;
+        fontSize: string;
+        fontWeight: string;
+        fontStyle: string;
+        lineHeight: string;
+        letterSpacing: string;
+      }
+    | undefined
+  >(undefined);
+  // A hidden element OUTSIDE `.editor-input`, given the paragraph's computed text metrics so its line
+  // box (the CSS "strut" a container gets from its own font/line-height, even with no text content)
+  // can be probed for a baseline without ever touching Lexical's contenteditable — appending even a
+  // synchronous probe span inside the editor would fire Lexical's MutationObserver as a microtask and
+  // risk perturbing undo history, a known-fragile area (see the deferred USJ-round-trip undo bug).
+  // The ref needs to start out with null for it to work as an element ref
+  // eslint-disable-next-line no-null/no-null
+  const measuringElementRef = useRef<HTMLSpanElement>(null);
 
   const isViewVisible = useViewVisibility();
   const selectionVersion = useEditorSelectionVersion();
@@ -79,7 +151,13 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     const editorRoot = positionAnchor.querySelector<HTMLElement>(EDITOR_ROOT_SELECTOR);
     if (!editorRoot) return;
 
-    let targetRect = resolveActiveLineRect(window.getSelection() ?? undefined, editorRoot);
+    const activeLine = resolveActiveLineRect(window.getSelection() ?? undefined, editorRoot);
+    let targetRect = activeLine?.rect;
+    // The paragraph whose font metrics the baseline is measured against: the one the caret is
+    // actually in, NOT the editor's first paragraph. On a chapter opening the first paragraph is
+    // typically a `\mt1` at 166% font-size, so measuring it would put the trigger several pixels low
+    // on every body line — the same magnitude of misalignment this alignment exists to fix.
+    let measurementPara = activeLine?.para;
 
     if (!targetRect) {
       // Before the first caret, anchor to the first paragraph so the bar is visible on load —
@@ -90,10 +168,74 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
       const firstPara = editorRoot.querySelector<HTMLElement>(EDITOR_PARA_SELECTOR);
       if (!firstPara) return;
       targetRect = firstPara.getBoundingClientRect();
+      // Measure against the SAME paragraph the position is anchored to, so the two halves of the
+      // alignment can never describe different paragraphs.
+      measurementPara = firstPara;
     }
 
     hasPositionedRef.current = true;
-    setTop(computeBarTop(targetRect, positionAnchor, scrollContainer));
+
+    // Measured lazily and cached, keyed on the CARET'S paragraph's computed font metrics
+    // (fontMetricsRef): metrics normally don't change as the caret moves within body text, so this
+    // usually runs once per mount rather than once per caret move — but it MUST re-run on an explicit
+    // font-size/zoom change, a `font-family` change, or a caret move between paragraphs with
+    // different metrics (body text ↔ an `\mt1` heading at 166%), so "is the offset set yet" alone is
+    // the wrong cache key (it would go stale in exactly the scenario the ResizeObserver below exists
+    // to catch). The webfont-load case this key can't see is handled separately — see the
+    // `document.fonts` effect below.
+    //
+    // The icon is resolved BEFORE the probe so a bar with no icon never touches the measuring element
+    // at all. Both halves must succeed: a partial measurement would align the trigger against a
+    // baseline that was never read. Leaving the ref unset is the correct outcome — `computeBarTop`'s
+    // default treats it as 0, i.e. the previous top-aligned behavior, and the next recompute tries
+    // again.
+    const barContainer = barContainerRef.current;
+    const iconCenter = barContainer ? measureTriggerIconCenter(barContainer) : undefined;
+    if (iconCenter !== undefined) {
+      const para = measurementPara;
+      const measuringElement = measuringElementRef.current;
+      if (para && measuringElement) {
+        const paraStyle = window.getComputedStyle(para);
+        const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight, letterSpacing } =
+          paraStyle;
+        const cachedMetrics = fontMetricsRef.current;
+        const metricsChanged =
+          !cachedMetrics ||
+          cachedMetrics.fontFamily !== fontFamily ||
+          cachedMetrics.fontSize !== fontSize ||
+          cachedMetrics.fontWeight !== fontWeight ||
+          cachedMetrics.fontStyle !== fontStyle ||
+          cachedMetrics.lineHeight !== lineHeight ||
+          cachedMetrics.letterSpacing !== letterSpacing;
+
+        if (metricsChanged) {
+          // Copy the paragraph's computed text metrics onto the hidden off-editor element so its
+          // line-box strut matches the real paragraph's — no filler text needed, the strut alone is
+          // what gets measured.
+          measuringElement.style.fontFamily = fontFamily;
+          measuringElement.style.fontSize = fontSize;
+          measuringElement.style.fontWeight = fontWeight;
+          measuringElement.style.fontStyle = fontStyle;
+          measuringElement.style.lineHeight = lineHeight;
+          measuringElement.style.letterSpacing = letterSpacing;
+
+          const editorBaseline = measureBaselineOffset(measuringElement);
+          if (editorBaseline !== undefined) {
+            baselineOffsetRef.current = editorBaseline - iconCenter;
+            fontMetricsRef.current = {
+              fontFamily,
+              fontSize,
+              fontWeight,
+              fontStyle,
+              lineHeight,
+              letterSpacing,
+            };
+          }
+        }
+      }
+    }
+
+    setTop(computeBarTop(targetRect, positionAnchor, scrollContainer, baselineOffsetRef.current));
   }, []);
 
   // Coalesces bursts of high-frequency triggers (scrolling, and dragging a selection, which fires
@@ -134,6 +276,34 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     };
   }, [recompute, scheduleRecompute]);
 
+  // Invalidates the font-metrics cache (see `fontMetricsRef`) when a webfont finishes loading — the
+  // one case that cache's computed-style key cannot detect on its own. `loadingdone` fires for every
+  // completed load batch, whether it lands before or after this effect subscribes, so this alone
+  // covers both "already loaded by mount" (harmless: the metrics recorded at mount are already
+  // correct) and "loads later" (the case that actually needs the invalidation).
+  //
+  // `document.fonts` is unimplemented in jsdom, so this is feature-detected rather than assumed —
+  // the effect is a no-op there, and the existing tests neither exercise nor warn about it.
+  //
+  // An event-listener subscription, not a `.ready` promise `.then()`: `removeEventListener` in the
+  // cleanup below is enough to make this safe across unmount, matching the scroll/resize listeners
+  // above — a promise callback would need an extra "am I still mounted" guard that this pattern
+  // doesn't.
+  useEffect(() => {
+    const { fonts } = document;
+    if (!fonts) return undefined;
+
+    const handleFontsLoaded = () => {
+      fontMetricsRef.current = undefined;
+      recompute();
+    };
+    fonts.addEventListener('loadingdone', handleFontsLoaded);
+
+    return () => {
+      fonts.removeEventListener('loadingdone', handleFontsLoaded);
+    };
+  }, [recompute]);
+
   // Reposition on every caret move, coalesced per frame. Listeners stay attached while hidden —
   // flagging a pending catch-up is cheaper than tearing down and re-wiring, and these events are
   // rare in a hidden view.
@@ -163,9 +333,23 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   return (
     <div ref={positionAnchorRef} className="tw:relative">
       {children}
+      {/* Off-editor measuring element for the baseline probe (see `measuringElementRef`): a sibling
+          of the editor, never a descendant, so the probe never touches Lexical's contenteditable. */}
+      <span
+        ref={measuringElementRef}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          top: 0,
+          left: 0,
+        }}
+      />
       {/* pointer-events-none on the container so the reserved gutter column stays click-through to
           the editor; the bar itself re-enables them. */}
       <div
+        ref={barContainerRef}
         data-testid="character-marker-bar-container"
         className="tw:absolute tw:pointer-events-none"
         // insetInlineEnd is a string ('0px'), not the number 0: React only appends a `px` unit to

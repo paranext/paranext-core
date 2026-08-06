@@ -43,6 +43,25 @@ describe('computeBarTop', () => {
     // Anchor at -100 → visibleAreaTop 100; caret content 50..60 → min(100, 60-1) = 59.
     expect(computeBarTop(makeRect(-50, -40), makeEl(-100, 500), makeEl(0, 600))).toBe(59);
   });
+
+  it('shifts the top down by the baseline offset', () => {
+    // Line box at 100, 18px tall; anchor and scroll container both at viewport 0. A +13px baseline
+    // offset lands the bar at 113.
+    expect(computeBarTop(makeRect(100, 118), makeEl(0, 800), makeEl(0, 800), 13)).toBe(113);
+  });
+
+  it('treats a missing baseline offset as zero, preserving the previous behavior', () => {
+    // This is what keeps every pre-existing computeBarTop test — and the bar's behavior before the
+    // first successful measurement — unchanged.
+    expect(computeBarTop(makeRect(100, 118), makeEl(0, 800), makeEl(0, 800))).toBe(100);
+  });
+
+  it('clamps a baseline offset larger than the line box to just above the line bottom', () => {
+    // A pathological offset must not push the bar below its own line. `clampTopToVisibleArea`'s
+    // existing lower bound (`bottom - 1` = 117) already does this, so the offset inherits that guard
+    // for free — this test pins that it stays true rather than adding a second clamp.
+    expect(computeBarTop(makeRect(100, 118), makeEl(0, 800), makeEl(0, 800), 999)).toBe(117);
+  });
 });
 
 describe('resolveActiveLineRect', () => {
@@ -129,7 +148,26 @@ describe('resolveActiveLineRect', () => {
     if (!textNode) throw new Error('expected a text node');
 
     // Identity, not field equality: `toBe` cannot pass by coincidence of matching numbers.
-    expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)).toBe(caretRect);
+    expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(caretRect);
+  });
+
+  it('returns the paragraph the caret is in, not the first paragraph in the editor', () => {
+    // The caller measures font metrics against this element. A chapter opens with an `\mt1` heading
+    // at 166% font-size, so handing back the editor's FIRST paragraph would make the caller measure a
+    // heading's baseline and mis-align the bar on every body line.
+    const { editorRoot, para: heading } = buildEditor();
+    heading.className = 'para usfm_mt1';
+    const body = document.createElement('p');
+    body.className = 'para usfm_p';
+    body.textContent = 'I shall not want';
+    editorRoot.appendChild(body);
+    // DOM's firstChild is typed as ChildNode | null, not undefined.
+    // eslint-disable-next-line no-null/no-null
+    const textNode = body.firstChild ?? null;
+    if (!textNode) throw new Error('expected a text node');
+
+    // Identity: it must be the very element the caret is in, not merely one that looks like it.
+    expect(resolveActiveLineRect(selectionAt(textNode, 2), editorRoot)?.para).toBe(body);
   });
 
   it('falls back to the containing paragraph rect when the caret rect is degenerate', () => {
@@ -142,7 +180,7 @@ describe('resolveActiveLineRect', () => {
     // eslint-disable-next-line no-null/no-null
     const textNode = para.firstChild ?? null;
     if (!textNode) throw new Error('expected a text node');
-    expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)).toBe(paraRect);
+    expect(resolveActiveLineRect(selectionAt(textNode, 4), editorRoot)?.rect).toBe(paraRect);
   });
 
   it('returns undefined when the caret is inside the editor but in no paragraph', () => {

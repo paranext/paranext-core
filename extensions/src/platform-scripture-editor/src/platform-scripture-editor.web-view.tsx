@@ -1870,6 +1870,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 blockMarker={blockMarker}
                 contextMarker={contextMarker}
                 isSyncBlocked={isSyncBlocked}
+                // The same direction the editor itself is given below. The marker menu portals to
+                // `document.body`, outside that `dir` element, so it can only mirror its alignment for
+                // an RTL project if the direction is handed to it explicitly.
+                textDirection={textDirectionEffective}
                 localizedStrings={localizedStrings}
               />
             }

@@ -25,9 +25,11 @@ const STRINGS = getLocalizedStrings([
 // `.editor-container-simple`: it has two consumers — the reserved padding below and the bar
 // container's own width, which the overlay sets inline. Declaring it on the shared ancestor is what
 // keeps the reservation and the bar the same size in the story as in the app.
+// The value is an absolute px, matching _simple-mode.scss: the trigger's chrome is fixed px, so an
+// em-based reservation would under-reserve at smaller base font sizes.
 const MOCK_EDITOR_STYLE: React.CSSProperties & Record<'--psc-character-marker-bar-width', string> =
   {
-    '--psc-character-marker-bar-width': '5em',
+    '--psc-character-marker-bar-width': '64px',
     border: '1px solid var(--border)',
     borderRadius: '4px',
     height: '260px',

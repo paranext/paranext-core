@@ -13,7 +13,13 @@
  */
 
 import { afterEach, beforeAll, describe, expect, it, vi, Mock } from 'vitest';
-import { findScrollContainer, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import {
+  BASELINE_PROBE_ATTRIBUTE,
+  findScrollContainer,
+  measureBaselineOffset,
+  scrollToAnnotation,
+  scrollToVerse,
+} from './editor-dom.util';
 
 vi.mock('@papi/frontend', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -372,5 +378,76 @@ describe('scrollToAnnotation', () => {
 
     expect(annotationElement).toBeUndefined();
     expect(wrapperScrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('measureBaselineOffset', () => {
+  /**
+   * Stubs `getBoundingClientRect` for the probe and for everything else separately. jsdom has no
+   * layout engine, so every real rect is all-zeros and the success path is otherwise unreachable.
+   */
+  function stubRects(values: { probeTop: number; containerTop: number; containerHeight: number }) {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function getRectStub(
+      this: Element,
+    ): DOMRect {
+      const isProbe = this.hasAttribute(BASELINE_PROBE_ATTRIBUTE);
+      const top = isProbe ? values.probeTop : values.containerTop;
+      const height = isProbe ? 0 : values.containerHeight;
+      return {
+        top,
+        bottom: top + height,
+        height,
+        left: 0,
+        right: 0,
+        width: 0,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      };
+    });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns the probe-to-container top delta', () => {
+    stubRects({ probeTop: 113, containerTop: 100, containerHeight: 18 });
+    const container = document.createElement('p');
+    document.body.appendChild(container);
+
+    expect(measureBaselineOffset(container)).toBe(13);
+  });
+
+  it('removes the probe on the success path', () => {
+    stubRects({ probeTop: 113, containerTop: 100, containerHeight: 18 });
+    const container = document.createElement('p');
+    document.body.appendChild(container);
+
+    measureBaselineOffset(container);
+
+    expect(container.querySelector(`[${BASELINE_PROBE_ATTRIBUTE}]`)).toBeNull();
+    expect(container.childNodes).toHaveLength(0);
+  });
+
+  it('returns undefined rather than 0 when there is no layout to measure', () => {
+    // Every rect degenerates to zeros inside a `display: none` iframe. Returning 0 there would be
+    // indistinguishable from a real zero offset, and a caller that cached it would top-align the
+    // bar for the life of the web view.
+    stubRects({ probeTop: 0, containerTop: 0, containerHeight: 0 });
+    const container = document.createElement('p');
+    document.body.appendChild(container);
+
+    expect(measureBaselineOffset(container)).toBeUndefined();
+  });
+
+  it('removes the probe on the no-layout path too', () => {
+    stubRects({ probeTop: 0, containerTop: 0, containerHeight: 0 });
+    const container = document.createElement('p');
+    document.body.appendChild(container);
+
+    measureBaselineOffset(container);
+
+    expect(container.childNodes).toHaveLength(0);
   });
 });

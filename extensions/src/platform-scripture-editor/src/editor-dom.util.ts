@@ -127,6 +127,57 @@ export function clampTopToVisibleArea(
 }
 
 /**
+ * Marks the throwaway span {@link measureBaselineOffset} appends. Exported so a test can tell the
+ * probe's stubbed rect from its container's.
+ */
+export const BASELINE_PROBE_ATTRIBUTE = 'data-psc-baseline-probe';
+
+/**
+ * Measures where a container's first-line text baseline sits, in pixels below the container's own
+ * top edge.
+ *
+ * The mechanism is a zero-height, zero-width `inline-block` span with `vertical-align: baseline`:
+ * such a box has no content to sit above or below the baseline, so its top edge lands exactly ON
+ * the baseline. The difference between its rect top and the container's rect top is therefore the
+ * baseline offset.
+ *
+ * Uses rect math, NOT `offsetTop`: `offsetTop` is measured against the nearest positioned ancestor,
+ * and callers here run inside a `position: relative` wrapper — so `offsetTop` would silently be
+ * relative to the wrong element.
+ *
+ * Returns `undefined`, not `0`, when there is nothing to measure. Inside a `display: none` iframe
+ * every rect degenerates to zeros (see the hidden-view rule in
+ * `.claude/rules/cross-view-sync-hidden-views.md`), and a `0` there is indistinguishable from a
+ * genuine zero offset — so a caller that cached it would misalign forever. `undefined` tells the
+ * caller not to cache and to measure again once layout exists.
+ *
+ * @param container The element whose text baseline to measure. Must have inline content flow — a
+ *   flex container is not a valid target, because flex items ignore `vertical-align`
+ * @returns Pixels from the container's top edge to its first-line baseline, or `undefined` when
+ *   there is no layout
+ */
+export function measureBaselineOffset(container: HTMLElement): number | undefined {
+  const probe = container.ownerDocument.createElement('span');
+  probe.setAttribute(BASELINE_PROBE_ATTRIBUTE, '');
+  probe.style.cssText =
+    'display:inline-block;width:0;height:0;vertical-align:baseline;pointer-events:none';
+  container.appendChild(probe);
+
+  try {
+    const probeTop = probe.getBoundingClientRect().top;
+    const containerRect = container.getBoundingClientRect();
+
+    if (probeTop === 0 && containerRect.top === 0 && containerRect.height === 0) return undefined;
+
+    return probeTop - containerRect.top;
+  } finally {
+    // `finally` so the probe never survives a throw. A leaked zero-width span would be invisible
+    // and would accumulate one per measurement.
+    probe.remove();
+  }
+}
+
+/**
  * Computes the top edge of the element with the given bounding rect in the scroll container's
  * scroll coordinate space, i.e. the `scrollTop` value at which that top edge sits at the
  * container's content top edge.
