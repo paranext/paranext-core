@@ -42,7 +42,7 @@ import {
   useRecentScriptureRefs,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service';
 import { registerBookChapterControlHandle } from '@renderer/services/book-chapter-control.registry';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {

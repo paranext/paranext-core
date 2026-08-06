@@ -12,7 +12,7 @@ import { startOverlayService } from '@renderer/services/overlays/overlay.service
 import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
-import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import { startScrollGroupService } from '@renderer/services/scroll-group.service';
 import {
   initialize as initializeThemeService,
   localThemeService,
