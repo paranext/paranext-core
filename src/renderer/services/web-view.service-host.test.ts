@@ -365,6 +365,51 @@ describe('handleSwitchToSimpleMode', () => {
     expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-unknown', false);
   });
 
+  it('fast path: uses the freshly re-checked editability when it disagrees with the cache', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-drifted', isEditable: true });
+    getMetadataForProjectMock.mockResolvedValue({ isEditable: false });
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(getMetadataForProjectMock).toHaveBeenCalledWith('proj-drifted');
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-drifted', true);
+  });
+
+  it('fast path: falls back to the cached editability and warns when the re-check rejects', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-recheck-fails', isEditable: true });
+    getMetadataForProjectMock.mockRejectedValue(new Error('PDP unavailable'));
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recheck-fails', false);
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('fast path: falls back to the cached editability and warns when the re-check hangs past its bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-recheck-hangs', isEditable: false });
+    // Never resolves within this test's lifetime - simulates a hung PDP-factory wait.
+    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recheck-hangs', true);
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+  }, 3000);
+
   it('slow path: resolves the most recent project, looks up real editability, and seeds the cache', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
