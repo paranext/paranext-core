@@ -15,6 +15,8 @@ import {
   CanHaveOnDidDispose,
   MutexMap,
   startsWith,
+  stringLength,
+  substring,
 } from 'platform-bible-utils';
 import {
   NetworkObject,
@@ -26,6 +28,7 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
+import { isServer } from '@shared/utils/internal-util';
 
 // #endregion
 
@@ -110,6 +113,37 @@ const initialize = (): Promise<void> => {
       // after module eval.
       // eslint-disable-next-line @typescript-eslint/no-use-before-define
       forgetRegistration(id);
+    });
+
+    // A process that goes away abruptly — most commonly a window the user closed — never disposes
+    // the network objects it was hosting, so nothing announces their disposal on its behalf. The
+    // RPC layer reports which method names its departure removed from the central registry and
+    // interprets none of them; this service is what knows which of those names are network objects.
+    // The dispose event that follows is a network event, so every process holding one of the dead
+    // objects forgets it through the dispose handling it already has.
+    networkService.onDidDisconnectClient(({ removedMethodNames }) => {
+      // Only the process that owns the connections can see one being lost, and only it may raise
+      // these disposals: the event it raises reaches every process, so a second announcer would
+      // only repeat it.
+      if (!isServer()) return;
+      // The functions below are defined later in the module; safe at runtime since this handler can
+      // only run after module evaluation.
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      const lostNetworkObjectIds = getNetworkObjectIdsLostWithClient(removedMethodNames);
+      if (lostNetworkObjectIds.length === 0) return;
+      // The emitter variable is declared later in the module; safe at runtime for the same reason.
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      const disposeEmitterForLostObjects = onDidDisposeNetworkObjectEmitter;
+      if (!disposeEmitterForLostObjects) {
+        logger.error(
+          `network-object.service not initialized — cannot announce the network objects a departed process took with it: ${lostNetworkObjectIds.join(', ')}`,
+        );
+        return;
+      }
+      logger.info(
+        `Announcing the network objects a departed process took with it: ${lostNetworkObjectIds.join(', ')}`,
+      );
+      lostNetworkObjectIds.forEach((id) => disposeEmitterForLostObjects.emit(id));
     });
 
     // A closing window takes its RPC connection down without disposing the objects it hosted, so no
@@ -199,6 +233,48 @@ const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
  *   network
  */
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
+
+/**
+ * What every request type registered for a network object starts with. Matches the front of what
+ * {@link getNetworkObjectRequestType} produces.
+ */
+const NETWORK_OBJECT_REQUEST_TYPE_PREFIX = `${CATEGORY_NETWORK_OBJECT}:`;
+
+/**
+ * Work out which network objects a departed process was hosting from the method names its departure
+ * removed from the central registry.
+ *
+ * {@link set} registers one bare `object:{id}` existence method per object plus one
+ * `object:{id}.{functionName}` per function it exposes. Every dead object's id is therefore among
+ * those names with the prefix stripped — but so is each of its function names, which read exactly
+ * the same way, since an id may itself contain dots (`platform.themeServiceDataProvider`).
+ * Splitting on the first dot would answer `platform`, so the question is settled the other way
+ * around: a name is another dead object's function exactly when some dot in it splits off an id
+ * that also died, and a name this process holds a registration under is an id whatever else it
+ * looks like.
+ *
+ * Announcing a function name as an id would be harmless — no live object can be called
+ * `{deadId}.{deadFunctionName}`, because the dead process held that name and registration is
+ * exclusive, so nothing else could be registered under it — but it would put a dispose event on the
+ * network for every method a departed process had registered rather than for every object.
+ */
+const getNetworkObjectIdsLostWithClient = (removedMethodNames: string[]): string[] => {
+  const candidateIds = removedMethodNames
+    .filter((methodName) => startsWith(methodName, NETWORK_OBJECT_REQUEST_TYPE_PREFIX))
+    .map((methodName) => substring(methodName, stringLength(NETWORK_OBJECT_REQUEST_TYPE_PREFIX)));
+  const candidateIdsThatDied = new Set(candidateIds);
+  return candidateIds.filter((candidateId) => {
+    if (hasKnown(candidateId)) return true;
+    // `split` from platform-bible-utils compiles a string separator into a regular expression, where
+    // '.' would match every character, so split on the dot directly. Both are code-unit safe here:
+    // no surrogate pair contains a '.'.
+    const idParts = candidateId.split('.');
+    return !idParts.some(
+      (_part, partIndex) =>
+        partIndex > 0 && candidateIdsThatDied.has(idParts.slice(0, partIndex).join('.')),
+    );
+  });
+};
 
 /**
  * Drop this process's registration for a network object and tell everyone holding it that it is
