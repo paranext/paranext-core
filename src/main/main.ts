@@ -100,7 +100,6 @@ import {
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -115,11 +114,10 @@ import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
-import { CommandNames, NetworkEventTypes, SettingTypes } from 'papi-shared-types';
+import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
-  PlatformEventEmitter,
   serialize,
   UnsubscriberAsyncList,
   wait,
@@ -425,38 +423,6 @@ async function main() {
       logger.warn(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`);
     }
   })();
-
-  // Announces a closed window to the whole app. Created once here rather than per window because an
-  // event type may only be claimed by one emitter, and the main process is the single source for it
-  // — it is the only process that knows when a window goes away. Services that a single window
-  // hosts on the whole app's behalf listen for this to hand hosting over to a surviving window.
-  //
-  // The name is intentionally NOT declared in the public `NetworkEvents` type — it is core plumbing
-  // between the main process and the renderer service hosts, not part of the `@papi/*` surface — so
-  // `EventType extends NetworkEventTypes` rejects the literal name. Cast the name past that
-  // constraint and recover the payload type on the result, the same escape hatch
-  // `scroll-group.service-host.ts` uses for its host-internal versification event. Registering
-  // centrally (rather than reaching for the deprecated sync factory, which does not) is what keeps
-  // the event out of the "announced but never registered" deprecation path.
-  /* eslint-disable no-type-assertion/no-type-assertion */
-  const onDidCloseWindowEmitter = (await networkService.createNetworkEventEmitterAsync(
-    EVENT_NAME_ON_DID_CLOSE_WINDOW as NetworkEventTypes,
-    {
-      notification: {
-        'x-experimental': true,
-        summary: 'Emitted when a window closes.',
-        params: [
-          {
-            name: 'windowId',
-            required: true,
-            summary: "The closed window's id.",
-            schema: { type: 'number' },
-          },
-        ],
-      },
-    },
-  )) as unknown as PlatformEventEmitter<number>;
-  /* eslint-enable no-type-assertion/no-type-assertion */
 
   // `before-quit` fires ahead of every window's `close`, so recording it here is what lets a
   // window's close handler tell a whole-app quit from a single window closing. Both this and the
@@ -1031,23 +997,6 @@ async function main() {
       // is destroyed by now, and reading a property off it can throw — which would abandon the rest
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
-
-      // Tell the rest of the app the window is gone. A closing renderer drops its RPC connection
-      // without disposing the network objects it hosted, so this is the only signal the surviving
-      // windows get that an app-global service they were consuming — the theme engine, the scroll
-      // group service — needs a new host. Announced as soon as the window is out of the tracked
-      // state the listeners read, and ahead of the unsubscribers below: those are RPC to a renderer
-      // that is already gone, so they take the network service's whole registration retry to fail,
-      // and no surviving window would start taking over until they did.
-      // `PlatformEventEmitter` runs its subscribers synchronously and does not isolate them, so one
-      // that throws would take the rest of the announcement — and everything below — with it.
-      try {
-        onDidCloseWindowEmitter.emit(windowId);
-      } catch (e) {
-        logger.error(
-          `A subscriber threw while being told window ${windowId} closed, so the rest of them were not told: ${getErrorMessage(e)}`,
-        );
-      }
 
       // Stop persisting this window. When the close was deliberate — the app stays up — rewrite the
       // structure without it so the window does not come back next session. During a quit the
