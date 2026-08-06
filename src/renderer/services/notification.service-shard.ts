@@ -18,6 +18,10 @@ import {
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  getServiceShardAttributes,
+  NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
 import { getErrorMessage, isLocalizeKey, newGuid } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -218,11 +222,16 @@ const notificationService: INotificationService = {
  * focused window, so a notification raised by a background task lands where the user is looking.
  */
 export async function startNotificationService(): Promise<void> {
+  if (!globalThis.windowId)
+    throw new Error('Cannot start NotificationService: windowId is not set');
+
   await networkObjectService.set(
     `${NotificationServiceNetworkObjectName}-${globalThis.windowId}`,
     notificationService,
-    undefined,
-    undefined,
+    // How the main process's notification service router finds this shard. The window-scoped name
+    // is an internal detail of the registration; the object type and window id are the contract.
+    NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE,
+    getServiceShardAttributes(globalThis.windowId),
     NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   );
 }
