@@ -208,4 +208,17 @@ describe('renderer-hosted request routing proxies', () => {
 
     expect(mocks.request).toHaveBeenCalledWith('command:platform.openSettings-3', 'owned-view');
   });
+
+  test('fails the call when a ready window’s WebView service has not registered yet', async () => {
+    // Readiness is keyed on the window service, and a renderer registers its several services
+    // moments apart, so a ready window can still be missing the one this asks. That window could
+    // not be asked, which is not the same as it answering that it does not own the web view —
+    // falling back to focus would run the call against whatever the focused window is showing.
+    withWindows(mocks, { 2: windowService([]), 3: undefined });
+
+    await expect(
+      registrations().get('command:platform.openSettings')?.handler('owned-view'),
+    ).rejects.toThrow('unreachable');
+    expect(mocks.request).not.toHaveBeenCalled();
+  });
 });

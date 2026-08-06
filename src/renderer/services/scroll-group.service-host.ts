@@ -821,7 +821,14 @@ async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
   if (isPublishingScrollGroupService) return;
   if (pendingTakeoverPromise) {
     isTakeoverQueuedAfterPendingRun = true;
-    await pendingTakeoverPromise;
+    const runInFlight = pendingTakeoverPromise;
+    await runInFlight;
+    // The run just awaited started before the window this call is about died, so its finishing says
+    // nothing about this close. What covers this close is the re-run the flag above asked for, which
+    // the `finally` below has already started by the time this resumes — waiting for that is the
+    // difference between reporting a takeover that happened and one that is still to come.
+    if (pendingTakeoverPromise && pendingTakeoverPromise !== runInFlight)
+      await pendingTakeoverPromise;
     return;
   }
   pendingTakeoverPromise = (async () => {
@@ -836,7 +843,7 @@ async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
     // nothing left to take over.
     if (isPublishingScrollGroupService) return;
     takeOverScrollGroupServiceAfterWindowClose().catch((e) => {
-      logger.warn(
+      logger.error(
         `Failed to publish the scroll group service after a window closed: ${getErrorMessage(e)}`,
       );
     });
@@ -846,7 +853,10 @@ async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
 
 getNetworkEvent<number>(EVENT_NAME_ON_DID_CLOSE_WINDOW)(() => {
   takeOverScrollGroupServiceAfterWindowClose().catch((e) => {
-    logger.warn(
+    // An error, not a warning: with no window publishing it, every window keeps navigating
+    // correctly on screen while remote `papi.scrollGroups` calls die for the rest of the session,
+    // so the log line is the only place this is visible at all.
+    logger.error(
       `Failed to publish the scroll group service after a window closed: ${getErrorMessage(e)}`,
     );
   });

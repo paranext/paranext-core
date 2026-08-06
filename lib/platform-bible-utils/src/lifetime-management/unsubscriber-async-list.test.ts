@@ -3,8 +3,9 @@ import UnsubscriberAsyncList from './unsubscriber-async-list';
 
 describe('UnsubscriberAsyncList', () => {
   beforeEach(() => {
-    // The list logs failures; keep the test output readable
+    // The list logs what it does with late arrivals; keep the test output readable
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   test('runs every unsubscriber and reports success', async () => {
@@ -105,6 +106,22 @@ describe('UnsubscriberAsyncList', () => {
 
     expect(lateUnsubscriber).toHaveBeenCalledTimes(1);
     expect(list.unsubscribers.size).toBe(0);
+  });
+
+  test('says so when it undoes a late arrival, rather than doing it silently', async () => {
+    // From the caller's point of view a subscription it just set up has been taken away. Without a
+    // line here that happens with no record anywhere, which is the hardest kind of thing to chase.
+    const list = new UnsubscriberAsyncList('late-arrival-list');
+    await list.runAllUnsubscribers();
+
+    list.add(async () => true);
+    // `add` cannot await the unsubscriber it runs, so let the microtask it queued settle
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(vi.mocked(console.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('late-arrival-list'),
+    );
   });
 
   test('unsubscribes a late disposable by calling its dispose', async () => {

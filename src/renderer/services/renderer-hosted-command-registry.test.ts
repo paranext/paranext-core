@@ -46,9 +46,11 @@ describe('renderer-hosted command registry', () => {
       '@renderer/services/renderer-hosted-command-registry'
     );
 
-    RENDERER_HOSTED_COMMAND_NAMES.forEach((commandName) => {
-      registerScopedCommands({ [commandName]: vi.fn() });
-    });
+    await Promise.all(
+      RENDERER_HOSTED_COMMAND_NAMES.flatMap((commandName) =>
+        registerScopedCommands({ [commandName]: vi.fn() }),
+      ),
+    );
 
     expect(() => assertAllRendererHostedCommandsRegistered()).not.toThrow();
   });
@@ -59,11 +61,31 @@ describe('renderer-hosted command registry', () => {
     );
     // Register everything except one, so the failure message can be checked precisely.
     const [omittedCommandName, ...restCommandNames] = RENDERER_HOSTED_COMMAND_NAMES;
-    restCommandNames.forEach((commandName) => {
-      registerScopedCommands({ [commandName]: vi.fn() });
-    });
+    await Promise.all(
+      restCommandNames.flatMap((commandName) => registerScopedCommands({ [commandName]: vi.fn() })),
+    );
 
     expect(() => assertAllRendererHostedCommandsRegistered()).toThrow(omittedCommandName);
+  });
+
+  test('does not count a command whose registration rejected', async () => {
+    // The check exists to prove there is a handler for the routing proxy to forward to. Counting a
+    // name on the attempt would report exactly the failure most likely to happen — a name collision
+    // after a reload, a network failure during startup — as covered, leaving the dead command to
+    // surface later as nothing but a proxy timeout.
+    const { registerScopedCommands, assertAllRendererHostedCommandsRegistered } = await import(
+      '@renderer/services/renderer-hosted-command-registry'
+    );
+    const [failingCommandName, ...restCommandNames] = RENDERER_HOSTED_COMMAND_NAMES;
+    await Promise.all(
+      restCommandNames.flatMap((commandName) => registerScopedCommands({ [commandName]: vi.fn() })),
+    );
+
+    mocks.registerCommand.mockRejectedValueOnce(new Error('Command is already registered'));
+    const [failedRegistration] = registerScopedCommands({ [failingCommandName]: vi.fn() });
+    await expect(failedRegistration).rejects.toThrow('already registered');
+
+    expect(() => assertAllRendererHostedCommandsRegistered()).toThrow(failingCommandName);
   });
 
   test('logs rather than throws in packaged builds, so one unroutable command does not block startup', async () => {

@@ -292,8 +292,8 @@ step, no automation. Just a record.
   closed by the user, so a fixed designation would still need a takeover path.
 - **Consequences:** the app has exactly one theme engine and one scroll group service at all times,
   transparent to consumers. The election/sweep/re-host machinery is implemented twice today (theme,
-  scroll group) and has already drifted between the two copies; round-3 review flags the duplication
-  as worth a shared helper.
+  scroll group) and has already drifted between the two copies, so the duplication is worth
+  extracting into a shared helper.
 - **Source:** multi-window PR.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets

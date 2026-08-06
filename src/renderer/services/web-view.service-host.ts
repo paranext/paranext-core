@@ -2229,5 +2229,8 @@ export async function startWebViewService(): Promise<void> {
     'platform.isUsersnapFormCurrentlyOpen': () => isUsersnapFormCurrentlyOpen(),
     'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
-  registerScopedCommands(commandHandlers);
+  // Awaited the way the other callers await theirs: the startup coverage check reads what these
+  // registrations record, and leaving them in flight would both let that check run before they had
+  // landed and turn a rejected registration into an unhandled rejection.
+  await Promise.all(registerScopedCommands(commandHandlers));
 }

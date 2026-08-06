@@ -72,7 +72,16 @@ async function findWebViewOwnerWindowId(
         const service = await networkObjectService.get<WebViewServiceType>(
           `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${id}`,
         );
-        if (!service) return undefined;
+        // Readiness is keyed on the window service; a renderer registers its WebView service
+        // moments apart from that one, so a ready window can still be missing it. That window could
+        // not be asked, which is not the same as it answering that it does not own the web view.
+        if (!service) {
+          logger.warn(
+            `WebView service for window ${id} is not registered, so it could not be asked about web view ${webViewId} while routing ${requestName}`,
+          );
+          hadServiceErrors = true;
+          return undefined;
+        }
         return (await service.getOpenWebViewDefinition(webViewId)) ? id : undefined;
       } catch (e) {
         logger.warn(

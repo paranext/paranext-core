@@ -916,8 +916,11 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
       try {
         await disposableDataProvider.dispose();
       } catch (disposeError) {
-        logger.warn(
-          `Failed to unregister the network object while cleaning up the failed registration of data provider ${providerName}: ${getErrorMessage(disposeError)}`,
+        // An error rather than a warning: the provider stays published under a name nothing holds a
+        // disposable for any more, so nothing can unregister it and nothing can re-register that
+        // name for the rest of the session. There is no recovery short of a restart.
+        logger.error(
+          `Failed to unregister the network object while cleaning up the failed registration of data provider ${providerName}, so that name stays claimed by an unusable provider for the rest of this session: ${getErrorMessage(disposeError)}`,
         );
       }
     } else if (onDidUpdateEmitter) {
@@ -927,8 +930,10 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
       try {
         onDidUpdateEmitter.dispose();
       } catch (disposeError) {
-        logger.warn(
-          `Failed to dispose the update event emitter while cleaning up the failed registration of data provider ${providerName}: ${getErrorMessage(disposeError)}`,
+        // Same permanence as the branch above: the event name stays centrally registered under this
+        // connection, so every future attempt to host this provider is rejected until a restart.
+        logger.error(
+          `Failed to dispose the update event emitter while cleaning up the failed registration of data provider ${providerName}, so that event name stays claimed for the rest of this session: ${getErrorMessage(disposeError)}`,
         );
       }
     }

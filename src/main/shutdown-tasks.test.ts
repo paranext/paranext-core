@@ -293,13 +293,34 @@ describe('performShutdownTasks', () => {
     expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('1'));
   });
 
-  it('skips S/R when the WebView service is unavailable', async () => {
+  it('says so rather than exiting silently when it cannot establish what was open', async () => {
+    // Every window's unsynced work goes out unsynced here, and this is the app's last chance to know
+    // it. A support engineer reading the log after a data-loss report must not find a clean
+    // shutdown with nothing at all between "quitting" and process exit.
     mockSettingsGet.mockResolvedValue('simple');
     mockGetOpenWebViews.mockRejectedValue(new Error('service unavailable'));
+
     await performShutdownTasks();
+
     expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
       expect.stringContaining('sendReceiveProjects'),
     );
+    expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('service unavailable'));
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('could not be established'),
+    );
+    expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+  });
+
+  it('records a skip when nothing writable was open anywhere', async () => {
+    // Every exit path from the shutdown sync leaves a line, so the log distinguishes "nothing to
+    // sync" from "the sync never got as far as choosing anything"
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+
+    await performShutdownTasks();
+
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('skipped'));
   });
 
   it('skips the automatic shutdown S/R and warns when settings service throws (no open-editor fallback)', async () => {
@@ -485,5 +506,50 @@ describe('performWindowCloseTasks', () => {
 
     await expect(performWindowCloseTasks(2)).resolves.toBeUndefined();
     expect(mockLoggerError).toHaveBeenCalled();
+  });
+
+  it('is not cancelled out from under the closing window when the app quits mid-sync', async () => {
+    // The closing window's editors only ever existed in it, so its sync is the only thing that can
+    // ever cover them. A quit arriving while it runs used to cancel it with nothing left to sync
+    // those projects.
+    mockSettingsGet.mockResolvedValue('simple');
+    mockGetOpenWebViewsForWindow.mockResolvedValue(
+      windowWebViews([writableEditor('closing-window-project')]),
+    );
+    mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
+    let releaseWindowCloseSync = () => {};
+    mockRequestNoRetry.mockImplementation(async (requestType) => {
+      if (`${requestType}`.includes('sendReceiveProjects'))
+        await new Promise<void>((resolve) => {
+          releaseWindowCloseSync = resolve;
+        });
+      return undefined;
+    });
+
+    const windowCloseTasks = performWindowCloseTasks(2);
+    await vi.waitFor(() =>
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['closing-window-project'],
+      ),
+    );
+
+    const shutdownTasks = performShutdownTasks();
+    // Give the quit every chance to reach its cancel while the window's sync is still running
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).not.toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
+
+    releaseWindowCloseSync();
+    await windowCloseTasks;
+    await shutdownTasks;
+
+    // Only once the window's sync had finished
+    expect(mockRequestNoRetry.mock.calls.map(([requestType]) => requestType)).toContainEqual(
+      expect.stringContaining('cancelSync'),
+    );
   });
 });

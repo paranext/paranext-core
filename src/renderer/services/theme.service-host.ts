@@ -793,7 +793,10 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
   }
 
   const hostedProvider = await dataProviderService.get(themeServiceDataProviderName);
-  if (!hostedProvider) throw new Error('Theme service undefined');
+  if (!hostedProvider)
+    throw new Error(
+      `Window ${globalThis.windowId} did not win hosting of the theme engine and could not resolve the window that did, so it has no theme service to attach to`,
+    );
   dataProvider = hostedProvider;
   // When the hosting window closes its provider goes with it, so drop it, re-arm, and take over.
   // Every remaining window does this; the one that wins the re-registration becomes the new host and
@@ -894,6 +897,13 @@ const themeServiceEngineSyncAdditions = Object.freeze({
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 export const localThemeService = createSyncProxyForAsyncObject(async () => {
   await initialize();
-  if (!dataProvider) throw new Error('Theme service undefined');
+  // Names the state rather than the symptom: this is the gap between the window that was hosting
+  // the theme engine going away and one of the surviving windows winning it back (see
+  // `takeOverThemeEngineAfterWindowClose`), which the retry closes on its own. Callers that can
+  // wait should retry rather than treat this as the theme service being gone.
+  if (!dataProvider)
+    throw new Error(
+      `Window ${globalThis.windowId} has no theme service while the theme engine is being handed over from the window that closed; retry once a window has taken it over`,
+    );
   return dataProvider;
 }, themeServiceEngineSyncAdditions) as IThemeServiceLocal;

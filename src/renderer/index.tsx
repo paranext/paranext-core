@@ -119,12 +119,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       initializeWindowService(),
     );
 
-    // Every command in RENDERER_HOSTED_COMMAND_NAMES must have been registered by one of the
-    // services started above (startWebViewService, startDialogService,
-    // startScrollGroupNavigationCommands) — otherwise the main process's routing proxy for it has
-    // nothing to forward to.
-    assertAllRendererHostedCommandsRegistered();
-
     // Drives the auto-sync edit-block banner on Scripture editors during a Send/Receive. Needs the
     // network service (already up above) for the blocking event and the web view service (already
     // up, from the block above) to read/update editor definitions. Both return unsubscribers we
@@ -142,6 +136,14 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       }
       applyThemeSafe(newTheme, 'subscribe');
     });
+
+    // Every command in RENDERER_HOSTED_COMMAND_NAMES must have been registered by one of the
+    // services started above (startWebViewService, startDialogService,
+    // startScrollGroupNavigationCommands) — otherwise the main process's routing proxy for it has
+    // nothing to forward to. Checked last so the dev-mode throw it uses to make a gap impossible to
+    // miss cannot cost this renderer any of the startup work above; what the app ends up with is
+    // the same in dev and packaged builds, and only how loudly it says so differs.
+    assertAllRendererHostedCommandsRegistered();
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }

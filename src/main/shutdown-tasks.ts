@@ -30,7 +30,11 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  * - `partial`: the sync ran and completed, but for only part of the app — a window did not report its
  *   open editors, so whatever it was editing was never in the selection. Warned.
  * - `failed`: the sync ran but did not succeed (Power: the command returned `'failed'`). Warned.
- * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`).
+ * - `selection-failed`: nothing ran because what the app had open could not be established at all, so
+ *   no project could be selected (Simple mode only). The failure detail was already warned where it
+ *   was caught. Warned.
+ * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`), or
+ *   nothing writable was open anywhere (Simple).
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
@@ -39,6 +43,7 @@ type ShutdownSyncOutcome =
   | 'synced'
   | 'partial'
   | 'failed'
+  | 'selection-failed'
   | 'skipped'
   | 'unreachable'
   | 'timed-out';
@@ -108,6 +113,15 @@ async function performShutdownTasksInternal(): Promise<void> {
 }
 
 /**
+ * Per-window close syncs that are still running.
+ *
+ * Tracked so the app-shutdown sync can wait for them instead of cancelling them: a closing window's
+ * editors are gone once it is, so its own sync is the only thing that can ever cover them, and a
+ * quit arriving mid-flight would otherwise abort it with nothing to run in its place.
+ */
+const inFlightWindowCloseSyncs = new Set<Promise<void>>();
+
+/**
  * Send/Receive what a single window had open, because that window is going away while the app stays
  * up.
  *
@@ -130,10 +144,18 @@ async function performShutdownTasksInternal(): Promise<void> {
  * @param closingWindowId Window that is closing
  */
 export async function performWindowCloseTasks(closingWindowId: number): Promise<void> {
+  const windowCloseSync = (async () => {
+    try {
+      await performWindowCloseTasksInternal(closingWindowId);
+    } catch (e) {
+      logger.error(`Unexpected error while syncing the projects of a closing window:`, e);
+    }
+  })();
+  inFlightWindowCloseSyncs.add(windowCloseSync);
   try {
-    await performWindowCloseTasksInternal(closingWindowId);
-  } catch (e) {
-    logger.error(`Unexpected error while syncing the projects of a closing window:`, e);
+    await windowCloseSync;
+  } finally {
+    inFlightWindowCloseSyncs.delete(windowCloseSync);
   }
 }
 
@@ -201,6 +223,17 @@ function getWritableEditorProjectIds(definitions: SavedWebViewDefinition[]): str
 }
 
 async function performSimpleModeShutdownSync(): Promise<void> {
+  // A window that closed a moment ago is already syncing what went with it, and nothing else can:
+  // its editors only ever existed in it. Waited for rather than cancelled below — it is bounded by
+  // the same shutdown wait everything else here is, so the cost is a delay and the alternative is
+  // that window's edits never going out at all.
+  if (inFlightWindowCloseSyncs.size > 0) {
+    logger.info(
+      `Waiting for ${inFlightWindowCloseSyncs.size} closing window sync(s) before cancelling in-progress syncs for shutdown`,
+    );
+    await Promise.allSettled([...inFlightWindowCloseSyncs]);
+  }
+
   // Cancel any in-progress sync first (e.g. a first-sync on startup), then S/R the active project.
   try {
     await networkService.requestNoRetry(
@@ -215,6 +248,8 @@ async function performSimpleModeShutdownSync(): Promise<void> {
   let projectIds: string[] = [];
   /** Windows whose editors are missing from the selection below, so the sync cannot cover them */
   let unreachableWindowIdsForSync: number[] = [];
+  /** Whether the selection could not be made at all, so no window's editors are covered */
+  let didSelectionFail = false;
   try {
     const { definitions: openWebViewDefinitions, unreachableWindowIds } =
       await getAllOpenWebViewDefinitionsWithReachability();
@@ -226,8 +261,14 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     // mode — one per window. Take them all: picking a single one would leave the other windows'
     // edits unsynced.
     projectIds = getWritableEditorProjectIds(openWebViewDefinitions);
-  } catch {
-    /* WebView service unavailable */
+  } catch (e) {
+    // The same loss the coverage warning below reports, for every window at once: this is the last
+    // moment anything can know what the app had open, so nothing selected here means nothing gets
+    // sent. Said out loud, and followed by an outcome, so the log never shows a silent shutdown.
+    logger.warn(
+      `Could not establish what any window had open, so nothing unsynced anywhere is covered by a shutdown sync: ${getErrorMessage(e)}`,
+    );
+    didSelectionFail = true;
   }
 
   // Said before the sync runs, and said even when nothing is left to sync: a window that could not
@@ -240,7 +281,14 @@ async function performSimpleModeShutdownSync(): Promise<void> {
       `Shutdown sync coverage is incomplete: windows ${unreachableWindowIdsForSync.join(', ')} did not report their open editors, so anything unsynced in them is not covered by this sync.`,
     );
 
-  if (projectIds.length === 0) return;
+  if (didSelectionFail) {
+    logShutdownSyncOutcome('selection-failed');
+    return;
+  }
+  if (projectIds.length === 0) {
+    logShutdownSyncOutcome('skipped');
+    return;
+  }
 
   logger.info(`Syncing projects on shutdown: ${projectIds.join(', ')}`);
   // `sendReceiveProjects` takes the whole list in one call, so every open editor's project goes out
@@ -251,9 +299,9 @@ async function performSimpleModeShutdownSync(): Promise<void> {
       projectIds,
     ),
   );
-  // Simple mode has no "skipped" state: reaching here means at least one writable project was
-  // selected, so a resolution is a completed S/R — of the projects that were found. A window that
-  // never answered keeps this from being reported as a clean, complete sync.
+  // The nothing-to-do states already returned above, so reaching here means at least one writable
+  // project was selected and a resolution is a completed S/R — of the projects that were found. A
+  // window that never answered keeps this from being reported as a clean, complete sync.
   let outcome: ShutdownSyncOutcome;
   if (settlement.status === 'timedOut') outcome = 'timed-out';
   else if (settlement.status === 'failed') outcome = 'unreachable';
@@ -316,8 +364,15 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
     case 'failed':
       logger.warn('Sync on shutdown ran but reported failure');
       break;
+    case 'selection-failed':
+      logger.warn(
+        'Sync on shutdown did not run: what the app had open could not be established, so nothing could be selected to sync',
+      );
+      break;
     case 'skipped':
-      logger.debug('Sync on shutdown skipped (nothing scheduled, not due, or already syncing)');
+      logger.debug(
+        'Sync on shutdown skipped (nothing writable open, nothing scheduled, not due, or already syncing)',
+      );
       break;
     case 'unreachable':
     case 'timed-out':
