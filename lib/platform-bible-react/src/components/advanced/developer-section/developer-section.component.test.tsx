@@ -87,6 +87,7 @@ describe('DeveloperSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
     expect(screen.getByTestId('server-type-production')).toBeDisabled();
     expect(screen.getByTestId('server-type-development')).toBeDisabled();
+    expect(screen.getByTestId('server-type-test')).toBeDisabled();
   });
 
   test('QualityAssurance selectedServer displays as Production being active', () => {
