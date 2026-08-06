@@ -8,7 +8,7 @@ import {
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
 import { logger } from '@shared/services/logger.service';
-import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,
   createErrorResponse,
@@ -25,7 +25,14 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
-import { AsyncVariable, getErrorMessage, Mutex, MutexMap } from 'platform-bible-utils';
+import {
+  AsyncVariable,
+  getErrorMessage,
+  Mutex,
+  MutexMap,
+  PlatformEvent,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import {
   SingleMethodDocumentation,
@@ -39,6 +46,12 @@ import {
  */
 export class RpcClient implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
+  /**
+   * Never fires here. Only the process that owns the websocket server sees a connection being lost;
+   * this end of the seam exists so shared code can subscribe in any process without asking which
+   * one it is running in.
+   */
+  readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   private ws: WebSocket | undefined;
   private requestId: number = 1;
   /** Refers to the current process that created this object (i.e., not main) */
@@ -49,9 +62,11 @@ export class RpcClient implements IRpcMethodRegistrar {
   private readonly connectionMutex: Mutex = new Mutex();
   private readonly registrationMutexMap: MutexMap = new MutexMap();
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
+  private readonly clientDisconnectEmitter = new PlatformEventEmitter<RpcClientDisconnectEvent>();
 
   constructor() {
     bindClassMethods.call(this);
+    this.onDidDisconnectClient = this.clientDisconnectEmitter.event;
     this.jsonRpcServer = new JSONRPCServer();
     this.jsonRpcClient = new JSONRPCClient(
       (payload) => sendPayloadToWebSocket(this.ws, payload),
