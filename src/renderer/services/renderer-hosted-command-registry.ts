@@ -1,6 +1,6 @@
 /**
- * Registers this renderer's window-scoped handlers for the commands the main process's routing
- * proxy expects to find under a `${commandName}-${windowId}` name (see
+ * Registers this renderer's window-scoped handlers for the commands the main process's service
+ * router expects to find under a `${commandName}-${windowId}` name (see
  * `RENDERER_HOSTED_COMMAND_NAMES`), and tracks which of them this renderer actually registered.
  *
  * The canonical list of renderer-hosted command names is declared centrally, but which module
@@ -75,7 +75,7 @@ export function registerScopedCommands(
  *
  * A name in `RENDERER_HOSTED_COMMAND_NAMES` that no {@link registerScopedCommands} call registered
  * means the main process's service router has nothing to forward calls to for that command —
- * without this check, that surfaces only as the proxy's request timing out, with nothing pointing
+ * without this check, that surfaces only as the router's request timing out, with nothing pointing
  * at the missing registration as the cause.
  */
 export function assertAllRendererHostedCommandsRegistered(): void {

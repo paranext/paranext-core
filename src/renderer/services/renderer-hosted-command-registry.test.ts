@@ -72,7 +72,7 @@ describe('renderer-hosted command registry', () => {
     // The check exists to prove there is a handler for the service router to forward to. Counting a
     // name on the attempt would report exactly the failure most likely to happen — a name collision
     // after a reload, a network failure during startup — as covered, leaving the dead command to
-    // surface later as nothing but a proxy timeout.
+    // surface later as nothing but a service router timeout.
     const { registerScopedCommands, assertAllRendererHostedCommandsRegistered } = await import(
       '@renderer/services/renderer-hosted-command-registry'
     );
