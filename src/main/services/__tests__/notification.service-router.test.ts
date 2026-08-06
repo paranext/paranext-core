@@ -3,16 +3,48 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
 import {
   getRegisteredRouter,
-  withWindows,
+  withoutWindowShard,
+  withWindows as withWindowsServingShards,
+  type ShardAnnouncementListeners,
 } from '@main/services/__tests__/service-router-test.util';
 import type { INotificationService } from '@shared/models/notification.service-model';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+import { NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 
-const mocks = vi.hoisted(() => ({
-  getTargetWindowId: vi.fn(),
-  getReadyWindowIds: vi.fn(),
-  networkObjectGet: vi.fn(),
-  networkObjectSet: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  // Where the router's shard index parks its subscriptions. Plain arrays rather than the subscribe
+  // mocks' recorded calls, which `vi.clearAllMocks()` wipes between tests while the index — module
+  // state that subscribes once at load — keeps listening.
+  const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
+  return {
+    getTargetWindowId: vi.fn(),
+    getReadyWindowIds: vi.fn(),
+    networkObjectGet: vi.fn(),
+    networkObjectSet: vi.fn(),
+    shardAnnouncementListeners,
+    onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
+      shardAnnouncementListeners.create.push(listener);
+      return () => {};
+    }),
+    onDidDisposeNetworkObject: vi.fn((listener: (networkObjectId: string) => void) => {
+      shardAnnouncementListeners.dispose.push(listener);
+      return () => {};
+    }),
+  };
+});
+
+/** Wire windows whose notification service shards are the given objects */
+function withWindows(
+  shardsByWindowId: Record<number, unknown>,
+  options?: { unreadyWindowIds?: number[] },
+) {
+  withWindowsServingShards(
+    mocks,
+    NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE,
+    shardsByWindowId,
+    options,
+  );
+}
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
@@ -20,6 +52,8 @@ vi.mock('@main/services/window-state.service', () => ({
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
+  onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
+  onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
 
 /** Capture the router object registered under the generic name */
@@ -52,10 +86,38 @@ describe('notification service router', () => {
     mocks.getReadyWindowIds.mockReturnValue([]);
   });
 
+  test('sends to a window that registered its shard after the router started', async () => {
+    // Routers start before any window exists, so every window they ever route to announced itself
+    // later; a second window has to become routable the moment its shard registers
+    withWindows({ 1: windowShard([]) });
+    const router = await getRouter();
+    const second = windowShard([]);
+    withWindows({ 1: windowShard([]), 2: second });
+    mocks.getTargetWindowId.mockReturnValue(2);
+
+    await router.send({ message: 'hi', severity: 'info' });
+
+    expect(second.send).toHaveBeenCalled();
+  });
+
+  test('stops dismissing in a window whose shard has announced that it is gone', async () => {
+    // The disposal announcement is the only thing that says a window's shard died with it
+    const closing = windowShard(['notification-1']);
+    const survivor = windowShard(['notification-1']);
+    withWindows({ 1: survivor, 2: closing });
+    const router = await getRouter();
+
+    withoutWindowShard(mocks, 2);
+    await router.dismiss('notification-1');
+
+    expect(closing.dismiss).not.toHaveBeenCalled();
+    expect(survivor.dismissed).toEqual(['notification-1']);
+  });
+
   test('sends a new notification to the focused window, where the user is looking', async () => {
     const focused = windowShard([]);
     const other = windowShard([]);
-    withWindows(mocks, { 1: focused, 2: other });
+    withWindows({ 1: focused, 2: other });
     const router = await getRouter();
 
     await router.send({ message: 'hi', severity: 'info' });
@@ -67,7 +129,7 @@ describe('notification service router', () => {
   test('dismisses in the window showing the notification, not the focused one', async () => {
     const focused = windowShard([]);
     const owner = windowShard(['notification-1']);
-    withWindows(mocks, { 1: focused, 2: owner });
+    withWindows({ 1: focused, 2: owner });
     const router = await getRouter();
 
     await router.dismiss('notification-1');
@@ -80,7 +142,7 @@ describe('notification service router', () => {
     const broken = windowShard([]);
     broken.dismiss.mockRejectedValue(new Error('window went away'));
     const owner = windowShard(['notification-1']);
-    withWindows(mocks, { 1: broken, 2: owner });
+    withWindows({ 1: broken, 2: owner });
     const router = await getRouter();
 
     await router.dismiss('notification-1');
@@ -93,7 +155,7 @@ describe('notification service router', () => {
     // background task's fire-and-forget dismissal for the network service's registration retry
     const showing = windowShard(['notification-1']);
     const starting = windowShard([]);
-    withWindows(mocks, { 1: showing, 2: starting }, { unreadyWindowIds: [2] });
+    withWindows({ 1: showing, 2: starting }, { unreadyWindowIds: [2] });
     const router = await getRouter();
 
     await router.dismiss('notification-1');
@@ -106,7 +168,7 @@ describe('notification service router', () => {
     // `dismiss` is documented to resolve quietly when the notification is not found, and callers
     // treat it as fire-and-forget cleanup. During shutdown, or on macOS after the last window
     // closes, throwing here turns that cleanup into an unhandled rejection.
-    withWindows(mocks, {});
+    withWindows({});
     const router = await getRouter();
 
     await expect(router.dismiss('notification-1')).resolves.toBeUndefined();
@@ -114,7 +176,7 @@ describe('notification service router', () => {
 
   test('refuses to send rather than guessing when no window is available', async () => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
-    withWindows(mocks, {});
+    withWindows({});
     const router = await getRouter();
 
     await expect(router.send({ message: 'hi', severity: 'info' })).rejects.toThrow(
