@@ -59,6 +59,44 @@ export type CharacterMarkerControlProps = {
   /** The markers to offer, already filtered and carrying their selection states. */
   markerMenuItems: MarkerMenuItem[];
   /**
+   * Render the trigger as icon-only, with no visible label. The accessible name still carries the
+   * current value, so this changes what is seen and not what is announced.
+   *
+   * A placement concern, deliberately passed in rather than decided here: a placement with room for
+   * a label wants one, and a placement squeezed into a reserved gutter cannot fit one. Defaults to
+   * `false` so every existing consumer renders exactly as it did.
+   */
+  isLabelHidden?: boolean;
+  /**
+   * Which edge of the trigger the menu's corresponding edge aligns to. `'start'` opens the menu
+   * inline-end of the trigger; `'end'` opens it inline-start.
+   *
+   * A placement concern: a trigger with room inline-end of it wants `'start'`, and a trigger pinned
+   * to the text column's trailing edge has no room there and wants `'end'`.
+   *
+   * `'start'`/`'end'` are LOGICAL only to the extent that
+   * {@link CharacterMarkerControlProps.menuDirection} says so — see that prop. Without it they
+   * resolve physically, because the popover content is portaled outside every element this app
+   * gives a `dir`.
+   */
+  menuAlign?: 'start' | 'center' | 'end';
+  /**
+   * The text direction {@link CharacterMarkerControlProps.menuAlign} is resolved against.
+   *
+   * Must be passed explicitly for an RTL placement to mirror. floating-ui (under Radix) mirrors
+   * `start`/`end` from the computed `direction` of the PORTALED content, and Radix's popover
+   * portals to `document.body` — which in this app inherits no direction at all: nothing sets
+   * `document.dir`, `readDirection()` in `dir-helper.util.ts` is localStorage-backed with no
+   * writer, and the only `dir` in the editor web view is on an inner container the portal is not
+   * inside. So with this omitted, `'end'` means "the physical right edge" even in an RTL project,
+   * and a 200px menu pinned to the text column's trailing (left) edge runs off the iframe and gets
+   * shifted back over the trigger by Radix's collision handling.
+   *
+   * Defaults to `undefined`, which leaves the popover's own `readDirection()` result in place — the
+   * behavior every pre-existing consumer already had.
+   */
+  menuDirection?: 'ltr' | 'rtl';
+  /**
    * Called when the menu opens. The expensive coverage analysis belongs here — never on selection
    * change.
    */
@@ -90,6 +128,9 @@ export function CharacterMarkerControl({
   isMixed,
   isSyncBlocked,
   markerMenuItems,
+  isLabelHidden = false,
+  menuAlign = 'start',
+  menuDirection,
   onOpen,
   onClose,
   localizedStrings,
@@ -121,6 +162,14 @@ export function CharacterMarkerControl({
     label = currentMarkerLabel ? `${currentMarker} - ${currentMarkerLabel}` : currentMarker;
   else label = localize(localizedStrings, NONE_KEY);
 
+  // Two different jobs for one tooltip. While DISABLED it explains why (a disabled button cannot
+  // host its own tooltip, hence the focusable wrapper below). While ENABLED and icon-only it is the
+  // sighted user's only readout of the current marker, which the visible label used to provide.
+  // Suppressed while the popover is open: a tooltip and a popover anchored to the same trigger
+  // otherwise render on top of each other.
+  const tooltipText = isDisabled ? disabledTooltip : label;
+  const isTooltipShown = !isOpen && (isDisabled || isLabelHidden);
+
   const handleOpenChange = (nextOpen: boolean) => {
     setIsOpen(nextOpen);
     if (nextOpen) onOpen();
@@ -146,9 +195,11 @@ export function CharacterMarkerControl({
               <PopoverTrigger asChild>
                 <Button
                   className={className}
-                  // The accessible name includes the current value — a static "Character marker"
-                  // would override the visible label and never let a screen-reader user hear it
-                  // (WCAG 2.5.3, label-in-name); this is the control's only readout of the value.
+                  // The accessible name includes the current value. With a visible label, a static
+                  // "Character marker" would override it and never let a screen-reader user hear
+                  // the value (WCAG 2.5.3, label-in-name). With `isLabelHidden` there is no visible
+                  // label for 2.5.3 to apply to, and this name becomes the ONLY readout of the
+                  // value — so it is load-bearing in both states, for different reasons.
                   aria-label={`${localize(localizedStrings, ARIA_LABEL_KEY)}: ${label}`}
                   disabled={isDisabled}
                   variant="outline"
@@ -157,11 +208,29 @@ export function CharacterMarkerControl({
                       "character marker" role and the current value, so the icon must not be
                       announced a second time. */}
                   <Type aria-hidden />
-                  {label}
+                  {!isLabelHidden && label}
                   <ChevronDown />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="tw:p-0 tw:w-96">
+              <PopoverContent
+                align={menuAlign}
+                // Overrides `PopoverContent`'s own `readDirection()` default (its `{...props}` spread
+                // comes after its `dir`), which is what makes `align` logical rather than physical.
+                // See `menuDirection`'s TSDoc for why the portaled content cannot inherit this.
+                //
+                // Spread conditionally rather than `dir={menuDirection}`: that same spread order means
+                // an explicit `dir: undefined` would WIN and blank out the default, changing behavior
+                // for every consumer that passes no direction.
+                {...(menuDirection ? { dir: menuDirection } : {})}
+                // The prototype's `mt-1.5`. Placement-independent, so a constant rather than a prop.
+                sideOffset={6}
+                // 200px and a 220px list are the prototype's `min-w-[200px]` / `max-h-[220px]`.
+                // The list cap is a descendant override on THIS popover, not a prop on MarkerMenu:
+                // MarkerMenu is shared with the `\` keydown menu and the footnote editor, both of
+                // which render in Power mode, so it must stay untouched. `CommandList` already
+                // emits `data-slot="command-list"`, so the selector is stable.
+                className="tw:w-[200px] tw:p-0 tw:**:data-[slot=command-list]:max-h-[220px]"
+              >
                 <MarkerMenu
                   localizedStrings={localizedStrings}
                   markerMenuItems={markerMenuItems}
@@ -172,9 +241,18 @@ export function CharacterMarkerControl({
             </Popover>
           </div>
         </TooltipTrigger>
-        {isDisabled && (
+        {isTooltipShown && (
           <TooltipContent>
-            <p className="tw:max-w-xs tw:whitespace-pre-line">{disabledTooltip}</p>
+            {/* `aria-hidden`: the tooltip is the VISUAL channel only. Its text is already the
+                accessible name of the thing it describes in both states — the button's `aria-label`
+                while enabled, the wrapper's `aria-label` while disabled — and Radix renders the
+                tooltip's children a second time inside a visually-hidden `role="tooltip"` node that
+                it wires up as the trigger's `aria-describedby`, so without this a screen reader
+                announces the same value twice. Hiding the tooltip text from the accessibility tree
+                (rather than trimming the name) keeps the accessible name as the single readout. */}
+            <p aria-hidden="true" className="tw:max-w-xs tw:whitespace-pre-line">
+              {tooltipText}
+            </p>
           </TooltipContent>
         )}
       </Tooltip>

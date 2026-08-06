@@ -39,12 +39,16 @@ function StatefulHarness({
   isSyncBlocked = false,
   hasMarkers = true,
   initialSelectionStates,
+  isLabelHidden = false,
+  menuAlign,
 }: {
   initialMarker?: string;
   isMixed?: boolean;
   isSyncBlocked?: boolean;
   hasMarkers?: boolean;
   initialSelectionStates?: Record<string, SelectionState>;
+  isLabelHidden?: boolean;
+  menuAlign?: 'start' | 'center' | 'end';
 }) {
   const [appliedMarker, setAppliedMarker] = useState(initialMarker);
   const [openCount, setOpenCount] = useState(0);
@@ -100,6 +104,8 @@ function StatefulHarness({
           onOpen={() => setOpenCount((count) => count + 1)}
           onClose={() => {}}
           localizedStrings={STRINGS}
+          isLabelHidden={isLabelHidden}
+          menuAlign={menuAlign}
         />
       </CharacterMarkerToolbar>
       <p className="tw:text-xs tw:text-muted-foreground">Menu opened {openCount} time(s)</p>
@@ -138,3 +144,15 @@ export const MixedSelection: Story = {
 export const SyncBlocked: Story = { args: { isSyncBlocked: true } };
 
 export const NoMarkersAvailable: Story = { args: { hasMarkers: false } };
+
+// The placement combination the reserved 64px gutter forces: icon-only trigger, menu opening
+// inline-start at the prototype's 200px. Menu SIZE is reviewed here rather than asserted in a test —
+// a class-string assertion would pass whether or not the popover actually rendered at 200px.
+export const IconOnlyMenuAlignedEnd: Story = {
+  args: {
+    initialMarker: 'bd',
+    initialSelectionStates: { bd: 'all', nd: 'partial', it: 'none' },
+    isLabelHidden: true,
+    menuAlign: 'end',
+  },
+};
