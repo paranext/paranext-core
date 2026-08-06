@@ -111,6 +111,23 @@ describe('CharacterMarkerControl — trigger label', () => {
     renderControl({ currentMarker: 'bd', currentMarkerLabel: 'Bold' });
     expect(screen.getByRole('button', { name: 'Character marker: bd - Bold' })).toBeInTheDocument();
   });
+
+  it('renders no visible label but keeps the value in the accessible name when isLabelHidden', () => {
+    renderControl({ currentMarker: 'bd', isLabelHidden: true });
+
+    // The accessible name is the ONLY readout of the value once the label is gone, so it must still
+    // carry it — this assertion is load-bearing, not incidental.
+    const trigger = screen.getByRole('button', { name: 'Character marker: bd' });
+    expect(trigger).toBeInTheDocument();
+    // `bd` must not appear as rendered text anywhere in the trigger.
+    expect(trigger).not.toHaveTextContent('bd');
+  });
+
+  it('renders the visible label by default', () => {
+    renderControl({ currentMarker: 'bd' });
+
+    expect(screen.getByRole('button', { name: 'Character marker: bd' })).toHaveTextContent('bd');
+  });
 });
 
 describe('CharacterMarkerControl — disabled states', () => {
@@ -127,6 +144,76 @@ describe('CharacterMarkerControl — disabled states', () => {
 
     expect(screen.getByRole('button')).toBeDisabled();
     expect(screen.getByLabelText('No character markers are available here.')).toBeInTheDocument();
+  });
+});
+
+describe('CharacterMarkerControl — tooltip', () => {
+  it('shows the current marker in a tooltip when the label is hidden', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+        isLabelHidden
+      />,
+    );
+
+    await user.hover(screen.getByRole('button', { name: 'Character marker: bd' }));
+
+    // Radix renders the tooltip content into a portal with role="tooltip".
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('bd');
+  });
+
+  it('does not announce the value a second time through the tooltip', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        currentMarkerLabel="Bold"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+        isLabelHidden
+      />,
+    );
+
+    await user.hover(screen.getByRole('button', { name: 'Character marker: bd - Bold' }));
+    // The tooltip is showing, so Radix has wired its visually-hidden copy up as the trigger
+    // wrapper's `aria-describedby` — which is exactly the second announcement being suppressed.
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('bd - Bold');
+
+    // The accessible name is the single readout; the tooltip is the visual channel only. Without
+    // `aria-hidden` on the tooltip's text this description reads 'bd - Bold', duplicating the name.
+    const tooltipTrigger = document.querySelector('[data-slot="tooltip-trigger"]');
+    if (!tooltipTrigger) throw new Error('expected a tooltip trigger');
+    expect(tooltipTrigger).toHaveAccessibleDescription('');
+  });
+
+  it('shows no tooltip when the label is visible and the control is enabled', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+      />,
+    );
+
+    await user.hover(screen.getByRole('button', { name: 'Character marker: bd' }));
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 });
 
@@ -178,6 +265,92 @@ describe('CharacterMarkerControl — menu', () => {
 
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the menu inline-start of the trigger when menuAlign is end', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+        menuAlign="end"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Character marker: bd' }));
+
+    const content = await screen.findByRole('dialog');
+    expect(content).toHaveAttribute('data-align', 'end');
+  });
+
+  it('defaults the menu to align start', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Character marker: bd' }));
+
+    expect(await screen.findByRole('dialog')).toHaveAttribute('data-align', 'start');
+  });
+
+  it('resolves the menu alignment against menuDirection when one is given', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+        menuAlign="end"
+        menuDirection="rtl"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Character marker: bd' }));
+
+    // floating-ui mirrors start/end from the PORTALED content's own direction, and the portal target
+    // (`document.body`) inherits none in this app — so this attribute is the only thing that makes
+    // `align="end"` logical rather than physical.
+    expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('leaves the popover its own direction default when no menuDirection is given', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+        menuAlign="end"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Character marker: bd' }));
+
+    // `dir` is spread conditionally, not passed as `dir={undefined}`: PopoverContent's own
+    // `readDirection()` value would otherwise be blanked out for every consumer that passes nothing.
+    expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'ltr');
   });
 });
 
