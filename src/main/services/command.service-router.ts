@@ -19,13 +19,11 @@ import {
   RENDERER_HOSTED_DIALOG_REQUEST_NAMES,
 } from '@shared/services/dialog.service-model';
 import {
-  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   RENDERER_HOSTED_COMMAND_DOCS,
   RENDERER_HOSTED_COMMAND_NAMES,
-  WebViewServiceType,
 } from '@shared/services/web-view.service-model';
+import { getWebViewShard } from '@main/services/web-view.service-router';
 import * as networkService from '@shared/services/network.service';
-import { networkObjectService } from '@shared/services/network-object.service';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { WebViewId } from '@shared/models/web-view.model';
@@ -100,20 +98,18 @@ async function findWebViewOwnerWindowId(
   const ownerWindowIds = await Promise.all(
     getReadyWindowIds().map(async (id) => {
       try {
-        const service = await networkObjectService.get<WebViewServiceType>(
-          `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${id}`,
-        );
+        const shard = await getWebViewShard(id);
         // Readiness is keyed on the window service; a renderer registers its WebView service
         // moments apart from that one, so a ready window can still be missing it. That window could
         // not be asked, which is not the same as it answering that it does not own the web view.
-        if (!service) {
+        if (!shard) {
           logger.warn(
             `WebView service for window ${id} is not registered, so it could not be asked about web view ${webViewId} while routing ${requestName}`,
           );
           hadServiceErrors = true;
           return undefined;
         }
-        return (await service.getOpenWebViewDefinition(webViewId)) ? id : undefined;
+        return (await shard.getOpenWebViewDefinition(webViewId)) ? id : undefined;
       } catch (e) {
         logger.warn(
           `Failed to query web view ${webViewId} in window ${id} while routing ${requestName}: ${getErrorMessage(e)}`,

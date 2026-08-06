@@ -1,4 +1,4 @@
-import { dataProviderService } from '@shared/services/data-provider.service';
+import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
 import { sendCommand } from '@shared/services/command.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
@@ -29,21 +29,19 @@ async function getFocusedWindowService(): Promise<IWindowService> {
   if (focusedWindowId === undefined) {
     throw new Error('Window service is not available: no focused window found. Is a window open?');
   }
-  const provider = await dataProviderService.get(
-    // dataProviderService.get expects the literal provider name type, but the scoped name is built
-    // dynamically at runtime
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    `${windowServiceProviderName}-${focusedWindowId}` as typeof windowServiceProviderName,
+  // Resolved by type rather than by name: the window-scoped name is built at runtime, where
+  // `dataProviderService.get` wants the literal provider name and would have to be lied to about it
+  const provider = await getDataProviderByType<IWindowService>(
+    `${windowServiceProviderName}-${focusedWindowId}`,
   );
   if (!provider) throw new Error('Window service undefined');
   return provider;
 }
 
 async function initializeWindowService(): Promise<void> {
-  const provider = await dataProviderService.get(
-    // Same runtime-built name assertion as in `getFocusedWindowService`
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    `${windowServiceProviderName}-${globalThis.windowId}` as typeof windowServiceProviderName,
+  // Resolved by type for the same reason as in `getFocusedWindowService`
+  const provider = await getDataProviderByType<IWindowService>(
+    `${windowServiceProviderName}-${globalThis.windowId}`,
   );
   if (!provider) throw new Error('Window service undefined');
   dataProvider = provider;
