@@ -2,7 +2,7 @@ import {
   createEmptyReferenceHistory,
   navigateHistory,
   recordNavigation,
-} from '@renderer/services/reference-history.util';
+} from '@shared/services/reference-history.util';
 import { isNameTakenError } from '@renderer/services/name-taken-error.util';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
