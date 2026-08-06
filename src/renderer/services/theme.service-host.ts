@@ -22,6 +22,7 @@ import {
   ThemeDefinitionExpanded,
   ThemeFamiliesById,
   AsyncVariable,
+  UnsubscriberAsync,
   UnsubscriberAsyncList,
   PlatformEventAsync,
   PlatformError,
@@ -798,6 +799,39 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
       `Window ${globalThis.windowId} did not win hosting of the theme engine and could not resolve the window that did, so it has no theme service to attach to`,
     );
   dataProvider = hostedProvider;
+
+  // Everything else on the theme service is answered by the host over the network, but
+  // `getCurrentThemeSync` reads this window's own engine — which serves nobody while this window is
+  // attached and hears nothing the host's engine does. Mirroring the host's current theme onto it
+  // is what keeps the synchronous answer honest; without it this window answers with whatever it
+  // loaded at startup for as long as it stays attached.
+  let unsubscribeFromHostCurrentTheme: UnsubscriberAsync | undefined;
+  try {
+    unsubscribeFromHostCurrentTheme = await hostedProvider.subscribeCurrentTheme(
+      undefined,
+      (currentThemeFromHost) => {
+        if (isPlatformError(currentThemeFromHost)) {
+          logger.warn(
+            `Window ${globalThis.windowId} could not read the hosting window's current theme for its synchronous theme reads: ${getErrorMessage(currentThemeFromHost)}`,
+          );
+          return;
+        }
+        // Assigned straight onto the engine rather than set through it, because the engine's
+        // setters persist what they are given. The persisted theme keys are app-global and the
+        // hosting window owns writing them, so a window echoing back what it was just told would
+        // race the host on every change — the same write `reloadState` suppresses while it rebuilds
+        // this engine from those keys.
+        themeServiceEngine.currentTheme = currentThemeFromHost;
+      },
+    );
+  } catch (e) {
+    // An attached window that cannot mirror the host still has a working theme service, since
+    // everything but the synchronous read goes to the host, so this must not fail the attach.
+    logger.warn(
+      `Window ${globalThis.windowId} could not subscribe to the hosting window's current theme for its synchronous theme reads: ${getErrorMessage(e)}`,
+    );
+  }
+
   // When the hosting window closes its provider goes with it, so drop it, re-arm, and take over.
   // Every remaining window does this; the one that wins the re-registration becomes the new host and
   // the others attach to it on their own retry. This runs whenever the provider is forgotten, no
@@ -805,6 +839,16 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
   // window's own sweep — is what makes the handover reliable.
   hostedProvider.onDidDispose(() => {
     dataProvider = undefined;
+    // The mirror above is over either way: if this window wins the re-registration its own engine
+    // becomes the source of truth, and if it attaches again it gets a fresh mirror on the new host.
+    // Leaving it subscribed would keep a dead provider's failures coming on every theme change.
+    const stopMirroringClosedHost = unsubscribeFromHostCurrentTheme;
+    unsubscribeFromHostCurrentTheme = undefined;
+    stopMirroringClosedHost?.().catch((e) => {
+      logger.warn(
+        `Window ${globalThis.windowId} failed to stop reading the closed hosting window's current theme: ${getErrorMessage(e)}`,
+      );
+    });
     retryHostOrAttachToThemeEngine();
   });
 }

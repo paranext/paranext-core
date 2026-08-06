@@ -67,18 +67,44 @@ async function settlePendingWork() {
   });
 }
 
+/** Theme shape the engine and the tests pass around, trimmed to what these tests read */
+type TestTheme = {
+  themeFamilyId: string;
+  type: string;
+  label: string;
+  cssVariables: Record<string, string>;
+};
+
 /** Minimal stand-in for a registered/consumed theme data provider */
 function makeProvider() {
   const disposeCallbacks: (() => void)[] = [];
+  const currentThemeCallbacks: ((currentTheme: TestTheme) => void)[] = [];
+  const unsubscribeCurrentTheme = vi.fn(async () => true);
   return {
     provider: {
       onDidDispose: (callback: () => void) => {
         disposeCallbacks.push(callback);
         return () => true;
       },
+      subscribeCurrentTheme: vi.fn(
+        async (_selector: undefined, callback: (currentTheme: TestTheme) => void) => {
+          currentThemeCallbacks.push(callback);
+          return async () => {
+            const callbackIndex = currentThemeCallbacks.indexOf(callback);
+            if (callbackIndex >= 0) currentThemeCallbacks.splice(callbackIndex, 1);
+            return unsubscribeCurrentTheme();
+          };
+        },
+      ),
     },
     /** Simulate the hosting window closing, which disposes the provider the other windows consumed */
-    dispose: () => disposeCallbacks.forEach((callback) => callback()),
+    dispose: () => [...disposeCallbacks].forEach((callback) => callback()),
+    /** Simulate this provider's engine publishing a new current theme */
+    emitCurrentTheme: (currentTheme: TestTheme) =>
+      [...currentThemeCallbacks].forEach((callback) => callback(currentTheme)),
+    /** How many live current-theme subscriptions this provider is serving */
+    currentThemeSubscriberCount: () => currentThemeCallbacks.length,
+    unsubscribeCurrentTheme,
   };
 }
 
@@ -118,6 +144,98 @@ describe('theme service host across multiple windows', () => {
     await initialize();
 
     expect(mocks.get).toHaveBeenCalledTimes(1);
+  });
+
+  // `getCurrentThemeSync` answers out of this window's own engine object, which serves nobody while
+  // this window is attached and hears nothing the hosting window's engine does. Without mirroring
+  // the host's theme onto it, every synchronous read in an attached window answers with whatever
+  // this window loaded at startup, for as long as the window stays attached.
+  test('an attached window answers synchronous theme reads with the hosting window current theme', async () => {
+    mocks.registerEngine.mockRejectedValue(new Error('already registered'));
+    const hosted = makeProvider();
+    mocks.get.mockResolvedValue(hosted.provider);
+
+    const { initialize, localThemeService } = await import('@renderer/services/theme.service-host');
+    await initialize();
+
+    const themeFromHost: TestTheme = {
+      themeFamilyId: 'extensionFamily',
+      type: 'dark',
+      label: 'Extension Dark',
+      cssVariables: { background: 'black' },
+    };
+    hosted.emitCurrentTheme(themeFromHost);
+
+    expect(localThemeService.getCurrentThemeSync()).toEqual(themeFromHost);
+  });
+
+  // The persisted theme keys are app-global and the hosting window owns writing them. A window that
+  // is only mirroring what it was told must not write back, or it would overwrite the state it was
+  // told about with a copy of itself and race the host on every change.
+  test('mirroring the hosting window current theme persists nothing', async () => {
+    const persistedTheme: TestTheme = {
+      themeFamilyId: 'extensionFamily',
+      type: 'light',
+      label: 'Extension Light',
+      cssVariables: {},
+    };
+    localStorage.setItem('theme.service-host.currentTheme', JSON.stringify(persistedTheme));
+
+    mocks.registerEngine.mockRejectedValue(new Error('already registered'));
+    const hosted = makeProvider();
+    mocks.get.mockResolvedValue(hosted.provider);
+
+    const { initialize, localThemeService } = await import('@renderer/services/theme.service-host');
+    await initialize();
+
+    const themeFromHost: TestTheme = {
+      themeFamilyId: 'extensionFamily',
+      type: 'dark',
+      label: 'Extension Dark',
+      cssVariables: {},
+    };
+    hosted.emitCurrentTheme(themeFromHost);
+
+    expect(localThemeService.getCurrentThemeSync()).toEqual(themeFromHost);
+    expect(localStorage.getItem('theme.service-host.currentTheme')).toBe(
+      JSON.stringify(persistedTheme),
+    );
+  });
+
+  // Once this window hosts the engine itself, its own engine is the source of truth. A mirror still
+  // subscribed to the window that closed would be reporting a dead provider's failures on every
+  // theme change, and anything it did deliver would be pre-close state.
+  test('the mirror of the hosting window current theme is dropped when this window takes over', async () => {
+    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
+    const hosted = makeProvider();
+    mocks.get.mockResolvedValue(hosted.provider);
+
+    const { initialize, localThemeService } = await import('@renderer/services/theme.service-host');
+    await initialize();
+
+    const { provider: ownProvider } = makeProvider();
+    mocks.registerEngine.mockResolvedValue(ownProvider);
+    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
+      hosted.dispose();
+      return ['platform.themeServiceDataProvider-data'];
+    });
+    closeWindow(1);
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
+    await settlePendingWork();
+
+    expect(hosted.unsubscribeCurrentTheme).toHaveBeenCalled();
+
+    // Anything still in flight from the window that closed must not land on the engine this window
+    // is now serving to everyone else
+    const themeFromClosedWindow: TestTheme = {
+      themeFamilyId: 'extensionFamily',
+      type: 'dark',
+      label: 'Extension Dark',
+      cssVariables: {},
+    };
+    hosted.emitCurrentTheme(themeFromClosedWindow);
+
+    expect(localThemeService.getCurrentThemeSync()).not.toEqual(themeFromClosedWindow);
   });
 
   test('a later window takes the engine over when the hosting window closes', async () => {
