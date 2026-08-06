@@ -270,4 +270,88 @@ describe('networkObjectService.forgetUnreachableRemoteObjects', () => {
       expect(networkObjectService.hasKnown('object-forgotten-on-window-close')).toBe(false),
     );
   });
+
+  /** Stand in for the main process announcing that a window closed */
+  function announceWindowClose(windowId: number) {
+    networkEventHandlers[EVENT_NAME_ON_DID_CLOSE_WINDOW]?.forEach((handler) => handler(windowId));
+  }
+
+  // The announcement is emitted from the closing window's `closed` handler, which can run before the
+  // socket teardown that removes the dead renderer's methods from the central registry. A sweep
+  // inside that gap still gets its probes answered, and the announcement is the only signal there
+  // is, so without a retry nothing would ever probe again.
+  it('sweeps once more when the close-triggered sweep found everything still reachable', async () => {
+    vi.useFakeTimers();
+    try {
+      // `fetchRemoteObject` leaves the probe answering, standing in for the closing window still
+      // being reachable when its close is announced
+      await fetchRemoteObject('object-still-answering-when-the-close-was-announced');
+
+      announceWindowClose(7);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(
+        networkObjectService.hasKnown('object-still-answering-when-the-close-was-announced'),
+      ).toBe(true);
+
+      // The closing window's connection finally goes down
+      makeUnreachable();
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(
+        networkObjectService.hasKnown('object-still-answering-when-the-close-was-announced'),
+      ).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not sweep again when the close-triggered sweep already dropped something', async () => {
+    vi.useFakeTimers();
+    try {
+      await fetchRemoteObject('object-in-the-window-that-closed');
+      // A second process's object, still answering, so a retry sweep would have something to probe
+      await fetchRemoteObject('object-in-a-window-that-stayed');
+      vi.mocked(networkService.request).mockImplementation(async (requestType: string) =>
+        requestType.includes('object-in-a-window-that-stayed')
+          ? true
+          : Promise.reject(new Error('No handler registered')),
+      );
+
+      announceWindowClose(7);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(networkObjectService.hasKnown('object-in-the-window-that-closed')).toBe(false);
+
+      // The close cleaned up normally, so it costs no further probing
+      const probeCountAfterSweep = vi.mocked(networkService.request).mock.calls.length;
+      await vi.advanceTimersByTimeAsync(5000);
+
+      expect(vi.mocked(networkService.request).mock.calls.length).toBe(probeCountAfterSweep);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('replaces a pending retry when another window closes before it runs', async () => {
+    vi.useFakeTimers();
+    try {
+      await fetchRemoteObject('object-outliving-the-first-retry');
+
+      // Both announcements land while the object still answers, so each schedules a retry
+      announceWindowClose(7);
+      await vi.advanceTimersByTimeAsync(1000);
+      announceWindowClose(8);
+      await vi.advanceTimersByTimeAsync(500);
+      makeUnreachable();
+
+      // Past when the first announcement's retry would have run: the second announcement took it
+      // over rather than leaving two retries pending
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(networkObjectService.hasKnown('object-outliving-the-first-retry')).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(networkObjectService.hasKnown('object-outliving-the-first-retry')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

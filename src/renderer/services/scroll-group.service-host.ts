@@ -782,6 +782,15 @@ export async function startScrollGroupService(): Promise<void> {
 let isPublishingScrollGroupService = false;
 
 /**
+ * The scroll group network object another window published and this window stepped aside for, while
+ * it is still there. `undefined` while this window publishes the object itself, and again once the
+ * object it stepped aside for goes away — which is what tells
+ * {@link takeOverScrollGroupServiceAfterWindowClose} that the closed window took the object this
+ * window was using with it.
+ */
+let attachedScrollGroupService: IScrollGroupRemoteService | undefined;
+
+/**
  * Takeover run that has not settled yet, if any. A takeover can be triggered again while one is
  * already in flight — the sweep in {@link takeOverScrollGroupServiceAfterWindowClose} fires the
  * dispose events of the cached objects it forgets, and close announcements can arrive in quick
@@ -805,9 +814,9 @@ let isTakeoverQueuedAfterPendingRun = false;
  * closes.
  *
  * A closing renderer drops its RPC connection without disposing the objects it published, so there
- * is no dispose event to react to — the main process's close announcement is the only signal. Every
- * surviving window reacts; the one that wins the re-registration publishes and the rest go back to
- * stepping aside, which is the same race that decided the original host.
+ * is no dispose event to react to — the main process's close announcement is what starts this off.
+ * Every surviving window reacts; the one that wins the re-registration publishes and the rest go
+ * back to stepping aside, which is the same race that decided the original host.
  *
  * Skipped in the window that is already publishing: some other window closed, and re-entering the
  * race there would drop the object it is serving to everyone else.
@@ -816,6 +825,14 @@ let isTakeoverQueuedAfterPendingRun = false;
  * the name look taken, so the stale registration has to be cleared before re-registering can
  * succeed. That is also what lets `scrollGroupService` consumers in this process stop calling into
  * the closed window.
+ *
+ * Also skipped when the closed window turns out to have been publishing nothing this window was
+ * using: the object is still there, so racing for a name that is still taken could only fail. That
+ * covers the case where the announcement arrives before the closing window's connection is actually
+ * torn down — the sweep still finds the object reachable, and the announcement is a one-shot
+ * signal. What covers the close then is the dispose hook {@link hostOrAttachToScrollGroupService}
+ * left on the object this window stepped aside for, which fires whenever the registration is
+ * dropped, no matter which of the cleanups a window close kicks off gets there first.
  */
 async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
   if (isPublishingScrollGroupService) return;
@@ -833,6 +850,9 @@ async function takeOverScrollGroupServiceAfterWindowClose(): Promise<void> {
   }
   pendingTakeoverPromise = (async () => {
     await forgetUnreachableRemoteObjects();
+    // Re-checked after the sweep because it takes as long as probing every unreachable object takes,
+    // and this window can win publishing inside that gap — off the dispose the sweep itself fires.
+    if (isPublishingScrollGroupService || attachedScrollGroupService) return;
     await hostOrAttachToScrollGroupService();
   })().finally(() => {
     pendingTakeoverPromise = undefined;
@@ -929,12 +949,42 @@ async function hostOrAttachToScrollGroupService(): Promise<void> {
       },
     );
     isPublishingScrollGroupService = true;
+    attachedScrollGroupService = undefined;
     publishedObject.onDidDispose(() => {
       isPublishingScrollGroupService = false;
     });
+    return;
   } catch (e) {
     logger.debug(
       `Another window is already publishing the scroll group service. ${getErrorMessage(e)}`,
     );
   }
+
+  // Step aside, but hold on to what this window stepped aside for. The window publishing it will not
+  // dispose it on the way out — a closing renderer drops its RPC connection without disposing
+  // anything — so the disposal this waits for is the one `forgetUnreachableRemoteObjects` raises
+  // once the network can no longer reach the object. That fires no matter which of the cleanups a
+  // window close kicks off gets there first, which is what makes the handover reliable: the close
+  // announcement on its own can arrive while the closing window still answers, and a takeover driven
+  // by nothing else would find the object reachable and never look again.
+  const publishedElsewhere = await networkObjectService.get<IScrollGroupRemoteService>(
+    NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  );
+  if (!publishedElsewhere) {
+    // The name was taken when this window tried for it and is gone by now, so the window that had it
+    // died in between. Nothing to watch; the next close announcement re-enters the race.
+    logger.warn(
+      `Window ${globalThis.windowId} did not win publishing the scroll group service and could not resolve the window that did`,
+    );
+    return;
+  }
+  attachedScrollGroupService = publishedElsewhere;
+  publishedElsewhere.onDidDispose(() => {
+    attachedScrollGroupService = undefined;
+    takeOverScrollGroupServiceAfterWindowClose().catch((e) => {
+      logger.error(
+        `Failed to publish the scroll group service after the window publishing it went away: ${getErrorMessage(e)}`,
+      );
+    });
+  });
 }

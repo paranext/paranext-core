@@ -8,18 +8,24 @@ import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names
 // The host module reads localStorage and creates a network emitter at import time; stub those.
 // Emitters are captured by event name so tests can assert on a specific event (e.g.
 // onDidChangeVersification) without conflating it with the pre-existing onDidUpdateScrRef emitter.
-const { emitters, networkEventHandlers, networkObjectSet, forgetUnreachableRemoteObjects } =
-  vi.hoisted(() => {
-    const hoistedEmitters: Record<string, { emit: ReturnType<typeof vi.fn> }> = {};
-    /** Handlers the host registered, keyed by the network event name they subscribed to */
-    const hoistedNetworkEventHandlers: Record<string, ((payload: unknown) => void)[]> = {};
-    return {
-      emitters: hoistedEmitters,
-      networkEventHandlers: hoistedNetworkEventHandlers,
-      networkObjectSet: vi.fn(),
-      forgetUnreachableRemoteObjects: vi.fn(async () => []),
-    };
-  });
+const {
+  emitters,
+  networkEventHandlers,
+  networkObjectSet,
+  networkObjectGet,
+  forgetUnreachableRemoteObjects,
+} = vi.hoisted(() => {
+  const hoistedEmitters: Record<string, { emit: ReturnType<typeof vi.fn> }> = {};
+  /** Handlers the host registered, keyed by the network event name they subscribed to */
+  const hoistedNetworkEventHandlers: Record<string, ((payload: unknown) => void)[]> = {};
+  return {
+    emitters: hoistedEmitters,
+    networkEventHandlers: hoistedNetworkEventHandlers,
+    networkObjectSet: vi.fn(),
+    networkObjectGet: vi.fn(),
+    forgetUnreachableRemoteObjects: vi.fn(async () => []),
+  };
+});
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: (eventName: string) => {
     const emitter = { emit: vi.fn() };
@@ -32,7 +38,7 @@ vi.mock('@shared/services/network.service', () => ({
   },
 }));
 vi.mock('@shared/services/network-object.service', () => ({
-  networkObjectService: { set: networkObjectSet },
+  networkObjectService: { set: networkObjectSet, get: networkObjectGet },
   forgetUnreachableRemoteObjects,
 }));
 vi.mock('@shared/services/logger.service', () => ({
@@ -495,6 +501,8 @@ describe('scroll group service publishing across windows', () => {
     localStorage.clear();
     vi.resetModules();
     networkObjectSet.mockReset();
+    networkObjectGet.mockReset();
+    networkObjectGet.mockResolvedValue(undefined);
     forgetUnreachableRemoteObjects.mockClear();
     Object.keys(networkEventHandlers).forEach((key) => delete networkEventHandlers[key]);
   });
@@ -502,6 +510,27 @@ describe('scroll group service publishing across windows', () => {
   /** Stand in for the main process announcing that a window closed */
   function closeWindow(windowId: number) {
     networkEventHandlers[EVENT_NAME_ON_DID_CLOSE_WINDOW]?.forEach((handler) => handler(windowId));
+  }
+
+  /**
+   * Stand in for the object the window that won the race published, as this window sees it over the
+   * network. Returns a handle that fires its `onDidDispose` subscribers, standing in for the sweep
+   * that eventually confirms the publishing window is unreachable and forgets it.
+   */
+  function mockPublishedElsewhere() {
+    const disposeCallbacks: (() => void)[] = [];
+    networkObjectGet.mockResolvedValue({
+      onDidDispose: (callback: () => void) => {
+        disposeCallbacks.push(callback);
+        return () => true;
+      },
+    });
+    return {
+      forget: () => disposeCallbacks.forEach((callback) => callback()),
+      get isAttached() {
+        return disposeCallbacks.length > 0;
+      },
+    };
   }
 
   /** Let queued promise callbacks run so a negative assertion is not just early */
@@ -581,6 +610,52 @@ describe('scroll group service publishing across windows', () => {
     // re-enters the race again.
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
     closeWindow(2);
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
+  });
+
+  // The close announcement can reach this window before the closing window's RPC connection is
+  // actually torn down. The sweep that announcement drives then finds the object still reachable and
+  // leaves it cached, and a cached registration makes the name look taken, so re-registering cannot
+  // succeed. The announcement is a one-shot signal, so with nothing else scheduled this window would
+  // never publish for the rest of the session even once the stale registration is finally dropped.
+  it('publishes the object when the one it attached to is forgotten after the takeover ran', async () => {
+    const publishedElsewhere = mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(new Error('already registered'));
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+    // Stepping aside is not enough: this window has to be watching the object it stepped aside for
+    expect(publishedElsewhere.isAttached).toBe(true);
+
+    // The announcement arrives while the closing window still answers, so the sweep forgets nothing
+    closeWindow(1);
+    await settlePendingWork();
+    // Nothing to take over yet — the object this window is using is still registered, and racing for
+    // a name that is still taken would only fail
+    expect(networkObjectSet).toHaveBeenCalledTimes(1);
+
+    // A later sweep confirms the closed window is gone and drops the registration it left behind
+    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
+    publishedElsewhere.forget();
+
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
+  });
+
+  it('re-attaches after losing a re-race so a later close still hands the object over', async () => {
+    const firstPublisher = mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(new Error('already registered'));
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+
+    // The first publisher goes away, but another surviving window wins the re-race
+    const secondPublisher = mockPublishedElsewhere();
+    firstPublisher.forget();
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(secondPublisher.isAttached).toBe(true));
+
+    // The re-arm must not be one-shot: when the window that won closes too, this window races again
+    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
+    secondPublisher.forget();
+
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
   });
 
