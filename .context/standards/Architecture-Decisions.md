@@ -296,7 +296,7 @@ step, no automation. Just a record.
 ## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
 
 - **Date:** 2026-08-05
-- **Status:** Accepted
+- **Status:** Accepted for the theme service; superseded for the scroll group service by ADR-0012
 - **Context:** Some services are conceptually app-global, not per-window (the theme engine, the
   scroll group service) — exactly one instance for the whole app — but every window's renderer runs
   the same startup code, so no window is distinguished as host in advance.
@@ -318,7 +318,8 @@ step, no automation. Just a record.
   group) and has already drifted between the two copies, so the duplication is worth extracting into
   a shared helper. Both copies also depend on the disposal announcement being the only trigger, so a
   run that neither wins the name nor finds the winner has to schedule its own retry — nothing else
-  will re-enter the election for it.
+  will re-enter the election for it. The scroll group copy is gone (ADR-0012); the theme copy is
+  still what runs, and the shared-helper idea was overtaken by moving the hosts instead.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
@@ -466,3 +467,48 @@ step, no automation. Just a record.
   to go away rather than to be converted.
 - **Source:** multi-window architecture plan step 2 (PT-4275 epic; branch
   `pt-4275-router-shard-discovery`).
+
+## ADR-0012: The scroll group service is hosted in main, and each renderer keeps a predicting cache
+
+- **Date:** 2026-08-07
+- **Status:** Accepted (supersedes the scroll-group half of ADR-0009)
+- **Context:** A scroll group is app-global — group 1 is on one reference for the whole app — but it
+  was hosted in whichever renderer won the election of ADR-0009, and any window can be closed. The
+  election worked, at the cost of a takeover path, a re-arm in every consumer of the network object,
+  and a cross-window mirror handler that kept each window's own `*Sync` readers current because the
+  host's state was module state in one renderer. The scroll group service's whole job is holding
+  app-global state, so the state had a home problem, not a routing problem: ADR-0008's routers
+  forward to a window, and there is no per-window answer to forward to.
+- **Decision:** Main owns the scroll group state — each group's Scripture reference and source
+  project (persisted through main's file-backed `localStorage` polyfill, under the keys the renderer
+  used) and its session-only reference history — and registers the `ScrollGroupService` network
+  object before any window is created. Each renderer's `scroll-group.service.ts` becomes what the
+  Service/Service Host pattern already calls it: a local representation. It seeds a copy of the
+  host's state at startup, keeps it current from the host's events, serves the `*Sync` readers from
+  it, and predicts the host's answer for a `*Sync` write — returning the prediction immediately,
+  sending the write on, and resyncing the group from the host if the host declines it or the write
+  never lands. Two operations exist for that cache-keeping alone (a whole-state snapshot, and a
+  one-time handover of state persisted where main cannot read it); they are on the network object but
+  off `IScrollGroupService`, so `papi.scrollGroups` does not offer them.
+- **Alternatives:** (a) Keep the election and extract the duplication into a shared helper (what
+  ADR-0009 anticipated) — rejected: it makes the takeover cheaper to maintain without making it
+  unnecessary, and the same window-death hazard stays. (b) A service router for scroll groups —
+  rejected: a router picks one window to answer, and no window has the right answer for state that
+  belongs to all of them. (c) Route every read through main and drop the sync API — rejected: the UI
+  reads a group's reference during render and inside keystroke handlers, where there is no room to
+  await. (d) Keep versification conversion with the state in main — rejected: the hot-path consumer
+  is in the renderer, so converting in main would add a hop per navigation AND leave the renderer
+  needing its own cache anyway for the synchronous reader; main keeps an uncached pass-through for
+  remote callers, which cannot go stale.
+- **Consequences:** the app-global invariant of `Architecture.md` §2 now holds for the scroll group
+  service outright — no window registers its name, so no window can lose it. Two `*Sync` booleans
+  (`setScrRefSync`, `navigateReferenceHistorySync`) become predictions rather than confirmations;
+  they can differ from the host only while a change from another window is in flight, which is the
+  same instant-race the single host has always resolved by arrival order, and the loser converges on
+  the host's next event. Reference history is deliberately app-global and single-authority: windows
+  sharing a group are on the same reference by definition, so per-window trails could only diverge
+  through a mirroring race or pre-join state. Serialization semantics for concurrent navigation from
+  several windows are PT-4270's. The theme service still uses ADR-0009's election until it moves the
+  same way.
+- **Source:** multi-window architecture plan §6 (PT-4275 epic; branch
+  `pt-4275-scroll-group-to-main`).
