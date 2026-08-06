@@ -120,12 +120,40 @@ const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 
+const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org/';
+
+/**
+ * Routes `sendCommand` by command name so the mount-time registry-URL fetch never consumes the mock
+ * queued for validation/save. Pass per-test overrides for the validation/save outcomes.
+ */
+function mockCommands(
+  overrides: { validate?: boolean; validateError?: Error; saveError?: Error; url?: string } = {},
+) {
+  mockSendCommand.mockImplementation((command: string) => {
+    switch (command) {
+      case 'paratextRegistration.getParatextRegistryUrl':
+        return Promise.resolve(overrides.url ?? PRODUCTION_REGISTRY_URL);
+      case 'paratextRegistration.validateParatextRegistrationData':
+        return overrides.validateError
+          ? Promise.reject(overrides.validateError)
+          : Promise.resolve(overrides.validate ?? false);
+      case 'paratextRegistration.setParatextRegistrationData':
+        return overrides.saveError
+          ? Promise.reject(overrides.saveError)
+          : Promise.resolve(undefined);
+      default:
+        return Promise.resolve(undefined);
+    }
+  });
+}
+
 beforeEach(() => {
   // Clear call history between tests (keeps factory/mockResolvedValue implementations) so
   // per-test call-count assertions on continueWithoutRegistration / settingsService.set don't
   // accumulate across the re-register-mode cases.
   vi.clearAllMocks();
   mockSendCommand.mockReset();
+  mockCommands();
   mockIsDemoMode.mockReturnValue(false);
   vi.useFakeTimers();
 });
@@ -166,7 +194,7 @@ describe('IdentifyStep', () => {
 
   it('submit calls validateParatextRegistrationData with the entered name and code', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -184,7 +212,7 @@ describe('IdentifyStep', () => {
 
   it('shows inline error without advancing when validation fails', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(false);
+    mockCommands({ validate: false });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -199,10 +227,7 @@ describe('IdentifyStep', () => {
 
   it('replaces form with restart messaging after validation success and save', async () => {
     const user = setupUser();
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined) // setParatextRegistrationData
-      .mockReturnValueOnce(new Promise(() => {})); // platform.restart — never settles
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -226,9 +251,7 @@ describe('IdentifyStep', () => {
 
   it('calls onRestartAfterSave instead of platform.restart when provided', async () => {
     const user = setupUser();
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
+    mockCommands({ validate: true });
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
 
     render(
@@ -254,9 +277,7 @@ describe('IdentifyStep', () => {
 
   it('clears the spinner overlay when onRestartAfterSave resolves', async () => {
     const user = setupUser();
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
+    mockCommands({ validate: true });
     const onRestartAfterSave = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -302,7 +323,7 @@ describe('IdentifyStep', () => {
 
   it('shows valid registration alert when backend confirms the name+code', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -350,7 +371,7 @@ describe('IdentifyStep', () => {
 
   it('shows error and keeps Save disabled when validation request throws', async () => {
     const user = setupUser();
-    mockSendCommand.mockRejectedValueOnce(new Error('Network error'));
+    mockCommands({ validateError: new Error('Network error') });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -364,7 +385,7 @@ describe('IdentifyStep', () => {
 
   it('clears validation error immediately when user types again', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(false);
+    mockCommands({ validate: false });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -380,7 +401,7 @@ describe('IdentifyStep', () => {
 
   it('validates with the correct name when code is entered before name', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -398,7 +419,7 @@ describe('IdentifyStep', () => {
 
   it('re-disables Save immediately when a valid code is edited (synchronous state reset)', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -415,7 +436,7 @@ describe('IdentifyStep', () => {
 
   it('shows error and re-enables Save when setParatextRegistrationData fails', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('Server error'));
+    mockCommands({ validate: true, saveError: new Error('Server error') });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
