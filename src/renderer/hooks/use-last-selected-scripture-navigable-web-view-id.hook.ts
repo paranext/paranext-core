@@ -1,7 +1,7 @@
 import {
   getLastSelectedScriptureNavigableWebViewId,
   onDidChangeLastSelectedScriptureNavigableWebViewId,
-} from '@renderer/services/window.service-host';
+} from '@renderer/services/window.service-shard';
 import { WebViewId } from '@shared/models/web-view.model';
 import { useSyncExternalStore } from 'react';
 

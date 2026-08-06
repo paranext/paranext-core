@@ -49,7 +49,7 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
   useIsPowerMode: vi.fn(() => true),
 }));
 
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
 }));

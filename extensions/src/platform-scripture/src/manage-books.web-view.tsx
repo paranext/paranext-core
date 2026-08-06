@@ -986,7 +986,7 @@ global.webViewComponent = function ManageBooksWebView({
   // ===== Cross-launch: Scripture Reference Settings (DEF-UI-006 — ADDRESSED 2026-05-03)
   // The `platform.openSettings` command opens the platform settings tab and reads the
   // calling web-view's `projectId` via `getOpenWebViewDefinition(webViewId)` — see
-  // `src/renderer/services/web-view.service-host.ts:openSettingsTab`. Passing
+  // `src/renderer/services/web-view.service-shard.ts:openSettingsTab`. Passing
   // `globalThis.webViewId` therefore scopes the resulting settings tab to the
   // currently-selected manage-books project (we keep the saved-definition's projectId
   // in sync via `updateWebViewDefinition` above).
