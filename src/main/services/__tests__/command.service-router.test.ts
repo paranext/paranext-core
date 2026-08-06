@@ -146,7 +146,7 @@ describe('renderer-hosted request service routers', () => {
     );
   });
 
-  test('disables the timeout on dialog proxies, since a dialog waits for the user', () => {
+  test('disables the timeout on the dialog routes, since a dialog waits for the user', () => {
     expect(registrations().get('dialog:showDialog')?.options).toEqual({ timeoutMilliseconds: 0 });
   });
 
