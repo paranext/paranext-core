@@ -230,6 +230,60 @@ describe('handleSwitchToSimpleMode', () => {
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     expect(getMetadataForProjectMock).not.toHaveBeenCalled();
   });
+
+  it('slow path: falls back to the bare layout and warns if resolving the most recent project hangs past the cold-start bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    // Never resolves within this test's lifetime - simulates a hung recents-provider round trip
+    // (e.g. the early-startup PDP-factory wait described in the Tier 0 #5 investigation).
+    const getRecentProjects = vi.fn(() => new Promise<string[]>(() => {}));
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+
+    vi.useFakeTimers();
+    try {
+      const switchPromise = host.handleSwitchToSimpleMode();
+      await vi.advanceTimersByTimeAsync(host.COLD_START_LOOKUP_TIMEOUT_MS);
+      await switchPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('slow path: falls back to the bare layout and warns if resolving editability hangs past the cold-start bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects: vi.fn(async () => ['proj-slow-editability']) }
+        : undefined,
+    );
+    // Never resolves - simulates a hung PDP-factory wait inside getMetadataForProject.
+    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
+
+    vi.useFakeTimers();
+    try {
+      const switchPromise = host.handleSwitchToSimpleMode();
+      await vi.advanceTimersByTimeAsync(host.COLD_START_LOOKUP_TIMEOUT_MS);
+      await switchPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+  });
 });
 
 describe('resolveProjectIsEditable', () => {
