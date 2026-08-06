@@ -4,16 +4,44 @@ import {
   findWebViewIdCommandNames,
   startCommandServiceRouter,
 } from '@main/services/command.service-router';
-import { withWindows } from '@main/services/__tests__/service-router-test.util';
+import {
+  withWindows as withWindowsServingShards,
+  type ShardAnnouncementListeners,
+} from '@main/services/__tests__/service-router-test.util';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 
-const mocks = vi.hoisted(() => ({
-  getTargetWindowId: vi.fn(),
-  getReadyWindowIds: vi.fn(),
-  registerRequestHandler: vi.fn(),
-  request: vi.fn(),
-  networkObjectGet: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  // Where the router's shard index parks its subscriptions. Plain arrays rather than the subscribe
+  // mocks' recorded calls, which `vi.clearAllMocks()` wipes between tests while the index — module
+  // state that subscribes once at load — keeps listening.
+  const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
+  return {
+    getTargetWindowId: vi.fn(),
+    getReadyWindowIds: vi.fn(),
+    registerRequestHandler: vi.fn(),
+    request: vi.fn(),
+    networkObjectGet: vi.fn(),
+    shardAnnouncementListeners,
+    onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
+      shardAnnouncementListeners.create.push(listener);
+      return () => {};
+    }),
+    onDidDisposeNetworkObject: vi.fn((listener: (networkObjectId: string) => void) => {
+      shardAnnouncementListeners.dispose.push(listener);
+      return () => {};
+    }),
+  };
+});
+
+/** Wire windows whose WebView service shards are the given objects */
+function withWindows(
+  shardsByWindowId: Record<number, unknown>,
+  options?: { unreadyWindowIds?: number[] },
+) {
+  withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
+}
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
@@ -28,6 +56,8 @@ vi.mock('@shared/services/network.service', () => ({
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet },
+  onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
+  onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
 
 /** A scoped per-window WebViewService whose web views are the given ids */
@@ -54,7 +84,7 @@ function withWindowsOwning(
       windowShard(ownedIds),
     ]),
   );
-  withWindows(mocks, servicesByWindowId, options);
+  withWindows(servicesByWindowId, options);
   return servicesByWindowId;
 }
 
@@ -226,7 +256,7 @@ describe('renderer-hosted request service routers', () => {
     // moments apart, so a ready window can still be missing the one this asks. That window could
     // not be asked, which is not the same as it answering that it does not own the web view —
     // falling back to focus would run the call against whatever the focused window is showing.
-    withWindows(mocks, { 2: windowShard([]), 3: undefined });
+    withWindows({ 2: windowShard([]), 3: undefined });
 
     await expect(
       registrations().get('command:platform.openSettings')?.handler('owned-view'),
