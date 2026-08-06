@@ -106,11 +106,12 @@ more than one window.
 - **Target state: platform code in the renderer registers zero globally-unique names.** Every global
   name is registered by main, and a renderer only ever registers window-scoped objects, which makes
   "a second window cannot start because the name is taken" structurally impossible rather than fixed
-  case by case. That is where the window-scoped services have arrived. Two app-global hosts have not
-  moved yet and are the exceptions: `theme.service-host.ts` and `scroll-group.service-host.ts` still
-  register their global names from whichever renderer gets there first, and the collision is handled
-  by host election with takeover instead — see ADR-0009. The invariant holds outright once those
-  hosts move to main.
+  case by case. That is where the window-scoped services have arrived, and where the scroll group
+  service arrived by moving its host into main (`src/main/services/scroll-group.service-host.ts`,
+  ADR-0012). One app-global host has not moved yet and is the exception: `theme.service-host.ts`
+  still registers its global name from whichever renderer gets there first, and the collision is
+  handled by host election with takeover instead — see ADR-0009. The invariant holds outright once
+  that host moves to main too.
 - **A shard declares what it is, and which window it is for.** It registers with a distinct
   `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
   `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
@@ -136,7 +137,13 @@ more than one window.
 N sources holding different data, combined into one view.
 
 `theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global
-(one current theme, one scroll group 0) and keep the service-host name.
+(one current theme, one scroll group 0) and keep the service-host name — the scroll group one from
+main, the theme one from a renderer until it moves.
+
+An app-global host in main pairs with a `*.service.ts` that is more than a proxy: where the UI needs
+a synchronous read or write, the service keeps a cache of the host's state (seeded at startup, kept
+current by the host's events) and predicts the host's answer for a write, reconciling afterwards.
+`src/renderer/services/scroll-group.service.ts` is the worked example.
 
 ### Main Process Services (`src/main/services/`)
 
@@ -146,6 +153,7 @@ N sources holding different data, combined into one view.
 | `dotnet-data-provider.service.ts` | Spawns and manages .NET process |
 | `app.service-host.ts` | App metadata and lifecycle |
 | `data-protection.service-host.ts` | Encryption/decryption |
+| `scroll-group.service-host.ts` | App-global scroll group references and reference history |
 | `rpc-server.ts` | WebSocket JSON-RPC server |
 
 ### Shared Services (`src/shared/services/`)
