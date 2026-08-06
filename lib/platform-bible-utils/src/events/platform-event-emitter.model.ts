@@ -80,16 +80,56 @@ export class PlatformEventEmitter<T> implements Dispose {
   };
 
   /**
+   * Runs the subscriptions for the event, keeping each subscriber's failure to itself: a subscriber
+   * that throws hands its error to `handleSubscriberError` and the remaining subscribers still
+   * run.
+   *
+   * Use this where the emit is the only time subscribers are told about something that has already
+   * happened and will not be reported again — one broken subscriber must not cost the rest the
+   * news. Prefer {@link emit} everywhere else: a caller that can still act on a throw should see
+   * it.
+   *
+   * @param event Event data to provide to subscribed callbacks
+   * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+   *   position in the subscription order. Must not throw; a throw from it stops the remaining
+   *   subscribers, which is the very thing this is here to prevent.
+   * @experimental
+   */
+  emitIsolated = (
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) => {
+    // Do not do anything other than emitIsolatedFn here. This is just binding `this` to it
+    this.emitIsolatedFn(event, handleSubscriberError);
+  };
+
+  /**
    * Function that runs the subscriptions for the event. Added here so children can override emit
    * and still call the base functionality. See NetworkEventEmitter.emit for example
    */
   protected emitFn(event: T) {
     this.assertNotDisposed();
 
-    // Clone the subscriptions array before iterating over the callbacks so the callback index
-    // doesn't get messed up if someone subscribes or unsubscribes inside one of the callbacks
-    const emitCallbacks = [...(this.subscriptions ?? [])];
-    emitCallbacks.forEach((callback) => callback(event));
+    this.forEachSubscription((callback) => callback(event));
+  }
+
+  /**
+   * Function that runs the subscriptions for the event in isolation from each other. Added here so
+   * children can override {@link emitIsolated} and still call the base functionality.
+   */
+  protected emitIsolatedFn(
+    event: T,
+    handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+  ) {
+    this.assertNotDisposed();
+
+    this.forEachSubscription((callback, subscriberIndex) => {
+      try {
+        callback(event);
+      } catch (error) {
+        handleSubscriberError(error, subscriberIndex);
+      }
+    });
   }
 
   /** Check to make sure this emitter is not disposed. Throw if it is */
@@ -108,6 +148,17 @@ export class PlatformEventEmitter<T> implements Dispose {
     this.subscriptions = undefined;
     this.lazyEvent = undefined;
     return Promise.resolve(true);
+  }
+
+  /**
+   * Run something for each current subscription. Clones the subscriptions array before iterating
+   * over the callbacks so the callback index doesn't get messed up if someone subscribes or
+   * unsubscribes inside one of the callbacks
+   */
+  private forEachSubscription(
+    runForSubscription: (callback: PlatformEventHandler<T>, subscriberIndex: number) => void,
+  ) {
+    [...(this.subscriptions ?? [])].forEach(runForSubscription);
   }
 }
 
