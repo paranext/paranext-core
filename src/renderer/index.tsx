@@ -104,7 +104,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
 
-    // This needs to run before the web view service host starts running and blocks us from creating
+    // This needs to run before the web view service shard starts running and blocks us from creating
     // an iframe for the Usersnap feedback forms
     await initializeUsersnapApi();
 
