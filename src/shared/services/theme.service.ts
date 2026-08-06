@@ -2,6 +2,7 @@ import { dataProviderService } from '@shared/services/data-provider.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IThemeService,
+  createReattachingSubscribeCurrentTheme,
   themeServiceDataProviderName,
   themeServiceObjectToProxy,
 } from '@shared/services/theme.service-model';
@@ -35,8 +36,16 @@ async function initializeThemeService(): Promise<void> {
   });
 }
 
-export const themeService = createSyncProxyForAsyncObject<IThemeService>(async () => {
+/** The theme provider this process should be talking to right now, resolving it if needed */
+async function getThemeProvider(): Promise<IThemeService> {
   await initialize();
   if (!dataProvider) throw new Error('Theme service undefined');
   return dataProvider;
-}, themeServiceObjectToProxy);
+}
+
+export const themeService = createSyncProxyForAsyncObject<IThemeService>(getThemeProvider, {
+  ...themeServiceObjectToProxy,
+  // Served here rather than passed through to the provider so a subscription made before a window
+  // handover keeps delivering afterwards. See `createReattachingSubscribeCurrentTheme`.
+  subscribeCurrentTheme: createReattachingSubscribeCurrentTheme(getThemeProvider),
+});

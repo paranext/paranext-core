@@ -5,6 +5,7 @@ import {
   ThemeDefinitionExpanded,
   ThemeFamiliesByIdExpanded,
   ThemeFamiliesById,
+  newPlatformError,
 } from 'platform-bible-utils';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
@@ -257,3 +258,84 @@ export type IThemeServiceLocal = IThemeService & {
   /** JSDOC DESTINATION getCurrentTheme */
   getCurrentThemeSync(): ThemeDefinitionExpanded;
 };
+
+/**
+ * Build a `subscribeCurrentTheme` that follows the theme engine when it moves to another window.
+ *
+ * The theme is app-global, so exactly one window hosts its engine and every other process consumes
+ * it as a remote data provider. A data provider subscription re-fetches the data through the
+ * provider object it was created with, and the provider pointing at a window is revoked when that
+ * window closes. The update events themselves keep arriving — they travel on a network event named
+ * after the provider, which the window that takes the engine over publishes under that same name —
+ * so a subscription made before the handover would report the revoked provider's failure on every
+ * theme change and never deliver another theme.
+ *
+ * Subscribing again through `getThemeProvider` when the provider is disposed hands the subscription
+ * to whichever window hosts the engine now. The subscription to the departed provider is dropped
+ * first, since it would otherwise go on failing on every change. The replacement retrieves the
+ * current theme immediately whatever the caller asked for, because the theme can change during the
+ * handover and no event this subscriber can still hear would report it.
+ *
+ * @param getThemeProvider Resolves the theme provider this process should be talking to right now.
+ *   Must resolve the window hosting the engine now rather than a remembered one — both theme
+ *   service facades re-arm their cached resolution when the provider they hold is disposed.
+ * @returns `subscribeCurrentTheme` for a theme service facade to serve in place of the provider's
+ * @experimental
+ */
+export function createReattachingSubscribeCurrentTheme(
+  getThemeProvider: () => Promise<IThemeService>,
+): IThemeService['subscribeCurrentTheme'] {
+  return async (selector, callback, options) => {
+    /** Whether the caller still wants this subscription */
+    let isSubscribed = true;
+    /** Ends the subscription to the theme provider currently serving this one */
+    let unsubscribeFromProvider: UnsubscriberAsync | undefined;
+
+    const subscribeThroughCurrentProvider = async (isReattaching: boolean): Promise<void> => {
+      const unsubscribeFromDepartedProvider = unsubscribeFromProvider;
+      unsubscribeFromProvider = undefined;
+      if (unsubscribeFromDepartedProvider) await unsubscribeFromDepartedProvider();
+
+      const themeProvider = await getThemeProvider();
+      if (!isSubscribed) return;
+
+      unsubscribeFromProvider = await themeProvider.subscribeCurrentTheme(
+        selector,
+        callback,
+        isReattaching ? { ...options, retrieveDataImmediately: true } : options,
+      );
+      // Unsubscribing while this was in flight has to be honored, or the caller is left with a
+      // subscription it already ended
+      if (!isSubscribed) {
+        await unsubscribeFromProvider();
+        unsubscribeFromProvider = undefined;
+        return;
+      }
+
+      themeProvider.onDidDispose(() => {
+        if (!isSubscribed) return;
+        reattachThroughCurrentProvider();
+      });
+    };
+
+    /**
+     * Move this subscription onto whichever window hosts the theme engine now. Never rejects — a
+     * dispose handler has nobody to hand a rejection to, so a failure is reported to the subscriber
+     * instead: it asked to be told about the current theme, and it is now not going to be.
+     */
+    async function reattachThroughCurrentProvider(): Promise<void> {
+      try {
+        await subscribeThroughCurrentProvider(true);
+      } catch (e) {
+        callback(newPlatformError(e));
+      }
+    }
+
+    await subscribeThroughCurrentProvider(false);
+
+    return async () => {
+      isSubscribed = false;
+      return unsubscribeFromProvider ? unsubscribeFromProvider() : true;
+    };
+  };
+}

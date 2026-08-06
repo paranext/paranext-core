@@ -614,6 +614,53 @@ describe('theme service host across multiple windows', () => {
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3));
   });
 
+  // A data provider subscription re-fetches through the provider object it was created with, and
+  // the provider an attached window holds is revoked when the window hosting it closes. Update
+  // events keep arriving — they travel on a network event named after the provider, and the window
+  // that takes the engine over publishes it under that same name — so a subscription made before
+  // the handover would go on reporting a revoked provider's failure on every theme change and never
+  // deliver another theme.
+  test('a current-theme subscription follows the engine to the window that takes it over', async () => {
+    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
+    const hosted = makeProvider();
+    mocks.get.mockResolvedValue(hosted.provider);
+
+    const { initialize, localThemeService } = await import('@renderer/services/theme.service-host');
+    await initialize();
+
+    const themesReceived: TestTheme[] = [];
+    await localThemeService.subscribeCurrentTheme(undefined, (currentTheme) => {
+      // The subscriber's job here is only to record what it was handed
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      themesReceived.push(currentTheme as TestTheme);
+    });
+
+    const ownEngine = makeProvider();
+    mocks.registerEngine.mockResolvedValue(ownEngine.provider);
+    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
+      hosted.dispose();
+      return ['platform.themeServiceDataProvider-data'];
+    });
+    closeWindow(1);
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
+
+    // The subscription is re-established against the engine this window now hosts
+    await vi.waitFor(() => expect(ownEngine.provider.subscribeCurrentTheme).toHaveBeenCalled());
+
+    const themeAfterTakeover: TestTheme = {
+      themeFamilyId: 'extensionFamily',
+      type: 'dark',
+      label: 'Extension Dark',
+      cssVariables: {},
+    };
+    ownEngine.emitCurrentTheme(themeAfterTakeover);
+
+    expect(themesReceived).toContainEqual(themeAfterTakeover);
+    // The subscription to the window that closed is gone, so its failures stop reaching the
+    // subscriber rather than being reported on every change for the rest of the session
+    expect(hosted.currentThemeSubscriberCount()).toBe(0);
+  });
+
   test('surfaces the failure when there is no engine to host or attach to', async () => {
     mocks.registerEngine.mockRejectedValue(new Error('already registered'));
     mocks.get.mockResolvedValue(undefined);

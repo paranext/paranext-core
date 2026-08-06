@@ -6,6 +6,7 @@ import {
   IThemeServiceLocal,
   CurrentThemeSpecifier,
   USER_THEME_FAMILY_PREFIX,
+  createReattachingSubscribeCurrentTheme,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
@@ -925,21 +926,8 @@ export const testingThemeService = {
   },
 };
 
-const themeServiceEngineSyncAdditions = Object.freeze({
-  ...themeServiceObjectToProxy,
-  getCurrentThemeSync() {
-    return themeServiceEngine.currentTheme;
-  },
-});
-
-/**
- * Theme service that is available locally in the renderer only and can perform synchronous
- * operations
- */
-// We are adding extra sync methods in the proxy-over object, so they will be available in the final
-// object
-// eslint-disable-next-line no-type-assertion/no-type-assertion
-export const localThemeService = createSyncProxyForAsyncObject(async () => {
+/** The theme provider this window should be talking to right now, resolving it if needed */
+async function getThemeProvider(): Promise<IThemeService> {
   await initialize();
   // Names the state rather than the symptom: this is the gap between the window that was hosting
   // the theme engine going away and one of the surviving windows winning it back (see
@@ -950,4 +938,26 @@ export const localThemeService = createSyncProxyForAsyncObject(async () => {
       `Window ${globalThis.windowId} has no theme service while the theme engine is being handed over from the window that closed; retry once a window has taken it over`,
     );
   return dataProvider;
-}, themeServiceEngineSyncAdditions) as IThemeServiceLocal;
+}
+
+const themeServiceEngineSyncAdditions = Object.freeze({
+  ...themeServiceObjectToProxy,
+  getCurrentThemeSync() {
+    return themeServiceEngine.currentTheme;
+  },
+  // Served here rather than passed through to the provider so a subscription made before a window
+  // handover keeps delivering afterwards. See `createReattachingSubscribeCurrentTheme`.
+  subscribeCurrentTheme: createReattachingSubscribeCurrentTheme(getThemeProvider),
+});
+
+/**
+ * Theme service that is available locally in the renderer only and can perform synchronous
+ * operations
+ */
+// We are adding extra sync methods in the proxy-over object, so they will be available in the final
+// object
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+export const localThemeService = createSyncProxyForAsyncObject(
+  getThemeProvider,
+  themeServiceEngineSyncAdditions,
+) as IThemeServiceLocal;

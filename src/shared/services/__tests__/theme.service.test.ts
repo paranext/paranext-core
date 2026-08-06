@@ -1,0 +1,138 @@
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { ThemeDefinitionExpanded } from 'platform-bible-utils';
+import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
+
+const mocks = vi.hoisted(() => ({ get: vi.fn() }));
+
+vi.mock('@shared/services/data-provider.service', () => ({
+  dataProviderService: { get: mocks.get },
+}));
+
+/** Minimal stand-in for the theme data provider a window publishes */
+function makeProvider() {
+  const disposeCallbacks: (() => void)[] = [];
+  const currentThemeCallbacks: ((currentTheme: ThemeDefinitionExpanded) => void)[] = [];
+  const optionsPerSubscription: (DataProviderSubscriberOptions | undefined)[] = [];
+  return {
+    provider: {
+      onDidDispose: (callback: () => void) => {
+        disposeCallbacks.push(callback);
+        return () => true;
+      },
+      subscribeCurrentTheme: vi.fn(
+        async (
+          _selector: undefined,
+          callback: (currentTheme: ThemeDefinitionExpanded) => void,
+          options?: DataProviderSubscriberOptions,
+        ) => {
+          currentThemeCallbacks.push(callback);
+          optionsPerSubscription.push(options);
+          return async () => {
+            const callbackIndex = currentThemeCallbacks.indexOf(callback);
+            if (callbackIndex >= 0) currentThemeCallbacks.splice(callbackIndex, 1);
+            return true;
+          };
+        },
+      ),
+    },
+    /** Simulate the window publishing this provider closing, which is what disposes it elsewhere */
+    dispose: () => [...disposeCallbacks].forEach((callback) => callback()),
+    /** Simulate this provider's engine publishing a new current theme */
+    emitCurrentTheme: (currentTheme: ThemeDefinitionExpanded) =>
+      [...currentThemeCallbacks].forEach((callback) => callback(currentTheme)),
+    /** How many live current-theme subscriptions this provider is serving */
+    currentThemeSubscriberCount: () => currentThemeCallbacks.length,
+    /** Subscriber options this provider was handed, in subscription order */
+    optionsPerSubscription,
+  };
+}
+
+function makeTheme(type: string): ThemeDefinitionExpanded {
+  return {
+    themeFamilyId: 'extensionFamily',
+    type,
+    label: `%theme_extension_${type}%`,
+    id: `extensionFamily-${type}`,
+    cssVariables: {},
+  };
+}
+
+// The theme engine is app-global and lives in exactly one window, so every other process consumes
+// it as a remote data provider. When that window closes, another one takes the engine over and
+// publishes it under the same name — but the provider object pointing at the closed window is
+// revoked, and a data provider subscription re-fetches through the provider it was created with.
+describe('theme service across a theme engine handover', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  test('a current-theme subscription follows the engine to the window that takes it over', async () => {
+    const closingHost = makeProvider();
+    mocks.get.mockResolvedValue(closingHost.provider);
+
+    const { themeService } = await import('@shared/services/theme.service');
+
+    const themesReceived: (ThemeDefinitionExpanded | unknown)[] = [];
+    await themeService.subscribeCurrentTheme(undefined, (currentTheme) => {
+      themesReceived.push(currentTheme);
+    });
+    expect(closingHost.provider.subscribeCurrentTheme).toHaveBeenCalledTimes(1);
+
+    // The hosting window closes: its provider is dropped everywhere, and another window has taken
+    // the engine over by the time this process resolves the provider again
+    const newHost = makeProvider();
+    mocks.get.mockResolvedValue(newHost.provider);
+    closingHost.dispose();
+
+    await vi.waitFor(() => expect(newHost.provider.subscribeCurrentTheme).toHaveBeenCalledTimes(1));
+
+    const themeAfterHandover = makeTheme('dark');
+    newHost.emitCurrentTheme(themeAfterHandover);
+
+    expect(themesReceived).toContainEqual(themeAfterHandover);
+    // The subscription to the closed window is gone, so its failures stop reaching the subscriber
+    // rather than being reported on every theme change for the rest of the session
+    expect(closingHost.currentThemeSubscriberCount()).toBe(0);
+  });
+
+  // The theme can change while the engine is being handed over, and there is no update event this
+  // subscriber could still hear for it.
+  test('re-subscribing after the handover delivers the current theme once', async () => {
+    const closingHost = makeProvider();
+    mocks.get.mockResolvedValue(closingHost.provider);
+
+    const { themeService } = await import('@shared/services/theme.service');
+
+    await themeService.subscribeCurrentTheme(undefined, () => {}, {
+      retrieveDataImmediately: false,
+    });
+
+    const newHost = makeProvider();
+    mocks.get.mockResolvedValue(newHost.provider);
+    closingHost.dispose();
+
+    await vi.waitFor(() => expect(newHost.provider.subscribeCurrentTheme).toHaveBeenCalledTimes(1));
+    expect(newHost.optionsPerSubscription[0]).toEqual({ retrieveDataImmediately: true });
+  });
+
+  test('unsubscribing stops the subscription from following the engine', async () => {
+    const closingHost = makeProvider();
+    mocks.get.mockResolvedValue(closingHost.provider);
+
+    const { themeService } = await import('@shared/services/theme.service');
+
+    const unsubscribe = await themeService.subscribeCurrentTheme(undefined, () => {});
+    await unsubscribe();
+    expect(closingHost.currentThemeSubscriberCount()).toBe(0);
+
+    const newHost = makeProvider();
+    mocks.get.mockResolvedValue(newHost.provider);
+    closingHost.dispose();
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(newHost.provider.subscribeCurrentTheme).not.toHaveBeenCalled();
+  });
+});
