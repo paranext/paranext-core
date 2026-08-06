@@ -3,6 +3,7 @@ import {
   EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
 } from '@shared/services/scroll-group.service-model';
+import { logger } from '@shared/services/logger.service';
 
 // The host module reads localStorage and creates a network emitter at import time; stub those.
 // Emitters are captured by event name so tests can assert on a specific event (e.g.
@@ -494,8 +495,20 @@ describe('scroll group service publishing across windows', () => {
     networkObjectSet.mockReset();
     networkObjectGet.mockReset();
     networkObjectGet.mockResolvedValue(undefined);
+    vi.mocked(logger.debug).mockClear();
+    vi.mocked(logger.warn).mockClear();
     Object.keys(networkEventHandlers).forEach((key) => delete networkEventHandlers[key]);
   });
+
+  /**
+   * What `networkObjectService.set` really throws when another window already holds the name: it
+   * could not register any of the object's methods, and reports the per-method reasons together.
+   */
+  const NAME_TAKEN_REJECTION = new Error(
+    'Unable to register network object with id ScrollGroupService:\n' +
+      '\tError: Could not register request handler for object:ScrollGroupService\n' +
+      '\tError: Could not register request handler for object:ScrollGroupService.getScrRef',
+  );
 
   /**
    * Stand in for the object the window that won the race published, as this window sees it over the
@@ -581,6 +594,56 @@ describe('scroll group service publishing across windows', () => {
     settleTakeoverRegistration();
 
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
+  });
+
+  // Losing the name is the routine outcome in every window but one, and the multi-window e2e proves
+  // a window stepped aside by finding this phrase in the log — so the real rejection has to keep
+  // being read as the routine outcome, not as a failure.
+  it('reports losing the race to another window as the routine step-aside', async () => {
+    mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(NAME_TAKEN_REJECTION);
+    const host = await import('@renderer/services/scroll-group.service-host');
+
+    await host.startScrollGroupService();
+
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('Another window is already publishing the scroll group service'),
+    );
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
+  });
+
+  // Every other way registering can fail lands in the same place and used to be reported as the
+  // expected outcome, at a severity nothing reads.
+  it('reports a publish failure that is not the name being taken', async () => {
+    mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(
+      new Error('Network service has shut down; not reconnecting'),
+    );
+    const host = await import('@renderer/services/scroll-group.service-host');
+
+    await host.startScrollGroupService();
+
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('for a reason other than the name being taken'),
+    );
+  });
+
+  // Coming out of a race with nothing is the one state nothing else re-enters the race from: the
+  // trigger is the disposal of an object this window holds, and it holds none. If every surviving
+  // window lands here — which is what an interleaved re-race does, since a rejected registration
+  // rolls back the ones that already succeeded — no window publishes the object again for the rest
+  // of the session, while the mirrored navigation events keep every screen looking right.
+  it('races again when it neither published the object nor found the window that did', async () => {
+    networkObjectSet.mockRejectedValue(new Error('already registered'));
+    networkObjectGet.mockResolvedValue(undefined);
+    const host = await import('@renderer/services/scroll-group.service-host');
+    await host.startScrollGroupService();
+    expect(networkObjectSet).toHaveBeenCalledTimes(1);
+
+    // By the time it races again the name is free — the window that briefly held it is gone
+    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
+
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2), { timeout: 4000 });
   });
 
   it('re-attaches after losing a re-race so a later disposal still hands the object over', async () => {
