@@ -3975,6 +3975,9 @@ declare module 'shared/services/web-view.service-model' {
      * @param webViewId The ID of the WebView whose saved properties to get
      * @returns Saved properties of the WebView definition with the specified ID or undefined if not
      *   found
+     * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+     *   in the window that did not answer, so `undefined` there would be indistinguishable from the
+     *   WebView genuinely not existing.
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
@@ -3991,6 +3994,9 @@ declare module 'shared/services/web-view.service-model' {
      * actual WebView definitions.
      *
      * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+     * @throws If any window could not be asked what it has open. Callers read this as the complete
+     *   picture, and a window that could not answer is indistinguishable in the result from one with
+     *   nothing open, so a short list is refused rather than passed off as the whole landscape.
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
@@ -4341,6 +4347,16 @@ declare module 'shared/models/web-view-factory.model' {
     private readonly webViewControllersMutexMap;
     private readonly webViewControllersCleanupList;
     private readonly webViewControllersById;
+    /**
+     * Whether {@link dispose} has run, so nothing this factory registers will ever be cleaned up
+     * again.
+     *
+     * `dispose` cannot take the per-web-view locks — it is not about any one web view — so a
+     * controller already being created can finish after it and land on a cleanup list that has
+     * already been drained, which tears that controller down on arrival. Returning a web view
+     * definition at that point would produce a web view whose controller is already dead.
+     */
+    private isDisposed;
     constructor(webViewType: WebViewType);
     /**
      * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
