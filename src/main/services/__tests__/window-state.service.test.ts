@@ -191,8 +191,8 @@ describe('window state tracking', () => {
     });
 
     test('stays quiet when the same window is re-reported as focused', () => {
-      // Electron re-fires `focus` in situations that do not change which window is focused; routing
-      // proxies re-point their update relay on every emission, so a repeat is real work for nothing
+      // Electron re-fires `focus` in situations that do not change which window is focused; service
+      // routers re-point their update relay on every emission, so a repeat is real work for nothing
       const heard: (number | undefined)[] = [];
       addWindow(fakeWindow(3));
       setFocusedWindowId(3);

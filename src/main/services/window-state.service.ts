@@ -67,7 +67,7 @@ const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<number | undefi
  * Event that fires when the window routed calls go to changes — a different window, or the same
  * window going from unready to serving requests (or back).
  *
- * Routing proxies that forward to "the focused window" need this: it is the moment their answer
+ * Service routers that forward to "the focused window" need this: it is the moment their answer
  * changes without any window's own state having changed. Every change to the tracked windows, the
  * focused window, and window readiness runs through the same target comparison, so this is the one
  * signal to react to, and it stays quiet when a change leaves the target where it was.

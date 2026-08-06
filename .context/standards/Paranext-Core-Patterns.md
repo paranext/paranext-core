@@ -1006,17 +1006,21 @@ const webViewShards = createServiceShardIndex<WebViewServiceType>({
 });
 const getTargetWebViewShard = createTargetShardResolver(
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  (windowId) => webViewShards.getShard(windowId),
+  webViewShards,
 );
 
-await registerServiceRouter({
-  genericName: NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-  forwardedMethodNames: ['someMethodThatJustGoesToTheTargetWindow'],
-  resolveTargetShard: getTargetWebViewShard,
-  overrides: {
-    /* events, fan-outs, owner-routed methods */
-  },
-});
+// Declared as the service it claims the name of, so a member added to the service interface fails
+// to compile until the router publishes it
+const webViewServiceRouter: WebViewServiceType = {
+  someMethodThatJustGoesToTheTargetWindow: async (...args) =>
+    (await getTargetWebViewShard()).someMethodThatJustGoesToTheTargetWindow(...args),
+  /* events, fan-outs, owner-routed methods */
+};
+
+await networkObjectService.set<WebViewServiceType>(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  webViewServiceRouter,
+);
 ```
 
 **Do:**
@@ -1025,10 +1029,12 @@ await registerServiceRouter({
   name first.
 - Give each service its own `objectType` string. Not one generic `'windowScopedService'` — filtering
   for exactly what you want beats filtering everything and re-filtering on an attribute.
-- Keep fan-outs (`getAllOpenWebViewDefinitions`, notification `dismiss`) as overrides. Asking every
+- Write fan-outs (`getAllOpenWebViewDefinitions`, notification `dismiss`) by hand. Asking every
   window is the meaningful answer for those, not a missing abstraction.
 - Ask only ready windows in a fan-out (`getReadyWindowIds`), and treat "could not ask" as different
-  from "answered no."
+  from "answered no." That includes the tracked windows a fan-out skipped for not being ready
+  (`getNotReadyWindowIds`): leaving them out of the answer entirely makes a window that is alive with
+  work open in it indistinguishable from a window that does not exist.
 
 **Don't:**
 
