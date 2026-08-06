@@ -10,10 +10,7 @@
  */
 
 import { getReadyWindowIds } from '@main/services/window-state.service';
-import {
-  createTargetShardResolver,
-  registerServiceRouter,
-} from '@main/services/service-router.factory';
+import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   INotificationService,
   NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
@@ -43,7 +40,7 @@ async function getNotificationShard(windowId: number): Promise<INotificationServ
 /** Get the notification service shard for the focused window, throwing if none is available */
 const getTargetNotificationShard = createTargetShardResolver(
   NotificationServiceNetworkObjectName,
-  getNotificationShard,
+  notificationShards,
 );
 
 /**
@@ -90,17 +87,28 @@ async function dismissInOwningWindows(notificationId: string | number): Promise<
 }
 
 /**
+ * The router object registered under the generic "NotificationService" name. Declared as the
+ * service it claims the name of, so a member added to `INotificationService` cannot silently become
+ * a name the router does not answer for.
+ */
+const notificationServiceRouter: INotificationService = {
+  send: async (...args) => (await getTargetNotificationShard()).send(...args),
+  dismiss: async (notificationId) => dismissInOwningWindows(notificationId),
+};
+
+/**
  * Register the notification service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startNotificationServiceRouter(): Promise<void> {
-  await registerServiceRouter({
-    genericName: NotificationServiceNetworkObjectName,
-    forwardedMethodNames: ['send'],
-    resolveTargetShard: getTargetNotificationShard,
-    overrides: { dismiss: dismissInOwningWindows },
+  await networkObjectService.set<INotificationService>(
+    NotificationServiceNetworkObjectName,
+    notificationServiceRouter,
+    undefined,
+    undefined,
     // The generic name is the one consumers actually call, so it carries the same OpenRPC docs the
     // renderers attach to their window-scoped registrations
-    docs: NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
-  });
+    NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
+  );
+  logger.info('Notification service router registered');
 }
