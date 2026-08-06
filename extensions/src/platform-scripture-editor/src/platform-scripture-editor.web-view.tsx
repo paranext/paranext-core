@@ -1374,23 +1374,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
   // `Editorial` stays mounted but visually hidden while the chapter is blank, so any focus/cursor
-  // effect Lexical would normally run for newly-inserted content is a no-op while hidden
-  // (`.claude/rules/cross-view-sync-hidden-views.md`) — re-trigger focus explicitly once the insert
-  // *this component* triggered actually lands. Gated on `pendingScaffoldInsertRef` so ordinary
-  // chapter navigation away from a blank chapter, a remote/collaborative update landing content, or
-  // a Send/Receive sync completing (all of which can also flip `isBlankChapter` to `false`) do not
-  // steal focus. Also gated on `!isPowerMode`: the empty-chapter-view feature (and this button) is
-  // Simple-mode only, so the button can't render in Power mode today — the guard is currently
-  // redundant but documents that invariant and protects against a future refactor.
+  // or scroll effect Lexical/the "scroll the selected verse" effect above would normally run for
+  // newly-inserted content is a no-op while hidden (`.claude/rules/cross-view-sync-hidden-views.md`)
+  // — re-trigger focus AND scroll-into-view explicitly once the insert *this component* triggered
+  // actually lands. The "scroll the selected verse" effect above is keyed on `scrRef`, which doesn't
+  // change across this insert (same chapter, no navigation), so it never re-fires on its own once
+  // the editor un-hides — without the explicit `scrollToVerse` call here, a blank chapter opened at
+  // `verseNum > 1` would land scrolled to the top instead of at that verse. Gated on
+  // `pendingScaffoldInsertRef` so ordinary chapter navigation away from a blank chapter, a
+  // remote/collaborative update landing content, or a Send/Receive sync completing (all of which can
+  // also flip `isBlankChapter` to `false`) do not steal focus or scroll. Also gated on
+  // `!isPowerMode`: the empty-chapter-view feature (and this button) is Simple-mode only, so the
+  // button can't render in Power mode today — the guard is currently redundant but documents that
+  // invariant and protects against a future refactor.
   useEffect(() => {
     if (isBlankChapter) return;
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
     if (!isPowerMode && pendingScaffoldInsertRef.current) {
+      scrollToVerse(scrRef);
       editorRef.current?.focus();
     }
     pendingScaffoldInsertRef.current = false;
-  }, [isBlankChapter, isPowerMode]);
+  }, [isBlankChapter, isPowerMode, scrRef]);
 
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
