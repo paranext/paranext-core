@@ -149,5 +149,6 @@ test.describe('Internet & Connectivity settings', () => {
     // Toggle items become visible
     await expect(frame.getByTestId('server-type-production')).toBeVisible({ timeout: 5_000 });
     await expect(frame.getByTestId('server-type-development')).toBeVisible();
+    await expect(frame.getByTestId('server-type-test')).toBeVisible();
   });
 });

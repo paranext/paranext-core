@@ -2,8 +2,8 @@ import { WebViewProps } from '@papi/core';
 import papi from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { MarkdownRenderer } from 'platform-bible-react';
+import { useCallback, useMemo, useState } from 'react';
+import { MarkdownRenderer, usePromise } from 'platform-bible-react';
 import { RegistrationForm } from './components/registration-form.component';
 import { PRODUCTION_REGISTRY_URL } from './utils';
 
@@ -14,27 +14,25 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%product_name%',
 ];
 
+/**
+ * Fetches the registry site URL for the selected server, falling back to production so the link is
+ * never blank or broken. Module-scope so it is a stable `usePromise` callback.
+ */
+async function fetchRegistryUrl() {
+  try {
+    const url = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
+    return url || PRODUCTION_REGISTRY_URL;
+  } catch {
+    return PRODUCTION_REGISTRY_URL;
+  }
+}
+
 globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
-  // The registry link follows the selected server. Default to (and fall back on) the production
-  // URL so the link is never blank or broken. The view reads the server on mount; a server change
+  // The registry link follows the selected server. The view reads it on mount; a server change
   // requires an app restart to take effect, after which the view reopens fresh.
-  const [registryLink, setRegistryLink] = useState(PRODUCTION_REGISTRY_URL);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const url = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
-        if (!cancelled && url) setRegistryLink(url);
-      } catch {
-        // Keep the production fallback so the link is never broken.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const [registryLink] = usePromise(fetchRegistryUrl, PRODUCTION_REGISTRY_URL);
 
   const registrationDetails = useMemo(
     () =>

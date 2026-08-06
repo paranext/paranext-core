@@ -7,7 +7,16 @@ import {
 } from '@renderer/services/first-run-store';
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
-import { Alert, AlertTitle, Button, Checkbox, Input, Label, Spinner } from 'platform-bible-react';
+import {
+  Alert,
+  AlertTitle,
+  Button,
+  Checkbox,
+  Input,
+  Label,
+  Spinner,
+  usePromise,
+} from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { AlertCircle, CircleCheck } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -33,6 +42,21 @@ export const VALIDATION_DEBOUNCE_MS = 1000;
 export const INVALID_CODE_DISPLAY_DEBOUNCE_MS = 1000;
 
 const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org/';
+
+/**
+ * Fetches the registry site URL for the selected server, falling back to production so the link is
+ * never blank or broken (and skips the lookup entirely in demo mode). Module-scope so it is a
+ * stable `usePromise` callback.
+ */
+async function fetchRegistryUrl() {
+  if (isDemoMode()) return PRODUCTION_REGISTRY_URL;
+  try {
+    const url = await commandService.sendCommand('paratextRegistration.getParatextRegistryUrl');
+    return url || PRODUCTION_REGISTRY_URL;
+  } catch {
+    return PRODUCTION_REGISTRY_URL;
+  }
+}
 
 // Eight %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
 // extension's localizedStrings.json via PAPI — they will not appear in en.json.
@@ -129,26 +153,10 @@ export function IdentifyStep({
     }
   };
 
-  // The registry link follows the server selected in Internet Settings. Default to (and fall back
-  // on) the production URL so the link is never blank or broken while the lookup runs or if it
-  // fails. This step remounts each time the wizard navigates to it, so the URL re-reads the latest
-  // selection (including a change made on the preceding Internet Settings step).
-  const [registryUrl, setRegistryUrl] = useState(PRODUCTION_REGISTRY_URL);
-  useEffect(() => {
-    if (isDemoMode()) return undefined;
-    let cancelled = false;
-    (async () => {
-      try {
-        const url = await commandService.sendCommand('paratextRegistration.getParatextRegistryUrl');
-        if (!cancelled && url) setRegistryUrl(url);
-      } catch {
-        // Keep the production fallback so the link is never broken.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // The registry link follows the selected server. This step remounts each time the wizard
+  // navigates to it, so the URL re-reads the latest selection (including a change made on the
+  // preceding Internet Settings step).
+  const [registryUrl] = usePromise(fetchRegistryUrl, PRODUCTION_REGISTRY_URL);
 
   const isMounted = useRef(false);
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
