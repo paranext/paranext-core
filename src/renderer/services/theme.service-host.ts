@@ -37,6 +37,7 @@ import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.
 import { themeDataService } from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { isNameTakenError } from '@renderer/services/name-taken-error.util';
 
 /** Raw un-expanded themes that are built into the software */
 // We know this is the right data type because we write this data
@@ -718,6 +719,24 @@ let pendingRetryPromise: Promise<void> | undefined;
 let isRetryQueuedAfterPendingRun = false;
 
 /**
+ * How long to wait before racing again after a run that came out of it with nothing — neither
+ * hosting the engine nor attached to the window that does. Every surviving window is in the same
+ * state, so the wait is what keeps them from retrying in lockstep forever; short enough that
+ * `papi.themes` is unanswerable for a moment rather than for the session.
+ */
+const RACE_AGAIN_AFTER_EMPTY_HANDED_RUN_DELAY_MS = 1000;
+
+/**
+ * How many times in a row to race again after coming out of a run empty-handed. Bounded so a window
+ * whose registrations are failing for some reason other than the name being taken does not retry
+ * for the life of the session; reset the moment a run ends with an engine to talk to.
+ */
+const MAX_CONSECUTIVE_EMPTY_HANDED_RUNS = 5;
+
+/** How many runs in a row have ended with this window neither hosting the engine nor attached */
+let consecutiveEmptyHandedRuns = 0;
+
+/**
  * Re-arm {@link runInitialize} and run it, so this window re-enters the host-or-attach race.
  *
  * Concurrent triggers share the pending run instead of starting another (see
@@ -726,25 +745,40 @@ let isRetryQueuedAfterPendingRun = false;
  */
 function retryHostOrAttachToThemeEngine(): void {
   // Nothing to take over while this window is the host: re-entering the race here would drop the
-  // engine it is serving to everyone else, and the reload below would discard whatever the user has
-  // changed since. Checked on every entry, including the re-run below, because this window can win
-  // hosting between a trigger being raised and it being acted on.
+  // engine it is serving to everyone else, and the state reload in `hostOrAttachToThemeEngine` would
+  // discard whatever the user has changed since. Checked on every entry, including the re-run below,
+  // because this window can win hosting between a trigger being raised and it being acted on.
   if (isHostingThemeEngine) return;
   if (pendingRetryPromise) {
     isRetryQueuedAfterPendingRun = true;
     return;
   }
-  // The engine still holds whatever this window loaded at startup, and the host that just went away
-  // may have saved newer state since then. Refresh before re-entering the race: winning it with the
-  // startup snapshot would republish — and, on the next save, persist — pre-close state, dropping
-  // the user's changes.
-  reloadPersistedThemeState();
   runInitialize = createCachedInitializer(hostOrAttachToThemeEngine);
   pendingRetryPromise = runInitialize()
     .catch((e) => {
-      logger.warn(
-        `Failed to re-host the theme service after its host closed: ${getErrorMessage(e)}`,
+      // Neither hosting nor attached, and nothing else re-enters the race for this window: a
+      // takeover is driven by the disposal of the provider this window is holding, and it is holding
+      // none. `createCachedInitializer` does clear its cache on this rejection, so the next
+      // `papi.themes` call would retry — but nothing guarantees there is a next call, and every
+      // surviving window can land here at once, which would leave the app with no theme engine at
+      // all. Schedule the re-entry rather than waiting to be asked.
+      consecutiveEmptyHandedRuns += 1;
+      if (consecutiveEmptyHandedRuns > MAX_CONSECUTIVE_EMPTY_HANDED_RUNS) {
+        logger.error(
+          `Window ${globalThis.windowId} gave up racing for the theme engine after ${MAX_CONSECUTIVE_EMPTY_HANDED_RUNS} attempts that neither hosted it nor found the window that does; papi.themes calls will fail until a window hosts it: ${getErrorMessage(e)}`,
+        );
+        return;
+      }
+      logger.error(
+        `Window ${globalThis.windowId} neither re-hosted the theme service after its host closed nor could attach to another window; racing again in ${RACE_AGAIN_AFTER_EMPTY_HANDED_RUN_DELAY_MS}ms (attempt ${consecutiveEmptyHandedRuns} of ${MAX_CONSECUTIVE_EMPTY_HANDED_RUNS}): ${getErrorMessage(e)}`,
       );
+      setTimeout(() => {
+        // A queued trigger's re-run, or another window's disposal, may have found this window an
+        // engine in the meantime. Racing again then would resolve that same provider and leave a
+        // second dispose handler on it.
+        if (dataProvider) return;
+        retryHostOrAttachToThemeEngine();
+      }, RACE_AGAIN_AFTER_EMPTY_HANDED_RUN_DELAY_MS);
     })
     .finally(() => {
       pendingRetryPromise = undefined;
@@ -754,6 +788,12 @@ function retryHostOrAttachToThemeEngine(): void {
       // only run again while this window still has no engine to talk to. Re-running against a
       // provider that is alive would resolve that same provider and leave another dispose handler
       // on it.
+      //
+      // Note the asymmetry with the scroll group host, which re-runs unless it came out of the run
+      // publishing: dropping the queued trigger for a window that ended up merely ATTACHED is only
+      // safe because the provider it attached to carries its own dispose handler, which re-fires
+      // this if that provider is the one the swallowed trigger was about. Remove that handler and
+      // this drops takeovers silently.
       if (!dataProvider) retryHostOrAttachToThemeEngine();
     });
 }
@@ -768,6 +808,12 @@ function retryHostOrAttachToThemeEngine(): void {
  * taken: nothing else in the app registers it, and the retry below re-enters this same path.
  */
 async function hostOrAttachToThemeEngine(): Promise<void> {
+  // This window's engine still holds whatever was persisted when the window loaded, and a window
+  // that has been hosting since then may have saved newer state. Refresh before racing, on every
+  // route into the race rather than only the one the disposal takes: any route that ends up winning
+  // would otherwise republish — and, on the next save, persist — the load-time snapshot, dropping
+  // the user's changes. A no-op on the first run, where the two are the same values.
+  reloadPersistedThemeState();
   try {
     const hostedEngine = await dataProviderService.registerEngine(
       themeServiceDataProviderName,
@@ -775,6 +821,7 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
     );
     dataProvider = hostedEngine;
     isHostingThemeEngine = true;
+    consecutiveEmptyHandedRuns = 0;
     // Only the hosting window watches the OS dark-mode preference, and only once it has actually
     // won the name. Listening before registering would leak a media-query listener in every window
     // that loses the race, since the unsubscribe below is only reached on the success path.
@@ -786,9 +833,20 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
     });
     return;
   } catch (e) {
-    logger.debug(
-      `Another window is already hosting the theme service; attaching to it. ${getErrorMessage(e)}`,
-    );
+    // Losing the name is the expected outcome in every window but one, and the only thing this
+    // `try` is written to survive. Anything else — a request that timed out, an event registration
+    // the central registry refused, a network service that has shut down — reaches here too and
+    // looks identical from the code's point of view, so say which one it was rather than reporting
+    // a bug as the routine outcome at a severity nothing reads.
+    const errorMessage = getErrorMessage(e);
+    if (isNameTakenError(errorMessage))
+      logger.debug(
+        `Another window is already hosting the theme service; attaching to it. ${errorMessage}`,
+      );
+    else
+      logger.warn(
+        `Window ${globalThis.windowId} failed to host the theme service for a reason other than the name being taken; attaching to whichever window has it instead. ${errorMessage}`,
+      );
   }
 
   const hostedProvider = await dataProviderService.get(themeServiceDataProviderName);
@@ -797,6 +855,7 @@ async function hostOrAttachToThemeEngine(): Promise<void> {
       `Window ${globalThis.windowId} did not win hosting of the theme engine and could not resolve the window that did, so it has no theme service to attach to`,
     );
   dataProvider = hostedProvider;
+  consecutiveEmptyHandedRuns = 0;
 
   // Everything else on the theme service is answered by the host over the network, but
   // `getCurrentThemeSync` reads this window's own engine — which serves nobody while this window is
