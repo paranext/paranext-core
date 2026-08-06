@@ -34,8 +34,16 @@ function ResourcePickerDialogWrapper({
 
   // Fetches locally-installed non-DBL resources (e.g. VULGP83, TNN, TND, HBK) that are not in
   // the DBL catalog. Each entry uses dblEntryUid === projectId as a synthetic marker.
+  // Catch errors (e.g. command not yet registered) so usePromise always resolves — the hook has
+  // no try/catch, so an unhandled rejection leaves isLoading=true forever.
   const [localNonDblResources, isLocalLoading] = usePromise(
-    useCallback(async () => sendCommand('platformGetResources.getLocalNonDblResources'), []),
+    useCallback(async () => {
+      try {
+        return await sendCommand('platformGetResources.getLocalNonDblResources');
+      } catch {
+        return [];
+      }
+    }, []),
     [],
   );
 
