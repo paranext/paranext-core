@@ -297,17 +297,23 @@ step, no automation. Just a record.
   the same startup code, so no window is distinguished as host in advance.
 - **Decision:** Every window's renderer races to register the same singleton network-object name at
   startup; the winner becomes the host, and every other window attaches to (proxies through) it
-  instead of registering its own. If the host window closes, surviving windows sweep for the
-  now-unreachable registration and re-run the same election so a new host takes over.
+  instead of registering its own. A window that closes never disposes what it hosted, so the process
+  owning the websocket connections derives the death from the connection teardown: it announces the
+  departed window's network objects as disposed once their methods are out of the central registry.
+  Every window hears that disposal on the object it attached to and re-runs the same election, so a
+  new host takes over — no polling and no reachability probing, and the announcement cannot arrive
+  before the object is genuinely unreachable.
 - **Alternatives:** Always host the singleton in main — rejected: these services' state and
   registration machinery already live in renderer-side service-host modules built around
   `dataProviderService`/`networkObjectService`; moving them to main is a larger rewrite for the same
   effect. A fixed "primary" window as host — rejected: any window, including the first, can be
   closed by the user, so a fixed designation would still need a takeover path.
 - **Consequences:** the app has exactly one theme engine and one scroll group service at all times,
-  transparent to consumers. The election/sweep/re-host machinery is implemented twice today (theme,
-  scroll group) and has already drifted between the two copies, so the duplication is worth
-  extracting into a shared helper.
+  transparent to consumers. The election/re-host machinery is implemented twice today (theme, scroll
+  group) and has already drifted between the two copies, so the duplication is worth extracting into
+  a shared helper. Both copies also depend on the disposal announcement being the only trigger, so a
+  run that neither wins the name nor finds the winner has to schedule its own retry — nothing else
+  will re-enter the election for it.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
