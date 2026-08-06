@@ -104,7 +104,7 @@ declare global {
 }
 /* eslint-enable */
 
-// Note: these items are used in `@renderer\services\web-view.service-host.ts`. Putting them here breaks
+// Note: these items are used in `@renderer\services\web-view.service-shard.ts`. Putting them here breaks
 // the circular dependency since `papi` uses the webview service.
 globalThis.papi = papiFrontend;
 globalThis.React = ReactModule;

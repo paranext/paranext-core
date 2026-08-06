@@ -53,7 +53,7 @@ Pick the service shape by whether it holds state and whether its implementation 
 
 Host a DataProvider engine in the process where its **dominant data source** lives, so subscribers don't fan out cross-process. The renderer hosts focus/window state, browser-only APIs (`localStorage`), `WebViewDefinition` reads, and theme/system-preference observers — engines reading those belong in the renderer (`src/renderer/services/*.service-host.ts`). The extension host hosts engines whose data is genuinely extension-host-local (extension lifecycle, cross-extension coordination).
 
-- **Choice:** put the engine in the process that owns its primary data source. e.g. `theme.service-host.ts` (reads OS color-scheme preference + `localStorage`) and `window.service-host.ts` (emits `Focus` / `AppFocus` from renderer-local events) both live in the renderer.
+- **Choice:** put the engine in the process that owns its primary data source. e.g. `theme.service-host.ts` (reads OS color-scheme preference + `localStorage`) and `window.service-shard.ts` (emits `Focus` / `AppFocus` from renderer-local events) both live in the renderer.
 - **Avoid:** hosting an engine in the extension host when ALL its data sources are renderer-local — every event would then JSON-RPC across the boundary for each subscriber.
 - **Rationale:** the decision is per-engine; a cross-process subscription chain is fine as the exception, not the rule for every event.
 - **C# vs TypeScript host:** OS-state / UI-adjacent services (focus, `WebViewDefinition`, settings) belong in a TypeScript service host; the C# data-provider process is reserved for ParatextData-backed services. See "Logic Placement" in [Paranext-Core-Patterns.md](../../../.context/standards/Paranext-Core-Patterns.md).

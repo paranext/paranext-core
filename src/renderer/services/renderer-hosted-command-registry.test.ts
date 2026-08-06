@@ -69,7 +69,7 @@ describe('renderer-hosted command registry', () => {
   });
 
   test('does not count a command whose registration rejected', async () => {
-    // The check exists to prove there is a handler for the routing proxy to forward to. Counting a
+    // The check exists to prove there is a handler for the service router to forward to. Counting a
     // name on the attempt would report exactly the failure most likely to happen — a name collision
     // after a reload, a network failure during startup — as covered, leaving the dead command to
     // surface later as nothing but a proxy timeout.
@@ -111,8 +111,8 @@ describe('renderer-hosted command registry', () => {
  * registered key in any of these files is exactly the omission this check exists to catch.
  */
 const REGISTERING_SOURCE_FILES = [
-  'dialog.service-host.ts',
-  'web-view.service-host.ts',
+  'dialog.service-shard.ts',
+  'web-view.service-shard.ts',
   'scroll-group-navigation.commands.ts',
 ].map((fileName) => resolve(__dirname, fileName));
 
