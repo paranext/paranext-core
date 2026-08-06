@@ -608,9 +608,9 @@ export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
 export type DeveloperSectionProps = {
 	/** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
 	localizedStrings: LanguageStrings;
-	/** The currently selected server type. QA and Test values display as Production. */
+	/** The currently selected server type. QA values display as Production; Test displays as Test. */
 	selectedServer: ServerType;
-	/** Called when the user switches to Production or Development. */
+	/** Called when the user switches to Production, Development, or Test. */
 	onServerChange: (server: ServerType) => void;
 	/** When true, the toggle items are non-interactive (loading or saving in progress). */
 	disabled: boolean;
