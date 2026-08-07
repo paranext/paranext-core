@@ -6,7 +6,7 @@ import {
   SHOULD_MATCH_SYSTEM_STORAGE_KEY,
   USER_THEMES_STORAGE_KEY,
 } from '@shared/services/theme.service-model';
-import { ThemeDefinitionExpanded } from 'platform-bible-utils';
+import { newPlatformError, ThemeDefinitionExpanded } from 'platform-bible-utils';
 
 // The renderer service is a CACHE over the main-process host: it is seeded from what main put on
 // this window's URL, kept current by the host's current-theme subscription, and hands over any
@@ -158,7 +158,7 @@ describe('keeping this window cache current', () => {
     );
     await startThemeService();
 
-    announceCurrentTheme({ isError: true, message: 'could not read the theme' });
+    announceCurrentTheme(newPlatformError('could not read the theme'));
 
     expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
     expect(logger.warn).toHaveBeenCalled();
@@ -179,12 +179,9 @@ describe('handing over theme state stored before the host moved to main', () => 
       shouldMatchSystem: false,
       userThemes: { 'user-0': {} },
     });
-    // eslint-disable-next-line no-null/no-null
-    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBe(null);
-    // eslint-disable-next-line no-null/no-null
-    expect(localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY)).toBe(null);
-    // eslint-disable-next-line no-null/no-null
-    expect(localStorage.getItem(USER_THEMES_STORAGE_KEY)).toBe(null);
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(USER_THEMES_STORAGE_KEY)).toBeNull();
   });
 
   it('clears the keys when the host refuses the offer as well', async () => {
@@ -196,8 +193,7 @@ describe('handing over theme state stored before the host moved to main', () => 
 
     // Refused means the host has state that beats this copy, so this copy is finished either way;
     // left in place it would be re-offered by every window on every start forever.
-    // eslint-disable-next-line no-null/no-null
-    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBe(null);
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBeNull();
   });
 
   it('keeps the keys when the offer could not be delivered', async () => {

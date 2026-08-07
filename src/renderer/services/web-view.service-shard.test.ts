@@ -64,7 +64,7 @@ vi.mock('@shared/services/network-object.service', () => ({
 }));
 vi.mock('@shared/services/command.service', () => ({ registerCommand: vi.fn() }));
 vi.mock('@shared/services/web-view-provider.service', () => ({ webViewProviderService: {} }));
-vi.mock('@renderer/services/theme.service-host', () => ({ localThemeService: {} }));
+vi.mock('@renderer/services/theme.service', () => ({ localThemeService: {} }));
 vi.mock('@renderer/services/web-view-state.service', () => ({
   deleteFullWebViewStateById: vi.fn(),
   getFullWebViewStateById: vi.fn(),
