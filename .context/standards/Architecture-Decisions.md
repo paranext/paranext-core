@@ -1972,15 +1972,27 @@ step, no automation. Just a record.
   service — no renderer registers a globally-unique name, so ADR-0009's machinery is gone with no
   consumers left, including a dispose-hook leak inside `createReattachingSubscribeCurrentTheme`
   (every re-attach added an `onDidDispose` handler whose unsubscriber was discarded). A window that
-  is RELOADED replays the URL main built when the window was created, whose theme is as old as the
-  window, so the renderer also records the theme it last painted and prefers that on a reload —
-  without it, a reload after a theme change paints the old theme and flashes. `shouldMatchSystem` is
-  computed in main only; a renderer that starts applying its own `matchMedia` would double-apply it.
-  `hasOwnThemeState` — what makes the host refuse a migration offer — is marked by the three public
-  setters rather than by any persistence, because the engine also writes on its own while extension
-  themes load, and those writes say nothing about what the user chose. `nativeTheme` cannot be
-  touched before Electron's `ready` event, so the host awaits `app.whenReady()` before building its
-  engine, which makes it the one app-global registration that is not purely synchronous in startup
+  is RELOADED replays the URL main built when the window was created, whose theme would otherwise be
+  as old as the window, so the renderer rewrites its own query parameter on every change — the same
+  mechanism the scroll group uses (ADR-0012), rather than a second seed source and a navigation-type
+  sniff to choose between them. `shouldMatchSystem` is computed in main only; a renderer that starts
+  applying its own `matchMedia` would double-apply it. `hasOwnThemeState` — what makes the host
+  refuse a migration offer — is seeded from a DEDICATED marker key that only the three public
+  setters and an adoption write, deliberately not from the presence of the three value keys, because
+  the engine also writes those on its own while extension themes load (matching the theme type to
+  the machine's dark-mode preference does it on the first start of a dark-mode machine) and those
+  writes say nothing about what the user chose; reading them back as a user choice would refuse a
+  handover that had not happened yet, and a refusal is what makes the offering window delete its
+  copy. "Do I have a theme worth handing a new window?" is deliberately a DIFFERENT question,
+  answered by "is this still the compile-time default?", so a theme derived from the OS preference
+  still travels on the URL. The theme list comes from a provider the extension host registers, which
+  does not exist when this host starts and which `platform.restartExtensionHost` replaces, so the
+  subscription is taken whenever that provider is announced rather than once — and the deadline for
+  "the current theme no longer exists, reset it" runs from that list's first payload rather than
+  from this process's age, which is not a bound on when the extension host publishes. `nativeTheme`
+  cannot be touched before Electron's `ready` event, so the host awaits `app.whenReady()` before
+  building its engine, which makes it the one app-global registration that is not purely synchronous
+  in startup
   order.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
