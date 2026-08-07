@@ -340,14 +340,18 @@ describe('generateCharacterMarkerMenuListItems', () => {
   it('is inert for a fully-covering row with no removeCharacterMarker, instead of nesting', () => {
     // With no `removeCharacterMarker`, a fully-covering row must not fall through to the
     // insert/change branch below — that would nest a duplicate marker, which the code this pins
-    // says must never happen.
+    // says must never happen. Two markers each fully covering the selection (a nested pair) is the
+    // real-world shape that produces this: with more than one covering marker, the state hook's
+    // `resolveCurrentMarker` returns `undefined`, so `currentCharacterMarker` is absent here rather
+    // than equal to the clicked row's marker — that absence is what let the old buggy code fall all
+    // the way through to `insertMarker(marker)` instead of stopping at the `changeCharacterMarker`
+    // branch.
     const { ref, insertMarker } = makeMockEditorRef();
     const close = vi.fn();
     const changeCharacterMarker = vi.fn();
     const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
-      currentCharacterMarker: 'bd',
       changeCharacterMarker,
-      coverage: { markerStates: { bd: 'all' }, hasUncovered: false },
+      coverage: { markerStates: { bd: 'all', nd: 'all' }, hasUncovered: false },
     });
 
     items.find((item) => item.marker === 'bd')?.action();
