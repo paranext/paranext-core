@@ -44,6 +44,13 @@ test.use({
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
 });
 
+// A fabricated all-caps token that cannot occur in the bundled WEB text, so `toContainText` /
+// `not.toContainText` are unambiguous (same rationale as type-through-save-echo.spec.ts's
+// TYPETHROUGHALPHA/BETA). "Yahweh" — the word used in earlier drafts of this spec — actually
+// occurs natively throughout Jonah 1 (vv. 1, 3, 4, 9, 10, 14 x3, 16 x2, 17 in the bundled WEB SFM),
+// which would make the paste-landed assertion pass vacuously and the undo assertion unsatisfiable.
+const PASTE_TOKEN = 'CLIPROUNDTRIPALPHA';
+
 test.describe('scripture editor clipboard USFM round trip', () => {
   test('Standard view copy/paste round-trips byte-faithful USFM through the real OS clipboard', async ({
     mainPage,
@@ -93,15 +100,20 @@ test.describe('scripture editor clipboard USFM round trip', () => {
     });
 
     await test.step('pasting external USFM-looking text tokenizes into editor marker spans', async () => {
-      await electronApp.evaluate(({ clipboard }) => clipboard.writeText('\\nd Yahweh\\nd* '));
+      await electronApp.evaluate(
+        ({ clipboard }, token) => clipboard.writeText(`\\nd ${token}\\nd* `),
+        PASTE_TOKEN,
+      );
       await editorInput.click();
       await editorInput.press('Control+End');
       await editorInput.press('Control+V');
-      await expect(editorInput).toContainText('Yahweh', { timeout: 20_000 });
+      await expect(editorInput).toContainText(PASTE_TOKEN, { timeout: 20_000 });
 
-      // Depart the just-pasted text to trigger the pend->settle rebuild (same idiom as
-      // attribute-display-settle.spec.ts): moving the caret off it is what turns raw marker syntax
-      // into a rendered MarkerNode span rather than leaving it as literal pending text.
+      // A fully-terminated paste (`\nd …\nd* `, both opener and closer present) rebuilds
+      // synchronously at paste time — unlike a typed span mid-edit, there is no pending tier it
+      // needs to depart to settle (contrast attribute-display-settle.spec.ts, where departure is
+      // required because typing stops mid-span). This Home press is belt-and-braces only, not a
+      // required step, in case caret position affects rendering some other way.
       await editorInput.press('Home');
 
       await expect(editorFrame.locator('span.opening[data-marker="nd"]').first()).toBeAttached({
@@ -114,26 +126,31 @@ test.describe('scripture editor clipboard USFM round trip', () => {
 
     await test.step('undoing the paste is a single step', async () => {
       await editorInput.press('Control+Z');
-      await expect(editorInput).not.toContainText('Yahweh', { timeout: 20_000 });
+      await expect(editorInput).not.toContainText(PASTE_TOKEN, { timeout: 20_000 });
       await expect(editorFrame.locator('span.opening[data-marker="nd"]')).toHaveCount(0, {
         timeout: 20_000,
       });
     });
 
     await test.step('pasting a `\\c` chapter marker cannot corrupt the open chapter', async () => {
+      // Chapter markers render as a block-level `<p class="chapter-marker usfm_c"
+      // data-marker="c">` (ChapterNode.createDOM), not an inline `span.opening` — the loaded
+      // chapter has exactly one going in, and a corrupted paste could either add a second one or
+      // replace/remove the existing one, so pin the baseline before pasting.
+      const chapterMarker = editorFrame.locator('p.chapter-marker[data-marker="c"]');
+      await expect(chapterMarker).toHaveCount(1);
+
       await electronApp.evaluate(({ clipboard }) => clipboard.writeText('\\c 99 '));
       await editorInput.click();
       await editorInput.press('Control+End');
       await editorInput.press('Control+V');
 
-      // Give the paste a moment to settle, then assert the engine's strip guarantee three
-      // independent ways: no `\c` marker span was created, no literal `\c` bytes landed as text
-      // either, and the toolbar's active reference — read entirely outside the editor DOM — is
-      // still Jonah 1. Any of the three would fail if a stray "\c 99" were (mis)tokenized as a
-      // real chapter marker.
-      await expect(editorFrame.locator('span.opening[data-marker="c"]')).toHaveCount(0, {
-        timeout: 20_000,
-      });
+      // Assert the engine's strip guarantee three independent ways: the chapter-marker block
+      // count is unchanged (no second one added, the existing one not corrupted away), no literal
+      // `\c 99` bytes landed as text either, and the toolbar's active reference — read entirely
+      // outside the editor DOM — is still Jonah 1. Any of the three would fail if a stray
+      // "\c 99" were (mis)tokenized as a real chapter marker.
+      await expect(chapterMarker).toHaveCount(1, { timeout: 20_000 });
       await expect(editorInput).not.toContainText('\\c 99');
       await expect(bcvTrigger).toContainText('Jonah 1', { timeout: 10_000 });
     });
