@@ -32,7 +32,7 @@ export type TrackSimpleLayoutTabsResolvedOptions = {
  * overlay anyway. The overlay should never get stuck if a tab's webview provider misbehaves — the
  * user is better off seeing a tab with an unresolved title than no UI at all.
  */
-export const DEFAULT_SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 5000;
+export const DEFAULT_SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 3000;
 
 /**
  * Behavior notes:
@@ -40,15 +40,21 @@ export const DEFAULT_SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS = 5000;
  * - If `tabIds` is empty, the tracker resolves on the next tick of the event loop (effectively
  *   immediately). There are no events to wait for, so blocking the caller until the timeout would
  *   be wasteful. The resolution still goes through the same `finish()` path so subscriptions are
- *   torn down cleanly.
+ *   torn down cleanly. This is not a timeout (`{ timedOut: false }`) — there was nothing to time
+ *   out on.
  * - Duplicate events for the same id (e.g. open followed by update) are idempotent: only the first
  *   firing advances progress, subsequent ones are ignored. This keeps the early-resolve check
  *   honest when an id fires twice while others are still pending.
  * - The timeout is a safety net, not a normal path. `dispose()` should be called by the caller if the
- *   surrounding workflow errors out so the tracker doesn't keep its subscriptions alive.
+ *   surrounding workflow errors out so the tracker doesn't keep its subscriptions alive; a disposal
+ *   like this resolves as `{ timedOut: false }` too — it's an external cancellation, not a
+ *   timeout.
+ * - `promise` resolves with `{ timedOut: boolean }` rather than plain `void` so a caller that timed
+ *   out (some tab's provider never fired) can tell the difference from genuine success and log or
+ *   react accordingly, instead of treating both outcomes identically.
  */
 export function trackSimpleLayoutTabsResolved(options: TrackSimpleLayoutTabsResolvedOptions): {
-  promise: Promise<void>;
+  promise: Promise<{ timedOut: boolean }>;
   dispose: () => void;
 } {
   const {
@@ -63,9 +69,9 @@ export function trackSimpleLayoutTabsResolved(options: TrackSimpleLayoutTabsReso
   let unsubUpdate: (() => void) | undefined;
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   let finished = false;
-  let resolveFn: (() => void) | undefined;
+  let resolveFn: ((result: { timedOut: boolean }) => void) | undefined;
 
-  const finish = () => {
+  const finish = (timedOut: boolean) => {
     if (finished) return;
     finished = true;
     if (timeoutHandle !== undefined) {
@@ -76,16 +82,16 @@ export function trackSimpleLayoutTabsResolved(options: TrackSimpleLayoutTabsReso
     unsubOpen = undefined;
     unsubUpdate?.();
     unsubUpdate = undefined;
-    resolveFn?.();
+    resolveFn?.({ timedOut });
   };
 
-  const promise = new Promise<void>((resolve) => {
+  const promise = new Promise<{ timedOut: boolean }>((resolve) => {
     resolveFn = resolve;
   });
 
   const handleEvent = ({ webView }: { webView: { id: string } }) => {
     if (!remaining.delete(webView.id)) return;
-    if (remaining.size === 0) finish();
+    if (remaining.size === 0) finish(false);
   };
 
   unsubOpen = onDidOpenWebView(handleEvent);
@@ -94,12 +100,12 @@ export function trackSimpleLayoutTabsResolved(options: TrackSimpleLayoutTabsReso
   if (remaining.size === 0) {
     // Empty `tabIds` — nothing to wait for. Resolve immediately, but still go through `finish()` so
     // the freshly-installed subscriptions are torn down.
-    finish();
+    finish(false);
   } else {
     timeoutHandle = setTimeout(() => {
-      finish();
+      finish(true);
     }, timeoutMs);
   }
 
-  return { promise, dispose: finish };
+  return { promise, dispose: () => finish(false) };
 }

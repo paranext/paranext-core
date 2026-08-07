@@ -51,6 +51,35 @@ export const SIMPLE_LAYOUT_TAB_IDS: readonly string[] = (() => {
   return ids;
 })();
 
+/**
+ * One tab id per panel — Column 1 (Model Text) and Column 2 (Scripture Editor) each hold exactly
+ * one tab, but Column 3 ("Resources & Tools") stacks additional tabs behind the active one, so this
+ * takes only that panel's first tab. A smaller, more targeted set than {@link SIMPLE_LAYOUT_TAB_IDS}
+ * for callers that only care about tabs the user can actually see: Column 3's other tabs are hidden
+ * behind the active one (rc-dock keeps them mounted but `display: none`), so waiting on them before
+ * doing something user-visible (like hiding a loading overlay) stalls unnecessarily on hidden
+ * WebViews.
+ *
+ * "First tab" is Column 3's default when no `activeId` is set (matching {@link simpleLayout}'s
+ * static definition, which doesn't set one) — but it is not necessarily the tab a project
+ * administrator's `platformScripture.sharedLayoutDefaultTab` setting ultimately wants active. That
+ * setting is only applied via `focusSharedLayoutDefaultTab`/`SharedLayoutReceiver.applyForProject`
+ * in the normal `openScriptureEditor` flow, deliberately as a non-blocking correction _after_ a
+ * fast Power → Simple switch's layout has already loaded (see `web-view.service-host.ts`) — reading
+ * it synchronously here, before the switch's overlay releases, would introduce a slow network round
+ * trip that we want to avoid. A project whose admin-configured default differs from "first tab" may
+ * see a brief tab-front change shortly after the switch completes; that's an accepted tradeoff, not
+ * a bug in this constant.
+ */
+export const VISIBLE_SIMPLE_LAYOUT_TAB_IDS: readonly string[] = (() => {
+  const ids: string[] = [];
+  visitPanels(simpleLayout, (panel) => {
+    const firstTabId = panel.tabs[0]?.id;
+    if (firstTabId) ids.push(firstTabId);
+  });
+  return ids;
+})();
+
 /** Narrows a tab's `data`/`state` payload (typed `unknown` on `TabBase`) to a writable record. */
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object';
