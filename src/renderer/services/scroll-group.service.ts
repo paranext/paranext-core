@@ -52,6 +52,7 @@ import {
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 import { SCROLL_GROUP_STATE_QUERY_PARAMETER } from '@shared/data/platform.data';
+import { refreshWindowCreationState } from '@renderer/services/window-creation-state.util';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -221,6 +222,19 @@ function seedCacheBeforeFirstRender(): void {
 seedCacheBeforeFirstRender();
 
 /**
+ * Keep the state on this window's URL as current as the cache, so a RELOAD of this document seeds
+ * from where the app is now rather than from where it was when the window was created. Called from
+ * every place the cached references change, whether the change came from the host or was predicted
+ * here. See {@link refreshWindowCreationState}.
+ */
+function rememberScrollGroupStateForReload(): void {
+  refreshWindowCreationState(SCROLL_GROUP_STATE_QUERY_PARAMETER, {
+    scrRefs: cachedScrRefs,
+    scrRefSourceProjectIds: cachedScrRefSourceProjectIds,
+  });
+}
+
+/**
  * This window's copy of each scroll group's reference history. The history is app-global and
  * authoritative in main — a group is on one reference in every window, so there is one trail
  * through it — and this copy exists only so the toolbar's back/forward buttons can be rendered and
@@ -305,6 +319,7 @@ function applyScrRefToCache(
   const scrRefClone = deepClone(scrRef);
   cachedScrRefs[scrollGroupId] = scrRefClone;
   cachedScrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
+  rememberScrollGroupStateForReload();
   onDidUpdateScrRefEmitter.emit({ scrollGroupId, scrRef: scrRefClone, sourceProjectId });
 }
 
@@ -909,6 +924,7 @@ function subscribeToScrollGroupUpdates(): void {
     ({ scrollGroupId, scrRef, sourceProjectId }) => {
       cachedScrRefs[scrollGroupId] = scrRef;
       cachedScrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
+      rememberScrollGroupStateForReload();
       onDidUpdateScrRefEmitter.emit({ scrollGroupId, scrRef, sourceProjectId });
       drainGroupsAwaitingResync();
     },
@@ -959,6 +975,7 @@ async function seedCacheFromHost(): Promise<void> {
   Object.entries(snapshot.referenceHistories ?? {}).forEach(([scrollGroupId, history]) => {
     if (history) applyReferenceHistoryToCache(Number(scrollGroupId), history);
   });
+  rememberScrollGroupStateForReload();
   hasSeededFromHost = true;
 }
 
