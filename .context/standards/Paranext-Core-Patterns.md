@@ -1050,10 +1050,14 @@ await networkObjectService.set<WebViewServiceType>(
 A service whose state belongs to the whole APP rather than to any window (the scroll group
 references, the current theme) cannot be a shard, and cannot be routed either — a router picks one
 window to answer and no window has the right answer. Host it in the process that outlives every
-window, and give each renderer a cache instead of an authority. See
-[ADR-0012](Architecture-Decisions.md#adr-0012-the-scroll-group-service-is-hosted-in-main-and-each-renderer-keeps-a-predicting-cache);
-worked example: `src/main/services/scroll-group.service-host.ts` +
-`src/renderer/services/scroll-group.service.ts`.
+window, and give each renderer a cache instead of an authority. Predict only where the UI has a
+SYNCHRONOUS WRITER — the scroll group does, the theme does not, and a cache with no writer to predict
+is just a cache. See
+[ADR-0012](Architecture-Decisions.md#adr-0012-the-scroll-group-service-is-hosted-in-main-and-each-renderer-keeps-a-predicting-cache)
+and [ADR-0013](Architecture-Decisions.md#adr-0013-the-theme-service-is-hosted-in-main-and-each-window-caches-the-current-theme);
+worked examples: `src/main/services/scroll-group.service-host.ts` +
+`src/renderer/services/scroll-group.service.ts` (predicting), and
+`src/main/services/theme.service-host.ts` + `src/renderer/services/theme.service.ts` (read-only).
 
 **Host side** (`src/main/services/{service}.service-host.ts`) — one for the app:
 
@@ -1099,10 +1103,10 @@ export function setScrRefSync(/* ... */): boolean {
 **Do:**
 
 - Pass the state a new window needs through the per-window query-param object in `main.ts`
-  (`SCROLL_GROUP_STATE_QUERY_PARAMETER`, alongside `WINDOW_ID`) and seed the cache from it at module
-  load. A cache that can only be filled by a round trip serves the default value to the first render.
-  Handle "main does not know yet" — omit the parameter, and let the renderer fall back to what it can
-  read for itself.
+  (`SCROLL_GROUP_STATE_QUERY_PARAMETER` / `THEME_STATE_QUERY_PARAMETER`, alongside `WINDOW_ID`) and
+  seed the cache from it at module load. A cache that can only be filled by a round trip serves the
+  default value to the first render. Handle "main does not know yet" — omit the parameter, and let
+  the renderer fall back to what it can read for itself.
 - Keep that query parameter as fresh as the cache, with `refreshWindowCreationState`
   (`src/renderer/services/window-creation-state.util.ts`). A RELOAD replays the URL main built when
   the window was created, and by then the window's own pre-host store has been handed over and
@@ -1127,7 +1131,14 @@ export function setScrRefSync(/* ... */): boolean {
 **Don't:**
 
 - Elect a host window (ADR-0009) for state that is app-global. The takeover path, the re-arm in every
-  consumer, and the cross-window mirror exist only because the state lived somewhere closable.
+  consumer, and the cross-window mirror exist only because the state lived somewhere closable. That
+  machinery is gone from this repo; do not reintroduce it.
+- Read a per-machine fact (OS dark mode, locale, display scaling) once per window. Read it in main —
+  `nativeTheme.shouldUseDarkColors` plus `nativeTheme.on('updated')` for dark mode — and let the
+  host derive from it, so N windows cannot disagree and there is no per-window listener to unwind.
+- Reach for your own process's data provider when you ARE the host process. Main's title bar reads
+  the theme host's module directly; going through the provider would put a JSON-RPC round trip
+  between a change and the object in the next module that already knows.
 - Let a persist failure abort the broadcast. The broadcast is what keeps the other windows agreeing;
   the file only decides what the next start opens on.
 - Leave a failed resync unretried. Without a retry — or a re-arm on the next inbound event — the
