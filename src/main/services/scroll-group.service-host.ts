@@ -632,12 +632,11 @@ const scrollGroupService: IScrollGroupHostService = {
  * Register the network object that backs the scroll group service. Must be called during main
  * process startup, before createWindow().
  *
- * The reference-history navigation commands are NOT registered here: the physical left/right
- * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
- * `scroll-group-navigation.commands.ts` in the renderer, because they resolve both the active
- * toolbar scroll group and the RTL layout direction, neither of which exists in this process.
- * Programmatic offset navigation is exposed through this network object's
- * `navigateReferenceHistory` method rather than a duplicate command.
+ * The reference-history navigation commands are registered by `scroll-group-navigation.commands.ts`
+ * in this process, not here: they resolve the active toolbar scroll group and the layout direction
+ * by asking the window the user is working in, so they belong with the other commands that do that
+ * rather than with the state they happen to write. Programmatic offset navigation is exposed
+ * through this network object's `navigateReferenceHistory` method rather than a duplicate command.
  */
 export async function startScrollGroupServiceHost(): Promise<void> {
   // Mark ONLY the experimental methods on the (otherwise stable) scroll group network object, via
