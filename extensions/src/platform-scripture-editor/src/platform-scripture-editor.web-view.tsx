@@ -330,6 +330,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
+  '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -344,6 +345,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -1600,6 +1602,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.insertMarker('x');
   }, [projectId, localizedStrings]);
 
+  /**
+   * Inserts an endnote at the current selection. Shared by the "Insert end note" context-menu item
+   * and the top-menu `platformScriptureEditor.insertEndnoteAtSelection` command (via the
+   * `webViewMessageListener` effect below). No keyboard shortcut, matching Paratext 9.
+   */
+  const insertEndnoteAtCurrentSelection = useCallback(async () => {
+    // Commits a snapshot of the project to the version history — see the footnote helper above.
+    await commitVersionHistorySnapshot(
+      projectId,
+      localizedStrings['%versionHistoryCommit_beforeInsertEndnote%'],
+      'inserting endnote',
+    );
+
+    editorRef.current?.insertMarker('fe');
+  }, [projectId, localizedStrings]);
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
@@ -1717,6 +1735,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'insertCrossReferenceAtSelection': {
           await insertCrossReferenceAtCurrentSelection();
+          break;
+        }
+        case 'insertEndnoteAtSelection': {
+          await insertEndnoteAtCurrentSelection();
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1895,6 +1917,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCommentAtCurrentSelection,
     insertFootnoteAtCurrentSelection,
     insertCrossReferenceAtCurrentSelection,
+    insertEndnoteAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
     decorations,
