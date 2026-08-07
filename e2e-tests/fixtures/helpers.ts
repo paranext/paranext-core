@@ -13,16 +13,16 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
- * A renderer's window-scoped `platform.about` command (`command:platform.about-{windowId}`, see
- * `dialog.service-shard.ts`).
+ * A renderer's window-scoped dialog service shard (`object:DialogService-{windowId}.showDialog`,
+ * see `dialog.service-shard.ts`).
  *
- * The gate matches the SCOPED name rather than the generic `command:platform.about`: the main
- * process registers service routers under the generic names before it creates any window, so the
- * generic name appears in `rpc.discover` while no renderer exists to serve it. A scoped name can
- * only come from a live renderer that finished registering its commands. The window id is an
- * Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
+ * The gate matches a SCOPED name rather than the generic `dialog:showDialog` or
+ * `command:platform.about`: the main process registers those before it creates any window, so they
+ * appear in `rpc.discover` while no renderer exists to serve them. A scoped shard method can only
+ * come from a live renderer that finished registering its services. The window id is an Electron
+ * BrowserWindow id, so it is matched as a pattern rather than a fixed string.
  */
-const SCOPED_PLATFORM_ABOUT_COMMAND = /^command:platform\.about-\d+$/;
+const SCOPED_DIALOG_SHARD_METHOD = /^object:DialogService-\d+\.showDialog$/;
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
@@ -636,11 +636,7 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     timeout,
   });
   const remaining1 = Math.max(1000, timeout - (Date.now() - start));
-  await waitForPapiMethodRegistered(
-    SCOPED_PLATFORM_ABOUT_COMMAND,
-    DEFAULT_WEBSOCKET_PORT,
-    remaining1,
-  );
+  await waitForPapiMethodRegistered(SCOPED_DIALOG_SHARD_METHOD, DEFAULT_WEBSOCKET_PORT, remaining1);
   const remaining2 = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after dock-layout mounts and platform.about
   // registers, so the overlay can outlast both earlier signals.
