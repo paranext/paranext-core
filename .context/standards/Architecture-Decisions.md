@@ -1377,5 +1377,11 @@ step, no automation. Just a record.
   position. The one-time handover of pre-host state is adopt-then-flag and answers the offering
   window, which discards its copy on either answer; a profile that downgrades, navigates on the old
   build, and upgrades again loses that navigation, because the host refuses an offer once it has
-  state of its own. The theme service still uses ADR-0009's election until it moves the same way.
+  state of its own. Because the window's URL is a SEED rather than a one-off argument, the renderer
+  rewrites its own query parameter (`history.replaceState`) whenever the cache changes: a
+  RELOAD replays that URL, and the pre-host store a reloaded document would otherwise fall back to
+  has been handed over and deleted by then, so a URL left as old as the window would put a reloaded
+  window back on the reference it opened on — which for a restored Scripture editor is the extra
+  chapter load the seed exists to avoid. The theme service still uses ADR-0009's election until it
+  moves the same way.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
