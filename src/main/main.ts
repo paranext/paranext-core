@@ -96,6 +96,7 @@ import {
   serialize,
   UnsubscriberAsyncList,
   wait,
+  waitForDuration,
 } from 'platform-bible-utils';
 import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
 import { themeService } from '@shared/services/theme.service';
@@ -1186,11 +1187,22 @@ async function main() {
       const unsubscribeMenubar = unsubscribeMacosMenubar;
       unsubscribeMacosMenubar = undefined;
       if (unsubscribeMenubar) {
-        try {
-          await unsubscribeMenubar();
-        } catch (error) {
-          logger.warn(`Failed to unsubscribe the macOS menubar: ${getErrorMessage(error)}`);
-        }
+        // Bounded like every other wait on this path. The unsubscribe is an RPC to the extension
+        // host, which is still up at this point and should answer at once — but an extension host
+        // that has stopped answering would otherwise hold the whole quit for the request timeout,
+        // and a subscription left behind in a process that is about to exit costs nothing.
+        const didFinishUnsubscribing = await waitForDuration(async () => {
+          try {
+            await unsubscribeMenubar();
+          } catch (error) {
+            logger.warn(`Failed to unsubscribe the macOS menubar: ${getErrorMessage(error)}`);
+          }
+          return true;
+        }, PROCESS_CLOSE_TIME_OUT_MS);
+        if (!didFinishUnsubscribing)
+          logger.warn(
+            `The macOS menubar did not unsubscribe within ${PROCESS_CLOSE_TIME_OUT_MS} ms; quitting anyway`,
+          );
       }
 
       await Promise.all([
@@ -1267,7 +1279,14 @@ async function main() {
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (getWindows().length === 0) createWindowReportingFailures('on activate');
+        //
+        // Asking whether the app is on its way down as well as counting windows, because for the
+        // moment between a window being destroyed and its `closed` handler stopping tracking it,
+        // the two disagree: the window is out of the count already but is still recorded as
+        // closing. `createWindow` refuses in that state, correctly — reporting the refusal as a
+        // failure to create a window is what this avoids.
+        if (getWindows().length === 0 && !isAppShuttingDown())
+          createWindowReportingFailures('on activate');
       });
 
       return undefined;
