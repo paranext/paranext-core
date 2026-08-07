@@ -28,7 +28,7 @@ public class SettingsServiceTests
     }
     #endregion
 
-    [TestCase()]
+    [Test]
     public void GetSettingValue_Boolean_ReturnsValue()
     {
         var settingKey = "isTest";
@@ -39,7 +39,7 @@ public class SettingsServiceTests
         Assert.That(retrievedSettingValue, Is.EqualTo(settingValue));
     }
 
-    [TestCase()]
+    [Test]
     public void GetSettingValue_Integer_ReturnsValue()
     {
         var settingKey = "testNum";
@@ -48,5 +48,34 @@ public class SettingsServiceTests
 
         var retrievedSettingValue = SettingsService.GetSetting<int>(_client, settingKey);
         Assert.That(retrievedSettingValue, Is.EqualTo(settingValue));
+    }
+
+    [Test]
+    public void TryGetSetting_LegitimateNullValue_ReturnsTrue()
+    {
+        // A stored-but-null value is not a failure; only an exception (e.g. a timeout) is.
+        _settingsService.AddSettingValue("nullableSetting", null!);
+
+        bool succeeded = SettingsService.TryGetSetting<string>(
+            _client,
+            "nullableSetting",
+            out var value
+        );
+
+        Assert.That(succeeded, Is.True);
+        Assert.That(value, Is.Null);
+    }
+
+    [Test]
+    public void TryGetSetting_LookupThrows_ReturnsFalse()
+    {
+        bool succeeded = SettingsService.TryGetSetting<string>(
+            _client,
+            "missingSetting",
+            out var value
+        );
+
+        Assert.That(succeeded, Is.False);
+        Assert.That(value, Is.Null);
     }
 }
