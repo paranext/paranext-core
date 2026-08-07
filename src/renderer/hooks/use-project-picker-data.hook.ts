@@ -261,10 +261,19 @@ export function useProjectPickerData(): ProjectPickerData {
       try {
         allDefs = getAllOpenWebViewDefinitionsSync();
       } catch (e) {
-        // The dock layout may not be registered yet on the first render. Nothing is open then, so
-        // there is no current project to name; the web view events above re-run this as soon as one
-        // opens. Logged at debug so a normal startup does not warn.
-        logger.debug(
+        // The dock layout may not be registered yet on the first render, so this read comes back
+        // empty rather than answering "nothing is open". Treating that as "no current project" is
+        // safe only because two things guarantee a later re-run, and both must hold:
+        // - every web view that ends up open announces itself through the events above, including
+        //   the ones restored from a saved layout. A persisted definition carries no content, so
+        //   restoring a tab re-opens it through the same path that emits `onDidUpdateWebView` —
+        //   there is no way for a web view to be present without having emitted.
+        // - `getAllMetadata`'s identity changes with `metadataRefreshCounter`, so this callback is
+        //   not pinned to a snapshot taken during the empty window.
+        // One of these while a window is starting up is the expected transient. One after the
+        // layout has registered means neither guarantee above fired, and the picker will sit blank
+        // with nothing left to re-trigger it — which is why this is loud enough to find in a log.
+        logger.warn(
           `ProjectPicker: could not enumerate this window's web views: ${getErrorMessage(e)}`,
         );
       }
