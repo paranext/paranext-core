@@ -7,9 +7,24 @@
 import { BrowserWindow } from 'electron';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 
+/** A tracked window, paired with the id it was created with */
+type TrackedWindow = {
+  /**
+   * The window's id, captured while the window was still alive.
+   *
+   * Every reader below answers from this rather than from `window.id`. Electron destroys a window
+   * before the `closed` handler removes it from this list, and a property read on a destroyed
+   * BrowserWindow throws — inside the routing lookup that runs on every routed call, and inside the
+   * mutations a closing window's own teardown is waiting on, where a throw abandons the rest of the
+   * close. See {@link removeWindow}, which has always taken the id for the same reason.
+   */
+  windowId: number;
+  window: BrowserWindow;
+};
+
 // Keep a global reference of the window objects. If you don't, the windows will
 // be closed automatically when the JavaScript objects are garbage collected.
-const windows: BrowserWindow[] = [];
+const trackedWindows: TrackedWindow[] = [];
 
 /** ID of the Electron BrowserWindow that Electron most recently reported as focused, if any */
 let focusedWindowId: number | undefined;
@@ -77,9 +92,18 @@ const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<number | undefi
  */
 export const onDidChangeRoutingTarget = onDidChangeRoutingTargetEmitter.event;
 
-/** Get the tracked windows array (read-only view) */
-export function getWindows(): readonly BrowserWindow[] {
-  return windows;
+/**
+ * The tracked windows that still exist, in creation order.
+ *
+ * Destroyed windows are filtered out here rather than at each call site because callers hold the
+ * BrowserWindow and go on to act on it — restore it, focus it, count it as a reason not to open
+ * another one — and every one of those acts throws on a window Electron has already destroyed. A
+ * window stays tracked until its `closed` handler runs, so a destroyed window can be in the list.
+ *
+ * Answers the tracked set at the moment it is called; it is not a live array.
+ */
+export function getWindows(): BrowserWindow[] {
+  return trackedWindows.filter(({ window }) => !window.isDestroyed()).map(({ window }) => window);
 }
 
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
@@ -115,7 +139,9 @@ export function doesNavigationReplaceRendererRegistrations(navigation: {
  * can only produce a wait on the network service's registration retry and a warning.
  */
 export function getReadyWindowIds(): number[] {
-  return windows.filter((window) => readyWindowIds.has(window.id)).map((window) => window.id);
+  return trackedWindows
+    .map(({ windowId }) => windowId)
+    .filter((windowId) => readyWindowIds.has(windowId));
 }
 
 /**
@@ -152,10 +178,12 @@ function getRoutingTarget(): RoutingTarget {
   if (mostRecentlyFocusedReadyWindowId !== undefined)
     return { windowId: mostRecentlyFocusedReadyWindowId, isReady: true };
 
-  const firstReadyWindow = windows.find((window) => readyWindowIds.has(window.id));
-  if (firstReadyWindow) return { windowId: firstReadyWindow.id, isReady: true };
+  const firstReadyWindowId = trackedWindows.find(({ windowId }) =>
+    readyWindowIds.has(windowId),
+  )?.windowId;
+  if (firstReadyWindowId !== undefined) return { windowId: firstReadyWindowId, isReady: true };
 
-  return { windowId: focusedWindowId ?? windows[0]?.id, isReady: false };
+  return { windowId: focusedWindowId ?? trackedWindows[0]?.windowId, isReady: false };
 }
 
 /** Get the window ID to target for command/service routing. See {@link getRoutingTarget}. */
@@ -181,9 +209,14 @@ function announceRoutingTargetIfChanged(): void {
   onDidChangeRoutingTargetEmitter.emit(routingTarget.windowId);
 }
 
-/** Add a window to the tracked list */
+/**
+ * Add a window to the tracked list.
+ *
+ * Its id is read once, here, while the window is certain to be alive, and every reader answers from
+ * that copy afterwards — see {@link TrackedWindow}.
+ */
 export function addWindow(window: BrowserWindow): void {
-  windows.push(window);
+  trackedWindows.push({ windowId: window.id, window });
   announceRoutingTargetIfChanged();
 }
 
@@ -201,8 +234,8 @@ export function addWindow(window: BrowserWindow): void {
  * @param windowId The window's ID, captured while it was still alive.
  */
 export function removeWindow(window: BrowserWindow, windowId: number): void {
-  const trackedIndex = windows.indexOf(window);
-  if (trackedIndex >= 0) windows.splice(trackedIndex, 1);
+  const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
+  if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
   readyWindowIds.delete(windowId);
   // Electron reuses window IDs, so leaving this behind would tell a future window's close that a
   // window which no longer exists is on its way out
@@ -254,9 +287,16 @@ export function markWindowClosing(windowId: number): void {
  *
  * Answered from what every window's close handler has recorded rather than from the tracked list
  * alone, which nothing trims until a window is actually gone. See {@link markWindowClosing}.
+ *
+ * No windows at all is not the app going down: `every` answers `true` for an empty list, but that
+ * state is the app coming UP — process start, and the moment a macOS dock reactivation runs before
+ * its window exists — where nothing is closing and refusing to create a window would be fatal.
  */
 export function areAllWindowsClosing(): boolean {
-  return windows.every((window) => closingWindowIds.has(window.id));
+  return (
+    trackedWindows.length > 0 &&
+    trackedWindows.every(({ windowId }) => closingWindowIds.has(windowId))
+  );
 }
 
 /**
@@ -272,4 +312,17 @@ export function areAllWindowsClosing(): boolean {
 export function markWindowNotReady(windowId: number): void {
   readyWindowIds.delete(windowId);
   announceRoutingTargetIfChanged();
+}
+
+/**
+ * Drop all tracked window state. This function is only exported for testing purposes and should not
+ * be used in production code — the app removes windows one at a time, as each one goes away.
+ */
+export function resetForTesting(): void {
+  trackedWindows.length = 0;
+  readyWindowIds.clear();
+  closingWindowIds.clear();
+  mostRecentlyFocusedWindowIds.length = 0;
+  focusedWindowId = undefined;
+  announcedRoutingTarget = { windowId: undefined, isReady: false };
 }

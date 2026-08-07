@@ -47,6 +47,7 @@ import {
   areAllWindowsClosing,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
+  getTargetWindowId,
   getWindows,
   markWindowClosing,
   markWindowNotReady,
@@ -374,9 +375,6 @@ async function main() {
     }
   })();
 
-  // Live reference to the internal windows array — reflects current state, not a snapshot
-  const windows = getWindows();
-
   // Announces a closed window to the whole app. Created once here rather than per window because an
   // event type may only be claimed by one emitter, and the main process is the single source for it
   // — it is the only process that knows when a window goes away. Services that a single window
@@ -427,8 +425,19 @@ async function main() {
   const args = process.argv.slice(1);
 
   function handleUri(uri: string) {
-    const focusWindow = BrowserWindow.getFocusedWindow() ?? windows[0];
-    if (focusWindow) {
+    // A deep link normally arrives while the app is in the background — that is the point of one —
+    // so no window has OS focus and the fallback below is the ordinary path, not the edge case. It
+    // asks where routed calls go, which is the window the user was last working in; the oldest
+    // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
+    const targetWindowId = getTargetWindowId();
+    const targetWindow =
+      targetWindowId === undefined
+        ? undefined
+        : (BrowserWindow.fromId(targetWindowId) ?? undefined);
+    const focusWindow = BrowserWindow.getFocusedWindow() ?? targetWindow;
+    // Restoring or focusing a window Electron has already destroyed throws, which would drop the
+    // URI before it is ever dispatched below
+    if (focusWindow && !focusWindow.isDestroyed()) {
       if (focusWindow.isMinimized()) focusWindow.restore();
       focusWindow.focus();
     }
@@ -539,7 +548,7 @@ async function main() {
     // Load the previous state with fallback to defaults.
     // Only use windowStateKeeper for the first window; subsequent windows are not managed by it, so
     // their size and position are not persisted (per-window bounds persistence is PT-4285's scope).
-    const isFirstWindow = windows.length === 0;
+    const isFirstWindow = getWindows().length === 0;
     const mainWindowState = isFirstWindow
       ? windowStateKeeper({ defaultWidth: 1024, defaultHeight: 728 })
       : undefined;
@@ -1216,7 +1225,7 @@ async function main() {
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (windows.length === 0) createWindowReportingFailures('on activate');
+        if (getWindows().length === 0) createWindowReportingFailures('on activate');
       });
 
       return undefined;

@@ -14,6 +14,7 @@ import {
   markWindowReady,
   onDidChangeRoutingTarget,
   removeWindow,
+  resetForTesting,
   setFocusedWindowId,
 } from '@main/services/window-state.service';
 
@@ -22,24 +23,26 @@ import {
 // imports above, so the static import resolves against this stub.
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 
-/** Stand-in for a BrowserWindow — the service only ever reads `id` */
+/** Stand-in for a BrowserWindow — the service only reads `id` and `isDestroyed` */
 function fakeWindow(id: number): BrowserWindow {
-  // Constructing a real BrowserWindow needs the Electron runtime; `id` is the only member the
+  // Constructing a real BrowserWindow needs the Electron runtime; these are the only members the
   // service under test touches
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { id } as BrowserWindow;
+  return { id, isDestroyed: () => false } as BrowserWindow;
 }
 
 /**
  * Stand-in for a BrowserWindow that can be destroyed the way Electron destroys one: once
- * `destroyForTest` has run, every property access throws instead of answering.
+ * `destroyForTest` has run, every property access throws instead of answering — except
+ * `isDestroyed`, which Electron keeps answerable precisely so a holder can find out.
  */
 function destroyableWindow(id: number): { window: BrowserWindow; destroyForTest: () => void } {
   let isDestroyed = false;
   const window = new Proxy(
-    { id },
+    { id, isDestroyed: () => isDestroyed },
     {
       get(target, key) {
+        if (key === 'isDestroyed') return target.isDestroyed;
         if (isDestroyed) throw new TypeError('Object has been destroyed');
         // Indexing the stub by the proxied key, which is only ever `id` here
         // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -60,9 +63,10 @@ function destroyableWindow(id: number): { window: BrowserWindow; destroyForTest:
 
 describe('window state tracking', () => {
   beforeEach(() => {
-    // The module holds process-wide state, so unwind it between tests
-    [...getWindows()].forEach((window) => removeWindow(window, window.id));
-    setFocusedWindowId(undefined);
+    // The module holds process-wide state, so unwind it between tests. Unwound wholesale rather
+    // than by removing each window: a test that destroys one leaves it tracked but out of
+    // `getWindows()`, which is exactly the state this module exists to survive.
+    resetForTesting();
   });
 
   test('targets the focused window when one is focused', () => {
@@ -134,12 +138,43 @@ describe('window state tracking', () => {
     expect(getFocusedWindowId()).toBeUndefined();
   });
 
-  test('exposes the live window list, which the close handler relies on to count windows', () => {
-    const live = getWindows();
+  test('answers with the windows tracked at the moment it is asked', () => {
+    expect(getWindows().length).toBe(0);
 
     addWindow(fakeWindow(1));
 
-    expect(live.length).toBe(1);
+    expect(getWindows().length).toBe(1);
+  });
+
+  test('leaves a window that was destroyed but not yet removed out of the window list', () => {
+    // A window is destroyed a moment before its `closed` handler removes it from the list. Callers
+    // that hold one of these act on it — restore it, focus it, count it as a reason not to open
+    // another window — and acting on a destroyed window throws instead.
+    const closing = destroyableWindow(1);
+    addWindow(closing.window);
+    addWindow(fakeWindow(2));
+
+    closing.destroyForTest();
+
+    expect(getWindows().map((window) => window.id)).toEqual([2]);
+  });
+
+  test('answers routing questions without reading a destroyed window', () => {
+    // Every read here happens on paths a closing window's own teardown is waiting on, so a throw
+    // does not merely fail the question — it abandons the rest of the close.
+    const closing = destroyableWindow(1);
+    addWindow(closing.window);
+    markWindowReady(1);
+    addWindow(fakeWindow(2));
+    markWindowReady(2);
+    markWindowClosing(1);
+
+    closing.destroyForTest();
+
+    expect(() => getReadyWindowIds()).not.toThrow();
+    expect(() => getTargetWindowId()).not.toThrow();
+    expect(() => areAllWindowsClosing()).not.toThrow();
+    expect(getReadyWindowIds()).toEqual([1, 2]);
   });
 
   describe('focus', () => {
@@ -566,6 +601,15 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
       markWindowClosing(2);
+
+      expect(areAllWindowsClosing()).toBe(false);
+    });
+
+    test('does not report the app going down when there is no window to be closing', () => {
+      // `every` on an empty list answers `true`, which would report an app on its way down at
+      // process start, at the moment the last window is removed, and on every macOS dock
+      // reactivation — all of which are moments the app is coming UP with nothing closing at all.
+      expect(getWindows().length).toBe(0);
 
       expect(areAllWindowsClosing()).toBe(false);
     });
