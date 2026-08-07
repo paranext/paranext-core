@@ -13,6 +13,12 @@
  * source project, target project), and the consumer that converts on every navigation is in this
  * process, so converting here keeps the round trips it costs to the one command call and lets the
  * results be cached against the versification subscriptions that invalidate them.
+ *
+ * ONE ANSWER PER WINDOW. This module is what `papi.scrollGroups` resolves to in the renderer (see
+ * {@link rendererScrollGroupService}), not just what the renderer's own hooks read, so a web view
+ * cannot get one answer from the hook and a different one from `papi`. `shared/services
+ * /scroll-group.service.ts` — the plain proxy to the host — is what the other processes get, where
+ * there is no window-local prediction to be consistent with.
  */
 
 import { sendCommand } from '@shared/services/command.service';
@@ -34,13 +40,18 @@ import {
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupHostService,
+  IScrollGroupService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  PersistedScrollGroupState,
   ReferenceHistory,
   ReferenceHistoryUpdateInfo,
+  SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY,
+  SCR_REFS_STORAGE_KEY,
   ScrollGroupMap,
   ScrollGroupSnapshot,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
+import { SCROLL_GROUP_STATE_QUERY_PARAMETER } from '@shared/data/platform.data';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -53,6 +64,7 @@ import {
   PlatformEventEmitter,
   ScrollGroupId,
   serialize,
+  wait,
 } from 'platform-bible-utils';
 import { resolveReferenceHistoryDirection } from 'platform-bible-utils/experimental';
 import { readDirection } from 'platform-bible-react/experimental';
@@ -106,6 +118,107 @@ const cachedScrRefs: ScrollGroupMap<SerializedVerseRef> = {};
  * in. `undefined` for a group means the source is unknown / canonical English.
  */
 const cachedScrRefSourceProjectIds: ScrollGroupMap<string> = {};
+
+/**
+ * Whether this window has caught up with the host at least once. Until it has, "the cache says
+ * nothing changed" is not evidence about the host — the cache may only hold what could be read
+ * before the network was up — so {@link setScrRefSync} does not act on it (see the guard there).
+ */
+let hasSeededFromHost = false;
+
+/** Whether a value is shaped like a Scripture reference this module can serve to the UI */
+function isScrRefShaped(scrRef: SerializedVerseRef | undefined): scrRef is SerializedVerseRef {
+  return (
+    !!scrRef &&
+    typeof scrRef.book === 'string' &&
+    typeof scrRef.chapterNum === 'number' &&
+    typeof scrRef.verseNum === 'number'
+  );
+}
+
+/**
+ * The scroll group state main handed this window on its URL when it created it, if any.
+ *
+ * This is how the cache is right on the FIRST render. React renders before the network is even up,
+ * and every `*Sync` reader is called during that render, so a cache that could only be filled by a
+ * round trip would serve the default reference to the toolbar, to the keyboard navigation commands,
+ * and to every scroll-group-following web view — which then jump when the real reference arrives, a
+ * jump that costs a restored Scripture editor a whole extra chapter load.
+ *
+ * Absent on a profile main has no state for yet, and unreadable input is treated the same as
+ * absent: this runs while the module is being evaluated, where a throw takes the window down with
+ * it.
+ */
+function readWindowCreationScrollGroupState(): PersistedScrollGroupState | undefined {
+  try {
+    const serialized = new URLSearchParams(globalThis.location?.search ?? '').get(
+      SCROLL_GROUP_STATE_QUERY_PARAMETER,
+    );
+    return serialized ? deserialize(serialized) : undefined;
+  } catch (e) {
+    logger.warn(
+      `Could not read the scroll group state this window was created with. ${getErrorMessage(e)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Where the scroll group state used to be persisted, back when a renderer held it: this window's
+ * own `localStorage`, under the keys the host now uses for its own store. The host cannot read it —
+ * main's `localStorage` polyfill is a different store in a different place — so a profile that
+ * predates the host has to hand it over, and until it has, this is the only thing in this process
+ * that knows where the user left off.
+ *
+ * This module never treats these keys as its own state: they are read to seed the first render on
+ * the one start where main has nothing yet, and to be offered once (see
+ * {@link handOverPreviouslyStoredState}). Both this and the offer stop being reachable once every
+ * profile that could be carrying them has started the app.
+ */
+function readPreviouslyStoredScrollGroupState(): PersistedScrollGroupState | undefined {
+  try {
+    const storedScrRefs = localStorage.getItem(SCR_REFS_STORAGE_KEY);
+    const storedSourceProjectIds = localStorage.getItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY);
+    if (!storedScrRefs && !storedSourceProjectIds) return undefined;
+    return {
+      scrRefs: storedScrRefs ? (deserialize(storedScrRefs) ?? {}) : {},
+      scrRefSourceProjectIds: storedSourceProjectIds
+        ? (deserialize(storedSourceProjectIds) ?? {})
+        : {},
+    };
+  } catch (e) {
+    logger.warn(
+      `Could not read the scroll group state stored in this window before the scroll group service host existed. ${getErrorMessage(e)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Fill the cache with everything that can be known without asking anyone, synchronously, while this
+ * module is being evaluated — which is before React renders.
+ *
+ * What main handed over wins: it is the app's live state, and it is the only one of the two that
+ * moves while the app runs. This window's own leftover store is the fallback for the single start
+ * after an upgrade, where main has nothing until the handover in {@link startScrollGroupService}
+ * completes. Neither is announced: nothing has subscribed yet, and this is the state consumers read
+ * on their first render rather than a change to it.
+ */
+function seedCacheBeforeFirstRender(): void {
+  const state = readWindowCreationScrollGroupState() ?? readPreviouslyStoredScrollGroupState();
+  if (!state) return;
+  Object.entries(state.scrRefSourceProjectIds ?? {}).forEach(([scrollGroupId, sourceProjectId]) => {
+    cachedScrRefSourceProjectIds[Number(scrollGroupId)] = sourceProjectId;
+  });
+  // Shape-checked because this window's own leftover store can predate the reference type carrying a
+  // book id. The host brings those forward when it adopts them; here, skipping one costs the default
+  // reference for a moment and beats handing the UI something it cannot render.
+  Object.entries(state.scrRefs ?? {}).forEach(([scrollGroupId, scrRef]) => {
+    if (isScrRefShaped(scrRef)) cachedScrRefs[Number(scrollGroupId)] = scrRef;
+  });
+}
+
+seedCacheBeforeFirstRender();
 
 /**
  * This window's copy of each scroll group's reference history. The history is app-global and
@@ -200,7 +313,26 @@ function applyReferenceHistoryToCache(
   history: ReferenceHistory,
 ): void {
   cachedReferenceHistories.set(scrollGroupId, history);
+  // Announced as a copy because the cached object is mutated in place by the predicting writers,
+  // while a consumer that holds what it was handed (the toolbar buttons keep it in React state and
+  // memoize on its identity) would otherwise see its own value change underneath it mid-render.
   onDidChangeReferenceHistoryEmitter.emit({ scrollGroupId, history: deepClone(history) });
+}
+
+/**
+ * Drop this window's copy of a scroll group's history because the host has none for it.
+ *
+ * "The host has no history for this group" is itself authoritative: it means nothing has been
+ * navigated there, so a trail this window recorded optimistically describes a move the host never
+ * made and would offer a back button the host will refuse. Deleting rather than emptying lets the
+ * next read lazily re-seed from the group's (just-corrected) reference, exactly as the host would.
+ */
+function resetCachedReferenceHistory(scrollGroupId: ScrollGroupId): void {
+  cachedReferenceHistories.delete(scrollGroupId);
+  onDidChangeReferenceHistoryEmitter.emit({
+    scrollGroupId,
+    history: deepClone(getOrCreateCachedReferenceHistory(scrollGroupId)),
+  });
 }
 
 // #endregion
@@ -227,6 +359,53 @@ async function resyncGroupFromHost(scrollGroupId: ScrollGroupId): Promise<void> 
   );
   const history = snapshot.referenceHistories[scrollGroupId];
   if (history) applyReferenceHistoryToCache(scrollGroupId, history);
+  else resetCachedReferenceHistory(scrollGroupId);
+}
+
+/** How long to wait before each retry of a resync that failed, in order */
+const RESYNC_RETRY_DELAYS_MS = [250, 1000];
+
+/**
+ * Groups whose resync gave up, waiting for a sign the host is reachable again. Drained by
+ * {@link drainGroupsAwaitingResync} on the next thing the host says, which is the cheapest proof
+ * available that asking is worth trying again.
+ */
+const groupsAwaitingResync = new Set<ScrollGroupId>();
+
+/** Resync a group, retrying a bounded number of times before parking it for the next host event. */
+async function resyncGroupFromHostWithRetry(
+  scrollGroupId: ScrollGroupId,
+  remainingRetryDelaysMs: readonly number[] = RESYNC_RETRY_DELAYS_MS,
+): Promise<void> {
+  groupsAwaitingResync.delete(scrollGroupId);
+  try {
+    await resyncGroupFromHost(scrollGroupId);
+  } catch (e) {
+    const [delayMs, ...laterDelaysMs] = remainingRetryDelaysMs;
+    if (delayMs === undefined) {
+      // Parked rather than abandoned: without this the window shows a reference the host rejected
+      // for the rest of the session, and every later write in this group starts from that wrong
+      // base, with nothing that would ever correct it.
+      groupsAwaitingResync.add(scrollGroupId);
+      logger.error(
+        `Scroll group ${scrollGroupId} could not be resynced from the scroll group service host, so this window may show a stale reference until the host is heard from again. ${getErrorMessage(e)}`,
+      );
+      return;
+    }
+    await wait(delayMs);
+    await resyncGroupFromHostWithRetry(scrollGroupId, laterDelaysMs);
+  }
+}
+
+/** Retry the resyncs that gave up, now that the host has been heard from. */
+function drainGroupsAwaitingResync(): void {
+  if (groupsAwaitingResync.size === 0) return;
+  [...groupsAwaitingResync].forEach((scrollGroupId) => {
+    resyncGroupFromHostWithRetry(scrollGroupId).catch(() => {
+      // resyncGroupFromHostWithRetry reports its own failure and re-parks the group; nothing here
+      // could add to that.
+    });
+  });
 }
 
 /**
@@ -234,6 +413,13 @@ async function resyncGroupFromHost(scrollGroupId: ScrollGroupId): Promise<void> 
  * own answer for the write; `false` means the host did NOT do what was predicted, so this window's
  * copy is wrong and has to be replaced. A failed send is treated the same way — the write may or
  * may not have landed, and the only way to find out is to ask.
+ *
+ * ORDERING: writes are sent independently, with no per-group sequencing, so the convergence
+ * argument for rapid navigation rests on requests and notifications sharing one ordered connection
+ * and the host handling them in arrival order. That holds today — the host's handlers are
+ * `await`-free, so each completes atomically — and it is load-bearing: under out-of-order delivery
+ * two writes can both be answered `true` while the host ends up on the earlier one, and nothing
+ * would reconcile. A transport that stops guaranteeing order needs a per-group queue here.
  */
 function sendPredictedWriteToHost(
   scrollGroupId: ScrollGroupId,
@@ -249,11 +435,11 @@ function sendPredictedWriteToHost(
       );
     }
     if (didChange) return;
-    await resyncGroupFromHost(scrollGroupId);
+    await resyncGroupFromHostWithRetry(scrollGroupId);
   };
   sendAndReconcile().catch((e) => {
     logger.warn(
-      `Scroll group ${scrollGroupId} could not be resynced from the scroll group service host, so this window may show a stale reference until the next change it hears about. ${getErrorMessage(e)}`,
+      `Scroll group ${scrollGroupId} write could not be reconciled with the scroll group service host. ${getErrorMessage(e)}`,
     );
   });
 }
@@ -279,13 +465,7 @@ export function setScrRefSync(
   scrRef: SerializedVerseRef,
   sourceProjectId?: string,
 ): boolean {
-  if (
-    !scrRef ||
-    !(typeof scrRef.book === 'string') ||
-    !(typeof scrRef.chapterNum === 'number') ||
-    !(typeof scrRef.verseNum === 'number')
-  )
-    throw new Error('Must provide scrRef in proper format!');
+  if (!isScrRefShaped(scrRef)) throw new Error('Must provide scrRef in proper format!');
 
   const scrollGroupIdDefaulted = scrollGroupId ?? 0;
 
@@ -300,8 +480,18 @@ export function setScrRefSync(
     scrRefUnchanged &&
     (sourceProjectId === undefined ||
       sourceProjectId === cachedScrRefSourceProjectIds[scrollGroupIdDefaulted])
-  )
+  ) {
+    // Before this window has caught up with the host, "nothing changed" is only a statement about
+    // what could be read locally, and acting on it discards the user's navigation with nothing left
+    // to correct it: the reconcile only ever runs on a write that was sent. So the write goes out
+    // anyway. The host runs the same guard, and whichever way it answers this window converges — on
+    // its `onDidUpdateScrRef` if it did move, on the resync a `false` triggers if it did not.
+    if (!hasSeededFromHost)
+      sendPredictedWriteToHost(scrollGroupIdDefaulted, (host) =>
+        host.setScrRef(scrollGroupIdDefaulted, scrRef, sourceProjectId),
+      );
     return false;
+  }
 
   // Capture (lazily seeding) the history BEFORE writing the cached ref so a first-touch seed records
   // the location being navigated AWAY from, not the destination — matching the host.
@@ -720,12 +910,15 @@ function subscribeToScrollGroupUpdates(): void {
       cachedScrRefs[scrollGroupId] = scrRef;
       cachedScrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
       onDidUpdateScrRefEmitter.emit({ scrollGroupId, scrRef, sourceProjectId });
+      drainGroupsAwaitingResync();
     },
   );
   getNetworkEvent<ReferenceHistoryUpdateInfo>(EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY)(
     ({ scrollGroupId, history }) => {
-      cachedReferenceHistories.set(scrollGroupId, history);
-      onDidChangeReferenceHistoryEmitter.emit({ scrollGroupId, history });
+      // Through the cache writer rather than straight into the map: it hands consumers a copy, and
+      // the object stored here is later mutated in place by the predicting writers.
+      applyReferenceHistoryToCache(scrollGroupId, history);
+      drainGroupsAwaitingResync();
     },
   );
 }
@@ -734,9 +927,14 @@ function subscribeToScrollGroupUpdates(): void {
  * Seed the cache from the host, and announce what was seeded.
  *
  * The announcement matters because the host does not replay anything: a consumer that mounted
- * before this ran would otherwise sit on the default reference until someone navigated. Announcing
- * only the groups the host actually knows about keeps a fresh profile — where every group is at the
- * default — from emitting a change nothing changed.
+ * before this ran would otherwise sit on whatever it first rendered until someone navigated.
+ * Announcing only the groups the host actually knows about keeps a fresh profile — where every
+ * group is at the default — from emitting a change nothing changed.
+ *
+ * Reference histories are announced the same way, and for the same reason: the toolbar's back and
+ * forward buttons read the history once when they mount, which in a window opened mid-session is
+ * before this runs, so without the announcement they would show an empty trail while another window
+ * plainly shows a full one.
  */
 async function seedCacheFromHost(): Promise<void> {
   const host = await getScrollGroupHost();
@@ -746,9 +944,6 @@ async function seedCacheFromHost(): Promise<void> {
       cachedScrRefSourceProjectIds[Number(scrollGroupId)] = sourceProjectId;
     },
   );
-  Object.entries(snapshot.referenceHistories ?? {}).forEach(([scrollGroupId, history]) => {
-    if (history) cachedReferenceHistories.set(Number(scrollGroupId), history);
-  });
   Object.entries(snapshot.scrRefs ?? {}).forEach(([scrollGroupId, scrRef]) => {
     if (!scrRef) return;
     const groupId = Number(scrollGroupId);
@@ -759,48 +954,42 @@ async function seedCacheFromHost(): Promise<void> {
       sourceProjectId: cachedScrRefSourceProjectIds[groupId],
     });
   });
+  // After the references, so a consumer reacting to a history change reads the reference it belongs
+  // to rather than the one this window came up with.
+  Object.entries(snapshot.referenceHistories ?? {}).forEach(([scrollGroupId, history]) => {
+    if (history) applyReferenceHistoryToCache(Number(scrollGroupId), history);
+  });
+  hasSeededFromHost = true;
 }
 
 /**
- * Where the scroll group state used to be persisted, back when a renderer held it: this window's
- * own `localStorage`. The host cannot read it — main's `localStorage` polyfill is a different store
- * in a different place — so a profile that predates the host has to hand it over.
+ * Offer this window's previously stored scroll group state (see
+ * {@link readPreviouslyStoredScrollGroupState}) to the host, which adopts it only if it has none of
+ * its own. Every window offers, and the host takes the first — they are all offering the same
+ * state, since these keys were app-global even while a renderer held them.
  *
- * This module never reads these keys as its own state; they exist only to be offered once. Both
- * they and {@link handOverPreviouslyStoredState} can be deleted in a later release, once every
- * profile that could still be carrying them has started the app at least once.
- */
-const PREVIOUSLY_STORED_SCR_REFS_KEY = 'scroll-group.service-host.scrRefs';
-const PREVIOUSLY_STORED_SCR_REF_SOURCE_PROJECT_IDS_KEY =
-  'scroll-group.service-host.scrRefSourceProjectIds';
-
-/**
- * Offer this window's previously stored scroll group state to the host, which adopts it only if it
- * has none of its own (see `migrateStoredScrollGroupState`). Every window offers, and the host
- * takes the first — they are all offering the same state, since these keys were app-global even
- * while a renderer held them.
+ * The offer is terminal in both directions. Adopted means the host now owns it; refused means the
+ * host has state that beats it. Either way this window's copy is finished, so the keys are removed:
+ * left in place they would be re-offered by every window on every start forever, and — worse — a
+ * profile whose main-process store is ever cleared would silently resurrect a reference from before
+ * the host existed. Only a rejection (the host was unreachable, or could not store what it adopted)
+ * keeps them, because that is the one case where this copy is still the only one.
  *
  * Best-effort: a failed offer costs the user their last reference for this session, which
  * navigating fixes, and it leaves the host with nothing adopted so a later start can offer again.
  * Failing startup over it would cost far more.
  */
 async function handOverPreviouslyStoredState(): Promise<void> {
-  const storedScrRefs = localStorage.getItem(PREVIOUSLY_STORED_SCR_REFS_KEY);
-  const storedSourceProjectIds = localStorage.getItem(
-    PREVIOUSLY_STORED_SCR_REF_SOURCE_PROJECT_IDS_KEY,
-  );
-  if (!storedScrRefs && !storedSourceProjectIds) return;
+  const previouslyStoredState = readPreviouslyStoredScrollGroupState();
+  if (!previouslyStoredState) return;
   try {
     const host = await getScrollGroupHost();
-    await host.migrateStoredScrollGroupState({
-      scrRefs: storedScrRefs ? (deserialize(storedScrRefs) ?? {}) : {},
-      scrRefSourceProjectIds: storedSourceProjectIds
-        ? (deserialize(storedSourceProjectIds) ?? {})
-        : {},
-    });
+    await host.migrateStoredScrollGroupState(previouslyStoredState);
+    localStorage.removeItem(SCR_REFS_STORAGE_KEY);
+    localStorage.removeItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY);
   } catch (e) {
     logger.warn(
-      `Could not hand this window's previously stored scroll group state to the scroll group service host. ${getErrorMessage(e)}`,
+      `Could not hand this window's previously stored scroll group state to the scroll group service host; it will be offered again. ${getErrorMessage(e)}`,
     );
   }
 }
@@ -812,12 +1001,53 @@ async function handOverPreviouslyStoredState(): Promise<void> {
  * Subscribing first so a change made while the rest is in flight is not lost, and handing over
  * before seeding so the first seed after an upgrade carries the reference the user left off at.
  *
+ * Nothing here is allowed to fail this window's startup. The cache is already usable — it was
+ * filled from what came with the window before React rendered, and the subscription above keeps it
+ * current — so a host that is slow or missing costs freshness, not correctness, and must not take
+ * down the unrelated services that start alongside this one. Until the seed succeeds every write is
+ * sent to the host regardless of what the cache predicts (see {@link setScrRefSync}), which is what
+ * keeps a never-seeded window honest.
+ *
  * Call once at renderer startup.
  */
 export async function startScrollGroupService(): Promise<void> {
   subscribeToScrollGroupUpdates();
   await handOverPreviouslyStoredState();
-  await seedCacheFromHost();
+  try {
+    await seedCacheFromHost();
+  } catch (e) {
+    logger.error(
+      `Could not seed this window's scroll group state from the scroll group service host; it will catch up on the first change it hears about. ${getErrorMessage(e)}`,
+    );
+  }
 }
+
+// #endregion
+
+// #region the service this window's consumers see
+
+/**
+ * This window's scroll group service — what `papi.scrollGroups` resolves to in the renderer.
+ *
+ * Deliberately NOT the shared network proxy: inside one window there is one answer about where a
+ * scroll group is, and it is this module's. A web view holds both this and the hooks (`window.papi`
+ * comes from the window that hosts it), so serving the two from different places would let
+ * `papi.scrollGroups.getScrRef` report a verse the same web view's own UI has already moved away
+ * from, for as long as a predicted write is in flight. Other processes read the host directly,
+ * which is the authority both of these agree with.
+ *
+ * @experimental
+ */
+export const rendererScrollGroupService: IScrollGroupService = {
+  getScrRef: async (scrollGroupId) => getScrRefSync(scrollGroupId),
+  setScrRef: async (scrollGroupId, scrRef, sourceProjectId) =>
+    setScrRefSync(scrollGroupId, scrRef, sourceProjectId),
+  getScrRefForProject,
+  getReferenceHistory: async (scrollGroupId) => getReferenceHistorySync(scrollGroupId),
+  navigateReferenceHistory: async (scrollGroupId, offset) =>
+    navigateReferenceHistorySync(scrollGroupId, offset),
+  onDidUpdateScrRef,
+  onDidChangeReferenceHistory,
+};
 
 // #endregion
