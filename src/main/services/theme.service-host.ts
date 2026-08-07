@@ -20,7 +20,9 @@ import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-pro
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { onDidCreateNetworkObject } from '@shared/services/network-object.service';
 import { themeDataService } from '@shared/services/theme-data.service';
+import { themeDataServiceProviderName } from '@shared/services/theme-data.service-model';
 import {
   CURRENT_THEME_STORAGE_KEY,
   CurrentThemeSpecifier,
@@ -49,6 +51,7 @@ import {
   PlatformEventEmitter,
   serialize,
   startsWith,
+  wait,
   ThemeDefinitionExpanded,
   ThemeFamiliesById,
   ThemeFamiliesByIdExpanded,
@@ -56,12 +59,35 @@ import {
 } from 'platform-bible-utils';
 
 /**
- * Time from process start to consider to be still in startup and loading. For example, do not reset
- * theme to default until after this time.
+ * How long extension-contributed themes have to arrive before the current theme is judged against
+ * the theme list — and reset if the list does not have it.
+ *
+ * Measured from the theme list's FIRST payload, not from this process's age. The list is published
+ * by the extension host, which this process spawns after its own app-global services have started,
+ * and its first payload is built at extension-host init before any extension has loaded — so
+ * "extension themes have had a fair chance" starts when that payload arrives and the extensions
+ * contributing themes are loading behind it. Anchoring to this process's age instead throws away
+ * the theme of anyone whose extension host starts slowly, and persists the reset.
  */
-const STARTUP_TIME_MS = 30000;
+const EXTENSION_THEMES_GRACE_PERIOD_MS = 30000;
 
 // #region interacting with localStorage
+
+/**
+ * Whether a value read out of a store — this process's own, or a renderer's offered over the
+ * network — is shaped like a theme this process can serve
+ */
+function isThemeShaped(
+  theme: ThemeDefinitionExpanded | undefined,
+): theme is ThemeDefinitionExpanded {
+  return (
+    !!theme &&
+    typeof theme.themeFamilyId === 'string' &&
+    typeof theme.type === 'string' &&
+    typeof theme.cssVariables === 'object' &&
+    !!theme.cssVariables
+  );
+}
 
 // `localStorage` here is main's file-backed polyfill (`polyfillLocalStorage()` in
 // `global-this.model.ts`), NOT a renderer's Chromium store, so these are one store for the whole
@@ -93,7 +119,13 @@ function loadStoredValue<T>(storageKey: string, fallback: T): T {
 function loadCurrentTheme(): ThemeDefinitionExpanded {
   // Load the whole theme data from the store now; the real definition for this theme is picked up
   // when the theme data service publishes it.
-  return loadStoredValue(CURRENT_THEME_STORAGE_KEY, DEFAULT_THEME);
+  const stored = loadStoredValue<ThemeDefinitionExpanded>(CURRENT_THEME_STORAGE_KEY, DEFAULT_THEME);
+  // Shape-checked the same way an offer arriving over the network is. A theme without
+  // `cssVariables` is served to the title-bar painter and to every window's stylesheet, neither of
+  // which has anywhere to report it; trusting this process's own file more than the network's
+  // offer is the wrong way round when both end up in the same places.
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  return isThemeShaped(stored) ? stored : DEFAULT_THEME;
 }
 
 /**
@@ -130,33 +162,29 @@ function loadUserThemes(): ThemeFamiliesById {
 const currentThemeAtLoad = loadCurrentTheme();
 
 /**
- * Whether this process holds theme state a user chose, as opposed to only ever having had defaults
+ * Whether this process holds theme state a user CHOSE, as opposed to only ever having had defaults
  * and whatever this process derived from them.
  *
- * Seeded from the store (rather than from memory like the scroll group's flag) because the theme
- * engine also writes on its own during startup — reconciling the current theme against the theme
- * list as extensions contribute to it — and those writes say nothing about what the user picked.
- * Only the three public setters mark it (see {@link noteUserThemeChange}).
- * {@link ThemeDataProviderEngine.migrateStoredThemeState} refuses an offer once this is true.
+ * Its own key rather than the presence of the three value keys, because this process writes those
+ * on its own: it matches the theme type to the machine's dark-mode preference and picks up changed
+ * definitions as extensions contribute to the theme list, and on a dark-mode machine that persists
+ * a current theme on the very first start before the user has touched anything. Seeding from the
+ * value keys would read those writes back one restart later as a user choice, and
+ * {@link ThemeDataProviderEngine.migrateStoredThemeState} would refuse an offer that has not been
+ * adopted yet — which deletes it, because the offering window discards its copy on a refusal.
+ *
+ * Written only by {@link noteUserThemeChange} (the three public setters) and by an adoption, which
+ * is a user choice made on an older build.
  */
+const HAS_USER_THEME_STATE_KEY = 'theme.service-host.hasUserThemeState';
+
 let hasOwnThemeState = false;
 try {
-  // Truthiness rather than presence: every value this host writes is a serialization, so none of
-  // them is ever the empty string, and a store that cannot be read reports nothing either way.
-  hasOwnThemeState = !!(
-    localStorage.getItem(CURRENT_THEME_STORAGE_KEY) ||
-    localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY) ||
-    localStorage.getItem(USER_THEMES_STORAGE_KEY)
-  );
+  hasOwnThemeState = !!localStorage.getItem(HAS_USER_THEME_STATE_KEY);
 } catch {
   // A store that cannot be read holds nothing this process can claim as its own, so the safe answer
   // is the one that lets a renderer's handover proceed. `loadStoredValue` has already said so.
   hasOwnThemeState = false;
-}
-
-/** Record that the user changed the theme in this process, not that this process derived something */
-function noteUserThemeChange(): void {
-  hasOwnThemeState = true;
 }
 
 /**
@@ -228,6 +256,13 @@ function schedulePersist(storageKey: string, value: unknown): void {
   }, PERSIST_DEBOUNCE_MS);
 }
 
+/** Record that the user changed the theme in this process, not that this process derived something */
+function noteUserThemeChange(): void {
+  if (hasOwnThemeState) return;
+  hasOwnThemeState = true;
+  schedulePersist(HAS_USER_THEME_STATE_KEY, true);
+}
+
 /**
  * Write any coalesced theme state to the store immediately.
  *
@@ -293,19 +328,6 @@ export const onDidChangeCurrentTheme: PlatformEvent<ThemeDefinitionExpanded> =
  */
 const MIGRATED_STORED_STATE_KEY = 'theme.service-host.didMigrateStoredState';
 
-/** Whether a value read out of a foreign store is shaped like a theme this process can serve */
-function isThemeShaped(
-  theme: ThemeDefinitionExpanded | undefined,
-): theme is ThemeDefinitionExpanded {
-  return (
-    !!theme &&
-    typeof theme.themeFamilyId === 'string' &&
-    typeof theme.type === 'string' &&
-    typeof theme.cssVariables === 'object' &&
-    !!theme.cssVariables
-  );
-}
-
 /** Whether a value read out of a foreign store is shaped like a set of theme families */
 function isThemeFamiliesShaped(
   userThemes: ThemeFamiliesById | undefined,
@@ -325,8 +347,29 @@ class ThemeDataProviderEngine
   /**
    * Async Variable that resolves to the first `allThemeFamiliesById`. If `allThemeFamiliesById` is
    * `undefined`, await this variable.
+   *
+   * Deliberately created with no timeout of its own. When the list arrives is up to the extension
+   * host, which this process neither controls nor bounds, so a deadline measured from here can only
+   * reject a wait that was going to succeed — and because the variable is settled once, that
+   * rejection would be the answer to every later theme change for the rest of the session. Callers
+   * bound their own wait instead (see
+   * {@link ThemeDataProviderEngine.#getAllThemeFamiliesByIdResolved}).
    */
   #allThemeFamiliesByIdAsyncVariable: AsyncVariable<ThemeFamiliesByIdExpanded>;
+  /**
+   * Whether extension-contributed themes have had their chance to arrive, so a current theme that
+   * is not in the served list is missing rather than merely late. See
+   * {@link EXTENSION_THEMES_GRACE_PERIOD_MS}.
+   */
+  #hasExtensionThemesGracePeriodElapsed = false;
+  /** Timer that ends the grace period, once the theme list's first payload has started it */
+  #extensionThemesGracePeriodTimeout: ReturnType<typeof setTimeout> | undefined;
+  /** Unsubscriber for the live `onDidUpdateAllThemes` subscription, if there is one */
+  #unsubscribeAllThemes: (() => void) | undefined;
+  /** Whether a subscribe attempt is in flight, so overlapping announcements take one attempt */
+  #isSubscribingAllThemes = false;
+  /** How to subscribe to the theme list, kept so the subscription can be taken again */
+  #onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>;
   /**
    * The most recent theme families received from `onDidUpdateAllThemes`, WITHOUT the user-defined
    * families merged in. Kept so {@link ThemeDataProviderEngine.adoptMigratedState} can rebuild
@@ -372,49 +415,18 @@ class ThemeDataProviderEngine
 
     this.#allThemeFamiliesByIdAsyncVariable = new AsyncVariable<ThemeFamiliesByIdExpanded>(
       'theme.service-host.allThemeFamiliesById',
-      STARTUP_TIME_MS,
+      -1,
     );
+    // Settled by `dispose` when nothing is waiting, which would otherwise be an unhandled rejection
+    // in main. Callers get the rejection through their own await; this only keeps the promise from
+    // being unhandled when there are none.
+    this.#allThemeFamiliesByIdAsyncVariable.promise.catch(() => {});
 
-    // Setup timeout to reset theme to default at end of startup if the current theme does not exist
-    const resetThemeTimeout = setTimeout(async () => {
-      if (this.#isDisposed) return;
-
-      const allThemeFamiliesById = await this.#getAllThemeFamiliesByIdResolved();
-
-      const updatedCurrentTheme =
-        allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
-      // If the current theme no longer exists, reset back to default
-      if (!updatedCurrentTheme) {
-        this.#resetCurrentThemeNoUpdate();
-        this.notifyUpdate('CurrentTheme');
-      }
-    }, STARTUP_TIME_MS - performance.now());
+    this.#onDidUpdateAllThemes = onDidUpdateAllThemes;
     this.unsubscribeEventListeners.add(() => {
-      clearTimeout(resetThemeTimeout);
+      this.#dropAllThemesSubscription();
       return true;
     });
-
-    // Immediately subscribe to and get latest themes
-    (async () => {
-      try {
-        const unsubscribe = await onDidUpdateAllThemes((allThemeFamilies) => {
-          // Keep the payload as received — no user themes merged in — for `adoptMigratedState` to
-          // rebuild from (see `#themeFamiliesFromLastUpdate`)
-          if (!isPlatformError(allThemeFamilies))
-            this.#themeFamiliesFromLastUpdate = allThemeFamilies;
-          const dataTypesToUpdate = this.#updateAllThemeFamiliesNoUpdate(allThemeFamilies);
-          // Notify others if theme data changed
-          if (dataTypesToUpdate) this.notifyUpdate(dataTypesToUpdate);
-        });
-        // If disposed while awaiting this subscription, immediately unsubscribe
-        if (this.#isDisposed) unsubscribe();
-        else this.unsubscribeEventListeners.add(unsubscribe);
-      } catch (e) {
-        logger.warn(
-          `Theme service failed to subscribe to onDidUpdateAllThemes: ${getErrorMessage(e)}`,
-        );
-      }
-    })();
 
     // Listen to system theme change and update current theme
     const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
@@ -424,6 +436,52 @@ class ThemeDataProviderEngine
     };
     updateThemeToSystem(currentSystemTheme);
     this.unsubscribeEventListeners.add(onDidChangeSystemTheme(updateThemeToSystem));
+  }
+
+  /**
+   * Take (or retake) the subscription to the theme list, dropping any subscription it replaces.
+   *
+   * Static for the same reason {@link ThemeDataProviderEngine.adoptMigratedState} is: every
+   * non-`#`-private method on the engine is exposed to consumers when it is registered, and this is
+   * a host-side lifecycle operation rather than part of the theme data API.
+   *
+   * The provider behind it is registered by the EXTENSION HOST, which this process spawns only
+   * after its own app-global services have started and which `platform.restartExtensionHost` can
+   * replace at any time — so this is driven by that provider appearing on the network (see
+   * {@link startThemeServiceHost}) rather than taken once at startup and hoped for. Without it, a
+   * cold start slow enough to miss the one attempt leaves the app with no theme list at all for the
+   * session: nothing else in this process ever asks again.
+   *
+   * @param engine Engine to subscribe
+   */
+  static async subscribeToAllThemes(engine: ThemeDataProviderEngine): Promise<void> {
+    if (engine.#isDisposed || engine.#isSubscribingAllThemes) return;
+    engine.#isSubscribingAllThemes = true;
+    try {
+      const unsubscribe = await engine.#onDidUpdateAllThemes((allThemeFamilies) => {
+        // Keep the payload as received — no user themes merged in — for `adoptMigratedState` to
+        // rebuild from (see `#themeFamiliesFromLastUpdate`)
+        if (!isPlatformError(allThemeFamilies))
+          engine.#themeFamiliesFromLastUpdate = allThemeFamilies;
+        engine.#startExtensionThemesGracePeriod();
+        const dataTypesToUpdate = engine.#updateAllThemeFamiliesNoUpdate(allThemeFamilies);
+        // Notify others if theme data changed
+        if (dataTypesToUpdate) engine.notifyUpdate(dataTypesToUpdate);
+      });
+      // Whatever this replaces is a subscription to a provider that has just been replaced, or one
+      // this engine no longer wants; either way it is not the one delivering from here on.
+      engine.#dropAllThemesSubscription();
+      if (engine.#isDisposed) unsubscribe();
+      else engine.#unsubscribeAllThemes = unsubscribe;
+    } catch (e) {
+      // Said at debug, not warn: before the extension host has registered the provider this is the
+      // expected answer, and the announcement that it exists is what tries again.
+      logger.debug(
+        `Theme service host could not subscribe to onDidUpdateAllThemes yet; it will try again when the theme data provider is announced. ${getErrorMessage(e)}`,
+      );
+    } finally {
+      engine.#isSubscribingAllThemes = false;
+    }
   }
 
   /**
@@ -447,23 +505,28 @@ class ThemeDataProviderEngine
     shouldMatchSystem: boolean | undefined,
     userThemes: ThemeFamiliesById | undefined,
   ): void {
-    if (currentTheme) engine.currentTheme = currentTheme;
-    if (shouldMatchSystem !== undefined) engine.shouldMatchSystem = shouldMatchSystem;
-    if (userThemes) engine.userThemes = userThemes;
-    // Rebuild the served theme list so it merges the adopted user themes over the latest provider
-    // payload, and reconcile the adopted current theme against the result the same way an incoming
-    // update would. Before the first payload arrives there is nothing to rebuild — the
-    // subscription's first event will pick the adopted user themes up when it fires.
+    // Through the same setters an ordinary change goes through, so the adopted theme is announced
+    // to this process's own consumers — main's title bar is painted from `ready-to-show`, which is
+    // before the offering window's renderer gets as far as offering, so an assignment that skipped
+    // the announcement would leave the caption buttons on the pre-adoption colours for the session.
     //
-    // Saves are suppressed for the length of the rebuild — see `#isSuppressingSaves`. Synchronous
-    // throughout, so the flag cannot span an await.
-    if (engine.#themeFamiliesFromLastUpdate) {
-      engine.#isSuppressingSaves = true;
-      try {
+    // Saves are suppressed for the length of the adoption — see `#isSuppressingSaves` — because
+    // `migrateStoredThemeState` persists every value itself, in an order chosen so an interrupted
+    // migration is retried rather than stranded. Synchronous throughout, so the flag cannot span an
+    // await.
+    engine.#isSuppressingSaves = true;
+    try {
+      if (currentTheme) engine.#setCurrentThemeNoUpdate(currentTheme);
+      if (shouldMatchSystem !== undefined) engine.#setShouldMatchSystemNoUpdate(shouldMatchSystem);
+      if (userThemes) engine.#setUserThemesNoUpdate(userThemes);
+      // Rebuild the served theme list so it merges the adopted user themes over the latest provider
+      // payload, and reconcile the adopted current theme against the result the same way an incoming
+      // update would. Before the first payload arrives there is nothing to rebuild — the
+      // subscription's first event will pick the adopted user themes up when it fires.
+      if (engine.#themeFamiliesFromLastUpdate)
         engine.#updateAllThemeFamiliesNoUpdate(engine.#themeFamiliesFromLastUpdate);
-      } finally {
-        engine.#isSuppressingSaves = false;
-      }
+    } finally {
+      engine.#isSuppressingSaves = false;
     }
   }
 
@@ -550,7 +613,10 @@ class ThemeDataProviderEngine
   }
 
   async getAllThemes(): Promise<ThemeFamiliesByIdExpanded> {
-    // TODO: SET UP TO WAIT FOR allThemeDefinitions
+    // Answers `{}` rather than waiting for the first payload: this is what the settings theme
+    // picker reads, and a picker that hangs until the extension host has published is worse than
+    // one that is briefly empty and fills in on the update that follows. The setters, which have no
+    // useful empty answer, do wait — see `#getAllThemeFamiliesByIdResolved`.
     return this.#allThemeFamiliesById ?? {};
   }
 
@@ -692,19 +758,27 @@ class ThemeDataProviderEngine
     );
     hasOwnThemeState = true;
 
-    // Persist what was adopted BEFORE recording that the migration ran, and write every value
-    // before the flag. The store is one file per key with no atomicity across them, so an order
-    // that records "already migrated" first can leave a profile permanently flagged as done with
-    // nothing migrated — the user's theme gone with no way to ask for it again. This order fails
-    // the other way: an interrupted migration is simply retried at the next start, which is
-    // idempotent because `hasOwnThemeState` only becomes true once something actually landed.
+    // Persist what was adopted BEFORE recording that the migration ran, and write the values before
+    // either marker. The store is one file per key with no atomicity across them, so an order that
+    // records "already migrated" first can leave a profile permanently flagged as done with nothing
+    // migrated — the user's theme gone with no way to ask for it again. This order fails the other
+    // way: neither marker is set, so the next start's offer is adopted again and the partial write
+    // is simply overwritten.
+    //
+    // The user themes go first because they are the one thing here this process could never derive
+    // for itself: a current theme and a should-match-system setting both have defaults it would
+    // land on anyway, while a user-defined family exists nowhere else once the offering window has
+    // dropped its copy.
     try {
       takePendingPersist();
       writeValuesNow(
         new Map<string, unknown>([
+          [USER_THEMES_STORAGE_KEY, this.userThemes],
           [CURRENT_THEME_STORAGE_KEY, this.currentTheme],
           [SHOULD_MATCH_SYSTEM_STORAGE_KEY, this.shouldMatchSystem],
-          [USER_THEMES_STORAGE_KEY, this.userThemes],
+          // What was adopted is a choice the user made on an older build, so it counts as this
+          // process's own state from here on — see `HAS_USER_THEME_STATE_KEY`.
+          [HAS_USER_THEME_STATE_KEY, true],
         ]),
       );
       localStorage.setItem(MIGRATED_STORED_STATE_KEY, 'true');
@@ -736,16 +810,73 @@ class ThemeDataProviderEngine
   }
 
   async #getAllThemeFamiliesByIdResolved(): Promise<ThemeFamiliesByIdExpanded> {
-    return this.#allThemeFamiliesById ?? this.#allThemeFamiliesByIdAsyncVariable.promise;
+    if (this.#allThemeFamiliesById) return this.#allThemeFamiliesById;
+    // Bounded from THIS call rather than from the variable's creation: the list arrives when the
+    // extension host publishes it, so a deadline anchored to startup would answer every later
+    // caller with a rejection it earned before the caller existed.
+    return Promise.race([
+      this.#allThemeFamiliesByIdAsyncVariable.promise,
+      wait(EXTENSION_THEMES_GRACE_PERIOD_MS).then(() => {
+        throw new Error(
+          'The theme list has not been published yet, so there is nothing to pick a theme from',
+        );
+      }),
+    ]);
+  }
+
+  /** Drop the live theme-list subscription, if there is one */
+  #dropAllThemesSubscription(): void {
+    const unsubscribe = this.#unsubscribeAllThemes;
+    this.#unsubscribeAllThemes = undefined;
+    if (!unsubscribe) return;
+    try {
+      unsubscribe();
+    } catch (e) {
+      // The usual reason is that the provider it belonged to is already gone, which is also the
+      // reason this is being replaced. Nothing to do about it and nothing depending on it.
+      logger.debug(
+        `Theme service host could not unsubscribe from a theme list it had replaced. ${getErrorMessage(e)}`,
+      );
+    }
+  }
+
+  /**
+   * Start the window in which extension-contributed themes may still arrive, on the first payload
+   * of the theme list. See {@link EXTENSION_THEMES_GRACE_PERIOD_MS}.
+   */
+  #startExtensionThemesGracePeriod(): void {
+    if (this.#extensionThemesGracePeriodTimeout !== undefined) return;
+    this.#extensionThemesGracePeriodTimeout = setTimeout(() => {
+      if (this.#isDisposed) return;
+      this.#hasExtensionThemesGracePeriodElapsed = true;
+      // The current theme is now judged missing rather than late. Reset it if the list does not
+      // have it — the family's extension was removed or renamed, and nothing else would notice.
+      const updatedCurrentTheme =
+        this.#allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
+      if (updatedCurrentTheme) return;
+      this.#resetCurrentThemeNoUpdate();
+      this.notifyUpdate('CurrentTheme');
+    }, EXTENSION_THEMES_GRACE_PERIOD_MS);
+    this.unsubscribeEventListeners.add(() => {
+      clearTimeout(this.#extensionThemesGracePeriodTimeout);
+      return true;
+    });
   }
 
   #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
     this.currentTheme = newTheme;
-    // Announced to this process's own consumers from the one place the current theme is assigned,
-    // so main's title bar hears every change rather than the subset that is also persisted.
-    onDidChangeCurrentThemeEmitter.emit(newTheme);
-    if (this.#isSuppressingSaves) return;
-    this.#saveCurrentTheme(this.currentTheme);
+    // Persisted before the announcement, and the announcement is isolated: main registers one
+    // subscriber per window, so a plain emit would let one throwing subscriber cost every later
+    // window its repaint AND — emitting first — cost the write. The store is a lagging record of
+    // memory either way, but the announcement is what keeps everything else agreeing with it.
+    if (!this.#isSuppressingSaves) this.#saveCurrentTheme(this.currentTheme);
+    // The one place the current theme is assigned, so main's title bar hears every change rather
+    // than the subset that is also persisted — including a theme adopted from a migration offer.
+    onDidChangeCurrentThemeEmitter.emitIsolated(newTheme, (error) => {
+      logger.error(
+        `A consumer threw while being told the current theme changed; the rest were still told: ${getErrorMessage(error)}`,
+      );
+    });
   }
 
   /** Sets current theme to default */
@@ -833,8 +964,10 @@ class ThemeDataProviderEngine
       const updatedCurrentTheme =
         this.#allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
       if (!updatedCurrentTheme) {
-        if (performance.now() >= STARTUP_TIME_MS) {
-          // The current theme no longer exists, and it's after startup time. Reset theme
+        // The current theme is not in the list. Only a reset once extension-contributed themes have
+        // had their chance — before that this list is simply incomplete, and resetting would throw
+        // away the theme of anyone whose theme extension has not finished loading.
+        if (this.#hasExtensionThemesGracePeriodElapsed) {
           this.#resetCurrentThemeNoUpdate();
           this.notifyUpdate('CurrentTheme');
         }
@@ -879,14 +1012,22 @@ export function getCurrentThemeSync(): ThemeDefinitionExpanded {
  * {@link schedulePersist}) — a window created moments after a theme change must still be told about
  * it.
  *
- * @returns The theme, or `undefined` when this process has none to give: a fresh profile, or one
- *   whose theme is still in a renderer's own store awaiting its one-time handover. The window falls
- *   back to what it can read for itself in that case.
+ * Asks whether this process has a theme worth handing over, NOT whether the user chose one (see
+ * `HAS_USER_THEME_STATE_KEY`, which answers a different question): a theme derived from the
+ * machine's dark-mode preference is the theme the app is on, and a window not told about it paints
+ * light and flashes. A profile whose theme is still in a renderer's own store awaiting its one-time
+ * handover is handled on the renderer's side, which is the only process that can see those keys —
+ * they beat what is handed over for as long as they exist.
+ *
+ * @returns The theme, or `undefined` while this process is still on the compile-time default, which
+ *   is what the window falls back to anyway — no point spending a multi-kilobyte query parameter
+ *   saying so.
  * @experimental
  */
 export function getCurrentThemeForNewWindow(): ThemeDefinitionExpanded | undefined {
-  if (!hasOwnThemeState) return undefined;
-  return getCurrentThemeSync();
+  const currentTheme = getCurrentThemeSync();
+  if (deepEqual(currentTheme, DEFAULT_THEME)) return undefined;
+  return currentTheme;
 }
 
 /**
@@ -910,6 +1051,25 @@ export async function startThemeServiceHost(): Promise<void> {
     loadUserThemes(),
     (userThemes) => schedulePersist(USER_THEMES_STORAGE_KEY, userThemes),
   );
+
+  // The theme list comes from a provider the EXTENSION HOST registers, and this runs inside main's
+  // app-global service batch — before that process has even been spawned, and it can be replaced
+  // later by `platform.restartExtensionHost`. So the subscription follows the provider onto the
+  // network rather than being taken once here: one attempt now for the case where it is already
+  // there, and one on every announcement that it exists.
+  //
+  // Matched on the id's prefix because a data provider's network object id is its provider name
+  // plus a suffix this module has no business spelling; provider names are namespaced, so nothing
+  // else starts with this one.
+  const engine = themeServiceEngine;
+  onDidCreateNetworkObject((networkObjectDetails) => {
+    if (!startsWith(networkObjectDetails.id, themeDataServiceProviderName)) return;
+    // Fire-and-forget: the subscribe reports its own failures and the next announcement retries.
+    (async () => {
+      await ThemeDataProviderEngine.subscribeToAllThemes(engine);
+    })();
+  });
+  await ThemeDataProviderEngine.subscribeToAllThemes(engine);
 
   // One listener for the app, for the life of the app. `nativeTheme` fires `updated` for changes
   // that leave the dark-mode answer alone, so only a real flip is announced.
