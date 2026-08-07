@@ -115,6 +115,26 @@
   vertical-align: text-top;
 }
 
+/* A verse's \va/\vp opening/closing glyphs ride INSIDE the AttributeRunNode wrapper now (they were
+   loose paragraph siblings before the flip), so their own `font-size: 0.7em`
+   (`.formatted-font.marker-editable .opening`/`.closing`/`.selfClosing` below) would otherwise
+   compound with the wrapper's OWN `font-size: 66%` above (0.7 × 0.66 ≈ 46% of the paragraph's
+   size — noticeably smaller than the pre-flip 70%, since `em` is always relative to the immediate
+   parent's computed size, not the paragraph). Reset to 100% of the wrapper's own already-reduced
+   size, matching the value's size exactly, so the glyphs and the value read as one uniformly-sized
+   green/blue-superscript run instead of two visibly different sizes glued together. Selector
+   specificity (four classes) beats the general glyph rule's three, so this wins regardless of
+   declaration order. Ported from the library's packages/platform/src/usj-nodes.css (added during
+   the display-run consolidation's AttributeRunNode wrapper migration). */
+.formatted-font.marker-editable .usfm_va .opening,
+.formatted-font.marker-editable .usfm_va .closing,
+.formatted-font.marker-editable .usfm_va .selfClosing,
+.formatted-font.marker-editable .usfm_vp .opening,
+.formatted-font.marker-editable .usfm_vp .closing,
+.formatted-font.marker-editable .usfm_vp .selfClosing {
+  font-size: 100%;
+}
+
 /* ParaNode */
 
 .formatted-font .usfm_usfm {
@@ -2096,6 +2116,23 @@
 }
 
 .attribute:hover {
+  color: rgba(25, 25, 25, 1);
+}
+
+/* AttributeRunNode: the ONE wrapper span holding a verse's \va/\vp display triplet or a
+   milestone's attribute run (AttributeRunNode.ts) — dim like a char span's `.attribute` run by
+   default, since `color` inherits down to the glyphs and value riding inside it. A verse's
+   wrapper additionally carries `usfm_va`/`usfm_vp` (added only for those two runKinds), whose
+   higher-specificity `.formatted-font .usfm_va`/`.usfm_vp` rules above override this dim color
+   with PT9's green/blue superscript — the same styling a standalone `char va`/`vp` span already
+   gets. A milestone's wrapper carries no such class, so it keeps the dim styling as its own.
+   Ported from the library's packages/platform/src/usj-nodes.css (added during the display-run
+   consolidation's AttributeRunNode wrapper migration). */
+.attribute-run {
+  color: rgba(170, 170, 170, 1);
+}
+
+.attribute-run:hover {
   color: rgba(25, 25, 25, 1);
 }
 
