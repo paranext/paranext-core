@@ -103,10 +103,7 @@ import {
 import withWindowScopedWebViewIds, {
   withWindowScopedWebViewIdInTab,
 } from '@renderer/components/docking/window-scoped-web-view-ids.util';
-import {
-  registerScopedCommands,
-  RendererHostedCommandHandlers,
-} from '@renderer/services/renderer-hosted-command-registry';
+import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import {
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
@@ -2390,16 +2387,19 @@ const papiWebViewService: WebViewServiceShard = {
   dockContainsTab,
 };
 
-async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
+/**
+ * Open a Settings tab in this window. See {@link WebViewServiceShard.openSettingsTab} for why the
+ * project arrives as an argument rather than being looked up here.
+ */
+async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
-  const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
 
   return addTab<SettingsTabData>(
     {
       id: settingsTabId,
       tabType: TAB_TYPE_SETTINGS_TAB,
       data: {
-        projectIdToLimitSettings: projectIdFromWebView,
+        projectIdToLimitSettings,
       },
     },
     {
@@ -2409,6 +2409,16 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
     },
   );
 }
+
+/**
+ * What this window serves under its scoped WebView service name: everything public, plus what only
+ * this window can do to its own dock layout. Declared as the shard type so a member added there
+ * cannot silently become a name this window does not answer for.
+ */
+const webViewServiceShard: WebViewServiceShard = {
+  ...papiWebViewService,
+  openSettingsTab,
+};
 
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
@@ -2422,7 +2432,7 @@ export async function startWebViewServiceShard(): Promise<void> {
   // router finds this shard; the name it is registered under is nobody else's business.
   await networkObjectService.set<WebViewServiceShard>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
-    papiWebViewService,
+    webViewServiceShard,
     WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
     getServiceShardAttributes(globalThis.windowId),
     // Experimental at the object level, which fans out over every method: this is a window-scoped
@@ -2430,20 +2440,4 @@ export async function startWebViewServiceShard(): Promise<void> {
     // between what a shard answers and what its router answers are still moving.
     { 'x-experimental': true },
   );
-
-  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
-  // renderers can coexist. The main process registers routers under the generic names. Typing this
-  // against RendererHostedCommandHandlers makes an unrecognized or misspelled key a compile error;
-  // registerScopedCommands records each name so a command that is on RENDERER_HOSTED_COMMAND_NAMES
-  // but never registered anywhere is caught too, at startup (see
-  // assertAllRendererHostedCommandsRegistered).
-  const commandHandlers: RendererHostedCommandHandlers = {
-    'platform.openSettings': openSettingsTab,
-    'platform.openProjectSettings': openSettingsTab,
-    'platform.openUserSettings': openSettingsTab,
-  };
-  // Awaited the way the other callers await theirs: the startup coverage check reads what these
-  // registrations record, and leaving them in flight would both let that check run before they had
-  // landed and turn a rejected registration into an unhandled rejection.
-  await Promise.all(registerScopedCommands(commandHandlers));
 }
