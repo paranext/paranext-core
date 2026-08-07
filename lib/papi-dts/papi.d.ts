@@ -4262,7 +4262,6 @@ declare module 'shared/services/web-view.service-model' {
     'platform.goToPreviousBook',
     'platform.goToNextVerse',
     'platform.goToPreviousVerse',
-    'platform.openBookChapterControl',
     'platform.navigateLeftInReferenceHistory',
     'platform.navigateRightInReferenceHistory',
   ];
