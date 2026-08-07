@@ -3,7 +3,7 @@
   "version": "0.6.0-alpha.0",
   "description": "C# Data Provider Test Types for Platform.Bible - provided by C# data provider",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "main": "",
   "activationEvents": []
 }

@@ -19,7 +19,7 @@
     "type": "git",
     "url": "git+https://github.com/paranext/paranext-core.git"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "author": {
     "name": "Paranext",
     "url": "https://github.com/paranext/"
@@ -57,6 +57,7 @@
     "build:platform-bible-react": "cd lib/platform-bible-react && npm run build",
     "build:platform-bible-utils": "cd lib/platform-bible-utils && npm run build",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
+    "build:third-party-notices": "node ./.erb/scripts/generate-third-party-notices.js",
     "build:types": "cd lib/papi-dts && npm run build",
     "bump-versions": "ts-node ./.erb/scripts/bump-versions.ts",
     "clean:build-cache": "rimraf ./node_modules/.cache",
@@ -77,7 +78,7 @@
     "lint:staged": "lint-staged -q && npm run lint:staged --workspaces --if-present",
     "lint:styles": "stylelint **/*.{css,scss}",
     "ncu:group": "npx npm-check-updates --interactive --format group --workspaces",
-    "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never && npm run build:dll",
+    "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && npm run build:third-party-notices && electron-builder build --publish never && npm run build:dll",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "postinstall": "patch-package && npm run link-dev-packages && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts && npm run build --workspace=eslint-plugin-paranext",
     "prepare": "husky && npm run csharp:tool:restore",

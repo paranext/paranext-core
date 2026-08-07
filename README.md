@@ -545,8 +545,14 @@ Some important decisions in this project were inspired by the work done in [Visu
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE).
-Copyright © 2017-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
+This repository contains code under two licenses:
+
+- The core Platform.Bible application — the Electron client, extension host, .NET data provider, the bundled extensions, and the generated PAPI type declarations in `lib/papi-dts` — is licensed under the [GNU Affero General Public License v3.0 or later](./LICENSE) (`AGPL-3.0-or-later`).
+- The developer libraries published to npm for extension authors — `platform-bible-react`, `platform-bible-utils`, `eslint-plugin-paranext`, and `browserslist-config-detect-electron`, all under [`lib/`](./lib/) — remain under the MIT License, so extensions built with them are not obligated to adopt the AGPL. Each carries its own `LICENSE` file.
+
+See [LICENSING.md](./LICENSING.md) for the authoritative path-by-path map and copyright attributions.
+
+Copyright © 2017-2026 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
 
 <!-- define variables used above -->
 

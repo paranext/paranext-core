@@ -21,10 +21,19 @@ const DB_IP_WEBSITE_NAME = 'DB-IP';
 const DB_IP_LICENSE = 'CC BY 4.0';
 const DB_IP_ATTRIBUTION_LINK = 'https://creativecommons.org/licenses/by/4.0/';
 
+/**
+ * Npm's registered value for "no rights are granted to recipients". The distributed application
+ * ships under separate terms from this repository's AGPL source (see LICENSING.md), and this is the
+ * placeholder until those end-user terms exist. Shown to users as "All rights reserved" because the
+ * raw token reads as the near-opposite `Unlicense` (a public-domain dedication).
+ */
+const NO_LICENSE_GRANTED = 'UNLICENSED';
+
 const STRING_KEYS: LocalizeKey[] = [
   '%product_name%',
   '%about_versionLabel_format%',
   '%about_licenseLabel_format%',
+  '%about_licenseLabel_allRightsReserved%',
   '%about_db_ip_attribution_format%',
   '%about_db_ip_attribution_intro%',
   '%about_db_ip_attribution_terms%',
@@ -42,6 +51,7 @@ function AboutDialog() {
       '%product_name%': productName,
       '%about_versionLabel_format%': versionLabelFormat,
       '%about_licenseLabel_format%': licenseLabelFormat,
+      '%about_licenseLabel_allRightsReserved%': allRightsReserved,
       '%about_db_ip_attribution_format%': dbIpAttributionFormat,
       '%about_db_ip_attribution_intro%': dbIpAttributionIntro,
       '%about_db_ip_attribution_terms%': dbIpAttributionTerms,
@@ -63,9 +73,15 @@ function AboutDialog() {
         <h1 className="about-title">{productName}</h1>
         <p className="about-description">{packageInfo.description}</p>
         <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
-        <p className="about-license">{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
+        <p className="about-license">
+          {formatReplacementString(licenseLabelFormat, {
+            ...packageInfo,
+            license:
+              packageInfo.license === NO_LICENSE_GRANTED ? allRightsReserved : packageInfo.license,
+          })}
+        </p>
         <p className="about-attribution">
-          Copyright ©2017-2025 SIL Global and United Bible Societies
+          Copyright ©2017-2026 SIL Global and United Bible Societies
         </p>
         <p className="about-db-ip-attribution">
           {formatReplacementStringToArray(dbIpAttributionFormat, {
