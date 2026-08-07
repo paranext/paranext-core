@@ -100,14 +100,16 @@ vi.mock('@shared/services/data-provider.service', async (importOriginal) => {
   };
 });
 
-// The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
-// mock never invokes the callback, so `currentInterfaceMode` stays `undefined` (treated as not
-// Simple) and these tests exercise the default tracked-first resolution. `subscribe` resolves to a
-// no-op unsubscriber so the module-load IIFE completes cleanly.
+// Only a renderer can read the layout direction, and there is no document here — so the one thing
+// this window reports about itself that the tests vary is stubbed
 vi.mock('platform-bible-react/experimental', () => ({
   readDirection: readDirectionMock,
 }));
 
+// The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
+// mock never invokes the callback, so `currentInterfaceMode` stays `undefined` (treated as not
+// Simple) and these tests exercise the default tracked-first resolution. `subscribe` resolves to a
+// no-op unsubscriber so the module-load IIFE completes cleanly.
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: {
     subscribe: vi.fn(async () => async () => true),
