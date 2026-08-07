@@ -1,7 +1,3 @@
-import {
-  getBookChapterControlHandle,
-  TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
-} from '@renderer/services/book-chapter-control.registry';
 import { registerScopedCommands } from '@renderer/services/renderer-hosted-command-registry';
 import {
   getScrRefForProject,
@@ -10,10 +6,7 @@ import {
   setScrRefSync,
 } from '@renderer/services/scroll-group.service';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-shard';
-import {
-  getLastSelectedScriptureNavigableWebViewId,
-  getNavigationTargetWebView,
-} from '@renderer/services/window.service-shard';
+import { getNavigationTargetWebView } from '@renderer/services/window.service-shard';
 import {
   ALL_BOOK_IDS,
   findAdjacentPresentBook,
@@ -27,12 +20,10 @@ import {
   ScriptureBounds,
 } from 'platform-bible-utils/experimental';
 import { WebViewId } from '@shared/models/web-view.model';
-import { getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { windowService } from '@shared/services/window.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, Mutex, ScrollGroupId } from 'platform-bible-utils';
@@ -268,46 +259,6 @@ function makeGoToCommandHandler(
     });
 }
 
-/**
- * Gets the web view id of the currently focused subject, if focus is on a web view or a web view's
- * tab. Used by {@link openBookChapterControl} to prefer the focused tab's own BookChapterControl
- * over the tracked last-selected web view, e.g. when focus has moved to a dialog or another
- * non-web-view tab that itself isn't scripture-navigable.
- */
-async function getFocusedWebViewId(): Promise<WebViewId | undefined> {
-  try {
-    const focusSubject = await windowService.getFocus();
-    return focusSubject ? getWebViewIdFromFocusSubject(focusSubject) : undefined;
-  } catch (e) {
-    logger.warn(
-      `platform.openBookChapterControl could not read current focus: ${getErrorMessage(e)}`,
-    );
-    return undefined;
-  }
-}
-
-/**
- * Opens a BookChapterControl to let the user pick a new reference, preferring — in order — (a) the
- * currently focused web view's own control, (b) the tracked last-selected web view's control, (c)
- * the top toolbar's control. No-ops if none of those has a registered control.
- */
-async function openBookChapterControl(): Promise<void> {
-  const focusedWebViewId = await getFocusedWebViewId();
-  let handle = focusedWebViewId ? getBookChapterControlHandle(focusedWebViewId) : undefined;
-
-  if (!handle) {
-    const trackedWebViewId = getLastSelectedScriptureNavigableWebViewId();
-    if (trackedWebViewId) handle = getBookChapterControlHandle(trackedWebViewId);
-  }
-
-  handle = handle ?? getBookChapterControlHandle(TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID);
-  if (!handle) {
-    logger.debug('platform.openBookChapterControl ignored: no BookChapterControl is available');
-    return;
-  }
-  handle.open();
-}
-
 /** Handlers by command name. Exported for testing */
 export const navigationCommandHandlers: {
   [commandName in Extract<
@@ -318,7 +269,6 @@ export const navigationCommandHandlers: {
     | 'platform.goToPreviousBook'
     | 'platform.goToNextVerse'
     | 'platform.goToPreviousVerse'
-    | 'platform.openBookChapterControl'
   >]: () => Promise<void>;
 } = {
   'platform.goToNextChapter': makeGoToCommandHandler(getNextChapterRef),
@@ -331,7 +281,6 @@ export const navigationCommandHandlers: {
   'platform.goToPreviousVerse': makeGoToCommandHandler(getPreviousVerseRef, {
     needsPreviousBook: true,
   }),
-  'platform.openBookChapterControl': openBookChapterControl,
 };
 
 /** Registers the scroll-group navigation commands. Call once at renderer startup */

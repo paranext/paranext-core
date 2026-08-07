@@ -6,6 +6,7 @@ import '@renderer/global-this.model';
 import { App } from '@renderer/app.component';
 import { initAutoSyncBlockingService } from '@renderer/services/auto-sync-blocking-service';
 import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-block-driver';
+import { startBookChapterControlServiceShard } from '@renderer/services/book-chapter-control.service-shard';
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
@@ -116,6 +117,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startScrollGroupNavigationCommands(),
       startNotificationServiceShard(),
       startUsersnapServiceShard(),
+      startBookChapterControlServiceShard(),
       startOverlayService(),
       startThemeService(),
       initializeWindowService(),
