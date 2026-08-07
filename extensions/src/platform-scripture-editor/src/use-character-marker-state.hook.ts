@@ -30,9 +30,9 @@ export type UseCharacterMarkerStateOptions = {
   /** Localized strings for the marker titles and the remove row. */
   localizedStrings: LanguageStrings;
   /**
-   * Supplied once removal exists upstream; absent means the menu offers no remove row. Optional
-   * marker: the generator calls this with no argument for the mixed-selection "remove all" row (see
-   * `character-marker-menu.utils.ts`) and with a marker to remove just that one.
+   * Removes character markers, keeping their content. Called with a marker to remove that one, and
+   * with no argument to remove every marker the selection covers. Absent means the menu offers no
+   * remove row.
    */
   removeCharacterMarker?: (marker?: string) => void;
   /** Supplied once replacement exists upstream; absent means picking a marker adds instead. */
@@ -86,7 +86,7 @@ function resolveCurrentMarker(
   return contextMarker && isCharacterMarker(contextMarker) ? contextMarker : undefined;
 }
 
-/** Builds the menu rows, stamping each with its selection state once coverage is known. */
+/** Builds the menu rows. Coverage goes down to the generator, which owns both action and state. */
 function buildMarkerMenuItems(
   options: Pick<
     UseCharacterMarkerStateOptions,
@@ -110,28 +110,20 @@ function buildMarkerMenuItems(
     coverage,
   } = options;
 
-  const items = generateCharacterMarkerMenuListItems(
+  return generateCharacterMarkerMenuListItems(
     editorRef,
     // The control owns its own open state; closing happens through the menu's own host, so the
     // generator's close callback has nothing to do here.
     () => {},
     localizedStrings,
     blockMarker,
-    { currentCharacterMarker: currentMarker, changeCharacterMarker, removeCharacterMarker },
+    {
+      currentCharacterMarker: currentMarker,
+      coverage,
+      changeCharacterMarker,
+      removeCharacterMarker,
+    },
   );
-  if (!coverage) return items;
-
-  return items.map((item) => {
-    let selectionState: 'all' | 'partial' | 'none';
-    if (item.marker) selectionState = coverage.markerStates[item.marker] ?? 'none';
-    // The remove row: 'partial' when some of the selection is unmarked, 'none' when every character
-    // carries a marker. The `coveringMarkers.length === 0` ('all') case cannot arise here: the
-    // remove row is only emitted when `currentCharacterMarker` is set (see
-    // `character-marker-menu.utils.ts`), and `resolveCurrentMarker` only returns a marker when
-    // exactly one covers the selection.
-    else selectionState = coverage.hasUncovered ? 'partial' : 'none';
-    return { ...item, selectionState };
-  });
 }
 
 /**
