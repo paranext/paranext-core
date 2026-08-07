@@ -4231,7 +4231,6 @@ declare module 'shared/services/web-view.service-model' {
    * @experimental
    */
   export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
-    'platform.about',
     'platform.openSettings',
     'platform.openProjectSettings',
     'platform.openUserSettings',
@@ -7670,26 +7669,6 @@ declare module 'shared/services/dialog.service-model' {
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
-  /**
-   * Exhaustiveness gate. A `DialogService` method missing here is a compile error naming it, which is
-   * what forces this list to keep up: without an entry the method gets no scoped registration and no
-   * routing proxy, and the startup assertion cannot see the gap because it only iterates the list. A
-   * method that is deliberately NOT renderer-hosted belongs here with a comment saying so, rather
-   * than being left out silently.
-   */
-  const RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET: {
-    readonly showDialog: true;
-    readonly selectProject: true;
-    readonly showAboutDialog: true;
-  };
-  /**
-   * Dialog requests served by the renderer process. A dialog belongs to the window the user is
-   * working in, so each renderer registers these under window-scoped names and the main process
-   * registers service routers under the generic names that forward to the focused window.
-   *
-   * @experimental
-   */
-  export const RENDERER_HOSTED_DIALOG_REQUEST_NAMES: (keyof typeof RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET)[];
 }
 declare module 'shared/services/dialog.service' {
   import { DialogService } from 'shared/services/dialog.service-model';
