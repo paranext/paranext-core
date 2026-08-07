@@ -15,6 +15,7 @@ import {
   getNavigationTargetWebView,
 } from '@renderer/services/window.service-shard';
 import {
+  ALL_BOOK_IDS,
   findAdjacentPresentBook,
   getBookIdsFromBooksPresent,
   getNextBookRef,
@@ -34,7 +35,6 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { windowService } from '@shared/services/window.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { CommandNames } from 'papi-shared-types';
-import { ALL_BOOK_IDS } from 'platform-bible-react/experimental';
 import { getErrorMessage, Mutex, ScrollGroupId } from 'platform-bible-utils';
 
 /**
