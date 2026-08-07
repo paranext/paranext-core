@@ -942,6 +942,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%",
 	...`%${string}%`[],
@@ -1221,6 +1222,7 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%"
 ];
@@ -1267,6 +1269,17 @@ export interface MarkerMenuItem {
 	 * neither visibility nor selectability. It is display only.
 	 */
 	selectionState?: "all" | "partial" | "none";
+	/**
+	 * Whether the consumer currently has no operation for this row, so it must not be selectable.
+	 * Optional and additive — with no value the row is selectable exactly as it has always been.
+	 *
+	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
+	 * nothing about the marker itself and so renders no trailing label: those two describe a property
+	 * of the marker, while this describes the consumer's momentary inability to act on it. It also
+	 * does not affect visibility — the row stays listed, because a row that disappears reads as "this
+	 * marker does not exist here" rather than "you cannot do that to it right now."
+	 */
+	isDisabled?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
 }

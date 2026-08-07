@@ -5,10 +5,11 @@ import { MutableRefObject, useCallback, useMemo, useState } from 'react';
 import {
   CharacterMarkerCoverage,
   CharacterMarkerSelection,
+  CharacterMarkerSelectionState,
   computeCharacterMarkerCoverage,
 } from './character-marker-coverage.utils';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
-import { CharacterMarkerControlProps } from './character-marker-control.component';
+import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
 import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 
 export type UseCharacterMarkerStateOptions = {
@@ -46,11 +47,13 @@ export type CharacterMarkerState = Pick<
  * selection cannot be resolved against the editor's USJ.
  *
  * Empty `markerStates` together with `hasUncovered === false` is the pure function's "no
- * information" result — it also occurs when the selection's json paths do not resolve against this
- * USJ (e.g. drift between the editor's USJ and its selection after an edit). A genuinely unmarked
- * selection always has `hasUncovered === true` (a collapsed caret included), so this combination is
- * unambiguous. Returning `undefined` makes the hook degrade exactly as it does with no selection or
- * no USJ — falling back to `contextMarker` — rather than confidently reporting "nothing applied".
+ * information" result, and it is treated as such here — never as "the selection carries no marker".
+ * It arises whenever there was nothing to measure: the selection's json paths do not resolve
+ * against this USJ (e.g. drift between the editor's USJ and its selection after an edit), the
+ * selection resolves inside a note (which coverage excludes entirely), or a collapsed caret's start
+ * node is not a text node, so no text segment is collected at all. Returning `undefined` makes the
+ * hook degrade exactly as it does with no selection or no USJ — falling back to `contextMarker` —
+ * rather than confidently reporting "nothing applied".
  */
 function computeCoverage(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -115,10 +118,24 @@ function buildMarkerMenuItems(
     blockMarker,
     { currentCharacterMarker: currentMarker, changeCharacterMarker, removeCharacterMarker },
   );
-  if (!coverage) return items;
 
   return items.map((item) => {
-    let selectionState: 'all' | 'partial' | 'none';
+    // Mirror the generator's action logic (`character-marker-menu.utils.ts`) so a row whose action
+    // is a no-op is visibly unavailable rather than silently ignoring the click. The generator
+    // deliberately stays inert while a character marker covers the selection, because
+    // `insertMarker` NESTS rather than replaces: picking the covering marker again has no defined
+    // meaning yet (toggle off? extend? — `PT-XXX-B4`), and picking a different one needs a replace
+    // operation that does not exist until `PT-XXX-B2`. Both are correct as behavior and wrong as
+    // silence, so the row is disabled here.
+    //
+    // The remove row (no `marker`) is never disabled: it is only emitted at all when
+    // `removeCharacterMarker` exists, so it always has something to do.
+    const isDisabled =
+      !!item.marker && !!currentMarker && (item.marker === currentMarker || !changeCharacterMarker);
+
+    if (!coverage) return { ...item, isDisabled };
+
+    let selectionState: CharacterMarkerSelectionState;
     if (item.marker) selectionState = coverage.markerStates[item.marker] ?? 'none';
     // The remove row: 'partial' when some of the selection is unmarked, 'none' when every character
     // carries a marker. The `coveringMarkers.length === 0` ('all') case cannot arise here: the
@@ -126,7 +143,7 @@ function buildMarkerMenuItems(
     // `character-marker-menu.utils.ts`), and `resolveCurrentMarker` only returns a marker when
     // exactly one covers the selection.
     else selectionState = coverage.hasUncovered ? 'partial' : 'none';
-    return { ...item, selectionState };
+    return { ...item, isDisabled, selectionState };
   });
 }
 

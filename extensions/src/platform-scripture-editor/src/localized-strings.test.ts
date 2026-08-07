@@ -64,7 +64,6 @@ const CHARACTER_MARKER_CONTROL_KEYS = [
   '%webView_platformScriptureEditor_characterMarkerControl_mixed%',
   '%webView_platformScriptureEditor_characterMarkerControl_none%',
   '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%',
-  '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%',
 ];
 
 // Same guard as above, for the control's own strings: nothing in the build enforces en/es parity.
@@ -81,3 +80,26 @@ describe.each(CHARACTER_MARKER_CONTROL_KEYS)('character marker control label %s'
     expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
+
+// The format strings are checked separately because the differs-from-English assertion above does
+// not apply to them: a format string is punctuation and placeholders, so es and en legitimately
+// match until a locale needs different ordering or separators. What must hold is that both locales
+// carry every placeholder the code substitutes — a dropped one silently renders an empty slot.
+const CHARACTER_MARKER_CONTROL_FORMAT_KEYS: [key: string, placeholders: string[]][] = [
+  ['%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%', ['name', 'value']],
+  [
+    '%webView_platformScriptureEditor_characterMarkerControl_label_format%',
+    ['marker', 'description'],
+  ],
+];
+
+describe.each(CHARACTER_MARKER_CONTROL_FORMAT_KEYS)(
+  'character marker control format string %s',
+  (key, placeholders) => {
+    it.each(['en', 'es'])('has every placeholder in %s', (locale) => {
+      const value = localizedStrings[locale][key];
+      expect(value).toBeTruthy();
+      placeholders.forEach((placeholder) => expect(value).toContain(`{${placeholder}}`));
+    });
+  },
+);

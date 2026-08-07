@@ -1,12 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { MARKER_MENU_STRING_KEYS, MarkerMenuItem } from 'platform-bible-react';
 import { useState } from 'react';
-import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
+import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
+import { CharacterMarkerSelectionState } from '../character-marker-coverage.utils';
 import {
   CHARACTER_MARKER_CONTROL_STRING_KEYS,
   CharacterMarkerControl,
-  CharacterMarkerToolbar,
 } from './character-marker-control.component';
+import { CharacterMarkerToolbar } from './character-marker-toolbar.component';
 
 // Real `en` values, resolved from the contribution files — the menu's own keys as well as the
 // control's, since the control passes one strings object through to MarkerMenu.
@@ -15,10 +16,8 @@ const STRINGS = getLocalizedStrings([
   ...MARKER_MENU_STRING_KEYS,
 ]);
 
-type SelectionState = 'all' | 'partial' | 'none';
-
 /** Every row starts uncovered until a story overrides it via `initialSelectionStates`. */
-const DEFAULT_SELECTION_STATES: Record<string, SelectionState> = {
+const DEFAULT_SELECTION_STATES: Record<string, CharacterMarkerSelectionState> = {
   bd: 'none',
   nd: 'none',
   it: 'none',
@@ -46,15 +45,15 @@ function StatefulHarness({
   isMixed?: boolean;
   isSyncBlocked?: boolean;
   hasMarkers?: boolean;
-  initialSelectionStates?: Record<string, SelectionState>;
+  initialSelectionStates?: Record<string, CharacterMarkerSelectionState>;
   isLabelHidden?: boolean;
   menuAlign?: 'start' | 'center' | 'end';
 }) {
   const [appliedMarker, setAppliedMarker] = useState(initialMarker);
   const [openCount, setOpenCount] = useState(0);
-  const [selectionStates, setSelectionStates] = useState<Record<string, SelectionState>>(
-    initialSelectionStates ?? DEFAULT_SELECTION_STATES,
-  );
+  const [selectionStates, setSelectionStates] = useState<
+    Record<string, CharacterMarkerSelectionState>
+  >(initialSelectionStates ?? DEFAULT_SELECTION_STATES);
 
   // Applying a marker to the whole selection makes that row `all` and clears the others — a
   // selection can only be fully covered by one marker at a time.

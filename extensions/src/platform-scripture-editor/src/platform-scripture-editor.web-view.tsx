@@ -125,7 +125,7 @@ import {
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
-import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control.component';
+import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import {

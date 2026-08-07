@@ -5,6 +5,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MarkerMenuItem } from 'platform-bible-react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { CharacterMarkerControl } from './character-marker-control.component';
 
 // cmdk instantiates a ResizeObserver and schedules scrollTo/scrollIntoView; jsdom ships none.
 class NoopResizeObserver implements ResizeObserver {
@@ -35,27 +36,16 @@ beforeAll(() => {
   }
 });
 
-// Mutable mock so one test can flip interface mode and assert both directions.
-const mockMode = { isPowerMode: false };
-vi.mock('./use-is-power-mode.hook', () => ({
-  useIsPowerMode: () => mockMode.isPowerMode,
-}));
-
-// Imported after the mock so the component picks up the mocked `useIsPowerMode`.
-// eslint-disable-next-line import/first
-import {
-  CharacterMarkerControl,
-  CharacterMarkerToolbar,
-} from './character-marker-control.component';
-
 const STRINGS = {
   '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%': 'Character marker',
   '%webView_platformScriptureEditor_characterMarkerControl_mixed%': '(mixed)',
   '%webView_platformScriptureEditor_characterMarkerControl_none%': '(none)',
   '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%':
     'No character markers are available here.',
-  '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%':
-    'Search to add a character style.',
+  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%': '{name}: {value}',
+  '%webView_platformScriptureEditor_characterMarkerControl_label_format%':
+    '{marker} - {description}',
+  '%markerMenu_searchPlaceholder_character%': 'Search character markers',
   '%webView_platformScriptureEditor_syncEditBlocked_banner%':
     'Editing paused — Send/Receive in progress',
   '%markerMenu_searchPlaceholder%': 'Type a style or search.',
@@ -68,23 +58,20 @@ const ITEMS: MarkerMenuItem[] = [
 
 function renderControl(overrides: Partial<Parameters<typeof CharacterMarkerControl>[0]> = {}) {
   return render(
-    <CharacterMarkerToolbar>
-      <CharacterMarkerControl
-        isMixed={false}
-        isSyncBlocked={false}
-        markerMenuItems={ITEMS}
-        onOpen={vi.fn()}
-        onClose={vi.fn()}
-        localizedStrings={STRINGS}
-        {...overrides}
-      />
-    </CharacterMarkerToolbar>,
+    <CharacterMarkerControl
+      isMixed={false}
+      isSyncBlocked={false}
+      markerMenuItems={ITEMS}
+      onOpen={vi.fn()}
+      onClose={vi.fn()}
+      localizedStrings={STRINGS}
+      {...overrides}
+    />,
   );
 }
 
 afterEach(() => {
   vi.clearAllMocks();
-  mockMode.isPowerMode = false;
 });
 
 describe('CharacterMarkerControl — trigger label', () => {
@@ -127,6 +114,34 @@ describe('CharacterMarkerControl — trigger label', () => {
     renderControl({ currentMarker: 'bd' });
 
     expect(screen.getByRole('button', { name: 'Character marker: bd' })).toHaveTextContent('bd');
+  });
+});
+
+describe('CharacterMarkerControl — label truncation', () => {
+  it('renders the visible label in a truncating element so a narrow placement clips it', () => {
+    // jsdom has no layout, so the clipping itself is not observable — assert the mechanism that
+    // makes it possible instead: the label must be its own truncating box, not a bare text child
+    // of a `whitespace-nowrap shrink-0` Button.
+    renderControl({ currentMarker: 'add', currentMarkerLabel: "Translator's Addition" });
+
+    const label = screen.getByText("add - Translator's Addition");
+    expect(label.tagName).toBe('SPAN');
+    expect(label).toHaveClass('tw:truncate');
+  });
+
+  it('keeps the full label in the accessible name even though the visible one may be clipped', () => {
+    renderControl({ currentMarker: 'add', currentMarkerLabel: "Translator's Addition" });
+
+    expect(
+      screen.getByRole('button', { name: "Character marker: add - Translator's Addition" }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders no label element at all when the label is hidden', () => {
+    renderControl({ currentMarker: 'bd', isLabelHidden: true });
+
+    expect(screen.queryByText('bd')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Character marker: bd' })).toBeInTheDocument();
   });
 });
 
@@ -226,7 +241,7 @@ describe('CharacterMarkerControl — menu', () => {
     await user.click(screen.getByRole('button'));
 
     expect(onOpen).toHaveBeenCalledTimes(1);
-    const search = screen.getByPlaceholderText('Search to add a character style.');
+    const search = screen.getByPlaceholderText('Search character markers');
     expect(search).toHaveFocus();
   });
 
@@ -253,6 +268,53 @@ describe('CharacterMarkerControl — menu', () => {
     expect(action).toHaveBeenCalledTimes(1);
   });
 
+  it('closes the menu and fires onClose once on selection', async () => {
+    // Single-select: picking a marker must dismiss the menu, and `onClose` is what returns focus to
+    // the editor. Radix reports the follow-up focus-outside as another close, which must not
+    // double-fire `onClose`.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onClose = vi.fn();
+    renderControl({
+      onClose,
+      markerMenuItems: [{ marker: 'bd', title: 'Bold', selectionState: 'none', action: vi.fn() }],
+    });
+
+    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('option', { name: /Bold/ }));
+
+    expect(screen.queryByRole('option', { name: /Bold/ })).not.toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('activates a marker by keyboard alone', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const action = vi.fn();
+    renderControl({
+      markerMenuItems: [{ marker: 'bd', title: 'Bold', selectionState: 'none', action }],
+    });
+
+    await user.tab();
+    await user.keyboard('{Enter}');
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire the action of a disabled row', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const action = vi.fn();
+    renderControl({
+      markerMenuItems: [
+        { marker: 'bd', title: 'Bold', selectionState: 'all', isDisabled: true, action },
+      ],
+    });
+
+    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('option', { name: /Bold/ }));
+
+    expect(action).not.toHaveBeenCalled();
+  });
+
   it('is operable by keyboard alone and fires onClose when the popover closes', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onClose = vi.fn();
@@ -261,7 +323,7 @@ describe('CharacterMarkerControl — menu', () => {
     await user.tab();
     expect(screen.getByRole('button')).toHaveFocus();
     await user.keyboard('{Enter}');
-    expect(screen.getByPlaceholderText('Search to add a character style.')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search character markers')).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -351,38 +413,5 @@ describe('CharacterMarkerControl — menu', () => {
     // `dir` is spread conditionally, not passed as `dir={undefined}`: PopoverContent's own
     // `readDirection()` value would otherwise be blanked out for every consumer that passes nothing.
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'ltr');
-  });
-});
-
-describe('CharacterMarkerToolbar', () => {
-  it('renders nothing in Power mode and everything in Simple mode', () => {
-    mockMode.isPowerMode = true;
-    const { unmount } = renderControl();
-    // Absent from the tree, not merely hidden — a hidden control would still affect layout.
-    expect(screen.queryByRole('button')).toBeNull();
-    unmount();
-
-    mockMode.isPowerMode = false;
-    renderControl();
-    expect(screen.getByRole('button')).toBeInTheDocument();
-  });
-
-  it('renders additional slot children without any change to the control', () => {
-    // U1: a second action button must be addable without editing this component's internals.
-    render(
-      <CharacterMarkerToolbar>
-        <CharacterMarkerControl
-          isMixed={false}
-          isSyncBlocked={false}
-          markerMenuItems={ITEMS}
-          onOpen={vi.fn()}
-          onClose={vi.fn()}
-          localizedStrings={STRINGS}
-        />
-        <button type="button">Second action</button>
-      </CharacterMarkerToolbar>,
-    );
-
-    expect(screen.getByRole('button', { name: 'Second action' })).toBeInTheDocument();
   });
 });

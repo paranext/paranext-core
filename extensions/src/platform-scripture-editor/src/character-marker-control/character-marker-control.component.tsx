@@ -10,19 +10,35 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useTruncationTooltip,
 } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
-import { ReactNode, useEffect, useRef, useState } from 'react';
-import { useIsPowerMode } from './use-is-power-mode.hook';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { DisabledTooltipWrapper } from '../disabled-tooltip-wrapper.component';
 
 const ARIA_LABEL_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%';
+/**
+ * The separators between a marker code and its description, and between the control's name and its
+ * current value, live in the translated string rather than in code: neither the punctuation nor the
+ * ordering is universal, and a Latin marker code sitting next to RTL text reorders around whatever
+ * separator is used.
+ */
+const ARIA_LABEL_FORMAT_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%';
+const LABEL_FORMAT_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_characterMarkerControl_label_format%';
 const MIXED_KEY: LocalizeKey = '%webView_platformScriptureEditor_characterMarkerControl_mixed%';
 const NONE_KEY: LocalizeKey = '%webView_platformScriptureEditor_characterMarkerControl_none%';
 const NO_MARKERS_TOOLTIP_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%';
-const SEARCH_PLACEHOLDER_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%';
+/**
+ * Lives in `platform-bible-react` beside its two siblings (`_insert`, `_paragraph`) rather than in
+ * this extension: all three are placeholders for the same shared `MarkerMenu` search field, and the
+ * editor web view already preloads `MARKER_MENU_STRING_KEYS`, so it needs no separate
+ * registration.
+ */
+const SEARCH_PLACEHOLDER_KEY: LocalizeKey = '%markerMenu_searchPlaceholder_character%';
 /** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */
 const SYNC_BLOCKED_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner%';
 
@@ -32,6 +48,8 @@ const SYNC_BLOCKED_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEdit
  */
 export const CHARACTER_MARKER_CONTROL_STRING_KEYS = Object.freeze([
   ARIA_LABEL_KEY,
+  ARIA_LABEL_FORMAT_KEY,
+  LABEL_FORMAT_KEY,
   MIXED_KEY,
   NONE_KEY,
   NO_MARKERS_TOOLTIP_KEY,
@@ -159,7 +177,12 @@ export function CharacterMarkerControl({
   let label: string;
   if (isMixed) label = localize(localizedStrings, MIXED_KEY);
   else if (currentMarker)
-    label = currentMarkerLabel ? `${currentMarker} - ${currentMarkerLabel}` : currentMarker;
+    label = currentMarkerLabel
+      ? formatReplacementString(localize(localizedStrings, LABEL_FORMAT_KEY), {
+          marker: currentMarker,
+          description: currentMarkerLabel,
+        })
+      : currentMarker;
   else label = localize(localizedStrings, NONE_KEY);
 
   // Two different jobs for one tooltip. While DISABLED it explains why (a disabled button cannot
@@ -167,40 +190,91 @@ export function CharacterMarkerControl({
   // sighted user's only readout of the current marker, which the visible label used to provide.
   // Suppressed while the popover is open: a tooltip and a popover anchored to the same trigger
   // otherwise render on top of each other.
+  // The visible label truncates rather than overflowing (the Responsiveness guideline's 300px
+  // floor; `${marker} - ${description}` easily exceeds a gutter-width trigger), so the tooltip
+  // gains a third job: revealing the clipped text. `useTruncationTooltip` measures the clipping so
+  // it fires only when there is actually something hidden.
+  //
+  // Unlike `project-selector`, the Tooltip stays UNCONTROLLED and this only widens what content
+  // there is to show. Project-selector had to control `open` because its trigger is a cmdk
+  // `CommandItem`, which defeats Radix's pointer/focus auto-detection; this trigger is an ordinary
+  // button, so controlling `open` would buy nothing and would cost the focus-driven tooltip that
+  // the disabled wrapper depends on for keyboard users. The trade-off: keyboard focus alone does
+  // not reveal a truncated label — acceptable because the full text is already the button's
+  // accessible name, so no information is unreachable.
+  const {
+    ref: labelRef,
+    open: isTruncatedLabelHovered,
+    onPointerEnter: onLabelPointerEnter,
+    onPointerLeave: onLabelPointerLeave,
+  } = useTruncationTooltip<HTMLSpanElement>();
+
   const tooltipText = isDisabled ? disabledTooltip : label;
-  const isTooltipShown = !isOpen && (isDisabled || isLabelHidden);
+  const isTooltipShown = !isOpen && (isDisabled || isLabelHidden || isTruncatedLabelHovered);
 
   const handleOpenChange = (nextOpen: boolean) => {
+    // Ignore no-op transitions. Closing from an item selection already ran `onClose`, and the
+    // editor refocus that `onClose` performs then reaches Radix as a focus-outside — which would
+    // otherwise report the same close a second time and fire `onClose` twice.
+    if (nextOpen === isOpen) return;
     setIsOpen(nextOpen);
     if (nextOpen) onOpen();
     else onClose();
   };
 
+  // Only ever called from an item action, which can only fire while the menu is open, so this
+  // needs no was-open guard.
+  const closeMenu = useCallback(() => {
+    setIsOpen(false);
+    onClose();
+  }, [onClose]);
+
+  // This is a single-select control, so picking a marker must close the menu — and closing is also
+  // what returns focus to the editor, via `onClose`. `MarkerMenu` wires `onSelect` straight to
+  // `item.action` and knows nothing about its host's open state, so the host wraps each action
+  // rather than the menu closing itself.
+  const closingMarkerMenuItems = useMemo(
+    () =>
+      markerMenuItems.map((item) => ({
+        ...item,
+        action: () => {
+          item.action();
+          closeMenu();
+        },
+      })),
+    [markerMenuItems, closeMenu],
+  );
+
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* When the button is disabled it is not focusable, so make the wrapper focusable and
+          {/* When the button is disabled it is not focusable, so the wrapper becomes focusable and
               named while disabled to keep the explanatory tooltip reachable for keyboard and
               screen-reader users. */}
-          <div
-            role={isDisabled ? 'group' : undefined}
-            // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to
-            // surface the explanation to keyboard and screen-reader users
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-            tabIndex={isDisabled ? 0 : undefined}
-            aria-label={isDisabled ? disabledTooltip : undefined}
+          <DisabledTooltipWrapper
+            // Lets the button shrink inside this wrapper, without which its truncation never
+            // engages: a min-content floor here would keep the label at full width.
+            className="tw:min-w-0"
+            isDisabled={isDisabled}
+            disabledExplanation={disabledTooltip}
           >
             <Popover open={isOpen} onOpenChange={handleOpenChange}>
               <PopoverTrigger asChild>
                 <Button
-                  className={className}
+                  // `tw:min-w-0 tw:shrink` overrides `buttonVariants`' base `tw:shrink-0` so the
+                  // label below can actually truncate; a shrink-0 button just overflows instead.
+                  // The consumer's class comes last so it still wins on any conflict.
+                  className={['tw:min-w-0 tw:shrink', className].filter(Boolean).join(' ')}
                   // The accessible name includes the current value. With a visible label, a static
                   // "Character marker" would override it and never let a screen-reader user hear
                   // the value (WCAG 2.5.3, label-in-name). With `isLabelHidden` there is no visible
                   // label for 2.5.3 to apply to, and this name becomes the ONLY readout of the
                   // value — so it is load-bearing in both states, for different reasons.
-                  aria-label={`${localize(localizedStrings, ARIA_LABEL_KEY)}: ${label}`}
+                  aria-label={formatReplacementString(
+                    localize(localizedStrings, ARIA_LABEL_FORMAT_KEY),
+                    { name: localize(localizedStrings, ARIA_LABEL_KEY), value: label },
+                  )}
                   disabled={isDisabled}
                   variant="outline"
                 >
@@ -208,7 +282,16 @@ export function CharacterMarkerControl({
                       "character marker" role and the current value, so the icon must not be
                       announced a second time. */}
                   <Type aria-hidden />
-                  {!isLabelHidden && label}
+                  {!isLabelHidden && (
+                    <span
+                      ref={labelRef}
+                      onPointerEnter={onLabelPointerEnter}
+                      onPointerLeave={onLabelPointerLeave}
+                      className="tw:truncate"
+                    >
+                      {label}
+                    </span>
+                  )}
                   <ChevronDown />
                 </Button>
               </PopoverTrigger>
@@ -233,13 +316,13 @@ export function CharacterMarkerControl({
               >
                 <MarkerMenu
                   localizedStrings={localizedStrings}
-                  markerMenuItems={markerMenuItems}
+                  markerMenuItems={closingMarkerMenuItems}
                   searchRef={searchRef}
                   searchPlaceholder={localize(localizedStrings, SEARCH_PLACEHOLDER_KEY)}
                 />
               </PopoverContent>
             </Popover>
-          </div>
+          </DisabledTooltipWrapper>
         </TooltipTrigger>
         {isTooltipShown && (
           <TooltipContent>
@@ -257,40 +340,5 @@ export function CharacterMarkerControl({
         )}
       </Tooltip>
     </TooltipProvider>
-  );
-}
-
-export type CharacterMarkerToolbarProps = {
-  /**
-   * The controls to lay out. One today; footnote and comment buttons are expected to join them
-   * without any change to this component.
-   */
-  children: ReactNode;
-  /** CSS class name for the container. Placement belongs to the caller, never to this component. */
-  className?: string;
-};
-
-/**
- * Slot-based container for the character-marker controls.
- *
- * Lays its children out in a row and decides nothing about where that row sits — the `className`
- * pass-through is how a placement wrapper positions it. Adding a second control means passing
- * another child, not editing this component.
- */
-export function CharacterMarkerToolbar({ children, className }: CharacterMarkerToolbarProps) {
-  const isPowerMode = useIsPowerMode();
-
-  // The character-marker control is only available in 10 Simple right now. Later it will be made
-  // available in 10 Power too.
-  if (isPowerMode) return undefined;
-
-  return (
-    <div
-      className={['tw:flex tw:flex-row tw:flex-nowrap tw:items-center tw:gap-1', className]
-        .filter(Boolean)
-        .join(' ')}
-    >
-      {children}
-    </div>
   );
 }

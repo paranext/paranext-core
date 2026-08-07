@@ -192,6 +192,19 @@ describe('computeCharacterMarkerCoverage', () => {
     expect(coverage.hasUncovered).toBe(true);
   });
 
+  it('reports no information rather than uncovered text for a caret inside a note', () => {
+    // The caret sits in the note's `ft` content, which coverage excludes entirely. Reporting
+    // `hasUncovered: true` here would claim unmarked text is selected at a location this function
+    // deliberately does not measure; the empty result instead makes the caller fall back to its own
+    // context, as it does for any other unresolvable selection.
+    const coverage = computeCharacterMarkerCoverage(USJ_WITH_NOTE, {
+      start: { jsonPath: '$.content[2].content[2].content[0].content[0]', offset: 2 },
+      end: { jsonPath: '$.content[2].content[2].content[0].content[0]', offset: 2 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: false });
+  });
+
   it('ignores the non-character markers a selection spans', () => {
     // The selection crosses the `\bd` char node and lands in plain text; `p` and `v` are block and
     // numbering markers and must never appear in the result.
