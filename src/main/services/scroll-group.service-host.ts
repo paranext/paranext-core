@@ -27,6 +27,8 @@ import {
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   PersistedScrollGroupState,
   ReferenceHistory,
+  SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY,
+  SCR_REFS_STORAGE_KEY,
   ScrollGroupMap,
   ScrollGroupSnapshot,
 } from '@shared/services/scroll-group.service-model';
@@ -98,12 +100,25 @@ const DEFAULT_SCR_REF: SerializedVerseRef = Object.freeze({
   verseNum: 1,
 });
 
-const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
-const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY = 'scroll-group.service-host.scrRefSourceProjectIds';
-
+/**
+ * Read one persisted map out of the store.
+ *
+ * A store this process cannot make sense of degrades to "no stored state" instead of throwing. This
+ * runs while `main.ts`'s import graph is being evaluated — before any window, any error dialog, or
+ * anything the user could act on — so a truncated or hand-edited file would otherwise stop the app
+ * from starting at all, with nothing to tell the user which file to remove. Losing one Scripture
+ * reference beats that. The next write replaces the unreadable file.
+ */
 function loadStoredMap<T>(storageKey: string): ScrollGroupMap<T> {
-  const serialized = localStorage.getItem(storageKey);
-  return serialized ? (deserialize(serialized) ?? {}) : {};
+  try {
+    const serialized = localStorage.getItem(storageKey);
+    return serialized ? (deserialize(serialized) ?? {}) : {};
+  } catch (e) {
+    logger.error(
+      `Scroll group service host could not read its stored ${storageKey}; starting without it. ${getErrorMessage(e)}`,
+    );
+    return {};
+  }
 }
 
 /** Object that maps scroll group ids to the scripture reference at each of those scroll group ids */
@@ -181,22 +196,111 @@ function normalizeStoredScrRefs(refs: ScrollGroupMap<SerializedVerseRef>): boole
 }
 
 /**
- * Persist the scroll-group state. `sourceProjectIdsChanged` controls whether the (separately-keyed)
- * source-project-id map is also rewritten; pass `false` to skip that second serialize + write when
- * only the ref changed — the common same-project navigation case, where the source id is unchanged.
- * Defaults to `true` so callers that can't tell stay correct.
+ * Whether this process holds scroll group state of its own, as opposed to only ever having had the
+ * default. Read from memory rather than from the store because writes reach the store lazily (see
+ * {@link schedulePersist}), so the file's absence proves nothing about what has been navigated.
+ * {@link migrateStoredScrollGroupState} refuses an offer once this is true.
+ */
+let hasOwnScrollGroupState = Object.keys(scrRefs).length > 0;
+
+/**
+ * Write the scroll-group state to the store, now. Throws whatever the store throws.
  *
  * `localStorage` here is main's file-backed polyfill (`polyfillLocalStorage()` in
  * `global-this.model.ts`), NOT a renderer's Chromium store, so this is one store for the whole app
- * rather than one per window.
+ * rather than one per window. Each `setItem` is a synchronous write-and-fsync of one file, which is
+ * why callers go through {@link schedulePersist} rather than calling this per navigation.
+ *
+ * `sourceProjectIdsChanged` controls whether the (separately-keyed) source-project-id map is also
+ * rewritten; pass `false` to skip that second serialize + write when only the ref changed — the
+ * common same-project navigation case, where the source id is unchanged. Defaults to `true` so
+ * callers that can't tell stay correct.
  */
-function saveScrRefs(sourceProjectIdsChanged = true) {
+function persistScrRefsNow(sourceProjectIdsChanged = true) {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
   if (sourceProjectIdsChanged)
     localStorage.setItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY, serialize(scrRefSourceProjectIds));
 }
 
-if (normalizeStoredScrRefs(scrRefs)) saveScrRefs(false);
+/**
+ * How long a reference change waits before it is written to disk. Long enough that holding a
+ * next-verse key down writes once at the end of the run rather than once per verse, short enough
+ * that it is over before a user who navigated and then quit gets to the menu.
+ */
+const PERSIST_DEBOUNCE_MS = 500;
+
+let pendingPersistTimeout: ReturnType<typeof setTimeout> | undefined;
+let pendingPersistIncludesSourceProjectIds = false;
+
+/**
+ * Claim the coalesced write, cancelling the timer that would have run it.
+ *
+ * @returns Whether the write it claimed also covers the source-project-id map, or `undefined` when
+ *   there was nothing pending
+ */
+function takePendingPersist(): boolean | undefined {
+  if (pendingPersistTimeout === undefined) return undefined;
+  clearTimeout(pendingPersistTimeout);
+  pendingPersistTimeout = undefined;
+  const includeSourceProjectIds = pendingPersistIncludesSourceProjectIds;
+  pendingPersistIncludesSourceProjectIds = false;
+  return includeSourceProjectIds;
+}
+
+/**
+ * Persist the scroll-group state soon.
+ *
+ * Memory is authoritative and the store is a lagging record of it, so the write is coalesced: each
+ * `localStorage.setItem` is an open-write-fsync-rename executed synchronously ON MAIN'S EVENT LOOP,
+ * which is also the JSON-RPC server every other process talks through. Writing per navigation puts
+ * that latency between every window and the platform while someone holds a next-verse key down.
+ *
+ * The cost of coalescing is a loss window: a crash (not a quit — see
+ * {@link flushPersistedScrollGroupState}) loses at most {@link PERSIST_DEBOUNCE_MS} of scroll
+ * position, which is one navigation's worth of a value the user can see and re-enter. That is the
+ * trade being made deliberately.
+ */
+function schedulePersist(sourceProjectIdsChanged = true) {
+  pendingPersistIncludesSourceProjectIds =
+    pendingPersistIncludesSourceProjectIds || sourceProjectIdsChanged;
+  if (pendingPersistTimeout !== undefined) return;
+  pendingPersistTimeout = setTimeout(() => {
+    const includeSourceProjectIds = takePendingPersist();
+    if (includeSourceProjectIds === undefined) return;
+    try {
+      persistScrRefsNow(includeSourceProjectIds);
+    } catch (e) {
+      // Said once and loudly, then the session carries on: the state consumers read is in memory and
+      // was already broadcast, so a store that cannot be written costs the next restart its starting
+      // reference, not this session its correctness.
+      logger.error(
+        `Scroll group service host could not persist its state; this session is unaffected but a restart will not remember where the user was. ${getErrorMessage(e)}`,
+      );
+    }
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+/**
+ * Write any coalesced scroll-group state to the store immediately.
+ *
+ * Call this on the way down. {@link schedulePersist} deliberately lets the store lag memory, so
+ * without a flush at shutdown a quit within {@link PERSIST_DEBOUNCE_MS} of the last navigation would
+ * lose it — the one loss the debounce must not cause, because quitting right after navigating is
+ * something users do on purpose.
+ */
+export function flushPersistedScrollGroupState(): void {
+  const includeSourceProjectIds = takePendingPersist();
+  if (includeSourceProjectIds === undefined) return;
+  try {
+    persistScrRefsNow(includeSourceProjectIds);
+  } catch (e) {
+    logger.error(
+      `Scroll group service host could not persist its state while shutting down; the next start will show the last reference it managed to write. ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+if (normalizeStoredScrRefs(scrRefs)) schedulePersist(false);
 
 function emitReferenceHistoryChange(scrollGroupId: ScrollGroupId, history: ReferenceHistory) {
   onDidChangeReferenceHistoryBufferedEmitter.emit({ scrollGroupId, history: deepClone(history) });
@@ -307,7 +411,12 @@ function writeScrRef(
   // take the raw reference rather than mis-frame it under the previous source. This is not a
   // lost-frame bug — an unknown frame is honestly unknown.
   scrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
-  saveScrRefs(sourceProjectIdChanged);
+  hasOwnScrollGroupState = true;
+  // Scheduled, not written, so a store that is slow or failing can neither delay nor prevent the
+  // broadcast below. The broadcast is the correctness-critical half — it is what stops the other
+  // windows from silently showing a different verse than this one — while the file only decides
+  // what the NEXT start opens on.
+  schedulePersist(sourceProjectIdChanged);
   // The buffered emitter is usable immediately; if it hasn't finished registering yet, the latest
   // update per scroll group is buffered and flushed.
   onDidUpdateScrRefBufferedEmitter.emit({ scrollGroupId, scrRef: scrRefClone, sourceProjectId });
@@ -421,20 +530,30 @@ export async function getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot> {
  */
 const MIGRATED_STORED_STATE_KEY = 'scroll-group.service-host.didMigrateStoredState';
 
+/** Whether a value read out of a foreign store is shaped like a Scripture reference */
+function isScrRefShaped(value: SerializedVerseRef | undefined): value is SerializedVerseRef {
+  return (
+    !!value &&
+    typeof value.book === 'string' &&
+    typeof value.chapterNum === 'number' &&
+    typeof value.verseNum === 'number'
+  );
+}
+
 /** See {@link IScrollGroupInternalService.migrateStoredScrollGroupState} */
 export async function migrateStoredScrollGroupState(
   state: PersistedScrollGroupState,
-): Promise<void> {
-  // First one wins. Deliberately no locking: the offers all describe the same app's state from
-  // before it had one store, so taking the first and ignoring the rest cannot lose anything the
-  // others would have added, and a mixture of two of them is the only outcome worth ruling out.
+): Promise<boolean> {
+  // First one wins. Deliberately no locking: this whole function body is `await`-free, so two
+  // windows offering in the same tick cannot interleave. The offers all describe the same app's
+  // state from before it had one store, so taking the first and ignoring the rest cannot lose
+  // anything the others would have added, and a mixture of two of them is the only outcome worth
+  // ruling out.
   //
-  // State this process has already stored also refuses an offer, even if the flag was never set:
-  // that means an earlier offer failed to arrive but the app has been used since, and the reference
-  // the user last navigated to has to beat the one they left behind before any of this.
-  if (localStorage.getItem(MIGRATED_STORED_STATE_KEY) || localStorage.getItem(SCR_REFS_STORAGE_KEY))
-    return;
-  localStorage.setItem(MIGRATED_STORED_STATE_KEY, 'true');
+  // State this process holds also refuses an offer, even if the flag was never set: that means an
+  // earlier offer failed to arrive but the app has been used since, and the reference the user last
+  // navigated to has to beat the one they left behind before any of this.
+  if (localStorage.getItem(MIGRATED_STORED_STATE_KEY) || hasOwnScrollGroupState) return false;
 
   const offeredScrRefs = state?.scrRefs ?? {};
   const offeredSourceProjectIds = state?.scrRefSourceProjectIds ?? {};
@@ -442,14 +561,61 @@ export async function migrateStoredScrollGroupState(
   // Adopted straight into the state rather than through `setScrRef`, and NOT broadcast: this is the
   // state the app already had, so recording it as navigation history or announcing it as a change
   // would describe moves the user never made. Consumers read it with their next snapshot.
+  //
+  // Shape-checked on the way in, the same way `setScrRefSync` checks a write: this arrives over the
+  // network from another process's store and is about to become this store's contents for the life
+  // of the profile, so a garbage entry must not survive the trip.
   Object.entries(offeredScrRefs).forEach(([scrollGroupId, scrRef]) => {
-    if (scrRef) scrRefs[Number(scrollGroupId)] = scrRef;
+    if (isScrRefShaped(scrRef)) scrRefs[Number(scrollGroupId)] = scrRef;
   });
   Object.entries(offeredSourceProjectIds).forEach(([scrollGroupId, sourceProjectId]) => {
-    if (sourceProjectId) scrRefSourceProjectIds[Number(scrollGroupId)] = sourceProjectId;
+    if (typeof sourceProjectId === 'string')
+      scrRefSourceProjectIds[Number(scrollGroupId)] = sourceProjectId;
   });
-  saveScrRefs();
+  hasOwnScrollGroupState = true;
+
+  // Persist what was adopted BEFORE recording that the migration ran, and write both keys before
+  // either flag. The store is one file per key with no atomicity across them, so an order that
+  // records "already migrated" first can leave a profile permanently flagged as done with nothing
+  // migrated — the user's last reference gone with no way to ask for it again. This order fails the
+  // other way: an interrupted migration is simply retried at the next start, which is idempotent
+  // because `hasOwnScrollGroupState` only becomes true once something actually landed.
+  try {
+    takePendingPersist();
+    persistScrRefsNow();
+    localStorage.setItem(MIGRATED_STORED_STATE_KEY, 'true');
+  } catch (e) {
+    // Rejected rather than reported as refused: a caller told "refused" discards its copy, and this
+    // is the one outcome where its copy is still the only durable one.
+    logger.error(
+      `Scroll group service host could not store the scroll group state it was offered; it will ask for it again. ${getErrorMessage(e)}`,
+    );
+    throw e;
+  }
   logger.info('Scroll group service host adopted previously stored scroll group state');
+  return true;
+}
+
+/**
+ * The scroll group state to hand a window being created, so its synchronous readers are right on
+ * its first render rather than showing the default until it has asked. Travels as a query parameter
+ * on the window's URL (see `SCROLL_GROUP_STATE_QUERY_PARAMETER`), which is the same channel the
+ * window id arrives on.
+ *
+ * Read from memory, not from the store, because persistence lags memory (see
+ * {@link schedulePersist}) — a window created moments after a navigation must still be told about
+ * it.
+ *
+ * @returns The state, or `undefined` when this process has none to give: a fresh profile, or one
+ *   whose state is still in a renderer's own store awaiting its one-time handover. The window falls
+ *   back to what it can read for itself in that case.
+ */
+export function getScrollGroupStateForNewWindow(): PersistedScrollGroupState | undefined {
+  if (!hasOwnScrollGroupState) return undefined;
+  return {
+    scrRefs: deepClone(scrRefs),
+    scrRefSourceProjectIds: deepClone(scrRefSourceProjectIds),
+  };
 }
 
 const scrollGroupService: IScrollGroupHostService = {
@@ -533,7 +699,7 @@ export async function startScrollGroupServiceHost(): Promise<void> {
           name: 'migrateStoredScrollGroupState',
           'x-experimental': true,
           summary:
-            'Hand over previously persisted scroll group state for the host to adopt (first call wins)',
+            'Hand over previously persisted scroll group state for the host to adopt (first offer adopted wins)',
           params: [
             {
               name: 'state',
@@ -542,7 +708,7 @@ export async function startScrollGroupServiceHost(): Promise<void> {
               schema: { type: 'object' },
             },
           ],
-          result: { name: 'void', schema: { type: 'null' } },
+          result: { name: 'didAdopt', schema: { type: 'boolean' } },
         },
       ],
     },
