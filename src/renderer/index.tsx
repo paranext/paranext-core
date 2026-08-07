@@ -10,6 +10,7 @@ import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
 import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
+import { assertAllRendererHostedDialogRequestsRegistered } from '@renderer/services/renderer-hosted-dialog-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
@@ -128,6 +129,23 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
 
+    // Every name in RENDERER_HOSTED_COMMAND_NAMES and RENDERER_HOSTED_DIALOG_REQUEST_NAMES must
+    // have been registered by one of the services started above (startWebViewService,
+    // startDialogService, startScrollGroupNavigationCommands) — otherwise the main process's
+    // routing proxy for it has nothing to forward to.
+    //
+    // Placed directly after those registrations and before anything else that can reject, and
+    // given its own catch: run from the shared catch below, a registration gap would be reported
+    // as the same generic message as every other startup failure, and any rejection between the
+    // registrations and this point would skip the check entirely. What the app ends up with is the
+    // same in dev and packaged builds; only how loudly it says so differs.
+    try {
+      assertAllRendererHostedCommandsRegistered();
+      assertAllRendererHostedDialogRequestsRegistered();
+    } catch (e) {
+      logger.error(`Renderer-hosted registration coverage check failed: ${getErrorMessage(e)}`);
+    }
+
     // Subscribe to updates to the current theme
     await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
       if (isPlatformError(newTheme)) {
@@ -136,14 +154,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       }
       applyThemeSafe(newTheme, 'subscribe');
     });
-
-    // Every command in RENDERER_HOSTED_COMMAND_NAMES must have been registered by one of the
-    // services started above (startWebViewService, startDialogService,
-    // startScrollGroupNavigationCommands) — otherwise the main process's routing proxy for it has
-    // nothing to forward to. Checked last so the dev-mode throw it uses to make a gap impossible to
-    // miss cannot cost this renderer any of the startup work above; what the app ends up with is
-    // the same in dev and packaged builds, and only how loudly it says so differs.
-    assertAllRendererHostedCommandsRegistered();
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }

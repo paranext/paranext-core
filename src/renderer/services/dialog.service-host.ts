@@ -15,15 +15,10 @@ import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
 } from '@shared/models/dialog-options.model';
-import {
-  CATEGORY_DIALOG,
-  RENDERER_HOSTED_DIALOG_REQUEST_NAMES,
-} from '@shared/services/dialog.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
-import * as networkService from '@shared/services/network.service';
 import { registerScopedCommands } from '@renderer/services/renderer-hosted-command-registry';
-import { serializeRequestType } from '@shared/utils/util';
+import { registerScopedDialogRequest } from '@renderer/services/renderer-hosted-dialog-registry';
 import {
   aggregateUnsubscriberAsyncs,
   isLocalizeKey,
@@ -326,17 +321,6 @@ async function selectProject(
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
-/**
- * Serialize a dialog request type under this window's scoped name (e.g. `dialog:showDialog-1`).
- * Dialogs open in a window, so each renderer serves its own; the main process registers proxies
- * under the generic names that forward to whichever window has focus.
- */
-function scopedDialogRequestType(
-  requestName: (typeof RENDERER_HOSTED_DIALOG_REQUEST_NAMES)[number],
-) {
-  return serializeRequestType(CATEGORY_DIALOG, `${requestName}-${globalThis.windowId}`);
-}
-
 /** Register the commands that back the PAPI dialog service */
 export async function startDialogService(): Promise<void> {
   await initialize();
@@ -346,8 +330,8 @@ export async function startDialogService(): Promise<void> {
   // register functions as requests
   const unsubPromises: Promise<UnsubscriberAsync>[] = [];
   unsubPromises.push(
-    networkService.registerRequestHandler(
-      scopedDialogRequestType('showDialog'),
+    registerScopedDialogRequest(
+      'showDialog',
       showDialog,
       {
         method: {
@@ -418,8 +402,8 @@ export async function startDialogService(): Promise<void> {
     ),
   );
   unsubPromises.push(
-    networkService.registerRequestHandler(
-      scopedDialogRequestType('selectProject'),
+    registerScopedDialogRequest(
+      'selectProject',
       selectProject,
       {
         method: {
@@ -473,8 +457,8 @@ export async function startDialogService(): Promise<void> {
     ),
   );
   unsubPromises.push(
-    networkService.registerRequestHandler(
-      scopedDialogRequestType('showAboutDialog'),
+    registerScopedDialogRequest(
+      'showAboutDialog',
       showAboutDialog,
       {
         method: {

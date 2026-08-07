@@ -29,22 +29,49 @@ import { serializeRequestType } from '@shared/utils/util';
 import { getErrorMessage } from 'platform-bible-utils';
 
 /**
- * Renderer-hosted commands whose FIRST argument is a web view id, so a call naming a web view has
- * to run in the window that owns it rather than the focused one — opening the settings for a web
- * view in a background window must not open a settings tab in the window the user happens to be
- * looking at (and would resolve the wrong project, since the owning window is the only one that can
- * read the web view's definition).
+ * Sort renderer-hosted commands by whether a call to them names a web view, reading each command's
+ * own OpenRPC documentation rather than a second list kept in step with it by hand.
  *
- * Only commands that declare a web view id parameter belong here (see `papi-shared-types`):
- * `platform.openUserSettings` is deliberately absent — despite sharing a handler with
- * `platform.openSettings`, it is declared to take no arguments, so it has no owner to route by and
- * keeps following focus. Every other renderer-hosted command (about, Usersnap, the scripture
- * navigation commands) acts on the window itself, not on a named web view.
+ * A command whose FIRST parameter is a web view id has to run in the window that owns that web view
+ * rather than the focused one — opening the settings for a web view in a background window must not
+ * open a settings tab in the window the user happens to be looking at, and would resolve the wrong
+ * project, since the owning window is the only one that can read the web view's definition.
+ *
+ * First is the constraint, not a convenience: {@link resolveRoutingWindowId} reads `args[0]`. A
+ * command documenting a web view id anywhere else is reported rather than quietly left out, because
+ * it looks routable by ownership and is not — the same silent wrong-window failure, returned inside
+ * a mechanism that appears to handle it.
+ *
+ * @param docsByCommandName OpenRPC documentation keyed by generic (unscoped) command name
+ * @returns The commands to route by ownership, and the ones whose declaration cannot be honored
  */
-const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set([
-  'platform.openSettings',
-  'platform.openProjectSettings',
-]);
+export function findWebViewIdCommandNames(
+  docsByCommandName: Record<string, SingleMethodDocumentation>,
+): {
+  routableByOwner: string[];
+  misdeclared: string[];
+} {
+  const routableByOwner: string[] = [];
+  const misdeclared: string[] = [];
+  Object.entries(docsByCommandName).forEach(([commandName, docs]) => {
+    // A `Reference` param carries only a `$ref`, so it names nothing this can route on
+    const webViewIdIndex = docs.method.params.findIndex(
+      (param) => 'name' in param && param.name === 'webViewId',
+    );
+    if (webViewIdIndex === 0) routableByOwner.push(commandName);
+    else if (webViewIdIndex > 0) misdeclared.push(commandName);
+  });
+  return { routableByOwner, misdeclared };
+}
+
+const { routableByOwner: webViewIdCommandNames, misdeclared: misdeclaredWebViewIdCommandNames } =
+  findWebViewIdCommandNames(RENDERER_HOSTED_COMMAND_DOCS);
+
+/**
+ * Renderer-hosted commands whose first argument is a web view id. See
+ * {@link findWebViewIdCommandNames}.
+ */
+const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set(webViewIdCommandNames);
 
 /**
  * Search the windows that can answer for the one whose scoped WebViewService knows the given web
@@ -169,6 +196,15 @@ async function registerWindowRoutingProxy(
  * createWindow().
  */
 export async function startCommandRoutingService(): Promise<void> {
+  if (misdeclaredWebViewIdCommandNames.length > 0) {
+    const message = `Renderer-hosted commands document a webViewId parameter that is not their first, so calls naming a web view will run in the focused window instead of the window that owns it: ${misdeclaredWebViewIdCommandNames.join(', ')}`;
+    // In dev/test, fail loudly and immediately so the gap cannot ship — startup collects and reports
+    // this. In production a thrown error here would leave every generic name unanswered for the
+    // session over one command's declaration, so log it and route the rest.
+    if (!globalThis.isPackaged) throw new Error(message);
+    logger.error(message);
+  }
+
   await Promise.all([
     ...RENDERER_HOSTED_COMMAND_NAMES.map((commandName) =>
       registerWindowRoutingProxy(

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
-import { startCommandRoutingService } from '@main/services/command-routing.service';
+import {
+  findWebViewIdCommandNames,
+  startCommandRoutingService,
+} from '@main/services/command-routing.service';
 import { withWindows } from '@main/services/__tests__/routing-proxy-test.util';
+import type { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
@@ -150,6 +154,17 @@ describe('renderer-hosted request routing proxies', () => {
     );
   });
 
+  test('follows focus for a command that declares no web view id, even sharing a handler with one that does', async () => {
+    // `platform.openUserSettings` opens the same tab as `platform.openSettings` but is declared to
+    // take no arguments, so it has no owner to route by and belongs to the window the user is in
+    withWindowsOwning({ 2: [], 3: ['owned-view'] });
+
+    await registrations().get('command:platform.openUserSettings')?.handler();
+
+    expect(mocks.networkObjectGet).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledWith('command:platform.openUserSettings-2');
+  });
+
   test('falls back to the focused window when no window owns the web view', async () => {
     withWindowsOwning({ 2: [], 3: [] });
 
@@ -220,5 +235,49 @@ describe('renderer-hosted request routing proxies', () => {
       registrations().get('command:platform.openSettings')?.handler('owned-view'),
     ).rejects.toThrow('unreachable');
     expect(mocks.request).not.toHaveBeenCalled();
+  });
+});
+
+/** Documentation for a command taking the given parameter names, in order */
+function docsTakingParams(...paramNames: string[]): SingleMethodDocumentation {
+  return {
+    method: {
+      summary: 'A renderer-hosted command',
+      params: paramNames.map((name) => ({ name, schema: { type: 'string' } })),
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  };
+}
+
+describe('which renderer-hosted commands route by web view ownership', () => {
+  test('selects the commands whose first documented parameter is a web view id', () => {
+    const { routableByOwner } = findWebViewIdCommandNames({
+      'platform.openSettings': docsTakingParams('webViewId'),
+      'platform.goToNextChapter': docsTakingParams(),
+      'platform.openUserSettings': docsTakingParams(),
+    });
+
+    expect(routableByOwner).toEqual(['platform.openSettings']);
+  });
+
+  test('reports a command that documents a web view id anywhere but first', () => {
+    // Routing reads the first argument only. A web view id further along is a command that looks
+    // routable by ownership and is not, which is the silent wrong-window bug this list exists to
+    // prevent, returned inside a mechanism that looks like it handles it.
+    const { routableByOwner, misdeclared } = findWebViewIdCommandNames({
+      'platform.openSettings': docsTakingParams('options', 'webViewId'),
+    });
+
+    expect(routableByOwner).toEqual([]);
+    expect(misdeclared).toEqual(['platform.openSettings']);
+  });
+
+  test('selects nothing from commands that take no parameters', () => {
+    const { routableByOwner, misdeclared } = findWebViewIdCommandNames({
+      'platform.about': docsTakingParams(),
+    });
+
+    expect(routableByOwner).toEqual([]);
+    expect(misdeclared).toEqual([]);
   });
 });
