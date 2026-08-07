@@ -84,7 +84,7 @@ describe('simple-layout.builder', () => {
       });
     });
 
-    it('the scripture editor tab has data.state.isReadOnly === false when isReadOnly arg is false', () => {
+    it('the Scripture editor tab has data.state.isReadOnly === false when isReadOnly arg is false', () => {
       const result = buildSimpleLayoutForProject('proj-1', false);
       const tabs = collectTabs(result);
       const editorTab = tabs.find((tab) => {
@@ -101,7 +101,7 @@ describe('simple-layout.builder', () => {
       expect(state?.isReadOnly).toBe(false);
     });
 
-    it('the scripture editor tab has data.state.isReadOnly === true when isReadOnly arg is true', () => {
+    it('the Scripture editor tab has data.state.isReadOnly === true when isReadOnly arg is true', () => {
       const result = buildSimpleLayoutForProject('proj-1', true);
       const tabs = collectTabs(result);
       const editorTab = tabs.find((tab) => {
@@ -116,6 +116,29 @@ describe('simple-layout.builder', () => {
       const { state } = editorTab?.data as { state?: { isReadOnly?: boolean } };
       expect(state).toBeDefined();
       expect(state?.isReadOnly).toBe(true);
+    });
+
+    it('when isReadOnly is true, only the Scripture editor tab gets projectId - the related panels do not follow a read-only project', () => {
+      const result = buildSimpleLayoutForProject('proj-readonly', true);
+      const tabs = collectTabs(result);
+      const editorTab = tabs.find((tab) => {
+        // Narrow only the field we read.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const data = tab.data as { webViewType?: string };
+        return data.webViewType === SCRIPTURE_EDITOR_WEB_VIEW_TYPE;
+      });
+      const nonEditorTabs = tabs.filter((tab) => tab !== editorTab);
+      expect(nonEditorTabs.length).toBeGreaterThan(0);
+
+      // Narrow only the field we read.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((editorTab?.data as { projectId?: string }).projectId).toBe('proj-readonly');
+      nonEditorTabs.forEach((tab) => {
+        // Narrow only the field we read.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const data = tab.data as { projectId?: string };
+        expect(data.projectId).toBeUndefined();
+      });
     });
 
     it('preserves the empty {} state shape on non-editor tabs', () => {

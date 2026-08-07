@@ -72,17 +72,27 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
  *   the target project's real-time `platform.isEditable` setting (as the normal open-flow does in
  *   `platform-scripture-editor`'s `main.ts`), because the resolved `projectId`
  *   (most-recently-active project, or a cached one) is not guaranteed to be editable: it can be a
- *   Resource Viewer's project, or a project whose editability changed since it was cached (e.g. a
- *   Send/Receive that revoked edit permission).
+ *   Resource Viewer's project. When `isReadOnly` is true, only the scripture editor tab gets
+ *   `projectId` - the related panels (model text, bible texts, commentaries, comments) are left
+ *   without one, matching `main.ts`'s own gate ("opening a read-only published resource in the
+ *   editor column must not switch [the related panels] over to the resource"). This never leaves a
+ *   panel showing a _previous_ project's stale content: `loadLayout` rebuilds every tab from
+ *   scratch via each provider's `getWebView` on every call, even for a tab id that was already
+ *   mounted (rc-dock's `loadLayout` has no per-tab-id diff/short-circuit). Model text/Bible
+ *   texts/commentaries each render an explicit "no project" placeholder when `projectId` is absent;
+ *   the comment list panel (`legacyCommentManager.commentListPanel`) has no such placeholder today
+ *   and shows a perpetual loading state instead - a known, accepted gap in that extension, not a
+ *   regression introduced here (see the fix spec's deferred-follow-up list).
  */
 export function buildSimpleLayoutForProject(projectId: string, isReadOnly: boolean): LayoutBase {
   const cloned = cloneDeep(simpleLayout);
   visitTabs(cloned, (tab) => {
     if (!isObjectRecord(tab.data)) return;
-    tab.data.projectId = projectId;
+    const isScriptureEditorTab = tab.data.webViewType === SCRIPTURE_EDITOR_WEB_VIEW_TYPE;
+    if (isScriptureEditorTab || !isReadOnly) tab.data.projectId = projectId;
     // The scripture editor's factory reads `state.isReadOnly` when restoring from saved state. Set
     // it explicitly so the restore matches what the editable open-flow would produce.
-    if (tab.data.webViewType === SCRIPTURE_EDITOR_WEB_VIEW_TYPE) {
+    if (isScriptureEditorTab) {
       const previousState = isObjectRecord(tab.data.state) ? tab.data.state : {};
       tab.data.state = { ...previousState, isReadOnly };
     }
