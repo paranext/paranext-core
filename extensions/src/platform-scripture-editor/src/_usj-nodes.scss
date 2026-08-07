@@ -1,8 +1,12 @@
 /* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/96371402babea48a02059f485a0f538bd8c49a88/packages/platform/src/usj-nodes.css
    Intentional divergences from that source: prettier single-quote formatting; the UnknownNode
    rules use literal rgba() grays because this app's --muted-foreground holds a full color value,
-   not the raw HSL components the source's hsl(var()) wrapping assumes; the paragraph-structure
-   gutter/active-focus region is kept at its earlier upstream state pending a Simple-mode review. */
+   not the raw HSL components the source's hsl(var()) wrapping assumes; the UnknownNode block
+   also keeps its earlier file position (before .caption rather than directly after the status
+   rules) and its user-select: contain declarations (a Blink no-op the source later removed);
+   the \fp comment keeps this app's extra clause about the footnote popover rendering in the
+   same web view document; the paragraph-structure gutter/active-focus region is kept at its
+   earlier upstream state pending a Simple-mode review. */
 
 /* stylelint-disable */
 

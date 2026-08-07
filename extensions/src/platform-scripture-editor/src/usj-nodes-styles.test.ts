@@ -44,14 +44,24 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // The PT9 look (small gray) must target those classes, scoped to
     // `.formatted-font.marker-editable` so the Unformatted view keeps full-size plain markers.
     it('grays the editable marker glyphs', () => {
-      expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker \{\s*color: rgba\(140, 140, 140, 1\);\s*\}/,
+      expect(scss).toContain(
+        '.formatted-font.marker-editable .opening,\n' +
+          '.formatted-font.marker-editable .closing,\n' +
+          '.formatted-font.marker-editable .selfClosing,\n' +
+          '.formatted-font.marker-editable .marker {\n' +
+          '  color: rgba(140, 140, 140, 1);\n' +
+          '}',
       );
     });
 
     it('shrinks the editable marker glyphs to 0.7em, chapter tokens excluded', () => {
-      expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker:not\(\.chapter\) \{\s*font-size: 0\.7em;\s*\}/,
+      expect(scss).toContain(
+        '.formatted-font.marker-editable .opening,\n' +
+          '.formatted-font.marker-editable .closing,\n' +
+          '.formatted-font.marker-editable .selfClosing,\n' +
+          '.formatted-font.marker-editable .marker:not(.chapter) {\n' +
+          '  font-size: 0.7em;\n' +
+          '}',
       );
     });
 
@@ -78,6 +88,10 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\],\n\.note\.usfm_ex \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: crossref;\s*\}/,
       );
       expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
+      // The footnote half must stay pinned too — a re-sync dropping the scoped footnote rules
+      // while keeping the crossref ones would leave nothing incrementing `caller`.
+      expect(scss).toMatch(/\.note\.usfm_f \.immutable-note-caller\[data-caller='\+'\]/);
+      expect(scss).toMatch(/counter\(caller, note-callers\)/);
       // The generic rules the scoped versions replaced must not return — a re-synced copy that
       // re-adds them alongside the scoped ones would double-increment the footnote counter.
       expect(scss).not.toMatch(/^\.immutable-note-caller\[data-caller='\+'\] \{/m);
