@@ -9,10 +9,11 @@ const PUBLIC_MULTI_SOURCE_EVENT_NAMES = [
   'object:onDidCreateNetworkObject',
   'object:onDidDisposeNetworkObject',
   'platform.onDidChangeProjects',
-  // The scroll group events have one emitter, in main — but they are published in the
-  // `MultiSourceNetworkEvents` type, and multi-source is a superset of single-source semantics (a
-  // lone emitter behaves identically), so narrowing them would be a breaking change to a public type
-  // for no runtime difference.
+  // The scroll group events have one emitter, in main. Multi-source was REQUIRED while a renderer
+  // hosted them; now it is only tolerated. Narrowing them to single-source would buy exactly one
+  // thing — stopping another process from emitting a scroll group event that every window's cache
+  // applies verbatim — at the cost of a breaking change to a public type. Worth doing at the next
+  // breaking-change window, not worth a break on its own.
   'scrollGroup:onDidUpdateScrRef',
   'scrollGroup:onDidChangeReferenceHistory',
   // Web view events are emitted by the renderers, and there is one renderer per open window. Each
