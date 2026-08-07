@@ -351,8 +351,12 @@ test.describe('per-window UI isolation', () => {
     // ── Modal dialog through the generic request lands in the FOCUSED window ───────────────────
     // Window 2 still holds focus. The pending request resolves only when the dialog is answered
     // or dismissed, so it is held un-awaited while the DOM assertions run.
+    // Waiting on window 2's dialog shard, not on a routing wire name: main claims the generic
+    // `dialog:showDialog` before any window exists, so its presence says nothing about whether the
+    // window that should show the dialog can serve it yet. What follows asserts the observable
+    // outcome — which window renders it, and that Escape resolves the request with null.
     await waitForPapiMethodRegistered(
-      new RegExp(`^dialog:showDialog-${window2Id}$`),
+      new RegExp(`^object:DialogService-${window2Id}\\.showDialog$`),
       WEBSOCKET_PORT,
       60_000,
     );
