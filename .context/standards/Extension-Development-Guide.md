@@ -100,6 +100,20 @@ export async function deactivate(): Promise<boolean> {
 
 Extensions cannot use static imports—code must be bundled with webpack.
 
+### Register each command once, globally
+
+Register a command **once, for the whole app** — in `activate`, not per web view instance. A command
+name is global: the second registration of the same name fails, so registering from a web view's
+code means the first instance wins and every later one errors. Nothing about multi-window changes
+this; `papi.commands.registerCommand` works exactly as it always has, and the platform adds no
+per-window command facility.
+
+If a command genuinely needs to act on ONE web view, take the web view id as its first argument
+rather than registering a copy per instance. For richer per-instance interaction, use a **web view
+controller** (see [WebViews](#webviews)), which already exists for that need: it is a network object
+per web view, so its methods are addressed to a specific instance without any global name per
+instance.
+
 ---
 
 ## PAPI (Platform API)
