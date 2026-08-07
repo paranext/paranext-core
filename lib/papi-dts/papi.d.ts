@@ -4076,7 +4076,6 @@ declare module 'shared/services/web-view.service-model' {
     WebViewType,
   } from 'shared/models/web-view.model';
   import { Layout } from 'shared/models/docking-framework.model';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { PlatformEvent } from 'platform-bible-utils';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -4251,37 +4250,6 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
-  /**
-   * Command names that are hosted by the renderer process and need to be registered with
-   * window-scoped suffixes in a multi-window setup. The main process registers service routers under
-   * the generic names that forward to the focused window's scoped handler.
-   *
-   * @experimental
-   */
-  export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
-    'platform.goToNextChapter',
-    'platform.goToPreviousChapter',
-    'platform.goToNextBook',
-    'platform.goToPreviousBook',
-    'platform.goToNextVerse',
-    'platform.goToPreviousVerse',
-    'platform.navigateLeftInReferenceHistory',
-    'platform.navigateRightInReferenceHistory',
-  ];
-  /**
-   * OpenRPC documentation for renderer-hosted commands, keyed by the generic (unscoped) command name.
-   *
-   * The documentation belongs to the generic name because that is the command consumers call; the
-   * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
-   * an implementation detail of multi-window routing and are deliberately left undocumented. The main
-   * process attaches these when it registers the service routers.
-   *
-   * @experimental
-   */
-  export const RENDERER_HOSTED_COMMAND_DOCS: Record<
-    (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
-    SingleMethodDocumentation
-  >;
 }
 declare module 'shared/models/web-view-provider.model' {
   import {

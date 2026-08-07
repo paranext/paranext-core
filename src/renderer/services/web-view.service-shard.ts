@@ -104,6 +104,7 @@ import withWindowScopedWebViewIds, {
   withWindowScopedWebViewIdInTab,
 } from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
@@ -2475,9 +2476,31 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
  * this window can do to its own dock layout. Declared as the shard type so a member added there
  * cannot silently become a name this window does not answer for.
  */
+/**
+ * Point a web view that carries its own independent reference at a new one. Only this window can:
+ * the definition lives in its dock layout.
+ *
+ * A failure is warned about and reported rather than thrown — a reference the user asked to move to
+ * that one tab could not take is not worth failing the whole navigation command over.
+ */
+async function setDetachedScrRef(
+  webViewId: WebViewId,
+  scrRef: SerializedVerseRef,
+): Promise<boolean> {
+  try {
+    return updateWebViewDefinitionSync(webViewId, { scrollGroupScrRef: scrRef });
+  } catch (e) {
+    logger.warn(
+      `Navigation command could not update detached ref on ${webViewId}: ${getErrorMessage(e)}`,
+    );
+    return false;
+  }
+}
+
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
   openSettingsTab,
+  setDetachedScrRef,
 };
 
 /** Register the network object that backs the PAPI webview service */
