@@ -15,7 +15,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
 }));
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: mocks.loggerWarn, error: vi.fn() },
+  logger: { debug: vi.fn(), info: vi.fn(), warn: mocks.loggerWarn, error: vi.fn() },
 }));
 
 /** A shard index over the given windows, resolving each window's shard with the given function */
@@ -24,9 +24,35 @@ function shardIndex(
   getShard: (windowId: number) => Promise<unknown>,
 ): ServiceShardIndex<unknown> {
   return {
-    onDidAddShard: vi.fn(),
+    onDidAddShard: vi.fn(() => () => true),
     getShard: vi.fn(getShard),
     getShardWindowIds: vi.fn(() => shardWindowIds),
+  };
+}
+
+/**
+ * A shard index no window has registered with yet, plus the lever a test pulls to announce one —
+ * the state a window is in between becoming routable and its every shard being announced.
+ */
+function shardIndexAwaitingAnnouncement(getShard: (windowId: number) => Promise<unknown>) {
+  const indexedWindowIds: number[] = [];
+  const listeners: ((windowId: number) => void)[] = [];
+  const index: ServiceShardIndex<unknown> = {
+    onDidAddShard: vi.fn((listener: (windowId: number) => void) => {
+      listeners.push(listener);
+      return () => true;
+    }),
+    getShard: vi.fn(async (windowId: number) =>
+      indexedWindowIds.includes(windowId) ? getShard(windowId) : undefined,
+    ),
+    getShardWindowIds: vi.fn(() => [...indexedWindowIds]),
+  };
+  return {
+    index,
+    announceShard(windowId: number) {
+      indexedWindowIds.push(windowId);
+      listeners.forEach((listener) => listener(windowId));
+    },
   };
 }
 
@@ -69,16 +95,41 @@ describe('target shard resolver', () => {
     await expect(resolve()).rejects.toThrow('No windows available to route TestService call');
   });
 
-  test('says the renderer may still be starting when the window has registered no shard', async () => {
-    const resolve = createTargetShardResolver(
-      'TestService',
-      shardIndex([], async () => undefined),
-    );
+  test('waits for a shard that is moments behind rather than failing the window', async () => {
+    // Routing picks a window as soon as it registers its WINDOW service, and a renderer starts all
+    // of its shards together — so a call fired at a window in its first instants can arrive
+    // between the two. Failing on first look makes that ordinary skew an error.
+    const { index, announceShard } = shardIndexAwaitingAnnouncement(async (windowId) => ({
+      servedBy: windowId,
+    }));
+    const resolve = createTargetShardResolver('TestService', index);
 
-    await expect(resolve()).rejects.toThrow(
-      'TestService for window 1 is not available. The renderer may not have started yet.',
-    );
-    expect(mocks.loggerWarn).not.toHaveBeenCalled();
+    const resolving = resolve();
+    announceShard(1);
+
+    expect(await resolving).toEqual({ servedBy: 1 });
+  });
+
+  test('says the renderer may still be starting when no shard is announced in time', async () => {
+    vi.useFakeTimers();
+    try {
+      const resolve = createTargetShardResolver(
+        'TestService',
+        shardIndex([], async () => undefined),
+      );
+
+      const resolving = resolve();
+      // The wait is bounded: a shard whose own start failed is never announced, and the call has to
+      // fail visibly rather than hang on an announcement that is not coming
+      await vi.runAllTimersAsync();
+
+      await expect(resolving).rejects.toThrow(
+        'TestService for window 1 is not available. The renderer may not have started yet.',
+      );
+      expect(mocks.loggerWarn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('does not blame startup timing when the window registered a shard that would not resolve', async () => {
