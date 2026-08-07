@@ -114,13 +114,6 @@ import {
 } from '@shared/data/window-layout-persistence.model';
 import { reconcileSavedLayout } from '@shared/utils/saved-layout-reconciliation.util';
 import {
-  closeOpenUsersnapForm,
-  isUsersnapFormCurrentlyOpen,
-  openUsersnapForm,
-  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
-  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
-} from './usersnap.service';
-import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
@@ -2508,10 +2501,6 @@ export async function startWebViewServiceShard(): Promise<void> {
     'platform.openSettings': openSettingsTab,
     'platform.openProjectSettings': openSettingsTab,
     'platform.openUserSettings': openSettingsTab,
-    'platform.usersnapSubmitIdea': () => openUsersnapForm(USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY),
-    'platform.usersnapReportIssue': () => openUsersnapForm(USERSNAP_PROJECT_REPORT_ISSUE_API_KEY),
-    'platform.isUsersnapFormCurrentlyOpen': () => isUsersnapFormCurrentlyOpen(),
-    'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
   // Awaited the way the other callers await theirs: the startup coverage check reads what these
   // registrations record, and leaving them in flight would both let that check run before they had
