@@ -1,4 +1,8 @@
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
+/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/96371402babea48a02059f485a0f538bd8c49a88/packages/platform/src/usj-nodes.css
+   Intentional divergences from that source: prettier single-quote formatting; the UnknownNode
+   rules use literal rgba() grays because this app's --muted-foreground holds a full color value,
+   not the raw HSL components the source's hsl(var()) wrapping assumes; the paragraph-structure
+   gutter/active-focus region is kept at its earlier upstream state pending a Simple-mode review. */
 
 /* stylelint-disable */
 
@@ -2066,6 +2070,51 @@
   font-size: 0.7em;
 }
 
+/* Standard view: editable markers within formatted text get the PT9 marker look.
+   MarkerNode carries its marker-syntax class (opening/closing/selfClosing), not
+   `marker` (dropped in #359); ImmutableTypedTextNode (book id) carries `marker`.
+   Verse/chapter tokens are deliberately excluded: PT9 styles them via their own
+   usfm_v/usfm_c stylesheet classes, not the grey marker look.
+   Scoped to .formatted-font so the Unformatted view keeps full-size plain markers. */
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker {
+  color: rgba(140, 140, 140, 1);
+}
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker:not(.chapter) {
+  font-size: 0.7em;
+}
+
+.formatted-font.marker-editable .verse {
+  white-space: nowrap;
+  unicode-bidi: embed;
+  /* PT9 Standard view has no background badge on verse tokens; the formatted
+     (non-editable) view keeps its badge. */
+  background-color: transparent;
+}
+
+/* Marker validation states (PT9 ScriptureBase.css .status_unknown/.status_invalid):
+   flag markers the project stylesheet reports as unknown or invalid. Applied to
+   marker GLYPH spans only — body text stays normal (PT9 Standard.xslt stamps status
+   on the marker span, not the element). Same error red as the unmatched-closer
+   `.invalid` rule below. */
+.marker-editable .status_unknown,
+.formatted-font.marker-editable .status_unknown {
+  color: rgba(204, 30, 20, 1);
+  font-weight: bold;
+}
+
+.marker-editable .status_invalid,
+.formatted-font.marker-editable .status_invalid {
+  color: rgba(204, 30, 20, 1);
+  border-bottom: 1px solid rgba(204, 30, 20, 1);
+}
+
 .notetext {
   unicode-bidi: embed;
 }
@@ -2243,17 +2292,6 @@
 
 .usfm rt {
   cursor: pointer;
-}
-
-/* Style statues */
-.status_unknown {
-  color: rgba(204, 30, 20, 1);
-  font-weight: bold;
-}
-
-.status_invalid {
-  border-bottom: 1px solid rgba(204, 30, 20, 1);
-  color: rgba(204, 30, 20, 1);
 }
 
 /* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,

@@ -37,4 +37,36 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // The old rule was `content: '//'`. Its removal is what fixes the `////` display.
     expect(scss).not.toMatch(/content:\s*['"]\/\/['"]/);
   });
+
+  describe('PT9 Standard-view marker glyph styling', () => {
+    // Standard view renders marker glyphs as MarkerNode spans carrying marker-syntax classes
+    // (opening/closing/selfClosing) — not `marker`, which MarkerNode dropped upstream in #359.
+    // The PT9 look (small gray) must target those classes, scoped to
+    // `.formatted-font.marker-editable` so the Unformatted view keeps full-size plain markers.
+    it('grays the editable marker glyphs', () => {
+      expect(scss).toMatch(
+        /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker \{\s*color: rgba\(140, 140, 140, 1\);\s*\}/,
+      );
+    });
+
+    it('shrinks the editable marker glyphs to 0.7em, chapter tokens excluded', () => {
+      expect(scss).toMatch(
+        /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker:not\(\.chapter\) \{\s*font-size: 0\.7em;\s*\}/,
+      );
+    });
+
+    it('drops the verse badge background in Standard view (PT9 has no verse badge)', () => {
+      expect(scss).toMatch(
+        /\.formatted-font\.marker-editable \.verse \{[^}]*background-color: transparent;[^}]*\}/,
+      );
+    });
+
+    it('scopes marker validation status rules to editable marker modes', () => {
+      expect(scss).toMatch(/\.marker-editable \.status_unknown/);
+      expect(scss).toMatch(/\.marker-editable \.status_invalid/);
+      // The unscoped legacy rules were superseded by the scoped ones; they must not return.
+      expect(scss).not.toMatch(/^\.status_unknown/m);
+      expect(scss).not.toMatch(/^\.status_invalid/m);
+    });
+  });
 });
