@@ -283,7 +283,7 @@ const forgetRegistration = (id: string): boolean => {
   // partway through used to leave the ID registered to a live proxy for the rest of the session:
   // `set` would refuse the name to the process taking the object over, and calls on the proxy would
   // hang instead of failing loudly. Freeing the ID first is also what lets a consumer claim the name
-  // from inside its own dispose handler, which is what the app-global service takeovers do.
+  // from inside its own dispose handler.
   networkObjectRegistrations.delete(id);
 
   // An object's own `dispose` unregisters its RPC handlers before announcing the disposal, so for
