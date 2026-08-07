@@ -287,9 +287,6 @@ export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
  * @experimental
  */
 export const RENDERER_HOSTED_COMMAND_NAMES = [
-  'platform.openSettings',
-  'platform.openProjectSettings',
-  'platform.openUserSettings',
   // Navigation commands act on the window's own navigation target (the web view the top toolbar
   // follows), so they must run in the window the user is looking at, not whichever renderer
   // happened to register first.
@@ -317,47 +314,6 @@ export const RENDERER_HOSTED_COMMAND_DOCS: Record<
   (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
   SingleMethodDocumentation
 > = {
-  'platform.openSettings': {
-    method: {
-      summary: 'Open a Settings tab, optionally limited to the project shown in a given web view',
-      params: [
-        {
-          name: 'webViewId',
-          required: false,
-          summary: 'Web view whose project the Settings tab should be limited to, if any',
-          schema: { type: 'string' },
-        },
-      ],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.openProjectSettings': {
-    method: {
-      deprecated: true,
-      summary:
-        'Open the Settings tab limited to the project shown in the given web view. Renamed to ' +
-        'platform.openSettings',
-      params: [
-        {
-          name: 'webViewId',
-          required: true,
-          summary: 'Web view whose project the Settings tab should be limited to',
-          schema: { type: 'string' },
-        },
-      ],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.openUserSettings': {
-    method: {
-      deprecated: true,
-      summary:
-        'Open the Settings tab without limiting it to any particular project. Renamed to ' +
-        'platform.openSettings',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
   'platform.goToNextChapter': {
     method: {
       'x-experimental': true,

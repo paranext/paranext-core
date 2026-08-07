@@ -36,9 +36,9 @@ describe('renderer-hosted command registry', () => {
     );
     const handler = vi.fn();
 
-    registerScopedCommands({ 'platform.openSettings': handler });
+    registerScopedCommands({ 'platform.goToNextChapter': handler });
 
-    expect(mocks.registerCommand).toHaveBeenCalledWith('platform.openSettings-1', handler);
+    expect(mocks.registerCommand).toHaveBeenCalledWith('platform.goToNextChapter-1', handler);
   });
 
   test('does not throw once every renderer-hosted command has been registered', async () => {
@@ -110,10 +110,9 @@ describe('renderer-hosted command registry', () => {
  * trying to catch cheaply. A command name that is on the canonical list but never appears as a
  * registered key in any of these files is exactly the omission this check exists to catch.
  */
-const REGISTERING_SOURCE_FILES = [
-  'web-view.service-shard.ts',
-  'scroll-group-navigation.commands.ts',
-].map((fileName) => resolve(__dirname, fileName));
+const REGISTERING_SOURCE_FILES = ['scroll-group-navigation.commands.ts'].map((fileName) =>
+  resolve(__dirname, fileName),
+);
 
 function findRegisteredCommandNames(source: string): Set<string> {
   const registeredNames = new Set<string>();
