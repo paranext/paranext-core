@@ -36,9 +36,9 @@ describe('renderer-hosted command registry', () => {
     );
     const handler = vi.fn();
 
-    registerScopedCommands({ 'platform.about': handler });
+    registerScopedCommands({ 'platform.openSettings': handler });
 
-    expect(mocks.registerCommand).toHaveBeenCalledWith('platform.about-1', handler);
+    expect(mocks.registerCommand).toHaveBeenCalledWith('platform.openSettings-1', handler);
   });
 
   test('does not throw once every renderer-hosted command has been registered', async () => {
@@ -111,7 +111,6 @@ describe('renderer-hosted command registry', () => {
  * registered key in any of these files is exactly the omission this check exists to catch.
  */
 const REGISTERING_SOURCE_FILES = [
-  'dialog.service-shard.ts',
   'web-view.service-shard.ts',
   'scroll-group-navigation.commands.ts',
 ].map((fileName) => resolve(__dirname, fileName));
