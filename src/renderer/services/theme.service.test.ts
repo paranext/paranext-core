@@ -73,8 +73,23 @@ function announceCurrentTheme(theme: unknown) {
   [...currentThemeSubscribers].forEach((subscriber) => subscriber(theme));
 }
 
+/**
+ * Make this document look like a reload of the URL main built when the window was created, which is
+ * what the service tells apart to decide which of its seeds is the fresher one.
+ */
+function makeDocumentAReload(isReload: boolean) {
+  vi.spyOn(performance, 'getEntriesByType').mockImplementation((entryType) =>
+    entryType === 'navigation'
+      ? // Only the `type` field is read; a full PerformanceNavigationTiming is not needed here.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        [{ type: isReload ? 'reload' : 'navigate' } as PerformanceNavigationTiming]
+      : [],
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   vi.resetModules();
   localStorage.clear();
   currentThemeSubscribers.length = 0;
@@ -110,6 +125,34 @@ describe('the theme this window paints its first frame with', () => {
     const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
 
     expect(getCurrentThemeSync().themeFamilyId).toBe('');
+  });
+
+  // A reload replays the URL main built when the window was created, so the theme on it is as old
+  // as the window. Painting it would show the theme the app was on when this window opened and then
+  // flash into the current one a round trip later.
+  it('paints the last theme this profile painted when the document is reloaded', async () => {
+    createWindowWithTheme(THEME_FROM_MAIN);
+    const themeSinceThisWindowOpened = makeTheme('mainFamily', 'light');
+    const { startThemeService } = await import('@renderer/services/theme.service');
+    await startThemeService();
+    announceCurrentTheme(themeSinceThisWindowOpened);
+
+    // The window reloads: same URL, same store, fresh module evaluation
+    vi.resetModules();
+    makeDocumentAReload(true);
+    const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
+
+    expect(getCurrentThemeSync()).toEqual(themeSinceThisWindowOpened);
+  });
+
+  it('prefers what main handed over on a window first load, not a remembered theme', async () => {
+    localStorage.setItem('theme.service.lastPaintedTheme', JSON.stringify(THEME_FROM_OWN_STORE));
+    createWindowWithTheme(THEME_FROM_MAIN);
+    makeDocumentAReload(false);
+
+    const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
+
+    expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
   });
 
   it('falls back rather than throwing when what it was handed cannot be read', async () => {
