@@ -55,6 +55,10 @@ export function ResultsCard({
   showDropdownOnHover = false,
 }: ResultsCardProps) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
+    // Only handle Enter/Space that targets the card itself. Without this guard, keystrokes
+    // bubbling up from interactive children (e.g. the Replace button or the dropdown trigger)
+    // are hijacked here, preventing those children from being activated via the keyboard.
+    if (event.target !== event.currentTarget) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       onSelect();
