@@ -38,6 +38,7 @@ import {
   PlatformEventEmitter,
   serialize,
   ThemeDefinitionExpanded,
+  wait,
 } from 'platform-bible-utils';
 
 // #region the host
@@ -267,6 +268,35 @@ async function subscribeToCurrentTheme(): Promise<void> {
   );
 }
 
+/** How long to wait before each retry of a subscription that failed, in order */
+const SUBSCRIBE_RETRY_DELAYS_MS = [250, 1000, 5000];
+
+/**
+ * Subscribe to the host's current theme, retrying a bounded number of times.
+ *
+ * Unlike a read, this is the only thing that ever updates this window's copy, so a subscription
+ * that fails and is not retried leaves the window painting the theme it started with for the rest
+ * of the session — with nothing that would ever correct it, since `getThemeProvider` is only re-run
+ * by a caller and there may not be another one.
+ */
+async function subscribeToCurrentThemeWithRetry(
+  remainingRetryDelaysMs: readonly number[] = SUBSCRIBE_RETRY_DELAYS_MS,
+): Promise<void> {
+  try {
+    await subscribeToCurrentTheme();
+  } catch (e) {
+    const [delayMs, ...laterDelaysMs] = remainingRetryDelaysMs;
+    if (delayMs === undefined) {
+      logger.error(
+        `Could not subscribe to the theme service host, so this window will keep showing the theme it started with. ${getErrorMessage(e)}`,
+      );
+      return;
+    }
+    await wait(delayMs);
+    await subscribeToCurrentThemeWithRetry(laterDelaysMs);
+  }
+}
+
 /**
  * Offer this window's previously stored theme state (see {@link readPreviouslyStoredThemeState}) to
  * the host, which adopts it only if it has none of its own. Every window offers, and the host takes
@@ -312,13 +342,17 @@ async function handOverPreviouslyStoredThemeState(): Promise<void> {
  * the subscription — that would cost it every theme change for the rest of the session, where the
  * failed handover only costs it the theme the user left off at.
  *
+ * Neither half is allowed to fail this window's startup. The cache is already usable — it was
+ * filled before React rendered — so a host that is slow or missing costs freshness, not
+ * correctness, and must not take down the unrelated services that start alongside this one.
+ *
  * Call once at renderer startup.
  *
  * @experimental
  */
 export async function startThemeService(): Promise<void> {
   await handOverPreviouslyStoredThemeState();
-  await subscribeToCurrentTheme();
+  await subscribeToCurrentThemeWithRetry();
 }
 
 // #endregion
