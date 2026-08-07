@@ -12552,26 +12552,12 @@ declare module 'shared/utils/built-in-themes.util' {
     themeFamiliesById: ThemeFamiliesById,
   ): ThemeFamiliesByIdExpanded;
   /**
-   * Expanded themes that are built into the software
-   *
-   * @experimental
-   */
-  export const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded;
-  /**
    * The theme to fall back on when nothing else is known — a profile that has never chosen one, or a
    * stored choice that could not be read
    *
    * @experimental
    */
   export const DEFAULT_THEME: ThemeDefinitionExpanded;
-  /**
-   * Gets name of user-defined theme family for the given number
-   *
-   * @param themeNumber Which user-defined theme family to name
-   * @returns The family id for that user-defined theme family
-   * @experimental
-   */
-  export function getUserThemeFamilyName(themeNumber: number): string;
   /**
    * The user-defined theme family every other user-defined family is filled in from
    *
