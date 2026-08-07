@@ -167,6 +167,61 @@ describe('service shard index', () => {
     expect(readyWindowIds).toEqual([3]);
   });
 
+  test('announces the window whose shard went away, with the id it was announced under', () => {
+    // The other half of onDidAddShard, for a router that did something outside itself when the
+    // shard appeared. The id has to travel on the event: the registration is already gone by the
+    // time subscribers hear about it, so it cannot be looked up afterwards.
+    const index = createIndex();
+    const departures: unknown[] = [];
+    index.onDidRemoveShard((departure) => departures.push(departure));
+    announceShard(3, 'TestService-3');
+
+    announceDispose('TestService-3');
+
+    expect(departures).toEqual([{ windowId: 3, networkObjectId: 'TestService-3' }]);
+  });
+
+  test('says nothing went away when a window replaced its shard rather than losing it', () => {
+    // The shard the window is routed to did not go anywhere, so anything undone on this event —
+    // a lifted request timeout, say — would be undone out from under a live registration
+    const index = createIndex();
+    const departures: unknown[] = [];
+    index.onDidRemoveShard((departure) => departures.push(departure));
+    announceShard(1, 'TestService-1');
+    announceShard(1, 'TestService-1');
+
+    announceDispose('TestService-1');
+
+    expect(departures).toEqual([]);
+  });
+
+  test('tells the remaining subscribers about a departure even when an earlier one throws', () => {
+    const index = createIndex();
+    const laterSubscriberSaw: unknown[] = [];
+    index.onDidRemoveShard(() => {
+      throw new Error('this departure subscriber is broken');
+    });
+    index.onDidRemoveShard((departure) => laterSubscriberSaw.push(departure));
+    announceShard(5, 'TestService-5');
+
+    expect(() => announceDispose('TestService-5')).not.toThrow();
+
+    expect(laterSubscriberSaw).toEqual([{ windowId: 5, networkObjectId: 'TestService-5' }]);
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.stringContaining('this departure subscriber is broken'),
+    );
+  });
+
+  test('answers the id a window`s shard announced, so nothing has to rebuild it', () => {
+    // A caller that has to name the shard's methods gets the id the shard actually registered
+    // under, rather than a second spelling of the window-scoped name
+    const index = createIndex();
+    announceShard(2, 'some-shard-id-2');
+
+    expect(index.getShardNetworkObjectId(2)).toBe('some-shard-id-2');
+    expect(index.getShardNetworkObjectId(9)).toBeUndefined();
+  });
+
   test('serves the newest registration when a window`s renderer registers again', async () => {
     // A renderer that reloads registers a brand new shard under the same window-scoped id; the
     // index has to hand back the new one rather than the page that is gone
