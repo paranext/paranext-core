@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
@@ -59,14 +60,25 @@ describe('character marker menu labels', () => {
   });
 });
 
-const CHARACTER_MARKER_CONTROL_KEYS = [
-  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%',
-  '%webView_platformScriptureEditor_characterMarkerControl_mixed%',
-  '%webView_platformScriptureEditor_characterMarkerControl_none%',
-  '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%',
+// Keys the control asks for that this file cannot assert on, each for its own reason. Anything not
+// listed here is checked, so a key added to the control is covered without anyone editing this file.
+const CHARACTER_MARKER_CONTROL_KEYS_CHECKED_ELSEWHERE: readonly string[] = [
+  // Format strings: asserted by the placeholder block below instead, which drops the
+  // differs-from-English assertion that does not apply to them.
+  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%',
+  '%webView_platformScriptureEditor_characterMarkerControl_label_format%',
+  // Ships in `platform-bible-react`'s own localized strings beside its `_insert` and `_paragraph`
+  // siblings, not in this extension's contribution, so it is absent from the file read here.
+  '%markerMenu_searchPlaceholder_character%',
 ];
 
+const CHARACTER_MARKER_CONTROL_KEYS = CHARACTER_MARKER_CONTROL_STRING_KEYS.filter(
+  (key) => !CHARACTER_MARKER_CONTROL_KEYS_CHECKED_ELSEWHERE.includes(key),
+);
+
 // Same guard as above, for the control's own strings: nothing in the build enforces en/es parity.
+// Driven off the exported key list, minus the documented exclusions, so a key added to the control
+// is covered here automatically.
 describe.each(CHARACTER_MARKER_CONTROL_KEYS)('character marker control label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

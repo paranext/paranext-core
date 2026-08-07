@@ -7,6 +7,7 @@ import {
   CharacterMarkerSelection,
   CharacterMarkerSelectionState,
   computeCharacterMarkerCoverage,
+  isEmptyCoverage,
 } from './character-marker-coverage.utils';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
 import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
@@ -64,8 +65,7 @@ function computeCoverage(
   if (!selection || !editorUsj) return undefined;
 
   const computed = computeCharacterMarkerCoverage(correctEditorUsjVersion(editorUsj), selection);
-  const isUnresolvable = Object.keys(computed.markerStates).length === 0 && !computed.hasUncovered;
-  return isUnresolvable ? undefined : computed;
+  return isEmptyCoverage(computed) ? undefined : computed;
 }
 
 /**
@@ -85,48 +85,29 @@ function resolveCurrentMarker(
   return contextMarker && isCharacterMarker(contextMarker) ? contextMarker : undefined;
 }
 
-/** Builds the menu rows, stamping each with its selection state once coverage is known. */
-function buildMarkerMenuItems(
-  options: Pick<
-    UseCharacterMarkerStateOptions,
-    | 'editorRef'
-    | 'localizedStrings'
-    | 'blockMarker'
-    | 'changeCharacterMarker'
-    | 'removeCharacterMarker'
-  > & {
-    currentMarker: string | undefined;
-    coverage: CharacterMarkerCoverage | undefined;
-  },
+/**
+ * Stamps each already-generated row with its disabled state and, once coverage is known, its
+ * selection state.
+ *
+ * Kept apart from generating the rows so that coverage — which is set on every open and cleared on
+ * every close — does not re-run the generator's filter and sort over the block's children. The
+ * generator still depends on `currentMarker`, because every row's action closes over it and the
+ * remove row's presence depends on it, so that seam cannot move any further out.
+ */
+function stampMarkerMenuItems(
+  items: MarkerMenuItem[],
+  currentMarker: string | undefined,
+  coverage: CharacterMarkerCoverage | undefined,
+  changeCharacterMarker: UseCharacterMarkerStateOptions['changeCharacterMarker'],
 ): MarkerMenuItem[] {
-  const {
-    editorRef,
-    localizedStrings,
-    blockMarker,
-    changeCharacterMarker,
-    removeCharacterMarker,
-    currentMarker,
-    coverage,
-  } = options;
-
-  const items = generateCharacterMarkerMenuListItems(
-    editorRef,
-    // The control owns its own open state; closing happens through the menu's own host, so the
-    // generator's close callback has nothing to do here.
-    () => {},
-    localizedStrings,
-    blockMarker,
-    { currentCharacterMarker: currentMarker, changeCharacterMarker, removeCharacterMarker },
-  );
-
   return items.map((item) => {
     // Mirror the generator's action logic (`character-marker-menu.utils.ts`) so a row whose action
     // is a no-op is visibly unavailable rather than silently ignoring the click. The generator
     // deliberately stays inert while a character marker covers the selection, because
     // `insertMarker` NESTS rather than replaces: picking the covering marker again has no defined
-    // meaning yet (toggle off? extend? — `PT-XXX-B4`), and picking a different one needs a replace
-    // operation that does not exist until `PT-XXX-B2`. Both are correct as behavior and wrong as
-    // silence, so the row is disabled here.
+    // meaning (toggle off? extend?), and picking a different one needs a replace operation the
+    // editor does not expose. Both are correct as behavior and wrong as silence, so the row is
+    // disabled here.
     //
     // The remove row (no `marker`) is never disabled: it is only emitted at all when
     // `removeCharacterMarker` exists, so it always has something to do.
@@ -138,10 +119,9 @@ function buildMarkerMenuItems(
     let selectionState: CharacterMarkerSelectionState;
     if (item.marker) selectionState = coverage.markerStates[item.marker] ?? 'none';
     // The remove row: 'partial' when some of the selection is unmarked, 'none' when every character
-    // carries a marker. The `coveringMarkers.length === 0` ('all') case cannot arise here: the
-    // remove row is only emitted when `currentCharacterMarker` is set (see
-    // `character-marker-menu.utils.ts`), and `resolveCurrentMarker` only returns a marker when
-    // exactly one covers the selection.
+    // carries a marker. The "covers all of it" case cannot arise here: the remove row is only
+    // emitted when `currentCharacterMarker` is set (see `character-marker-menu.utils.ts`), and
+    // `resolveCurrentMarker` only returns a marker when exactly one covers the selection.
     else selectionState = coverage.hasUncovered ? 'partial' : 'none';
     return { ...item, isDisabled, selectionState };
   });
@@ -165,6 +145,13 @@ export function useCharacterMarkerState({
 }: UseCharacterMarkerStateOptions): CharacterMarkerState {
   const [coverage, setCoverage] = useState<CharacterMarkerCoverage | undefined>(undefined);
 
+  // Coverage is deliberately FROZEN for as long as the menu is open. It is sampled once here and
+  // cleared on close, so a selection that changes underneath an open menu (an external scroll-group
+  // update, say) leaves the trigger label and the per-row check states showing the selection the
+  // user opened the menu against. That is the intended reading: the rows describe the selection the
+  // user is about to act on, and re-sampling would silently repoint the menu at text they cannot
+  // see. Re-syncing would also mean calling `getUsj()` — a whole-chapter serialization — on every
+  // selection change while open, which is the cost this whole design exists to avoid.
   const onOpen = useCallback(() => {
     setCoverage(computeCoverage(editorRef, getSelection));
   }, [editorRef, getSelection]);
@@ -174,9 +161,6 @@ export function useCharacterMarkerState({
     editorRef.current?.focus();
   }, [editorRef]);
 
-  const coveringMarkers = useMemo(() => Object.keys(coverage?.markerStates ?? {}), [coverage]);
-
-  // See `resolveCurrentMarker`; U3 is the case its doc comment describes.
   const currentMarker = useMemo(
     () => resolveCurrentMarker(coverage, contextMarker),
     [coverage, contextMarker],
@@ -196,6 +180,7 @@ export function useCharacterMarkerState({
   let isMixed: boolean;
   if (coverage) {
     // More than one covering marker, or a mix of covered and uncovered text.
+    const coveringMarkers = Object.keys(coverage.markerStates);
     isMixed = coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered);
   } else {
     // O(1) fallback while the menu is closed. It over-reports — a selection spanning two adjacent
@@ -204,17 +189,20 @@ export function useCharacterMarkerState({
     isMixed = !!selection?.end && selection.start.jsonPath !== selection.end.jsonPath;
   }
 
-  const markerMenuItems = useMemo(
+  // Deliberately NOT keyed on `coverage`: opening and closing the menu sets and clears it, and the
+  // generator's filter and locale-aware sort over the block's children would re-run each time for a
+  // list that has not changed.
+  const baseMarkerMenuItems = useMemo(
     () =>
-      buildMarkerMenuItems({
+      generateCharacterMarkerMenuListItems(
         editorRef,
+        // The control owns its own open state; closing happens through the menu's own host, so the
+        // generator's close callback has nothing to do here.
+        () => {},
         localizedStrings,
         blockMarker,
-        changeCharacterMarker,
-        removeCharacterMarker,
-        currentMarker,
-        coverage,
-      }),
+        { currentCharacterMarker: currentMarker, changeCharacterMarker, removeCharacterMarker },
+      ),
     [
       editorRef,
       localizedStrings,
@@ -222,8 +210,12 @@ export function useCharacterMarkerState({
       currentMarker,
       changeCharacterMarker,
       removeCharacterMarker,
-      coverage,
     ],
+  );
+
+  const markerMenuItems = useMemo(
+    () => stampMarkerMenuItems(baseMarkerMenuItems, currentMarker, coverage, changeCharacterMarker),
+    [baseMarkerMenuItems, currentMarker, coverage, changeCharacterMarker],
   );
 
   return {

@@ -40,6 +40,7 @@ function StatefulHarness({
   initialSelectionStates,
   isLabelHidden = false,
   menuAlign,
+  menuDirection = 'ltr',
 }: {
   initialMarker?: string;
   isMixed?: boolean;
@@ -48,6 +49,7 @@ function StatefulHarness({
   initialSelectionStates?: Record<string, CharacterMarkerSelectionState>;
   isLabelHidden?: boolean;
   menuAlign?: 'start' | 'center' | 'end';
+  menuDirection?: 'ltr' | 'rtl';
 }) {
   const [appliedMarker, setAppliedMarker] = useState(initialMarker);
   const [openCount, setOpenCount] = useState(0);
@@ -105,6 +107,7 @@ function StatefulHarness({
           localizedStrings={STRINGS}
           isLabelHidden={isLabelHidden}
           menuAlign={menuAlign}
+          menuDirection={menuDirection}
         />
       </CharacterMarkerToolbar>
       <p className="tw:text-xs tw:text-muted-foreground">Menu opened {openCount} time(s)</p>

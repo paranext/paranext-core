@@ -1,6 +1,7 @@
 import { ChevronDown, Type } from 'lucide-react';
 import {
   Button,
+  cn,
   MarkerMenu,
   MarkerMenuItem,
   Popover,
@@ -15,47 +16,18 @@ import {
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DisabledTooltipWrapper } from '../disabled-tooltip-wrapper.component';
-
-const ARIA_LABEL_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%';
-/**
- * The separators between a marker code and its description, and between the control's name and its
- * current value, live in the translated string rather than in code: neither the punctuation nor the
- * ordering is universal, and a Latin marker code sitting next to RTL text reorders around whatever
- * separator is used.
- */
-const ARIA_LABEL_FORMAT_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%';
-const LABEL_FORMAT_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_characterMarkerControl_label_format%';
-const MIXED_KEY: LocalizeKey = '%webView_platformScriptureEditor_characterMarkerControl_mixed%';
-const NONE_KEY: LocalizeKey = '%webView_platformScriptureEditor_characterMarkerControl_none%';
-const NO_MARKERS_TOOLTIP_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%';
-/**
- * Lives in `platform-bible-react` beside its two siblings (`_insert`, `_paragraph`) rather than in
- * this extension: all three are placeholders for the same shared `MarkerMenu` search field, and the
- * editor web view already preloads `MARKER_MENU_STRING_KEYS`, so it needs no separate
- * registration.
- */
-const SEARCH_PLACEHOLDER_KEY: LocalizeKey = '%markerMenu_searchPlaceholder_character%';
-/** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */
-const SYNC_BLOCKED_KEY: LocalizeKey = '%webView_platformScriptureEditor_syncEditBlocked_banner%';
-
-/**
- * Localize keys used by {@link CharacterMarkerControl}. Spread these into the editor web view's
- * localized-strings list so the values are loaded and passed into `localizedStrings`.
- */
-export const CHARACTER_MARKER_CONTROL_STRING_KEYS = Object.freeze([
-  ARIA_LABEL_KEY,
+import {
   ARIA_LABEL_FORMAT_KEY,
+  ARIA_LABEL_KEY,
   LABEL_FORMAT_KEY,
   MIXED_KEY,
-  NONE_KEY,
   NO_MARKERS_TOOLTIP_KEY,
+  NONE_KEY,
   SEARCH_PLACEHOLDER_KEY,
   SYNC_BLOCKED_KEY,
-] as const);
+} from './character-marker-control.const';
+
+export { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control.const';
 
 /** Localized strings for the character-marker control. Falls back to the key when absent. */
 export type CharacterMarkerControlLocalizedStrings = {
@@ -99,21 +71,21 @@ export type CharacterMarkerControlProps = {
    */
   menuAlign?: 'start' | 'center' | 'end';
   /**
-   * The text direction {@link CharacterMarkerControlProps.menuAlign} is resolved against.
+   * The text direction {@link CharacterMarkerControlProps.menuAlign} is resolved against. Pass the
+   * project's resolved direction.
    *
-   * Must be passed explicitly for an RTL placement to mirror. floating-ui (under Radix) mirrors
-   * `start`/`end` from the computed `direction` of the PORTALED content, and Radix's popover
-   * portals to `document.body` — which in this app inherits no direction at all: nothing sets
-   * `document.dir`, `readDirection()` in `dir-helper.util.ts` is localStorage-backed with no
-   * writer, and the only `dir` in the editor web view is on an inner container the portal is not
-   * inside. So with this omitted, `'end'` means "the physical right edge" even in an RTL project,
-   * and a 200px menu pinned to the text column's trailing (left) edge runs off the iframe and gets
-   * shifted back over the trigger by Radix's collision handling.
-   *
-   * Defaults to `undefined`, which leaves the popover's own `readDirection()` result in place — the
-   * behavior every pre-existing consumer already had.
+   * REQUIRED rather than optional, because the dangerous case is the one a default would create.
+   * floating-ui (under Radix) mirrors `start`/`end` from the computed `direction` of the PORTALED
+   * content, and Radix's popover portals to `document.body` — which in this app inherits no
+   * direction at all: nothing sets `document.dir`, `readDirection()` in `dir-helper.util.ts` is
+   * localStorage-backed with no writer, and the only `dir` in the editor web view is on an inner
+   * container the portal is not inside. So any default here resolves physically, and an RTL project
+   * whose placement wrapper passes `menuAlign="end"` but omits the direction gets a 200px menu
+   * pinned to the text column's trailing (left) edge, running off the iframe and shifted back over
+   * the trigger by Radix's collision handling. Making it required means a wrapper cannot forget
+   * it.
    */
-  menuDirection?: 'ltr' | 'rtl';
+  menuDirection: 'ltr' | 'rtl';
   /**
    * Called when the menu opens. The expensive coverage analysis belongs here — never on selection
    * change.
@@ -132,13 +104,17 @@ export type CharacterMarkerControlProps = {
  * popover.
  *
  * Placement-agnostic by construction — it takes state and callbacks as props and renders no
- * positioning of its own, so the same component serves every placement wrapper. It is also
- * structure-protection-agnostic: character markers are deliberately exempt, so there is no input
- * that could disable it for that reason. The real guarantee is the ABSENCE of any
- * `isStructureProtected` prop or import on this component — verified by grep (`grep -n
- * "isStructureProtected" character-marker-control.component.tsx`) rather than by a runtime test,
- * since there is no prop to flip and a test asserting "stays enabled" would only cover the same
- * default-enabled path the other tests here already exercise.
+ * positioning of its own, so the same component serves every placement wrapper.
+ *
+ * ⚠️ Mount it inside {@link CharacterMarkerToolbar}, never on its own. The toolbar is where the
+ * Simple-mode gate lives, so a wrapper that renders this component directly would show it in 10
+ * Power — which this feature is required not to do.
+ *
+ * It is also structure-protection-agnostic: character markers are deliberately exempt, so there is
+ * no input that could disable it for that reason. The guarantee is the ABSENCE of any
+ * `isStructureProtected` prop or import on this component, which no runtime test can assert — there
+ * is no prop to flip, so a "stays enabled" test would only re-cover the default-enabled path the
+ * other tests already exercise.
  */
 export function CharacterMarkerControl({
   currentMarker,
@@ -185,23 +161,12 @@ export function CharacterMarkerControl({
       : currentMarker;
   else label = localize(localizedStrings, NONE_KEY);
 
-  // Two different jobs for one tooltip. While DISABLED it explains why (a disabled button cannot
-  // host its own tooltip, hence the focusable wrapper below). While ENABLED and icon-only it is the
-  // sighted user's only readout of the current marker, which the visible label used to provide.
-  // Suppressed while the popover is open: a tooltip and a popover anchored to the same trigger
-  // otherwise render on top of each other.
-  // The visible label truncates rather than overflowing (the Responsiveness guideline's 300px
-  // floor; `${marker} - ${description}` easily exceeds a gutter-width trigger), so the tooltip
-  // gains a third job: revealing the clipped text. `useTruncationTooltip` measures the clipping so
-  // it fires only when there is actually something hidden.
-  //
-  // Unlike `project-selector`, the Tooltip stays UNCONTROLLED and this only widens what content
-  // there is to show. Project-selector had to control `open` because its trigger is a cmdk
-  // `CommandItem`, which defeats Radix's pointer/focus auto-detection; this trigger is an ordinary
-  // button, so controlling `open` would buy nothing and would cost the focus-driven tooltip that
-  // the disabled wrapper depends on for keyboard users. The trade-off: keyboard focus alone does
-  // not reveal a truncated label — acceptable because the full text is already the button's
-  // accessible name, so no information is unreachable.
+  // One tooltip, three jobs. While DISABLED it explains why (a disabled button cannot host its own
+  // tooltip, hence the focusable wrapper below). While ENABLED and icon-only it is the sighted
+  // user's only readout of the current marker. And when the visible label truncates rather than
+  // overflows (the Responsiveness guideline's 300px floor; `${marker} - ${description}` easily
+  // exceeds a gutter-width trigger) it reveals the clipped text — `useTruncationTooltip` measures
+  // the clipping so this fires only when something is actually hidden.
   const {
     ref: labelRef,
     open: isTruncatedLabelHovered,
@@ -210,7 +175,16 @@ export function CharacterMarkerControl({
   } = useTruncationTooltip<HTMLSpanElement>();
 
   const tooltipText = isDisabled ? disabledTooltip : label;
-  const isTooltipShown = !isOpen && (isDisabled || isLabelHidden || isTruncatedLabelHovered);
+  // Suppressed while the popover is open: a tooltip and a popover anchored to the same trigger
+  // otherwise render on top of each other.
+  const hasTooltipToShow = !isOpen && (isDisabled || isLabelHidden || isTruncatedLabelHovered);
+
+  // Radix's own pointer/focus detection still drives WHEN the tooltip wants to open — this only
+  // decides whether to honor it. Gating the rendered `TooltipContent` alone would not be enough:
+  // Radix sets `aria-describedby` on the trigger from its own open state, so a trigger it opened
+  // with no content rendered would point a screen reader at an element that is not in the DOM.
+  const [isTooltipRequested, setIsTooltipRequested] = useState(false);
+  const isTooltipShown = hasTooltipToShow && isTooltipRequested;
 
   const handleOpenChange = (nextOpen: boolean) => {
     // Ignore no-op transitions. Closing from an item selection already ran `onClose`, and the
@@ -247,7 +221,7 @@ export function CharacterMarkerControl({
 
   return (
     <TooltipProvider>
-      <Tooltip>
+      <Tooltip open={isTooltipShown} onOpenChange={setIsTooltipRequested}>
         <TooltipTrigger asChild>
           {/* When the button is disabled it is not focusable, so the wrapper becomes focusable and
               named while disabled to keep the explanatory tooltip reachable for keyboard and
@@ -264,8 +238,8 @@ export function CharacterMarkerControl({
                 <Button
                   // `tw:min-w-0 tw:shrink` overrides `buttonVariants`' base `tw:shrink-0` so the
                   // label below can actually truncate; a shrink-0 button just overflows instead.
-                  // The consumer's class comes last so it still wins on any conflict.
-                  className={['tw:min-w-0 tw:shrink', className].filter(Boolean).join(' ')}
+                  // The consumer's class comes last so `cn`'s tailwind-merge lets it win.
+                  className={cn('tw:min-w-0 tw:shrink', className)}
                   // The accessible name includes the current value. With a visible label, a static
                   // "Character marker" would override it and never let a screen-reader user hear
                   // the value (WCAG 2.5.3, label-in-name). With `isLabelHidden` there is no visible
@@ -300,11 +274,7 @@ export function CharacterMarkerControl({
                 // Overrides `PopoverContent`'s own `readDirection()` default (its `{...props}` spread
                 // comes after its `dir`), which is what makes `align` logical rather than physical.
                 // See `menuDirection`'s TSDoc for why the portaled content cannot inherit this.
-                //
-                // Spread conditionally rather than `dir={menuDirection}`: that same spread order means
-                // an explicit `dir: undefined` would WIN and blank out the default, changing behavior
-                // for every consumer that passes no direction.
-                {...(menuDirection ? { dir: menuDirection } : {})}
+                dir={menuDirection}
                 // The prototype's `mt-1.5`. Placement-independent, so a constant rather than a prop.
                 sideOffset={6}
                 // 200px and a 220px list are the prototype's `min-w-[200px]` / `max-h-[220px]`.
@@ -324,20 +294,16 @@ export function CharacterMarkerControl({
             </Popover>
           </DisabledTooltipWrapper>
         </TooltipTrigger>
-        {isTooltipShown && (
-          <TooltipContent>
-            {/* `aria-hidden`: the tooltip is the VISUAL channel only. Its text is already the
-                accessible name of the thing it describes in both states — the button's `aria-label`
-                while enabled, the wrapper's `aria-label` while disabled — and Radix renders the
-                tooltip's children a second time inside a visually-hidden `role="tooltip"` node that
-                it wires up as the trigger's `aria-describedby`, so without this a screen reader
-                announces the same value twice. Hiding the tooltip text from the accessibility tree
-                (rather than trimming the name) keeps the accessible name as the single readout. */}
-            <p aria-hidden="true" className="tw:max-w-xs tw:whitespace-pre-line">
-              {tooltipText}
-            </p>
-          </TooltipContent>
-        )}
+        <TooltipContent>
+          {/* `aria-hidden` because this text is already the accessible name of what it describes —
+              the button's `aria-label` while enabled, the wrapper's `aria-label` while disabled.
+              Radix also renders these children into a visually-hidden `role="tooltip"` node wired
+              up as the trigger's `aria-describedby`, so without this a screen reader says the same
+              value twice. */}
+          <p aria-hidden="true" className="tw:max-w-xs tw:whitespace-pre-line">
+            {tooltipText}
+          </p>
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

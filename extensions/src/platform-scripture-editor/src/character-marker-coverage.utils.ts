@@ -44,6 +44,19 @@ const EMPTY_COVERAGE: CharacterMarkerCoverage = Object.freeze({
 });
 
 /**
+ * Whether a coverage carries no information at all — no marker covers any of the selection AND
+ * nothing is uncovered.
+ *
+ * This is the "nothing to measure" result, NOT "the selection carries no marker": it arises from an
+ * unresolvable json path, a selection inside a note, or a caret whose start node holds no text.
+ * Callers should degrade to their own context on it rather than report an unmarked selection.
+ * Exported so that test lives in one place instead of being re-derived at each call site.
+ */
+export function isEmptyCoverage(coverage: CharacterMarkerCoverage): boolean {
+  return Object.keys(coverage.markerStates).length === 0 && !coverage.hasUncovered;
+}
+
+/**
  * Guard on the ancestor walk. USJ nesting is shallow in practice (book > para > char > char), so a
  * depth this size can only be reached by a malformed document or a JSONPath that resolves to
  * something unexpected — in which case stopping is better than looping.
@@ -120,16 +133,32 @@ export function computeCharacterMarkerCoverage(
   // walk includes its starting point, and returning `true` stops it.
   const segments: { jsonPath: string; text: string }[] = [];
   let reachedEnd = false;
+  // Set when the end path names a MarkerObject rather than a text node — see below.
+  let isInsideEndSubtree = false;
+  const isDescendantOfEnd = (jsonPath: string) => jsonPath.startsWith(`${endJsonPath}.`);
   usjRW.findNextMatchingNode(startLocation, ({ node, documentLocation }) => {
-    if (isString(node)) segments.push({ jsonPath: documentLocation.jsonPath, text: node });
-    if (documentLocation.jsonPath === endJsonPath) {
+    const { jsonPath } = documentLocation;
+    // Leaving the end node's subtree ends the walk. Checked before collecting so the node that
+    // carried us out never enters `segments`.
+    if (isInsideEndSubtree && !isDescendantOfEnd(jsonPath)) return true;
+
+    if (isString(node)) segments.push({ jsonPath, text: node });
+
+    if (jsonPath === endJsonPath) {
       reachedEnd = true;
-      return true;
+      if (isString(node)) return true;
+      // The end resolved to a MarkerObject, not to its text. The walk is PRE-ORDER — it runs the
+      // callback on an object before descending into its `content` — so stopping here would end
+      // the walk before the marker's own text was ever collected and silently undercount it.
+      // Descend instead, and stop on the way back out.
+      isInsideEndSubtree = true;
     }
     return false;
   });
-  // An end that never came up (a reversed or unreachable range) degrades to the start node alone
-  // rather than to the rest of the chapter.
+  // An end that never came up (an unreachable range) degrades to the start node alone rather than
+  // to the rest of the chapter. Note this is not the backwards-drag case: the editor normalizes
+  // selection direction before this sees it (`$getUsjSelectionFromEditor` swaps anchor and focus
+  // on `isBackward()`), so `start` always precedes `end` in document order.
   if (!reachedEnd) segments.length = Math.min(segments.length, 1);
 
   // Trim the first and last segments to the selection's offsets. With one segment both apply to it.
@@ -137,7 +166,13 @@ export function computeCharacterMarkerCoverage(
     const startOffset = selection.start.offset ?? 0;
     const endOffset = selection.end?.offset;
     if (segments.length === 1) {
-      segments[0].text = segments[0].text.slice(startOffset, endOffset);
+      // `endOffset` indexes the END node's text. It applies here only when the end was actually
+      // reached, which for a single segment means start and end name the same text node. On the
+      // degraded path above the sole segment is the START node, and applying the end node's offset
+      // to it would keep an arbitrary prefix instead of the whole node.
+      segments[0].text = reachedEnd
+        ? segments[0].text.slice(startOffset, endOffset)
+        : segments[0].text.slice(startOffset);
     } else {
       segments[0].text = segments[0].text.slice(startOffset);
       const last = segments[segments.length - 1];

@@ -243,6 +243,67 @@ describe('computeCharacterMarkerCoverage', () => {
     expect(coverage.hasUncovered).toBe(true);
   });
 
+  it('treats a collapsed caret in unmarked text as uncovered', () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 2 },
+      end: { jsonPath: KOLO, offset: 2 },
+    });
+
+    expect(coverage.markerStates).toEqual({});
+    expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('degrades an end it can never reach to the start node alone', () => {
+    // `end` precedes `start` in document order, so walking forward never arrives at it. Without the
+    // degrade the walk runs to the end of the chapter and drags ' rest' in, reporting `bd` as
+    // 'partial' over uncovered text.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: MULU, offset: 0 },
+      end: { jsonPath: KOLO, offset: 5 },
+    });
+
+    expect(coverage.markerStates.bd).toBe('all');
+    expect(coverage.hasUncovered).toBe(false);
+  });
+
+  it('counts the text inside an end that names a marker rather than its text', () => {
+    // `end` is the `\bd` MarkerObject itself, not the 'Mulu' inside it. The walk visits an object
+    // before descending into it, so it must not stop on arrival or the marker's own text goes
+    // uncounted and `bd` vanishes from the result entirely.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 0 },
+      end: { jsonPath: '$.content[2].content[2]' },
+    });
+
+    // 'kolo ' (5) + 'Mulu' (4): `bd` covers 4 of 9, and ' rest' after the marker stays out.
+    expect(coverage.markerStates.bd).toBe('partial');
+    expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('drops a trailing marker the selection stops short of', () => {
+    // Ending at offset 0 of 'Mulu' selects up to the bold run without entering it. Untrimmed, the
+    // whole of 'Mulu' would count and report `bd` as covering part of the selection.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 0 },
+      end: { jsonPath: MULU, offset: 0 },
+    });
+
+    expect(coverage.markerStates).toEqual({});
+    expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('drops trailing uncovered text the selection stops short of', () => {
+    // The mirror of the case above: ending at offset 0 of ' rest' keeps the selection wholly inside
+    // `\bd`. Untrimmed, ' rest' would count as uncovered and demote `bd` to 'partial'.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: MULU, offset: 0 },
+      end: { jsonPath: REST, offset: 0 },
+    });
+
+    expect(coverage.markerStates.bd).toBe('all');
+    expect(coverage.hasUncovered).toBe(false);
+  });
+
   it('returns an empty coverage rather than throwing for degenerate input', () => {
     expect(computeCharacterMarkerCoverage(USJ_PARTIAL_BD, undefined)).toEqual({
       markerStates: {},

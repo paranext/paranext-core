@@ -184,6 +184,33 @@ describe('CharacterMarkerControl — tooltip', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('bd');
   });
 
+  it('never describes the trigger by a tooltip it has not rendered', async () => {
+    const user = userEvent.setup();
+    render(
+      <CharacterMarkerControl
+        currentMarker="bd"
+        currentMarkerLabel="Bold"
+        isMixed={false}
+        isSyncBlocked={false}
+        markerMenuItems={ITEMS}
+        onOpen={() => {}}
+        onClose={() => {}}
+        localizedStrings={STRINGS}
+        menuDirection="ltr"
+      />,
+    );
+
+    // Enabled, with a visible label that is not truncated: there is nothing for a tooltip to add,
+    // so hovering must not leave `aria-describedby` pointing at an element that was never mounted.
+    // Radix drives its own open state from the pointer, so the guard has to be on the open state
+    // itself rather than only on whether the content is rendered.
+    const trigger = screen.getByRole('button', { name: 'Character marker: bd - Bold' });
+    await user.hover(trigger);
+
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    expect(trigger.closest('[aria-describedby]')).toBeNull();
+  });
+
   it('does not announce the value a second time through the tooltip', async () => {
     const user = userEvent.setup();
     render(
@@ -393,7 +420,7 @@ describe('CharacterMarkerControl — menu', () => {
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'rtl');
   });
 
-  it('leaves the popover its own direction default when no menuDirection is given', async () => {
+  it('forwards an ltr menuDirection to the popover', async () => {
     const user = userEvent.setup();
     render(
       <CharacterMarkerControl
@@ -405,13 +432,14 @@ describe('CharacterMarkerControl — menu', () => {
         onClose={() => {}}
         localizedStrings={STRINGS}
         menuAlign="end"
+        menuDirection="ltr"
       />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Character marker: bd' }));
 
-    // `dir` is spread conditionally, not passed as `dir={undefined}`: PopoverContent's own
-    // `readDirection()` value would otherwise be blanked out for every consumer that passes nothing.
+    // The complement of the rtl case above: the direction comes from the prop, so the popover is
+    // never pinned to one direction regardless of what the consumer resolved.
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'ltr');
   });
 });

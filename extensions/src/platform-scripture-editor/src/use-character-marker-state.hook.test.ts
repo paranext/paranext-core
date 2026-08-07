@@ -85,6 +85,26 @@ describe('useCharacterMarkerState — getUsj cost', () => {
 
     expect(getUsj).toHaveBeenCalledTimes(1);
   });
+
+  it('holds the open-time coverage when the selection moves under an open menu', () => {
+    // The freeze is deliberate: the rows describe the selection the menu was opened against, and
+    // re-sampling would both repoint them at text the user cannot see and pay for another
+    // whole-chapter `getUsj()`. Pinned here so a future edit cannot make it drift by accident.
+    let selection = { start: { jsonPath: MULU, offset: 0 }, end: { jsonPath: MULU, offset: 4 } };
+    const { result, rerender } = renderHook((props) => useCharacterMarkerState(props), {
+      initialProps: options({ getSelection: () => selection }),
+    });
+
+    act(() => result.current.onOpen());
+    expect(result.current.currentMarker).toBe('bd');
+
+    // The caret moves out of `\bd` into the plain text before it, and the view re-renders.
+    selection = { start: { jsonPath: KOLO, offset: 0 }, end: { jsonPath: KOLO, offset: 5 } };
+    rerender(options({ getSelection: () => selection, contextMarker: 'p' }));
+
+    expect(result.current.currentMarker).toBe('bd');
+    expect(getUsj).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useCharacterMarkerState — trigger label inputs', () => {

@@ -1,3 +1,4 @@
+import { cn } from 'platform-bible-react';
 import { ReactNode } from 'react';
 import { useIsPowerMode } from '../use-is-power-mode.hook';
 
@@ -31,11 +32,7 @@ export function CharacterMarkerToolbar({ children, className }: CharacterMarkerT
   if (isPowerMode !== false) return undefined;
 
   return (
-    <div
-      className={['tw:flex tw:flex-row tw:flex-nowrap tw:items-center tw:gap-1', className]
-        .filter(Boolean)
-        .join(' ')}
-    >
+    <div className={cn('tw:flex tw:flex-row tw:flex-nowrap tw:items-center tw:gap-1', className)}>
       {children}
     </div>
   );
