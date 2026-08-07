@@ -610,6 +610,32 @@ const DOCK_LAYOUT_KEY = 'dock-saved-layout';
  */
 let currentInterfaceMode: 'simple' | 'power' | undefined;
 
+/**
+ * Bumped once per interface-mode switch (in either direction), so an in-flight switch can tell it
+ * has been superseded by a newer one and bail out before mutating the dock or persisted storage.
+ *
+ * Rapid Power<->Simple toggling (e.g. the user changing their mind mid-switch, which can already
+ * take multiple seconds) previously let two switches run concurrently: two overlay tokens
+ * outstanding, two `SIMPLE_LAYOUT_TAB_IDS` trackers each satisfied by the other's events, and —
+ * worse — a stale switch's `loadLayout` call could still fire `onLayoutChange` -> `saveLayout`
+ * after `currentInterfaceMode` had already moved on, persisting the wrong layout into the wrong
+ * slot. This is a plain counter, not a queue: a new switch always starts immediately (the user can
+ * always abort/redirect an in-flight switch), and a superseded switch's tail self-cancels rather
+ * than blocking behind it or racing it. See {@link startNewSwitchGeneration}.
+ */
+let switchGeneration = 0;
+
+/**
+ * Starts a new switch generation and returns it. Called once per user-initiated mode change (from
+ * the `platform.interfaceMode` subscription below), and — via {@link handleSwitchToSimpleMode}'s
+ * default parameter — once per standalone call for callers (tests) that invoke it directly outside
+ * that subscription flow.
+ */
+function startNewSwitchGeneration(): number {
+  switchGeneration += 1;
+  return switchGeneration;
+}
+
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
   return new AsyncVariable<PapiDockLayout>('web-view.service-host.platformDockLayout');
@@ -834,8 +860,20 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
  *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  *   the persisted layout information and loads it into the dock layout.
+ * @param options.persist Only meaningful when `layout` is provided (the no-arg branch never
+ *   persists a _loaded_ layout back out — it only reacts to subsequent interactive changes via
+ *   `onLayoutChange`). Defaults to `true`. Pass `false` when the caller knows — independent of
+ *   whatever `currentInterfaceMode` reads at this moment — that this layout must never be written
+ *   to `DOCK_LAYOUT_KEY` (e.g. the Simple-mode project-bound switch in
+ *   `runProjectBoundSimpleSwitch`). This is a deliberate, explicit alternative to routing through
+ *   `onLayoutChange` -> `saveLayout`'s implicit `currentInterfaceMode` read, which is the read that
+ *   a superseded, still-in-flight switch could otherwise race (see `switchGeneration`'s doc comment
+ *   for the incident this defends against).
  */
-async function loadLayout(layout?: LayoutInfo | LayoutBase): Promise<void> {
+async function loadLayout(
+  layout?: LayoutInfo | LayoutBase,
+  options?: { persist?: boolean },
+): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   // Capture the web views open before the load so close events can be emitted for the ones the
   // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
@@ -849,10 +887,11 @@ async function loadLayout(layout?: LayoutInfo | LayoutBase): Promise<void> {
     // to. Matches the convention in `platform-dock-layout.component.tsx`.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const layoutAsInfo = layout as unknown as LayoutInfo;
-    // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
     dockLayoutVar.loadLayout(layoutAsInfo);
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
-    await onLayoutChange(layoutAsInfo);
+    // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
+    // unless the caller explicitly opted out (see the `options.persist` doc above).
+    if (options?.persist !== false) await saveLayout(layoutAsInfo);
     return;
   }
 
@@ -994,8 +1033,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
-          if (newMode === 'simple') await handleSwitchToSimpleMode();
-          else await loadLayoutWithWarning();
+          const generation = startNewSwitchGeneration();
+          if (newMode === 'simple') await handleSwitchToSimpleMode(generation);
+          else await loadLayoutWithWarning(generation);
         },
         { retrieveDataImmediately: false },
       );
@@ -1141,11 +1181,18 @@ async function resolveFastPathIsEditable(cached: LastOpenedProject): Promise<boo
   }
 }
 
-export async function handleSwitchToSimpleMode(): Promise<void> {
+/**
+ * @param generation This switch's generation (see {@link switchGeneration}). Defaults to starting a
+ *   fresh one, for callers (tests) invoking this directly rather than through the
+ *   `platform.interfaceMode` subscription, which starts one itself before calling this.
+ */
+export async function handleSwitchToSimpleMode(
+  generation: number = startNewSwitchGeneration(),
+): Promise<void> {
   const cached = getLastOpenedProject();
   if (cached) {
     const isEditable = await resolveFastPathIsEditable(cached);
-    await runProjectBoundSimpleSwitch(cached.id, !isEditable);
+    await runProjectBoundSimpleSwitch(cached.id, !isEditable, generation);
     return;
   }
 
@@ -1156,7 +1203,7 @@ export async function handleSwitchToSimpleMode(): Promise<void> {
     );
   }
   if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
-    await loadLayoutWithWarning();
+    await loadLayoutWithWarning(generation);
     return;
   }
 
@@ -1168,12 +1215,12 @@ export async function handleSwitchToSimpleMode(): Promise<void> {
     logger.warn(
       `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
     );
-    await loadLayoutWithWarning();
+    await loadLayoutWithWarning(generation);
     return;
   }
   // Populate the cache so the next switch can take the fast path.
   setLastOpenedProject({ id: resolvedId, isEditable });
-  await runProjectBoundSimpleSwitch(resolvedId, !isEditable);
+  await runProjectBoundSimpleSwitch(resolvedId, !isEditable, generation);
 }
 
 /**
@@ -1199,8 +1246,13 @@ export async function resolveProjectIsEditable(projectId: string): Promise<boole
  * Wrapper around `loadLayout()` that catches any failure and logs a single consistent warning. Used
  * by the mode-change subscription and the fast-switch fallback — both paths want
  * "load-and-keep-going" semantics rather than propagating the error.
+ *
+ * @param generation This switch's generation (see {@link switchGeneration}). Skips the load entirely
+ *   if a newer switch has since started — a superseded switch must never overwrite the dock with
+ *   its now-stale target layout.
  */
-async function loadLayoutWithWarning(): Promise<void> {
+async function loadLayoutWithWarning(generation: number): Promise<void> {
+  if (generation !== switchGeneration) return;
   try {
     await loadLayout();
   } catch (err) {
@@ -1208,7 +1260,13 @@ async function loadLayoutWithWarning(): Promise<void> {
   }
 }
 
-async function runProjectBoundSimpleSwitch(projectId: string, isReadOnly: boolean): Promise<void> {
+async function runProjectBoundSimpleSwitch(
+  projectId: string,
+  isReadOnly: boolean,
+  generation: number,
+): Promise<void> {
+  if (generation !== switchGeneration) return; // superseded before this switch even started
+
   // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
   // the default-project picker never fires `openScriptureEditor` and the extension's
   // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
@@ -1240,7 +1298,19 @@ async function runProjectBoundSimpleSwitch(projectId: string, isReadOnly: boolea
       enabledEntries.length === 0
         ? projectBoundLayout
         : mergeDefaultLayoutSupplement(projectBoundLayout, enabledEntries);
-    await loadLayout(layoutToLoad);
+    // Re-check right before the mutating load: a newer switch (the user changing their mind) may
+    // have started and become current during the awaits above. A superseded switch must never
+    // reach `loadLayout` — that's what would let it persist stale data into the wrong slot (see
+    // `switchGeneration`'s doc comment).
+    if (generation !== switchGeneration) {
+      tabsResolved.dispose();
+      return;
+    }
+    // `persist: false` is defense-in-depth alongside the generation check above: even if this
+    // switch is (impossibly, as far as this function knows) still current, a Simple-mode layout
+    // must never be written to the Power-mode storage key regardless of what `currentInterfaceMode`
+    // reads by the time `loadLayout` would otherwise call `saveLayout`.
+    await loadLayout(layoutToLoad, { persist: false });
     // Wait for every simple-layout tab's webview to fire its open/update event, which is when
     // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
     await tabsResolved.promise;
