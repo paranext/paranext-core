@@ -313,6 +313,8 @@ async function handOverPreviouslyStoredThemeState(): Promise<void> {
  * failed handover only costs it the theme the user left off at.
  *
  * Call once at renderer startup.
+ *
+ * @experimental
  */
 export async function startThemeService(): Promise<void> {
   await handOverPreviouslyStoredThemeState();
