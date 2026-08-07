@@ -176,9 +176,10 @@ export function FootnoteList({
         className={cn(
           'tw:p-0.5 tw:pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
           'tw:grid',
-          layout === 'horizontal'
-            ? 'tw:grid-cols-[min-content_min-content_1fr]'
-            : 'tw:grid-cols-[min-content_1fr]',
+          // Two columns in both layouts: the note's marker+caller, then its text. PT9 keeps the
+          // `\fr`/`\xo` target reference inside the note text rather than aligning it in a column
+          // of its own, so there is no third column to size.
+          'tw:grid-cols-[min-content_1fr]',
           !suppressFormatting && 'formatted-font',
         )}
       >
@@ -204,7 +205,8 @@ export function FootnoteList({
                     // PT9 highlights the entry being edited (light yellow); warning is the theme's
                     // amber-family token so this stays theme-aware in dark mode.
                     'tw:bg-warning/15',
-                    layout === 'horizontal' ? 'tw:col-span-3' : 'tw:col-span-2 tw:row-span-2',
+                    'tw:col-span-2',
+                    layout === 'vertical' && 'tw:row-span-2',
                     classNameForItems,
                   )}
                 >
@@ -237,7 +239,8 @@ export function FootnoteList({
                   */
                   'tw:focus-visible:ring-offset-0.5 tw:focus-visible:relative tw:focus-visible:z-10 tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
                   'tw:grid tw:grid-flow-col tw:grid-cols-subgrid',
-                  layout === 'horizontal' ? 'tw:col-span-3' : 'tw:col-span-2 tw:row-span-2',
+                  'tw:col-span-2',
+                  layout === 'vertical' && 'tw:row-span-2',
                   classNameForItems,
                 )}
                 onClick={(event) => handleFootnoteClick(footnote, idx, event)}

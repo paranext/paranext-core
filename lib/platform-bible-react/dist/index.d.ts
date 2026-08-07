@@ -862,17 +862,19 @@ export type FootnoteLayout = "horizontal" | "vertical";
 /**
  * Where the caret should land within a footnote's rendered text.
  *
- * The offset origin is the note BODY text as displayed by `FootnoteItem` in a row's
- * `.textual-note-body` - i.e. it EXCLUDES the caller and the first top-level `fr`/`xo` reference
- * run (`FootnoteItem` splits both of those into header divs, separately from the body; see
- * `footnote-item.component.tsx`'s `footnoteCaller`/`targetRef`). A later `fr`/`xo` run (not the
- * first top-level item) IS body text. A consumer that resolves this offset against a DIFFERENT text
- * flattening - e.g. the editor's raw DOM, which also renders the caller and inserts structural
- * spacing text nodes between top-level runs - must first align to this same origin (see
- * `createNoteBodyTextNodeFilter` in `footnote-editor.utils.ts`).
+ * The offset origin is the note text as displayed by `FootnoteItem` in a row's
+ * `.textual-note-body`: every character run the note contains, including a leading `fr`/`xo` target
+ * reference, which PT9's notes pane and `FootnoteItem` alike render inline at the head of the note
+ * text. It EXCLUDES two kinds of chrome: the caller (`FootnoteItem` renders it in a separate header
+ * div) and the rendered USFM markers themselves (`.marker` spans; see `isMarkerText` in
+ * `footnote-caret.utils.ts`), which the editor renders as non-editable decorators rather than text.
+ * A consumer that resolves this offset against a DIFFERENT text flattening - e.g. the editor's raw
+ * DOM, which also renders the caller and inserts structural spacing text nodes between top-level
+ * runs - must first align to this same origin (see `createNoteBodyTextNodeFilter` in
+ * `footnote-editor.utils.ts`).
  *
- * - `'end'`: after the last character of the note BODY text (not the raw editor DOM's last text node,
- *   which may include trailing non-body text - see `createNoteBodyTextNodeFilter`).
+ * - `'end'`: after the last character of the note text (not the raw editor DOM's last text node,
+ *   which may include trailing structural text - see `createNoteBodyTextNodeFilter`).
  * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
  *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
  *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
@@ -896,10 +898,13 @@ export interface FootnoteItemProps {
 	/**
 	 * Determines how footnotes are displayed:
 	 *
-	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
-	 *   second column (typically used in a wide pane below the text).
-	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
-	 *   beneath (typically used side-by-side with the text).
+	 * - `'horizontal'`: the note's marker and caller appear in a leading-aligned column, with the note
+	 *   text in a second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: the note's marker and caller appear on the first line, with the note text
+	 *   displayed beneath (typically used side-by-side with the text).
+	 *
+	 * A leading `\fr`/`\xo` target reference is part of the note text in both layouts, as it is in
+	 * PT9's notes pane - it is not aligned in a column of its own.
 	 *
 	 * @default 'horizontal'
 	 */
@@ -924,10 +929,13 @@ export interface FootnoteListProps {
 	/**
 	 * Determines how footnotes are displayed:
 	 *
-	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
-	 *   second column (typically used in a wide pane below the text).
-	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
-	 *   beneath (typically used side-by-side with the text).
+	 * - `'horizontal'`: the note's marker and caller appear in a leading-aligned column, with the note
+	 *   text in a second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: the note's marker and caller appear on the first line, with the note text
+	 *   displayed beneath (typically used side-by-side with the text).
+	 *
+	 * A leading `\fr`/`\xo` target reference is part of the note text in both layouts, as it is in
+	 * PT9's notes pane - it is not aligned in a column of its own.
 	 *
 	 * @default 'horizontal'
 	 */
@@ -983,8 +991,9 @@ export interface FootnoteListProps {
  *
  * @param clientX Viewport X of the click (from the mouse event).
  * @param clientY Viewport Y of the click.
- * @param rowElement The row's root element; the offset is computed over the visible text of its
- *   `.textual-note-body` descendant (the note text, excluding caller/reference headers).
+ * @param rowElement The row's root element; the offset is computed over the text of its
+ *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
+ *   the row's header cell) and the rendered USFM markers (see `isMarkerText`).
  * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
  *   (no browser support, click outside the body text, empty note).
  */

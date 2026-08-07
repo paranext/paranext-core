@@ -24,12 +24,9 @@ function charRun(marker: string, text: string): string {
  * The editor's structural NBSP spacer, exactly as captured live: Lexical wraps EVERY TextNode -
  * including this one, which `NoteNodePlugin` inserts purely so the caret can enter/exit adjacent
  * top-level note children - in its own `<span data-lexical-text="true">`. This is deliberately NOT
- * a bare text/comment node: an earlier version of this fixture modeled the spacer as `<!--nbsp--> `
- * (a comment + bare text), which `Element.children` skips entirely - that fixture shape let
- * `findFirstTopLevelReferenceRun`'s original (buggy) "first non-caller ELEMENT child" lookup land
- * on the `fr` run by accident, masking a real bug: in the ACTUAL editor DOM the spacer is an
- * element too, so it - not the `fr` run - is the first non-caller element child. The lookup must
- * find the first `.char`-typed child structurally, not merely skip the caller.
+ * a bare text/comment node: modeling the spacer as `<!--nbsp--> ` (a comment + bare text) would let
+ * an `Element.children` walk skip it entirely, hiding the fact that in the ACTUAL editor DOM every
+ * spacer is an element sitting between the note's content runs.
  */
 const NBSP_SPAN = '<span data-lexical-text="true">&nbsp;</span>';
 
@@ -37,10 +34,11 @@ const NBSP_SPAN = '<span data-lexical-text="true">&nbsp;</span>';
  * Builds a fabricated editor-like note DOM matching the shape verified live against the real
  * Platform Editor (Storybook `Demo/Scripture Editor/Footnotes Pane`, clicking mid-word in a
  * footnote row's "sinful" text): a non-editable caller wrapper, an optional leading `fr` reference
- * run, then `bodyRunsHtml`'s `.char` runs - each separated by {@link NBSP_SPAN}, exactly as the
- * live-captured note DOM shows: `<span class="note ..."><span class="immutable-note-caller"
- * contenteditable="false">...</span><span data-lexical-text="true">&nbsp;</span><span class="char
- * usfm_fr">...</span><span data-lexical-text="true">&nbsp;</span>...</span>`.
+ * run (note text, not a header), then `bodyRunsHtml`'s `.char` runs - each separated by
+ * {@link NBSP_SPAN}, exactly as the live-captured note DOM shows: `<span class="note ..."><span
+ * class="immutable-note-caller" contenteditable="false">...</span><span
+ * data-lexical-text="true">&nbsp;</span><span class="char usfm_fr">...</span><span
+ * data-lexical-text="true">&nbsp;</span>...</span>`.
  */
 function makeNoteContainer(bodyRunsHtml: string, includeLeadingReferenceRun = true): HTMLElement {
   const referenceRun = includeLeadingReferenceRun ? `${charRun('fr', '1:1 ')}${NBSP_SPAN}` : '';
@@ -97,11 +95,12 @@ describe('createNoteBodyTextNodeFilter (caret origin alignment)', () => {
   // "sin") captures { utf16Offset: 7 } from the read-only row's BODY-only text. Without the
   // filter, walking the editor's raw DOM lands 7 code units early - inside the caller/fr prefix -
   // instead of inside "sinful".
-  it('lands inside the first body run at the captured offset, skipping caller + leading fr run', () => {
+  it('lands inside a later body run at the captured offset, skipping the caller', () => {
     const container = makeNoteContainer(`${charRun('ft', 'Or "sinful"')}${NBSP_SPAN}`);
+    // Note text is '1:1 ' (4) + 'Or "sinful"'. Offset 11 = 7 into "Or \"sinful\"".
     const ok = placeCaretAtPosition(
       container,
-      { utf16Offset: 7 },
+      { utf16Offset: 11 },
       createNoteBodyTextNodeFilter(container),
     );
     expect(ok).toBe(true);
@@ -110,7 +109,22 @@ describe('createNoteBodyTextNodeFilter (caret origin alignment)', () => {
     expect(sel?.anchorOffset).toBe(7); // between 'n' and 'f' of "sinful"
   });
 
-  it('lands at the start of the body text (offset 0), not in the caller or fr run', () => {
+  // FootnoteItem renders a leading fr/xo target reference inline at the head of the note text, the
+  // way PT9's notes pane does, so it is part of the caret origin like any other run.
+  it('lands inside the leading fr reference run, which is note text like any other run', () => {
+    const container = makeNoteContainer(`${charRun('ft', 'Or "sinful"')}${NBSP_SPAN}`);
+    const ok = placeCaretAtPosition(
+      container,
+      { utf16Offset: 2 },
+      createNoteBodyTextNodeFilter(container),
+    );
+    expect(ok).toBe(true);
+    const sel = window.getSelection();
+    expect(sel?.anchorNode?.textContent).toBe('1:1 ');
+    expect(sel?.anchorOffset).toBe(2);
+  });
+
+  it('lands at the start of the note text (offset 0), not in the caller', () => {
     const container = makeNoteContainer(`${charRun('ft', 'Or "sinful"')}${NBSP_SPAN}`);
     const ok = placeCaretAtPosition(
       container,
@@ -119,7 +133,7 @@ describe('createNoteBodyTextNodeFilter (caret origin alignment)', () => {
     );
     expect(ok).toBe(true);
     const sel = window.getSelection();
-    expect(sel?.anchorNode?.textContent).toBe('Or "sinful"');
+    expect(sel?.anchorNode?.textContent).toBe('1:1 ');
     expect(sel?.anchorOffset).toBe(0);
   });
 
@@ -139,10 +153,10 @@ describe('createNoteBodyTextNodeFilter (caret origin alignment)', () => {
     const container = makeNoteContainer(
       `${charRun('ft', 'Or "sinful"')}${NBSP_SPAN}${charRun('fq', 'quoted')}${NBSP_SPAN}`,
     );
-    // Body text is 'Or "sinful"' (11) + 'quoted' (6) = 17. Offset 14 = 3 into 'quoted' ('quo|ted').
+    // Note text is '1:1 ' (4) + 'Or "sinful"' (11) + 'quoted' (6). Offset 18 = 3 into 'quoted'.
     const ok = placeCaretAtPosition(
       container,
-      { utf16Offset: 14 },
+      { utf16Offset: 18 },
       createNoteBodyTextNodeFilter(container),
     );
     expect(ok).toBe(true);
@@ -151,10 +165,8 @@ describe('createNoteBodyTextNodeFilter (caret origin alignment)', () => {
     expect(sel?.anchorOffset).toBe(3);
   });
 
-  // Only the FIRST top-level content item is a header when it's fr/xo (mirrors
-  // footnote-item.component.tsx's targetRef destructuring, which only ever inspects index 0). A
-  // later fr/xo run is body text like any other run.
-  it('treats a non-first fr run as body text, not a header', () => {
+  // Every fr/xo run is note text regardless of position - no run is hoisted out of the row.
+  it('treats an fr run in any position as note text', () => {
     const container = makeNoteContainer(
       `${charRun('ft', 'Foo')}${NBSP_SPAN}${charRun('fr', 'Bar')}${NBSP_SPAN}`,
       false, // no leading reference run - the note's first top-level run is 'ft'

@@ -7,6 +7,7 @@ import {
   Editorial,
   EditorOptions,
   EditorRef,
+  getDefaultViewOptions,
   isInsertEmbedOpOfType,
 } from '@eten-tech-foundation/platform-editor';
 import { MarkerObject, Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -28,6 +29,7 @@ type StoryArgs = {
   paneDirection: 'vertical' | 'horizontal';
   textDirection: 'ltr' | 'rtl';
   isReadonly: boolean;
+  showMarkers: boolean;
 };
 
 const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum: 1 };
@@ -35,7 +37,12 @@ const defaultScrRef: SerializedVerseRef = { book: 'PSA', chapterNum: 1, verseNum
 // eslint-disable-next-line no-type-assertion/no-type-assertion
 const localizedStrings = {} as FootnoteEditorLocalizedStrings;
 
-function ScriptureEditorWithFootnotesPane({ paneDirection, textDirection, isReadonly }: StoryArgs) {
+function ScriptureEditorWithFootnotesPane({
+  paneDirection,
+  textDirection,
+  isReadonly,
+  showMarkers,
+}: StoryArgs) {
   // Ref must default to null to be accepted by React as an element ref
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
@@ -58,6 +65,9 @@ function ScriptureEditorWithFootnotesPane({ paneDirection, textDirection, isRead
       hasExternalUI: true,
       textDirection,
       isReadonly,
+      // PT9's Standard view shows USFM markers in the text as well as in the notes pane, so the
+      // demo's editor tracks the same toggle the pane uses.
+      view: { ...getDefaultViewOptions(), markerMode: showMarkers ? 'visible' : 'hidden' },
       nodes: {
         noteCallerOnClick: isReadonly
           ? undefined
@@ -79,7 +89,7 @@ function ScriptureEditorWithFootnotesPane({ paneDirection, textDirection, isRead
             },
       },
     }),
-    [textDirection, isReadonly, footnotes.length],
+    [textDirection, isReadonly, showMarkers, footnotes.length],
   );
 
   const handleEditRequested = useCallback(
@@ -166,7 +176,11 @@ function ScriptureEditorWithFootnotesPane({ paneDirection, textDirection, isRead
             footnotes={footnotes}
             listId={footnotes.length}
             layout={paneDirection === 'vertical' ? 'horizontal' : 'vertical'}
-            showMarkers={false}
+            showMarkers={showMarkers}
+            // PT9's Standard notes pane prints the note's own caller verbatim (`\f + `), where its
+            // formatted pane substitutes a generated sequence. Mirrors the production wiring in
+            // `platform-scripture-editor-footnotes.component.tsx`.
+            formatCaller={showMarkers ? (caller) => caller : undefined}
             editingFootnoteIndex={isReadonly ? undefined : editingIndex}
             renderEditingFootnote={renderEditingFootnote}
             onFootnoteEditRequested={isReadonly ? undefined : handleEditRequested}
@@ -188,7 +202,10 @@ const meta: Meta<StoryArgs> = {
         component:
           'PT-4189: footnote editing in the footnotes pane. Click a note caller in the text or a ' +
           'row in the pane - the row swaps to an inline FootnoteEditor with the caret where you ' +
-          'clicked. Production-props successor to draft PR #2153.',
+          'clicked. Defaults to the PT9 Standard-view configuration this feature targets - ' +
+          'markers visible in both the text and the pane, note callers printed verbatim. Turn ' +
+          '**Show markers** off to see the formatted-view configuration. Production-props ' +
+          'successor to draft PR #2153.',
       },
     },
   },
@@ -196,10 +213,16 @@ const meta: Meta<StoryArgs> = {
     paneDirection: { control: { type: 'inline-radio' }, options: ['vertical', 'horizontal'] },
     textDirection: { control: { type: 'inline-radio' }, options: ['ltr', 'rtl'] },
     isReadonly: { control: 'boolean' },
+    showMarkers: {
+      control: 'boolean',
+      description:
+        'On = PT9 Standard view (markers shown in the text and the pane, callers verbatim); ' +
+        'off = PT9 formatted view (no markers, generated callers).',
+    },
   },
 };
 export default meta;
 
 export const Default: StoryObj<StoryArgs> = {
-  args: { paneDirection: 'vertical', textDirection: 'ltr', isReadonly: false },
+  args: { paneDirection: 'vertical', textDirection: 'ltr', isReadonly: false, showMarkers: true },
 };

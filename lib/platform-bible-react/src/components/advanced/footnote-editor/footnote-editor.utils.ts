@@ -110,36 +110,11 @@ export function placeCaretAtPosition(
 }
 
 /**
- * Finds the note's first top-level reference-run element (a `fr`/`xo` `.char` child of the note),
- * if any - the editor-DOM equivalent of `FootnoteItem`'s `targetRef` split, which pulls the FIRST
- * top-level content item out of the body only when it's a `fr`/`xo` marker (see
- * `footnote-item.component.tsx`'s `targetRef` destructuring).
- *
- * Selects structurally (`:scope > .char`, the first DIRECT `.char` child, in document order) - NOT
- * by "first non-caller child". Lexical wraps every TextNode in its own `<span
- * data-lexical-text="true">`, including the structural NBSP spacers `NoteNodePlugin` inserts
- * between top-level note children (see `createNoteBodyTextNodeFilter`'s doc comment) - those
- * spacers are themselves `.note` child ELEMENTS that sit BEFORE the `fr` run and lack the `.char`
- * class. A "first non-caller child" lookup lands on that spacer, not the reference run; only a
- * `.char`-typed lookup finds the actual first content run, whatever non-`.char` structural elements
- * (caller, spacers) precede it.
- *
- * @param noteElement The note's root element (Platform Editor's `NoteNode`, class `note`).
- */
-function findFirstTopLevelReferenceRun(noteElement: Element): Element | undefined {
-  const firstCharChild = noteElement.querySelector(':scope > .char');
-  if (!firstCharChild) return undefined;
-
-  const marker = firstCharChild.getAttribute('data-marker');
-  return marker === 'fr' || marker === 'xo' ? firstCharChild : undefined;
-}
-
-/**
  * Builds a {@link placeCaretAtPosition} text-node filter that restricts caret placement to the same
- * text `FootnoteItem` renders in a footnote row's `.textual-note-body` - the note's BODY text, as
- * loaded live into the editor. Without this filter, a `FootnoteCaretPosition` captured from the
- * read-only row (via `getCaretPositionFromClick`) lands early in the editor by the length of every
- * excluded run, because the editor's flat text includes content the read-only row never renders.
+ * text `FootnoteItem` renders in a footnote row's `.textual-note-body` - the note's text, as loaded
+ * live into the editor. Without this filter, a `FootnoteCaretPosition` captured from the read-only
+ * row (via `getCaretPositionFromClick`) lands early in the editor by the length of every excluded
+ * run, because the editor's flat text includes content the read-only row never renders.
  *
  * Verified against the real Platform Editor note DOM (Storybook `Demo/Scripture Editor/Footnotes
  * Pane`): a loaded note renders as (exact live capture, elided for brevity): `<span class="note
@@ -150,36 +125,36 @@ function findFirstTopLevelReferenceRun(noteElement: Element): Element | undefine
  * class="char usfm_ft" data-marker="ft"><span data-lexical-text="true">Or "sinful"</span></span>
  * <span data-lexical-text="true">&nbsp;</span> </span>`. Critically, the structural NBSP spacers
  * are `<span data-lexical-text="true">` ELEMENTS (Lexical wraps every TextNode, including its own
- * structural ones), not bare text/comment nodes - a note's DIRECT element children are `[caller,
- * nbsp-span, fr-span, nbsp-span, ft-span, nbsp-span, ...]`, so "first non-caller child" lands on
- * the nbsp-span, not the reference run (see {@link findFirstTopLevelReferenceRun}'s doc for why this
- * must be a `.char`-typed lookup, not a caller-exclusion lookup). This excludes:
+ * structural ones), not bare text/comment nodes. This excludes:
  *
- * - Text inside a non-editable decorator wrapper (the rendered note caller button). Lexical's
- *   `DecoratorNode` reconciler sets `contenteditable="false"` on the wrapper, never on the button
- *   itself, so the check must walk ancestors rather than the immediate parent.
- * - Text inside the note's first top-level `fr`/`xo` reference-run `.char` element (see
- *   {@link findFirstTopLevelReferenceRun}).
+ * - Text inside a non-editable decorator wrapper - the rendered note caller button, and (with markers
+ *   shown) the marker decorators. Lexical's `DecoratorNode` reconciler sets
+ *   `contenteditable="false"` on the wrapper, never on the button itself, so the check must walk
+ *   ancestors rather than the immediate parent. The row excludes the same two things: it renders
+ *   the caller in its header cell, and skips its own `.marker` spans (see `isMarkerText` in
+ *   `footnote-caret.utils.ts`).
  * - Text that isn't inside any `.char` element at all. `NoteNodePlugin`'s
  *   `$noteCharNodeTransform`/`$noteCallerNodeTransform` insert a zero-width NBSP `TextNode`
  *   (rendered as its own `<span data-lexical-text="true">`) directly between each pair of top-level
  *   note children (caller/char runs) purely so the caret can enter/exit them; these are editor-DOM
  *   structural artifacts with no counterpart in the read-only row's flattened text, and would
- *   otherwise silently inflate offsets for any note with more than one body run (e.g. `fr` + `fq` +
- *   `ft`).
+ *   otherwise silently inflate offsets for any note with more than one run (e.g. `fr` + `fq` +
+ *   `ft`). KNOWN GAP - TODO(PT-4322): this also excludes a note's bare text children - text the
+ *   source wrote directly inside the note rather than inside a `\ft`-style run - which the row DOES
+ *   render, so offsets in such a note still drift.
+ *
+ * A leading `fr`/`xo` target reference is NOT excluded: `FootnoteItem` renders it inline at the
+ * head of the note text (as PT9's notes pane does), so it is part of the origin like any other
+ * run.
  *
  * @param container The note's rendered root (e.g. the editor's `.editor-input`).
  */
 export function createNoteBodyTextNodeFilter(container: HTMLElement): CaretTextNodeFilter {
-  const noteElement = container.querySelector('.note');
-  const excludedRun = noteElement ? findFirstTopLevelReferenceRun(noteElement) : undefined;
-
   return (node: Text): boolean => {
     let insideCharElement = false;
     let ancestor = node.parentElement;
     while (ancestor && ancestor !== container) {
       if (ancestor.getAttribute('contenteditable') === 'false') return false;
-      if (ancestor === excludedRun) return false;
       if (ancestor.classList.contains('char')) insideCharElement = true;
       ancestor = ancestor.parentElement;
     }
