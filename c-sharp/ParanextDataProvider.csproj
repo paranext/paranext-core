@@ -10,7 +10,7 @@
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
     <Company>SIL Global and United Bible Societies</Company>
-    <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
+    <Copyright>Copyright © 2017-2026 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
@@ -20,7 +20,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
     <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <!-- To support macOS universal binaries, we need to build both architectures -->
     <RuntimeIdentifiers Condition="$([MSBuild]::IsOsPlatform('OSX'))">osx-x64;osx-arm64</RuntimeIdentifiers>
     <UserSecretsId>1860f020-31dd-4eb4-81c4-323eb0cb3e48</UserSecretsId>
@@ -39,7 +39,6 @@
     <PackageReference Include="ParatextChecks" Version="9.5.0.22" />
     <PackageReference Include="ParatextData" Version="9.5.0.22" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.11" />
-    <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
   </ItemGroup>
 

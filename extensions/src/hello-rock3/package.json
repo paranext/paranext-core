@@ -5,7 +5,7 @@
   "main": "src/main.js",
   "types": "src/types/hello-rock3.d.ts",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.5",
+    "platform-bible-react": "file:../../../lib/platform-bible-react",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
@@ -72,7 +73,6 @@
     "glob": "^10.5.0",
     "lucide-react": "^1.8.0",
     "papi-dts": "file:../../../lib/papi-dts",
-    "platform-bible-react": "file:../../../lib/platform-bible-react",
     "postcss": "^8.5.3",
     "postcss-loader": "^8.1.1",
     "prettier": "^3.5.2",

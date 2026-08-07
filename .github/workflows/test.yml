@@ -144,6 +144,15 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Linux only: the NuGet section is read from the restore closure, which is RID-dependent, so
+      # exactly one platform has to be canonical or the three legs would each produce a different
+      # file. Placed before verify-changed-files so that step doubles as the staleness check —
+      # a stale THIRD-PARTY-NOTICES.md fails the build. This is also what runs the strong-copyleft
+      # gate on every pull request. Requires the restore that `npm run build` above performs.
+      - name: check third-party notices are current
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run build:third-party-notices
+
       - name: Verify no files changed after build
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v20
