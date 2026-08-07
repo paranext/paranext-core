@@ -7,10 +7,9 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
-import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
-import { CommandNames, WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import { NetworkObject } from '@shared/models/network-object.model';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -278,109 +277,3 @@ export type CloseWebViewEvent = {
 };
 
 export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
-
-/**
- * Command names that are hosted by the renderer process and need to be registered with
- * window-scoped suffixes in a multi-window setup. The main process registers service routers under
- * the generic names that forward to the focused window's scoped handler.
- *
- * @experimental
- */
-export const RENDERER_HOSTED_COMMAND_NAMES = [
-  // Navigation commands act on the window's own navigation target (the web view the top toolbar
-  // follows), so they must run in the window the user is looking at, not whichever renderer
-  // happened to register first.
-  'platform.goToNextChapter',
-  'platform.goToPreviousChapter',
-  'platform.goToNextBook',
-  'platform.goToPreviousBook',
-  'platform.goToNextVerse',
-  'platform.goToPreviousVerse',
-  'platform.navigateLeftInReferenceHistory',
-  'platform.navigateRightInReferenceHistory',
-] as const satisfies readonly CommandNames[];
-
-/**
- * OpenRPC documentation for renderer-hosted commands, keyed by the generic (unscoped) command name.
- *
- * The documentation belongs to the generic name because that is the command consumers call; the
- * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
- * an implementation detail of multi-window routing and are deliberately left undocumented. The main
- * process attaches these when it registers the service routers.
- *
- * @experimental
- */
-export const RENDERER_HOSTED_COMMAND_DOCS: Record<
-  (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
-  SingleMethodDocumentation
-> = {
-  'platform.goToNextChapter': {
-    method: {
-      'x-experimental': true,
-      summary: 'Navigate the active scroll group to the next chapter (rolls into the next book)',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.goToPreviousChapter': {
-    method: {
-      'x-experimental': true,
-      summary:
-        'Navigate the active scroll group to the previous chapter (rolls into the previous book)',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.goToNextBook': {
-    method: {
-      'x-experimental': true,
-      summary: 'Navigate the active scroll group to the next book (chapter 1, verse 1)',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.goToPreviousBook': {
-    method: {
-      'x-experimental': true,
-      summary: 'Navigate the active scroll group to the previous book (chapter 1, verse 1)',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.goToNextVerse': {
-    method: {
-      'x-experimental': true,
-      summary: 'Navigate the active scroll group to the next verse',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.goToPreviousVerse': {
-    method: {
-      'x-experimental': true,
-      summary: 'Navigate the active scroll group to the previous verse',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.navigateLeftInReferenceHistory': {
-    method: {
-      'x-experimental': true,
-      summary:
-        'Navigate the reference history of the active scroll group (the one the top toolbar ' +
-        'follows) in the physical "left" direction (back in LTR, forward in RTL)',
-      params: [],
-      result: { name: 'didNavigate', schema: { type: 'boolean' } },
-    },
-  },
-  'platform.navigateRightInReferenceHistory': {
-    method: {
-      'x-experimental': true,
-      summary:
-        'Navigate the reference history of the active scroll group (the one the top toolbar ' +
-        'follows) in the physical "right" direction (forward in LTR, back in RTL)',
-      params: [],
-      result: { name: 'didNavigate', schema: { type: 'boolean' } },
-    },
-  },
-};
