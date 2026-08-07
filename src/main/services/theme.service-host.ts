@@ -20,6 +20,7 @@ import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-pro
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { markStartup } from '@shared/utils/startup-timing.util';
 import { onDidCreateNetworkObject } from '@shared/services/network-object.service';
 import { themeDataService } from '@shared/services/theme-data.service';
 import { themeDataServiceProviderName } from '@shared/services/theme-data.service-model';
@@ -1038,7 +1039,12 @@ export async function startThemeServiceHost(): Promise<void> {
   // `nativeTheme` cannot be touched before Electron is ready. Startup reaches here well before
   // `main.ts`'s own `app.whenReady()` handler runs, and `ready` fires off Electron's event loop
   // regardless of what this process is awaiting, so this is a wait rather than a deadlock.
+  //
+  // Marked because this start function is awaited in main's app-global service batch, which puts
+  // the .NET data provider and the extension-host spawn behind Electron's `ready` event too. That
+  // is invisible in the waterfall without a mark for the moment the wait ends.
   await app.whenReady();
+  markStartup('theme-host-electron-ready');
 
   themeServiceEngine = new ThemeDataProviderEngine(
     currentThemeAtLoad,
