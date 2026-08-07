@@ -302,16 +302,15 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 
 /**
  * Wait until a window's renderer has registered its window-scoped services with the main process:
- * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the service routers forward to). Only then can generic-name
- * calls be routed to this window.
+ * its dialog service shard and its window service shard, both of which the service routers forward
+ * to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
   windowId: number,
   timeoutMs: number,
 ): Promise<void> {
   await waitForPapiMethodRegistered(
-    new RegExp(`^command:platform\\.about-${windowId}$`),
+    new RegExp(`^object:DialogService-${windowId}\\.showDialog$`),
     WEBSOCKET_PORT,
     timeoutMs,
   );
