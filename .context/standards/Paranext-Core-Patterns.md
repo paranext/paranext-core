@@ -1072,6 +1072,12 @@ await networkObjectService.set<IScrollGroupHostService>(
   // Per-method x-experimental for the cache-keeping methods only, so the stable ones stay unmarked
   { methods: [{ name: 'getScrollGroupSnapshot', 'x-experimental': true /* ... */ }] },
 );
+
+// A host that is a DATA PROVIDER registers the same way, with the OpenRPC documentation in the
+// fifth parameter — the theme host is one (`dataProviderService.registerEngine`)
+await dataProviderService.registerEngine(themeServiceDataProviderName, engine, undefined, undefined, {
+  methods: [{ name: 'migrateStoredThemeState', 'x-experimental': true /* ... */ }],
+});
 ```
 
 **Cache side** (`src/renderer/services/{service}.service.ts`) — one per window:
@@ -1127,7 +1133,31 @@ export function setScrRefSync(/* ... */): boolean {
   is a synchronous fsync on the event loop that carries the whole app's JSON-RPC traffic.
 - Persist what was adopted BEFORE recording that the migration ran, when taking over state from a
   store the host cannot read. One file per key means no atomicity across them, and the other order
-  can strand a profile as migrated-with-nothing-migrated.
+  can strand a profile as migrated-with-nothing-migrated. Write the value the host could never
+  derive for itself first — user-defined themes, not a current theme that has a default.
+- Make the host's "do I already have state of my own?" flag evidence of a USER ACTION, never of a
+  write the host derived. Both worked examples need one and they answer it differently for a real
+  reason: the scroll group's is memory (`Object.keys(scrRefs).length > 0`, which is only non-empty
+  once something was navigated), while the theme host writes its value keys on its own during
+  startup — matching the theme type to the machine's dark-mode preference persists a current theme
+  on the first start of a dark-mode machine — so IT seeds from a dedicated marker key that only the
+  setters and an adoption write. Seeding from the value keys reads the host's own writes back as a
+  user choice one restart later, refuses a handover that has not happened, and the offering window
+  deletes its copy on the refusal. Keep "may I adopt an offer?" and "do I have state worth handing a
+  new window?" as two questions: they have different answers.
+- Await `app.whenReady()` inside the host's start function if it touches ANY Electron API
+  (`nativeTheme`, `screen`, `powerMonitor`, `session`) — those are unusable before `ready`, so the
+  engine cannot be built at module load. Know what that costs: the start function is awaited in
+  `main.ts`'s app-global batch, so everything after that batch — the .NET data provider and the
+  extension-host spawn — is behind `ready` too. Measure it with `PT_STARTUP_MARKS` (README §
+  Startup performance) rather than assuming.
+- Re-take a subscription the host depends on whenever its provider is announced
+  (`onDidCreateNetworkObject`), not once at startup, when that provider is registered by another
+  process. Main's app-global hosts start BEFORE the extension host is spawned and
+  `platform.restartExtensionHost` replaces it mid-session, so a one-shot subscription can be taken
+  before the provider exists and is never re-armed after a restart. Anchor any deadline that depends
+  on the subscription's data to the data's arrival, not to this process's age — process age is not a
+  bound on when another process publishes.
 
 **Don't:**
 
