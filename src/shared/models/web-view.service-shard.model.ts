@@ -11,7 +11,9 @@
  */
 
 import { Layout } from '@shared/models/docking-framework.model';
+import { WebViewId } from '@shared/models/web-view.model';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /**
  * The WebView service as one window serves it: everything public, plus what only that window can do
@@ -44,4 +46,16 @@ export interface WebViewServiceShard extends WebViewServiceType {
    * @experimental
    */
   openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined>;
+
+  /**
+   * Point a web view that carries its own independent reference at a new one.
+   *
+   * Only the window holding the web view can write this — the definition lives in its dock layout.
+   *
+   * @param webViewId Web view whose detached reference to set
+   * @param scrRef Reference to move it to
+   * @returns Whether the definition was updated
+   * @experimental
+   */
+  setDetachedScrRef(webViewId: WebViewId, scrRef: SerializedVerseRef): Promise<boolean>;
 }

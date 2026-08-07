@@ -25,6 +25,7 @@ const {
   getTabInfoByIdMock,
   getSavedWebViewDefinitionSyncMock,
   getAllOpenWebViewDefinitionsSyncMock,
+  readDirectionMock,
 } = vi.hoisted(() => {
   const callbacks: CloseWebViewCallback[] = [];
   const openCallbacks: WebViewLifecycleCallback[] = [];
@@ -47,6 +48,9 @@ const {
   const allOpenDefinitionsMock = vi.fn(
     (): { id: string; webViewType: string; projectId?: string }[] => [],
   );
+  // Layout direction is read from the document, which only a renderer has; LTR unless a test says
+  // otherwise
+  const directionMock = vi.fn((): 'ltr' | 'rtl' => 'ltr');
   return {
     closeWebViewCallbacks: callbacks,
     openWebViewCallbacks: openCallbacks,
@@ -54,6 +58,7 @@ const {
     getTabInfoByIdMock: tabInfoMock,
     getSavedWebViewDefinitionSyncMock: definitionMock,
     getAllOpenWebViewDefinitionsSyncMock: allOpenDefinitionsMock,
+    readDirectionMock: directionMock,
   };
 });
 
@@ -81,13 +86,23 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
 }));
 
 vi.mock('@shared/services/data-provider.service', () => ({
-  dataProviderService: { registerEngine: vi.fn(async (_name, engine) => engine) },
+  dataProviderService: {
+    registerEngine: vi.fn(async (_name, engine) => engine),
+    // `getNavigationContext` carries the `ignore` decorator, which is evaluated when the engine
+    // class is defined at module load — so the mock has to provide it even though nothing here
+    // exercises the data provider machinery it speaks to
+    decorators: { ignore: () => {} },
+  },
 }));
 
 // The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
 // mock never invokes the callback, so `currentInterfaceMode` stays `undefined` (treated as not
 // Simple) and these tests exercise the default tracked-first resolution. `subscribe` resolves to a
 // no-op unsubscriber so the module-load IIFE completes cleanly.
+vi.mock('platform-bible-react/experimental', () => ({
+  readDirection: readDirectionMock,
+}));
+
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: {
     subscribe: vi.fn(async () => async () => true),
@@ -131,6 +146,7 @@ describe('last selected scripture-navigable web view tracking', () => {
   beforeEach(() => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
     getSavedWebViewDefinitionSyncMock.mockReset();
     getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
       id,
@@ -286,6 +302,7 @@ describe('last focused tab tracking', () => {
   beforeEach(() => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
     getSavedWebViewDefinitionSyncMock.mockReset();
     getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
       id,
@@ -350,6 +367,7 @@ describe('navigation target web view', () => {
   beforeEach(() => {
     getTabInfoByIdMock.mockReset();
     getTabInfoByIdMock.mockReturnValue(undefined);
+    readDirectionMock.mockReturnValue('ltr');
     getSavedWebViewDefinitionSyncMock.mockReset();
     getSavedWebViewDefinitionSyncMock.mockImplementation((id: string) => ({
       id,
@@ -438,5 +456,44 @@ describe('navigation target web view', () => {
     emitCloseWebView('editor-1');
 
     expect(getNavigationTargetWebView()).toBeUndefined();
+  });
+});
+
+describe('getNavigationContext', () => {
+  test('reports no target when this window has nothing to navigate', async () => {
+    // The history commands still act (on scroll group 0) with no target, so the context itself has
+    // to come back rather than being absent
+    const engine = createTestEngine();
+    // Nothing has been focused and no editor is open, so resolution has nothing to land on
+    expect(getNavigationTargetWebView()).toBeUndefined();
+
+    await expect(engine.getNavigationContext()).resolves.toEqual({
+      readDirection: 'ltr',
+      target: undefined,
+    });
+  });
+
+  test('reports the resolved target and this window’s layout direction in one answer', async () => {
+    const engine = createTestEngine();
+    await engine.setFocus({ focusType: 'webView', id: 'web-view-nav-1' });
+
+    await expect(engine.getNavigationContext()).resolves.toEqual({
+      readDirection: 'ltr',
+      target: {
+        webViewId: 'web-view-nav-1',
+        scrollGroupScrRef: 0,
+        projectId: 'project-1',
+      },
+    });
+  });
+
+  test('reports an RTL window as RTL, which is what decides the history direction', async () => {
+    // Only a renderer can read the layout direction, so the main process gets it from here
+    readDirectionMock.mockReturnValue('rtl');
+    const engine = createTestEngine();
+
+    await expect(engine.getNavigationContext()).resolves.toEqual(
+      expect.objectContaining({ readDirection: 'rtl' }),
+    );
   });
 });

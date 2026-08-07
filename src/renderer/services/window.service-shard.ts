@@ -21,6 +21,8 @@ import {
   getWebViewIdFromFocusSubject,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { NavigationContext } from '@shared/models/window.service-shard.model';
+import { readDirection } from 'platform-bible-react/experimental';
 import {
   getServiceShardAttributes,
   WINDOW_SERVICE_SHARD_OBJECT_TYPE,
@@ -295,6 +297,29 @@ onDidCloseWebView(({ webView }) => {
   }
 })();
 
+/**
+ * What navigation should act on in this window — the resolved target (if any) and this window's
+ * layout direction, in one round trip for the main process's navigation commands.
+ *
+ * Reads module state only, so it is a free function the engine exposes rather than a method: the
+ * data provider machinery reads a `get___` method on an engine as the getter for a
+ * `NavigationContext` data type and fails registration for want of a `setNavigationContext`, which
+ * is why the engine's copy carries the `ignore` decorator.
+ */
+export async function getNavigationContext(): Promise<NavigationContext> {
+  const target = getNavigationTargetWebView();
+  return {
+    readDirection: readDirection(),
+    target: target
+      ? {
+          webViewId: target.id,
+          scrollGroupScrRef: target.definition.scrollGroupScrRef ?? 0,
+          projectId: target.definition.projectId,
+        }
+      : undefined,
+  };
+}
+
 class WindowDataProviderEngine
   extends DataProviderEngine<WindowDataTypes>
   implements IDataProviderEngine<WindowDataTypes>
@@ -333,6 +358,24 @@ class WindowDataProviderEngine
       window.removeEventListener('focusout', handleChangeFocus);
       return true;
     };
+  }
+
+  /**
+   * What navigation should act on in this window. Delegates to the module-level
+   * {@link getNavigationContext}; this is only how the main process reaches it.
+   *
+   * Ignored by the data provider machinery on purpose: a `get___` method on an engine is otherwise
+   * read as the getter for a `NavigationContext` data type, and registration fails the get/set
+   * matching check for want of a `setNavigationContext`. This is a plain method on the shard, not a
+   * subscribable data type.
+   */
+  @dataProviderService.decorators.ignore
+  // The answer is module state shared with the rest of this file's resolution chain, not per-engine
+  // state, so there is no instance to consult — but it has to be reachable as a member for the
+  // network object to expose it.
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getNavigationContext(): Promise<NavigationContext> {
+    return getNavigationContext();
   }
 
   async getFocus(): Promise<FocusSubject | undefined> {
