@@ -134,16 +134,23 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // startDialogService, startScrollGroupNavigationCommands) — otherwise the main process's
     // routing proxy for it has nothing to forward to.
     //
-    // Placed directly after those registrations and before anything else that can reject, and
-    // given its own catch: run from the shared catch below, a registration gap would be reported
-    // as the same generic message as every other startup failure, and any rejection between the
-    // registrations and this point would skip the check entirely. What the app ends up with is the
-    // same in dev and packaged builds; only how loudly it says so differs.
+    // Placed directly after those registrations and before anything else that can fail: run from
+    // the shared catch below, a registration gap would be reported as the same generic message as
+    // every other startup failure, and anything that threw between the registrations and this point
+    // would skip the check entirely. What the app ends up with is the same in dev and packaged
+    // builds; only how loudly it says so differs.
+    //
+    // A catch each, rather than one around both: in dev these throw, so a single catch would let a
+    // missing command hide a missing dialog request and report only half of what is broken.
     try {
       assertAllRendererHostedCommandsRegistered();
+    } catch (e) {
+      logger.error(`Renderer-hosted command coverage check failed: ${getErrorMessage(e)}`);
+    }
+    try {
       assertAllRendererHostedDialogRequestsRegistered();
     } catch (e) {
-      logger.error(`Renderer-hosted registration coverage check failed: ${getErrorMessage(e)}`);
+      logger.error(`Renderer-hosted dialog request coverage check failed: ${getErrorMessage(e)}`);
     }
 
     // Subscribe to updates to the current theme
