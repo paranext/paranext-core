@@ -42,7 +42,11 @@ import { startProjectLookupService } from '@main/services/project-lookup.service
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationServiceRouter } from '@main/services/notification.service-router';
-import { startScrollGroupServiceHost } from '@main/services/scroll-group.service-host';
+import {
+  flushPersistedScrollGroupState,
+  getScrollGroupStateForNewWindow,
+  startScrollGroupServiceHost,
+} from '@main/services/scroll-group.service-host';
 import {
   getWindowIdsWithServiceShard,
   getWindowServiceShard,
@@ -109,6 +113,7 @@ import {
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
+  SCROLL_GROUP_STATE_QUERY_PARAMETER,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
   WINDOW_ID,
@@ -1092,6 +1097,14 @@ async function main() {
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
     if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
 
+    // The scroll group state travels with the window rather than being asked for after it loads, so
+    // the toolbar and every scroll-group-following web view render the reference the app is actually
+    // on instead of the default reference followed by a jump. Omitted when this process has none
+    // yet, which is the case the renderer's own fallback covers.
+    const scrollGroupStateForWindow = getScrollGroupStateForNewWindow();
+    if (scrollGroupStateForWindow)
+      searchParamsObject[SCROLL_GROUP_STATE_QUERY_PARAMETER] = serialize(scrollGroupStateForWindow);
+
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
     newWindow.loadURL(urlToLoad).catch((e) => {
@@ -1349,6 +1362,11 @@ async function main() {
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
       logger.info('Main process is quitting');
+      // Before anything that can fail or wait: the scroll group host lets its store lag memory so a
+      // held-down navigation key does not fsync per verse, and this is the last moment that lag can
+      // be closed. Synchronous and unconditional, so quitting right after navigating still opens on
+      // the right reference next time.
+      flushPersistedScrollGroupState();
       // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
       // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
       startupTasksAbort.abort();
