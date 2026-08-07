@@ -2,10 +2,10 @@
  * Multi-window lifecycle e2e tests.
  *
  * These are behaviour-level safety nets for the multi-window plumbing (window-scoped services with
- * main-process service routers, app-global service hosting with takeover, and the shared
- * shutdown-task latch). They deliberately assert only what an outside observer can see — PAPI
- * responses over the WebSocket, page content, and log lines describing user-visible outcomes — so
- * the implementation underneath can be refactored while these tests keep guarding the behaviour.
+ * main-process service routers, app-global services hosted in main, and the shared shutdown-task
+ * latch). They deliberately assert only what an outside observer can see — PAPI responses over the
+ * WebSocket, page content, and log lines describing user-visible outcomes — so the implementation
+ * underneath can be refactored while these tests keep guarding the behaviour.
  *
  * Three tests, each launching its own Electron instance (the isolated fixture is test-scoped and
  * each launch costs 30+ seconds, so related assertions are grouped into one instance):
@@ -15,13 +15,12 @@
  *    services register under scoped names with no collisions, generic window-service calls route to
  *    whichever window has focus, and closing the secondary window neither quits the app nor runs
  *    shutdown tasks.
- * 2. Scroll groups across windows, and surviving the host window: a scroll group change reaches every
- *    open window's toolbar, a window created afterwards starts on the current reference rather than
- *    the default, and then window 1 — which hosts the app-global theme service — is closed, handing
- *    theme hosting to a survivor while the main-hosted scroll group service is undisturbed. The
- *    theme half is proven by live PAPI reads after the close; the scroll group half by what the
- *    surviving windows are DISPLAYING, since a PAPI read only ever talks to main and would pass
- *    even if no window heard anything.
+ * 2. App-global state across windows, and surviving any window's close: a scroll group change and a
+ *    theme change each reach every open window, a window created afterwards starts on the current
+ *    reference and the current theme rather than the defaults, and then window 1 — no longer
+ *    special in any way, since both services are hosted in main — is closed and both keep working.
+ *    Proven by what the surviving windows are DISPLAYING, not only by PAPI reads: a PAPI read only
+ *    ever talks to main and would pass even if no window heard anything.
  * 3. Quit with two windows: the shutdown tasks run exactly once (not once per window, not zero times)
  *    and the process exits cleanly.
  *
@@ -95,17 +94,21 @@ import {
 // persistence spec live in multi-window.util.ts.
 
 /**
- * A renderer that lost the theme-hosting race attaches instead.
- * `src/renderer/services/theme.service-host.ts`
- */
-const THEME_STEP_ASIDE_LOG = 'Another window is already hosting the theme service';
-
-/**
- * The main process announces the network objects a departed window was hosting, naming each of them
- * — the observable start of a hosting handover. `src/shared/services/network-object.service.ts`
+ * The main process announces the network objects a departed window was hosting, naming each of
+ * them. `src/shared/services/network-object.service.ts`
+ *
+ * No window hosts the theme provider any more (main does, before any window exists), so this
+ * pattern matching after a window closes would mean a renderer had claimed the name again.
  */
 const ANNOUNCE_THEME_OBJECT_PATTERN =
   /Announcing the network objects a departed process took with it:[^\n]*themeServiceDataProvider/;
+
+/**
+ * The same announcement, whatever objects it names. Waited for so the negative assertion about the
+ * theme provider has something to be a negative OF.
+ */
+const ANNOUNCE_DEPARTED_OBJECTS_LOG =
+  'Announcing the network objects a departed process took with it';
 
 /**
  * The bounded shutdown-sync wait for power mode is named `power-mode shutdown session sync`, and
@@ -151,7 +154,7 @@ type FocusSubjectLike = { focusType?: string; id?: string; tabType?: string } | 
 type VerseRefLike = { book?: string; chapterNum?: number; verseNum?: number } | undefined;
 
 /** Minimal shape of an expanded theme definition, as seen over JSON-RPC. */
-type ThemeLike = { type?: string; cssVariables?: Record<string, string> } | undefined;
+type ThemeLike = { id?: string; type?: string; cssVariables?: Record<string, string> } | undefined;
 
 /**
  * Call the GENERIC window service's `getFocus` — the name declared in `papi.d.ts` that consumers
@@ -189,6 +192,32 @@ async function getCurrentTheme(): Promise<ThemeLike> {
     WEBSOCKET_PORT,
     PAPI_ATTEMPT_TIMEOUT_MS,
   );
+}
+
+/** Set the current theme through the app-global theme service. */
+async function setCurrentTheme(themeFamilyId: string, type: string): Promise<unknown> {
+  return sendPapiRequestOnce<unknown>(
+    'object:platform.themeServiceDataProvider-data.setCurrentTheme',
+    [undefined, { themeFamilyId, type }],
+    WEBSOCKET_PORT,
+    PAPI_ATTEMPT_TIMEOUT_MS,
+  );
+}
+
+/**
+ * The theme a window is actually RENDERING WITH, read off the stylesheet element the renderer
+ * applies the current theme through (`applyThemeStylesheet` tags it with the theme's id). This is
+ * what a user sees, as opposed to what the service in main would answer.
+ */
+async function expectWindowToRenderTheme(page: Page, themeId: string, timeoutMs: number) {
+  await expect(async () => {
+    const renderedThemeId = await page.evaluate(
+      () =>
+        document.querySelector<HTMLStyleElement>('style[data-theme-id]')?.dataset.themeId ??
+        '(none)',
+    );
+    expect(renderedThemeId).toBe(themeId);
+  }).toPass({ timeout: timeoutMs, intervals: [500, 1_000] });
 }
 
 /** Read scroll group 0's verse reference from the app-global scroll group service. */
@@ -442,7 +471,7 @@ test.describe('multi-window lifecycle', () => {
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
   });
 
-  test('a scroll group change reaches every window, and closing the theme host disturbs neither', async ({
+  test('scroll group and theme changes reach every window, and closing any window disturbs neither', async ({
     electronApp,
     mainPage,
   }) => {
@@ -468,7 +497,6 @@ test.describe('multi-window lifecycle', () => {
     );
     expect(isVerseRefShaped(baselineRef)).toBe(true);
 
-    const beforeCreateMark = output.mark();
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);
     await waitForRendererRegistered(window2Id, 120_000);
@@ -478,14 +506,7 @@ test.describe('multi-window lifecycle', () => {
     await expect(page2.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
     await waitForOverlayGone(page2, 120_000);
 
-    // Window 1 hosts the theme service, so window 2 steps aside for it — the log records that
-    // explicitly. Renderer log lines reach the captured stream asynchronously, hence the poll.
-    // Nothing equivalent exists for the scroll group service: main hosts it, so no window ever
-    // races for it.
-    await expect(() => {
-      expect(output.textFrom(beforeCreateMark)).toContain(THEME_STEP_ASIDE_LOG);
-    }).toPass({ timeout: 60_000, intervals: [1_000] });
-    logStep(`window ${window2Id} up and stepped aside for the theme service`);
+    logStep(`window ${window2Id} up`);
 
     // THE HEADLINE BEHAVIOUR: a change to a scroll group reaches every window's UI. Written through
     // the host (which is where a navigation in any window ends up) and then read off BOTH windows'
@@ -497,15 +518,26 @@ test.describe('multi-window lifecycle', () => {
     await expectToolbarReferenceToContain(mainPage, '3:16', 60_000);
     logStep('scroll group change reached both windows');
 
-    // A window created AFTER that navigation must show it on its first paint rather than starting on
-    // the default and jumping: main puts the state on the window's URL, the same channel the window
-    // id arrives on.
-    const page3 = await createSecondWindow(electronApp);
-    expect(decodeURIComponent(page3.url())).toContain('JHN');
-    await expectToolbarReferenceToContain(page3, '3:16', 60_000);
-    logStep('a newly created window starts on the current reference');
+    // The same for the theme, and read the same way — off what each window is RENDERING rather than
+    // off the service. `paratext` is a built-in family, so it exists whatever extensions are loaded.
+    await setCurrentTheme('paratext', 'dark');
+    await expectWindowToRenderTheme(page2, 'paratext-dark', 60_000);
+    await expectWindowToRenderTheme(mainPage, 'paratext-dark', 60_000);
+    logStep('theme change reached both windows');
 
-    // Close WINDOW 1 — the host — the way a user does.
+    // A window created AFTER those changes must show them on its first paint rather than starting on
+    // the defaults and jumping: main puts both on the window's URL, the same channel the window id
+    // arrives on.
+    const page3 = await createSecondWindow(electronApp);
+    const window3Url = decodeURIComponent(page3.url());
+    expect(window3Url).toContain('JHN');
+    expect(window3Url).toContain('paratext-dark');
+    await expectToolbarReferenceToContain(page3, '3:16', 60_000);
+    await expectWindowToRenderTheme(page3, 'paratext-dark', 60_000);
+    logStep('a newly created window starts on the current reference and theme');
+
+    // Close WINDOW 1 the way a user does. It hosts neither app-global service — both live in main —
+    // so nothing about this close should be special.
     const beforeHostCloseMark = output.mark();
     const page1Closed = mainPage.waitForEvent('close', { timeout: 30_000 });
     await mainPage.evaluate(() => {
@@ -514,34 +546,30 @@ test.describe('multi-window lifecycle', () => {
     await page1Closed;
     logStep('window 1 (the host) closed');
 
-    // The theme service must recover, served by the survivor. The handover itself starts as soon as
-    // the dead host's connection is torn down, but a poll attempt that lands in the moment before
-    // the survivor has re-registered can burn ~9 seconds in the main process's handler-lookup retry
-    // (see PAPI_ATTEMPT_TIMEOUT_MS), so 90 seconds gives several full poll cycles of headroom.
-    const recoveredTheme = await pollUntil(
+    // Both services are hosted in main, which did not go anywhere, so both must keep answering
+    // across the close with no handover at all.
+    const themeAfterClose = await pollUntil(
       getCurrentTheme,
       isThemeShaped,
       90_000,
-      'theme service to be re-hosted by the surviving window',
+      'theme service to keep answering after a window closed',
       2_000,
     );
-    expect(typeof recoveredTheme?.type).toBe('string');
-    logStep('theme service recovered');
-    // The scroll group service is hosted in main, which did not go anywhere, so it must keep
-    // answering across the close with no handover at all.
+    expect(themeAfterClose?.id).toBe('paratext-dark');
+    logStep('theme service still answering');
     const refAfterClose = await pollUntil(
       getScrollGroupRef,
       isVerseRefShaped,
       90_000,
-      'scroll group service to keep answering after the host window closed',
+      'scroll group service to keep answering after a window closed',
       2_000,
     );
     expect(isVerseRefShaped(refAfterClose)).toBe(true);
     logStep('scroll group service still answering');
 
-    // A write round-trip proves it serves writes, not just cached reads, AND that the surviving
-    // windows are still being fed: set scroll group 0's reference, read the same value back, and
-    // then look at what the survivors are actually displaying.
+    // Write round-trips prove both services serve writes, not just cached reads, AND that the
+    // surviving windows are still being fed: change each one and then look at what the survivors are
+    // actually displaying.
     const targetRef = { book: 'ROM', chapterNum: 8, verseNum: 28 };
     await pollUntil(
       async () => {
@@ -553,20 +581,27 @@ test.describe('multi-window lifecycle', () => {
         ref.chapterNum === targetRef.chapterNum &&
         ref.verseNum === targetRef.verseNum,
       30_000,
-      'a scroll-group write round-trip after the host window closed',
+      'a scroll-group write round-trip after a window closed',
     );
     await expectToolbarReferenceToContain(page2, '8:28', 60_000);
     await expectToolbarReferenceToContain(page3, '8:28', 60_000);
-    logStep('surviving windows followed a scroll-group write made after the host window closed');
+    logStep('surviving windows followed a scroll-group write made after a window closed');
 
-    // The handover is recorded in the log: the theme provider the closed window hosted is announced
-    // as gone, which is what every process holding it acts on. (Successful re-hosting itself is
-    // proven behaviourally by the reads and the write round-trip above.)
+    await setCurrentTheme('paratext', 'light');
+    await expectWindowToRenderTheme(page2, 'paratext-light', 60_000);
+    await expectWindowToRenderTheme(page3, 'paratext-light', 60_000);
+    logStep('surviving windows followed a theme change made after a window closed');
+
+    // No window ever hosted the theme provider, so the closed window cannot have taken it with it:
+    // the departed-objects announcement must not name it. This is what makes "closing any window is
+    // ordinary" checkable rather than merely asserted — a renderer that started claiming the name
+    // again would show up here even while every read above still passed.
     await expect(() => {
-      expect(output.textFrom(beforeHostCloseMark)).toMatch(ANNOUNCE_THEME_OBJECT_PATTERN);
-    }).toPass({ timeout: 30_000, intervals: [1_000] });
+      expect(output.textFrom(beforeHostCloseMark)).toContain(ANNOUNCE_DEPARTED_OBJECTS_LOG);
+    }).toPass({ timeout: 60_000, intervals: [1_000] });
+    expect(output.textFrom(beforeHostCloseMark)).not.toMatch(ANNOUNCE_THEME_OBJECT_PATTERN);
 
-    // The whole flow — second window start, host window close, theme takeover — must complete
+    // The whole flow — second window start, app-global changes, a window close — must complete
     // without faults.
     const wholeLog = output.text();
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
