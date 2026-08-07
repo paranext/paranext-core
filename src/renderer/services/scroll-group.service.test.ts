@@ -232,6 +232,57 @@ describe('the state a window is created with', () => {
   });
 });
 
+// A reload replays the URL main built when the window was created, and by then this window's own
+// leftover store has been cleared, so the URL is the only thing a reloaded document can seed from —
+// which is why it is kept as current as the cache instead of being left as old as the window.
+describe('the state a reloaded document seeds from', () => {
+  it('seeds from the reference the window last heard, not the one it opened on', async () => {
+    createWindowWithScrollGroupState({ scrRefs: { 0: GENESIS }, scrRefSourceProjectIds: {} });
+    await startService();
+
+    deliverNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF, {
+      scrollGroupId: 0,
+      scrRef: MARK,
+      sourceProjectId: 'projA',
+    });
+
+    // The window reloads: same URL, fresh module evaluation
+    vi.resetModules();
+    const service = await import('@renderer/services/scroll-group.service');
+
+    expect(service.getScrRefSync(0)).toEqual(MARK);
+    expect(service.getScrRefSourceProjectIdSync(0)).toBe('projA');
+  });
+
+  it('seeds from a reference this window predicted before the host confirmed it', async () => {
+    createWindowWithScrollGroupState({ scrRefs: { 0: GENESIS }, scrRefSourceProjectIds: {} });
+    const started = await startService();
+
+    started.setScrRefSync(0, MARK);
+
+    vi.resetModules();
+    const service = await import('@renderer/services/scroll-group.service');
+
+    expect(service.getScrRefSync(0)).toEqual(MARK);
+  });
+
+  it('leaves every other query parameter alone', async () => {
+    window.history.replaceState({}, '', '/?windowId=3&logLevel=info');
+    await startService();
+
+    deliverNetworkEvent(EVENT_NAME_ON_DID_UPDATE_SCR_REF, {
+      scrollGroupId: 0,
+      scrRef: MARK,
+      sourceProjectId: undefined,
+    });
+
+    // The window id and the log level travel on the same URL, and a reload has to find them too
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('windowId')).toBe('3');
+    expect(params.get('logLevel')).toBe('info');
+  });
+});
+
 describe('startup seed', () => {
   it('seeds the cache from the host snapshot', async () => {
     const service = await startService({
