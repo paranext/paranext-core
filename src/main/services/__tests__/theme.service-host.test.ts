@@ -274,8 +274,7 @@ describe('adopting theme state stored before the host moved to main', () => {
     } as unknown as PersistedThemeState);
 
     expect(didAdopt).toBe(false);
-    // eslint-disable-next-line no-null/no-null
-    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBe(null);
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBeNull();
   });
 });
 

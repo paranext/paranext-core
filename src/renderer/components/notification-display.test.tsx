@@ -68,8 +68,8 @@ vi.mock('@shared/services/network-object.service', () => ({
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 
 // jsdom does not implement `window.matchMedia`; Sonner's Toaster calls it directly (unrelated to
-// this app's own theme service) to pick its light/dark default. Precedent:
-// share-layout.dialog.test.tsx hits the same gap for a different matchMedia caller.
+// this app's own theme service, which reads the OS preference in main through `nativeTheme`) to
+// pick its light/dark default.
 function stubMatchMedia() {
   window.matchMedia = vi.fn().mockImplementation((query: string) => ({
     matches: false,
