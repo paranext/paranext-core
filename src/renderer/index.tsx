@@ -15,9 +15,10 @@ import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-so
 import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service';
 import {
-  initialize as initializeThemeService,
-  localThemeService,
-} from '@renderer/services/theme.service-host';
+  getCurrentThemeSync,
+  onDidChangeCurrentTheme,
+  startThemeService,
+} from '@renderer/services/theme.service';
 import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import { startWebViewServiceShard } from '@renderer/services/web-view.service-shard';
@@ -32,7 +33,6 @@ import { markStartup } from '@shared/utils/startup-timing.util';
 import {
   applyThemeStylesheet,
   getErrorMessage,
-  isPlatformError,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { createRoot } from 'react-dom/client';
@@ -116,7 +116,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startScrollGroupNavigationCommands(),
       startNotificationServiceShard(),
       startOverlayService(),
-      initializeThemeService(),
+      startThemeService(),
       initializeWindowService(),
     );
 
@@ -152,15 +152,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     } catch (e) {
       logger.error(`Renderer-hosted dialog request coverage check failed: ${getErrorMessage(e)}`);
     }
-
-    // Subscribe to updates to the current theme
-    await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
-      if (isPlatformError(newTheme)) {
-        logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
-        return;
-      }
-      applyThemeSafe(newTheme, 'subscribe');
-    });
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }
@@ -191,9 +182,14 @@ const scrollbarStyleSheet = document.createElement('style');
 scrollbarStyleSheet.textContent = SCROLLBAR_STYLES_RAW;
 document.head.appendChild(scrollbarStyleSheet);
 
+// Subscribed here, at module evaluation, rather than alongside the services above: the theme
+// service's cache is what `getCurrentThemeSync` below and every web view's baked-in stylesheet read,
+// and this local event fires after that cache has been updated. Registering it before the awaits in
+// the service startup above resolve means no change can slip through the gap.
+onDidChangeCurrentTheme((newTheme) => applyThemeSafe(newTheme, 'theme change'));
+
 // Apply theme on first load since it applies the theme a lot faster than the subscribe application does
-const currentTheme = localThemeService.getCurrentThemeSync();
-applyThemeSafe(currentTheme, 'first load');
+applyThemeSafe(getCurrentThemeSync(), 'first load');
 
 // #endregion
 
