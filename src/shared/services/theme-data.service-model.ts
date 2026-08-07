@@ -26,7 +26,11 @@ export const themeDataServiceObjectToProxy = Object.freeze({
   dataProviderName: themeDataServiceProviderName,
 });
 
-// Data Type to initialize data provider engine with
+/**
+ * Data types this data provider serves
+ *
+ * @experimental
+ */
 export type ThemeDataDataTypes = {
   AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
 };
@@ -42,6 +46,8 @@ declare module 'papi-shared-types' {
 /**
  * Service that provides aggregated theme contributions from the platform and extensions. Serves
  * theme contribution info to the theme service
+ *
+ * @experimental
  */
 export type IThemeDataService = {
   /** JSDOC DESTINATION getAllThemes */
