@@ -949,7 +949,14 @@ step, no automation. Just a record.
   from this process's age, which is not a bound on when the extension host publishes. `nativeTheme`
   cannot be touched before Electron's `ready` event, so the host awaits `app.whenReady()` before
   building its engine, which makes it the one app-global registration that is not purely synchronous
-  in startup
-  order.
+  in startup order — and everything main awaits after that batch, including the .NET and
+  extension-host spawns, is behind `ready` too. Measured rather than assumed (`PT_STARTUP_MARKS`,
+  dev build, Linux): the wait ends at +152 ms from process start, and `extension-host-forked`
+  lands at +188 ms against +175 ms without the theme host at all — inside run-to-run noise,
+  because `ready` fires while main is still doing work it would have done anyway. The mark
+  `theme-host-electron-ready` is emitted where the wait ends so this stays checkable. What is NOT
+  free is resolving the theme data provider: an unregistered data provider is only answered after
+  the whole RPC retry budget (~10 s), so the host's first subscribe attempt is deliberately not
+  awaited — awaiting it put ten seconds in front of both process spawns.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
