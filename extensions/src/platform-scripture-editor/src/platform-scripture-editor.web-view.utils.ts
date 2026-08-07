@@ -27,6 +27,7 @@ import type { MutableRefObject } from 'react';
 import {
   defaultStyleInfo,
   getMarkerMenuItems,
+  type ContextMenuOptionConfig,
   type EditorRef,
   type MarkerMenuItem as EditorMarkerMenuItem,
   type SelectionRange,
@@ -378,4 +379,59 @@ export function shouldSpaceCommitNoteMarker(
 export function parseCallerSequenceSetting(value: string): string[] | undefined {
   const callers = value.split(/\s+/).filter((caller) => caller.length > 0);
   return callers.length > 0 ? callers : undefined;
+}
+
+/** Callbacks the editor context menu's insert items dispatch to. */
+export interface InsertContextMenuActions {
+  insertFootnote: () => void;
+  insertCrossReference: () => void;
+  insertEndnote: () => void;
+  insertComment: () => void;
+}
+
+/**
+ * Editor state that decides which insert items are selectable. `isReadOnly` is the editor's
+ * effective read-only state, which already folds in a sync freeze; `isSyncBlocked` is passed
+ * separately because comment insertion does not go through the editor and so is not covered by it.
+ */
+export interface InsertContextMenuState {
+  isReadOnly: boolean;
+  canUserCreateComments: boolean;
+  isSyncBlocked: boolean;
+}
+
+/**
+ * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu
+ * (`contributions/menus.json`, group `platformScriptureEditor.insertTextualNotes`) — same items,
+ * same order; pinned by the parity test in `platform-scripture-editor.web-view.utils.test.ts`.
+ */
+export function createInsertContextMenuItems(
+  localizedStrings: LanguageStrings,
+  actions: InsertContextMenuActions,
+  state: InsertContextMenuState,
+): ContextMenuOptionConfig[] {
+  const { isReadOnly, canUserCreateComments, isSyncBlocked } = state;
+  return [
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
+      onSelect: actions.insertFootnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
+      onSelect: actions.insertCrossReference,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertEndnoteAtSelection%'],
+      onSelect: actions.insertEndnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
+      onSelect: actions.insertComment,
+      // Disabled while sync-blocked too, so the menu reflects the frozen state.
+      isDisabled: !canUserCreateComments || isSyncBlocked,
+    },
+  ];
 }
