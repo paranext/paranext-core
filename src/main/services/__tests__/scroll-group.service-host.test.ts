@@ -1,8 +1,10 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
+  SCR_REFS_STORAGE_KEY,
 } from '@shared/services/scroll-group.service-model';
+import { logger } from '@shared/services/logger.service';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
 // The host reads localStorage and creates network emitters at import time; stub those. Emitters are
@@ -31,12 +33,21 @@ vi.mock('@shared/services/command.service', () => ({
 }));
 
 beforeEach(() => {
+  // The host writes its store on a debounce timer, so every test in this file runs on a clock it
+  // controls: without that, a write scheduled by one test lands in the middle of another.
+  vi.useFakeTimers();
   localStorage.clear();
   vi.resetModules();
   sendCommand.mockReset();
   networkObjectSet.mockReset();
   networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
+  Object.values(logger).forEach((logMock) => vi.mocked(logMock).mockClear());
   Object.keys(emitters).forEach((key) => delete emitters[key]);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe('scroll group service host source project tracking', () => {
@@ -56,6 +67,7 @@ describe('scroll group service host source project tracking', () => {
   it('persists the source project id across a restart', async () => {
     const host1 = await import('@main/services/scroll-group.service-host');
     await host1.setScrRef(3, { book: 'PSA', chapterNum: 23, verseNum: 1 }, 'projReload');
+    host1.flushPersistedScrollGroupState();
 
     // Simulate an app restart: drop the module cache but KEEP the store.
     vi.resetModules();
@@ -264,6 +276,115 @@ describe('reference history', () => {
   });
 });
 
+// Main's event loop is the JSON-RPC server every other process talks through, and each store write
+// is a synchronous fsync on it, so the store is written lazily and memory is what everything reads.
+describe('persisting the state', () => {
+  it('writes once for a run of navigations rather than once per navigation', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    await host.setScrRef(0, { book: 'MRK', chapterNum: 4, verseNum: 1 });
+    await host.setScrRef(0, { book: 'MRK', chapterNum: 5, verseNum: 1 });
+    await host.setScrRef(0, { book: 'MRK', chapterNum: 6, verseNum: 1 });
+
+    // Each write is a synchronous fsync on the event loop every other process talks through, so
+    // holding a next-verse key down must not put one between them and the platform per verse.
+    expect(setItem).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1000);
+    expect(setItem.mock.calls.filter(([key]) => key === SCR_REFS_STORAGE_KEY)).toHaveLength(1);
+    expect(localStorage.getItem(SCR_REFS_STORAGE_KEY)).toContain('"chapterNum":6');
+  });
+
+  it('writes the current state when the app is shutting down', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'LUK', chapterNum: 2, verseNum: 1 });
+
+    // Quitting right after navigating is something users do on purpose, so the lag the debounce
+    // introduces has to be closed on the way down rather than lost.
+    host.flushPersistedScrollGroupState();
+
+    expect(localStorage.getItem(SCR_REFS_STORAGE_KEY)).toContain('LUK');
+  });
+
+  it('keeps announcing changes when the store cannot be written', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    const scrRefEmit = emitters[EVENT_NAME_ON_DID_UPDATE_SCR_REF].emit;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    await host.setScrRef(0, { book: 'LUK', chapterNum: 2, verseNum: 1 });
+
+    // The broadcast is what stops other windows from silently showing a different verse, so it must
+    // not be a casualty of a store that cannot be written.
+    expect(scrRefEmit).toHaveBeenCalledTimes(1);
+    expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
+    expect(logger.error).toHaveBeenCalled();
+  });
+});
+
+describe('starting with an unreadable store', () => {
+  it('starts on the default rather than stopping the app from starting', async () => {
+    localStorage.setItem(SCR_REFS_STORAGE_KEY, '{ this is not serialized state');
+
+    // This module is evaluated inside main.ts's import graph, before any window or error dialog, so
+    // a throw here is an app that does not start with nothing to tell the user why.
+    const host = await import('@main/services/scroll-group.service-host');
+
+    expect(await host.getScrRef(0)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('lets a window hand over the state the unreadable store lost', async () => {
+    localStorage.setItem(SCR_REFS_STORAGE_KEY, '{ this is not serialized state');
+    const host = await import('@main/services/scroll-group.service-host');
+
+    const didAdopt = await host.migrateStoredScrollGroupState({
+      scrRefs: { 0: { book: 'MRK', chapterNum: 4, verseNum: 1 } },
+      scrRefSourceProjectIds: {},
+    });
+
+    expect(didAdopt).toBe(true);
+  });
+});
+
+// A window is handed the state main holds on its URL so its first render is right; main omits it
+// when it has nothing to hand over.
+describe('state for a new window', () => {
+  it('has nothing to hand a window before anything has been navigated', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+
+    expect(host.getScrollGroupStateForNewWindow()).toBeUndefined();
+  });
+
+  it('hands over a navigation that has not reached the store yet', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.setScrRef(0, { book: 'MRK', chapterNum: 4, verseNum: 1 }, 'projA');
+
+    // Deliberately no flush: a window created moments after a navigation must still be told about
+    // it, so this reads memory rather than the store.
+    expect(host.getScrollGroupStateForNewWindow()).toEqual({
+      scrRefs: { 0: { book: 'MRK', chapterNum: 4, verseNum: 1 } },
+      scrRefSourceProjectIds: { 0: 'projA' },
+    });
+  });
+
+  it('hands over what it adopted from a window that had stored state', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    await host.migrateStoredScrollGroupState({
+      scrRefs: { 0: { book: 'LUK', chapterNum: 2, verseNum: 1 } },
+      scrRefSourceProjectIds: {},
+    });
+
+    expect(host.getScrollGroupStateForNewWindow()?.scrRefs[0]).toEqual({
+      book: 'LUK',
+      chapterNum: 2,
+      verseNum: 1,
+    });
+  });
+});
+
 describe('registration', () => {
   it('registers the network object under the app-global name with the experimental methods marked', async () => {
     const host = await import('@main/services/scroll-group.service-host');
@@ -340,6 +461,56 @@ describe('adopting previously stored state', () => {
     await host.migrateStoredScrollGroupState(previouslyStored);
 
     expect(await host.getScrRef(0)).toEqual({ book: 'LUK', chapterNum: 2, verseNum: 1 });
+  });
+
+  it('tells the offering window whether the offer was taken', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+
+    // The answer is what lets the window know its copy is finished with, so it stops offering it on
+    // every start forever.
+    expect(await host.migrateStoredScrollGroupState(previouslyStored)).toBe(true);
+    expect(await host.migrateStoredScrollGroupState(previouslyStored)).toBe(false);
+  });
+
+  it('does not consume the one-time adoption when storing what it adopted fails', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    // Rejects rather than answering "refused": the offering window's copy is still the only durable
+    // one, so it has to keep it and offer again.
+    await expect(host.migrateStoredScrollGroupState(previouslyStored)).rejects.toThrow();
+    setItem.mockRestore();
+
+    // A later start offers again and is adopted — the failure must not have latched the profile into
+    // "already migrated" with nothing migrated.
+    vi.resetModules();
+    const hostAfterRestart = await import('@main/services/scroll-group.service-host');
+    expect(await hostAfterRestart.migrateStoredScrollGroupState(previouslyStored)).toBe(true);
+    expect(await hostAfterRestart.getScrRef(0)).toEqual({
+      book: 'MRK',
+      chapterNum: 4,
+      verseNum: 1,
+    });
+  });
+
+  it('ignores an offered entry that is not shaped like a reference', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+
+    await host.migrateStoredScrollGroupState({
+      scrRefs: {
+        // This arrives over the network from another process's store and is about to become this
+        // store's contents for the life of the profile.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        0: { chapterNum: 'not a number' } as unknown as SerializedVerseRef,
+        1: { book: 'LUK', chapterNum: 2, verseNum: 1 },
+      },
+      scrRefSourceProjectIds: {},
+    });
+
+    expect(await host.getScrRef(0)).toEqual({ book: 'GEN', chapterNum: 1, verseNum: 1 });
+    expect(await host.getScrRef(1)).toEqual({ book: 'LUK', chapterNum: 2, verseNum: 1 });
   });
 
   it('brings a reference forward from the older bookNum shape', async () => {
