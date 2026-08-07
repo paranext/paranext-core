@@ -79,6 +79,26 @@ declare module 'shared/services/scroll-group.service-model' {
    */
   export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY: 'scrollGroup:onDidChangeReferenceHistory';
   /**
+   * `localStorage` key the scroll group state is persisted under: every group's Scripture reference.
+   *
+   * Named here rather than in the host because two processes spell it: main's host, which owns the
+   * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+   * from when a renderer held this state. Those are two different stores under one key name, and the
+   * handover only finds anything if the name stays identical in both.
+   *
+   * @experimental
+   */
+  export const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
+  /**
+   * `localStorage` key the scroll group state is persisted under: the project whose versification
+   * each group's reference is expressed in. Spelled in two processes for the same reason as
+   * {@link SCR_REFS_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY =
+    'scroll-group.service-host.scrRefSourceProjectIds';
+  /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
@@ -177,6 +197,11 @@ declare module 'shared/services/scroll-group.service-model' {
      * displays or navigates in a specific project's versification, use {@link getScrRefForProject}
      * instead so mixed-versification projects land on the right verse.
      *
+     * NOTE: a window's own synchronous writers move that window's UI before the host has answered, so
+     * a caller in another process can read a reference the window it is looking at has already left.
+     * The host's `onDidUpdateScrRef` is what everything converges on; subscribe to it rather than
+     * polling if you need to follow a group.
+     *
      * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
      * @returns Scripture reference associated with the provided scroll group, in its source project's
      *   versification
@@ -235,8 +260,14 @@ declare module 'shared/services/scroll-group.service-model' {
   }
   /**
    * Scroll group operations that exist for the platform's own cache-keeping rather than for
-   * consumers. They ride on the same network object as {@link IScrollGroupRemoteService} but are
-   * deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does not offer them.
+   * consumers. They are deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does
+   * not offer them.
+   *
+   * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+   * ride on the same network object as {@link IScrollGroupRemoteService} under the same name, so any
+   * process that resolves the object itself can call them. That reachability is why they are
+   * `@experimental` on both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC
+   * document) rather than pretending to be private.
    *
    * @experimental
    */
@@ -251,13 +282,20 @@ declare module 'shared/services/scroll-group.service-model' {
     getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
     /**
      * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
-     * into its own store. Idempotent: the first call wins and every later one is a no-op, so several
-     * callers offering their own copies cannot interleave into a mixture of them.
+     * into its own store. Idempotent: the first offer to be adopted wins and every later one is
+     * refused, so several callers offering their own copies cannot interleave into a mixture of
+     * them.
+     *
+     * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+     * store, `false` means the host already has state that beats the offer. In both cases the
+     * caller's copy is dead and should be discarded. A rejection means neither — the offer can be
+     * made again.
      *
      * @param state Previously persisted scroll group state
+     * @returns `true` if the offer was adopted, `false` if it was refused
      * @experimental
      */
-    migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<void>;
+    migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<boolean>;
   }
   /**
    * Everything the scroll group service host registers on its network object: what consumers call
@@ -8560,9 +8598,15 @@ declare module 'shared/services/reference-history.util' {
   /**
    * Maximum number of entries a scroll group's history keeps in total, counting the current location
    * (matches Paratext 9). The back stack therefore holds at most this many minus one.
+   *
+   * @experimental
    */
   export const REFERENCE_HISTORY_MAX_DEPTH = 20;
-  /** Create a new, empty reference history */
+  /**
+   * Create a new, empty reference history
+   *
+   * @experimental
+   */
   export function createEmptyReferenceHistory(): ReferenceHistory;
   /**
    * Record a navigation to `entry` in `history` (mutates `history`). Matches Paratext 9
@@ -8570,6 +8614,8 @@ declare module 'shared/services/reference-history.util' {
    * current entry in place (preserving the forward stack); a genuinely new chapter pushes the old
    * current onto the back stack, clears the forward stack, caps same-book runs, and trims to
    * {@link REFERENCE_HISTORY_MAX_DEPTH} total entries.
+   *
+   * @experimental
    */
   export function recordNavigation(history: ReferenceHistory, entry: ReferenceHistoryEntry): void;
   /**
@@ -8580,14 +8626,92 @@ declare module 'shared/services/reference-history.util' {
    *
    * @returns The destination entry (the new current), or `undefined` (history unchanged) when
    *   `offset` is 0, non-integer, or out of range
+   * @experimental
    */
   export function navigateHistory(
     history: ReferenceHistory,
     offset: number,
   ): ReferenceHistoryEntry | undefined;
 }
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /**
+   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+   *
+   * @experimental
+   */
+  export const WINDOW_ID = 'windowId';
+  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Query parameter key used to pass the serialized scroll group state main holds at the moment a
+   * window is created, so that window's synchronous readers are right on its first render instead of
+   * showing the default reference until a round trip returns.
+   *
+   * Absent when main has nothing to pass — a profile that has never navigated, or one whose state is
+   * still only in a renderer's own store awaiting its one-time handover. A renderer that does not
+   * find it falls back to what it can read for itself, and then to the default.
+   *
+   * @experimental
+   */
+  export const SCROLL_GROUP_STATE_QUERY_PARAMETER = 'scrollGroupState';
+  /**
+   * Prefix that identifies a startup timing mark in the logs (see
+   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+   */
+  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+  /**
+   * Name of the mark each process emits first, right after start. The main process's copy is the
+   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+   * and `src/extension-host/extension-host.ts`.
+   */
+  export const STARTUP_MARK_PROCESS_START = 'process-start';
+  /**
+   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+   * can identify the run boundary without importing `global-this.model` (which pulls in React and
+   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+   * `src/shared/global-this.model.ts`.
+   */
+  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
+  /** Constants related to zoom factor of entire application */
+  export const DEFAULT_ZOOM_FACTOR = 1;
+  export const MIN_ZOOM_FACTOR = 0.5;
+  export const MAX_ZOOM_FACTOR = 3;
+  /**
+   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
+   * deliberately long.
+   *
+   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
+   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
+   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
+   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
+   * when the backend says so rather than on a renderer-side timer.
+   *
+   * @experimental
+   */
+  export const AUTO_SYNC_MAX_DURATION_MS: number;
+}
 declare module 'renderer/services/scroll-group.service' {
   import {
+    IScrollGroupService,
     ReferenceHistory,
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
@@ -8720,9 +8844,29 @@ declare module 'renderer/services/scroll-group.service' {
    * Subscribing first so a change made while the rest is in flight is not lost, and handing over
    * before seeding so the first seed after an upgrade carries the reference the user left off at.
    *
+   * Nothing here is allowed to fail this window's startup. The cache is already usable — it was
+   * filled from what came with the window before React rendered, and the subscription above keeps it
+   * current — so a host that is slow or missing costs freshness, not correctness, and must not take
+   * down the unrelated services that start alongside this one. Until the seed succeeds every write is
+   * sent to the host regardless of what the cache predicts (see {@link setScrRefSync}), which is what
+   * keeps a never-seeded window honest.
+   *
    * Call once at renderer startup.
    */
   export function startScrollGroupService(): Promise<void>;
+  /**
+   * This window's scroll group service — what `papi.scrollGroups` resolves to in the renderer.
+   *
+   * Deliberately NOT the shared network proxy: inside one window there is one answer about where a
+   * scroll group is, and it is this module's. A web view holds both this and the hooks (`window.papi`
+   * comes from the window that hosts it), so serving the two from different places would let
+   * `papi.scrollGroups.getScrRef` report a verse the same web view's own UI has already moved away
+   * from, for as long as a predicted write is in flight. Other processes read the host directly,
+   * which is the authority both of these agree with.
+   *
+   * @experimental
+   */
+  export const rendererScrollGroupService: IScrollGroupService;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
@@ -8775,70 +8919,6 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
     sourceProjectId: string | undefined,
   ];
   export default useScrollGroupScrRef;
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query parameter passed to the renderer. Determines which log level to use */
-  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
-  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
-  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /**
-   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
-   *
-   * @experimental
-   */
-  export const WINDOW_ID = 'windowId';
-  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
-  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
-  /**
-   * Prefix that identifies a startup timing mark in the logs (see
-   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
-   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
-   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
-   */
-  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
-  /**
-   * Name of the mark each process emits first, right after start. The main process's copy is the
-   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
-   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
-   * and `src/extension-host/extension-host.ts`.
-   */
-  export const STARTUP_MARK_PROCESS_START = 'process-start';
-  /**
-   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
-   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
-   * can identify the run boundary without importing `global-this.model` (which pulls in React and
-   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
-   * `src/shared/global-this.model.ts`.
-   */
-  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
-  /** ID of the default theme family for use in the application */
-  export const DEFAULT_THEME_FAMILY = '';
-  /** Type of the default theme for use in the application */
-  export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
-  export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
-  /**
-   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
-   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
-   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
-   * deliberately long.
-   *
-   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
-   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
-   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
-   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
-   * when the backend says so rather than on a renderer-side timer.
-   *
-   * @experimental
-   */
-  export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -12385,11 +12465,11 @@ declare module 'renderer/services/name-taken-error.util' {
    * Whether a failure to register something under a name says that the name is already taken, as
    * opposed to saying that the registration itself went wrong.
    *
-   * The app-global service hosts (the theme engine, the scroll group service) let every window race
-   * for the same name and treat losing as the routine outcome. That is only true for this one kind of
-   * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
-   * service that has already shut down all arrive at the same `catch` and would otherwise be reported
-   * as the expected result at a severity nothing reads.
+   * A renderer-elected app-global service host (the theme engine) lets every window race for the same
+   * name and treats losing as the routine outcome. That is only true for this one kind of failure: a
+   * request that timed out, an object that already carried an `onDidDispose`, or a network service
+   * that has already shut down all arrive at the same `catch` and would otherwise be reported as the
+   * expected result at a severity nothing reads.
    *
    * Recognized by message text because that is all the throw sites give — see
    * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards
