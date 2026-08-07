@@ -100,8 +100,8 @@ export function countOccurrences(haystack: string, needle: string): number {
 
 /**
  * Per-test elapsed-time step logger, so the runner output records how long each phase actually took
- * — the evidence for judging whether a pass exercised the intended waits (e.g. a hosting takeover
- * that waits on the disposal announced for the departed window) or short-circuited.
+ * — the evidence for judging whether a pass exercised the intended waits (e.g. a second window's
+ * services genuinely coming up) or short-circuited.
  */
 export function createStepLogger(prefix: string): (label: string) => void {
   const start = Date.now();
