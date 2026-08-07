@@ -287,7 +287,6 @@ export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
  * @experimental
  */
 export const RENDERER_HOSTED_COMMAND_NAMES = [
-  'platform.about',
   'platform.openSettings',
   'platform.openProjectSettings',
   'platform.openUserSettings',
@@ -323,13 +322,6 @@ export const RENDERER_HOSTED_COMMAND_DOCS: Record<
   (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
   SingleMethodDocumentation
 > = {
-  'platform.about': {
-    method: {
-      summary: 'Open a dialog that displays essential information about the application',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
   'platform.openSettings': {
     method: {
       summary: 'Open a Settings tab, optionally limited to the project shown in a given web view',
