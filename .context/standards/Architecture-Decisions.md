@@ -305,7 +305,7 @@ step, no automation. Just a record.
 ## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
 
 - **Date:** 2026-08-05
-- **Status:** Accepted for the theme service (scroll-group half **superseded by ADR-0012**)
+- **Status:** **Superseded** — the scroll-group half by ADR-0012, the theme half by ADR-0013. Nothing uses this any more.
 - **Context:** Some services are conceptually app-global, not per-window (the theme engine, the
   scroll group service) — exactly one instance for the whole app — but every window's renderer runs
   the same startup code, so no window is distinguished as host in advance.
@@ -327,8 +327,13 @@ step, no automation. Just a record.
   group) and has already drifted between the two copies, so the duplication is worth extracting into
   a shared helper. Both copies also depend on the disposal announcement being the only trigger, so a
   run that neither wins the name nor finds the winner has to schedule its own retry — nothing else
-  will re-enter the election for it. The scroll group copy is gone (ADR-0012); the theme copy is
-  still what runs, and the shared-helper idea was overtaken by moving the hosts instead.
+  will re-enter the election for it. Both copies are now gone — the scroll group's with ADR-0012 and
+  the theme's with ADR-0013 — and the shared-helper idea was overtaken by moving the hosts instead:
+  the duplication that was worth extracting turned out to be worth deleting. What went with the theme
+  copy: `createReattachingSubscribeCurrentTheme` (a subscription that followed the engine between
+  windows), the mirror that kept a non-hosting window's synchronous read honest, the re-arm in every
+  consumer facade, and `name-taken-error.util.ts`, whose only job was telling "someone else won the
+  race" apart from a real registration failure.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
@@ -1378,10 +1383,65 @@ step, no automation. Just a record.
   window, which discards its copy on either answer; a profile that downgrades, navigates on the old
   build, and upgrades again loses that navigation, because the host refuses an offer once it has
   state of its own. Because the window's URL is a SEED rather than a one-off argument, the renderer
-  rewrites its own query parameter (`history.replaceState`) whenever the cache changes: a
-  RELOAD replays that URL, and the pre-host store a reloaded document would otherwise fall back to
-  has been handed over and deleted by then, so a URL left as old as the window would put a reloaded
-  window back on the reference it opened on — which for a restored Scripture editor is the extra
-  chapter load the seed exists to avoid. The theme service still uses ADR-0009's election until it
-  moves the same way.
+  rewrites its own query parameter (`history.replaceState`) whenever the cache changes: a RELOAD
+  replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
+  handed over and deleted by then, so a URL left as old as the window would put a reloaded window
+  back on the reference it opened on — which for a restored Scripture editor is the extra chapter
+  load the seed exists to avoid. The theme service moved the same way in ADR-0013.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
+
+
+## ADR-0013: The theme service is hosted in main, and each window caches the current theme
+
+- **Date:** 2026-08-07
+- **Status:** Accepted (supersedes the theme half of ADR-0009)
+- **Context:** The theme is app-global — one current theme, one should-match-system setting, one set
+  of user-defined themes — but the engine that owned it was hosted in whichever renderer won the
+  election of ADR-0009, and any window can be closed. That cost a takeover path, a re-arm in every
+  consumer of the provider, a subscription helper that followed the engine between windows, and a
+  cross-window mirror to keep a non-hosting window's `getCurrentThemeSync` honest. The mirror only
+  covered the window's own engine object; a window that ATTACHED rather than hosted still answered
+  `getCurrentThemeSync` from its module-load snapshot in the places the mirror did not reach, which
+  is what baked a stale theme into a new web view's `srcdoc` (the staleness noted in §9.2 of the
+  plan).
+- **Decision:** Main owns the three persisted values and registers the theme data provider under its
+  existing name before any window is created. Each renderer's `theme.service.ts` becomes a local
+  representation: it seeds a copy of the current theme synchronously at module load, keeps it current
+  from the host's `subscribeCurrentTheme`, and serves `getCurrentThemeSync` from it — so the sync
+  answer is fed by the update event rather than being a module-load snapshot, and the §9.2 staleness
+  is gone by construction. Everything else on the service is a plain pass-through: unlike the scroll
+  group there is no synchronous WRITER, so nothing is predicted. The OS dark-mode preference is read
+  in main from Electron's `nativeTheme` (`shouldUseDarkColors` plus `on('updated')`) instead of a
+  `matchMedia` listener per window. One `migrateStoredThemeState` method, off `IThemeService` and
+  marked experimental on both surfaces, adopts state persisted in a renderer's store before this
+  change — adopt-then-flag, first offer wins, and the offering window drops its keys on either
+  answer. Main's own consumer (the Windows title-bar overlay colours) reads and subscribes locally
+  rather than through the provider its own process registers.
+- **Alternatives:** (a) Keep the election and extract the duplication into a shared helper (what
+  ADR-0009 anticipated) — rejected for the same reason as in ADR-0012, and the theme was the second
+  copy that would have justified the helper. (b) Fix the §9.2 staleness in place and leave the
+  election — rejected: it treats the symptom of state living somewhere closable. (c) Keep the OS
+  preference in the renderer and send it to main — rejected: it is one fact about the machine, so N
+  windows watching it is N chances to disagree, and `nativeTheme` is strictly better placed. (d) Put
+  the migration on a command instead of the provider — rejected: it is one caller reaching one host,
+  which is what the provider already is; a command would add a globally-unique name for it. (e) Seed
+  the renderer's cache from the host's snapshot alone and accept the default theme on the first frame
+  — rejected: that frame is the flash of unstyled content `index.tsx` reads `getCurrentThemeSync`
+  before React renders specifically to beat, and every web view bakes the same value into its
+  `srcdoc`.
+- **Consequences:** the app-global invariant of `Architecture.md` §2 now holds for every platform
+  service — no renderer registers a globally-unique name, so ADR-0009's machinery is gone with no
+  consumers left, including a dispose-hook leak inside `createReattachingSubscribeCurrentTheme`
+  (every re-attach added an `onDidDispose` handler whose unsubscriber was discarded). A window that
+  is RELOADED replays the URL main built when the window was created, whose theme is as old as the
+  window, so the renderer also records the theme it last painted and prefers that on a reload —
+  without it, a reload after a theme change paints the old theme and flashes. `shouldMatchSystem` is
+  computed in main only; a renderer that starts applying its own `matchMedia` would double-apply it.
+  `hasOwnThemeState` — what makes the host refuse a migration offer — is marked by the three public
+  setters rather than by any persistence, because the engine also writes on its own while extension
+  themes load, and those writes say nothing about what the user chose. `nativeTheme` cannot be
+  touched before Electron's `ready` event, so the host awaits `app.whenReady()` before building its
+  engine, which makes it the one app-global registration that is not purely synchronous in startup
+  order.
+- **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
+  closes).
