@@ -136,6 +136,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import {
+  createInsertContextMenuItems,
   generateInlineMarkerMenuListItems,
   isStandardViewEnterKeyEvent,
   markerMenuItemToCommandPaletteItem,
@@ -175,6 +176,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
+  '%versionHistoryCommit_beforeInsertEndnote%',
   '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
@@ -185,6 +187,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_insertCommentAtSelection%',
   '%webView_platformScriptureEditor_insertFootnoteAtSelection%',
   '%webView_platformScriptureEditor_insertCrossReferenceAtSelection%',
+  '%webView_platformScriptureEditor_insertEndnoteAtSelection%',
 ];
 
 /** Annotation type used for translator comments (kebab-case to match CSS class naming) */
@@ -1179,6 +1182,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     correctEditingNoteKeyAfterInsert(editorRef.current?.insertMarker('x'));
   }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
 
+  /**
+   * Inserts an endnote at the current selection. Shared by the "Insert end note" context-menu item
+   * and the top-menu `platformScriptureEditor.insertEndnoteAtSelection` command (via the
+   * `webViewMessageListener` effect below). No keyboard shortcut, matching Paratext 9.
+   */
+  const insertEndnoteAtCurrentSelection = useCallback(async () => {
+    // Commits a snapshot of the project to the version history
+    if (projectId)
+      try {
+        await papi.commands.sendCommand(
+          'paratextBibleSendReceive.commitChanges',
+          projectId,
+          localizedStrings['%versionHistoryCommit_beforeInsertEndnote%'],
+          true,
+        );
+      } catch (err: unknown) {
+        const errMessage = getErrorMessage(err);
+        // Requires the `commitChanges` command handler to throw
+        // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
+        // successfully handle if this command is not implemented in the application version
+        if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
+          logger.info(errMessage);
+        } else {
+          logger.warn(
+            `Error committing changes to version history before inserting endnote: ${getErrorMessage(err)}`,
+          );
+        }
+      }
+
+    correctEditingNoteKeyAfterInsert(editorRef.current?.insertMarker('fe'));
+  }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnlyEffective,
@@ -1190,24 +1225,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       view: viewOptions,
       styleInfo,
       hasExternalUI: true,
-      contextMenu: [
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
         {
-          title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
-          onSelect: insertFootnoteAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
+          insertFootnote: insertFootnoteAtCurrentSelection,
+          insertCrossReference: insertCrossReferenceAtCurrentSelection,
+          insertEndnote: insertEndnoteAtCurrentSelection,
+          insertComment: insertCommentAtCurrentSelection,
         },
-        {
-          title:
-            localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
-          onSelect: insertCrossReferenceAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
-        },
-        {
-          title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
-          onSelect: insertCommentAtCurrentSelection,
-          isDisabled: !canUserCreateComments,
-        },
-      ],
+        isReadOnlyEffective,
+        canUserCreateComments,
+      ),
     }),
     [
       isReadOnlyEffective,
@@ -1221,6 +1249,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,
       insertCrossReferenceAtCurrentSelection,
+      insertEndnoteAtCurrentSelection,
     ],
   );
 
@@ -1288,6 +1317,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
         case 'insertCrossReferenceAtSelection': {
           await insertCrossReferenceAtCurrentSelection();
+          break;
+        }
+        case 'insertEndnoteAtSelection': {
+          await insertEndnoteAtCurrentSelection();
           break;
         }
         case 'insertCommentAtSelection': {
@@ -1466,6 +1499,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     insertCommentAtCurrentSelection,
     insertFootnoteAtCurrentSelection,
     insertCrossReferenceAtCurrentSelection,
+    insertEndnoteAtCurrentSelection,
     scrRef,
     setScrRefWithScroll,
     decorations,
