@@ -22,6 +22,7 @@ import type { MutableRefObject } from 'react';
 import {
   defaultStyleInfo,
   getMarkerMenuItems,
+  type ContextMenuOptionConfig,
   type EditorRef,
   type MarkerMenuItem as EditorMarkerMenuItem,
   type SelectionRange,
@@ -171,4 +172,47 @@ export function markerMenuItemToCommandPaletteItem(item: EditorMarkerMenuItem): 
     badge: item.kind === 'closeTag' ? 'end' : undefined,
     muted: !item.isBasic,
   };
+}
+
+/** Callbacks the editor context menu's insert items dispatch to. */
+export interface InsertContextMenuActions {
+  insertFootnote: () => void;
+  insertCrossReference: () => void;
+  insertEndnote: () => void;
+  insertComment: () => void;
+}
+
+/**
+ * Build the editor context-menu insert items. MUST stay in parity with the Insert top-menu
+ * (`contributions/menus.json`, group `platformScriptureEditor.insertTextualNotes`) — same items,
+ * same order; pinned by the parity test in `platform-scripture-editor.web-view.utils.test.ts`.
+ */
+export function createInsertContextMenuItems(
+  localizedStrings: LanguageStrings,
+  actions: InsertContextMenuActions,
+  isReadOnly: boolean,
+  canUserCreateComments: boolean,
+): ContextMenuOptionConfig[] {
+  return [
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
+      onSelect: actions.insertFootnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
+      onSelect: actions.insertCrossReference,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertEndnoteAtSelection%'],
+      onSelect: actions.insertEndnote,
+      isDisabled: isReadOnly,
+    },
+    {
+      title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
+      onSelect: actions.insertComment,
+      isDisabled: !canUserCreateComments,
+    },
+  ];
 }

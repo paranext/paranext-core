@@ -136,6 +136,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
 } from './platform-scripture-editor.utils';
 import {
+  createInsertContextMenuItems,
   generateInlineMarkerMenuListItems,
   isStandardViewEnterKeyEvent,
   markerMenuItemToCommandPaletteItem,
@@ -1224,24 +1225,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       view: viewOptions,
       styleInfo,
       hasExternalUI: true,
-      contextMenu: [
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
         {
-          title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
-          onSelect: insertFootnoteAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
+          insertFootnote: insertFootnoteAtCurrentSelection,
+          insertCrossReference: insertCrossReferenceAtCurrentSelection,
+          insertEndnote: insertEndnoteAtCurrentSelection,
+          insertComment: insertCommentAtCurrentSelection,
         },
-        {
-          title:
-            localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
-          onSelect: insertCrossReferenceAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
-        },
-        {
-          title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
-          onSelect: insertCommentAtCurrentSelection,
-          isDisabled: !canUserCreateComments,
-        },
-      ],
+        isReadOnlyEffective,
+        canUserCreateComments,
+      ),
     }),
     [
       isReadOnlyEffective,
@@ -1255,6 +1249,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,
       insertCrossReferenceAtCurrentSelection,
+      insertEndnoteAtCurrentSelection,
     ],
   );
 
