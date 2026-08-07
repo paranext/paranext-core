@@ -74,8 +74,16 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     it('gives cross-references their own caller counter so they do not consume footnote letters', () => {
       expect(scss).toMatch(/@counter-style cross-ref-callers/);
       expect(scss).toMatch(/counter-reset: caller crossref;/);
-      expect(scss).toMatch(/\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\]/);
+      expect(scss).toMatch(
+        /\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\],\n\.note\.usfm_ex \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: crossref;\s*\}/,
+      );
       expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
+      // The generic rules the scoped versions replaced must not return — a re-synced copy that
+      // re-adds them alongside the scoped ones would double-increment the footnote counter.
+      expect(scss).not.toMatch(/^\.immutable-note-caller\[data-caller='\+'\] \{/m);
+      expect(scss).not.toMatch(
+        /^\.note\.collapsed \.immutable-note-caller\[data-caller='\+'\] > button::before/m,
+      );
     });
   });
 });
