@@ -31,10 +31,10 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
-import { startCommandServiceRouter } from '@main/services/command.service-router';
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startBookChapterControlServiceRouter } from '@main/services/book-chapter-control.service-router';
+import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-navigation.commands';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
@@ -326,13 +326,13 @@ async function main() {
   // stops naming everything that went wrong instead of one thing.
   const globalServiceStarts = [
     { name: 'WebView service router', started: startWebViewServiceRouter() },
-    { name: 'command service router', started: startCommandServiceRouter() },
     { name: 'dialog service router', started: startDialogServiceRouter() },
     { name: 'Usersnap service router', started: startUsersnapServiceRouter() },
     {
       name: 'BookChapterControl service router',
       started: startBookChapterControlServiceRouter(),
     },
+    { name: 'scripture navigation commands', started: startScrollGroupNavigationCommands() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
     { name: 'scroll group service host', started: startScrollGroupServiceHost() },
