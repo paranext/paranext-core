@@ -256,8 +256,7 @@ step, no automation. Just a record.
   with one retry for the sweep that runs before the connection teardown lands). A window-scoped
   service therefore has to tolerate its own registrations outliving its window for a moment, and
   consumers have to tolerate resolving one that is already gone.
-- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
-  `pt-1891-multi-window`.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0008: Generic-name routing proxies in main forward to the focused/owning window's scoped service
 
@@ -284,8 +283,7 @@ step, no automation. Just a record.
   whole registration retry. And an owner probe that could not reach a window fails the call rather
   than falling back to the routing target: "could not ask" is not "answered no", and the window that
   did not answer may be the one that owns the web view.
-- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
-  `pt-1891-multi-window`.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
 
@@ -307,8 +305,7 @@ step, no automation. Just a record.
   transparent to consumers. The election/sweep/re-host machinery is implemented twice today (theme,
   scroll group) and has already drifted between the two copies, so the duplication is worth
   extracting into a shared helper.
-- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
-  `pt-1891-multi-window`.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
 
@@ -342,5 +339,4 @@ step, no automation. Just a record.
 - **Consequences:** routing proxies get a cheap way to skip an unready window in the common case, at
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
-- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
-  `pt-1891-multi-window`.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
