@@ -81,7 +81,7 @@ function AboutDialog() {
           })}
         </p>
         <p className="about-attribution">
-          Copyright ©2017-2026 SIL Global and United Bible Societies
+          Copyright © 2017-2026 SIL Global and United Bible Societies
         </p>
         <p className="about-db-ip-attribution">
           {formatReplacementStringToArray(dbIpAttributionFormat, {

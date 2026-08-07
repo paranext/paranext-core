@@ -227,3 +227,98 @@ step, no automation. Just a record.
   it lands — do not re-solve it per tool.
 - **Source:** punctuation-checklist port (markers-consumption verdict); see `08_Checklists.md` in the
   PT9 feature inventory for the per-tool behavior and the verse-range divergence.
+
+## ADR-0007: The MIT carve-out under `lib/` is drawn by runtime linking, not by dependency section
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** The repository relicensed from MIT to AGPL-3.0-or-later. A blanket relicense was not
+  viable: Platform.Bible's extension model expects third parties to build and distribute their own
+  extensions, and those extensions import Platform.Bible's developer libraries. If those libraries
+  were AGPL, every third-party extension would inherit AGPL obligations simply by being built —
+  which would make the platform's own extension model a copyleft trap. So some packages under `lib/`
+  had to stay MIT. The initial split was justified package by package, with no single stated
+  principle, and it did not survive scrutiny: `eslint-plugin-paranext` and
+  `browserslist-config-detect-electron` were kept MIT despite contributing nothing to any extension,
+  so the carve-out was protecting packages that needed no protection.
+- **Decision:** Draw the boundary with one rule, recorded in
+  [`LICENSING.md`](../../LICENSING.md#the-rule-that-draws-the-line):
+
+  > **MIT if a third-party extension links against the package at runtime — whether webpack bundles
+  > it in or Platform.Bible supplies it as an external. AGPL-3.0-or-later if the package exists only
+  > while the extension is being built and the extension never links against it.**
+
+  Applied to the five packages under `lib/`:
+
+  | Package                               | License           | Why                                                     |
+  | ------------------------------------- | ----------------- | ------------------------------------------------------- |
+  | `platform-bible-react`                | MIT               | Linked at runtime; webpack bundles it into extension output |
+  | `platform-bible-utils`                | MIT               | Linked at runtime; not bundled — supplied as a webpack external |
+  | `papi-dts`                            | AGPL-3.0-or-later | Types only; declarations erased at compile time          |
+  | `browserslist-config-detect-electron` | AGPL-3.0-or-later | Build-time browserslist config; emits nothing            |
+  | `eslint-plugin-paranext`              | AGPL-3.0-or-later | Lint-time only; emits nothing                            |
+
+  The rule keys on **runtime linking**, deliberately and explicitly not on which `package.json`
+  section declares the package, and not on bundling either — `platform-bible-utils` is an external
+  and reaches a third-party extension without being bundled into it, yet the extension is combined
+  with it just the same.
+- **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
+  viral for third-party extensions and defeats the extension model. Key the rule on the
+  `dependencies`/`devDependencies` section — rejected because that field was already wrong:
+  `platform-bible-react` was declared a `devDependency` by every extension in this repository while
+  extension source across all of them imported it at runtime, so a mechanical "devDependency means
+  AGPL" reading would have relicensed exactly the package the carve-out exists to protect.
+  (The declarations were corrected to `dependencies` alongside this decision, but the rule still must
+  not depend on them.) Keep all four originally-MIT `lib/` packages MIT — rejected: two of them
+  contribute nothing to extension output, so the carve-out bought no protection there and the
+  boundary no longer tracked a single principle.
+- **Consequences:** a directory's own `LICENSE` file governs that directory, and the MIT side is now
+  exactly `lib/platform-bible-react/` and `lib/platform-bible-utils/` — not `lib/` as a whole.
+  Moving code across that boundary in either direction is a relicensing act requiring the copyright
+  holders' agreement, not a refactor. `papi-dts` is AGPL yet imposes nothing on extension authors,
+  because TypeScript erases its declarations at compile time and no part of it reaches a built
+  extension. The sharpest ongoing constraint: **adding a runtime import of a currently-AGPL
+  build-time package from extension source is a licensing change, not just a build change** — it
+  would put AGPL bytes into a third-party extension's distributed output. Check
+  `extensions/webpack/webpack.config.base.ts` `externals` to determine what a given import actually
+  bundles. **Revisit** if a package changes character — e.g. if `eslint-plugin-paranext` ever grew a
+  runtime helper that extensions import.
+- **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
+  the relicense code review.
+
+---
+
+## ADR-0008: The notices generator reproduces canonical SPDX texts from the repo, and every dual-license election is recorded per ecosystem
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** `THIRD-PARTY-NOTICES.md` listed 28 of 88 NuGet packages (and 19 npm packages) as an
+  identifier plus a copyright line with no license text at all, because those packages declare a
+  license but bundle no file. For MIT and its relatives that is short of "this permission notice
+  shall be included in all copies". Separately, `CsvHelper` shipped as `MS-PL OR Apache-2.0` with no
+  recorded election, even though the npm side already had `ELECTED_LICENSES` for exactly that
+  ambiguity — and MS-PL is GPL-incompatible while `ParanextDataProvider`, which links it, is now
+  AGPL-3.0-or-later.
+- **Decision:** (a) Check the canonical SPDX text of each needed identifier into
+  `.erb/scripts/license-texts/<SPDX-ID>.txt` and have the generator reproduce it, labelled as SPDX's
+  text and paired with the package's own copyright notice, whenever a package resolves an identifier
+  but ships no file. (b) Record dual-license elections in a per-ecosystem map —
+  `ELECTED_LICENSES` (npm) and `DOTNET_ELECTED_LICENSES` (NuGet) — render the elected branch beside
+  the expression it was elected from, and classify the elected branch rather than the declared
+  expression. `CsvHelper` is elected Apache-2.0.
+- **Alternatives:** fetch the canonical texts at generation time — rejected: CI regenerates the
+  artifact on every pull request and fails on a stale copy, so a network dependency would make a
+  legal artifact depend on a third-party host's availability and on whatever it served that day.
+  Fill SPDX's `<year>` / `<copyright holders>` placeholders from package metadata — rejected: that
+  invents a copyright holder. Leave the identifier-only rows as they were — rejected: the attribution
+  obligation attaches to the distributed binary regardless of how the upstream packaged its repo.
+- **Consequences:** the generation path must stay hermetic — **nothing in it may open a socket**, and
+  a new identifier needs a new checked-in text rather than a fetch. The generated file names the
+  packages it could not reproduce a text for, so the gap reports itself. A dependency whose license
+  is an `OR` expression must have its election recorded before it can be described accurately;
+  an unelected `OR` still passes the copyleft gate (a disjunction classifies as its best branch), so
+  the gate is not the thing that catches it — reading the artifact is. **Revisit** if the data
+  provider takes a dependency whose only permissive branch is GPL-incompatible, or if a shipped
+  product ever needs notices generated per-platform rather than from the Linux closure.
+- **Source:** code review of the AGPL relicense branch; `LICENSING.md`,
+  `.erb/scripts/license-texts/README.md`.
