@@ -14,7 +14,7 @@
  */
 
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
-import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { createServiceShardIndex, ServiceShardDeparture } from '@main/services/service-shard-index';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME,
@@ -27,7 +27,10 @@ import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
-import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  getNetworkObjectMethodRequestType,
+  networkObjectService,
+} from '@shared/services/network-object.service';
 import { sharedStoreService } from '@shared/services/shared-store.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { getErrorMessage } from 'platform-bible-utils';
@@ -53,12 +56,44 @@ const getTargetDialogShard = createTargetShardResolver(
  */
 const DIALOG_HANDLER_OPTIONS: NetworkMethodHandlerOptions = { timeoutMilliseconds: 0 };
 
-/** The shard methods that wait for the user, so a call to one must not time out */
-const USER_ANSWERED_SHARD_METHODS = [
-  'showDialog',
-  'selectProject',
-  'showAboutDialog',
-] as const satisfies readonly (keyof IDialogServiceShard)[];
+/**
+ * Whether a call to each shard method has to be allowed to outlive the default request timeout.
+ *
+ * `showDialog` and `selectProject` wait for the user, so any bound on them is a bound on how long
+ * the user may take to answer. `showAboutDialog` resolves as soon as its dialog is on screen, and
+ * is lifted alongside them so the `dialog:showAboutDialog` route it serves behaves like the other
+ * two rather than differing for a reason no caller can see.
+ *
+ * Exhaustive over the shard on purpose: a method added to {@link IDialogServiceShard} is a compile
+ * error naming it here, which is what stops a new one from silently inheriting the default timeout
+ * — the exact failure this mechanism exists to prevent. A method that genuinely should keep the
+ * default belongs here as `false`, where the decision is visible, rather than being left out.
+ */
+const IS_SHARD_METHOD_TIMEOUT_LIFTED = {
+  showDialog: true,
+  selectProject: true,
+  showAboutDialog: true,
+} as const satisfies Record<keyof IDialogServiceShard, boolean>;
+
+/** The shard methods whose calls must not time out. See {@link IS_SHARD_METHOD_TIMEOUT_LIFTED} */
+const TIMEOUT_LIFTED_SHARD_METHODS = Object.entries(IS_SHARD_METHOD_TIMEOUT_LIFTED)
+  .filter(([, isLifted]) => isLifted)
+  .map(([methodName]) => methodName);
+
+/**
+ * The shared store keys holding the lifted timeouts for one window's dialog shard.
+ *
+ * Built from the id the shard ANNOUNCED rather than from a second spelling of its window-scoped
+ * name: the id is an internal detail of the registration, and a lift aimed at a name the window
+ * does not answer to writes a key nobody reads, leaving dialogs on the default timeout with nothing
+ * reporting it.
+ */
+function getLiftedTimeoutKeys(shardNetworkObjectId: string) {
+  return TIMEOUT_LIFTED_SHARD_METHODS.map(
+    (methodName) =>
+      `platform.customNetworkTimeoutMs.${getNetworkObjectMethodRequestType(shardNetworkObjectId, methodName)}` as const,
+  );
+}
 
 /**
  * Lift the request timeout on a window's dialog shard methods.
@@ -74,15 +109,46 @@ const USER_ANSWERED_SHARD_METHODS = [
  * the same value is a no-op, so a window registering again costs nothing.
  */
 function liftRequestTimeoutForWindowDialogs(windowId: number): void {
-  USER_ANSWERED_SHARD_METHODS.forEach((methodName) => {
-    const requestType = `object:${DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${windowId}.${methodName}`;
+  const shardNetworkObjectId = dialogShards.getShardNetworkObjectId(windowId);
+  if (!shardNetworkObjectId) {
+    logger.warn(
+      `Window ${windowId} has no dialog shard to lift the request timeout for; its dialogs may time out before the user answers them`,
+    );
+    return;
+  }
+  getLiftedTimeoutKeys(shardNetworkObjectId).forEach((timeoutKey) => {
     try {
-      sharedStoreService.set(`platform.customNetworkTimeoutMs.${requestType}`, 0);
+      sharedStoreService.set(timeoutKey, 0);
     } catch (e) {
       // A dialog in this window would fail ~30s in rather than waiting for the user, which is worth
       // saying out loud — but it is not a reason to refuse to route to the window at all
       logger.warn(
-        `Could not disable the request timeout for ${requestType}; dialogs in window ${windowId} may time out before the user answers them: ${getErrorMessage(e)}`,
+        `Could not disable the request timeout for ${timeoutKey}; dialogs in window ${windowId} may time out before the user answers them: ${getErrorMessage(e)}`,
+      );
+    }
+  });
+}
+
+/**
+ * Drop the lifted timeouts for a window's dialog shard once that shard is gone.
+ *
+ * Main owns these keys, so main is the only process that can remove them: the shared store rejects
+ * a removal from any other, and the departing renderer's own attempt would fail. Removing them here
+ * is what keeps the store to the windows that exist rather than to every window the session has
+ * ever had.
+ */
+function dropRequestTimeoutForWindowDialogs({
+  windowId,
+  networkObjectId,
+}: ServiceShardDeparture): void {
+  getLiftedTimeoutKeys(networkObjectId).forEach((timeoutKey) => {
+    try {
+      sharedStoreService.remove(timeoutKey);
+    } catch (e) {
+      // The entry is inert once nothing answers under that id, so a failure here costs nothing but
+      // the space it takes up
+      logger.warn(
+        `Could not remove the request timeout ${timeoutKey} left by window ${windowId}'s dialog shard: ${getErrorMessage(e)}`,
       );
     }
   });
@@ -91,6 +157,7 @@ function liftRequestTimeoutForWindowDialogs(windowId: number): void {
 // A window's shard can register before or after this module starts, so both paths are covered: the
 // event for windows that arrive later, and a reconcile below for any already indexed.
 dialogShards.onDidAddShard(liftRequestTimeoutForWindowDialogs);
+dialogShards.onDidRemoveShard(dropRequestTimeoutForWindowDialogs);
 
 /**
  * OpenRPC documentation for the generic dialog request names, which are the ones consumers call.
@@ -179,12 +246,14 @@ export async function startDialogServiceRouter(): Promise<void> {
     ),
     // The same implementation the `dialog:showAboutDialog` route reaches, not a second one. The
     // shard's `showAboutDialog` resolves as soon as the dialog is on screen rather than when the
-    // user closes it, which is what lets a caller await this command.
+    // user closes it, which is what lets a caller await this command — so unlike the `dialog:*`
+    // routes above, this one keeps the default request timeout. Nothing here waits on a human, and
+    // a window that has stopped answering should fail this call in bounded time rather than leave
+    // whoever asked (a menu item, a smoke test) waiting forever with nothing to report.
     networkService.registerRequestHandler(
       serializeRequestType(CATEGORY_COMMAND, 'platform.about'),
       async () => (await getTargetDialogShard()).showAboutDialog(),
       ABOUT_COMMAND_DOCS,
-      DIALOG_HANDLER_OPTIONS,
     ),
   ]);
   logger.info('Dialog service router registered');
