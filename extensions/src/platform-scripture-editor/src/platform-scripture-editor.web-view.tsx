@@ -183,6 +183,7 @@ import {
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
+  createInsertContextMenuItems,
   generateInlineMarkerMenuListItems,
   getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
@@ -1639,25 +1640,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       styleInfo,
       markerSettleDelayMs,
       hasExternalUI: true,
-      contextMenu: [
+      contextMenu: createInsertContextMenuItems(
+        localizedStrings,
         {
-          title: localizedStrings['%webView_platformScriptureEditor_insertFootnoteAtSelection%'],
-          onSelect: insertFootnoteAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
+          insertFootnote: insertFootnoteAtCurrentSelection,
+          insertCrossReference: insertCrossReferenceAtCurrentSelection,
+          insertEndnote: insertEndnoteAtCurrentSelection,
+          insertComment: insertCommentAtCurrentSelection,
         },
-        {
-          title:
-            localizedStrings['%webView_platformScriptureEditor_insertCrossReferenceAtSelection%'],
-          onSelect: insertCrossReferenceAtCurrentSelection,
-          isDisabled: isReadOnlyEffective,
-        },
-        {
-          title: localizedStrings['%webView_platformScriptureEditor_insertCommentAtSelection%'],
-          onSelect: insertCommentAtCurrentSelection,
-          // Disabled while sync-blocked too, so the menu reflects the frozen state.
-          isDisabled: !canUserCreateComments || isSyncBlocked,
-        },
-      ],
+        { isReadOnly: isReadOnlyEffective, canUserCreateComments, isSyncBlocked },
+      ),
     }),
     [
       isReadOnlyEffective,
@@ -1673,6 +1665,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,
       insertCrossReferenceAtCurrentSelection,
+      insertEndnoteAtCurrentSelection,
     ],
   );
 
