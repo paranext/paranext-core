@@ -31,7 +31,7 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
-import { startCommandRoutingService } from '@main/services/command-routing.service';
+import { startCommandServiceRouter } from '@main/services/command.service-router';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
@@ -41,15 +41,20 @@ import { startNetworkObjectStatusService } from '@main/services/network-object-s
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
-import { startNotificationRoutingService } from '@main/services/notification-routing.service';
-import { startWindowRoutingService } from '@main/services/window-routing.service';
+import { startNotificationServiceRouter } from '@main/services/notification.service-router';
+import {
+  getWindowIdsWithServiceShard,
+  getWindowServiceShard,
+  onDidRegisterWindowServiceShard,
+  startWindowServiceRouter,
+} from '@main/services/window.service-router';
 import {
   isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
-import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
+import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
 import {
   addWindow,
   doesNavigationReplaceRendererRegistrations,
@@ -100,52 +105,29 @@ import {
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { readFile } from 'fs/promises';
-import {
-  networkObjectService,
-  onDidCreateNetworkObject,
-} from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { markStartup, markStartupOnce } from '@shared/utils/startup-timing.util';
 import { SerializedRequestType } from '@shared/utils/util';
-import { CommandNames, NetworkEventTypes, SettingTypes } from 'papi-shared-types';
+import { CommandNames, SettingTypes } from 'papi-shared-types';
 import {
   getErrorMessage,
   isPlatformError,
-  PlatformEventEmitter,
   serialize,
   UnsubscriberAsyncList,
   wait,
   waitForDuration,
 } from 'platform-bible-utils';
-import { getByType as getDataProviderByType } from '@shared/services/data-provider.service';
 import { themeService } from '@shared/services/theme.service';
-import { IWindowService, windowServiceProviderName } from '@shared/services/window.service-model';
 
 // #region Helper functions
-
-/**
- * Pull the window ID out of a scoped window service's network object id, e.g.
- * "platform.windowServiceDataProvider-2-data" gives 2. Returns undefined for anything else,
- * including the generic name the main-process routing proxy publishes, whose remainder does not
- * start with a number.
- *
- * @param networkObjectId Id of a network object that was just created
- * @returns Window whose renderer registered it, or undefined if this is not a scoped window service
- */
-function getWindowIdFromScopedWindowServiceId(networkObjectId: string): number | undefined {
-  const scopedPrefix = `${windowServiceProviderName}-`;
-  if (!networkObjectId.startsWith(scopedPrefix)) return undefined;
-  const windowId = Number.parseInt(networkObjectId.slice(scopedPrefix.length), 10);
-  return Number.isNaN(windowId) ? undefined : windowId;
-}
 
 /**
  * Get the zoom factor from settings or return the default value
@@ -256,21 +238,6 @@ const TITLE_BAR_BUTTON_BACKGROUND_COLOR = 'hsla(0, 0%, 100%, 0)'; // transparent
  */
 let willRestart = false;
 
-/**
- * Get the window service data provider for a specific window by its ID. Each renderer registers its
- * own scoped data provider (e.g. "platform.windowServiceDataProvider-1").
- *
- * Deliberately a plain lookup rather than a caching layer, even though the input handlers below
- * call it on every keystroke and mouse press: the network object service already keeps what it
- * resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it holds
- * when the object is disposed or its window closes. A second cache here could only go stale — and
- * because Electron reuses `BrowserWindow.id`, a stale entry would be handed to the next window
- * opened with that ID rather than merely being useless.
- */
-async function getWindowServiceForWindow(windowId: number): Promise<IWindowService | undefined> {
-  return getDataProviderByType<IWindowService>(`${windowServiceProviderName}-${windowId}`);
-}
-
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
   logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
@@ -320,40 +287,35 @@ async function main() {
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
 
-  // Register multi-window routing proxies before any windows are created. These claim generic names
-  // (e.g. "WebViewService", "platform.openSettings") so renderers register under scoped names
-  // (e.g. "WebViewService-1", "platform.openSettings-1") and the proxies route to the focused window.
+  // Register the multi-window service routers before any windows are created. These claim generic
+  // names (e.g. "WebViewService", "platform.openSettings") so renderers register shards under scoped
+  // names (e.g. "WebViewService-1", "platform.openSettings-1") and the routers forward to the window
+  // that should handle the call.
   // Started together rather than one after another: each claims its own set of names and none reads
   // anything another one registers, so serializing them only adds their round trips together on the
   // startup path every window is waiting behind.
   // Settled rather than raced to the first rejection: they run together, so `Promise.all` would
   // report whichever failed first and discard what the others went on to say. Startup still stops
-  // here — a routing proxy that never registered leaves a name nothing answers for the rest of the
+  // here — a router that never registered leaves a name nothing answers for the rest of the
   // session — it just stops naming everything that went wrong instead of one thing.
-  const routingServiceStarts = [
-    { name: 'WebView routing service', started: startWebViewRoutingService() },
-    { name: 'command routing service', started: startCommandRoutingService() },
-    { name: 'notification routing service', started: startNotificationRoutingService() },
-    // Reuses the same per-window lookup the input handlers use
-    {
-      name: 'window routing service',
-      started: startWindowRoutingService(getWindowServiceForWindow),
-    },
+  const routerStarts = [
+    { name: 'WebView service router', started: startWebViewServiceRouter() },
+    { name: 'command service router', started: startCommandServiceRouter() },
+    { name: 'notification service router', started: startNotificationServiceRouter() },
+    { name: 'window service router', started: startWindowServiceRouter() },
   ];
-  const routingServiceOutcomes = await Promise.allSettled(
-    routingServiceStarts.map(({ started }) => started),
-  );
-  const failedRoutingServiceNames = routingServiceOutcomes
+  const routerOutcomes = await Promise.allSettled(routerStarts.map(({ started }) => started));
+  const failedRouterNames = routerOutcomes
     .map((outcome, index) => {
       if (outcome.status === 'fulfilled') return undefined;
-      const { name } = routingServiceStarts[index];
+      const { name } = routerStarts[index];
       logger.error(`Failed to start the ${name}: ${getErrorMessage(outcome.reason)}`);
       return name;
     })
     .filter((name) => name !== undefined);
-  if (failedRoutingServiceNames.length > 0)
+  if (failedRouterNames.length > 0)
     throw new Error(
-      `Could not start the multi-window routing proxies: ${failedRoutingServiceNames.join(', ')}. Each failure is logged above.`,
+      `Could not start the multi-window service routers: ${failedRouterNames.join(', ')}. Each failure is logged above.`,
     );
 
   // Window layout persistence must register its request handlers before any window exists so a
@@ -361,12 +323,14 @@ async function main() {
   await initializeWindowLayoutPersistence();
 
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
-  // call until its renderer has registered. Its scoped window service appearing is that signal, and
+  // call until its renderer has registered. Its window service shard appearing is that signal, and
   // routing waits for it rather than following focus alone — see `getTargetWindowId`.
-  onDidCreateNetworkObject(({ id }) => {
-    const readyWindowId = getWindowIdFromScopedWindowServiceId(id);
-    if (readyWindowId !== undefined) markWindowReady(readyWindowId);
-  });
+  onDidRegisterWindowServiceShard((readyWindowId) => markWindowReady(readyWindowId));
+  // The index has been listening since its module was evaluated, which is well before this line,
+  // and the announcement it heard is never repeated. Reconciling here is what makes the two
+  // orderings equivalent, so a window that registered in the meantime is not left unroutable for
+  // the rest of the session.
+  getWindowIdsWithServiceShard().forEach((readyWindowId) => markWindowReady(readyWindowId));
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
@@ -425,38 +389,6 @@ async function main() {
       logger.warn(`performStartupTasks threw unexpectedly: ${getErrorMessage(e)}`);
     }
   })();
-
-  // Announces a closed window to the whole app. Created once here rather than per window because an
-  // event type may only be claimed by one emitter, and the main process is the single source for it
-  // — it is the only process that knows when a window goes away. Services that a single window
-  // hosts on the whole app's behalf listen for this to hand hosting over to a surviving window.
-  //
-  // The name is intentionally NOT declared in the public `NetworkEvents` type — it is core plumbing
-  // between the main process and the renderer service hosts, not part of the `@papi/*` surface — so
-  // `EventType extends NetworkEventTypes` rejects the literal name. Cast the name past that
-  // constraint and recover the payload type on the result, the same escape hatch
-  // `scroll-group.service-host.ts` uses for its host-internal versification event. Registering
-  // centrally (rather than reaching for the deprecated sync factory, which does not) is what keeps
-  // the event out of the "announced but never registered" deprecation path.
-  /* eslint-disable no-type-assertion/no-type-assertion */
-  const onDidCloseWindowEmitter = (await networkService.createNetworkEventEmitterAsync(
-    EVENT_NAME_ON_DID_CLOSE_WINDOW as NetworkEventTypes,
-    {
-      notification: {
-        'x-experimental': true,
-        summary: 'Emitted when a window closes.',
-        params: [
-          {
-            name: 'windowId',
-            required: true,
-            summary: "The closed window's id.",
-            schema: { type: 'number' },
-          },
-        ],
-      },
-    },
-  )) as unknown as PlatformEventEmitter<number>;
-  /* eslint-enable no-type-assertion/no-type-assertion */
 
   // `before-quit` fires ahead of every window's `close`, so recording it here is what lets a
   // window's close handler tell a whole-app quit from a single window closing. Both this and the
@@ -778,7 +710,7 @@ async function main() {
     const setWindowFocus = async (
       specifier: import('@shared/services/window.service-model').SetFocusSpecifier,
     ) => {
-      const windowService = await getWindowServiceForWindow(windowId);
+      const windowService = await getWindowServiceShard(windowId);
       if (windowService) await windowService.setFocus(specifier);
       else logger.debug(`Window service for window ${windowId} not available yet`);
     };
@@ -1032,23 +964,6 @@ async function main() {
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
 
-      // Tell the rest of the app the window is gone. A closing renderer drops its RPC connection
-      // without disposing the network objects it hosted, so this is the only signal the surviving
-      // windows get that an app-global service they were consuming — the theme engine, the scroll
-      // group service — needs a new host. Announced as soon as the window is out of the tracked
-      // state the listeners read, and ahead of the unsubscribers below: those are RPC to a renderer
-      // that is already gone, so they take the network service's whole registration retry to fail,
-      // and no surviving window would start taking over until they did.
-      // `PlatformEventEmitter` runs its subscribers synchronously and does not isolate them, so one
-      // that throws would take the rest of the announcement — and everything below — with it.
-      try {
-        onDidCloseWindowEmitter.emit(windowId);
-      } catch (e) {
-        logger.error(
-          `A subscriber threw while being told window ${windowId} closed, so the rest of them were not told: ${getErrorMessage(e)}`,
-        );
-      }
-
       // Stop persisting this window. When the close was deliberate — the app stays up — rewrite the
       // structure without it so the window does not come back next session. During a quit the
       // structure was already flushed with this window still in it, and must NOT be rewritten
@@ -1074,7 +989,7 @@ async function main() {
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with
-    // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
+    // target="_blank". Please revise web-view.service-shard.ts as necessary if you make changes here
     newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
       (async () => {

@@ -1666,11 +1666,38 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     );
     emit: (event: T) => void;
     /**
+     * Sends the event to the other processes and runs this process's subscriptions for it, keeping
+     * each of those subscribers' failures to itself. See {@link PlatformEventEmitter.emitIsolated}.
+     *
+     * @param event Event data to provide to subscribed callbacks
+     * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+     *   position in the subscription order. Must not throw. Only local subscribers are reported here;
+     *   a failure to reach the network is reported where the network callback was supplied.
+     * @experimental
+     */
+    emitIsolated: (
+      event: T,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ) => void;
+    /**
      * Runs only the subscriptions for the event that are on this process. Does not send over network
      *
      * @param event Event data to provide to subscribed callbacks
      */
     emitLocal(event: T): void;
+    /**
+     * Runs only the subscriptions for the event that are on this process, keeping each subscriber's
+     * failure to itself. Does not send over network. See {@link PlatformEventEmitter.emitIsolated}.
+     *
+     * @param event Event data to provide to subscribed callbacks
+     * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
+     *   position in the subscription order. Must not throw.
+     * @experimental
+     */
+    emitLocalIsolated(
+      event: T,
+      handleSubscriberError: (error: unknown, subscriberIndex: number) => void,
+    ): void;
     dispose: () => Promise<boolean>;
   }
   export default PapiNetworkEventEmitter;
@@ -1688,6 +1715,20 @@ declare module 'shared/models/rpc.interface' {
   } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import { JSONRPCResponse } from 'json-rpc-2.0';
+  import { PlatformEvent } from 'platform-bible-utils';
+  /**
+   * What a process took with it when its connection to the network went away
+   *
+   * @experimental
+   */
+  export type RpcClientDisconnectEvent = {
+    /**
+     * Names of the methods that were registered by the departed process and have now been removed
+     * from the central registry, in registration order. Nothing has interpreted these names; a
+     * subscriber that knows how a given kind of name is formed is the one that can say what died.
+     */
+    removedMethodNames: string[];
+  };
   /**
    * Defines how to support sending requests on the network and emitting events on the network
    *
@@ -1777,6 +1818,21 @@ declare module 'shared/models/rpc.interface' {
     ) => Promise<boolean>;
     /** Unregister a network event emitter so it is no longer tracked centrally */
     unregisterEvent: (eventName: string) => Promise<boolean>;
+    /**
+     * Event that fires when a process disconnects from the network, carrying the method names its
+     * departure removed from the central registry.
+     *
+     * This is platform-internal core plumbing between the process that owns the websocket server and
+     * the services that know how their own registered names are formed, not part of the `@papi/*`
+     * surface.
+     *
+     * This is a local, in-process event: only the process that owns the connections can observe one
+     * being lost, so it fires exclusively in the process holding the websocket server. Everywhere
+     * else it is a real event that simply never fires.
+     *
+     * @experimental
+     */
+    onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   }
   export type RegisteredRpcMethodDetails = {
     handler: IRpcHandler;
@@ -1870,13 +1926,14 @@ declare module 'client/services/web-socket.factory' {
 }
 declare module 'client/services/rpc-client' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
   import {
     ConnectionStatus,
     EventHandler,
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
+  import { PlatformEvent } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
   import {
     SingleMethodDocumentation,
@@ -1889,6 +1946,14 @@ declare module 'client/services/rpc-client' {
    */
   export class RpcClient implements IRpcMethodRegistrar {
     connectionStatus: ConnectionStatus;
+    /**
+     * Never fires here. Only the process that owns the websocket server sees a connection being lost;
+     * this end of the seam exists so shared code can subscribe in any process without asking which
+     * one it is running in.
+     *
+     * @experimental
+     */
+    readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
     private ws;
     private requestId;
     /** Refers to the current process that created this object (i.e., not main) */
@@ -1899,6 +1964,7 @@ declare module 'client/services/rpc-client' {
     private readonly connectionMutex;
     private readonly registrationMutexMap;
     private readonly connectionComplete;
+    private readonly clientDisconnectEmitter;
     constructor();
     private static handleError;
     private static onError;
@@ -1943,6 +2009,8 @@ declare module 'main/services/rpc-server' {
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
+  /** Called by an RpcServer with the method names its client's departure removed from the registry */
+  type AnnounceClientDisconnectMethod = (removedMethodNames: string[]) => void;
   /**
    * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
    * intended to be instantiated by anything other than RpcWebSocketListener.
@@ -1964,12 +2032,15 @@ declare module 'main/services/rpc-server' {
     private readonly rpcEventDetailsByEventName;
     /** Called by an RpcServer when all other RpcServers should emit an event over the network */
     private readonly propagateEventMethod;
+    /** Called by an RpcServer once its client's methods have been removed from the registry */
+    private readonly announceClientDisconnectMethod;
     constructor(
       name: string,
       webSocket: WebSocket,
       propagateEventMethod: PropagateEventMethod,
       rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
       rpcEventDetailsByEventName: IRpcEventRegistry,
+      announceClientDisconnectMethod: AnnounceClientDisconnectMethod,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -2009,23 +2080,6 @@ declare module 'shared/data/network-event-names' {
    * one.
    */
   export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string>;
-  /**
-   * Name of the platform-internal network event the main process emits when a window closes. The
-   * payload is the closed window's Electron window id.
-   *
-   * The main process owns window-lifecycle truth, so it is the only emitter — this is a single-source
-   * event and deliberately absent from {@link MULTI_SOURCE_EVENT_NAMES}. It is a plain string rather
-   * than a `NetworkEvents` declaration because it is core plumbing between the main process and the
-   * renderer service hosts, not part of the `@papi/*` surface.
-   *
-   * Renderers need this because a closing window tears its RPC connection down without disposing the
-   * network objects it hosted: nothing emits `object:onDidDisposeNetworkObject` on a socket close, so
-   * app-global services hosted by one window (the theme engine, the scroll group service) have no
-   * other signal that their host went away.
-   *
-   * @experimental
-   */
-  export const EVENT_NAME_ON_DID_CLOSE_WINDOW = 'platform:onDidCloseWindow';
 }
 declare module 'main/services/rpc-event-registry' {
   import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
@@ -2086,12 +2140,13 @@ declare module 'main/services/rpc-websocket-listener' {
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import { IRpcMethodRegistrar, RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
   import {
     OpenRpc,
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
   } from 'shared/models/openrpc.model';
+  import { PlatformEvent } from 'platform-bible-utils';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { SerializedRequestType } from 'shared/utils/util';
   import { RpcEventRegistry } from 'main/services/rpc-event-registry';
@@ -2109,6 +2164,15 @@ declare module 'main/services/rpc-websocket-listener' {
    */
   export class RpcWebSocketListener implements IRpcMethodRegistrar {
     connectionStatus: ConnectionStatus;
+    /**
+     * Event that fires when a connected process goes away, carrying the method names its departure
+     * removed from the registry. Local to this process: it is announced as part of tearing the
+     * connection down, so it cannot outrun the teardown the way anything the departing process sent
+     * can.
+     *
+     * @experimental
+     */
+    readonly onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
     private localEventHandler;
     private webSocketServer;
     private nextSocketNumber;
@@ -2128,6 +2192,7 @@ declare module 'main/services/rpc-websocket-listener' {
      * single-source event. Deduped for the same reason as {@link warnedUnregisteredAnnouncements}.
      */
     private readonly warnedForeignAnnouncements;
+    private readonly clientDisconnectEmitter;
     constructor();
     get nextSocketId(): string;
     connect(localEventHandler: EventHandler): Promise<boolean>;
@@ -2169,6 +2234,7 @@ declare module 'main/services/rpc-websocket-listener' {
      */
     private warnIfInvalidEventAnnouncement;
     private onClientConnect;
+    private announceClientDisconnect;
     private onClientDisconnect;
   }
   export default RpcWebSocketListener;
@@ -2198,6 +2264,7 @@ declare module 'shared/services/network.service' {
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { StoreChangeEvent } from 'shared/services/shared-store.service';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { RpcClientDisconnectEvent } from 'shared/models/rpc.interface';
   import {
     SingleMethodDocumentation,
     SingleNotificationDocumentation,
@@ -2210,6 +2277,24 @@ declare module 'shared/services/network.service' {
   } from 'papi-shared-types';
   import { MULTI_SOURCE_EVENT_NAMES } from 'shared/data/network-event-names';
   export { MULTI_SOURCE_EVENT_NAMES };
+  /**
+   * Event that fires when a process disconnects from the network, carrying the names of the methods
+   * its departure removed from the central registry.
+   *
+   * This is platform-internal core plumbing between the process that owns the websocket server and
+   * the services that know how their own registered names are formed, not part of the `@papi/*`
+   * surface.
+   *
+   * A process that goes away abruptly — most commonly a window the user closed — announces nothing on
+   * its way out, so this is derived from the connection teardown itself: it is emitted only once the
+   * departed process's methods are out of the registry, and therefore cannot report a death that has
+   * not finished happening. Only the process holding the websocket server can observe a connection
+   * being lost, so this only ever fires there; elsewhere it is a real event that never fires, which
+   * lets shared code subscribe without knowing which process it is running in.
+   *
+   * @experimental
+   */
+  export const onDidDisconnectClient: PlatformEvent<RpcClientDisconnectEvent>;
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -2482,34 +2567,6 @@ declare module 'shared/services/network-object.service' {
   export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails>;
   /** Event that fires with a network object ID when that object is disposed locally or remotely */
   export const onDidDisposeNetworkObject: PlatformEvent<string>;
-  /**
-   * Drop every cached registration for a network object living in another process that can no longer
-   * be reached, as if that object had been disposed.
-   *
-   * This is platform-internal core plumbing between the process that hosted a departed network object
-   * and the processes still holding registrations for it, not part of the `@papi/*` surface.
-   *
-   * Disposal is normally announced by the process that owns the object, but a process that goes away
-   * abruptly — most commonly a window the user closed — never gets to announce anything. Its
-   * registered methods are dropped from the central registry, yet every other process still holds a
-   * registration pointing at it. That cached registration is why the name looks taken to
-   * {@link set}/`registerEngine`, so app-global services hosted by one window can only be re-hosted
-   * elsewhere once it is cleared.
-   *
-   * Only remote registrations are considered, and only ones the network confirms are gone, so a call
-   * made while every object is still alive changes nothing. Runs under the same per-ID lock as
-   * {@link get} so a concurrent lookup cannot resurrect the registration mid-sweep.
-   *
-   * Reachability is decided with the same probe {@link get} uses, which retries a missing handler on
-   * the main process's registration-race cadence. Confirming a genuinely gone object therefore takes
-   * a few seconds — deliberately, since erring the other way would revoke a proxy that consumers are
-   * still legitimately using. Objects that are alive answer on the first attempt, so a sweep costs
-   * nothing when nothing has gone away.
-   *
-   * @returns IDs of the network objects that were forgotten
-   * @experimental
-   */
-  export const forgetUnreachableRemoteObjects: () => Promise<string[]>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }
@@ -4068,7 +4125,7 @@ declare module 'shared/services/web-view.service-model' {
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
   /**
    * Command names that are hosted by the renderer process and need to be registered with
-   * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+   * window-scoped suffixes in a multi-window setup. The main process registers service routers under
    * the generic names that forward to the focused window's scoped handler.
    *
    * @experimental
@@ -4098,7 +4155,7 @@ declare module 'shared/services/web-view.service-model' {
    * The documentation belongs to the generic name because that is the command consumers call; the
    * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
    * an implementation detail of multi-window routing and are deliberately left undocumented. The main
-   * process attaches these when it registers the routing proxies.
+   * process attaches these when it registers the service routers.
    *
    * @experimental
    */
@@ -5601,7 +5658,7 @@ declare module 'shared/models/notification.service-model' {
    *
    * Attached in two places: each window's renderer registers its window-scoped name (e.g.
    * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
-   * registers its routing proxy under the generic {@link NotificationServiceNetworkObjectName} — the
+   * registers its service router under the generic {@link NotificationServiceNetworkObjectName} — the
    * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
    *
    * @experimental
@@ -7203,7 +7260,7 @@ declare module 'shared/models/dialog-options.model' {
     'okLabel',
     'cancelLabel',
   ];
-  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-host.ts` */
+  /** Data in each tab that is a dialog. Added to DialogOptions in `dialog.service-shard.ts` */
   export type DialogData = DialogOptions & {
     isDialog: true;
   };
@@ -7279,10 +7336,10 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   };
   /**
    * Set the functionality of submitting and canceling dialogs. This should be called specifically by
-   * `dialog.service-host.ts` immediately on startup and by nothing else. This is only here to
+   * `dialog.service-shard.ts` immediately on startup and by nothing else. This is only here to
    * mitigate a dependency cycle
    *
-   * @param dialogServiceFunctions Functions from the dialog service host for resolving and rejecting
+   * @param dialogServiceFunctions Functions from the dialog service shard for resolving and rejecting
    *   dialogs
    */
   export function hookUpDialogService({
@@ -7528,7 +7585,7 @@ declare module 'shared/services/dialog.service-model' {
   /**
    * Dialog requests served by the renderer process. A dialog belongs to the window the user is
    * working in, so each renderer registers these under window-scoped names and the main process
-   * registers proxies under the generic names that forward to the focused window.
+   * registers service routers under the generic names that forward to the focused window.
    *
    * @experimental
    */
@@ -8443,6 +8500,28 @@ declare module 'renderer/services/reference-history.util' {
     history: ReferenceHistory,
     offset: number,
   ): ReferenceHistoryEntry | undefined;
+}
+declare module 'renderer/services/name-taken-error.util' {
+  /**
+   * Whether a failure to register something under a name says that the name is already taken, as
+   * opposed to saying that the registration itself went wrong.
+   *
+   * The app-global service hosts (the theme engine, the scroll group service) let every window race
+   * for the same name and treat losing as the routine outcome. That is only true for this one kind of
+   * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
+   * service that has already shut down all arrive at the same `catch` and would otherwise be reported
+   * as the expected result at a severity nothing reads.
+   *
+   * Recognized by message text because that is all the throw sites give — see
+   * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards
+   * "not taken" only ever adds a warning to a step-aside that still happens; erring the other way
+   * would report a real failure as the routine outcome, so the list is deliberately exact rather than
+   * generous.
+   *
+   * @experimental
+   */
+  export function isNameTakenError(errorMessage: string): boolean;
+  export default isNameTakenError;
 }
 declare module 'renderer/services/scroll-group.service-host' {
   import {

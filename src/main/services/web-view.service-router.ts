@@ -1,14 +1,19 @@
 /**
- * Proxy service that registers under the generic "WebViewService" network object name and routes
- * calls to the focused window's scoped WebViewService (e.g. "WebViewService-1"). This enables
- * multi-window support by ensuring that operations like openWebView execute in the correct window.
+ * Service router for the WebView service. Registers under the generic "WebViewService" network
+ * object name and routes calls to the focused window's WebView service shard (e.g.
+ * "WebViewService-1"). This enables multi-window support by ensuring that operations like
+ * openWebView execute in the correct window.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
  */
 
 import {
+  getNotReadyWindowIds,
   getReadyWindowIds,
-  getTargetWindowId,
   isWindowReady,
 } from '@main/services/window-state.service';
+import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -21,6 +26,8 @@ import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   CloseWebViewEvent,
@@ -35,40 +42,45 @@ import {
 } from '@shared/services/web-view.service-model';
 
 /**
- * Get the scoped WebViewService for a specific window. Returns undefined if not yet registered.
+ * The WebView service shard each window registers, found by network object type and window
+ * attribute rather than by rebuilding the window-scoped name the window registered under.
+ */
+const webViewShards = createServiceShardIndex<WebViewServiceType>({
+  objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+  resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceType>(networkObjectId),
+});
+
+/**
+ * Get the WebView service shard for a specific window. Returns undefined if that window has not
+ * registered one — its renderer has not got that far, or the window is gone.
+ *
+ * Exported for `command.service-router.ts`, which routes the requests that name a web view to the
+ * window that owns it and so has to ask the same shards this router does.
  *
  * @param windowId The Electron BrowserWindow ID
  */
-async function getScopedWebViewService(windowId: number): Promise<WebViewServiceType | undefined> {
-  return networkObjectService.get<WebViewServiceType>(
-    `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${windowId}`,
-  );
+export async function getWebViewShard(windowId: number): Promise<WebViewServiceType | undefined> {
+  return webViewShards.getShard(windowId);
 }
 
-/** Get the scoped WebViewService for the currently focused window, throwing if none is available. */
-async function getTargetWebViewService(): Promise<WebViewServiceType> {
-  const targetWindowId = getTargetWindowId();
-  if (targetWindowId === undefined)
-    throw new Error('No windows available to route WebViewService call');
-  const webViewService = await getScopedWebViewService(targetWindowId);
-  if (!webViewService)
-    throw new Error(
-      `WebViewService for window ${targetWindowId} is not available. The renderer may not have started yet.`,
-    );
-  return webViewService;
-}
+/** Get the WebView service shard for the currently focused window, throwing if none is available. */
+const getTargetWebViewShard = createTargetShardResolver(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  webViewShards,
+);
 
 /** The window that owns a web view, and the definition the ownership search already fetched */
-type WebViewOwner = { service: WebViewServiceType; definition: SavedWebViewDefinition };
+type WebViewOwner = { shard: WebViewServiceType; definition: SavedWebViewDefinition };
 
 /**
- * Search the windows that can answer for the one that owns a given web view, returning its scoped
- * WebViewService along with the definition the search fetched — callers that want the definition
+ * Search the windows that can answer for the one that owns a given web view, returning its WebView
+ * service shard along with the definition the search fetched — callers that want the definition
  * already have it here, and a second fetch would be another cross-process round trip that can come
  * back with something different.
  *
- * Only ready windows are asked: a window that has not registered its services cannot own a web
- * view, and asking it stalls the search for the network service's whole registration retry.
+ * Only ready windows are asked: a window that has not registered its services cannot answer, and
+ * asking it stalls the search for the network service's whole registration retry. It still counts
+ * as a window that could not be asked — see below.
  *
  * Returns undefined when every window answered and none owns it.
  *
@@ -79,23 +91,32 @@ async function findOwner(
   webViewId: WebViewId,
   operation: string,
 ): Promise<WebViewOwner | undefined> {
-  let hadServiceErrors = false;
+  // A tracked window that has not registered its services is skipped by the search below rather
+  // than answering it, which makes it a window that could not be asked. Letting the search come
+  // back "nobody owns this" while such a window exists would send the operation to the focused
+  // window, and the web view it named may be sitting in the window that never got asked.
+  const notReadyWindowIds = getNotReadyWindowIds();
+  let hadServiceErrors = notReadyWindowIds.length > 0;
+  if (hadServiceErrors)
+    logger.warn(
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about webview ${webViewId} for ${operation}`,
+    );
   const owners = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
       try {
-        const webViewService = await getScopedWebViewService(windowId);
+        const webViewShard = await getWebViewShard(windowId);
         // A ready window is one whose renderer registered its WINDOW service; the others register
         // moments apart, so its WebView service can still be missing. That is a window that could
         // not be asked, not one that answered no — see the reachability note below.
-        if (!webViewService) {
+        if (!webViewShard) {
           logger.warn(
             `WebView service for window ${windowId} is not registered, so it could not be asked about webview ${webViewId} for ${operation}`,
           );
           hadServiceErrors = true;
           return undefined;
         }
-        const definition = await webViewService.getOpenWebViewDefinition(webViewId);
-        if (definition) return { service: webViewService, definition };
+        const definition = await webViewShard.getOpenWebViewDefinition(webViewId);
+        if (definition) return { shard: webViewShard, definition };
         return undefined;
       } catch (e) {
         logger.warn(
@@ -117,7 +138,7 @@ async function findOwner(
   return undefined;
 }
 
-// Proxy methods that route to the focused window's scoped WebViewService
+// Router methods that route to the focused window's WebView service shard
 
 async function openWebView(
   webViewType: WebViewType,
@@ -127,11 +148,11 @@ async function openWebView(
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
     const owner = await findOwner(options.existingId, 'openWebView');
-    if (owner) return owner.service.openWebView(webViewType, layout, options);
+    if (owner) return owner.shard.openWebView(webViewType, layout, options);
   }
   // No existingId or not found in any window — route to focused window
-  const webViewService = await getTargetWebViewService();
-  return webViewService.openWebView(webViewType, layout, options);
+  const webViewShard = await getTargetWebViewShard();
+  return webViewShard.openWebView(webViewType, layout, options);
 }
 
 async function reloadWebView(
@@ -140,11 +161,11 @@ async function reloadWebView(
   options?: ReloadWebViewOptions,
 ): Promise<WebViewId | undefined> {
   const owner = await findOwner(webViewId, 'reload');
-  if (owner) return owner.service.reloadWebView(webViewType, webViewId, options);
+  if (owner) return owner.shard.reloadWebView(webViewType, webViewId, options);
 
   // Webview not found in any window — fall back to focused window (may be a new webview)
-  const webViewService = await getTargetWebViewService();
-  return webViewService.reloadWebView(webViewType, webViewId, options);
+  const webViewShard = await getTargetWebViewShard();
+  return webViewShard.reloadWebView(webViewType, webViewId, options);
 }
 
 async function getOpenWebViewDefinition(
@@ -164,33 +185,46 @@ export type OpenWebViewDefinitionsByReachability = {
 /**
  * Gather what every window has open, keeping track of the ones that could not be asked.
  *
- * Unlike the other proxy methods, this fans out rather than routing: callers use it to seed their
+ * Unlike the other router methods, this fans out rather than routing: callers use it to seed their
  * picture of the whole WebView landscape, so restricting it to the focused window would make every
  * other window's tabs invisible.
  *
  * Exported for the callers that can do something sensible with an incomplete answer — the shutdown
  * sync has one shot at this and no event stream to correct it later, so it syncs what it can find
- * and says plainly that the coverage is partial. Everyone else should use the proxy's
+ * and says plainly that the coverage is partial. Everyone else should use the router's
  * {@link getAllOpenWebViewDefinitions}, which refuses to answer at all rather than pass a partial
  * list off as the whole picture.
  */
 export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<OpenWebViewDefinitionsByReachability> {
   const unreachableWindowIds: number[] = [];
+
+  // A tracked window that has not registered its services is not in the list fanned out to below,
+  // so nothing else here would ever mention it. Leaving it out entirely makes a window that is
+  // alive with a dozen editors in it come back identical to a window that does not exist — and a
+  // window drops out of the ready set by crashing or reloading, not only by still starting up.
+  const notReadyWindowIds = getNotReadyWindowIds();
+  if (notReadyWindowIds.length > 0) {
+    logger.warn(
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so what they have open could not be read. They are reported as unreachable rather than as having nothing open.`,
+    );
+    unreachableWindowIds.push(...notReadyWindowIds);
+  }
+
   const definitionsPerWindow = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
       try {
-        const webViewService = await getScopedWebViewService(windowId);
+        const webViewShard = await getWebViewShard(windowId);
         // A ready window whose WebView service has not registered yet is a window that could not be
         // asked. Answering `[]` for it would put it in the result as a window with nothing open,
         // which is the one thing this function exists to keep apart from the truth.
-        if (!webViewService) {
+        if (!webViewShard) {
           logger.warn(
             `WebView service for window ${windowId} is not registered, so its open webviews could not be read`,
           );
           unreachableWindowIds.push(windowId);
           return [];
         }
-        return await webViewService.getAllOpenWebViewDefinitions();
+        return await webViewShard.getAllOpenWebViewDefinitions();
       } catch (e) {
         logger.warn(
           `Failed to get open webview definitions from window ${windowId}: ${getErrorMessage(e)}`,
@@ -204,7 +238,7 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
 }
 
 /**
- * What one specific window has open, rather than the merged picture the proxy serves.
+ * What one specific window has open, rather than the merged picture the router serves.
  *
  * A window is the only thing that knows what it has open, so this is the only way to ask about a
  * window that is on its way out — the merged read asks the windows that can answer, and by the time
@@ -219,8 +253,8 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
 export async function getOpenWebViewDefinitionsForWindow(
   windowId: number,
 ): Promise<SavedWebViewDefinition[]> {
-  const webViewService = await getScopedWebViewService(windowId);
-  if (webViewService) return webViewService.getAllOpenWebViewDefinitions();
+  const webViewShard = await getWebViewShard(windowId);
+  if (webViewShard) return webViewShard.getAllOpenWebViewDefinitions();
 
   // Readiness is what tells the two empty answers apart. A window whose renderer never registered
   // genuinely had nothing open. One that was serving requests a moment ago may have had editors
@@ -274,10 +308,14 @@ const onDidUpdateWebView = getNetworkEvent<UpdateWebViewEvent>(EVENT_NAME_ON_DID
 const onDidCloseWebView = getNetworkEvent<CloseWebViewEvent>(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW);
 
 /**
- * The proxy WebViewService object registered under the generic "WebViewService" name. All method
- * calls are forwarded to the focused window's scoped service.
+ * The router object registered under the generic "WebViewService" name. Every method either routes
+ * to the window that owns a named web view or asks every window and merges the answers; none of
+ * them is a plain forward to the focused window.
+ *
+ * Declared as the service it claims the name of, so a member added to `WebViewServiceType` cannot
+ * silently become a name the router does not answer for.
  */
-const webViewServiceProxy: WebViewServiceType = {
+const webViewServiceRouter: WebViewServiceType = {
   onDidAddWebView: onDidOpenWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
@@ -292,13 +330,20 @@ const webViewServiceProxy: WebViewServiceType = {
 };
 
 /**
- * Register the WebViewService proxy under the generic name so it claims the name before any
+ * Register the WebView service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
-export async function startWebViewRoutingService(): Promise<void> {
+export async function startWebViewServiceRouter(): Promise<void> {
   await networkObjectService.set<WebViewServiceType>(
     NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-    webViewServiceProxy,
+    webViewServiceRouter,
+    undefined,
+    undefined,
+    // Experimental at the object level, which fans out over every method. The generic name is not
+    // new, but what it now answers with is: several of its methods ask every window and merge, or
+    // route by which window owns a named web view, and both of those can now fail in ways a
+    // single-window caller never had to handle.
+    { 'x-experimental': true },
   );
-  logger.info('WebViewService routing proxy registered');
+  logger.info('WebView service router registered');
 }

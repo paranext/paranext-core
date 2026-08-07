@@ -240,34 +240,35 @@ step, no automation. Just a record.
 - **Decision:** Each window's renderer registers its own copy of these services under its own
   `globalThis.windowId` suffix (e.g. `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${windowId}`,
   `${NotificationServiceNetworkObjectName}-${windowId}`, per-window dialog request names, per-window
-  command names). The pre-existing generic name is kept working via a routing proxy (ADR-0008).
+  command names). The pre-existing generic name is kept working via a service router (ADR-0008).
 - **Alternatives:** One shared instance for all windows — rejected: state (open web views, toasts,
   dialogs) is inherently per-window. A single object internally keyed by window id under the old
   generic name only — rejected: reinvents what `networkObjectService`'s per-name registration and
   `rpc.discover` already give for free.
-- **Consequences:** every window-scoped service now has a scoped identity and (via the proxy) a
-  generic one; new window-scoped services must follow the same convention and get a routing proxy if
-  generic-name callers exist. **Do not rely on a window disposing its own registrations as it
+- **Consequences:** every window-scoped service now has a scoped identity and (via the router) a
+  generic one; new window-scoped services must follow the same convention and get a service router
+  if generic-name callers exist. **Do not rely on a window disposing its own registrations as it
   closes** — it cannot: a closing window drops its RPC connection without disposing anything it
   hosted, and `destroy()` does not run `beforeunload` at all. Scoped registrations are instead
-  cleaned up by the surviving processes: main announces the close on
-  `EVENT_NAME_ON_DID_CLOSE_WINDOW`, and every process sweeps the registrations that announcement
-  makes unreachable (`sweepUnreachableRemoteObjectsAfterWindowClose` in `network-object.service.ts`,
-  with one retry for the sweep that runs before the connection teardown lands). A window-scoped
-  service therefore has to tolerate its own registrations outliving its window for a moment, and
-  consumers have to tolerate resolving one that is already gone.
+  cleaned up by the process that owns the websocket connections, which derives the death from the
+  connection teardown and announces the departed window's network objects as disposed once their
+  methods are out of the central registry (`onDidDisconnectClient` handling in
+  `network-object.service.ts`; see ADR-0009). A window-scoped service therefore has to tolerate its
+  own registrations outliving its window for a moment, and consumers have to tolerate resolving one
+  that is already gone. The scoped ids remain the registration name (`object:{id}.{method}` derives
+  from them) but are no longer how anything FINDS a window's implementation — see ADR-0011.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## ADR-0008: Generic-name routing proxies in main forward to the focused/owning window's scoped service
+## ADR-0008: Generic-name service routers in main forward to the focused/owning window's scoped service
 
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** Existing PAPI consumers call services by their historical generic name
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
   After ADR-0007 scoped each window's copy under its own name, nothing answers the generic name.
-- **Decision:** Main registers one routing proxy per generic name (`command-routing.service.ts` —
-  which also registers the dialog-request proxies, `notification-routing.service.ts`,
-  `web-view-routing.service.ts`, `window-routing.service.ts`) that forwards to the scoped service of
+- **Decision:** Main registers one service router per generic name (`command.service-router.ts` —
+  which also registers the dialog-request routes, `notification.service-router.ts`,
+  `web-view.service-router.ts`, `window.service-router.ts`) that forwards to the scoped service of
   the window that should handle it: the owning window when ownership is determinable (e.g. a command
   whose first argument names a web view routes to the window that owns that web view), otherwise the
   routing target (ADR-0010). A few read-only queries fan out and merge across all windows instead,
@@ -277,12 +278,15 @@ step, no automation. Just a record.
   window — rejected as the general answer: most of these calls are single-target actions where
   fanning out isn't meaningful, and forwarding to a not-yet-ready window is measurably costly.
 - **Consequences:** external callers of the generic name are unaffected by multi-window; the
-  owner/target-selection logic in each proxy is now load-bearing, and two rules fell out of getting
+  owner/target-selection logic in each router is now load-bearing, and two rules fell out of getting
   it wrong first. Fan-outs ask only the windows that can answer (`getReadyWindowIds`), because
   forwarding to a window whose renderer has not registered costs that call the network service's
   whole registration retry. And an owner probe that could not reach a window fails the call rather
   than falling back to the routing target: "could not ask" is not "answered no", and the window that
-  did not answer may be the one that owns the web view.
+  did not answer may be the one that owns the web view. The main-side piece is a **service router**
+  (`*.service-router.ts`) and the per-window implementation it forwards to is a **service shard**
+  (`*.service-shard.ts`); both are documented in `Architecture.md` § "Service router and service
+  shard".
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
@@ -294,17 +298,23 @@ step, no automation. Just a record.
   the same startup code, so no window is distinguished as host in advance.
 - **Decision:** Every window's renderer races to register the same singleton network-object name at
   startup; the winner becomes the host, and every other window attaches to (proxies through) it
-  instead of registering its own. If the host window closes, surviving windows sweep for the
-  now-unreachable registration and re-run the same election so a new host takes over.
+  instead of registering its own. A window that closes never disposes what it hosted, so the process
+  owning the websocket connections derives the death from the connection teardown: it announces the
+  departed window's network objects as disposed once their methods are out of the central registry.
+  Every window hears that disposal on the object it attached to and re-runs the same election, so a
+  new host takes over — no polling and no reachability probing, and the announcement cannot arrive
+  before the object is genuinely unreachable.
 - **Alternatives:** Always host the singleton in main — rejected: these services' state and
   registration machinery already live in renderer-side service-host modules built around
   `dataProviderService`/`networkObjectService`; moving them to main is a larger rewrite for the same
   effect. A fixed "primary" window as host — rejected: any window, including the first, can be
   closed by the user, so a fixed designation would still need a takeover path.
 - **Consequences:** the app has exactly one theme engine and one scroll group service at all times,
-  transparent to consumers. The election/sweep/re-host machinery is implemented twice today (theme,
-  scroll group) and has already drifted between the two copies, so the duplication is worth
-  extracting into a shared helper.
+  transparent to consumers. The election/re-host machinery is implemented twice today (theme, scroll
+  group) and has already drifted between the two copies, so the duplication is worth extracting into
+  a shared helper. Both copies also depend on the disposal announcement being the only trigger, so a
+  run that neither wins the name nor finds the winner has to schedule its own retry — nothing else
+  will re-enter the election for it.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
@@ -313,7 +323,7 @@ step, no automation. Just a record.
 - **Status:** Accepted
 - **Context:** A window's `BrowserWindow` exists (and is enumerable) well before its renderer has
   registered any window-scoped service, because window creation and renderer service startup are
-  asynchronous. Routing proxies (ADR-0008) need to avoid picking a window that can't yet answer.
+  asynchronous. Service routers (ADR-0008) need to avoid picking a window that can't yet answer.
 - **Decision:** Main tracks a `readyWindowIds` set (`window-state.service.ts`); a window is marked
   ready when its `platform.windowServiceDataProvider-{id}-data` registration appears (observed via
   `onDidCreateNetworkObject`), used as a single proxy signal for "this window's services are up," and
@@ -328,7 +338,7 @@ step, no automation. Just a record.
   through this target, and the window holding focus during a quit is often one the user opened
   moments earlier whose renderer never finished starting. A
   dedicated `onDidChangeRoutingTarget` event fires whenever this computed target actually changes —
-  either the target window id, or the same window flipping ready/not-ready — so routing proxies and
+  either the target window id, or the same window flipping ready/not-ready — so service routers and
   other consumers can react without polling.
 - **Alternatives:** Wait for every window-scoped service to individually confirm registration before
   considering a window ready — more correct but heavier; the window service starts reliably early and
@@ -336,7 +346,44 @@ step, no automation. Just a record.
   can be ready while its other services are still registering). No readiness tracking, always try the
   target and eat the retry cost — rejected: this is exactly where the ~9s registration-race retries in
   `network.service.ts` come from.
-- **Consequences:** routing proxies get a cheap way to skip an unready window in the common case, at
+- **Consequences:** service routers get a cheap way to skip an unready window in the common case, at
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+
+## ADR-0011: Service routers discover shards by network-object type, not by rebuilding the scoped name
+
+- **Date:** 2026-08-06
+- **Status:** Accepted
+- **Context:** ADR-0007 gave every per-window service a `${name}-${windowId}` registration name, and
+  main's routers found a window's implementation by building that string again. So did window
+  readiness (ADR-0010), which parsed a window id back out of a network object id. That made the
+  name shape a contract between two processes that no type could check, spread across a dozen sites,
+  and it needed `as` assertions to defeat the typed provider-name system. It also meant a router
+  asked the network object service for a name that might not exist, paying its registration retry to
+  learn nothing.
+- **Decision:** A shard registers with a distinct `objectType` per service (`'webViewServiceShard'`,
+  `'notificationServiceShard'`, `'windowServiceShard'`) and a `windowId` attribute
+  (`src/shared/models/service-shard.model.ts`). Each router keeps an index built from the
+  `onDidCreateNetworkObject` / `onDidDisposeNetworkObject` announcements, filtered on that type
+  (`createServiceShardIndex`), and resolves a window's shard through it. Window readiness listens to
+  the same index rather than parsing ids. The scoped names stay exactly as they were — this changes
+  discovery only.
+- **Alternatives:** One generic `'windowScopedService'` type for every shard — rejected: filtering
+  for exactly the thing you want beats filtering everything and re-filtering on an attribute, and
+  `'webViewService'` already means something else here. Scanning
+  `getAllNetworkObjectDetails` per call — rejected: an index is O(1) and gets window close right for
+  free. Converting the network object shards to data providers to reuse `getByType` — unnecessary:
+  `registerEngine` passes `dataProviderType`/`dataProviderAttributes` straight to
+  `networkObjectService.set`, so transport is orthogonal to discovery.
+- **Consequences:** a router asking about a window that has not registered gets `undefined`
+  immediately instead of after a retry; a shard leaves its router's view the moment its network
+  object is announced as disposed, which is what happens when its window closes. The index is built
+  from announcements, so a router MUST start before any window is created — the same assumption
+  `network-object-status.service-host.ts` already makes. This does not yet apply to
+  `command.service-router.ts`, which forwards request names rather than resolving a network object
+  and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
+  transitional — each of its commands moves into the router for its own service — so it is expected
+  to go away rather than to be converted.
+- **Source:** multi-window architecture plan step 2 (PT-4275 epic; branch
+  `pt-4275-router-shard-discovery`).

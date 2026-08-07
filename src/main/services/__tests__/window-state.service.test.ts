@@ -235,8 +235,8 @@ describe('window state tracking', () => {
     });
 
     test('stays quiet when the same window is re-reported as focused', () => {
-      // Electron re-fires `focus` in situations that do not change which window is focused; routing
-      // proxies re-point their update relay on every emission, so a repeat is real work for nothing
+      // Electron re-fires `focus` in situations that do not change which window is focused; service
+      // routers re-point their update relay on every emission, so a repeat is real work for nothing
       const heard: (number | undefined)[] = [];
       addWindow(fakeWindow(3));
       setFocusedWindowId(3);
@@ -365,6 +365,35 @@ describe('window state tracking', () => {
       }
 
       expect(getWindows().map((window) => window.id)).toEqual([2]);
+      expect(mocks.loggerError).toHaveBeenCalledOnce();
+    });
+
+    test('tells the subscribers queued behind one that threw', () => {
+      // Keeping the throw off the teardown path is only half of it: the announcement is the one time
+      // subscribers hear that routing moved, and it is never repeated for that change. A subscriber
+      // that throws must cost only itself the news, not everything subscribed after it.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const targetsSeenAfterTheThrow: (number | undefined)[] = [];
+      const unsubscribeThrower = onDidChangeRoutingTarget(() => {
+        throw new Error('subscriber blew up');
+      });
+      const unsubscribeListener = onDidChangeRoutingTarget((windowId) => {
+        targetsSeenAfterTheThrow.push(windowId);
+      });
+
+      // See the note on the sibling tests: an escaping subscriber outlives `resetForTesting`
+      try {
+        expect(() => markWindowClosing(1)).not.toThrow();
+      } finally {
+        unsubscribeThrower();
+        unsubscribeListener();
+      }
+
+      expect(targetsSeenAfterTheThrow).toEqual([2]);
       expect(mocks.loggerError).toHaveBeenCalledOnce();
     });
 

@@ -975,6 +975,76 @@ await Task.WhenAll(
 
 ## TypeScript Patterns
 
+### Per-window services: service router + service shard
+
+A service whose state belongs to ONE window (open web views, notification toasts, dialogs, focus)
+cannot be a single service host, because there can be several windows. Use the router/shard pair —
+the vocabulary and diagram are in
+[Architecture.md](Architecture.md#service-router-and-service-shard).
+
+**Shard side** (`src/renderer/services/{service}.service-shard.ts`) — one per window:
+
+```typescript
+await networkObjectService.set<WebViewServiceType>(
+  `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
+  papiWebViewService,
+  // Distinct object type per service, so a router filters for exactly the shards it wants
+  WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+  getServiceShardAttributes(globalThis.windowId),
+);
+```
+
+A shard that is a data provider passes the same two arguments to
+`dataProviderService.registerEngine`, which forwards them to `networkObjectService.set`.
+
+**Router side** (`src/main/services/{service}.service-router.ts`) — one for the app:
+
+```typescript
+const webViewShards = createServiceShardIndex<WebViewServiceType>({
+  objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+  resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceType>(networkObjectId),
+});
+const getTargetWebViewShard = createTargetShardResolver(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  webViewShards,
+);
+
+// Declared as the service it claims the name of, so a member added to the service interface fails
+// to compile until the router publishes it
+const webViewServiceRouter: WebViewServiceType = {
+  someMethodThatJustGoesToTheTargetWindow: async (...args) =>
+    (await getTargetWebViewShard()).someMethodThatJustGoesToTheTargetWindow(...args),
+  /* events, fan-outs, owner-routed methods */
+};
+
+await networkObjectService.set<WebViewServiceType>(
+  NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  webViewServiceRouter,
+);
+```
+
+**Do:**
+
+- Register the router during main startup, before any window is created, so it claims the generic
+  name first.
+- Give each service its own `objectType` string. Not one generic `'windowScopedService'` — filtering
+  for exactly what you want beats filtering everything and re-filtering on an attribute.
+- Write fan-outs (`getAllOpenWebViewDefinitions`, notification `dismiss`) by hand. Asking every
+  window is the meaningful answer for those, not a missing abstraction.
+- Ask only ready windows in a fan-out (`getReadyWindowIds`), and treat "could not ask" as different
+  from "answered no." That includes the tracked windows a fan-out skipped for not being ready
+  (`getNotReadyWindowIds`): leaving them out of the answer entirely makes a window that is alive with
+  work open in it indistinguishable from a window that does not exist.
+
+**Don't:**
+
+- Discover a shard by rebuilding its window-scoped id. The id exists because `object:{id}.{method}`
+  derives from it; discovery goes through the index.
+- Register a globally-unique name from renderer platform code.
+- Cache a resolved shard in the router. `networkObjectService.get` already caches, serializes
+  concurrent lookups, and drops what it holds on disposal; a second cache can only go stale, and
+  Electron reuses `BrowserWindow.id`.
+
 ### Command Naming
 
 - **Pattern:** `'{extensionName}.{commandName}'`

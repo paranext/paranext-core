@@ -83,7 +83,7 @@ const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<number | undefi
  * Event that fires when the window routed calls go to changes — a different window, or the same
  * window going from unready to serving requests (or back).
  *
- * Routing proxies that forward to "the focused window" need this: it is the moment their answer
+ * Service routers that forward to "the focused window" need this: it is the moment their answer
  * changes without any window's own state having changed. Every change to the tracked windows, the
  * focused window, and window readiness runs through the same target comparison, so this is the one
  * signal to react to, and it stays quiet when a change leaves the target where it was.
@@ -149,6 +149,24 @@ export function getReadyWindowIds(): number[] {
   return trackedWindows
     .map(({ windowId }) => windowId)
     .filter((windowId) => readyWindowIds.has(windowId));
+}
+
+/**
+ * IDs of the windows that are tracked but cannot currently answer a routed call, in creation order.
+ *
+ * The other half of {@link getReadyWindowIds}, and the half a fan-out has to say something about:
+ * skipping these windows leaves them out of the answer entirely, so a window that is alive with
+ * work open in it comes back indistinguishable from a window that does not exist. A fan-out reports
+ * them as windows it could not ask rather than as windows with nothing to say.
+ *
+ * A window is in here while its renderer is still starting, and again if that renderer stops
+ * serving requests — see {@link markWindowNotReady}. Those two cannot be told apart from here, and a
+ * fan-out must not try: the second is exactly the case where the window had something open.
+ */
+export function getNotReadyWindowIds(): number[] {
+  return trackedWindows
+    .map(({ windowId }) => windowId)
+    .filter((windowId) => !readyWindowIds.has(windowId));
 }
 
 /**
@@ -241,18 +259,15 @@ function announceRoutingTargetIfChanged(): void {
   announcedRoutingTarget = routingTarget;
   // Every mutation in this module runs on a path a window's own teardown is waiting on — the top of
   // a `close` handler, above where it suppresses Electron's default close, and the `closed` sweep
-  // that tells the rest of the app the window is gone. `PlatformEventEmitter` runs its subscribers
-  // synchronously and does not isolate them, so a subscriber that throws would escape into that
-  // caller and abandon the rest of the close with nothing reporting why. Swap this for an isolating
-  // emit on the emitter itself when one is available: that would also keep the subscribers queued
-  // behind the throwing one, which catching the whole fan-out here cannot.
-  try {
-    onDidChangeRoutingTargetEmitter.emit(routingTarget.windowId);
-  } catch (e) {
+  // that tells the rest of the app the window is gone. A subscriber that throws must therefore not
+  // escape into that caller and abandon the rest of the close with nothing reporting why. It must
+  // also not cost the subscribers after it the announcement: this emit is the only time they are
+  // told routing moved, and it is not repeated for that change.
+  onDidChangeRoutingTargetEmitter.emitIsolated(routingTarget.windowId, (e, subscriberIndex) => {
     logger.error(
-      `A subscriber threw while being told routed calls now go to window ${routingTarget.windowId}, so the rest of them were not told: ${getErrorMessage(e)}`,
+      `Subscriber ${subscriberIndex} threw while being told routed calls now go to window ${routingTarget.windowId}: ${getErrorMessage(e)}`,
     );
-  }
+  });
 }
 
 /**

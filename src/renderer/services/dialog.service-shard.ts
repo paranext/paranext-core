@@ -1,3 +1,13 @@
+/**
+ * Dialog service shard — the dialog service implementation for THIS window. Its request handlers
+ * are registered under window-scoped request names (e.g. "dialog:showDialog-1") so several windows
+ * can coexist; the main process's `command.service-router.ts` publishes the generic names and
+ * forwards each request to the window that should show the dialog.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
 import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
@@ -10,7 +20,7 @@ import {
 } from '@renderer/services/overlays/overlay-store';
 import { ReactElement } from 'react';
 import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
-import * as webViewService from '@renderer/services/web-view.service-host';
+import * as webViewService from '@renderer/services/web-view.service-shard';
 import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
@@ -322,7 +332,7 @@ async function selectProject(
 }
 
 /** Register the commands that back the PAPI dialog service */
-export async function startDialogService(): Promise<void> {
+export async function startDialogServiceShard(): Promise<void> {
   await initialize();
   const complexArrayDescription =
     'String representation of RegExp pattern(s) to match against projects’ projectInterfaces (using https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) to determine if they should be included. Each array entry is handled based on its type (at least one entry must match for this filter condition to pass). If the entry is a string, it will be matched against each projectInterface. If any match, the project will pass this filter condition. If the entry is an array of strings, each will be matched against each projectInterface. If every string matches against at least one projectInterface, the project will pass this filter condition. In other words, each entry in the first-level array is OR’ed together. Each entry in second-level arrays (arrays within the first-level array) are AND’ed together.';
@@ -335,6 +345,9 @@ export async function startDialogService(): Promise<void> {
       showDialog,
       {
         method: {
+          // Experimental: this is a window-scoped name, and which window a dialog opens in is part
+          // of what the multi-window work is still settling.
+          'x-experimental': true,
           summary: 'Shows a dialog to the user and prompts the user to respond',
           params: [
             {
@@ -407,6 +420,8 @@ export async function startDialogService(): Promise<void> {
       selectProject,
       {
         method: {
+          // Experimental for the same reason as `showDialog` above
+          'x-experimental': true,
           summary:
             'Shows a select project dialog to the user and prompts the user to select a project',
           params: [
@@ -462,6 +477,8 @@ export async function startDialogService(): Promise<void> {
       showAboutDialog,
       {
         method: {
+          // Experimental for the same reason as `showDialog` above
+          'x-experimental': true,
           summary: 'Shows a dialog with essential information about the application.',
           params: [],
           result: {
@@ -476,7 +493,7 @@ export async function startDialogService(): Promise<void> {
     ),
   );
   // Register under a window-scoped name so multiple windows can coexist. The main process command
-  // routing proxy handles forwarding the generic name to the focused window.
+  // service router handles forwarding the generic name to the focused window.
   unsubPromises.push(...registerScopedCommands({ 'platform.about': showAboutDialog }));
 
   // Wait to successfully register all requests

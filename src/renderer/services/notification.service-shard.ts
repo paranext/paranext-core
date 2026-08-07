@@ -1,3 +1,13 @@
+/**
+ * Notification service shard — the notification service implementation for THIS window. Registered
+ * under a window-scoped network object id (e.g. "NotificationService-1") so every window can serve
+ * its own notification UI; the main process's `notification.service-router.ts` publishes the
+ * generic name and forwards to the window that should show (or stop showing) a notification.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
 import { toast } from 'sonner';
 import { CommandHandlers } from 'papi-shared-types';
 import {
@@ -8,6 +18,10 @@ import {
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import {
+  getServiceShardAttributes,
+  NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
 import { getErrorMessage, isLocalizeKey, newGuid } from 'platform-bible-utils';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -48,7 +62,7 @@ async function send(notification: PlatformNotification): Promise<string | number
   } catch (e) {
     notificationString = `<error stringifying notification: ${e}>`;
   }
-  logger.info(`Notification service host received notification: ${notificationString}`);
+  logger.info(`Notification service shard received notification: ${notificationString}`);
 
   const { notificationId } = notification;
   // Merge an update-send over the last notification we sent for this id, so a field the caller omits
@@ -128,7 +142,7 @@ async function send(notification: PlatformNotification): Promise<string | number
         .sendCommand(command, effectiveNotificationId)
         .catch((e) =>
           logger.warn(
-            `Notification service host ${description} command '${command}' failed: ${getErrorMessage(e)}`,
+            `Notification service shard ${description} command '${command}' failed: ${getErrorMessage(e)}`,
           ),
         );
     };
@@ -207,14 +221,19 @@ const notificationService: INotificationService = {
  * serve its own notification UI. The main process publishes the generic name and forwards to the
  * focused window, so a notification raised by a background task lands where the user is looking.
  */
-export async function startNotificationService(): Promise<void> {
+export async function startNotificationServiceShard(): Promise<void> {
+  if (!globalThis.windowId)
+    throw new Error('Cannot start NotificationService: windowId is not set');
+
   await networkObjectService.set(
     `${NotificationServiceNetworkObjectName}-${globalThis.windowId}`,
     notificationService,
-    undefined,
-    undefined,
+    // How the main process's notification service router finds this shard. The window-scoped name
+    // is an internal detail of the registration; the object type and window id are the contract.
+    NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE,
+    getServiceShardAttributes(globalThis.windowId),
     NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   );
 }
 
-export default startNotificationService;
+export default startNotificationServiceShard;
