@@ -3,6 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 
 // Duplicated from `CHARACTER_MARKER_CONTROL_STRING_KEYS` in `character-marker-control.component`
 // rather than imported: this suite runs in a node environment, and importing that component pulls
@@ -76,6 +77,32 @@ describe('character marker menu labels', () => {
 // parenthetical status words ("(mixto)", "(ninguno)") that do not open with a capital letter.
 describe('character marker control labels', () => {
   CHARACTER_MARKER_CONTROL_STRING_KEYS.forEach((key) => {
+    it(`has an English label for ${key}`, () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it(`has a Spanish label for ${key}`, () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it(`Spanish label differs from English for ${key}`, () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  });
+});
+
+// The two notification strings the removal action can show. The commit-message and sync-blocked
+// keys in that list are excluded here: `%versionHistoryCommit_*%` is en-only across the whole file
+// (its insert-footnote and insert-cross-reference siblings are too), and the sync-blocked key is
+// already shipped and paired.
+const REMOVE_CHARACTER_MARKER_PARITY_KEYS = REMOVE_CHARACTER_MARKER_STRING_KEYS.filter(
+  (key) =>
+    key === '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%' ||
+    key === '%webView_platformScriptureEditor_error_removeCharacterMarkerNotNarrowable%',
+);
+
+describe('character marker removal notifications', () => {
+  REMOVE_CHARACTER_MARKER_PARITY_KEYS.forEach((key) => {
     it(`has an English label for ${key}`, () => {
       expect(localizedStrings.en[key]).toBeTruthy();
     });
