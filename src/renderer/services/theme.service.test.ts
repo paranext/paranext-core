@@ -73,20 +73,6 @@ function announceCurrentTheme(theme: unknown) {
   [...currentThemeSubscribers].forEach((subscriber) => subscriber(theme));
 }
 
-/**
- * Make this document look like a reload of the URL main built when the window was created, which is
- * what the service tells apart to decide which of its seeds is the fresher one.
- */
-function makeDocumentAReload(isReload: boolean) {
-  vi.spyOn(performance, 'getEntriesByType').mockImplementation((entryType) =>
-    entryType === 'navigation'
-      ? // Only the `type` field is read; a full PerformanceNavigationTiming is not needed here.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        [{ type: isReload ? 'reload' : 'navigate' } as PerformanceNavigationTiming]
-      : [],
-  );
-}
-
 beforeEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
@@ -121,49 +107,67 @@ describe('the theme this window paints its first frame with', () => {
     expect(getCurrentThemeSync()).toEqual(THEME_FROM_OWN_STORE);
   });
 
+  it('prefers the theme stored before the host existed to what main handed over', async () => {
+    storePreviouslyStoredThemeState();
+    createWindowWithTheme(THEME_FROM_MAIN);
+
+    const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
+
+    // These keys exist only until the one-time handover runs, and while they do they hold a theme
+    // the user chose that main cannot have adopted yet — main is on a theme it derived from the
+    // default. Once the handover has run they are gone and the URL is what is left.
+    expect(getCurrentThemeSync()).toEqual(THEME_FROM_OWN_STORE);
+  });
+
   it('falls back to the default theme when neither has one', async () => {
     const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
 
     expect(getCurrentThemeSync().themeFamilyId).toBe('');
   });
 
-  // A reload replays the URL main built when the window was created, so the theme on it is as old
-  // as the window. Painting it would show the theme the app was on when this window opened and then
-  // flash into the current one a round trip later.
-  it('paints the last theme this profile painted when the document is reloaded', async () => {
+  // A reload replays the URL main built when the window was created, and by then this window's own
+  // pre-host store has been handed over and deleted, so the URL is the only thing a reloaded
+  // document can seed from — which is why the window keeps it as current as its cache.
+  it('paints the theme this window last heard when the document is reloaded', async () => {
     createWindowWithTheme(THEME_FROM_MAIN);
     const themeSinceThisWindowOpened = makeTheme('mainFamily', 'light');
     const { startThemeService } = await import('@renderer/services/theme.service');
     await startThemeService();
     announceCurrentTheme(themeSinceThisWindowOpened);
 
-    // The window reloads: same URL, same store, fresh module evaluation
+    // The window reloads: same URL, fresh module evaluation
     vi.resetModules();
-    makeDocumentAReload(true);
     const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
 
     expect(getCurrentThemeSync()).toEqual(themeSinceThisWindowOpened);
   });
 
-  it('prefers what main handed over on a window first load, not a remembered theme', async () => {
-    localStorage.setItem('theme.service.lastPaintedTheme', JSON.stringify(THEME_FROM_OWN_STORE));
-    createWindowWithTheme(THEME_FROM_MAIN);
-    makeDocumentAReload(false);
-
-    const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
-
-    expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
-  });
-
   it('falls back rather than throwing when what it was handed cannot be read', async () => {
     createWindowWithTheme('{ this is not a serialized theme');
-    storePreviouslyStoredThemeState();
 
     // This runs while the module is being evaluated, where a throw takes the window down with it
     const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
 
-    expect(getCurrentThemeSync()).toEqual(THEME_FROM_OWN_STORE);
+    expect(getCurrentThemeSync().themeFamilyId).toBe('');
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('falls back when what it was handed reads cleanly but is not a theme', async () => {
+    createWindowWithTheme(JSON.stringify({ notATheme: true }));
+
+    const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
+
+    // Handing the stylesheet something without `cssVariables` would take the render down instead
+    expect(getCurrentThemeSync().themeFamilyId).toBe('');
+  });
+
+  it('still uses what main handed over when the pre-host store cannot be read', async () => {
+    localStorage.setItem(CURRENT_THEME_STORAGE_KEY, '{ this is not a serialized theme');
+    createWindowWithTheme(THEME_FROM_MAIN);
+
+    const { getCurrentThemeSync } = await import('@renderer/services/theme.service');
+
+    expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
   });
 });
 
@@ -228,17 +232,43 @@ describe('keeping this window cache current', () => {
   });
 
   it('stops retrying as soon as the subscription lands', async () => {
-    host.subscribeCurrentTheme.mockRejectedValueOnce(new Error('host not up yet'));
-    const { getCurrentThemeSync, startThemeService } = await import(
-      '@renderer/services/theme.service'
-    );
+    vi.useFakeTimers();
+    try {
+      host.subscribeCurrentTheme.mockRejectedValueOnce(new Error('host not up yet'));
+      const { getCurrentThemeSync, startThemeService } = await import(
+        '@renderer/services/theme.service'
+      );
 
-    await startThemeService();
+      await startThemeService();
+      await vi.advanceTimersByTimeAsync(30_000);
 
-    expect(host.subscribeCurrentTheme).toHaveBeenCalledTimes(2);
-    expect(logger.error).not.toHaveBeenCalled();
-    announceCurrentTheme(THEME_FROM_MAIN);
-    expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
+      expect(host.subscribeCurrentTheme).toHaveBeenCalledTimes(2);
+      expect(logger.error).not.toHaveBeenCalled();
+      announceCurrentTheme(THEME_FROM_MAIN);
+      expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The retries back off over several seconds, and this is one of the promises the renderer's
+  // startup batch waits on: awaiting them would put that backoff in front of the dock layout in
+  // exactly the case where the app is already slow.
+  it('does not hold up this window startup while it keeps trying', async () => {
+    vi.useFakeTimers();
+    try {
+      host.subscribeCurrentTheme.mockRejectedValue(new Error('host unreachable'));
+      const { startThemeService } = await import('@renderer/services/theme.service');
+
+      // No timers advanced: startup has to be finished before any backoff has been waited out
+      await startThemeService();
+
+      expect(host.subscribeCurrentTheme).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(host.subscribeCurrentTheme.mock.calls.length).toBeGreaterThan(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
