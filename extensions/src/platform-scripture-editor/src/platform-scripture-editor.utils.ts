@@ -688,6 +688,9 @@ async function tryOpenFromRecentlyOpened(
               `Default active project picker: failed to record recently-opened project ${projectId}: ${getErrorMessage(e)}`,
             );
           }
+          // Fire-and-forget, mirroring the project-switch call site in main.ts. No outgoing
+          // project — nothing was previously active in Simple mode this session.
+          syncOnProjectSwitch(papi, projectId, undefined);
           return 'filled' as const;
         } catch (e) {
           papi.logger.debug(
@@ -845,6 +848,9 @@ export async function openDefaultActiveProjectIfApplicable(
         `Default active project picker: failed to record recently-opened project ${top.id}: ${getErrorMessage(e)}`,
       );
     }
+    // Fire-and-forget, mirroring the project-switch call site in main.ts. No outgoing project —
+    // nothing was previously active in Simple mode this session.
+    syncOnProjectSwitch(papi, top.id, undefined);
   }
 
   return hasFailed ? 'failed' : 'filled';
