@@ -91,7 +91,7 @@ vi.mock('@renderer/services/usersnap.service', () => ({
 
 const { settingsGetMock, settingsSubscribeMock } = vi.hoisted(() => ({
   // Typed broadly (not narrowed to the default implementation's `'simple' | false`) so tests can
-  // also mock other settings keys returning `true`.
+  // also mock other settings keys (e.g. default-layout-supplement flag settings) returning `true`.
   settingsGetMock: vi.fn(
     async (key: string): Promise<string | boolean> =>
       key === 'platform.interfaceMode' ? 'simple' : false,
@@ -118,10 +118,30 @@ vi.mock('@shared/services/data-provider.service', () => ({
 // computes from the resolved project's real editability, so capturing it here is the primary
 // assertion point below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real,
 // separately-tested) tabs-resolved tracker resolves immediately instead of waiting on webview
-// open/update events that never fire in this test.
+// open/update events that never fire in this test. The dockbox includes a
+// `platformScriptureEditor.bibleTexts` tab so the real (unmocked) default-layout-supplement merge
+// has a matching anchor to attach the Scripture Text Grid supplement tab to (see the merge tests
+// below) - the merge/filter logic itself is real production code, not mocked.
 const { buildSimpleLayoutForProjectMock } = vi.hoisted(() => ({
   buildSimpleLayoutForProjectMock: vi.fn((projectId: string, isReadOnly: boolean) => ({
-    dockbox: { mode: 'horizontal' as const, children: [] },
+    dockbox: {
+      mode: 'horizontal' as const,
+      children: [
+        {
+          mode: 'vertical' as const,
+          children: [
+            {
+              tabs: [
+                {
+                  id: 'bible-texts-tab',
+                  data: { webViewType: 'platformScriptureEditor.bibleTexts' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
     builtForProjectId: projectId,
     builtIsReadOnly: isReadOnly,
   })),
@@ -529,6 +549,54 @@ describe('handleSwitchToSimpleMode', () => {
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it('fast path: merges an enabled default-layout supplement entry into the project-bound layout', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    settingsGetMock.mockImplementation(async (key: string) => {
+      if (key === 'platform.interfaceMode') return 'simple';
+      if (key === 'platformScriptureEditor.enableScriptureTextGrid') return true;
+      return false;
+    });
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-supplement', isEditable: true });
+
+    await host.handleSwitchToSimpleMode();
+
+    const { lastCall } = vi.mocked(fakeDockLayout.loadLayout).mock;
+    expect(lastCall).toBeDefined();
+    const [loadedLayoutArg] = lastCall ?? [];
+    // The loaded layout's shape is dynamic — narrow only the fields this test reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const loadedLayout = loadedLayoutArg as {
+      dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
+    };
+    const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
+    expect(bibleTextsPanelTabs.map((tab) => tab.id)).toContain('scripture-text-grid-tab');
+  });
+
+  it('fast path: does not merge a disabled default-layout supplement entry', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    // Default settingsGetMock (from beforeEach) resolves every flag setting to false.
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-no-supplement', isEditable: true });
+
+    await host.handleSwitchToSimpleMode();
+
+    const { lastCall } = vi.mocked(fakeDockLayout.loadLayout).mock;
+    expect(lastCall).toBeDefined();
+    const [loadedLayoutArg] = lastCall ?? [];
+    // The loaded layout's shape is dynamic — narrow only the fields this test reads.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const loadedLayout = loadedLayoutArg as {
+      dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
+    };
+    const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
+    expect(bibleTextsPanelTabs.map((tab) => tab.id)).not.toContain('scripture-text-grid-tab');
   });
 });
 

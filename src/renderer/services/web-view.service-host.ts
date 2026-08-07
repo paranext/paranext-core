@@ -841,14 +841,15 @@ async function loadLayout(layout?: LayoutInfo | LayoutBase): Promise<void> {
   // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
   if (layout) {
+    // NOTE: this branch intentionally does NOT apply the default-layout supplement — a caller
+    // passing an explicit layout owns its full contents. A caller that wants supplement tabs
+    // merged in must do it itself before calling `loadLayout` (see `runProjectBoundSimpleSwitch`
+    // for an example, via `getEnabledSupplementEntries` + `mergeDefaultLayoutSupplement`).
     // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
     // to. Matches the convention in `platform-dock-layout.component.tsx`.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const layoutAsInfo = layout as unknown as LayoutInfo;
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    // NOTE: we intentionally do NOT apply the default-layout supplement here — a caller passing an
-    // explicit layout owns its full contents. If a future "reset to default layout" path routes
-    // through here and should include supplement tabs, merge `getEnabledSupplementEntries()` in too.
     dockLayoutVar.loadLayout(layoutAsInfo);
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
     await onLayoutChange(layoutAsInfo);
@@ -1229,7 +1230,17 @@ async function runProjectBoundSimpleSwitch(projectId: string, isReadOnly: boolea
 
   try {
     const projectBoundLayout = buildSimpleLayoutForProject(projectId, isReadOnly);
-    await loadLayout(projectBoundLayout);
+    // `loadLayout`'s explicit-layout branch deliberately does not apply the default-layout
+    // supplement (a caller passing an explicit layout owns its full contents) - so this caller
+    // must merge it in itself, mirroring what `loadLayout`'s own no-arg branch does. Without this,
+    // an enabled supplement tab (e.g. Scripture Text Grid) shows on a cold Simple start but
+    // disappears after every Power -> Simple switch.
+    const enabledEntries = await getEnabledSupplementEntries();
+    const layoutToLoad =
+      enabledEntries.length === 0
+        ? projectBoundLayout
+        : mergeDefaultLayoutSupplement(projectBoundLayout, enabledEntries);
+    await loadLayout(layoutToLoad);
     // Wait for every simple-layout tab's webview to fire its open/update event, which is when
     // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
     await tabsResolved.promise;
