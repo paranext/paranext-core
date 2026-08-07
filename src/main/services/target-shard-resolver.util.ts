@@ -9,6 +9,50 @@
 import { ServiceShardIndex } from '@main/services/service-shard-index';
 import { getTargetWindowId } from '@main/services/window-state.service';
 import { logger } from '@shared/services/logger.service';
+import { Unsubscriber } from 'platform-bible-utils';
+
+/**
+ * How long to keep waiting for the shard of a window that routing has already picked.
+ *
+ * A window becomes routable the moment it registers its WINDOW service, and a renderer starts every
+ * one of its shards together in one batch — so what this covers is the scheduling skew between
+ * registrations that were all begun at the same moment, not the seconds a renderer takes to start.
+ * The wait ends as soon as the announcement arrives, so the bound only ever elapses for a shard
+ * that is not coming at all because its own start failed. Long enough that a busy startup does not
+ * trip it, short enough that such a window fails visibly instead of hanging.
+ */
+const SHARD_ANNOUNCEMENT_GRACE_MS = 5000;
+
+/**
+ * Start watching for the given window's announcement of its shard of this service.
+ *
+ * Driven by the index's own announcement rather than by re-checking on a timer: an announcement is
+ * the only moment anything learns a shard exists, so this costs nothing while none has arrived and
+ * finishes the instant one does.
+ *
+ * Started BEFORE the first lookup, deliberately. An announcement that lands while that lookup is in
+ * flight would otherwise be missed, and the call would then wait out the whole grace period for
+ * news it had already been given.
+ */
+function watchForShardAnnouncement<T>(shardIndex: ServiceShardIndex<T>, windowId: number) {
+  let settle: (() => void) | undefined;
+  const announced = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  const unsubscribe: Unsubscriber = shardIndex.onDidAddShard((announcedWindowId) => {
+    if (announcedWindowId === windowId) settle?.();
+  });
+  const graceTimeout = setTimeout(() => settle?.(), SHARD_ANNOUNCEMENT_GRACE_MS);
+  return {
+    /** Resolves when the window announces its shard, or when the grace period runs out */
+    announced,
+    /** Stop watching. Safe whether or not {@link announced} was ever awaited */
+    stopWatching() {
+      clearTimeout(graceTimeout);
+      unsubscribe();
+    },
+  };
+}
 
 /** The shard a routed call should run in, and the window serving it */
 export type TargetWindowShard<T> = {
@@ -50,25 +94,47 @@ export function createTargetWindowShardResolver<T>(
     // Read before resolving rather than after: an entry evicted while the resolve was in flight was
     // still a registration that failed to resolve, not a window that never registered one
     const isIndexed = shardIndex.getShardWindowIds().includes(targetWindowId);
-    const shard = await shardIndex.getShard(targetWindowId);
-    if (shard) return { windowId: targetWindowId, shard };
+    // Routing picked this window because it registered its WINDOW service, and a renderer starts
+    // its shards together in one batch — so a window can be routable while the shard this call
+    // needs is a moment behind. Failing on first look would turn that ordinary skew into an error
+    // for anything fired at a window in its first instants, which is exactly when a keyboard
+    // shortcut or an activating extension is most likely to fire one.
+    const shardAnnouncement = isIndexed
+      ? undefined
+      : watchForShardAnnouncement(shardIndex, targetWindowId);
 
-    if (!isIndexed)
-      throw new Error(
-        `${serviceName} for window ${targetWindowId} is not available. The renderer may not have started yet.`,
+    try {
+      let shard = await shardIndex.getShard(targetWindowId);
+
+      if (!shard && shardAnnouncement) {
+        logger.debug(
+          `${serviceName} for window ${targetWindowId} has not been announced yet; waiting for it before giving up`,
+        );
+        await shardAnnouncement.announced;
+        shard = await shardIndex.getShard(targetWindowId);
+      }
+
+      if (shard) return { windowId: targetWindowId, shard };
+
+      if (!isIndexed)
+        throw new Error(
+          `${serviceName} for window ${targetWindowId} is not available. The renderer may not have started yet.`,
+        );
+
+      // The window did register a shard, so "the renderer has not started yet" is the one thing
+      // this is not. `networkObjectService.get` reports a genuinely absent object, a request that
+      // timed out, and a handler that threw as the same `undefined`, so which of those happened
+      // cannot be told from here — but a registered shard failing to resolve means something is
+      // wrong beyond startup timing, and nothing else on this path says so.
+      logger.warn(
+        `The ${serviceName} shard registered by window ${targetWindowId} could not be resolved. The window may have stopped answering, or its shard may have gone away between being found and being called.`,
       );
-
-    // The window did register a shard, so "the renderer has not started yet" is the one thing this
-    // is not. `networkObjectService.get` reports a genuinely absent object, a request that timed
-    // out, and a handler that threw as the same `undefined`, so which of those happened cannot be
-    // told from here — but a registered shard failing to resolve means something is wrong beyond
-    // startup timing, and nothing else on this path says so.
-    logger.warn(
-      `The ${serviceName} shard registered by window ${targetWindowId} could not be resolved. The window may have stopped answering, or its shard may have gone away between being found and being called.`,
-    );
-    throw new Error(
-      `${serviceName} for window ${targetWindowId} is registered but could not be resolved.`,
-    );
+      throw new Error(
+        `${serviceName} for window ${targetWindowId} is registered but could not be resolved.`,
+      );
+    } finally {
+      shardAnnouncement?.stopWatching();
+    }
   };
 }
 
