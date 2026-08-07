@@ -859,6 +859,32 @@ interface FilterProps extends MultiSelectComboBoxProps {
  */
 export declare function Filter({ entries, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, id, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export type FootnoteLayout = "horizontal" | "vertical";
+/**
+ * Where the caret should land within a footnote's rendered text.
+ *
+ * The offset origin is the note text as displayed by `FootnoteItem` in a row's
+ * `.textual-note-body`: every character run the note contains, including a leading `fr`/`xo` target
+ * reference, which PT9's notes pane and `FootnoteItem` alike render inline at the head of the note
+ * text. It EXCLUDES two kinds of chrome: the caller (`FootnoteItem` renders it in a separate header
+ * div) and the rendered USFM markers themselves (`.marker` spans; see `isMarkerText` in
+ * `footnote-caret.utils.ts`), which the editor renders as non-editable decorators rather than text.
+ * A consumer that resolves this offset against a DIFFERENT text flattening - e.g. the editor's raw
+ * DOM, which also renders the caller and inserts structural spacing text nodes between top-level
+ * runs - must first align to this same origin (see `createNoteBodyTextNodeFilter` in
+ * `footnote-editor.utils.ts`).
+ *
+ * - `'end'`: after the last character of the note text (not the raw editor DOM's last text node,
+ *   which may include trailing structural text - see `createNoteBodyTextNodeFilter`).
+ * - `{ utf16Offset }`: a flat offset over the note body's visible text content, in UTF-16 code units
+ *   (the unit used by DOM Selection APIs and the editor's text nodes). Offsets originate from
+ *   browser caret APIs (`caretPositionFromPoint`), which only produce positions at valid caret
+ *   boundaries, so surrogate pairs and combining sequences are never split by construction.
+ *   Consumers walk text nodes and accumulate `Text.data.length` to resolve it; an offset past the
+ *   available text resolves to `'end'`.
+ */
+export type FootnoteCaretPosition = "end" | {
+	utf16Offset: number;
+};
 /** Interface defining the properties for a single footnote item component */
 export interface FootnoteItemProps {
 	/**
@@ -872,10 +898,13 @@ export interface FootnoteItemProps {
 	/**
 	 * Determines how footnotes are displayed:
 	 *
-	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
-	 *   second column (typically used in a wide pane below the text).
-	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
-	 *   beneath (typically used side-by-side with the text).
+	 * - `'horizontal'`: the note's marker and caller appear in a leading-aligned column, with the note
+	 *   text in a second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: the note's marker and caller appear on the first line, with the note text
+	 *   displayed beneath (typically used side-by-side with the text).
+	 *
+	 * A leading `\fr`/`\xo` target reference is part of the note text in both layouts, as it is in
+	 * PT9's notes pane - it is not aligned in a column of its own.
 	 *
 	 * @default 'horizontal'
 	 */
@@ -900,10 +929,13 @@ export interface FootnoteListProps {
 	/**
 	 * Determines how footnotes are displayed:
 	 *
-	 * - `'horizontal'`: caller and reference appear in a leading-aligned column, with the contents in a
-	 *   second column (typically used in a wide pane below the text).
-	 * - `'vertical'`: caller and reference appear on the first line, with the contents displayed
-	 *   beneath (typically used side-by-side with the text).
+	 * - `'horizontal'`: the note's marker and caller appear in a leading-aligned column, with the note
+	 *   text in a second column (typically used in a wide pane below the text).
+	 * - `'vertical'`: the note's marker and caller appear on the first line, with the note text
+	 *   displayed beneath (typically used side-by-side with the text).
+	 *
+	 * A leading `\fr`/`\xo` target reference is part of the note text in both layouts, as it is in
+	 * PT9's notes pane - it is not aligned in a column of its own.
 	 *
 	 * @default 'horizontal'
 	 */
@@ -931,7 +963,41 @@ export interface FootnoteListProps {
 	formatCaller?: (caller: string | undefined, index: number) => string | undefined;
 	/** Callback to handle clicking/selecting a footnote in the list */
 	onFootnoteSelected?: (footnote: MarkerObject, index: number, listId: string | number) => void;
+	/**
+	 * Callback requesting that a footnote open for editing (e.g. swap the row for an inline editor).
+	 * When provided, a row click or Enter keypress fires this INSTEAD of `onFootnoteSelected`; Space
+	 * still fires `onFootnoteSelected`. `caretPosition` maps the click point into the note text (see
+	 * {@link FootnoteCaretPosition}); keyboard activation passes `'end'`.
+	 */
+	onFootnoteEditRequested?: (footnote: MarkerObject, index: number, listId: string | number, caretPosition: FootnoteCaretPosition) => void;
+	/**
+	 * Index of the footnote currently being edited in place, if any. When set (and
+	 * `renderEditingFootnote` is provided), that row renders the editor slot instead of its read-only
+	 * display and is highlighted as the active editing row.
+	 */
+	editingFootnoteIndex?: number;
+	/**
+	 * Render prop for the in-place editor shown for `editingFootnoteIndex`'s row. The list stays
+	 * presentation-only: it never imports an editor component; the consumer supplies one (e.g. an
+	 * inline `FootnoteEditor`).
+	 */
+	renderEditingFootnote?: (footnote: MarkerObject, index: number) => React$1.ReactNode;
 }
+/**
+ * Map a mouse click on a read-only footnote row to a caret position in the footnote's text, so an
+ * editor swapped into the row can place its caret where the user clicked (PT9-parity
+ * caret-where-you-clicked). Uses the browser caret APIs; positions land only at valid caret
+ * boundaries, so graphemes are never split.
+ *
+ * @param clientX Viewport X of the click (from the mouse event).
+ * @param clientY Viewport Y of the click.
+ * @param rowElement The row's root element; the offset is computed over the text of its
+ *   `.textual-note-body` descendant - the note's character runs, excluding the caller (rendered in
+ *   the row's header cell) and the rendered USFM markers (see `isMarkerText`).
+ * @returns A flat UTF-16 offset into the note body text, or `'end'` when the click cannot be mapped
+ *   (no browser support, click outside the body text, empty note).
+ */
+export declare function getCaretPositionFromClick(clientX: number, clientY: number, rowElement: HTMLElement): FootnoteCaretPosition;
 /**
  * Object containing all keys used for localization in the FootnoteEditor component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -996,17 +1062,41 @@ export interface FootnoteEditorProps {
 	 * parent editor, so the client does not need to handle this in the `onChange` callback.
 	 */
 	parentEditorRef?: React$1.RefObject<EditorRef | null>;
+	/**
+	 * When true, renders for in-place embedding (e.g. inside a footnotes pane row) instead of a
+	 * popover: fluid width (no width-lock), no Save/Cancel buttons, and edits apply live to the
+	 * parent editor (debounced) rather than on explicit save. This mode is fixed for the component's
+	 * lifetime - toggling it on a mounted instance is unsupported (e.g. the popover width-lock effect
+	 * never clears a previously-locked `style.width` when `inline` flips to `true`, so the container
+	 * stays stuck at its old fixed width instead of going fluid).
+	 *
+	 * @default false
+	 */
+	inline?: boolean;
+	/**
+	 * Where to place the caret in the note text after the note loads. `'end'` matches PT9's
+	 * caller-click behavior; a `utf16Offset` supports caret-where-you-clicked from a pane row. When
+	 * omitted, the editor does not move the caret (existing popover behavior).
+	 */
+	initialCaretPosition?: FootnoteCaretPosition;
 }
+/** Debounce interval for inline-mode live application of note edits to the parent editor. */
+export declare const INLINE_APPLY_DEBOUNCE_MS = 300;
 /**
  * Component to edit footnotes from within the editor component
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, inline, initialCaretPosition, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
-/** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
-export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * `FootnoteList` is a component that displays a list of USFM/JSX footnotes. Rows are read-only by
+ * default; a consumer can make one row editable in place at a time via `editingFootnoteIndex` +
+ * `renderEditingFootnote` (see those props), which swaps that row's display for a rendered editor
+ * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
+ */
+export declare function FootnoteList({ className, classNameForItems, footnotes, layout, listId, selectedFootnote, showMarkers, suppressFormatting, formatCaller, onFootnoteSelected, onFootnoteEditRequested, editingFootnoteIndex, renderEditingFootnote, }: FootnoteListProps): import("react/jsx-runtime").JSX.Element;
 export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type ScopeWithRange = Scope | "range";
 type Status = "approved" | "unapproved" | "unknown";

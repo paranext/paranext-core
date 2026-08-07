@@ -2,11 +2,37 @@ import { MarkerObject } from '@eten-tech-foundation/scripture-utilities';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Separator } from '@/components/shadcn-ui/separator';
 import { getFormatCallerFunction } from 'platform-bible-utils';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { FootnoteItem } from './footnote-item.component';
 import { FootnoteListProps } from './footnotes.types';
+import { getCaretPositionFromClick } from './footnote-caret.utils';
 
-/** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */
+/**
+ * Returns the nearest row index adjacent to `from` in `direction`, hopping over `editingIndex` -
+ * that row isn't a selectable option while it's being edited, and it renders no `ref`/`tabIndex`
+ * for the roving-focus effect to land on. Falls back to `from` if there's no other row to move to
+ * (e.g. a single-row list whose only row is being edited).
+ */
+function getAdjacentFocusableIndex(
+  from: number,
+  direction: 1 | -1,
+  lastIndex: number,
+  editingIndex: number | undefined,
+): number {
+  let next = Math.min(Math.max(from + direction, 0), lastIndex);
+  if (next === editingIndex) {
+    const hopped = Math.min(Math.max(next + direction, 0), lastIndex);
+    next = hopped === next ? from : hopped;
+  }
+  return next === editingIndex ? from : next;
+}
+
+/**
+ * `FootnoteList` is a component that displays a list of USFM/JSX footnotes. Rows are read-only by
+ * default; a consumer can make one row editable in place at a time via `editingFootnoteIndex` +
+ * `renderEditingFootnote` (see those props), which swaps that row's display for a rendered editor
+ * (e.g. an inline `FootnoteEditor`) while every other row stays read-only.
+ */
 export function FootnoteList({
   className,
   classNameForItems,
@@ -18,9 +44,34 @@ export function FootnoteList({
   suppressFormatting = false,
   formatCaller,
   onFootnoteSelected,
+  onFootnoteEditRequested,
+  editingFootnoteIndex,
+  renderEditingFootnote,
 }: FootnoteListProps) {
   const handleFormatCaller = formatCaller ?? getFormatCallerFunction(footnotes, undefined);
-  const handleFootnoteClick = (footnote: MarkerObject, index: number) => {
+
+  // `editingFootnoteIndex` only takes effect when `renderEditingFootnote` is also provided (see
+  // `isEditing` in the row map below) - mirror that gating here so keyboard navigation only treats
+  // a row as non-focusable when it will actually render as the editing row.
+  const editingRowIndex = renderEditingFootnote ? editingFootnoteIndex : undefined;
+
+  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+
+  const handleFootnoteClick = (
+    footnote: MarkerObject,
+    index: number,
+    event: React.MouseEvent<HTMLLIElement>,
+  ) => {
+    if (onFootnoteEditRequested) {
+      // Read the row element and click coordinates synchronously, before
+      // onFootnoteEditRequested can trigger a state update that removes this display row.
+      const row = rowRefs.current[index];
+      const caretPosition = row
+        ? getCaretPositionFromClick(event.clientX, event.clientY, row)
+        : 'end';
+      onFootnoteEditRequested(footnote, index, listId, caretPosition);
+      return;
+    }
     onFootnoteSelected?.(footnote, index, listId);
   };
 
@@ -39,6 +90,14 @@ export function FootnoteList({
 
     switch (e.key) {
       case 'Enter':
+        e.preventDefault();
+        if (onFootnoteEditRequested) {
+          onFootnoteEditRequested(footnote, index, listId, 'end');
+        } else {
+          onFootnoteSelected?.(footnote, index, listId);
+        }
+        break;
+
       case ' ':
         e.preventDefault();
         onFootnoteSelected?.(footnote, index, listId);
@@ -49,18 +108,31 @@ export function FootnoteList({
     }
   };
 
+  const lastIndex = footnotes.length - 1;
+
   const handleListKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!footnotes.length) return;
+
+    // While a row is being edited, its content may host a real editor (e.g. FootnoteEditor) that
+    // needs ArrowUp/ArrowDown for its own cursor movement. Let those keystrokes through instead of
+    // hijacking them for list navigation.
+    if (
+      editingRowIndex !== undefined &&
+      e.target instanceof HTMLElement &&
+      e.target.closest('li[data-state="editing"]')
+    ) {
+      return;
+    }
 
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedIndex((prev) => Math.min(prev + 1, footnotes.length - 1));
+        setFocusedIndex((prev) => getAdjacentFocusableIndex(prev, 1, lastIndex, editingRowIndex));
         break;
 
       case 'ArrowUp':
         e.preventDefault();
-        setFocusedIndex((prev) => Math.max(prev - 1, 0));
+        setFocusedIndex((prev) => getAdjacentFocusableIndex(prev, -1, lastIndex, editingRowIndex));
         break;
 
       default:
@@ -68,7 +140,18 @@ export function FootnoteList({
     }
   };
 
-  const rowRefs = useRef<(HTMLLIElement | null)[]>([]);
+  useEffect(() => {
+    // The focused row just became (or already was) the editing row - it's no longer a selectable
+    // option, so hop the roving tabIndex/focus to the nearest non-editing row instead of stranding
+    // it on a row that renders no `ref`/`tabIndex`.
+    if (editingRowIndex === undefined || focusedIndex !== editingRowIndex) return;
+    setFocusedIndex((prev) => {
+      const forward = getAdjacentFocusableIndex(prev, 1, lastIndex, editingRowIndex);
+      if (forward !== prev) return forward;
+      const backward = getAdjacentFocusableIndex(prev, -1, lastIndex, editingRowIndex);
+      return backward !== prev ? backward : -1;
+    });
+  }, [editingRowIndex, focusedIndex, lastIndex]);
 
   useEffect(() => {
     if (focusedIndex >= 0 && focusedIndex < rowRefs.current.length) {
@@ -93,24 +176,54 @@ export function FootnoteList({
         className={cn(
           'tw:p-0.5 tw:pt-1' /* Added top padding to prevent focus ring clipping in P.B app */,
           'tw:grid',
-          layout === 'horizontal'
-            ? 'tw:grid-cols-[min-content_min-content_1fr]'
-            : 'tw:grid-cols-[min-content_1fr]',
+          // Two columns in both layouts: the note's marker+caller, then its text. PT9 keeps the
+          // `\fr`/`\xo` target reference inside the note text rather than aligning it in a column
+          // of its own, so there is no third column to size.
+          'tw:grid-cols-[min-content_1fr]',
           !suppressFormatting && 'formatted-font',
         )}
       >
         {footnotes.map((footnote, idx) => {
           const isSelected = footnote === selectedFootnote;
           const key = `${listId}-${idx}`;
+          const isEditing = idx === editingFootnoteIndex && !!renderEditingFootnote;
+          // Only render separator if not the last item. Shared by both branches below so vertical
+          // layout keeps its separator after the editing row too, and so the two branches return
+          // the same Fragment shape (avoids an unnecessary remount when toggling edit mode).
+          const separator = idx < footnotes.length - 1 && layout === 'vertical' && (
+            <Separator tabIndex={-1} className="tw:col-span-2" />
+          );
+
+          if (isEditing) {
+            return (
+              <Fragment key={key}>
+                <li
+                  data-state="editing"
+                  className={cn(
+                    'tw:gap-x-3 tw:gap-y-1 tw:p-2',
+                    'tw:w-full tw:rounded-sm tw:border-0 tw:shadow-none',
+                    // PT9 highlights the entry being edited (light yellow); warning is the theme's
+                    // amber-family token so this stays theme-aware in dark mode.
+                    'tw:bg-warning/15',
+                    'tw:col-span-2',
+                    layout === 'vertical' && 'tw:row-span-2',
+                    classNameForItems,
+                  )}
+                >
+                  {renderEditingFootnote(footnote, idx)}
+                </li>
+                {separator}
+              </Fragment>
+            );
+          }
           return (
-            <>
+            <Fragment key={key}>
               <li
                 ref={(el) => {
                   rowRefs.current[idx] = el;
                 }}
                 role="option"
                 aria-selected={isSelected}
-                key={key}
                 data-marker={footnote.marker}
                 data-state={isSelected ? 'selected' : undefined}
                 tabIndex={idx === focusedIndex ? 0 : -1}
@@ -126,10 +239,11 @@ export function FootnoteList({
                   */
                   'tw:focus-visible:ring-offset-0.5 tw:focus-visible:relative tw:focus-visible:z-10 tw:focus-visible:ring-2 tw:focus-visible:ring-ring',
                   'tw:grid tw:grid-flow-col tw:grid-cols-subgrid',
-                  layout === 'horizontal' ? 'tw:col-span-3' : 'tw:col-span-2 tw:row-span-2',
+                  'tw:col-span-2',
+                  layout === 'vertical' && 'tw:row-span-2',
                   classNameForItems,
                 )}
-                onClick={() => handleFootnoteClick(footnote, idx)}
+                onClick={(event) => handleFootnoteClick(footnote, idx, event)}
                 onKeyDown={(e) => handleFootnoteKeyDown(e, footnote, idx)}
               >
                 <FootnoteItem
@@ -139,11 +253,8 @@ export function FootnoteList({
                   showMarkers={showMarkers}
                 />
               </li>
-              {/* Only render separator if not the last item */}
-              {idx < footnotes.length - 1 && layout === 'vertical' && (
-                <Separator tabIndex={-1} className="tw:col-span-2" />
-              )}
-            </>
+              {separator}
+            </Fragment>
           );
         })}
       </ul>
