@@ -10784,6 +10784,11 @@ declare module 'shared/services/theme-data.service-model' {
      */
     dataProviderName: 'platform.themeDataServiceDataProvider';
   }>;
+  /**
+   * Data types this data provider serves
+   *
+   * @experimental
+   */
   export type ThemeDataDataTypes = {
     AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
   };
@@ -10795,6 +10800,8 @@ declare module 'shared/services/theme-data.service-model' {
   /**
    * Service that provides aggregated theme contributions from the platform and extensions. Serves
    * theme contribution info to the theme service
+   *
+   * @experimental
    */
   export type IThemeDataService = {
     /**
@@ -12597,6 +12604,11 @@ declare module 'renderer/services/theme.service' {
    * Neither half is allowed to fail this window's startup. The cache is already usable — it was
    * filled before React rendered — so a host that is slow or missing costs freshness, not
    * correctness, and must not take down the unrelated services that start alongside this one.
+   *
+   * Only the FIRST subscribe attempt is awaited. This is one of the promises the renderer's startup
+   * batch waits on (see `index.tsx`), and the retries back off over several seconds — so awaiting
+   * them would put that whole backoff in front of the dock layout in exactly the case where the app
+   * is already slow. Nothing downstream depends on the subscription being live.
    *
    * Call once at renderer startup.
    *
