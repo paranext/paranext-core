@@ -2224,20 +2224,45 @@
     'w' 'x' 'y' 'z';
 }
 
+/* Cross-reference (x, ex) auto-generated callers use their own sequence, so they don't also
+   increment the footnote counter above. */
+@counter-style cross-ref-callers {
+  system: cyclic;
+  /* These symbols are updated in TS by the `NoteNodePlugin`. */
+  symbols: '\2020';
+  suffix: '';
+}
+
 .editor-input {
-  counter-reset: caller;
+  counter-reset: caller crossref;
 }
 
 .editor-input.reset-counters {
   counter-reset: none;
 }
 
-.immutable-note-caller[data-caller='+'] {
+.note.usfm_f .immutable-note-caller[data-caller='+'],
+.note.usfm_fe .immutable-note-caller[data-caller='+'],
+.note.usfm_ef .immutable-note-caller[data-caller='+'],
+.note.usfm_efe .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed.usfm_f .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_fe .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_ef .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_efe .immutable-note-caller[data-caller='+'] > button::before {
   content: counter(caller, note-callers);
+}
+
+.note.usfm_x .immutable-note-caller[data-caller='+'],
+.note.usfm_ex .immutable-note-caller[data-caller='+'] {
+  counter-increment: crossref;
+}
+
+.note.collapsed.usfm_x .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_ex .immutable-note-caller[data-caller='+'] > button::before {
+  content: counter(crossref, cross-ref-callers);
 }
 
 .formatted-font.text-spacing[contenteditable='false']

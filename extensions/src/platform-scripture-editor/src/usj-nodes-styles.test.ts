@@ -69,4 +69,13 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       expect(scss).not.toMatch(/^\.status_invalid/m);
     });
   });
+
+  describe('note caller sequences', () => {
+    it('gives cross-references their own caller counter so they do not consume footnote letters', () => {
+      expect(scss).toMatch(/@counter-style cross-ref-callers/);
+      expect(scss).toMatch(/counter-reset: caller crossref;/);
+      expect(scss).toMatch(/\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\]/);
+      expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
+    });
+  });
 });
