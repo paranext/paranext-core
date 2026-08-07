@@ -25,7 +25,11 @@ function shardIndex(
 ): ServiceShardIndex<unknown> {
   return {
     onDidAddShard: vi.fn(() => () => true),
+    onDidRemoveShard: vi.fn(() => () => true),
     getShard: vi.fn(getShard),
+    getShardNetworkObjectId: vi.fn((windowId: number) =>
+      shardWindowIds.includes(windowId) ? `shard-of-window-${windowId}` : undefined,
+    ),
     getShardWindowIds: vi.fn(() => shardWindowIds),
   };
 }
@@ -42,8 +46,12 @@ function shardIndexAwaitingAnnouncement(getShard: (windowId: number) => Promise<
       listeners.push(listener);
       return () => true;
     }),
+    onDidRemoveShard: vi.fn(() => () => true),
     getShard: vi.fn(async (windowId: number) =>
       indexedWindowIds.includes(windowId) ? getShard(windowId) : undefined,
+    ),
+    getShardNetworkObjectId: vi.fn((windowId: number) =>
+      indexedWindowIds.includes(windowId) ? `shard-of-window-${windowId}` : undefined,
     ),
     getShardWindowIds: vi.fn(() => [...indexedWindowIds]),
   };

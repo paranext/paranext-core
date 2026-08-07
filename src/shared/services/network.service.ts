@@ -413,8 +413,8 @@ export async function registerRequestHandler(
   if (!jsonRpc) throw new Error('RPC handler not set');
   const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
-  if (requestHandlerOptions?.timeoutMilliseconds !== undefined)
-    setTimeoutMsForRequestType(requestType, requestHandlerOptions.timeoutMilliseconds);
+  const customTimeoutMs = requestHandlerOptions?.timeoutMilliseconds;
+  if (customTimeoutMs !== undefined) setTimeoutMsForRequestType(requestType, customTimeoutMs);
   return async () => {
     if (!jsonRpc) {
       // Expected on graceful shutdown: shutdown() clears jsonRpc before disposing emitters so their
@@ -426,7 +426,12 @@ export async function registerRequestHandler(
       );
       return false;
     }
-    removeTimeoutMsForRequestType(requestType);
+    // Only what this registration set. A custom timeout is a shared store entry owned by the
+    // process that wrote it, so another process may well own the one on this request type — a
+    // window's dialog methods have theirs set by main, which outlives the window. Removing
+    // unconditionally makes every one of those teardowns an ownership violation the shared store
+    // reports as an error, on a path where nothing is wrong.
+    if (customTimeoutMs !== undefined) removeTimeoutMsForRequestType(requestType);
     const unregistered = await jsonRpc.unregisterMethod(requestType);
     if (!unregistered) logger.warn(`Failed to unregister request handler for "${requestType}"`);
     return unregistered;
