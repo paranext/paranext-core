@@ -1045,6 +1045,87 @@ await networkObjectService.set<WebViewServiceType>(
   concurrent lookups, and drops what it holds on disposal; a second cache can only go stale, and
   Electron reuses `BrowserWindow.id`.
 
+### App-global services: service host in main + predicting cache
+
+A service whose state belongs to the whole APP rather than to any window (the scroll group
+references, the current theme) cannot be a shard, and cannot be routed either — a router picks one
+window to answer and no window has the right answer. Host it in the process that outlives every
+window, and give each renderer a cache instead of an authority. See
+[ADR-0012](Architecture-Decisions.md#adr-0012-the-scroll-group-service-is-hosted-in-main-and-each-renderer-keeps-a-predicting-cache);
+worked example: `src/main/services/scroll-group.service-host.ts` +
+`src/renderer/services/scroll-group.service.ts`.
+
+**Host side** (`src/main/services/{service}.service-host.ts`) — one for the app:
+
+```typescript
+// Registered during main startup, BEFORE createWindow(), so it is there for the first render
+await networkObjectService.set<IScrollGroupHostService>(
+  NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  scrollGroupService,
+  'object',
+  undefined,
+  // Per-method x-experimental for the cache-keeping methods only, so the stable ones stay unmarked
+  { methods: [{ name: 'getScrollGroupSnapshot', 'x-experimental': true /* ... */ }] },
+);
+```
+
+**Cache side** (`src/renderer/services/{service}.service.ts`) — one per window:
+
+```typescript
+// 1. Seeded synchronously at module load from what main put on the window's URL: React renders
+//    before any service has started, and the *Sync readers are called during that render
+seedCacheBeforeFirstRender();
+
+// 2. Started later: subscribe to the host's events, then take a snapshot. Neither may fail startup
+export async function startScrollGroupService(): Promise<void> {
+  subscribeToScrollGroupUpdates();
+  await handOverPreviouslyStoredState();
+  try {
+    await seedCacheFromHost();
+  } catch (e) {
+    logger.error(/* the cache is usable without it; the next event catches it up */);
+  }
+}
+
+// 3. A sync write predicts locally, then reconciles with the host
+export function setScrRefSync(/* ... */): boolean {
+  if (predictedNoChange && hasSeededFromHost) return false;
+  applyToCache(/* ... */);
+  sendPredictedWriteToHost(scrollGroupId, (host) => host.setScrRef(/* ... */));
+  return true;
+}
+```
+
+**Do:**
+
+- Pass the state a new window needs through the per-window query-param object in `main.ts`
+  (`SCROLL_GROUP_STATE_QUERY_PARAMETER`, alongside `WINDOW_ID`) and seed the cache from it at module
+  load. A cache that can only be filled by a round trip serves the default value to the first render.
+  Handle "main does not know yet" — omit the parameter, and let the renderer fall back to what it can
+  read for itself.
+- Make `papi.{service}` in the renderer resolve to the cache rather than to the shared network proxy.
+  Web views take `window.papi` from the window hosting them, so two authorities in one window means
+  the hook and `papi` can disagree about the same instant.
+- Treat "the cache says nothing changed" as untrustworthy until the first snapshot has landed, and
+  send the write anyway. The reconcile only ever runs on a write that was sent.
+- Debounce the host's persistence and flush it on `will-quit`. Every `localStorage.setItem` in main
+  is a synchronous fsync on the event loop that carries the whole app's JSON-RPC traffic.
+- Persist what was adopted BEFORE recording that the migration ran, when taking over state from a
+  store the host cannot read. One file per key means no atomicity across them, and the other order
+  can strand a profile as migrated-with-nothing-migrated.
+
+**Don't:**
+
+- Elect a host window (ADR-0009) for state that is app-global. The takeover path, the re-arm in every
+  consumer, and the cross-window mirror exist only because the state lived somewhere closable.
+- Let a persist failure abort the broadcast. The broadcast is what keeps the other windows agreeing;
+  the file only decides what the next start opens on.
+- Leave a failed resync unretried. Without a retry — or a re-arm on the next inbound event — the
+  window shows a value the host rejected for the rest of the session, and every later write in that
+  group starts from it.
+- Add a second module named after the service. The `*.service.ts` that already exists in each process
+  grows the cache; a new one beside it is a second answer to the same question.
+
 ### Command Naming
 
 - **Pattern:** `'{extensionName}.{commandName}'`

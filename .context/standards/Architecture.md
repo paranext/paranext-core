@@ -141,9 +141,13 @@ N sources holding different data, combined into one view.
 main, the theme one from a renderer until it moves.
 
 An app-global host in main pairs with a `*.service.ts` that is more than a proxy: where the UI needs
-a synchronous read or write, the service keeps a cache of the host's state (seeded at startup, kept
-current by the host's events) and predicts the host's answer for a write, reconciling afterwards.
-`src/renderer/services/scroll-group.service.ts` is the worked example.
+a synchronous read or write, the service keeps a cache of the host's state and predicts the host's
+answer for a write, reconciling afterwards. The cache is seeded twice — synchronously at module load
+from the state main puts on the window's URL, so the first render is already right, and again from
+the host's snapshot once the network is up — and kept current by the host's events after that. In the
+renderer `papi.scrollGroups` resolves to that same cache, so everything in one window agrees.
+`src/renderer/services/scroll-group.service.ts` is the worked example; the Do/Don't list is in
+[Paranext-Core-Patterns.md](Paranext-Core-Patterns.md#app-global-services-service-host-in-main--predicting-cache).
 
 ### Main Process Services (`src/main/services/`)
 
