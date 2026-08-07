@@ -1863,6 +1863,13 @@ step, no automation. Just a record.
   and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
+- **Amended 2026-08-07 (ADR-0014):** `command.service-router.ts` is gone, so the exception above is
+  spent — every router now discovers its shards through an index, and no module rebuilds a
+  window-scoped name to reach one. The index also answers with the id a shard ANNOUNCED
+  (`getShardNetworkObjectId`), which is what lets a router name one of a shard's methods —
+  `object:{id}.{method}`, for a request timeout — without that being a second rebuild of the same
+  name. It reports a shard's departure as well as its arrival, so a router that did something
+  outside itself on arrival can undo it.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
 ## ADR-0012: The scroll group service is hosted in main, and each renderer keeps a predicting cache

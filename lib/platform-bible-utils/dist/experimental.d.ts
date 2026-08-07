@@ -20,7 +20,7 @@ export declare const BOOKS_PRESENT_DEFAULT = "";
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare const ALL_BOOK_IDS: string[];
+export declare const ALL_BOOK_IDS: readonly string[];
 /**
  * Converts a `platformScripture.booksPresent` flag string ('1' per present book, indexed by
  * canonical book number) into the list of present book ids
@@ -64,7 +64,7 @@ export type ScriptureBounds = {
  * @returns The closest present book id in that direction, or `undefined` if none exists
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function findAdjacentPresentBook(book: string, availableBooks: string[], direction: "next" | "previous"): string | undefined;
+export declare function findAdjacentPresentBook(book: string, availableBooks: readonly string[], direction: "next" | "previous"): string | undefined;
 /**
  * Previous chapter (verse 1), rolling across book boundaries. Steps back one chapter within the
  * current book when it is present and not at chapter 1; otherwise — at chapter 1, or when the
@@ -82,7 +82,7 @@ export declare function findAdjacentPresentBook(book: string, availableBooks: st
  * @returns The previous-chapter reference, or `undefined` if there is nowhere before it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availableBooks: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availableBooks: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Next chapter (verse 1), rolling across book boundaries. Steps forward one chapter within the
  * current book when it is present and not at its last chapter; otherwise — at the last chapter, or
@@ -100,7 +100,7 @@ export declare function getPreviousChapterRef(scrRef: SerializedVerseRef, availa
  * @returns The next-chapter reference, or `undefined` if there is nowhere after it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableBooks: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableBooks: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Previous book (chapter 1 verse 1): the closest previous present book, skipping absent books.
  * `scrRef.book` need not be present. Returns `undefined` when there is no present book before it.
@@ -113,7 +113,7 @@ export declare function getNextChapterRef(scrRef: SerializedVerseRef, availableB
  * @returns Chapter 1 verse 1 of the closest previous present book, or `undefined` if none
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousBookRef(scrRef: SerializedVerseRef, availableBooks: string[]): SerializedVerseRef | undefined;
+export declare function getPreviousBookRef(scrRef: SerializedVerseRef, availableBooks: readonly string[]): SerializedVerseRef | undefined;
 /**
  * Next book (chapter 1 verse 1): the closest next present book, skipping absent books.
  * `scrRef.book` need not be present. Returns `undefined` when there is no present book after it.
@@ -123,7 +123,7 @@ export declare function getPreviousBookRef(scrRef: SerializedVerseRef, available
  * @returns Chapter 1 verse 1 of the closest next present book, or `undefined` if none
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBooks: string[]): SerializedVerseRef | undefined;
+export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBooks: readonly string[]): SerializedVerseRef | undefined;
 /**
  * Previous verse, matching Paratext 9 (`SIL.Scripture.VerseRef.PreviousVerse`) with books-present
  * awareness. Decrements within the chapter; from chapter 1 verse 1 goes to verse 0 (P9 assumes
@@ -147,7 +147,7 @@ export declare function getNextBookRef(scrRef: SerializedVerseRef, availableBook
  * @returns The previous-verse reference, or `undefined` if there is nowhere before it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availableBooks?: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availableBooks?: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Next verse, matching Paratext 9 (`SIL.Scripture.VerseRef.NextVerse`) with books-present
  * awareness. Increments within the chapter until the last verse, then rolls to the next chapter's
@@ -169,7 +169,7 @@ export declare function getPreviousVerseRef(scrRef: SerializedVerseRef, availabl
  * @returns The next-verse reference, or `undefined` if there is nowhere after it to go
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBooks?: string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
+export declare function getNextVerseRef(scrRef: SerializedVerseRef, availableBooks?: readonly string[], bounds?: ScriptureBounds): SerializedVerseRef | undefined;
 /**
  * Resolve a physical arrow/bracket navigation direction to the logical reference-history direction
  * for the current UI layout direction. In LTR the left key goes back and the right key goes
