@@ -124,6 +124,7 @@ Check:
 - Dead/unreachable code
 - Unclear variable or function naming
 - Indecipherable [initialisms and abbreviations](../../.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations) in identifiers, types, comments, or localization keys
+- Backward-facing comments: notes that only record development history (ticket/PR IDs for in-PR work, review-finding IDs, stage/epic tags, dated dev notes). See [forward-facing-comments.md](../rules/code-quality/forward-facing-comments.md). Open `TODO(PT-XXXX)`s and non-inlinable deep links are forward-facing and fine
 
 ---
 
