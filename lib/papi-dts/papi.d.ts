@@ -12594,6 +12594,10 @@ declare module 'renderer/services/theme.service' {
    * the subscription — that would cost it every theme change for the rest of the session, where the
    * failed handover only costs it the theme the user left off at.
    *
+   * Neither half is allowed to fail this window's startup. The cache is already usable — it was
+   * filled before React rendered — so a host that is slow or missing costs freshness, not
+   * correctness, and must not take down the unrelated services that start alongside this one.
+   *
    * Call once at renderer startup.
    *
    * @experimental
