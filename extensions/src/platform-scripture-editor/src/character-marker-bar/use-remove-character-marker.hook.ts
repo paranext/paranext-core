@@ -1,13 +1,11 @@
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import papi, { logger } from '@papi/frontend';
-import { deepEqual, getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { MutableRefObject, useCallback } from 'react';
 
 const COMMIT_MESSAGE_KEY: LocalizeKey = '%versionHistoryCommit_beforeRemoveCharacterMarker%';
 const REMOVE_FAILED_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%';
-const NOT_NARROWABLE_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_error_removeCharacterMarkerNotNarrowable%';
 /** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */
 const SYNC_BLOCKED_KEY: LocalizeKey = '%webView_platformScriptureEditor_error_syncEditBlocked%';
 
@@ -18,7 +16,6 @@ const SYNC_BLOCKED_KEY: LocalizeKey = '%webView_platformScriptureEditor_error_sy
 export const REMOVE_CHARACTER_MARKER_STRING_KEYS = Object.freeze([
   COMMIT_MESSAGE_KEY,
   REMOVE_FAILED_KEY,
-  NOT_NARROWABLE_KEY,
   SYNC_BLOCKED_KEY,
 ] as const);
 
@@ -99,23 +96,23 @@ export function useRemoveCharacterMarker({
 
       await commitSnapshot(projectId, localizedStrings[COMMIT_MESSAGE_KEY] ?? COMMIT_MESSAGE_KEY);
 
-      const usjBefore = editorRef.current?.getUsj();
       try {
         editorRef.current?.removeCharacterMarker(marker);
       } catch (e) {
         logger.warn(`Error removing character marker ${marker ?? '(all)'}: ${getErrorMessage(e)}`);
         await notify(localizedStrings[REMOVE_FAILED_KEY] ?? REMOVE_FAILED_KEY);
-        return;
       }
 
-      // The editor declines, without throwing, when the removal could not be confined to the
-      // selection — a range selection covering only part of a NESTED marker whose OUTER marker is
-      // the target. Refusing is correct (removing would alter text the user never selected), but
-      // silently doing nothing is not, so the unchanged document is what surfaces it. Lexical's
-      // `editor.update()` is synchronous, so the USJ read here already reflects the removal.
-      const usjAfter = editorRef.current?.getUsj();
-      if (usjBefore && usjAfter && deepEqual(usjBefore, usjAfter))
-        await notify(localizedStrings[NOT_NARROWABLE_KEY] ?? NOT_NARROWABLE_KEY);
+      // NOT handled: the editor declines, without throwing, when a removal cannot be confined to
+      // the selection — a range selection covering only part of a NESTED marker whose OUTER marker
+      // is the target. Detecting that would need an outcome signal from the editor (a return value
+      // from `removeCharacterMarker`, or the discrete-update-plus-inline-re-derive that
+      // `applyUpdate` does elsewhere in this feature). A before/after `getUsj()` comparison cannot
+      // stand in for that: `getUsj()` returns `editedUsjRef.current`, a cached ref, and the
+      // `editor.update()` inside `removeCharacterMarker` runs without `{ discrete: true }`, so
+      // Lexical defers the commit and that ref is not refreshed synchronously — a before/after
+      // comparison would read the same stale object and report "unchanged" for every successful
+      // removal, not just the declined ones.
     },
     [editorRef, projectId, isSyncBlocked, localizedStrings],
   );

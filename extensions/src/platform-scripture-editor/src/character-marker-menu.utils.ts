@@ -149,8 +149,10 @@ export function generateCharacterMarkerMenuListItems(
           if (selectionState === 'all' && removeCharacterMarker) removeCharacterMarker(marker);
           // Inert while partially covering: extending the marker over the rest of the selection is
           // a separate editor operation (`PT-XXX-B4`), and `insertMarker` would nest instead of
-          // extending. Falling through to the branches below would do exactly that.
-          else if (selectionState !== 'partial') {
+          // extending. Falling through to the branches below would do exactly that. Also excludes
+          // 'all': that case is handled above, and without a `removeCharacterMarker` (the option is
+          // typed optional) it would otherwise fall through here and nest a duplicate marker.
+          else if (selectionState !== 'partial' && selectionState !== 'all') {
             // Never `insertMarker` while a character marker is already applied: it *nests* rather
             // than replaces. Verified 2026-08-04 against the editor package by driving
             // `getUsjMarkerAction('bd')` over a selection inside an existing `\nd` CharNode, which

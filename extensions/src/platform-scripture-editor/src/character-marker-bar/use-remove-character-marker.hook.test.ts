@@ -23,27 +23,19 @@ import { useRemoveCharacterMarker } from './use-remove-character-marker.hook';
 const STRINGS = {
   '%versionHistoryCommit_beforeRemoveCharacterMarker%': 'Before removing character marker',
   '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%': 'Could not remove',
-  '%webView_platformScriptureEditor_error_removeCharacterMarkerNotNarrowable%': 'Cannot narrow',
   '%webView_platformScriptureEditor_error_syncEditBlocked%': 'Editing paused',
 };
 
-/**
- * A mock editor whose USJ changes on removal by default, so a test only opts into the "nothing
- * changed" path by passing `usjChanges: false`.
- */
-function makeEditorRef({ usjChanges = true, throws = false } = {}) {
-  let usj = { type: 'USJ', version: '3.1', content: ['before'] };
+function makeEditorRef({ throws = false } = {}) {
   const removeCharacterMarker = vi.fn(() => {
     if (throws) throw new Error('readonly');
-    if (usjChanges) usj = { type: 'USJ', version: '3.1', content: ['after'] };
   });
-  const getUsj = vi.fn(() => usj);
   // A mock literal cannot satisfy the full EditorRef interface — cast for test isolation.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const ref = {
-    current: { removeCharacterMarker, getUsj },
+    current: { removeCharacterMarker },
   } as unknown as MutableRefObject<EditorRef | null>;
-  return { ref, removeCharacterMarker, getUsj };
+  return { ref, removeCharacterMarker };
 }
 
 function renderRemove(
@@ -148,28 +140,5 @@ describe('useRemoveCharacterMarker', () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Could not remove', severity: 'warning' }),
     );
-  });
-
-  it('explains a refusal when the document is unchanged after the call', async () => {
-    // The upstream method declines rather than over-removing when a range selection covers only
-    // part of a nested marker and the OUTER one is the target. Without this the row just does
-    // nothing, which is the silent no-op the AC forbids.
-    const { ref } = makeEditorRef({ usjChanges: false });
-    const result = renderRemove({ editorRef: ref });
-
-    await result.current('nd');
-
-    expect(sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Cannot narrow', severity: 'warning' }),
-    );
-  });
-
-  it('says nothing when the removal did change the document', async () => {
-    const { ref } = makeEditorRef();
-    const result = renderRemove({ editorRef: ref });
-
-    await result.current('nd');
-
-    expect(sendNotification).not.toHaveBeenCalled();
   });
 });

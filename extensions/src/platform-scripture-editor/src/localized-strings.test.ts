@@ -91,14 +91,12 @@ describe('character marker control labels', () => {
   });
 });
 
-// The two notification strings the removal action can show. The commit-message and sync-blocked
+// The one notification string the removal action can show. The commit-message and sync-blocked
 // keys in that list are excluded here: `%versionHistoryCommit_*%` is en-only across the whole file
 // (its insert-footnote and insert-cross-reference siblings are too), and the sync-blocked key is
 // already shipped and paired.
 const REMOVE_CHARACTER_MARKER_PARITY_KEYS = REMOVE_CHARACTER_MARKER_STRING_KEYS.filter(
-  (key) =>
-    key === '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%' ||
-    key === '%webView_platformScriptureEditor_error_removeCharacterMarkerNotNarrowable%',
+  (key) => key === '%webView_platformScriptureEditor_error_removeCharacterMarkerFailed%',
 );
 
 describe('character marker removal notifications', () => {

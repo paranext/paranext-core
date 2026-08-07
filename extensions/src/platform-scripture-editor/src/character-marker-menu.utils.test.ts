@@ -337,6 +337,25 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it('is inert for a fully-covering row with no removeCharacterMarker, instead of nesting', () => {
+    // With no `removeCharacterMarker`, a fully-covering row must not fall through to the
+    // insert/change branch below — that would nest a duplicate marker, which the code this pins
+    // says must never happen.
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const changeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
+      currentCharacterMarker: 'bd',
+      changeCharacterMarker,
+      coverage: { markerStates: { bd: 'all' }, hasUncovered: false },
+    });
+
+    items.find((item) => item.marker === 'bd')?.action();
+
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(changeCharacterMarker).not.toHaveBeenCalled();
+  });
+
   it('leaves a partially-covering marker row inert (extend is PT-XXX-B4)', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const close = vi.fn();
