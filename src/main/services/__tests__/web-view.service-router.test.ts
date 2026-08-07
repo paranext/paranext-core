@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
     networkObjectSet: vi.fn(),
     loggerWarn: vi.fn(),
     loggerDebug: vi.fn(),
+    registerRequestHandler: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -65,7 +66,10 @@ vi.mock('@shared/services/network-object.service', () => ({
   onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
-vi.mock('@shared/services/network.service', () => ({ getNetworkEvent: () => vi.fn() }));
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: () => vi.fn(),
+  registerRequestHandler: mocks.registerRequestHandler,
+}));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: mocks.loggerWarn, debug: mocks.loggerDebug, error: vi.fn() },
 }));
@@ -104,7 +108,38 @@ function windowShard(
     // Typed the way the real method is — it answers with nothing when the open did not happen
     openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
     reloadWebView: vi.fn(async () => 'reloaded'),
+    openSettingsTab: vi.fn(async () => undefined),
   };
+}
+
+/** A per-window shard whose web views carry the given projects, keyed by web view id */
+function windowShardWithProjects(projectIdsByWebViewId: Record<string, string | undefined>) {
+  return {
+    ...windowShard(Object.keys(projectIdsByWebViewId)),
+    getOpenWebViewDefinition: vi.fn(async (id: string) =>
+      id in projectIdsByWebViewId ? { id, projectId: projectIdsByWebViewId[id] } : undefined,
+    ),
+  };
+}
+
+/** Registrations the router made, keyed by the generic request type it claimed */
+function registrations() {
+  return new Map<string, { handler: Function; docs: unknown }>(
+    mocks.registerRequestHandler.mock.calls.map(([requestType, handler, docs]) => [
+      requestType,
+      { handler, docs },
+    ]),
+  );
+}
+
+/** Start the router and hand back the settings command handler for the given name */
+async function getCommandHandler(commandName: string) {
+  mocks.networkObjectSet.mockResolvedValue(undefined);
+  mocks.registerRequestHandler.mockResolvedValue(vi.fn());
+  await startWebViewServiceRouter();
+  const registration = registrations().get(`command:${commandName}`);
+  if (!registration) throw new Error(`${commandName} was not registered`);
+  return registration.handler;
 }
 
 describe('web view service router', () => {
@@ -705,6 +740,119 @@ describe('web view service router', () => {
       mocks.isWindowReady.mockReturnValue(false);
 
       await expect(getOpenWebViewDefinitionsForWindow(1)).resolves.toEqual([]);
+    });
+  });
+
+  describe('the settings commands', () => {
+    test('claims all three settings command names', async () => {
+      await getCommandHandler('platform.openSettings');
+
+      expect([...registrations().keys()].sort()).toEqual(
+        [
+          'command:platform.openProjectSettings',
+          'command:platform.openSettings',
+          'command:platform.openUserSettings',
+        ].sort(),
+      );
+    });
+
+    test('opens the settings for a named web view in the window that owns it', async () => {
+      // Focus is on window 1, but window 2 is showing this web view — its settings must open there,
+      // where the web view (and so its project) actually is
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards);
+      const openSettings = await getCommandHandler('platform.openSettings');
+
+      await openSettings('owned-view');
+
+      expect(shards[2].openSettingsTab).toHaveBeenCalledWith('project-2');
+      expect(shards[1].openSettingsTab).not.toHaveBeenCalled();
+    });
+
+    test('passes the project the ownership search already read, without asking again', async () => {
+      // The owner lookup returns the definition it fetched; a second read would be another
+      // cross-process round trip that can come back with something different
+      const shard = windowShardWithProjects({ 'owned-view': 'project-2' });
+      withWindows({ 2: shard });
+      const openSettings = await getCommandHandler('platform.openSettings');
+
+      await openSettings('owned-view');
+
+      expect(shard.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+      expect(shard.openSettingsTab).toHaveBeenCalledWith('project-2');
+    });
+
+    test('routes the deprecated openProjectSettings by ownership too', async () => {
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards);
+      const openProjectSettings = await getCommandHandler('platform.openProjectSettings');
+
+      await openProjectSettings('owned-view');
+
+      expect(shards[2].openSettingsTab).toHaveBeenCalledWith('project-2');
+    });
+
+    test('follows focus for openUserSettings, which names no web view', async () => {
+      // `platform.openUserSettings` opens the same tab but is declared to take no arguments, so it
+      // has no owner to route by and belongs to the window the user is in. Losing this distinction
+      // would send it to whichever window happens to own some web view.
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards);
+      const openUserSettings = await getCommandHandler('platform.openUserSettings');
+
+      await openUserSettings();
+
+      expect(shards[1].openSettingsTab).toHaveBeenCalledWith(undefined);
+      expect(shards[2].openSettingsTab).not.toHaveBeenCalled();
+      // No ownership fan-out at all for a command that names nothing
+      expect(shards[2].getOpenWebViewDefinition).not.toHaveBeenCalled();
+    });
+
+    test('opens unlimited settings in the focused window when openSettings names no web view', async () => {
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards);
+      const openSettings = await getCommandHandler('platform.openSettings');
+
+      await openSettings();
+
+      expect(shards[1].openSettingsTab).toHaveBeenCalledWith(undefined);
+      expect(shards[2].getOpenWebViewDefinition).not.toHaveBeenCalled();
+    });
+
+    test('falls back to the focused window when no window owns the named web view', async () => {
+      const shards = { 1: windowShardWithProjects({}), 2: windowShardWithProjects({}) };
+      withWindows(shards);
+      const openSettings = await getCommandHandler('platform.openSettings');
+
+      await openSettings('gone-view');
+
+      expect(shards[1].openSettingsTab).toHaveBeenCalledWith(undefined);
+    });
+
+    test('fails the call rather than running it in the wrong window when a window cannot be asked', async () => {
+      // Falling back to focus here opens the settings for a web view in a window that does not have
+      // it, against whichever project that window happens to be showing
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards, { unreadyWindowIds: [2] });
+      const openSettings = await getCommandHandler('platform.openSettings');
+
+      await expect(openSettings('owned-view')).rejects.toThrow('unreachable');
+      expect(shards[1].openSettingsTab).not.toHaveBeenCalled();
     });
   });
 });

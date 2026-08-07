@@ -2,7 +2,8 @@
  * Service router for the WebView service. Registers under the generic "WebViewService" network
  * object name and routes calls to the focused window's WebView service shard (e.g.
  * "WebViewService-1"). This enables multi-window support by ensuring that operations like
- * openWebView execute in the correct window.
+ * openWebView execute in the correct window. It also claims the settings commands, which open a tab
+ * in a window's dock layout and so belong to the same shards.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
@@ -32,7 +33,10 @@ import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
-import { getNetworkEvent } from '@shared/services/network.service';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
+import { serializeRequestType } from '@shared/utils/util';
 import {
   CloseWebViewEvent,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -548,6 +552,87 @@ const webViewServiceRouter: WebViewServiceType = {
 };
 
 /**
+ * Open a Settings tab limited to the project of the web view a caller named.
+ *
+ * Owner-routed: opening the settings for a web view in a background window must not open a settings
+ * tab in the window the user happens to be looking at, and the owning window is the only one that
+ * can read the web view's definition. `findOwner` hands back the definition it already fetched, so
+ * the project comes along without a second round trip. A web view no window claims falls back to
+ * the focused window with no project — the same thing an id that no longer exists anywhere wants.
+ */
+async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
+  // The id is optional on this command, and arguments arrive untyped over the network
+  if (typeof webViewId === 'string') {
+    // A window that could not be asked is treated as one that answered no, unlike the existingId
+    // search: guessing wrong there mints a second copy of a view meant to be unique, while guessing
+    // wrong here opens a settings tab in the window the user is in, which is where an unroutable
+    // request was always going to land.
+    const { owner } = await findOwner({ kind: 'id', webViewId }, 'openSettings');
+    if (owner) {
+      await owner.shard.openSettingsTab(owner.definition.projectId);
+      return;
+    }
+  }
+  await (await getTargetWebViewShard()).openSettingsTab(undefined);
+}
+
+/**
+ * Open a Settings tab that is not limited to any project, in the window the user is working in.
+ *
+ * Focus-routed, unlike the two above: this command is declared to take no arguments, so it names no
+ * web view and has no owner to route by. It shares its implementation with them and must not share
+ * their routing.
+ */
+async function openUserSettings(): Promise<void> {
+  await (await getTargetWebViewShard()).openSettingsTab(undefined);
+}
+
+/** OpenRPC documentation for the settings commands, which are the names consumers call */
+const SETTINGS_COMMAND_DOCS: Record<string, SingleMethodDocumentation> = {
+  'platform.openSettings': {
+    method: {
+      summary: 'Open a Settings tab, optionally limited to the project shown in a given web view',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'Web view whose project the Settings tab should be limited to, if any',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openProjectSettings': {
+    method: {
+      deprecated: true,
+      summary:
+        'Open the Settings tab limited to the project shown in the given web view. Renamed to ' +
+        'platform.openSettings',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view whose project the Settings tab should be limited to',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openUserSettings': {
+    method: {
+      deprecated: true,
+      summary:
+        'Open the Settings tab without limiting it to any particular project. Renamed to ' +
+        'platform.openSettings',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+};
+
+/**
  * Register the WebView service router under the generic name so it claims the name before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
@@ -563,5 +648,23 @@ export async function startWebViewServiceRouter(): Promise<void> {
     // single-window caller never had to handle.
     { 'x-experimental': true },
   );
+
+  await Promise.all([
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.openSettings'),
+      openSettingsForWebView,
+      SETTINGS_COMMAND_DOCS['platform.openSettings'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.openProjectSettings'),
+      openSettingsForWebView,
+      SETTINGS_COMMAND_DOCS['platform.openProjectSettings'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.openUserSettings'),
+      openUserSettings,
+      SETTINGS_COMMAND_DOCS['platform.openUserSettings'],
+    ),
+  ]);
   logger.info('WebView service router registered');
 }

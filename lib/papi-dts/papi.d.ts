@@ -4247,9 +4247,6 @@ declare module 'shared/services/web-view.service-model' {
    * @experimental
    */
   export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
-    'platform.openSettings',
-    'platform.openProjectSettings',
-    'platform.openUserSettings',
     'platform.goToNextChapter',
     'platform.goToPreviousChapter',
     'platform.goToNextBook',
