@@ -36,7 +36,7 @@ import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationRoutingService } from '@main/services/notification-routing.service';
 import { startWindowRoutingService } from '@main/services/window-routing.service';
 import {
-  isAppQuitRequested,
+  isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
@@ -44,7 +44,6 @@ import {
 import { startWebViewRoutingService } from '@main/services/web-view-routing.service';
 import {
   addWindow,
-  areAllWindowsClosing,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
@@ -536,7 +535,10 @@ async function main() {
     // would start a second one and the windows still waiting would stop waiting for anything.
     // Thrown rather than returned quietly: `platform.createWindow` and the menu item both await
     // this, and resolving with nothing would report a window that does not exist as created.
-    if (isAppQuitRequested())
+    // Asked of both routes the app takes down, not just a quit: closing the last window with the X
+    // button never sets the quit flag, and that gap is precisely as long as the shared run this
+    // guard exists to protect.
+    if (isAppShuttingDown())
       throw new Error('Cannot create a window while the application is quitting');
 
     // A window is being created, so the app is alive and whatever brought the last one down is
@@ -825,16 +827,21 @@ async function main() {
       // tasks to the other
       markWindowClosing(windowId);
 
+      // Prevents the window from initially closing. First, and ahead of every decision this handler
+      // makes: Electron reads `defaultPrevented` when this synchronous stretch returns, so anything
+      // that throws above this line lets the window close with none of the shutdown work below ever
+      // running — and an async listener's throw becomes a rejected promise Electron never sees.
+      // Below the `isWindowClosing` guard, though: the second close click has to reach Electron's
+      // default close, which is the user's only escape from the wait this handler is about to start.
+      event.preventDefault();
+      isWindowClosing = true;
+
       // Shutdown tasks belong to the app going down, not to a window going away. Two ways the app
       // goes down, and both have to be caught here: every remaining window closing at once, and a
       // quit (Cmd+Q, menu Quit, OS logout) — which does NOT show up as a last-window close, since
       // Electron closes every window and `isAppQuitRequested` is set from `before-quit`, which
       // fires ahead of any `close`.
-      const isAppGoingDown = isAppQuitRequested() || areAllWindowsClosing();
-
-      // Prevents the window from initially closing
-      event.preventDefault();
-      isWindowClosing = true;
+      const isAppGoingDown = isAppShuttingDown();
 
       try {
         if (isAppGoingDown) {
@@ -1140,6 +1147,12 @@ async function main() {
     }
   });
 
+  /**
+   * Ends the one process-global macOS menubar subscription. Undefined off macOS, before the
+   * subscription is made, and once it has been run — the quit teardown below runs it exactly once.
+   */
+  let unsubscribeMacosMenubar: (() => Promise<boolean>) | undefined;
+
   let isAppQuitting = false;
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
@@ -1152,6 +1165,17 @@ async function main() {
       // Also, in the future, this should allow a "are you sure?" dialog to display.
       e.preventDefault();
       isAppQuitting = true;
+
+      // Cleared before it is run so a second pass through here cannot run it again
+      const unsubscribeMenubar = unsubscribeMacosMenubar;
+      unsubscribeMacosMenubar = undefined;
+      if (unsubscribeMenubar) {
+        try {
+          await unsubscribeMenubar();
+        } catch (error) {
+          logger.warn(`Failed to unsubscribe the macOS menubar: ${getErrorMessage(error)}`);
+        }
+      }
 
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT_MS),
@@ -1199,11 +1223,13 @@ async function main() {
         await installExtensions();
       }
 
-      // Subscribe to macOS menubar once globally (not per-window)
+      // Subscribe to macOS menubar once globally (not per-window). Its unsubscribe is handed to the
+      // ordered teardown in `will-quit` rather than registered as a second listener there: a second
+      // listener runs on the FIRST emission, while that teardown has only begun, and `will-quit` is
+      // emitted again after the teardown re-quits, so it would run twice as well as too early.
       if (process.platform === 'darwin') {
         try {
-          const unsubscribeMacosMenubar = await subscribeCurrentMacosMenubar();
-          app.on('will-quit', () => unsubscribeMacosMenubar());
+          unsubscribeMacosMenubar = await subscribeCurrentMacosMenubar();
         } catch (error) {
           logger.info(`Failed to build the macOS menubar ${error}`);
         }

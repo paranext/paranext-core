@@ -11,6 +11,8 @@
  * would come down without running its shutdown tasks.
  */
 
+import { areAllWindowsClosing } from '@main/services/window-state.service';
+
 let isQuitRequested = false;
 let shutdownTasksPromise: Promise<void> | undefined;
 
@@ -26,6 +28,22 @@ export function markQuitRequested(): void {
  */
 export function isAppQuitRequested(): boolean {
   return isQuitRequested;
+}
+
+/**
+ * Whether the app is on its way down, by either of the two routes it can take.
+ *
+ * A quit (Cmd+Q, menu Quit, OS logout) sets the quit flag from `before-quit`. Closing the last
+ * window with the X button does not: on non-macOS, `window-all-closed` only calls `app.quit()` once
+ * every window is already gone, so for the whole shutdown the quit flag is false while every
+ * tracked window is on its way out.
+ *
+ * Both the guard that refuses to create a window during a shutdown and the decision a window's
+ * close handler makes about whether to run the app's shutdown tasks have to agree on this, or the
+ * guard protects the shared shutdown run from only one of the two ways it can be undermined.
+ */
+export function isAppShuttingDown(): boolean {
+  return isAppQuitRequested() || areAllWindowsClosing();
 }
 
 /**

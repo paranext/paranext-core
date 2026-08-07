@@ -1,15 +1,36 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type { BrowserWindow } from 'electron';
 import {
   isAppQuitRequested,
+  isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
+import {
+  addWindow,
+  markWindowClosing,
+  resetForTesting as resetWindowStateForTesting,
+} from '@main/services/window-state.service';
+
+// `window-state.service`, which this module asks about the tracked windows, imports BrowserWindow
+// as a type, but the module graph resolves `electron`, which is unavailable outside the Electron
+// runtime. `vi.mock` is hoisted above the imports above, so the static import resolves against this
+// stub.
+vi.mock('electron', () => ({ BrowserWindow: class {} }));
+
+/** Stand-in for a BrowserWindow — the window state service only reads `id` and `isDestroyed` */
+function fakeWindow(id: number): BrowserWindow {
+  // Constructing a real BrowserWindow needs the Electron runtime
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { id, isDestroyed: () => false } as BrowserWindow;
+}
 
 describe('shutdown latches', () => {
   beforeEach(() => {
-    // The module holds process-wide state, so unwind it between tests
+    // Both modules hold process-wide state, so unwind it between tests
     resetShutdownLatchesForNewSession();
+    resetWindowStateForTesting();
   });
 
   test('does not report a quit until one is requested', () => {
@@ -54,6 +75,43 @@ describe('shutdown latches', () => {
     resetShutdownLatchesForNewSession();
 
     expect(isAppQuitRequested()).toBe(false);
+  });
+
+  describe('whether the app is on its way down', () => {
+    test('reports the app shutting down while a quit is under way', () => {
+      addWindow(fakeWindow(1));
+
+      markQuitRequested();
+
+      expect(isAppShuttingDown()).toBe(true);
+    });
+
+    test('reports the app shutting down once every window has begun closing', () => {
+      // Closing the last window with the X button emits no `before-quit`, so the quit flag stays
+      // false for the whole shutdown. Anything that refuses to start new work during a shutdown has
+      // to catch this case too, or it only guards half of the ways the app goes down.
+      addWindow(fakeWindow(1));
+
+      markWindowClosing(1);
+
+      expect(isAppQuitRequested()).toBe(false);
+      expect(isAppShuttingDown()).toBe(true);
+    });
+
+    test('does not report the app shutting down while a window is staying open', () => {
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+
+      markWindowClosing(1);
+
+      expect(isAppShuttingDown()).toBe(false);
+    });
+
+    test('does not report the app shutting down when no window is tracked', () => {
+      // Process start and a macOS dock reactivation both run with nothing tracked. Reporting a
+      // shutdown here would refuse to create the window the app is starting up to show.
+      expect(isAppShuttingDown()).toBe(false);
+    });
   });
 
   test('keeps the shared run distinct from the quit flag', async () => {
