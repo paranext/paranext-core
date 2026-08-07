@@ -191,6 +191,25 @@ async function insertCrossReferenceAtSelection(webViewId: string | undefined): P
   await webViewController.insertCrossReferenceAtSelection();
 }
 
+async function insertEndnoteAtSelection(webViewId: string | undefined): Promise<void> {
+  logger.debug('Inserting endnote...');
+
+  if (!webViewId) {
+    throw new Error('No WebView ID provided!');
+  }
+
+  const webViewController = await papi.webViews.getWebViewController(
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+    webViewId,
+  );
+
+  if (!webViewController) {
+    throw new Error('No web view controller found!');
+  }
+
+  await webViewController.insertEndnoteAtSelection();
+}
+
 async function insertCommentAtSelection(webViewId: string | undefined): Promise<void> {
   logger.debug('Inserting project comment...');
 
@@ -830,6 +849,16 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
           message,
         );
       },
+      async insertEndnoteAtSelection() {
+        const message: EditorWebViewMessage = {
+          method: 'insertEndnoteAtSelection',
+        };
+        await papi.webViewProviders.postMessageToWebView(
+          currentWebViewDefinition.id,
+          webViewNonce,
+          message,
+        );
+      },
       async insertCommentAtSelection() {
         const { projectId } = currentWebViewDefinition;
         if (!projectId) {
@@ -1175,6 +1204,27 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             summary:
               'The ID of the web view tied to the project that we are inserting the footnote',
             schema: { type: 'null' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+  const insertEndnotePromise = papi.commands.registerCommand(
+    'platformScriptureEditor.insertEndnoteAtSelection',
+    insertEndnoteAtSelection,
+    {
+      method: {
+        summary: 'Insert an endnote into the project at the given selection in the editor',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that we are inserting the endnote',
+            schema: { type: 'string' },
           },
         ],
         result: {
@@ -1539,6 +1589,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await changeFootnotesPaneLocationPromise,
     await insertFootnotePromise,
     await insertCrossReferencePromise,
+    await insertEndnotePromise,
     await insertCommentPromise,
     await annotationStyleDataProviderPromise,
     await modelTextPanelWebViewProviderPromise,
