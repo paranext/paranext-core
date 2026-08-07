@@ -6,6 +6,14 @@
  * default theme as the last fallback for the theme it paints its first frame with (see
  * `renderer/services/theme.service.ts`). One copy is what stops the two from disagreeing about what
  * "the default theme" is — a disagreement nothing would report, because both answers render.
+ *
+ * PUBLISHED WHOLESALE. The renderer's import puts this module on the generated type surface, so
+ * `THEMES_DATA_OBJECT`, `expandThemeFamiliesByIdWithDefault` and `DEFAULT_USER_THEME_FAMILY` are
+ * visible to extensions even though only main uses them. Accepted rather than split: the default
+ * theme is derived from the raw data by the same expansion those exports are, so a module holding
+ * only `DEFAULT_THEME` would either import this one (putting it back on the surface) or expand the
+ * built-in themes a second time — which is the disagreement about "the default theme" this file
+ * exists to prevent. All four are marked `@experimental`.
  */
 
 import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
