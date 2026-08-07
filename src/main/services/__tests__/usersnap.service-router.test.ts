@@ -154,11 +154,14 @@ describe('Usersnap service router', () => {
     expect(registrations().get('command:platform.usersnapSubmitIdea')?.docs).toBeDefined();
   });
 
-  test('refuses to route rather than guessing when no window is available', async () => {
+  test.each([
+    'command:platform.usersnapSubmitIdea',
+    'command:platform.usersnapReportIssue',
+    'command:platform.isUsersnapFormCurrentlyOpen',
+    'command:platform.closeOpenUsersnapForm',
+  ])('%s refuses to route rather than guessing when no window is available', async (name) => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
 
-    await expect(
-      registrations().get('command:platform.usersnapSubmitIdea')?.handler(),
-    ).rejects.toThrow('No windows available');
+    await expect(registrations().get(name)?.handler()).rejects.toThrow('No windows available');
   });
 });
