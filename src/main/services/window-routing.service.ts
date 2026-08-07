@@ -220,11 +220,13 @@ class FocusedWindowDataProviderEngine
         `Window service for window ${targetWindowId} is not available. The renderer may not have started yet.`,
       );
     // Start relaying from this window if we aren't already — covers the case where the first call
-    // arrives before any routing target change has happened. Failing to set up the relay must not
-    // fail the read: the window answered, and the relay retries on the next call.
-    await this.#relayUpdatesFromTargetWindow().catch((e) =>
-      logger.warn(`Window routing could not start relaying updates: ${getErrorMessage(e)}`),
-    );
+    // arrives before any routing target change has happened. A relay this call could not set up
+    // fails the call rather than being logged and dropped: the value would be correct at the moment
+    // it was read and then silently stop tracking the window, and the caller is the only one
+    // positioned to retry or degrade. The routing target change that follows is still the later
+    // self-heal — `#repointRelay` commits its bookkeeping only after a subscribe succeeds, so that
+    // re-point genuinely retries instead of short-circuiting on a relay it does not hold.
+    await this.#relayUpdatesFromTargetWindow();
     return windowService;
   }
 }

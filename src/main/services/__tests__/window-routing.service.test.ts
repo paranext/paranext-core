@@ -312,9 +312,10 @@ describe('window service routing proxy', () => {
     expect(only.unsubscribe).toHaveBeenCalledTimes(1);
   });
 
-  test('retries the relay after a failed subscribe instead of wedging', async () => {
-    // Committing the bookkeeping before the subscribe resolved would leave the engine believing it
-    // relays a window it holds no subscription to, and the short-circuit would block every retry
+  test('fails the call that triggered a relay setup it could not complete', async () => {
+    // A read that answers from a window it never managed to subscribe to hands back a value that
+    // then silently stops updating. The caller is the only one positioned to retry or degrade, so
+    // the failure travels to it rather than being logged and dropped.
     const only = windowService('a');
     let failNext = true;
     const attachToUpdates = only.subscribeFocus.getMockImplementation();
@@ -327,13 +328,39 @@ describe('window service routing proxy', () => {
     });
     const engine = new FocusedWindowDataProviderEngine(async () => only as never);
 
-    // The read still succeeds — the window answered; only the relay setup failed
-    expect(await engine.getFocus()).toBe('a');
-    expect(await engine.getFocus()).toBe('a');
+    await expect(engine.getFocus()).rejects.toThrow('transient subscribe failure');
 
+    // Committing the bookkeeping before the subscribe resolved would leave the engine believing it
+    // relays a window it holds no subscription to, and the short-circuit would block every retry
+    expect(await engine.getFocus()).toBe('a');
     expect(only.subscribeFocus).toHaveBeenCalledTimes(2);
     const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
     await only.emitUpdate();
+    await settle();
+    expect(notifyUpdate).toHaveBeenCalledWith('Focus');
+  });
+
+  test('re-points on the next routing target change after a failed relay setup', async () => {
+    // Failing the triggering call is not the whole recovery: the routing target change that follows
+    // re-points the relay on its own, so the window that ends up targeted is relayed without another
+    // read having to ask for it.
+    const first = windowService('focus-in-window-1');
+    const second = windowService('focus-in-window-2');
+    first.subscribeFocus.mockRejectedValue(new Error('transient subscribe failure'));
+    const engine = new FocusedWindowDataProviderEngine(
+      async (id) => (id === 1 ? first : second) as never,
+    );
+
+    await expect(engine.getFocus()).rejects.toThrow('transient subscribe failure');
+
+    moveRoutingTargetTo(2);
+    await settle();
+
+    expect(second.subscribeFocus).toHaveBeenCalledTimes(1);
+    // Spied only now, so what it sees is the relay working rather than the notify the routing
+    // target change itself fires
+    const notifyUpdate = vi.spyOn(engine, 'notifyUpdate');
+    await second.emitUpdate();
     await settle();
     expect(notifyUpdate).toHaveBeenCalledWith('Focus');
   });
