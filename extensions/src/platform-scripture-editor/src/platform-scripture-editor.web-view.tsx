@@ -115,6 +115,7 @@ import { FootnotesLayout } from './platform-scripture-editor-footnotes.component
 import {
   availableScrollGroupIds,
   blockMarkerToBlockNames,
+  correctEditorUsjVersion,
   deepEqualAcrossIframes,
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
@@ -124,6 +125,7 @@ import {
   selectCommentThreadInPanelSafe,
 } from './platform-scripture-editor.utils';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
+import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import {
@@ -161,6 +163,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
+  // Consumed by CharacterMarkerControl, which its placement wrapper mounts. Preloaded here because
+  // the web view owns the key list; resolving one extra key in Power mode renders nothing.
+  ...CHARACTER_MARKER_CONTROL_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -256,21 +261,6 @@ const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
 // Sentinel appended by the backend write-gate (SendReceiveWriteLock in paranext-core's c-sharp)
 // when a project write is rejected because an automatic Send/Receive is syncing that project.
 const SYNC_EDIT_BLOCKED_REGEX = /\(SR_EDIT_BLOCKED\)/;
-
-/**
- * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
- *
- * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
- * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
- * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
- * need to change how we're handling this.
- */
-function correctEditorUsjVersion(editorUsj: Usj): Usj {
-  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
-  // well right now
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
-}
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
   id: webViewId,
