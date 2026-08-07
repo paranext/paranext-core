@@ -450,6 +450,36 @@ describe('handleSwitchToSimpleMode', () => {
 
     expect(localStorage.getItem('dock-saved-layout')).toContain('power-layout');
   });
+
+  it('recovers to the bare layout and releases the overlay when the project-bound layout fails to load', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    // Throw only for the project-bound layout (identified by the mock builder's distinctive
+    // `builtForProjectId` field), not for `registerDockLayout`'s own fire-and-forget initial bare
+    // load or the bare-layout recovery attempt this test expects - matching on the layout's shape
+    // avoids depending on exactly which call number is which.
+    vi.mocked(fakeDockLayout.loadLayout).mockImplementation((layout) => {
+      if (layout && typeof layout === 'object' && 'builtForProjectId' in layout) {
+        throw new Error('rc-dock explosion');
+      }
+    });
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-1', isEditable: true });
+
+    await host.handleSwitchToSimpleMode();
+
+    // Recovered via the bare-layout fallback, instead of leaving the dock stuck on whatever it
+    // showed when the project-bound load threw.
+    const { lastCall } = vi.mocked(fakeDockLayout.loadLayout).mock;
+    expect(lastCall?.[0]).not.toEqual(
+      expect.objectContaining({ builtForProjectId: expect.anything() }),
+    );
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+    const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
+    expect(getWorkspaceUpdating()).toBe(false);
+  });
 });
 
 describe('resolveProjectIsEditable', () => {

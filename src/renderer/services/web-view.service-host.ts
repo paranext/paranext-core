@@ -1168,38 +1168,50 @@ async function resolveFastPathIsEditable(cached: LastOpenedProject): Promise<boo
 export async function handleSwitchToSimpleMode(
   generation: number = startNewSwitchGeneration(),
 ): Promise<void> {
-  const cached = getLastOpenedProject();
-  if (cached) {
-    const isEditable = await resolveFastPathIsEditable(cached);
-    await runProjectBoundSimpleSwitch(cached.id, !isEditable, generation);
-    return;
-  }
+  try {
+    const cached = getLastOpenedProject();
+    if (cached) {
+      const isEditable = await resolveFastPathIsEditable(cached);
+      await runProjectBoundSimpleSwitch(cached.id, !isEditable, generation);
+      return;
+    }
 
-  const resolvedId = await withTimeout(getMostRecentProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
-  if (resolvedId === LOOKUP_TIMED_OUT) {
-    logger.warn(
-      `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving the most recent project while switching to Simple mode; loading the bare layout instead.`,
-    );
-  }
-  if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
-    await loadLayoutWithWarning(generation);
-    return;
-  }
+    const resolvedId = await withTimeout(getMostRecentProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
+    if (resolvedId === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving the most recent project while switching to Simple mode; loading the bare layout instead.`,
+      );
+    }
+    if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
+      await loadLayoutWithWarning(generation);
+      return;
+    }
 
-  const isEditable = await withTimeout(
-    () => resolveProjectIsEditable(resolvedId),
-    COLD_START_LOOKUP_TIMEOUT_MS,
-  );
-  if (isEditable === LOOKUP_TIMED_OUT) {
+    const isEditable = await withTimeout(
+      () => resolveProjectIsEditable(resolvedId),
+      COLD_START_LOOKUP_TIMEOUT_MS,
+    );
+    if (isEditable === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
+      );
+      await loadLayoutWithWarning(generation);
+      return;
+    }
+    // Populate the cache so the next switch can take the fast path.
+    setLastOpenedProject({ id: resolvedId, isEditable });
+    await runProjectBoundSimpleSwitch(resolvedId, !isEditable, generation);
+  } catch (err) {
+    // Belt-and-suspenders: `runProjectBoundSimpleSwitch` already recovers from its own failures
+    // internally (see its try/catch/finally), so this is only reached if something upstream of it
+    // throws unexpectedly. Either way, a settings-subscription callback must never produce an
+    // unhandled rejection, and the dock must never be left stuck on the pre-switch layout while
+    // `platform.interfaceMode` already reads `'simple'`.
     logger.warn(
-      `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
+      `Switching to Simple mode failed unexpectedly (${getErrorMessage(err)}); falling back to the bare layout.`,
     );
     await loadLayoutWithWarning(generation);
-    return;
   }
-  // Populate the cache so the next switch can take the fast path.
-  setLastOpenedProject({ id: resolvedId, isEditable });
-  await runProjectBoundSimpleSwitch(resolvedId, !isEditable, generation);
 }
 
 /**
@@ -1246,26 +1258,32 @@ async function runProjectBoundSimpleSwitch(
 ): Promise<void> {
   if (generation !== switchGeneration) return; // superseded before this switch even started
 
-  // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
-  // the default-project picker never fires `openScriptureEditor` and the extension's
-  // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
-  const releaseWorkspaceUpdate = startWorkspaceUpdate();
-  // Force React to commit + browser to paint the overlay BEFORE the layout swap, otherwise the
-  // show/hide can batch around the fast `loadLayout` and the overlay never appears.
-  await waitForNextPaint();
-
-  // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
-  // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
-  // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
-  // where the previous switch's resolved titles are still in the dock layout and the new update
-  // events for them are what tell us the project content has actually landed.
-  const tabsResolved = trackSimpleLayoutTabsResolvedImpl({
-    tabIds: SIMPLE_LAYOUT_TAB_IDS,
-    onDidOpenWebView,
-    onDidUpdateWebView,
-  });
-
+  // `startWorkspaceUpdate`/`waitForNextPaint`/the tracker are acquired *inside* `try` (not before
+  // it) so a throw from any of them still reaches `catch`/`finally` below — previously a throw
+  // here would skip both, leaking the overlay token (until its 30s safety leash) and the tracker's
+  // event subscriptions. `finally` only releases/disposes what was actually acquired.
+  let releaseWorkspaceUpdate: (() => void) | undefined;
+  let tabsResolved: ReturnType<typeof trackSimpleLayoutTabsResolvedImpl> | undefined;
   try {
+    // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
+    // the default-project picker never fires `openScriptureEditor` and the extension's
+    // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
+    releaseWorkspaceUpdate = startWorkspaceUpdate();
+    // Force React to commit + browser to paint the overlay BEFORE the layout swap, otherwise the
+    // show/hide can batch around the fast `loadLayout` and the overlay never appears.
+    await waitForNextPaint();
+
+    // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
+    // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
+    // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
+    // where the previous switch's resolved titles are still in the dock layout and the new update
+    // events for them are what tell us the project content has actually landed.
+    tabsResolved = trackSimpleLayoutTabsResolvedImpl({
+      tabIds: SIMPLE_LAYOUT_TAB_IDS,
+      onDidOpenWebView,
+      onDidUpdateWebView,
+    });
+
     const projectBoundLayout = buildSimpleLayoutForProject(projectId, isReadOnly);
     // `loadLayout`'s explicit-layout branch deliberately does not apply the default-layout
     // supplement (a caller passing an explicit layout owns its full contents) - so this caller
@@ -1281,10 +1299,7 @@ async function runProjectBoundSimpleSwitch(
     // have started and become current during the awaits above. A superseded switch must never
     // reach `loadLayout` — that's what would let it persist stale data into the wrong slot (see
     // `switchGeneration`'s doc comment).
-    if (generation !== switchGeneration) {
-      tabsResolved.dispose();
-      return;
-    }
+    if (generation !== switchGeneration) return; // tabsResolved is disposed in `finally` below
     // `persist: false` is defense-in-depth alongside the generation check above: even if this
     // switch is (impossibly, as far as this function knows) still current, a Simple-mode layout
     // must never be written to the Power-mode storage key regardless of what `currentInterfaceMode`
@@ -1297,12 +1312,19 @@ async function runProjectBoundSimpleSwitch(
     logger.warn(
       `Dock layout failed to load project-bound Simple-mode layout for project ${projectId}: ${err}`,
     );
-    tabsResolved.dispose();
+    // Rethrow so the caller (`handleSwitchToSimpleMode`) can fall back to the bare layout instead
+    // of silently leaving the dock on whatever it showed when this failed.
+    throw err;
   } finally {
+    // `dispose` is idempotent (a no-op once the tracker has already finished) - safe to call
+    // unconditionally here even on the happy path, where `await tabsResolved.promise` above means
+    // the tracker already disposed itself. One unconditional cleanup site is easier to trust than
+    // reasoning about which of several paths already handled it.
+    tabsResolved?.dispose();
     // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
     // handoff (overlay → tabs) instead of a flash of an unresolved layout.
     await waitForNextPaint();
-    releaseWorkspaceUpdate();
+    releaseWorkspaceUpdate?.();
   }
 }
 
