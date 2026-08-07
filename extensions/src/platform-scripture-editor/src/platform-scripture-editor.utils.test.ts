@@ -5,6 +5,7 @@ import { UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
   generateParagraphMenuListItems,
@@ -17,6 +18,10 @@ import {
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   toScriptureEditorInfos,
+  isChapterBlank,
+  buildChapterScaffoldOps,
+  canAddChapterNumber,
+  resolveAddChapterNumberClick,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2495,5 +2500,94 @@ describe('generateInlineMarkerMenuListItems', () => {
   it('returns [] when there is no parent marker', () => {
     const { ref } = makeMockEditorRef();
     expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
+  });
+});
+
+describe('isChapterBlank', () => {
+  const emptyUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
+
+  it('returns true when the chapter has no content at all', () => {
+    expect(isChapterBlank(emptyUsj)).toBe(true);
+  });
+
+  it('returns false when the chapter has a chapter marker but no verses (avoids a duplicate \\c on click)', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [{ type: 'chapter', marker: 'c', number: '1' }],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+
+  it('returns false when a verse node exists at the top level', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [{ type: 'verse', marker: 'v', number: '1' }],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+
+  it('returns false when a verse node is nested inside a paragraph', () => {
+    const usj: Usj = {
+      ...emptyUsj,
+      content: [
+        { type: 'chapter', marker: 'c', number: '1' },
+        {
+          type: 'para',
+          marker: 'p',
+          content: [{ type: 'verse', marker: 'v', number: '1' }, 'Some text'],
+        },
+      ],
+    };
+    expect(isChapterBlank(usj)).toBe(false);
+  });
+});
+
+describe('buildChapterScaffoldOps', () => {
+  it('builds one chapter-embed op followed by one verse-embed op per verse, 1-indexed', () => {
+    const ops = buildChapterScaffoldOps(3, 4);
+    expect(ops).toEqual([
+      { insert: { chapter: { number: '3', style: 'c' } } },
+      { insert: { verse: { number: '1', style: 'v' } } },
+      { insert: { verse: { number: '2', style: 'v' } } },
+      { insert: { verse: { number: '3', style: 'v' } } },
+      { insert: { verse: { number: '4', style: 'v' } } },
+    ]);
+  });
+
+  it('builds one chapter-embed op and one verse-embed op when the chapter has exactly one verse', () => {
+    const ops = buildChapterScaffoldOps(1, 1);
+    expect(ops).toEqual([
+      { insert: { chapter: { number: '1', style: 'c' } } },
+      { insert: { verse: { number: '1', style: 'v' } } },
+    ]);
+  });
+});
+
+describe('canAddChapterNumber', () => {
+  it('returns false when there is no versification entry for the chapter (lastVerse 0)', () => {
+    expect(canAddChapterNumber(0)).toBe(false);
+  });
+
+  it('returns false for a negative lastVerse', () => {
+    expect(canAddChapterNumber(-1)).toBe(false);
+  });
+
+  it('returns true when the chapter has at least one verse', () => {
+    expect(canAddChapterNumber(1)).toBe(true);
+  });
+});
+
+describe('resolveAddChapterNumberClick', () => {
+  it('returns "already-in-flight" when a previous insert has not yet completed, regardless of lastVerse', () => {
+    expect(resolveAddChapterNumberClick(true, 5)).toBe('already-in-flight');
+    expect(resolveAddChapterNumberClick(true, 0)).toBe('already-in-flight');
+  });
+
+  it('returns "no-versification" when not in flight but lastVerse is 0', () => {
+    expect(resolveAddChapterNumberClick(false, 0)).toBe('no-versification');
+  });
+
+  it('returns "insert" when not in flight and lastVerse is positive', () => {
+    expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
   });
 });
