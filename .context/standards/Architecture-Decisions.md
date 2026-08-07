@@ -266,13 +266,20 @@ step, no automation. Just a record.
 - **Context:** Existing PAPI consumers call services by their historical generic name
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
   After ADR-0007 scoped each window's copy under its own name, nothing answers the generic name.
-- **Decision:** Main registers one service router per generic name (`command.service-router.ts` —
-  which also registers the dialog-request routes, `notification.service-router.ts`,
-  `web-view.service-router.ts`, `window.service-router.ts`) that forwards to the scoped service of
-  the window that should handle it: the owning window when ownership is determinable (e.g. a command
-  whose first argument names a web view routes to the window that owns that web view), otherwise the
-  routing target (ADR-0010). A few read-only queries fan out and merge across all windows instead,
-  where a merged view is the meaningful answer.
+- **Decision:** Main registers one service router per generic name (`notification.service-router.ts`,
+  `web-view.service-router.ts`, `window.service-router.ts`, `dialog.service-router.ts`,
+  `usersnap.service-router.ts`, `book-chapter-control.service-router.ts`) that forwards to the
+  scoped service of the window that should handle it: the owning window when ownership is
+  determinable (e.g. a command that names a web view routes to the window that owns that web view),
+  otherwise the routing target (ADR-0010). A few read-only queries fan out and merge across all
+  windows instead, where a merged view is the meaningful answer.
+- **Amended 2026-08-07 (ADR-0014):** the original decision also included
+  `command.service-router.ts`, a transitional router that forwarded a list of generic COMMAND names
+  to per-window scoped command names (`platform.about` → `platform.about-1`). That module is gone.
+  Commands are no longer forwarded name-to-name at all: each is registered by the router for its own
+  service and calls a method on a window's shard. What remains of this ADR is the routers for
+  network-object services, which is what it was always about — the command list was the part that
+  needed a name-keeping mechanism, and that is what ADR-0014 removes.
 - **Alternatives:** Push a window-id argument onto every external caller — rejected: breaks every
   existing extension/PAPI consumer and the documented `papi.d.ts` signatures. Always fan out to every
   window — rejected as the general answer: most of these calls are single-target actions where
@@ -616,3 +623,51 @@ step, no automation. Just a record.
   awaited — awaiting it put ten seconds in front of both process spawns.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
+
+## ADR-0014: Renderer platform code registers no command or request names; routers call shard methods
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** ADR-0007 scoped each window's copy of the renderer-hosted commands and dialog requests
+  under a `${name}-${windowId}` suffix, and ADR-0008's `command.service-router.ts` forwarded the
+  generic name to the right window's scoped name. That worked, but it made the set of per-window
+  commands a **list** — `RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES` — that a renderer had to register against and that nothing
+  could check across module boundaries. Two startup coverage checks and two registry modules existed
+  only to catch a name on the list that no module had registered, and a command whose handler had a
+  web view id as its first documented parameter had to be sorted into owner-routed rather than
+  focus-routed by reading its own OpenRPC docs.
+- **Decision:** Move every one of those commands into the router for its own service, where the
+  router registers the generic name in main and calls a **method on the window's service shard**
+  instead of forwarding to a scoped command name. The dialog service, the Usersnap feedback widget,
+  and the BookChapterControl each got a shard and a router; the settings commands joined the WebView
+  router, which already knew how to find a web view's owning window; the scripture navigation
+  commands moved into main outright, asking the window one question (`getNavigationContext`) and then
+  computing and writing in main. Renderer platform code now registers no command or request name,
+  scoped or otherwise.
+- **Alternatives:** Keep the transitional router and its name lists — rejected: the lists are the
+  cost, not the routing. Give the platform a per-window command facility so a renderer could keep
+  registering — rejected: it would make the shape this ADR removes into supported API, and the shard
+  interface already expresses "one window's implementation of a service" with compile-time checking
+  that a name list cannot have. Put the new methods on the existing public services
+  (`WebViewServiceType`, `IWindowService`) — rejected: both are emitted into `papi.d.ts`, so a UI
+  affordance would become permanent extension-facing API; the shards extend those types privately
+  instead, and the router objects stay typed as the public service so the public surface is
+  byte-identical.
+- **Consequences:** `papi.d.ts` **shrinks** by three `@experimental` exports
+  (`RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES`) and grows by nothing — a breaking change for anyone who
+  imported them, which is why they were experimental. `command.service-router.ts`,
+  `renderer-hosted-command-registry.ts`, `renderer-hosted-dialog-registry.ts`, and both startup
+  coverage checks are deleted; what replaces their guarantee is that each router's registration list
+  is asserted by its own test, and each shard's methods are checked by its interface. Owner-vs-focus
+  routing is no longer derived from OpenRPC parameter names — it is written per command in the
+  router, so `platform.openSettings` naming a web view routes by ownership while
+  `platform.openUserSettings` follows focus, and each is pinned by a test. One behavior change: the
+  navigation mutex was per-renderer and is now app-global, since the handler runs in main — two
+  windows driving one scroll group are serialized against each other, which is strictly better than
+  the interleaving the per-renderer lock allowed. Cross-window navigation ordering beyond this is
+  PT-4270. Registering three routers plus the navigation commands adds four entries to main's awaited
+  startup batch; they are in-process registrations against main's own RPC server.
+- **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
+  `pt-4275-commands-to-main`.
