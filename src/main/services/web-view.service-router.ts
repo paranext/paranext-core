@@ -589,8 +589,19 @@ async function openUserSettings(): Promise<void> {
   await (await getTargetWebViewShard()).openSettingsTab(undefined);
 }
 
-/** OpenRPC documentation for the settings commands, which are the names consumers call */
-const SETTINGS_COMMAND_DOCS: Record<string, SingleMethodDocumentation> = {
+/** The settings command names this router claims */
+type SettingsCommandName =
+  | 'platform.openSettings'
+  | 'platform.openProjectSettings'
+  | 'platform.openUserSettings';
+
+/**
+ * OpenRPC documentation for the settings commands, which are the names consumers call.
+ *
+ * Keyed by the exact names rather than by `string`, so a mistyped lookup below is a compile error
+ * rather than a registration that publishes no documentation at all.
+ */
+const SETTINGS_COMMAND_DOCS: Record<SettingsCommandName, SingleMethodDocumentation> = {
   'platform.openSettings': {
     method: {
       summary: 'Open a Settings tab, optionally limited to the project shown in a given web view',

@@ -166,7 +166,7 @@ dialogShards.onDidRemoveShard(dropRequestTimeoutForWindowDialogs);
  * dialog-type enum in `dialog-definition.model`, which is renderer-only and read at runtime rather
  * than as a type; relocating that model into `@shared` is what would let these names carry it.
  */
-const DIALOG_REQUEST_DOCS: Record<string, SingleMethodDocumentation> = {
+const DIALOG_REQUEST_DOCS: Record<keyof IDialogServiceShard, SingleMethodDocumentation> = {
   showDialog: {
     method: {
       // Experimental: which window a dialog opens in is part of what the multi-window work is still
