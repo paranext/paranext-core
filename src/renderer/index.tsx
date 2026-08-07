@@ -10,9 +10,7 @@ import { startBookChapterControlServiceShard } from '@renderer/services/book-cha
 import { startDialogServiceShard } from '@renderer/services/dialog.service-shard';
 import { startNotificationServiceShard } from '@renderer/services/notification.service-shard';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
-import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
-import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service';
 import {
   getCurrentThemeSync,
@@ -114,7 +112,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startWebViewServiceShard(),
       startDialogServiceShard(),
       startScrollGroupService(),
-      startScrollGroupNavigationCommands(),
       startNotificationServiceShard(),
       startUsersnapServiceShard(),
       startBookChapterControlServiceShard(),
@@ -131,21 +128,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // reload during an in-flight sync seeds the store instead of assuming unblocked.
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
-
-    // Every name in RENDERER_HOSTED_COMMAND_NAMES must have been registered by one of the services
-    // started above (startWebViewServiceShard, startScrollGroupNavigationCommands) — otherwise the
-    // main process's service router for it has nothing to forward to.
-    //
-    // Placed directly after those registrations and before anything else that can fail: run from
-    // the shared catch below, a registration gap would be reported as the same generic message as
-    // every other startup failure, and anything that threw between the registrations and this point
-    // would skip the check entirely. What the app ends up with is the same in dev and packaged
-    // builds; only how loudly it says so differs.
-    try {
-      assertAllRendererHostedCommandsRegistered();
-    } catch (e) {
-      logger.error(`Renderer-hosted command coverage check failed: ${getErrorMessage(e)}`);
-    }
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
   }
