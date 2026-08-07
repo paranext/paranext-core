@@ -14,6 +14,7 @@
  */
 
 import { THEME_STATE_QUERY_PARAMETER } from '@shared/data/platform.data';
+import { refreshWindowCreationState } from '@renderer/services/window-creation-state.util';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -36,7 +37,6 @@ import {
   isPlatformError,
   PlatformEvent,
   PlatformEventEmitter,
-  serialize,
   ThemeDefinitionExpanded,
   wait,
 } from 'platform-bible-utils';
@@ -131,74 +131,28 @@ function readPreviouslyStoredThemeState(): PersistedThemeState | undefined {
 }
 
 /**
- * `localStorage` key holding the last theme a window in this profile painted.
- *
- * Deliberately NOT one of the keys the host now owns: those hold the state persisted before the
- * host existed, are offered to it once, and are then deleted. This one is window-side scratch —
- * rewritten on every change, never offered to anyone, and read only to paint a first frame.
- */
-const LAST_PAINTED_THEME_STORAGE_KEY = 'theme.service.lastPaintedTheme';
-
-/** The last theme a window in this profile painted, if it recorded one this module can use */
-function readLastPaintedTheme(): ThemeDefinitionExpanded | undefined {
-  try {
-    const serialized = localStorage.getItem(LAST_PAINTED_THEME_STORAGE_KEY);
-    return serialized ? deserialize(serialized) : undefined;
-  } catch (e) {
-    logger.warn(`Could not read the theme this window last painted. ${getErrorMessage(e)}`);
-    return undefined;
-  }
-}
-
-/** Record the theme being painted so a reload of this document can start from it */
-function rememberLastPaintedTheme(theme: ThemeDefinitionExpanded): void {
-  try {
-    localStorage.setItem(LAST_PAINTED_THEME_STORAGE_KEY, serialize(theme));
-  } catch (e) {
-    // Costs a reload its first frame, nothing else: the theme in memory is unaffected and the
-    // subscription corrects a reload a round trip later.
-    logger.warn(`Could not record the theme this window is painting. ${getErrorMessage(e)}`);
-  }
-}
-
-/**
- * Whether this document is a RELOAD of the URL main built when the window was created, rather than
- * that window's first load.
- *
- * The difference matters for the first frame: a reload replays a URL that is as old as the window,
- * while everything else this module can read has been kept current since.
- */
-function isDocumentReload(): boolean {
-  const [navigationEntry] = globalThis.performance?.getEntriesByType?.('navigation') ?? [];
-  // `getEntriesByType` is typed as the base entry, but the 'navigation' key only ever yields
-  // `PerformanceNavigationTiming`, and its `type` is the thing being read.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return (navigationEntry as PerformanceNavigationTiming | undefined)?.type === 'reload';
-}
-
-/**
  * Work out the theme to paint with before anything has started, synchronously, while this module is
- * being evaluated — which is before React renders.
+ * being evaluated — which is before React renders. Getting this wrong is visible: the window paints
+ * one theme and then flashes into another a round trip later.
  *
- * What main handed over on the URL normally wins: it is the app's live theme at the moment this
- * window was created. On a RELOAD it does not, because the URL being replayed was built when the
- * window was created and the theme has been free to change since — so the last theme painted in
- * this profile, which is as new as the last change any window heard, goes first instead. Getting
- * this order wrong is visible: the window paints the wrong theme and then flashes into the right
- * one a round trip later.
+ * The keys left over from before the host existed go FIRST, and only exist at all until the
+ * one-time handover in {@link startThemeService} has run. While they are there they hold a theme the
+ * user chose that main cannot have adopted yet, so they beat what main handed over — which on that
+ * one start is a theme main derived from the default. Afterwards they are gone.
  *
- * The keys left over from before the host existed are the fallback for the single start after an
- * upgrade, where main has nothing until the handover in {@link startThemeService} completes. The
- * default is the last resort, for a profile that has never chosen a theme.
+ * What main put on the URL is what is left, and it is as current as the last change this window
+ * heard: the window rewrites its own query parameter on every change (see
+ * {@link refreshWindowCreationState}), so a RELOAD — which replays that URL — starts where the app
+ * is now rather than where it was when the window opened.
+ *
+ * The default is the last resort, for a profile that has never chosen a theme and a window main had
+ * nothing to hand.
  */
 function seedCurrentThemeBeforeFirstRender(): ThemeDefinitionExpanded {
-  const seedsInPreferenceOrder = isDocumentReload()
-    ? [readLastPaintedTheme(), readWindowCreationCurrentTheme()]
-    : [readWindowCreationCurrentTheme(), readLastPaintedTheme()];
-  const seed = seedsInPreferenceOrder.find(isThemeShaped);
-  if (seed) return seed;
   const fromOwnStore = readPreviouslyStoredThemeState()?.currentTheme;
   if (isThemeShaped(fromOwnStore)) return fromOwnStore;
+  const fromWindowCreation = readWindowCreationCurrentTheme();
+  if (isThemeShaped(fromWindowCreation)) return fromWindowCreation;
   return DEFAULT_THEME;
 }
 
@@ -261,7 +215,9 @@ async function subscribeToCurrentTheme(): Promise<void> {
         return;
       }
       cachedCurrentTheme = currentTheme;
-      rememberLastPaintedTheme(currentTheme);
+      // Keep the theme on this window's URL as current as the cache, so a RELOAD of this document
+      // paints where the app is now rather than where it was when the window was created.
+      refreshWindowCreationState(THEME_STATE_QUERY_PARAMETER, currentTheme);
       onDidChangeCurrentThemeEmitter.emit(currentTheme);
     },
     { retrieveDataImmediately: true },
@@ -272,28 +228,33 @@ async function subscribeToCurrentTheme(): Promise<void> {
 const SUBSCRIBE_RETRY_DELAYS_MS = [250, 1000, 5000];
 
 /**
- * Subscribe to the host's current theme, retrying a bounded number of times.
+ * Keep trying to subscribe to the host's current theme, a bounded number of times, waiting longer
+ * between each. Call after an attempt has already failed.
  *
  * Unlike a read, this is the only thing that ever updates this window's copy, so a subscription
  * that fails and is not retried leaves the window painting the theme it started with for the rest
  * of the session — with nothing that would ever correct it, since `getThemeProvider` is only re-run
  * by a caller and there may not be another one.
+ *
+ * @param lastError What the attempt before this one failed with, for the message if this gives up
+ * @param remainingRetryDelaysMs How long to wait before each remaining attempt, in order
  */
-async function subscribeToCurrentThemeWithRetry(
+async function retrySubscribingToCurrentTheme(
+  lastError: unknown,
   remainingRetryDelaysMs: readonly number[] = SUBSCRIBE_RETRY_DELAYS_MS,
 ): Promise<void> {
+  const [delayMs, ...laterDelaysMs] = remainingRetryDelaysMs;
+  if (delayMs === undefined) {
+    logger.error(
+      `Could not subscribe to the theme service host, so this window will keep showing the theme it started with. ${getErrorMessage(lastError)}`,
+    );
+    return;
+  }
+  await wait(delayMs);
   try {
     await subscribeToCurrentTheme();
   } catch (e) {
-    const [delayMs, ...laterDelaysMs] = remainingRetryDelaysMs;
-    if (delayMs === undefined) {
-      logger.error(
-        `Could not subscribe to the theme service host, so this window will keep showing the theme it started with. ${getErrorMessage(e)}`,
-      );
-      return;
-    }
-    await wait(delayMs);
-    await subscribeToCurrentThemeWithRetry(laterDelaysMs);
+    await retrySubscribingToCurrentTheme(e, laterDelaysMs);
   }
 }
 
@@ -346,13 +307,30 @@ async function handOverPreviouslyStoredThemeState(): Promise<void> {
  * filled before React rendered — so a host that is slow or missing costs freshness, not
  * correctness, and must not take down the unrelated services that start alongside this one.
  *
+ * Only the FIRST subscribe attempt is awaited. This is one of the promises the renderer's startup
+ * batch waits on (see `index.tsx`), and the retries back off over several seconds — so awaiting
+ * them would put that whole backoff in front of the dock layout in exactly the case where the app
+ * is already slow. Nothing downstream depends on the subscription being live.
+ *
  * Call once at renderer startup.
  *
  * @experimental
  */
 export async function startThemeService(): Promise<void> {
   await handOverPreviouslyStoredThemeState();
-  await subscribeToCurrentThemeWithRetry();
+  try {
+    await subscribeToCurrentTheme();
+  } catch (e) {
+    logger.warn(
+      `Could not subscribe to the theme service host yet; this window will keep trying in the background. ${getErrorMessage(e)}`,
+    );
+    // Deliberately not awaited — see above. Wrapped in an async IIFE per the code-style preference
+    // for try/catch over `.catch()` chains; `retrySubscribingToCurrentTheme` handles its own
+    // failures, so there is nothing here that can reject.
+    (async () => {
+      await retrySubscribingToCurrentTheme(e);
+    })();
+  }
 }
 
 // #endregion
