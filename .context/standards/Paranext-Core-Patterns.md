@@ -1042,6 +1042,11 @@ await networkObjectService.set<WebViewServiceType>(
 - Discover a shard by rebuilding its window-scoped id. The id exists because `object:{id}.{method}`
   derives from it; discovery goes through the index.
 - Register a globally-unique name from renderer platform code.
+- Register a command or request name from renderer platform code at all, scoped or not. A command
+  that has to run in one window is registered in main and forwarded to that window's shard as a
+  method call — the shard's interface is what keeps the two sides in step, where a per-window name
+  list has to be maintained by hand. (Extension and web-view code registering its own commands
+  through `papi.commands.registerCommand` is unaffected.)
 - Cache a resolved shard in the router. `networkObjectService.get` already caches, serializes
   concurrent lookups, and drops what it holds on disposal; a second cache can only go stale, and
   Electron reuses `BrowserWindow.id`.
