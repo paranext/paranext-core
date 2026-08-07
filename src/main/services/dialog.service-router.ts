@@ -13,6 +13,7 @@
  * service shard".
  */
 
+import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
@@ -147,6 +148,10 @@ const ABOUT_COMMAND_DOCS: SingleMethodDocumentation = {
  * starts. Must be called during main process startup, before createWindow().
  */
 export async function startDialogServiceRouter(): Promise<void> {
+  assertCommandRoutingMatchesDocs('dialog service router', [
+    { commandName: 'platform.about', docs: ABOUT_COMMAND_DOCS, routing: 'focus' },
+  ]);
+
   // onDidAddShard has no replay, so reconcile against what is already indexed — otherwise a window
   // that registered before this ran keeps the default timeout on its dialogs
   dialogShards.getShardWindowIds().forEach(liftRequestTimeoutForWindowDialogs);

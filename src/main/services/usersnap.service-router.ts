@@ -4,14 +4,14 @@
  * in — the widget is a DOM overlay owned by one renderer, so a feedback form has to open where the
  * user is looking.
  *
- * These four commands used to be re-exported by the WebView service shard while their
- * implementation lived in `usersnap.service.ts`. They get a shard of their own here because they
- * have nothing to do with web views.
+ * These four commands have a shard of their own rather than riding on the WebView service shard,
+ * because they have nothing to do with web views.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
  * service shard".
  */
 
+import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
@@ -79,6 +79,15 @@ const USERSNAP_COMMAND_DOCS: Record<string, SingleMethodDocumentation> = {
  * starts. Must be called during main process startup, before createWindow().
  */
 export async function startUsersnapServiceRouter(): Promise<void> {
+  assertCommandRoutingMatchesDocs(
+    'Usersnap service router',
+    Object.entries(USERSNAP_COMMAND_DOCS).map(([commandName, docs]) => ({
+      commandName,
+      docs,
+      routing: 'focus' as const,
+    })),
+  );
+
   await Promise.all([
     networkService.registerRequestHandler(
       serializeRequestType(CATEGORY_COMMAND, 'platform.usersnapSubmitIdea'),
