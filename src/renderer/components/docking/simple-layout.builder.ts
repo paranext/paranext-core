@@ -81,8 +81,8 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
  *   mounted (rc-dock's `loadLayout` has no per-tab-id diff/short-circuit). Model text/Bible
  *   texts/commentaries each render an explicit "no project" placeholder when `projectId` is absent;
  *   the comment list panel (`legacyCommentManager.commentListPanel`) has no such placeholder today
- *   and shows a perpetual loading state instead - a known, accepted gap in that extension, not a
- *   regression introduced here (see the fix spec's deferred-follow-up list).
+ *   and shows a perpetual loading state instead - a known gap in that extension's panel, not
+ *   something this function can fix.
  */
 export function buildSimpleLayoutForProject(projectId: string, isReadOnly: boolean): LayoutBase {
   const cloned = cloneDeep(simpleLayout);

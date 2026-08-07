@@ -970,12 +970,29 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  * power-save-dropped-on-switch race. Falls back to a direct settings read only before the cache has
  * been seeded (very early startup).
  *
+ * Also refuses to persist a layout that still contains one of Simple mode's fixed tab ids
+ * (`SIMPLE_LAYOUT_TAB_IDS`) while not in Simple mode. This is reached via rc-dock's own reactive
+ * `onLayoutChange` callback (this function is called from there, not only from this module's own
+ * explicit `loadLayout` calls), which can fire from a stale async webview-content-load
+ * (`openOrReloadWebView` -> `addWebViewToDock`) completing after the user switched back to Power
+ * mid-switch — a path the switch-generation guard in `runProjectBoundSimpleSwitch` cannot reach,
+ * since rc-dock triggers it directly rather than through this module's own call chain. A genuine
+ * Power layout can never legitimately contain these exact synthetic ids, so their presence is an
+ * unambiguous signal to keep the previously-saved layout instead.
+ *
  * @param layout Layout to persist
  */
 async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
+  const containedWebViewIds = collectWebViewIdsFromLayoutInfo(layout);
+  if (SIMPLE_LAYOUT_TAB_IDS.some((id) => containedWebViewIds.has(id))) {
+    logger.warn(
+      `Refused to persist a ${interfaceMode}-mode layout that still contains a Simple-mode tab id; leaving the previously-saved layout untouched.`,
+    );
+    return;
+  }
   localWindowStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
 }
 
@@ -1189,6 +1206,18 @@ async function resolveFastPathIsEditable(cached: LastOpenedProject): Promise<boo
 export async function handleSwitchToSimpleMode(
   generation: number = startNewSwitchGeneration(),
 ): Promise<void> {
+  // Raised here, before any lookup - not just before the layout swap inside
+  // `runProjectBoundSimpleSwitch` - so the still-visible Power layout is blocked from interaction
+  // for the whole switch, including the fast path's editability re-check and the cold-start path's
+  // recents lookup, both of which otherwise give no feedback that a switch is even happening. A
+  // live per-webview "editing disabled" signal on the active Power editor would be more targeted,
+  // but has no reactive channel today (`setFullWebViewStateById` only seeds state before a webview
+  // mounts, not for an already-mounted one) - raising the overlay this early is the practical
+  // stand-in.
+  const releaseWorkspaceUpdate = startWorkspaceUpdate();
+  // Force React to commit + browser to paint the overlay BEFORE any lookup, otherwise the show can
+  // batch with later state changes and the overlay never actually appears on screen.
+  await waitForNextPaint();
   try {
     const cached = getLastOpenedProject();
     if (cached) {
@@ -1232,6 +1261,11 @@ export async function handleSwitchToSimpleMode(
       `Switching to Simple mode failed unexpectedly (${getErrorMessage(err)}); falling back to the bare layout.`,
     );
     await loadLayoutWithWarning(generation);
+  } finally {
+    // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
+    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
+    await waitForNextPaint();
+    releaseWorkspaceUpdate();
   }
 }
 
@@ -1279,21 +1313,10 @@ async function runProjectBoundSimpleSwitch(
 ): Promise<void> {
   if (generation !== switchGeneration) return; // superseded before this switch even started
 
-  // `startWorkspaceUpdate`/`waitForNextPaint`/the tracker are acquired *inside* `try` (not before
-  // it) so a throw from any of them still reaches `catch`/`finally` below — previously a throw
-  // here would skip both, leaking the overlay token (until its 30s safety leash) and the tracker's
-  // event subscriptions. `finally` only releases/disposes what was actually acquired.
-  let releaseWorkspaceUpdate: (() => void) | undefined;
+  // The tracker is acquired *inside* `try` (not before it) so a throw from it still reaches
+  // `catch`/`finally` below. `finally` only disposes it if it was actually acquired.
   let tabsResolved: ReturnType<typeof trackSimpleLayoutTabsResolvedImpl> | undefined;
   try {
-    // The renderer drives the overlay on this fast path: because the layout has projectId baked in,
-    // the default-project picker never fires `openScriptureEditor` and the extension's
-    // `WILL_START`/`DID_FINISH` events are never emitted — so nothing else would show the overlay.
-    releaseWorkspaceUpdate = startWorkspaceUpdate();
-    // Force React to commit + browser to paint the overlay BEFORE the layout swap, otherwise the
-    // show/hide can batch around the fast `loadLayout` and the overlay never appears.
-    await waitForNextPaint();
-
     // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
     // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
     // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
@@ -1340,12 +1363,10 @@ async function runProjectBoundSimpleSwitch(
     // `dispose` is idempotent (a no-op once the tracker has already finished) - safe to call
     // unconditionally here even on the happy path, where `await tabsResolved.promise` above means
     // the tracker already disposed itself. One unconditional cleanup site is easier to trust than
-    // reasoning about which of several paths already handled it.
+    // reasoning about which of several paths already handled it. The overlay itself is the
+    // caller's (`handleSwitchToSimpleMode`'s) responsibility now, since it spans the whole switch,
+    // not just this layout swap.
     tabsResolved?.dispose();
-    // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
-    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
-    await waitForNextPaint();
-    releaseWorkspaceUpdate?.();
   }
 }
 

@@ -122,33 +122,42 @@ vi.mock('@shared/services/data-provider.service', () => ({
 // `platformScriptureEditor.bibleTexts` tab so the real (unmocked) default-layout-supplement merge
 // has a matching anchor to attach the Scripture Text Grid supplement tab to (see the merge tests
 // below) - the merge/filter logic itself is real production code, not mocked.
-const { buildSimpleLayoutForProjectMock } = vi.hoisted(() => ({
-  buildSimpleLayoutForProjectMock: vi.fn((projectId: string, isReadOnly: boolean) => ({
-    dockbox: {
-      mode: 'horizontal' as const,
-      children: [
-        {
-          mode: 'vertical' as const,
-          children: [
-            {
-              tabs: [
-                {
-                  id: 'bible-texts-tab',
-                  data: { webViewType: 'platformScriptureEditor.bibleTexts' },
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    builtForProjectId: projectId,
-    builtIsReadOnly: isReadOnly,
-  })),
-}));
+const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock } = vi.hoisted(() => {
+  // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
+  // real Simple-mode tab ids, while defaulting to empty for every other test (matching real
+  // SIMPLE_LAYOUT_TAB_IDS's shape without needing to know its actual values). Declared as its own
+  // explicitly-typed variable (rather than an inline `[] as string[]`) so the array's element type
+  // doesn't need a type assertion.
+  const simpleLayoutTabIds: string[] = [];
+  return {
+    buildSimpleLayoutForProjectMock: vi.fn((projectId: string, isReadOnly: boolean) => ({
+      dockbox: {
+        mode: 'horizontal' as const,
+        children: [
+          {
+            mode: 'vertical' as const,
+            children: [
+              {
+                tabs: [
+                  {
+                    id: 'bible-texts-tab',
+                    data: { webViewType: 'platformScriptureEditor.bibleTexts' },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      builtForProjectId: projectId,
+      builtIsReadOnly: isReadOnly,
+    })),
+    simpleLayoutTabIdsMock: simpleLayoutTabIds,
+  };
+});
 vi.mock('@renderer/components/docking/simple-layout.builder', () => ({
   buildSimpleLayoutForProject: buildSimpleLayoutForProjectMock,
-  SIMPLE_LAYOUT_TAB_IDS: [],
+  SIMPLE_LAYOUT_TAB_IDS: simpleLayoutTabIdsMock,
 }));
 
 // `LayoutInfo` is deliberately opaque in the shared model, so building a layout fixture and reading
@@ -336,6 +345,7 @@ describe('handleSwitchToSimpleMode', () => {
     dataProviderGetMock.mockReset();
     dataProviderGetMock.mockResolvedValue(undefined);
     buildSimpleLayoutForProjectMock.mockClear();
+    simpleLayoutTabIdsMock.length = 0;
   });
 
   afterEach(() => {
@@ -502,7 +512,10 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     // Never resolves within this test's lifetime - simulates a hung recents-provider round trip
-    // (e.g. the early-startup PDP-factory wait described in the Tier 0 #5 investigation).
+    // (e.g. the early-startup PDP-factory wait). Real timers here (not faked):
+    // handleSwitchToSimpleMode starts with a waitForNextPaint() in order to show the overlay
+    // earlier, and faking timers made that hang unpredictably depending on whether jsdom's
+    // requestAnimationFrame polyfill happens to be setTimeout-based.
     const getRecentProjects = vi.fn(() => new Promise<string[]>(() => {}));
     dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
       dataProviderId === 'platformScripture.recentlyOpenedProjects'
@@ -510,20 +523,13 @@ describe('handleSwitchToSimpleMode', () => {
         : undefined,
     );
 
-    vi.useFakeTimers();
-    try {
-      const switchPromise = host.handleSwitchToSimpleMode();
-      await vi.advanceTimersByTimeAsync(host.COLD_START_LOOKUP_TIMEOUT_MS);
-      await switchPromise;
-    } finally {
-      vi.useRealTimers();
-    }
+    await host.handleSwitchToSimpleMode();
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     expect(getMetadataForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalled();
-  });
+  }, 5000);
 
   it('slow path: falls back to the bare layout and warns if resolving editability hangs past the cold-start bound', async () => {
     const host = await importHost();
@@ -537,19 +543,12 @@ describe('handleSwitchToSimpleMode', () => {
     // Never resolves - simulates a hung PDP-factory wait inside getMetadataForProject.
     getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
 
-    vi.useFakeTimers();
-    try {
-      const switchPromise = host.handleSwitchToSimpleMode();
-      await vi.advanceTimersByTimeAsync(host.COLD_START_LOOKUP_TIMEOUT_MS);
-      await switchPromise;
-    } finally {
-      vi.useRealTimers();
-    }
+    await host.handleSwitchToSimpleMode();
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalled();
-  });
+  }, 5000);
 
   it('fast path: merges an enabled default-layout supplement entry into the project-bound layout', async () => {
     const host = await importHost();
@@ -607,9 +606,9 @@ describe('handleSwitchToSimpleMode', () => {
     setLastOpenedProject({ id: 'proj-stale', isEditable: true });
 
     // Start two overlapping switches without awaiting the first - simulates the user changing
-    // their mind mid-switch (the scenario Tier 0 finding #1 in the fix spec is about). Both calls'
-    // synchronous prefixes (including capturing their own switch generation) run before either
-    // call's first await resumes, so the ordering here is deterministic, not racy.
+    // their mind mid-switch. Both calls' synchronous prefixes (including capturing their own
+    // switch generation) run before either call's first await resumes, so the ordering here is
+    // deterministic, not racy.
     const firstSwitch = host.handleSwitchToSimpleMode();
     setLastOpenedProject({ id: 'proj-latest', isEditable: true });
     const secondSwitch = host.handleSwitchToSimpleMode();
@@ -649,6 +648,44 @@ describe('handleSwitchToSimpleMode', () => {
     expect(localStorage.getItem('dock-saved-layout')).toContain('power-layout');
   });
 
+  it('refuses to persist a layout containing a Simple-mode tab id while not in Simple mode', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    simpleLayoutTabIdsMock.push('simple-fixed-tab-1');
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    host.registerDockLayout(fakeDockLayout);
+    localStorage.setItem(
+      'dock-saved-layout',
+      JSON.stringify({
+        dockbox: { mode: 'horizontal', children: [] },
+        marker: 'good-power-layout',
+      }),
+    );
+
+    // Simulate rc-dock's own reactive onLayoutChange firing - e.g. from a stale async
+    // webview-content-load (openOrReloadWebView -> addWebViewToDock) completing after the user
+    // switched back to Power mid-switch - with a layout that still contains a Simple-mode fixed
+    // tab id. This path is NOT reachable through runProjectBoundSimpleSwitch's own generation
+    // guard, since rc-dock triggers it directly, not this module's explicit loadLayout call.
+    const contaminatedLayout = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [{ tabs: [{ id: 'simple-fixed-tab-1', tabType: 'webView', data: {} }] }],
+      },
+    };
+    // onLayoutChangeRef.current's real type (OnLayoutChange) is rc-dock's own LayoutInfo-shaped
+    // signature; this test only needs enough of that shape to exercise saveLayout's tab-id check,
+    // so asserting through it here is simpler than building a full LayoutInfo fixture.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await fakeDockLayout.onLayoutChangeRef.current?.(contaminatedLayout as never, '', undefined);
+
+    expect(localStorage.getItem('dock-saved-layout')).toContain('good-power-layout');
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
   it('recovers to the bare layout and releases the overlay when the project-bound layout fails to load', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -676,6 +713,26 @@ describe('handleSwitchToSimpleMode', () => {
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalled();
     const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
+    expect(getWorkspaceUpdating()).toBe(false);
+  });
+
+  it('raises the overlay before any lookup begins, not just before the layout swap', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-1', isEditable: true });
+    const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
+    // Hang the fast-path re-check indefinitely so overlay state can be observed mid-switch,
+    // instead of racing to check it before the real (~1s-bounded) work settles on its own.
+    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
+
+    const switchPromise = host.handleSwitchToSimpleMode();
+    // No await has happened yet inside handleSwitchToSimpleMode's synchronous prefix, so the
+    // overlay must already be up by the time this line runs.
+    expect(getWorkspaceUpdating()).toBe(true);
+
+    await switchPromise;
     expect(getWorkspaceUpdating()).toBe(false);
   });
 });
