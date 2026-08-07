@@ -137,6 +137,12 @@ export function doesNavigationReplaceRendererRegistrations(navigation: {
  * Fan-outs that ask every window a question use this rather than {@link getWindows}: a window that
  * has not registered its services cannot own a web view or be showing a notification, so asking it
  * can only produce a wait on the network service's registration retry and a warning.
+ *
+ * A window that has begun closing is still listed, unlike in {@link getRoutingTarget}. This answers
+ * "who can be asked", not "where should new work go": a window is the only thing that knows what it
+ * has open, and it can answer for as long as it is there. The shutdown sync of a whole quit selects
+ * the projects it sends this way, and by the time it runs every window is marked closing — so
+ * dropping them here would make a quit select nothing and send nothing.
  */
 export function getReadyWindowIds(): number[] {
   return trackedWindows
@@ -165,21 +171,29 @@ export function getFocusedWindowId(): number | undefined {
  * was most recently working in, falling back to the oldest ready window if the user has not focused
  * any ready window in this session.
  *
- * When no window is ready — ordinary startup — this falls back to the focused or first tracked
- * window, so callers get the honest "the renderer has not started yet" error rather than silence.
+ * A window that has begun closing is passed over, however ready and however focused it still is. A
+ * close runs that window's shutdown work first, which is bounded by the shutdown sync rather than
+ * by anything quick, and the window keeps focus and keeps serving throughout — so without this,
+ * every notification, dialog, and newly opened web view for the whole of that wait lands in the
+ * window the user is watching disappear.
+ *
+ * When no window is ready — ordinary startup — or when every window is closing, this falls back to
+ * the focused or first tracked window, so callers get the honest "the renderer has not started yet"
+ * error rather than silence, and a quit's own progress reports still have somewhere to go.
  */
 function getRoutingTarget(): RoutingTarget {
-  if (focusedWindowId !== undefined && readyWindowIds.has(focusedWindowId))
+  const canTakeNewWork = (windowId: number) =>
+    readyWindowIds.has(windowId) && !closingWindowIds.has(windowId);
+
+  if (focusedWindowId !== undefined && canTakeNewWork(focusedWindowId))
     return { windowId: focusedWindowId, isReady: true };
 
-  const mostRecentlyFocusedReadyWindowId = mostRecentlyFocusedWindowIds.find((windowId) =>
-    readyWindowIds.has(windowId),
-  );
+  const mostRecentlyFocusedReadyWindowId = mostRecentlyFocusedWindowIds.find(canTakeNewWork);
   if (mostRecentlyFocusedReadyWindowId !== undefined)
     return { windowId: mostRecentlyFocusedReadyWindowId, isReady: true };
 
   const firstReadyWindowId = trackedWindows.find(({ windowId }) =>
-    readyWindowIds.has(windowId),
+    canTakeNewWork(windowId),
   )?.windowId;
   if (firstReadyWindowId !== undefined) return { windowId: firstReadyWindowId, isReady: true };
 
@@ -275,10 +289,15 @@ export function markWindowReady(windowId: number): void {
  * Record that a window has begun closing. Call this at the top of a window's close handling, before
  * anything reads {@link areAllWindowsClosing}.
  *
+ * A window on its way out stops being where new work goes, so this announces like every other
+ * mutation here — routing proxies hold a resolved service for the target window and have nothing
+ * else to tell them it moved.
+ *
  * @param windowId Window that is on its way out
  */
 export function markWindowClosing(windowId: number): void {
   closingWindowIds.add(windowId);
+  announceRoutingTargetIfChanged();
 }
 
 /**

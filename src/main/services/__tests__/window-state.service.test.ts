@@ -605,6 +605,68 @@ describe('window state tracking', () => {
       expect(areAllWindowsClosing()).toBe(false);
     });
 
+    test('routes new work to a window that is staying once one begins closing', () => {
+      // A close runs the closing window's shutdown sync first, which is bounded by the sync's own
+      // limit rather than by anything quick. For all of that time the window is still focused and
+      // still serving, so notifications, dialogs, and newly opened web views land in the window the
+      // user is watching disappear.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+      markWindowReady(2);
+      setFocusedWindowId(1);
+
+      markWindowClosing(1);
+
+      expect(getTargetWindowId()).toBe(2);
+    });
+
+    test('announces routing moving off a window that has begun closing', () => {
+      // Routing proxies hold a resolved service for the target window; nothing else tells them the
+      // target moved, so without this they go on forwarding into the closing window.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowClosing(1);
+      unsubscribe();
+
+      expect(heard).toEqual([2]);
+    });
+
+    test('keeps routing to the closing window when every window is closing', () => {
+      // The closing window's own shutdown work — Send/Receive progress, anything it needs to ask
+      // the user — has nowhere else to go during a quit, and the window is alive until its
+      // shutdown work finishes. Answering with no window at all would fail those calls outright.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      setFocusedWindowId(1);
+
+      markWindowClosing(1);
+
+      expect(getTargetWindowId()).toBe(1);
+    });
+
+    test('keeps a closing window in the fan-out list while it is still there to answer', () => {
+      // A window is the only thing that knows what it has open, and the shutdown sync selects the
+      // projects it sends by asking every window in this list what editors it has. During a quit
+      // every window is marked closing before that selection runs, so dropping them here would make
+      // the shutdown sync of a whole quit select nothing and send nothing.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+      markWindowReady(2);
+
+      markWindowClosing(1);
+      markWindowClosing(2);
+
+      expect(getReadyWindowIds()).toEqual([1, 2]);
+    });
+
     test('does not report the app going down when there is no window to be closing', () => {
       // `every` on an empty list answers `true`, which would report an app on its way down at
       // process start, at the moment the last window is removed, and on every macOS dock
