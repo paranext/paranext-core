@@ -299,7 +299,6 @@ export const RENDERER_HOSTED_COMMAND_NAMES = [
   'platform.goToPreviousBook',
   'platform.goToNextVerse',
   'platform.goToPreviousVerse',
-  'platform.openBookChapterControl',
   'platform.navigateLeftInReferenceHistory',
   'platform.navigateRightInReferenceHistory',
 ] as const satisfies readonly CommandNames[];
@@ -404,16 +403,6 @@ export const RENDERER_HOSTED_COMMAND_DOCS: Record<
     method: {
       'x-experimental': true,
       summary: 'Navigate the active scroll group to the previous verse',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.openBookChapterControl': {
-    method: {
-      'x-experimental': true,
-      summary:
-        "Open the appropriate Book Chapter Control (the active tab's if it shows one, else the " +
-        "top toolbar's) and focus its input, ready for typing a reference",
       params: [],
       result: { name: 'return value', schema: { type: 'null' } },
     },
