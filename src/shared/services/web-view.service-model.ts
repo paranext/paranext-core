@@ -290,10 +290,6 @@ export const RENDERER_HOSTED_COMMAND_NAMES = [
   'platform.openSettings',
   'platform.openProjectSettings',
   'platform.openUserSettings',
-  'platform.usersnapSubmitIdea',
-  'platform.usersnapReportIssue',
-  'platform.isUsersnapFormCurrentlyOpen',
-  'platform.closeOpenUsersnapForm',
   // Navigation commands act on the window's own navigation target (the web view the top toolbar
   // follows), so they must run in the window the user is looking at, not whichever renderer
   // happened to register first.
@@ -359,34 +355,6 @@ export const RENDERER_HOSTED_COMMAND_DOCS: Record<
       summary:
         'Open the Settings tab without limiting it to any particular project. Renamed to ' +
         'platform.openSettings',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.usersnapSubmitIdea': {
-    method: {
-      summary: 'Open Usersnap feedback form to submit an idea',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.usersnapReportIssue': {
-    method: {
-      summary: 'Open Usersnap feedback form to report an issue',
-      params: [],
-      result: { name: 'return value', schema: { type: 'null' } },
-    },
-  },
-  'platform.isUsersnapFormCurrentlyOpen': {
-    method: {
-      summary: 'Check if a Usersnap form is currently open',
-      params: [],
-      result: { name: 'isOpen', schema: { type: 'boolean' } },
-    },
-  },
-  'platform.closeOpenUsersnapForm': {
-    method: {
-      summary: 'Call close function for Usersnap forms known to the application',
       params: [],
       result: { name: 'return value', schema: { type: 'null' } },
     },

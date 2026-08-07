@@ -33,6 +33,7 @@ import {
 } from '@main/services/app.service-host';
 import { startCommandServiceRouter } from '@main/services/command.service-router';
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
+import { startUsersnapServiceRouter } from '@main/services/usersnap.service-router';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
 import { enhancedResourceProtocolService } from '@main/services/enhanced-resource-protocol.service';
@@ -319,6 +320,7 @@ async function main() {
     { name: 'WebView service router', started: startWebViewServiceRouter() },
     { name: 'command service router', started: startCommandServiceRouter() },
     { name: 'dialog service router', started: startDialogServiceRouter() },
+    { name: 'Usersnap service router', started: startUsersnapServiceRouter() },
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
     { name: 'scroll group service host', started: startScrollGroupServiceHost() },
