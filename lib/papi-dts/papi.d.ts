@@ -8752,6 +8752,27 @@ declare module 'shared/data/platform.data' {
    */
   export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
+declare module 'renderer/services/window-creation-state.util' {
+  /**
+   * Record the state this window now holds under the query parameter main created it with, so a
+   * reload of this document seeds from it rather than from the state the window was created with.
+   *
+   * Call from wherever the cache is updated — by the host's events, and by a locally predicted write.
+   *
+   * Written straight through rather than coalesced the way the host's store is: this is a
+   * same-document history entry, not an fsync, and not on the event loop the whole app's JSON-RPC
+   * traffic shares. It is skipped when the query already says this, which is what keeps a predicted
+   * write and the host's echo of it from writing twice, and a run of changes that really are
+   * different (dragging a colour picker through a user theme) costs one serialize and one
+   * `replaceState` per change in each window — the same order as re-rendering the change itself.
+   *
+   * @param parameterName Query parameter main passes this state on, e.g.
+   *   `SCROLL_GROUP_STATE_QUERY_PARAMETER`
+   * @param state State to serialize into that parameter
+   * @experimental
+   */
+  export function refreshWindowCreationState(parameterName: string, state: unknown): void;
+}
 declare module 'renderer/services/scroll-group.service' {
   import {
     IScrollGroupService,
