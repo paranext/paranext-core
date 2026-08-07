@@ -108,6 +108,57 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     expect(networkObjectService.set).toHaveBeenCalledTimes(1);
     expect(vi.mocked(networkObjectService.set).mock.calls[0][4]).toBe(documentation);
   });
+
+  it('exposes an ignored get___ method as a plain method rather than a data type getter', async () => {
+    // The window service shard reaches the main process's navigation commands this way: a
+    // `get___` method that is not a data type at all, kept off the get/set matching check by the
+    // `ignore` decorator. Both sides of that join are otherwise tested against mocks — the shard's
+    // suite stubs the decorator out, and the router's stubs the shard — so nothing else exercises
+    // what registration actually does with it. Without the decorator this registration throws for
+    // want of a matching setter, taking every window's startup with it.
+    const engine = {
+      getData: async () => 1,
+      setData: async () => true,
+      getSomethingThatIsNotADataType: async () => 'answer',
+    };
+    dataProviderService.decorators.ignore(engine.getSomethingThatIsNotADataType);
+
+    await dataProviderService.registerEngine(
+      // The name/engine are generic in this test context; cast to satisfy the typed signature.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      'test.ignoredGetter' as never,
+      // The name/engine are generic in this test context; cast to satisfy the typed signature.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      engine as never,
+    );
+
+    const registeredObject = vi.mocked(networkObjectService.set).mock.calls[0][1];
+    const exposedMethod: unknown = Reflect.get(registeredObject, 'getSomethingThatIsNotADataType');
+    // Reachable over the network, which is the whole point of putting it on the engine
+    expect(exposedMethod).toBeInstanceOf(Function);
+    if (exposedMethod instanceof Function) await expect(exposedMethod()).resolves.toBe('answer');
+  });
+
+  it('refuses to register an unignored get___ method with no matching setter', async () => {
+    // The other half: registration failing this way is what the decorator is holding back, so a
+    // decorator quietly dropped from a shard is a window that cannot start
+    const engine = {
+      getData: async () => 1,
+      setData: async () => true,
+      getSomethingThatIsNotADataType: async () => 'answer',
+    };
+
+    await expect(
+      dataProviderService.registerEngine(
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        'test.unignoredGetter' as never,
+        // The name/engine are generic in this test context; cast to satisfy the typed signature.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        engine as never,
+      ),
+    ).rejects.toThrow('matching get and set functions');
+  });
 });
 
 // ---------------------------------------------------------------------------
