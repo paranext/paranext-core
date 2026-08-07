@@ -353,6 +353,13 @@ async function main() {
   const startupTasksAbort = new AbortController();
   let mainWindowInteractiveAt: number | undefined;
 
+  /**
+   * Whether this process has already created a window. Latched for the life of the process, not per
+   * session: the command-line and environment flags that describe how to show a window belong to
+   * the launch that set them, and nothing that happens afterwards is that launch again.
+   */
+  let hasCreatedWindowThisProcess = false;
+
   // Fire-and-forget startup tasks (initial S/R). Must not block window creation. In Simple mode the
   // S/R command is served by the .NET data provider and is driven through the retrying
   // `commandService.sendCommand`. In Power mode the trigger is `runScheduledSessionSync`, which the
@@ -551,6 +558,14 @@ async function main() {
     // Only use windowStateKeeper for the first window; subsequent windows are not managed by it, so
     // their size and position are not persisted (per-window bounds persistence is PT-4285's scope).
     const isFirstWindow = getWindows().length === 0;
+
+    // The flags the process was launched with describe how to show the window that launch is
+    // producing, and nothing after it. "No windows tracked" is not that window: on macOS the app
+    // stays resident after its last window closes, so a dock click — a window the USER asked for —
+    // arrives with nothing tracked and would be minimized or maximized by a flag from a launch that
+    // is long over.
+    const isFirstWindowOfProcess = !hasCreatedWindowThisProcess;
+    hasCreatedWindowThisProcess = true;
     const mainWindowState = isFirstWindow
       ? windowStateKeeper({ defaultWidth: 1024, defaultHeight: 728 })
       : undefined;
@@ -723,14 +738,14 @@ async function main() {
         mainWindowInteractiveAt ??= performance.now();
       }
       // Startup flags only apply to the first window, not windows opened later by the user
-      if (isFirstWindow && process.env.START_MINIMIZED) {
+      if (isFirstWindowOfProcess && process.env.START_MINIMIZED) {
         logger.info(`Window ${windowId} is starting minimized due to START_MINIMIZED env variable`);
         newWindow.minimize();
       } else {
         newWindow.show();
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
-        if (isFirstWindow && getCommandLineSwitch(CommandLineArgs.Maximize)) {
+        if (isFirstWindowOfProcess && getCommandLineSwitch(CommandLineArgs.Maximize)) {
           logger.info(
             `Window ${windowId} is starting maximized due to --maximize command-line switch`,
           );
