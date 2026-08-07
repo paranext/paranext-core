@@ -99,5 +99,3 @@ export async function startBookChapterControlServiceShard(): Promise<void> {
 
 /** Internal-only export for testing; not for use in development */
 export const testingBookChapterControlServiceShard = { openBookChapterControl };
-
-export default startBookChapterControlServiceShard;

@@ -133,10 +133,14 @@ describe('dataProviderService.registerEngine — documentation forwarding', () =
     );
 
     const registeredObject = vi.mocked(networkObjectService.set).mock.calls[0][1];
+    // Called through `Reflect.apply` rather than behind an `instanceof` guard, so a method that is
+    // not on the registered object at all fails here instead of skipping the assertion
     const exposedMethod: unknown = Reflect.get(registeredObject, 'getSomethingThatIsNotADataType');
+
     // Reachable over the network, which is the whole point of putting it on the engine
-    expect(exposedMethod).toBeInstanceOf(Function);
-    if (exposedMethod instanceof Function) await expect(exposedMethod()).resolves.toBe('answer');
+    await expect(Reflect.apply(Function.prototype.call, exposedMethod, [undefined])).resolves.toBe(
+      'answer',
+    );
   });
 
   it('refuses to register an unignored get___ method with no matching setter', async () => {

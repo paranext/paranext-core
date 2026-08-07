@@ -556,12 +556,13 @@ export function navigateReferenceHistorySync(
 /**
  * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
  * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
- * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
- * commands so the main-process keyboard handler can dispatch the physical key directly and stay
- * direction-agnostic.
+ * via {@link resolveReferenceHistoryDirection}). Backs the top toolbar's history buttons, which know
+ * which way the user pointed rather than which way that is through the history.
  *
- * The mapping lives in the renderer because layout direction is renderer state: `readDirection`
- * reads the document, which only this process has. The host exposes logical back/forward only.
+ * The mapping is made here because layout direction is renderer state: `readDirection` reads the
+ * document, which only this process has. The host exposes logical back/forward only. The
+ * `platform.navigateLeft/RightInReferenceHistory` commands make the same mapping in the main
+ * process, from the layout direction the window reports in its navigation context.
  */
 export function navigateReferenceHistoryPhysicalSync(
   scrollGroupId: ScrollGroupId | undefined,
