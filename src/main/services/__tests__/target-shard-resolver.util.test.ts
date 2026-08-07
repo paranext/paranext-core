@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the resolver resolves against the stubs below
-import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
+import {
+  createTargetShardResolver,
+  createTargetWindowShardResolver,
+} from '@main/services/target-shard-resolver.util';
 import type { ServiceShardIndex } from '@main/services/service-shard-index';
 
 const mocks = vi.hoisted(() => ({
@@ -103,5 +106,35 @@ describe('target shard resolver', () => {
     );
 
     await expect(resolve()).rejects.toThrow('the websocket went away mid-lookup');
+  });
+});
+
+describe('target shard resolver that reports which window answered', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getTargetWindowId.mockReturnValue(1);
+  });
+
+  test('answers with the window alongside its shard', async () => {
+    // A caller that acts on what one window answered has to come back to that same window, and the
+    // routing target can move in between — so the window it resolved has to travel with the shard
+    // rather than being derived a second time
+    const resolve = createTargetWindowShardResolver(
+      'TestService',
+      shardIndex([1, 2], async (windowId) => ({ servedBy: windowId })),
+    );
+    mocks.getTargetWindowId.mockReturnValue(2);
+
+    expect(await resolve()).toEqual({ windowId: 2, shard: { servedBy: 2 } });
+  });
+
+  test('refuses to route rather than guessing when there is no window to route to', async () => {
+    const resolve = createTargetWindowShardResolver(
+      'TestService',
+      shardIndex([], async () => undefined),
+    );
+    mocks.getTargetWindowId.mockReturnValue(undefined);
+
+    await expect(resolve()).rejects.toThrow('No windows available to route TestService call');
   });
 });

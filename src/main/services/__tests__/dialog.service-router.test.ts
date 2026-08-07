@@ -173,12 +173,15 @@ describe('dialog service router', () => {
     await expect(registrations().get('command:platform.about')?.handler()).resolves.toBeUndefined();
   });
 
-  test('refuses to route rather than guessing when no window is available', async () => {
+  test.each([
+    'dialog:showDialog',
+    'dialog:selectProject',
+    'dialog:showAboutDialog',
+    'command:platform.about',
+  ])('%s refuses to route rather than guessing when no window is available', async (name) => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
 
-    await expect(registrations().get('dialog:showDialog')?.handler('t')).rejects.toThrow(
-      'No windows available',
-    );
+    await expect(registrations().get(name)?.handler('t')).rejects.toThrow('No windows available');
   });
 
   test('lets a window’s dialog outlive the default request timeout', async () => {
