@@ -1075,7 +1075,16 @@ export async function startThemeServiceHost(): Promise<void> {
       await ThemeDataProviderEngine.subscribeToAllThemes(engine);
     })();
   });
-  await ThemeDataProviderEngine.subscribeToAllThemes(engine);
+  // Also fire-and-forget, and for a sharper reason: resolving a data provider that is not
+  // registered spends the whole RPC retry budget (`MAX_REQUEST_ATTEMPTS` x
+  // `REQUEST_ATTEMPT_WAIT_TIME_MS`, about ten seconds) before answering, and on a cold start it
+  // never is — the extension host that registers it has not been spawned yet. Awaiting that here
+  // would put those ten seconds in front of the .NET and extension-host spawns, which main awaits
+  // after the batch this function runs in. This attempt is only for the case where the provider is
+  // already there; the announcement above is what takes the subscription otherwise.
+  (async () => {
+    await ThemeDataProviderEngine.subscribeToAllThemes(engine);
+  })();
 
   // One listener for the app, for the life of the app. `nativeTheme` fires `updated` for changes
   // that leave the dark-mode answer alone, so only a real flip is announced.
