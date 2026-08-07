@@ -20,6 +20,15 @@ export const WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE = 'webViewServiceShard';
 /** Network object type the notification service shard registers under, one per window */
 export const NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE = 'notificationServiceShard';
 
+/** Network object type the dialog service shard registers under, one per window */
+export const DIALOG_SERVICE_SHARD_OBJECT_TYPE = 'dialogServiceShard';
+
+/** Network object type the Usersnap service shard registers under, one per window */
+export const USERSNAP_SERVICE_SHARD_OBJECT_TYPE = 'usersnapServiceShard';
+
+/** Network object type the BookChapterControl service shard registers under, one per window */
+export const BOOK_CHAPTER_CONTROL_SERVICE_SHARD_OBJECT_TYPE = 'bookChapterControlServiceShard';
+
 /**
  * Network object type the window service shard registers under, one per window. It is a data
  * provider rather than a plain network object, which changes nothing about discovery:
