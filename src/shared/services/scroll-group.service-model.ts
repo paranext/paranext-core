@@ -44,6 +44,28 @@ export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY = serializeRequestType(
 ) as 'scrollGroup:onDidChangeReferenceHistory';
 
 /**
+ * `localStorage` key the scroll group state is persisted under: every group's Scripture reference.
+ *
+ * Named here rather than in the host because two processes spell it: main's host, which owns the
+ * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+ * from when a renderer held this state. Those are two different stores under one key name, and the
+ * handover only finds anything if the name stays identical in both.
+ *
+ * @experimental
+ */
+export const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
+
+/**
+ * `localStorage` key the scroll group state is persisted under: the project whose versification
+ * each group's reference is expressed in. Spelled in two processes for the same reason as
+ * {@link SCR_REFS_STORAGE_KEY}.
+ *
+ * @experimental
+ */
+export const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY =
+  'scroll-group.service-host.scrRefSourceProjectIds';
+
+/**
  * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
  * means this should be synced with the scroll group sharing that number. If this value is an
  * object, that means it is an independent Scripture reference and should not be synced with any
@@ -148,6 +170,11 @@ export interface IScrollGroupRemoteService {
    * displays or navigates in a specific project's versification, use {@link getScrRefForProject}
    * instead so mixed-versification projects land on the right verse.
    *
+   * NOTE: a window's own synchronous writers move that window's UI before the host has answered, so
+   * a caller in another process can read a reference the window it is looking at has already left.
+   * The host's `onDidUpdateScrRef` is what everything converges on; subscribe to it rather than
+   * polling if you need to follow a group.
+   *
    * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
    * @returns Scripture reference associated with the provided scroll group, in its source project's
    *   versification
@@ -207,8 +234,14 @@ export interface IScrollGroupRemoteService {
 
 /**
  * Scroll group operations that exist for the platform's own cache-keeping rather than for
- * consumers. They ride on the same network object as {@link IScrollGroupRemoteService} but are
- * deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does not offer them.
+ * consumers. They are deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does
+ * not offer them.
+ *
+ * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+ * ride on the same network object as {@link IScrollGroupRemoteService} under the same name, so any
+ * process that resolves the object itself can call them. That reachability is why they are
+ * `@experimental` on both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC
+ * document) rather than pretending to be private.
  *
  * @experimental
  */
@@ -223,13 +256,20 @@ export interface IScrollGroupInternalService {
   getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
   /**
    * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
-   * into its own store. Idempotent: the first call wins and every later one is a no-op, so several
-   * callers offering their own copies cannot interleave into a mixture of them.
+   * into its own store. Idempotent: the first offer to be adopted wins and every later one is
+   * refused, so several callers offering their own copies cannot interleave into a mixture of
+   * them.
+   *
+   * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+   * store, `false` means the host already has state that beats the offer. In both cases the
+   * caller's copy is dead and should be discarded. A rejection means neither — the offer can be
+   * made again.
    *
    * @param state Previously persisted scroll group state
+   * @returns `true` if the offer was adopted, `false` if it was refused
    * @experimental
    */
-  migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<void>;
+  migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<boolean>;
 }
 
 /**
