@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import { startDialogServiceRouter } from '@main/services/dialog.service-router';
 import {
+  withoutWindowShard,
   withWindows as withWindowsServingShards,
   type ShardAnnouncementListeners,
 } from '@main/services/__tests__/service-router-test.util';
@@ -20,6 +21,7 @@ const mocks = vi.hoisted(() => {
     registerRequestHandler: vi.fn(),
     networkObjectGet: vi.fn(),
     sharedStoreSet: vi.fn(),
+    sharedStoreRemove: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -45,11 +47,15 @@ vi.mock('@shared/services/network.service', () => ({
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet },
+  // The real builder, not a stub: what these tests are checking about the timeout lift is the
+  // request type it aims at, so a stubbed one would assert nothing
+  getNetworkObjectMethodRequestType: (networkObjectId: string, methodName: string) =>
+    `object:${networkObjectId}.${methodName}`,
   onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
 vi.mock('@shared/services/shared-store.service', () => ({
-  sharedStoreService: { set: mocks.sharedStoreSet },
+  sharedStoreService: { set: mocks.sharedStoreSet, remove: mocks.sharedStoreRemove },
 }));
 
 /** A window's dialog service shard, recording what the router asked it to do */
@@ -85,6 +91,7 @@ describe('dialog service router', () => {
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
     mocks.sharedStoreSet.mockReturnValue(undefined);
+    mocks.sharedStoreRemove.mockReturnValue(undefined);
     await startDialogServiceRouter();
   });
 
@@ -197,11 +204,22 @@ describe('dialog service router', () => {
 
     expect(disabledRequestTypes).toEqual(
       expect.arrayContaining([
-        'platform.customNetworkTimeoutMs.object:DialogService-2.showDialog',
-        'platform.customNetworkTimeoutMs.object:DialogService-2.selectProject',
-        'platform.customNetworkTimeoutMs.object:DialogService-2.showAboutDialog',
+        'platform.customNetworkTimeoutMs.object:shard-of-window-2.showDialog',
+        'platform.customNetworkTimeoutMs.object:shard-of-window-2.selectProject',
+        'platform.customNetworkTimeoutMs.object:shard-of-window-2.showAboutDialog',
       ]),
     );
+  });
+
+  test('lifts the timeout on the name the shard announced, not a rebuilt one', async () => {
+    // The window-scoped name is an internal detail of the registration. A lift aimed at a rebuilt
+    // spelling of it writes a key nobody reads, and dialogs go back to timing out at ~30s with
+    // nothing anywhere reporting that they will.
+    withWindows({ 2: dialogShard() });
+
+    const keys = mocks.sharedStoreSet.mock.calls.map(([key]) => key);
+
+    expect(keys).not.toContain('platform.customNetworkTimeoutMs.object:DialogService-2.showDialog');
   });
 
   test('lifts the timeout for every window that registers a dialog shard', async () => {
@@ -209,6 +227,24 @@ describe('dialog service router', () => {
 
     const keys = mocks.sharedStoreSet.mock.calls.map(([key]) => key);
 
-    expect(keys).toContain('platform.customNetworkTimeoutMs.object:DialogService-3.showDialog');
+    expect(keys).toContain('platform.customNetworkTimeoutMs.object:shard-of-window-3.showDialog');
+  });
+
+  test('removes the timeouts it set once a window’s dialog shard is gone', async () => {
+    // Main owns these entries — the shared store refuses a removal from any other process, so the
+    // departing renderer cannot clear them and nothing else would. Left behind, they accumulate one
+    // set per window the session has ever had.
+    withWindows({ 2: dialogShard() });
+    // Wiring the windows for this test retires the ones the previous test left behind, whose own
+    // removals are not what is being asserted here
+    mocks.sharedStoreRemove.mockClear();
+
+    withoutWindowShard(mocks, 2);
+
+    expect(mocks.sharedStoreRemove.mock.calls.map(([key]) => key)).toEqual([
+      'platform.customNetworkTimeoutMs.object:shard-of-window-2.showDialog',
+      'platform.customNetworkTimeoutMs.object:shard-of-window-2.selectProject',
+      'platform.customNetworkTimeoutMs.object:shard-of-window-2.showAboutDialog',
+    ]);
   });
 });
