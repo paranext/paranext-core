@@ -10,21 +10,38 @@ import { ServiceShardIndex } from '@main/services/service-shard-index';
 import { getTargetWindowId } from '@main/services/window-state.service';
 import { logger } from '@shared/services/logger.service';
 
+/** The shard a routed call should run in, and the window serving it */
+export type TargetWindowShard<T> = {
+  /**
+   * The window that answered. Travels with the shard because a caller that acts on what one window
+   * said has to come back to that same window: the routing target can move between the two calls,
+   * and re-deriving it would send the second one somewhere else.
+   */
+  windowId: number;
+  /** That window's shard of the service */
+  shard: T;
+};
+
 /**
- * Resolve the shard of the window a routed call should currently run in.
+ * Resolve the shard of the window a routed call should currently run in, along with the window that
+ * serves it.
  *
  * Nothing is cached: the answer changes as the user moves between windows and as windows finish
  * starting, and re-resolving per call is what keeps a router following that without a cache to
  * invalidate.
  *
+ * Every way of having no shard throws, rather than answering with nothing. A resolved promise
+ * carrying "there was no window" is indistinguishable to a caller from the call having run, and the
+ * caller is the only one positioned to retry it or tell a user it did not happen.
+ *
  * @param serviceName Name the service is known by, for the errors this raises
  * @param shardIndex The router's index of the service's shards
  * @returns A resolver that answers with the target window's shard or explains why there isn't one
  */
-export function createTargetShardResolver<T>(
+export function createTargetWindowShardResolver<T>(
   serviceName: string,
   shardIndex: ServiceShardIndex<T>,
-): () => Promise<T> {
+): () => Promise<TargetWindowShard<T>> {
   return async () => {
     const targetWindowId = getTargetWindowId();
     if (targetWindowId === undefined)
@@ -34,7 +51,7 @@ export function createTargetShardResolver<T>(
     // still a registration that failed to resolve, not a window that never registered one
     const isIndexed = shardIndex.getShardWindowIds().includes(targetWindowId);
     const shard = await shardIndex.getShard(targetWindowId);
-    if (shard) return shard;
+    if (shard) return { windowId: targetWindowId, shard };
 
     if (!isIndexed)
       throw new Error(
@@ -53,4 +70,22 @@ export function createTargetShardResolver<T>(
       `${serviceName} for window ${targetWindowId} is registered but could not be resolved.`,
     );
   };
+}
+
+/**
+ * Resolve the shard of the window a routed call should currently run in.
+ *
+ * {@link createTargetWindowShardResolver} without the window id, for the routers that forward one
+ * call and never have to come back to the window that served it.
+ *
+ * @param serviceName Name the service is known by, for the errors this raises
+ * @param shardIndex The router's index of the service's shards
+ * @returns A resolver that answers with the target window's shard or explains why there isn't one
+ */
+export function createTargetShardResolver<T>(
+  serviceName: string,
+  shardIndex: ServiceShardIndex<T>,
+): () => Promise<T> {
+  const resolveTargetWindowShard = createTargetWindowShardResolver(serviceName, shardIndex);
+  return async () => (await resolveTargetWindowShard()).shard;
 }
