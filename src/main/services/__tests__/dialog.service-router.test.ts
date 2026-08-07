@@ -154,6 +154,25 @@ describe('dialog service router', () => {
     expect(claimed.get('command:platform.about')?.docs).toBeDefined();
   });
 
+  test('keeps each name marked exactly as it was before this router claimed it', () => {
+    // The dialog request names carried the experimental mark and `platform.about` did not. Adding
+    // one is as much a change to the published surface as dropping one.
+    const experimentalByName = new Map(
+      [...registrations()].map(([name, { docs }]) => [
+        name,
+        // The docs are the OpenRPC object the router published; read the wire mark off it
+        Reflect.get(Reflect.get(Object(docs), 'method') ?? {}, 'x-experimental'),
+      ]),
+    );
+
+    expect(Object.fromEntries(experimentalByName)).toEqual({
+      'dialog:showDialog': true,
+      'dialog:selectProject': true,
+      'dialog:showAboutDialog': true,
+      'command:platform.about': undefined,
+    });
+  });
+
   test('platform.about shows the about dialog in the focused window', async () => {
     // Two names, one implementation: `platform.about` and `dialog:showAboutDialog` must not drift
     // into separate behavior

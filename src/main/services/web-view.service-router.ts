@@ -63,8 +63,9 @@ const webViewShards = createServiceShardIndex<WebViewServiceShard>({
  * Get the WebView service shard for a specific window. Returns undefined if that window has not
  * registered one — its renderer has not got that far, or the window is gone.
  *
- * Exported for `command.service-router.ts`, which routes the requests that name a web view to the
- * window that owns it and so has to ask the same shards this router does.
+ * Exported for `scroll-group-navigation.commands.ts`, which writes a detached reference back to the
+ * window that answered its navigation context and so has to reach the same shards this router
+ * does.
  *
  * @param windowId The Electron BrowserWindow ID
  */
