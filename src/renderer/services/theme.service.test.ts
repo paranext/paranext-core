@@ -206,6 +206,40 @@ describe('keeping this window cache current', () => {
     expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
     expect(logger.warn).toHaveBeenCalled();
   });
+
+  // The subscription is the only thing that ever updates this window's copy, so a failure that is
+  // not retried leaves the window painting the theme it started with for the rest of the session.
+  it('retries a subscription that fails, and says so once it gives up', async () => {
+    // The retries back off over several seconds, which this test does not need to spend
+    vi.useFakeTimers();
+    try {
+      host.subscribeCurrentTheme.mockRejectedValue(new Error('host unreachable'));
+      const { startThemeService } = await import('@renderer/services/theme.service');
+
+      const starting = startThemeService();
+      await vi.advanceTimersByTimeAsync(30_000);
+      await starting;
+
+      expect(host.subscribeCurrentTheme.mock.calls.length).toBeGreaterThan(1);
+      expect(logger.error).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops retrying as soon as the subscription lands', async () => {
+    host.subscribeCurrentTheme.mockRejectedValueOnce(new Error('host not up yet'));
+    const { getCurrentThemeSync, startThemeService } = await import(
+      '@renderer/services/theme.service'
+    );
+
+    await startThemeService();
+
+    expect(host.subscribeCurrentTheme).toHaveBeenCalledTimes(2);
+    expect(logger.error).not.toHaveBeenCalled();
+    announceCurrentTheme(THEME_FROM_MAIN);
+    expect(getCurrentThemeSync()).toEqual(THEME_FROM_MAIN);
+  });
 });
 
 // Main cannot read this window's `localStorage`, so a profile from before the host moved has to
