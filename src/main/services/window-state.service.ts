@@ -5,7 +5,8 @@
  */
 
 import { BrowserWindow } from 'electron';
-import { PlatformEventEmitter } from 'platform-bible-utils';
+import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
 
 /** A tracked window, paired with the id it was created with */
 type TrackedWindow = {
@@ -220,7 +221,20 @@ function announceRoutingTargetIfChanged(): void {
   )
     return;
   announcedRoutingTarget = routingTarget;
-  onDidChangeRoutingTargetEmitter.emit(routingTarget.windowId);
+  // Every mutation in this module runs on a path a window's own teardown is waiting on — the top of
+  // a `close` handler, above where it suppresses Electron's default close, and the `closed` sweep
+  // that tells the rest of the app the window is gone. `PlatformEventEmitter` runs its subscribers
+  // synchronously and does not isolate them, so a subscriber that throws would escape into that
+  // caller and abandon the rest of the close with nothing reporting why. Swap this for an isolating
+  // emit on the emitter itself when one is available: that would also keep the subscribers queued
+  // behind the throwing one, which catching the whole fan-out here cannot.
+  try {
+    onDidChangeRoutingTargetEmitter.emit(routingTarget.windowId);
+  } catch (e) {
+    logger.error(
+      `A subscriber threw while being told routed calls now go to window ${routingTarget.windowId}, so the rest of them were not told: ${getErrorMessage(e)}`,
+    );
+  }
 }
 
 /**

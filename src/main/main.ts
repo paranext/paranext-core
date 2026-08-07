@@ -837,11 +837,6 @@ async function main() {
       // mid-flight — same risk profile as force-quitting the app.
       if (isWindowClosing) return;
 
-      // Recorded before the decision below, and read by every window's handler, so that windows
-      // closing at the same moment agree on what is happening rather than each leaving the shutdown
-      // tasks to the other
-      markWindowClosing(windowId);
-
       // Prevents the window from initially closing. First, and ahead of every decision this handler
       // makes: Electron reads `defaultPrevented` when this synchronous stretch returns, so anything
       // that throws above this line lets the window close with none of the shutdown work below ever
@@ -850,6 +845,12 @@ async function main() {
       // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
       isWindowClosing = true;
+
+      // Recorded before the decision below, and read by every window's handler, so that windows
+      // closing at the same moment agree on what is happening rather than each leaving the shutdown
+      // tasks to the other. Announces to arbitrary subscribers as it goes, which is the other reason
+      // it sits below `preventDefault()`.
+      markWindowClosing(windowId);
 
       // Shutdown tasks belong to the app going down, not to a window going away. Two ways the app
       // goes down, and both have to be caught here: every remaining window closing at once, and a

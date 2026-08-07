@@ -23,6 +23,14 @@ import {
 // imports above, so the static import resolves against this stub.
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 
+const mocks = vi.hoisted(() => ({ loggerError: vi.fn() }));
+
+// Stood in for so a swallowed subscriber throw can be asserted to have been reported rather than
+// merely swallowed, and so the real logger's file/console transports stay out of the test run
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
+}));
+
 /** Stand-in for a BrowserWindow — the service only reads `id` and `isDestroyed` */
 function fakeWindow(id: number): BrowserWindow {
   // Constructing a real BrowserWindow needs the Electron runtime; these are the only members the
@@ -67,6 +75,7 @@ describe('window state tracking', () => {
     // than by removing each window: a test that destroys one leaves it tracked but out of
     // `getWindows()`, which is exactly the state this module exists to survive.
     resetForTesting();
+    mocks.loggerError.mockClear();
   });
 
   test('targets the focused window when one is focused', () => {
@@ -305,6 +314,58 @@ describe('window state tracking', () => {
       unsubscribe();
 
       expect(targetsSeenByListener).toEqual([2]);
+    });
+
+    test('a subscriber that throws does not take the close that announced with it', () => {
+      // The announcement runs synchronously inside the mutation that triggered it, and the mutation
+      // that records a window as closing runs at the top of that window's `close` handler — above
+      // the point where the handler decides to suppress Electron's default close. A throw escaping
+      // here lets the window close with none of its shutdown work having run, and an async
+      // handler's throw is a rejected promise nothing ever reports.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const unsubscribe = onDidChangeRoutingTarget(() => {
+        throw new Error('subscriber blew up');
+      });
+
+      // `resetForTesting` unwinds window state but not subscriptions, so this one has to come off
+      // even when the assertion fails — otherwise it fires in every test that follows
+      try {
+        expect(() => markWindowClosing(1)).not.toThrow();
+      } finally {
+        unsubscribe();
+      }
+
+      expect(mocks.loggerError).toHaveBeenCalledOnce();
+    });
+
+    test('a subscriber that throws does not take the rest of a closed window’s sweep with it', () => {
+      // Removing the window is the first thing the `closed` handler does, and telling the rest of
+      // the app the window is gone is the next — the only signal a surviving window gets that an
+      // app-global service it was consuming needs a new host. A throw escaping the removal skips
+      // that, so nothing takes over and nothing reclaims what the window was hosting.
+      const closing = fakeWindow(1);
+      addWindow(closing);
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const unsubscribe = onDidChangeRoutingTarget(() => {
+        throw new Error('subscriber blew up');
+      });
+
+      // See the note on the sibling test: an escaping subscriber outlives `resetForTesting`
+      try {
+        expect(() => removeWindow(closing, 1)).not.toThrow();
+      } finally {
+        unsubscribe();
+      }
+
+      expect(getWindows().map((window) => window.id)).toEqual([2]);
+      expect(mocks.loggerError).toHaveBeenCalledOnce();
     });
 
     test('stops calling a listener that unsubscribed', () => {
