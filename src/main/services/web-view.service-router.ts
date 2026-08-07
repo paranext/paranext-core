@@ -17,6 +17,7 @@ import {
   getTargetWindowId,
   isWindowReady,
 } from '@main/services/window-state.service';
+import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
@@ -500,6 +501,27 @@ const SETTINGS_COMMAND_DOCS: Record<string, SingleMethodDocumentation> = {
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startWebViewServiceRouter(): Promise<void> {
+  // Which of these three routes by ownership is decided in this module rather than derived from
+  // their parameters, so nothing otherwise keeps the `webViewId` each one documents and the routing
+  // it actually gets in agreement.
+  assertCommandRoutingMatchesDocs('WebView service router', [
+    {
+      commandName: 'platform.openSettings',
+      docs: SETTINGS_COMMAND_DOCS['platform.openSettings'],
+      routing: 'owner',
+    },
+    {
+      commandName: 'platform.openProjectSettings',
+      docs: SETTINGS_COMMAND_DOCS['platform.openProjectSettings'],
+      routing: 'owner',
+    },
+    {
+      commandName: 'platform.openUserSettings',
+      docs: SETTINGS_COMMAND_DOCS['platform.openUserSettings'],
+      routing: 'focus',
+    },
+  ]);
+
   await networkObjectService.set<WebViewServiceType>(
     NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     webViewServiceRouter,

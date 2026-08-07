@@ -17,6 +17,7 @@ import {
   navigateReferenceHistory,
   setScrRef,
 } from '@main/services/scroll-group.service-host';
+import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { getWebViewShard } from '@main/services/web-view.service-router';
 import { getTargetWindowServiceShard } from '@main/services/window.service-router';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
@@ -435,6 +436,15 @@ const navigationCommands: Record<
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startScrollGroupNavigationCommands(): Promise<void> {
+  assertCommandRoutingMatchesDocs(
+    'scripture navigation commands',
+    Object.entries(navigationCommands).map(([commandName, { docs }]) => ({
+      commandName,
+      docs,
+      routing: 'focus' as const,
+    })),
+  );
+
   await Promise.all(
     Object.entries(navigationCommands).map(([commandName, { handler, docs }]) =>
       networkService.registerRequestHandler(
