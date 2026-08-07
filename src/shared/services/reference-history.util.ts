@@ -7,6 +7,8 @@ import {
 /**
  * Maximum number of entries a scroll group's history keeps in total, counting the current location
  * (matches Paratext 9). The back stack therefore holds at most this many minus one.
+ *
+ * @experimental
  */
 export const REFERENCE_HISTORY_MAX_DEPTH = 20;
 /**
@@ -15,7 +17,11 @@ export const REFERENCE_HISTORY_MAX_DEPTH = 20;
  */
 const MAX_SAME_BOOK_RUN = 4;
 
-/** Create a new, empty reference history */
+/**
+ * Create a new, empty reference history
+ *
+ * @experimental
+ */
 export function createEmptyReferenceHistory(): ReferenceHistory {
   return { current: undefined, back: [], forward: [] };
 }
@@ -30,6 +36,8 @@ function isSameBookAndChapter(a: SerializedVerseRef, b: SerializedVerseRef): boo
  * current entry in place (preserving the forward stack); a genuinely new chapter pushes the old
  * current onto the back stack, clears the forward stack, caps same-book runs, and trims to
  * {@link REFERENCE_HISTORY_MAX_DEPTH} total entries.
+ *
+ * @experimental
  */
 export function recordNavigation(history: ReferenceHistory, entry: ReferenceHistoryEntry): void {
   // Verse-only move within the current book+chapter: replace the current entry, keep forward.
@@ -68,6 +76,7 @@ export function recordNavigation(history: ReferenceHistory, entry: ReferenceHist
  *
  * @returns The destination entry (the new current), or `undefined` (history unchanged) when
  *   `offset` is 0, non-integer, or out of range
+ * @experimental
  */
 export function navigateHistory(
   history: ReferenceHistory,
