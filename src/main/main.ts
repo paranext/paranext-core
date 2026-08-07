@@ -902,9 +902,18 @@ async function main() {
 
         // Read and subscribed locally, not through the theme data provider: the provider is
         // registered by this very process, so going through it would put a JSON-RPC round trip
-        // between the theme changing and the object in the next module that already knows. There is
-        // no error case left either — a local event delivers a theme or nothing.
-        paintTitleBarForTheme(getCurrentThemeSync());
+        // between the theme changing and the object in the next module that already knows.
+        //
+        // Guarded because this runs inside an `async` handler, where a throw is an unhandled
+        // rejection at window creation rather than a caught error. Colouring caption buttons is not
+        // worth that, and the subscription below is isolated for the same reason.
+        try {
+          paintTitleBarForTheme(getCurrentThemeSync());
+        } catch (e) {
+          logger.warn(
+            `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
+          );
+        }
         windowCloseUnsubscribers.add(onDidChangeCurrentTheme(paintTitleBarForTheme));
       }
     });
