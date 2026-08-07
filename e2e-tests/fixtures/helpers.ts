@@ -13,16 +13,25 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
- * A renderer's window-scoped dialog service shard (`object:DialogService-{windowId}.showDialog`,
- * see `dialog.service-shard.ts`).
+ * The window-scoped shard methods a renderer registers, one per service the main process's routers
+ * forward a command or request to (see the `*.service-shard.ts` modules).
  *
- * The gate matches a SCOPED name rather than the generic `dialog:showDialog` or
- * `command:platform.about`: the main process registers those before it creates any window, so they
- * appear in `rpc.discover` while no renderer exists to serve them. A scoped shard method can only
- * come from a live renderer that finished registering its services. The window id is an Electron
- * BrowserWindow id, so it is matched as a pattern rather than a fixed string.
+ * Each gate matches a SCOPED name rather than the generic `dialog:showDialog` or
+ * `command:platform.openBookChapterControl`: the main process registers those before it creates any
+ * window, so they appear in `rpc.discover` while no renderer exists to serve them. A scoped shard
+ * method can only come from a live renderer that finished registering its services. The window id
+ * is an Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
+ *
+ * All of them, not just one: a renderer starts its shards together, so any one of them proves only
+ * that the batch is under way. A spec that drives a command right after the gate — Ctrl+B, a
+ * feedback form, a settings tab — needs the shard behind THAT command to have registered.
  */
-const SCOPED_DIALOG_SHARD_METHOD = /^object:DialogService-\d+\.showDialog$/;
+const SCOPED_SHARD_METHODS = [
+  /^object:DialogService-\d+\.showDialog$/,
+  /^object:UsersnapService-\d+\.submitIdea$/,
+  /^object:BookChapterControlService-\d+\.open$/,
+  /^object:WebViewService-\d+\.openSettingsTab$/,
+];
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
@@ -625,10 +634,11 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
- * platform-dock layout to appear, then for a renderer to finish registering its window-scoped menu
- * commands (the dock can render before that async work completes), and finally for the full-screen
- * initialization overlay to clear. The overlay lingers while async services (settings, theme)
- * finish initializing — it must be gone before tests interact with the UI.
+ * platform-dock layout to appear, then for a renderer to finish registering every window-scoped
+ * shard the main process routes a command to (the dock can render before that async work
+ * completes), and finally for the full-screen initialization overlay to clear. The overlay lingers
+ * while async services (settings, theme) finish initializing — it must be gone before tests
+ * interact with the UI.
  */
 export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
   const start = Date.now();
@@ -636,12 +646,18 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     state: 'attached',
     timeout,
   });
-  const remaining1 = Math.max(1000, timeout - (Date.now() - start));
-  await waitForPapiMethodRegistered(SCOPED_DIALOG_SHARD_METHOD, DEFAULT_WEBSOCKET_PORT, remaining1);
-  const remaining2 = Math.max(1000, timeout - (Date.now() - start));
-  // Services like settings and theme finish async work after dock-layout mounts and platform.about
-  // registers, so the overlay can outlast both earlier signals.
-  await waitForOverlayGone(page, remaining2);
+  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
+  // another and waiting one after another would spend the timeout budget several times over
+  const remainingForShards = Math.max(1000, timeout - (Date.now() - start));
+  await Promise.all(
+    SCOPED_SHARD_METHODS.map((scopedShardMethod) =>
+      waitForPapiMethodRegistered(scopedShardMethod, DEFAULT_WEBSOCKET_PORT, remainingForShards),
+    ),
+  );
+  const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
+  // Services like settings and theme finish async work after the dock layout mounts and the shards
+  // register, so the overlay can outlast both earlier signals.
+  await waitForOverlayGone(page, remainingForOverlay);
 }
 
 /** Options accepted by {@link openFromEditorHamburger}. */
