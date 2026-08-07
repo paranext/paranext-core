@@ -5,7 +5,7 @@ import { simpleLayout } from './simple-layout.data';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   __esModule: true,
   localThemeService: {},
 }));
