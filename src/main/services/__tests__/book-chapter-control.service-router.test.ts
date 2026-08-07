@@ -123,6 +123,14 @@ describe('BookChapterControl service router', () => {
     expect(registrations().get('command:platform.openBookChapterControl')?.docs).toBeDefined();
   });
 
+  test('keeps the command marked experimental on the wire, as it was before', () => {
+    // It carried the mark before this router claimed it, and dropping one silently promotes an
+    // unsettled command to something an extension may rely on
+    const { docs } = registrations().get('command:platform.openBookChapterControl') ?? {};
+
+    expect(Reflect.get(Reflect.get(Object(docs), 'method') ?? {}, 'x-experimental')).toBe(true);
+  });
+
   test('refuses to route rather than guessing when no window is available', async () => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
 

@@ -59,5 +59,3 @@ export async function startUsersnapServiceShard(): Promise<void> {
     { 'x-experimental': true },
   );
 }
-
-export default startUsersnapServiceShard;

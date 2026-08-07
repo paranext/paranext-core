@@ -389,6 +389,30 @@ describe('web view service router', () => {
       );
     });
 
+    test('leaves the three settings commands unmarked, exactly as they were before', async () => {
+      await getCommandHandler('platform.openSettings');
+
+      // None of these carried the experimental mark, and two are deprecated aliases whose
+      // documentation is what tells a caller to move off them. Adding or dropping either flag is a
+      // change to the published surface.
+      const publishedFlags = [...registrations()].map(([name, { docs }]) => {
+        const method = Reflect.get(Object(docs), 'method') ?? {};
+        return [
+          name,
+          {
+            experimental: Reflect.get(method, 'x-experimental'),
+            deprecated: Reflect.get(method, 'deprecated'),
+          },
+        ];
+      });
+
+      expect(Object.fromEntries(publishedFlags)).toEqual({
+        'command:platform.openSettings': { experimental: undefined, deprecated: undefined },
+        'command:platform.openProjectSettings': { experimental: undefined, deprecated: true },
+        'command:platform.openUserSettings': { experimental: undefined, deprecated: true },
+      });
+    });
+
     test('opens the settings for a named web view in the window that owns it', async () => {
       // Focus is on window 1, but window 2 is showing this web view — its settings must open there,
       // where the web view (and so its project) actually is

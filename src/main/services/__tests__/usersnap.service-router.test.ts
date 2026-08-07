@@ -154,6 +154,16 @@ describe('Usersnap service router', () => {
     expect(registrations().get('command:platform.usersnapSubmitIdea')?.docs).toBeDefined();
   });
 
+  test('leaves the four commands unmarked, exactly as they were before this router claimed them', () => {
+    // None of these carried the experimental mark. Adding one is as much a change to the published
+    // surface as dropping one.
+    registrations().forEach(({ docs }) =>
+      expect(
+        Reflect.get(Reflect.get(Object(docs), 'method') ?? {}, 'x-experimental'),
+      ).toBeUndefined(),
+    );
+  });
+
   test.each([
     'command:platform.usersnapSubmitIdea',
     'command:platform.usersnapReportIssue',

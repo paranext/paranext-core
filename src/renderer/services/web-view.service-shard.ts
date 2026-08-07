@@ -2348,11 +2348,6 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
 }
 
 /**
- * What this window serves under its scoped WebView service name: everything public, plus what only
- * this window can do to its own dock layout. Declared as the shard type so a member added there
- * cannot silently become a name this window does not answer for.
- */
-/**
  * Point a web view that carries its own independent reference at a new one. Only this window can:
  * the definition lives in its dock layout.
  *
@@ -2373,6 +2368,11 @@ async function setDetachedScrRef(
   }
 }
 
+/**
+ * What this window serves under its scoped WebView service name: everything public, plus what only
+ * this window can do to its own dock layout. Declared as the shard type so a member added there
+ * cannot silently become a name this window does not answer for.
+ */
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
   openSettingsTab,
