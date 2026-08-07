@@ -42,8 +42,20 @@ const getTargetUsersnapShard = createTargetShardResolver(
   usersnapShards,
 );
 
-/** OpenRPC documentation for the generic command names, which are the ones consumers call */
-const USERSNAP_COMMAND_DOCS: Record<string, SingleMethodDocumentation> = {
+/** The Usersnap command names this router claims */
+type UsersnapCommandName =
+  | 'platform.usersnapSubmitIdea'
+  | 'platform.usersnapReportIssue'
+  | 'platform.isUsersnapFormCurrentlyOpen'
+  | 'platform.closeOpenUsersnapForm';
+
+/**
+ * OpenRPC documentation for the generic command names, which are the ones consumers call.
+ *
+ * Keyed by the exact names rather than by `string`, so a mistyped lookup below is a compile error
+ * rather than a registration that publishes no documentation at all.
+ */
+const USERSNAP_COMMAND_DOCS: Record<UsersnapCommandName, SingleMethodDocumentation> = {
   'platform.usersnapSubmitIdea': {
     method: {
       summary: 'Open Usersnap feedback form to submit an idea',
