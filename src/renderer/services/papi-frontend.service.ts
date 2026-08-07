@@ -34,7 +34,7 @@ import { windowService } from '@shared/services/window.service';
 import { IWindowService } from '@shared/services/window.service-model';
 import { overlayService } from '@renderer/services/overlays/overlay.service-host';
 import { IOverlayService } from '@renderer/services/overlays/overlay.service-model';
-import { localThemeService } from '@renderer/services/theme.service-host';
+import { localThemeService } from '@renderer/services/theme.service';
 import { IThemeServiceLocal } from '@shared/services/theme.service-model';
 import { webViewService } from '@shared/services/web-view.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';

@@ -20,7 +20,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import { localThemeService } from '@renderer/services/theme.service-host';
+import { localThemeService } from '@renderer/services/theme.service';
 import {
   deleteFullWebViewStateById,
   getFullWebViewStateById,
