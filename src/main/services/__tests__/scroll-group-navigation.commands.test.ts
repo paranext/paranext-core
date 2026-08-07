@@ -124,6 +124,20 @@ describe('which commands the navigation module claims', () => {
 
     registrations().forEach(({ docs }) => expect(docs).toBeDefined());
   });
+
+  test('keeps every command marked experimental on the wire', async () => {
+    // All eight carried the mark before they were registered here, and dropping one silently
+    // promotes an unsettled command to something an extension may rely on
+    await startScrollGroupNavigationCommands();
+
+    registrations().forEach(({ docs }) =>
+      expect(docs).toEqual(
+        expect.objectContaining({
+          method: expect.objectContaining({ 'x-experimental': true }),
+        }),
+      ),
+    );
+  });
 });
 
 describe('when there is no window to navigate in', () => {

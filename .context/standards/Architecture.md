@@ -118,9 +118,13 @@ more than one window.
   window's shard as a method call (ADR-0014). There is nothing left to keep a per-window name list
   in step with.
 
-  **The one exception is extension and web-view code**, which calls
-  `papi.commands.registerCommand(...)` exactly as it always has. That mechanism is unchanged and
-  deliberately unguarded; the rule above is about platform code in `src/renderer`.
+  **Two exceptions.** Extension and web-view code calls `papi.commands.registerCommand(...)` exactly
+  as it always has — that mechanism is unchanged and deliberately unguarded, and the rule above is
+  about platform code in `src/renderer`. And a name derived from a PER-INSTANCE id that only one
+  window can hold is not a globally-unique name at all: the web view message channel
+  (`webViewMessage:{webViewId}`, registered by `src/renderer/components/web-view.component.tsx`) is
+  the one such name platform code still registers, and a web view lives in exactly one window, so
+  two windows cannot collide on it.
 - **A shard declares what it is, and which window it is for.** It registers with a distinct
   `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
   `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
@@ -129,13 +133,20 @@ more than one window.
   (`src/main/services/service-shard-index.ts`) subscribes once to the network object create/dispose
   announcements, filters on the object type, and maintains a `windowId → shard` map. Lookups are
   O(1), and a window closing removes its shard for free.
-- **A router is a plain object declared as the service it answers for.**
-  `const router: WebViewServiceType = { ... }` plus `networkObjectService.set`, so a member added to
-  the service interface fails to compile until the router publishes it. The one piece that is shared
-  is `createTargetShardResolver` (`src/main/services/target-shard-resolver.util.ts`), which resolves
-  the shard of whichever window a call should currently run in. There is no router factory: with one
-  genuinely plain forward across four routers, generating them costs more than it saves and gives up
-  the free coverage the type annotation provides.
+- **A router that publishes a network object is a plain object declared as the service it answers
+  for.** `const router: WebViewServiceType = { ... }` plus `networkObjectService.set`, so a member
+  added to the service interface fails to compile until the router publishes it. The one piece that
+  is shared is `createTargetShardResolver` (`src/main/services/target-shard-resolver.util.ts`),
+  which resolves the shard of whichever window a call should currently run in. There is no router
+  factory: with one genuinely plain forward across the routers that have one, generating them costs
+  more than it saves and gives up the free coverage the type annotation provides.
+- **A router may claim command or request names instead of a network object** — the dialog, Usersnap
+  and BookChapterControl routers do, as does the scripture navigation command module. There is no
+  service interface to declare such a router as, so nothing type-checks the set of names it claims:
+  each one pins that set with an exact-set test in `src/main/services/__tests__/`, and each states
+  how it routes every command it claims so `assertCommandRoutingMatchesDocs`
+  (`src/main/services/owner-routed-command.util.ts`) can report a command whose OpenRPC parameters
+  say otherwise.
 - **The pattern does not depend on the transport.** Most routers and shards are plain network
   objects; the window service's are data providers, because it has subscription semantics.
   `registerEngine` passes `dataProviderType` / `dataProviderAttributes` straight through to

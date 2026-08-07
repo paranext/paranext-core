@@ -1023,6 +1023,33 @@ await networkObjectService.set<WebViewServiceType>(
 );
 ```
 
+**A router may claim command or request names instead of a network object** — the dialog, Usersnap
+and BookChapterControl routers do, and the scripture navigation commands are a command-only module
+with no service behind them at all. The shard index and target resolver are identical; what changes
+is that there is no service interface to declare the router as, so nothing type-checks the set of
+names it claims:
+
+```typescript
+export async function startUsersnapServiceRouter(): Promise<void> {
+  // Nothing derives owner-vs-focus routing from a command's parameters any more, so each router
+  // states how it routes what it claims and this reports a command whose parameters say otherwise
+  assertCommandRoutingMatchesDocs('Usersnap service router', [
+    { commandName: 'platform.usersnapSubmitIdea', docs: USERSNAP_COMMAND_DOCS[...], routing: 'focus' },
+    /* ...one per claimed command */
+  ]);
+
+  await networkService.registerRequestHandler(
+    serializeRequestType(CATEGORY_COMMAND, 'platform.usersnapSubmitIdea'),
+    async () => (await getTargetUsersnapShard()).submitIdea(),
+    USERSNAP_COMMAND_DOCS['platform.usersnapSubmitIdea'],
+  );
+}
+```
+
+Pin the claimed-name set with an exact-set test in `src/main/services/__tests__/` — that test is
+what the type annotation does for the network object shape, and it is the only thing that catches a
+name this router is responsible for silently going unregistered.
+
 **Do:**
 
 - Register the router during main startup, before any window is created, so it claims the generic
@@ -1046,7 +1073,13 @@ await networkObjectService.set<WebViewServiceType>(
   that has to run in one window is registered in main and forwarded to that window's shard as a
   method call — the shard's interface is what keeps the two sides in step, where a per-window name
   list has to be maintained by hand. (Extension and web-view code registering its own commands
-  through `papi.commands.registerCommand` is unaffected.)
+  through `papi.commands.registerCommand` is unaffected, as is a name derived from a per-instance id
+  only one window can hold — the web view message channel, `webViewMessage:{webViewId}`.)
+- Build the request type of a shard method (`object:{id}.{method}`) by hand, to set a timeout on it
+  or otherwise name it. Ask the index for the id the shard ANNOUNCED
+  (`getShardNetworkObjectId`) and build the request type with
+  `getNetworkObjectMethodRequestType` — a name aimed at a spelling the window does not answer to
+  fails silently, since writing it succeeds and nothing ever reads it.
 - Cache a resolved shard in the router. `networkObjectService.get` already caches, serializes
   concurrent lookups, and drops what it holds on disposal; a second cache can only go stale, and
   Electron reuses `BrowserWindow.id`.
