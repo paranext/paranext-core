@@ -6,16 +6,16 @@
  * Each renderer registers its window service shard under a window-scoped name so several windows
  * can coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and
  * used by `useData('platform.windowServiceDataProvider', …)` — registered by nobody. This restores
- * it, matching what `web-view.service-router.ts`, `notification.service-router.ts`, and
- * `command.service-router.ts` do for their own services.
+ * it, matching what `web-view.service-router.ts` and `notification.service-router.ts` do for their
+ * own services.
  *
  * The router/shard pattern does not depend on the transport: this one is a data provider on both
  * sides because the window service has subscription semantics, while the others are plain network
  * objects. See `.context/standards/Architecture.md` § "Service router and service shard".
  *
- * Unlike those three, a data provider also has to keep subscribers current, which means re-emitting
- * updates from two sources: the window it currently routes to, and the routing target moving to
- * another window (which changes the answer without any window's data having changed).
+ * Unlike those routers, a data provider also has to keep subscribers current, which means
+ * re-emitting updates from two sources: the window it currently routes to, and the routing target
+ * moving to another window (which changes the answer without any window's data having changed).
  */
 
 import { getTargetWindowId, onDidChangeRoutingTarget } from '@main/services/window-state.service';

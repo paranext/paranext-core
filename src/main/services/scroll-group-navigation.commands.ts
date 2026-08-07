@@ -91,7 +91,7 @@ async function getCurrentRef(
     : getScrRef(target.scrollGroupScrRef);
 }
 
-async function getAvailableBooks(projectId: string | undefined): Promise<string[]> {
+async function getAvailableBooks(projectId: string | undefined): Promise<readonly string[]> {
   if (!projectId) return ALL_BOOK_IDS;
   try {
     const projectDataProvider = await getProjectDataProvider(
@@ -139,7 +139,7 @@ async function getScriptureBounds(
   versificationPdpPromise: ReturnType<typeof acquireVersificationPdp>,
   projectId: string,
   scrRef: SerializedVerseRef,
-  availableBooks: string[],
+  availableBooks: readonly string[],
   needsPreviousBook: boolean,
 ): Promise<ScriptureBounds | undefined> {
   try {
@@ -213,7 +213,15 @@ async function writeNewRef(
     );
     return;
   }
-  await webViewShard.setDetachedScrRef(target.webViewId, newRef);
+  // The window reports a definition it could not update by answering `false` rather than by
+  // throwing, so the answer is the only sign anything went wrong — a web view closed between the
+  // context being read and the write arriving, most likely. Not worth failing the command over, and
+  // worth a line, because the reference the user asked for is not where they think it is.
+  const didUpdate = await webViewShard.setDetachedScrRef(target.webViewId, newRef);
+  if (!didUpdate)
+    logger.warn(
+      `Navigation command did not update the detached ref on ${target.webViewId} in window ${windowId}; the web view may have closed`,
+    );
 }
 
 /**
@@ -237,7 +245,7 @@ const navigationCommandMutex = new Mutex();
 function makeGoToCommandHandler(
   getNewRef: (
     scrRef: SerializedVerseRef,
-    availableBooks: string[],
+    availableBooks: readonly string[],
     bounds?: ScriptureBounds,
   ) => SerializedVerseRef | undefined,
   {
