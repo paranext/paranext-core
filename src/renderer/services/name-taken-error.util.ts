@@ -21,11 +21,11 @@ const NAME_TAKEN_MESSAGES = [
  * Whether a failure to register something under a name says that the name is already taken, as
  * opposed to saying that the registration itself went wrong.
  *
- * The app-global service hosts (the theme engine, the scroll group service) let every window race
- * for the same name and treat losing as the routine outcome. That is only true for this one kind of
- * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
- * service that has already shut down all arrive at the same `catch` and would otherwise be reported
- * as the expected result at a severity nothing reads.
+ * A renderer-elected app-global service host (the theme engine) lets every window race for the same
+ * name and treats losing as the routine outcome. That is only true for this one kind of failure: a
+ * request that timed out, an object that already carried an `onDidDispose`, or a network service
+ * that has already shut down all arrive at the same `catch` and would otherwise be reported as the
+ * expected result at a severity nothing reads.
  *
  * Recognized by message text because that is all the throw sites give — see
  * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards

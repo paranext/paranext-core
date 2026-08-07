@@ -9,7 +9,7 @@ import { isNameTakenError } from '@renderer/services/name-taken-error.util';
 describe('isNameTakenError', () => {
   it('recognizes the local guard in networkObjectService.set', () => {
     expect(
-      isNameTakenError('Network object with id platform.scrollGroupService is already registered'),
+      isNameTakenError('Network object with id platform.themeService is already registered'),
     ).toBe(true);
   });
 
