@@ -21,6 +21,32 @@ export const WINDOW_ID = 'windowId';
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 
 /**
+ * Query parameter key used to pass the serialized scroll group state main holds at the moment a
+ * window is created, so that window's synchronous readers are right on its first render instead of
+ * showing the default reference until a round trip returns.
+ *
+ * Absent when main has nothing to pass — a profile that has never navigated, or one whose state is
+ * still only in a renderer's own store awaiting its one-time handover. A renderer that does not
+ * find it falls back to what it can read for itself, and then to the default.
+ *
+ * @experimental
+ */
+export const SCROLL_GROUP_STATE_QUERY_PARAMETER = 'scrollGroupState';
+
+/**
+ * Query parameter key used to pass the serialized current theme main holds at the moment a window
+ * is created, so that window paints its first frame — and bakes its web views' stylesheets — with
+ * the theme the app is actually on instead of the default followed by a flash.
+ *
+ * Absent when main has nothing to pass — a profile that has never chosen a theme, or one whose
+ * theme is still only in a renderer's own store awaiting its one-time handover. A renderer that
+ * does not find it falls back to what it can read for itself, and then to the default.
+ *
+ * @experimental
+ */
+export const THEME_STATE_QUERY_PARAMETER = 'themeState';
+
+/**
  * Prefix that identifies a startup timing mark in the logs (see
  * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
  * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without

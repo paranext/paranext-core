@@ -139,6 +139,21 @@ const getNetworkObjectRequestType = (id: string, functionName?: string) =>
   serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}${functionName ? `.${functionName}` : ''}`);
 
 /**
+ * The request type one method of a network object is served under.
+ *
+ * This module decides that format, so anything that has to name a single method of a network object
+ * from the outside — attaching a custom request timeout to it, for instance — derives the name here
+ * rather than spelling it a second time somewhere a change to the format would never reach.
+ *
+ * @param networkObjectId ID the network object was registered under
+ * @param methodName Method on that object to name
+ * @returns The request type that method's calls travel on
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export const getNetworkObjectMethodRequestType = (networkObjectId: string, methodName: string) =>
+  getNetworkObjectRequestType(networkObjectId, methodName);
+
+/**
  * Determine if a network object with the specified ID exists remotely (does not check locally)
  *
  * @param id ID of the network object - all processes must use this ID to look up this network
@@ -283,7 +298,7 @@ const forgetRegistration = (id: string): boolean => {
   // partway through used to leave the ID registered to a live proxy for the rest of the session:
   // `set` would refuse the name to the process taking the object over, and calls on the proxy would
   // hang instead of failing loudly. Freeing the ID first is also what lets a consumer claim the name
-  // from inside its own dispose handler, which is what the app-global service takeovers do.
+  // from inside its own dispose handler.
   networkObjectRegistrations.delete(id);
 
   // An object's own `dispose` unregisters its RPC handlers before announcing the disposal, so for

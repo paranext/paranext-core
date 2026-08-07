@@ -266,13 +266,20 @@ step, no automation. Just a record.
 - **Context:** Existing PAPI consumers call services by their historical generic name
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
   After ADR-0007 scoped each window's copy under its own name, nothing answers the generic name.
-- **Decision:** Main registers one service router per generic name (`command.service-router.ts` —
-  which also registers the dialog-request routes, `notification.service-router.ts`,
-  `web-view.service-router.ts`, `window.service-router.ts`) that forwards to the scoped service of
-  the window that should handle it: the owning window when ownership is determinable (e.g. a command
-  whose first argument names a web view routes to the window that owns that web view), otherwise the
-  routing target (ADR-0010). A few read-only queries fan out and merge across all windows instead,
-  where a merged view is the meaningful answer.
+- **Decision:** Main registers one service router per generic name (`notification.service-router.ts`,
+  `web-view.service-router.ts`, `window.service-router.ts`, `dialog.service-router.ts`,
+  `usersnap.service-router.ts`, `book-chapter-control.service-router.ts`) that forwards to the
+  scoped service of the window that should handle it: the owning window when ownership is
+  determinable (e.g. a command that names a web view routes to the window that owns that web view),
+  otherwise the routing target (ADR-0010). A few read-only queries fan out and merge across all
+  windows instead, where a merged view is the meaningful answer.
+- **Amended 2026-08-07 (ADR-0014):** the original decision also included
+  `command.service-router.ts`, a transitional router that forwarded a list of generic COMMAND names
+  to per-window scoped command names (`platform.about` → `platform.about-1`). That module is gone.
+  Commands are no longer forwarded name-to-name at all: each is registered by the router for its own
+  service and calls a method on a window's shard. What remains of this ADR is the routers for
+  network-object services, which is what it was always about — the command list was the part that
+  needed a name-keeping mechanism, and that is what ADR-0014 removes.
 - **Alternatives:** Push a window-id argument onto every external caller — rejected: breaks every
   existing extension/PAPI consumer and the documented `papi.d.ts` signatures. Always fan out to every
   window — rejected as the general answer: most of these calls are single-target actions where
@@ -292,7 +299,7 @@ step, no automation. Just a record.
 ## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
 
 - **Date:** 2026-08-05
-- **Status:** Accepted
+- **Status:** **Superseded** — the scroll-group half by ADR-0012, the theme half by ADR-0013. Nothing uses this any more.
 - **Context:** Some services are conceptually app-global, not per-window (the theme engine, the
   scroll group service) — exactly one instance for the whole app — but every window's renderer runs
   the same startup code, so no window is distinguished as host in advance.
@@ -314,7 +321,13 @@ step, no automation. Just a record.
   group) and has already drifted between the two copies, so the duplication is worth extracting into
   a shared helper. Both copies also depend on the disposal announcement being the only trigger, so a
   run that neither wins the name nor finds the winner has to schedule its own retry — nothing else
-  will re-enter the election for it.
+  will re-enter the election for it. Both copies are now gone — the scroll group's with ADR-0012 and
+  the theme's with ADR-0013 — and the shared-helper idea was overtaken by moving the hosts instead:
+  the duplication that was worth extracting turned out to be worth deleting. What went with the theme
+  copy: `createReattachingSubscribeCurrentTheme` (a subscription that followed the engine between
+  windows), the mirror that kept a non-hosting window's synchronous read honest, the re-arm in every
+  consumer facade, and `name-taken-error.util.ts`, whose only job was telling "someone else won the
+  race" apart from a real registration failure.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
@@ -385,5 +398,214 @@ step, no automation. Just a record.
   and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
-- **Source:** multi-window architecture plan step 2 (PT-4275 epic; branch
-  `pt-4275-router-shard-discovery`).
+- **Amended 2026-08-07 (ADR-0014):** `command.service-router.ts` is gone, so the exception above is
+  spent — every router now discovers its shards through an index, and no module rebuilds a
+  window-scoped name to reach one. The index also answers with the id a shard ANNOUNCED
+  (`getShardNetworkObjectId`), which is what lets a router name one of a shard's methods —
+  `object:{id}.{method}`, for a request timeout — without that being a second rebuild of the same
+  name. It reports a shard's departure as well as its arrival, so a router that did something
+  outside itself on arrival can undo it.
+- **Source:** PT-4275 epic (multi-window architecture plan step 2).
+
+## ADR-0012: The scroll group service is hosted in main, and each renderer keeps a predicting cache
+
+- **Date:** 2026-08-07
+- **Status:** Accepted (supersedes the scroll-group half of ADR-0009)
+- **Context:** A scroll group is app-global — group 1 is on one reference for the whole app — but it
+  was hosted in whichever renderer won the election of ADR-0009, and any window can be closed. The
+  election worked, at the cost of a takeover path, a re-arm in every consumer of the network object,
+  and a cross-window mirror handler that kept each window's own `*Sync` readers current because the
+  host's state was module state in one renderer. The scroll group service's whole job is holding
+  app-global state, so the state had a home problem, not a routing problem: ADR-0008's routers
+  forward to a window, and there is no per-window answer to forward to.
+- **Decision:** Main owns the scroll group state — each group's Scripture reference and source
+  project (persisted through main's file-backed `localStorage` polyfill, under the keys the renderer
+  used) and its session-only reference history — and registers the `ScrollGroupService` network
+  object before any window is created. Each renderer's `scroll-group.service.ts` becomes what the
+  Service/Service Host pattern already calls it: a local representation. It seeds a copy of the
+  host's state at startup, keeps it current from the host's events, serves the `*Sync` readers from
+  it, and predicts the host's answer for a `*Sync` write — returning the prediction immediately,
+  sending the write on, and resyncing the group from the host if the host declines it or the write
+  never lands. Two operations exist for that cache-keeping alone (a whole-state snapshot, and a
+  one-time handover of state persisted where main cannot read it); they are on the network object but
+  off `IScrollGroupService`, so `papi.scrollGroups` does not offer them. Three things follow from the
+  cache being a cache rather than the authority: (1) main hands each window the state it holds on the
+  window's URL — the channel `WINDOW_ID` already travels on — so the cache is right on the first
+  render instead of after a round trip; (2) `papi.scrollGroups` in the renderer resolves to that same
+  cache rather than to the shared network proxy, so everything in one window gives one answer about
+  where a scroll group is; and (3) main's store is written on a short debounce with a flush at
+  shutdown, because each write is a synchronous fsync on the event loop the whole app's JSON-RPC
+  traffic shares.
+- **Alternatives:** (a) Keep the election and extract the duplication into a shared helper (what
+  ADR-0009 anticipated) — rejected: it makes the takeover cheaper to maintain without making it
+  unnecessary, and the same window-death hazard stays. (b) A service router for scroll groups —
+  rejected: a router picks one window to answer, and no window has the right answer for state that
+  belongs to all of them. (c) Route every read through main and drop the sync API — rejected: the UI
+  reads a group's reference during render and inside keystroke handlers, where there is no room to
+  await. (d) Keep versification conversion with the state in main — rejected: the hot-path consumer
+  is in the renderer, so converting in main would add a hop per navigation AND leave the renderer
+  needing its own cache anyway for the synchronous reader; main keeps an uncached pass-through for
+  remote callers, which cannot go stale, at the price of a round trip per remote conversion —
+  acceptable while remote conversion requests are occasional, and worth revisiting if a consumer
+  outside the renderer starts converting per navigation. (e) Let the renderer's cache fill from the
+  host's snapshot alone and accept the default reference on the first render — rejected: the sync
+  readers run during that render, so the toolbar, the keyboard navigation commands, and every
+  scroll-group-following web view would start on Genesis 1:1 and jump, which for a restored Scripture
+  editor is a whole extra chapter load on the startup path this epic is trying to shorten. (f) Await
+  the cache's startup before rendering React — rejected: it puts a round trip on the critical startup
+  path to fix a problem the window's own URL already solves.
+- **Consequences:** the app-global invariant of `Architecture.md` §2 now holds for the scroll group
+  service outright — no window registers its name, so no window can lose it. Two `*Sync` booleans
+  (`setScrRefSync`, `navigateReferenceHistorySync`) become predictions rather than confirmations;
+  they can differ from the host only while a change from another window is in flight, which is the
+  same instant-race the single host has always resolved by arrival order, and the loser converges on
+  the host's next event. Reads from OTHER processes (`papi.scrollGroups` in the extension host) can
+  briefly sit behind what a window's own UI is showing, for the length of a predicted write; the
+  host's event is what everything converges on. Reference history is deliberately app-global and
+  single-authority: windows sharing a group are on the same reference by definition, so per-window
+  trails could only diverge through a mirroring race or pre-join state. Serialization semantics for
+  concurrent navigation from several windows are PT-4270's. Persistence lags memory by the debounce
+  interval, so a crash — not a quit, which flushes — loses at most one navigation's worth of scroll
+  position. The one-time handover of pre-host state is adopt-then-flag and answers the offering
+  window, which discards its copy on either answer; a profile that downgrades, navigates on the old
+  build, and upgrades again loses that navigation, because the host refuses an offer once it has
+  state of its own. Because the window's URL is a SEED rather than a one-off argument, the renderer
+  rewrites its own query parameter (`history.replaceState`) whenever the cache changes: a RELOAD
+  replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
+  handed over and deleted by then, so a URL left as old as the window would put a reloaded window
+  back on the reference it opened on — which for a restored Scripture editor is the extra chapter
+  load the seed exists to avoid. The theme service moved the same way in ADR-0013.
+- **Source:** PT-4275 epic (multi-window architecture plan §6).
+
+
+## ADR-0013: The theme service is hosted in main, and each window caches the current theme
+
+- **Date:** 2026-08-07
+- **Status:** Accepted (supersedes the theme half of ADR-0009)
+- **Context:** The theme is app-global — one current theme, one should-match-system setting, one set
+  of user-defined themes — but the engine that owned it was hosted in whichever renderer won the
+  election of ADR-0009, and any window can be closed. That cost a takeover path, a re-arm in every
+  consumer of the provider, a subscription helper that followed the engine between windows, and a
+  cross-window mirror to keep a non-hosting window's `getCurrentThemeSync` honest. The mirror only
+  covered the window's own engine object; a window that ATTACHED rather than hosted still answered
+  `getCurrentThemeSync` from its module-load snapshot in the places the mirror did not reach, which
+  is what baked a stale theme into a new web view's `srcdoc` (the staleness noted in §9.2 of the
+  plan).
+- **Decision:** Main owns the three persisted values and registers the theme data provider under its
+  existing name before any window is created. Each renderer's `theme.service.ts` becomes a local
+  representation: it seeds a copy of the current theme synchronously at module load, keeps it current
+  from the host's `subscribeCurrentTheme`, and serves `getCurrentThemeSync` from it — so the sync
+  answer is fed by the update event rather than being a module-load snapshot, and the §9.2 staleness
+  is gone by construction. Everything else on the service is a plain pass-through: unlike the scroll
+  group there is no synchronous WRITER, so nothing is predicted. The OS dark-mode preference is read
+  in main from Electron's `nativeTheme` (`shouldUseDarkColors` plus `on('updated')`) instead of a
+  `matchMedia` listener per window. One `migrateStoredThemeState` method, off `IThemeService` and
+  marked experimental on both surfaces, adopts state persisted in a renderer's store before this
+  change — adopt-then-flag, first offer wins, and the offering window drops its keys on either
+  answer. Main's own consumer (the Windows title-bar overlay colours) reads and subscribes locally
+  rather than through the provider its own process registers.
+- **Alternatives:** (a) Keep the election and extract the duplication into a shared helper (what
+  ADR-0009 anticipated) — rejected for the same reason as in ADR-0012, and the theme was the second
+  copy that would have justified the helper. (b) Fix the §9.2 staleness in place and leave the
+  election — rejected: it treats the symptom of state living somewhere closable. (c) Keep the OS
+  preference in the renderer and send it to main — rejected: it is one fact about the machine, so N
+  windows watching it is N chances to disagree, and `nativeTheme` is strictly better placed. (d) Put
+  the migration on a command instead of the provider — rejected: it is one caller reaching one host,
+  which is what the provider already is; a command would add a globally-unique name for it. (e) Seed
+  the renderer's cache from the host's snapshot alone and accept the default theme on the first frame
+  — rejected: that frame is the flash of unstyled content `index.tsx` reads `getCurrentThemeSync`
+  before React renders specifically to beat, and every web view bakes the same value into its
+  `srcdoc`.
+- **Consequences:** the app-global invariant of `Architecture.md` §2 now holds for every platform
+  service — no renderer registers a globally-unique name, so ADR-0009's machinery is gone with no
+  consumers left, including a dispose-hook leak inside `createReattachingSubscribeCurrentTheme`
+  (every re-attach added an `onDidDispose` handler whose unsubscriber was discarded). A window that
+  is RELOADED replays the URL main built when the window was created, whose theme would otherwise be
+  as old as the window, so the renderer rewrites its own query parameter on every change — the same
+  mechanism the scroll group uses (ADR-0012), rather than a second seed source and a navigation-type
+  sniff to choose between them. `shouldMatchSystem` is computed in main only; a renderer that starts
+  applying its own `matchMedia` would double-apply it. `hasOwnThemeState` — what makes the host
+  refuse a migration offer — is seeded from a DEDICATED marker key that only the three public
+  setters and an adoption write, deliberately not from the presence of the three value keys, because
+  the engine also writes those on its own while extension themes load (matching the theme type to
+  the machine's dark-mode preference does it on the first start of a dark-mode machine) and those
+  writes say nothing about what the user chose; reading them back as a user choice would refuse a
+  handover that had not happened yet, and a refusal is what makes the offering window delete its
+  copy. "Do I have a theme worth handing a new window?" is deliberately a DIFFERENT question,
+  answered by "is this still the compile-time default?", so a theme derived from the OS preference
+  still travels on the URL. The theme list comes from a provider the extension host registers, which
+  does not exist when this host starts and which `platform.restartExtensionHost` replaces, so the
+  subscription is taken whenever that provider is announced rather than once — and the deadline for
+  "the current theme no longer exists, reset it" runs from that list's first payload rather than
+  from this process's age, which is not a bound on when the extension host publishes. `nativeTheme`
+  cannot be touched before Electron's `ready` event, so the host awaits `app.whenReady()` before
+  building its engine, which makes it the one app-global registration that is not purely synchronous
+  in startup order — and everything main awaits after that batch, including the .NET and
+  extension-host spawns, is behind `ready` too. Measured rather than assumed (`PT_STARTUP_MARKS`,
+  dev build, Linux): the wait ends at +152 ms from process start, and `extension-host-forked`
+  lands at +188 ms against +175 ms without the theme host at all — inside run-to-run noise,
+  because `ready` fires while main is still doing work it would have done anyway. The mark
+  `theme-host-electron-ready` is emitted where the wait ends so this stays checkable. What is NOT
+  free is resolving the theme data provider: an unregistered data provider is only answered after
+  the whole RPC retry budget (~10 s), so the host's first subscribe attempt is deliberately not
+  awaited — awaiting it put ten seconds in front of both process spawns.
+- **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
+  closes).
+
+## ADR-0014: Renderer platform code registers no command or request names; routers call shard methods
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** ADR-0007 scoped each window's copy of the renderer-hosted commands and dialog requests
+  under a `${name}-${windowId}` suffix, and ADR-0008's `command.service-router.ts` forwarded the
+  generic name to the right window's scoped name. That worked, but it made the set of per-window
+  commands a **list** — `RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES` — that a renderer had to register against and that nothing
+  could check across module boundaries. Two startup coverage checks and two registry modules existed
+  only to catch a name on the list that no module had registered, and a command whose handler had a
+  web view id as its first documented parameter had to be sorted into owner-routed rather than
+  focus-routed by reading its own OpenRPC docs.
+- **Decision:** Move every one of those commands into the router for its own service, where the
+  router registers the generic name in main and calls a **method on the window's service shard**
+  instead of forwarding to a scoped command name. The dialog service, the Usersnap feedback widget,
+  and the BookChapterControl each got a shard and a router; the settings commands joined the WebView
+  router, which already knew how to find a web view's owning window; the scripture navigation
+  commands moved into main outright, asking the window one question (`getNavigationContext`) and then
+  computing and writing in main. Renderer platform code now registers no command or request name,
+  scoped or otherwise.
+- **Alternatives:** Keep the transitional router and its name lists — rejected: the lists are the
+  cost, not the routing. Give the platform a per-window command facility so a renderer could keep
+  registering — rejected: it would make the shape this ADR removes into supported API, and the shard
+  interface already expresses "one window's implementation of a service" with compile-time checking
+  that a name list cannot have. Put the new methods on the existing public services
+  (`WebViewServiceType`, `IWindowService`) — rejected: both are emitted into `papi.d.ts`, so a UI
+  affordance would become permanent extension-facing API; the shards extend those types privately
+  instead, and the router objects stay typed as the public service so the public surface is
+  byte-identical.
+- **Consequences:** `papi.d.ts` **shrinks** by three `@experimental` exports
+  (`RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES`) and grows by nothing — a breaking change for anyone who
+  imported them, which is why they were experimental. `command.service-router.ts`,
+  `renderer-hosted-command-registry.ts`, `renderer-hosted-dialog-registry.ts`, and both startup
+  coverage checks are deleted; what replaces their guarantee is that each router's registration list
+  is asserted by its own test, and each shard's methods are checked by its interface. Owner-vs-focus
+  routing is no longer derived from OpenRPC parameter names as a routing INPUT — it is written per
+  command in the router, so `platform.openSettings` naming a web view routes by ownership while
+  `platform.openUserSettings` follows focus, and each is pinned by a test; the parameter names are
+  kept as a startup assertion instead, so a command that documents `webViewId` first and is not
+  owner-routed is reported rather than silently following focus. All twenty moved names report an
+  unreachable window the same way — by throwing at call time, as the transitional router did — which
+  the eight navigation commands need stating explicitly because they resolve a value: a go-to
+  resolves `undefined` and a history command resolves a boolean, so `false` means "nothing to move
+  to" and never "this could not run". Two behavior changes. The navigation mutex was per-renderer
+  and is now app-global, since the handler runs in main: two windows driving one scroll group are
+  serialized against each other, which a per-renderer lock could not do, at the cost of a slow
+  window being able to delay another window's navigation — so the round trip that asks a window what
+  to navigate is deliberately outside the lock, leaving only main's own read-compute-write inside
+  it. And a go-to now steps from the reference main holds rather than from the asking window's
+  predicting cache, which is what keeps a held key advancing one step per repeat; a navigation the
+  window itself just made reaches main one hop later. Cross-window navigation ordering beyond this
+  is PT-4270. Registering three routers plus the navigation commands adds four entries to main's
+  awaited startup batch; they are in-process registrations against main's own RPC server.
+- **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
+  `pt-4275-commands-to-main`.

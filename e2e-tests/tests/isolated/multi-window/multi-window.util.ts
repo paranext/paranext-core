@@ -100,8 +100,8 @@ export function countOccurrences(haystack: string, needle: string): number {
 
 /**
  * Per-test elapsed-time step logger, so the runner output records how long each phase actually took
- * — the evidence for judging whether a pass exercised the intended waits (e.g. a hosting takeover
- * that waits on the disposal announced for the departed window) or short-circuited.
+ * — the evidence for judging whether a pass exercised the intended waits (e.g. a second window's
+ * services genuinely coming up) or short-circuited.
  */
 export function createStepLogger(prefix: string): (label: string) => void {
   const start = Date.now();
@@ -301,24 +301,34 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 }
 
 /**
- * Wait until a window's renderer has registered its window-scoped services with the main process:
- * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the service routers forward to). Only then can generic-name
- * calls be routed to this window.
+ * The window-scoped shard methods a renderer registers, as patterns taking the window id.
+ *
+ * One per service the main process's routers forward a command or request to. A renderer starts
+ * them together, so any one of them proves only that the batch is under way — a spec that drives a
+ * command at this window right after the gate needs the shard behind THAT command to have arrived.
+ */
+const SCOPED_SHARD_METHOD_PATTERNS = [
+  (windowId: number) => `^object:DialogService-${windowId}\\.showDialog$`,
+  (windowId: number) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
+  (windowId: number) => `^object:BookChapterControlService-${windowId}\\.open$`,
+  (windowId: number) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
+  (windowId: number) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
+];
+
+/**
+ * Wait until a window's renderer has registered every window-scoped service the main process's
+ * routers forward to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
   windowId: number,
   timeoutMs: number,
 ): Promise<void> {
-  await waitForPapiMethodRegistered(
-    new RegExp(`^command:platform\\.about-${windowId}$`),
-    WEBSOCKET_PORT,
-    timeoutMs,
-  );
-  await waitForPapiMethodRegistered(
-    new RegExp(`^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`),
-    WEBSOCKET_PORT,
-    timeoutMs,
+  // Waited on together: the renderer starts them together too, so they arrive within a poll of one
+  // another and waiting one after another would spend the timeout budget several times over
+  await Promise.all(
+    SCOPED_SHARD_METHOD_PATTERNS.map((buildPattern) =>
+      waitForPapiMethodRegistered(new RegExp(buildPattern(windowId)), WEBSOCKET_PORT, timeoutMs),
+    ),
   );
 }
 

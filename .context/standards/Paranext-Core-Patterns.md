@@ -1023,6 +1023,33 @@ await networkObjectService.set<WebViewServiceType>(
 );
 ```
 
+**A router may claim command or request names instead of a network object** — the dialog, Usersnap
+and BookChapterControl routers do, and the scripture navigation commands are a command-only module
+with no service behind them at all. The shard index and target resolver are identical; what changes
+is that there is no service interface to declare the router as, so nothing type-checks the set of
+names it claims:
+
+```typescript
+export async function startUsersnapServiceRouter(): Promise<void> {
+  // Nothing derives owner-vs-focus routing from a command's parameters any more, so each router
+  // states how it routes what it claims and this reports a command whose parameters say otherwise
+  assertCommandRoutingMatchesDocs('Usersnap service router', [
+    { commandName: 'platform.usersnapSubmitIdea', docs: USERSNAP_COMMAND_DOCS[...], routing: 'focus' },
+    /* ...one per claimed command */
+  ]);
+
+  await networkService.registerRequestHandler(
+    serializeRequestType(CATEGORY_COMMAND, 'platform.usersnapSubmitIdea'),
+    async () => (await getTargetUsersnapShard()).submitIdea(),
+    USERSNAP_COMMAND_DOCS['platform.usersnapSubmitIdea'],
+  );
+}
+```
+
+Pin the claimed-name set with an exact-set test in `src/main/services/__tests__/` — that test is
+what the type annotation does for the network object shape, and it is the only thing that catches a
+name this router is responsible for silently going unregistered.
+
 **Do:**
 
 - Register the router during main startup, before any window is created, so it claims the generic
@@ -1041,9 +1068,152 @@ await networkObjectService.set<WebViewServiceType>(
 - Discover a shard by rebuilding its window-scoped id. The id exists because `object:{id}.{method}`
   derives from it; discovery goes through the index.
 - Register a globally-unique name from renderer platform code.
+- Register a command or request name from renderer platform code at all, scoped or not. A command
+  that has to run in one window is registered in main and forwarded to that window's shard as a
+  method call — the shard's interface is what keeps the two sides in step, where a per-window name
+  list has to be maintained by hand. (Extension and web-view code registering its own commands
+  through `papi.commands.registerCommand` is unaffected, as is a name derived from a per-instance id
+  only one window can hold — the web view message channel, `webViewMessage:{webViewId}`.)
+- Build the request type of a shard method (`object:{id}.{method}`) by hand, to set a timeout on it
+  or otherwise name it. Ask the index for the id the shard ANNOUNCED
+  (`getShardNetworkObjectId`) and build the request type with
+  `getNetworkObjectMethodRequestType` — a name aimed at a spelling the window does not answer to
+  fails silently, since writing it succeeds and nothing ever reads it.
 - Cache a resolved shard in the router. `networkObjectService.get` already caches, serializes
   concurrent lookups, and drops what it holds on disposal; a second cache can only go stale, and
   Electron reuses `BrowserWindow.id`.
+
+### App-global services: service host in main + predicting cache
+
+A service whose state belongs to the whole APP rather than to any window (the scroll group
+references, the current theme) cannot be a shard, and cannot be routed either — a router picks one
+window to answer and no window has the right answer. Host it in the process that outlives every
+window, and give each renderer a cache instead of an authority. Predict only where the UI has a
+SYNCHRONOUS WRITER — the scroll group does, the theme does not, and a cache with no writer to predict
+is just a cache. See
+[ADR-0012](Architecture-Decisions.md#adr-0012-the-scroll-group-service-is-hosted-in-main-and-each-renderer-keeps-a-predicting-cache)
+and [ADR-0013](Architecture-Decisions.md#adr-0013-the-theme-service-is-hosted-in-main-and-each-window-caches-the-current-theme);
+worked examples: `src/main/services/scroll-group.service-host.ts` +
+`src/renderer/services/scroll-group.service.ts` (predicting), and
+`src/main/services/theme.service-host.ts` + `src/renderer/services/theme.service.ts` (read-only).
+
+**Host side** (`src/main/services/{service}.service-host.ts`) — one for the app:
+
+```typescript
+// Registered during main startup, BEFORE createWindow(), so it is there for the first render
+await networkObjectService.set<IScrollGroupHostService>(
+  NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  scrollGroupService,
+  'object',
+  undefined,
+  // Per-method x-experimental for the cache-keeping methods only, so the stable ones stay unmarked
+  { methods: [{ name: 'getScrollGroupSnapshot', 'x-experimental': true /* ... */ }] },
+);
+
+// A host that is a DATA PROVIDER registers the same way, with the OpenRPC documentation in the
+// fifth parameter — the theme host is one (`dataProviderService.registerEngine`)
+await dataProviderService.registerEngine(themeServiceDataProviderName, engine, undefined, undefined, {
+  methods: [{ name: 'migrateStoredThemeState', 'x-experimental': true /* ... */ }],
+});
+```
+
+**Cache side** (`src/renderer/services/{service}.service.ts`) — one per window:
+
+```typescript
+// 1. Seeded synchronously at module load from what main put on the window's URL: React renders
+//    before any service has started, and the *Sync readers are called during that render
+seedCacheBeforeFirstRender();
+
+// 2. Started later: subscribe to the host's events, then take a snapshot. Neither may fail startup
+export async function startScrollGroupService(): Promise<void> {
+  subscribeToScrollGroupUpdates();
+  await handOverPreviouslyStoredState();
+  try {
+    await seedCacheFromHost();
+  } catch (e) {
+    logger.error(/* the cache is usable without it; the next event catches it up */);
+  }
+}
+
+// 3. A sync write predicts locally, then reconciles with the host
+export function setScrRefSync(/* ... */): boolean {
+  if (predictedNoChange && hasSeededFromHost) return false;
+  applyToCache(/* ... */);
+  sendPredictedWriteToHost(scrollGroupId, (host) => host.setScrRef(/* ... */));
+  return true;
+}
+```
+
+**Do:**
+
+- Pass the state a new window needs through the per-window query-param object in `main.ts`
+  (`SCROLL_GROUP_STATE_QUERY_PARAMETER` / `THEME_STATE_QUERY_PARAMETER`, alongside `WINDOW_ID`) and
+  seed the cache from it at module load. A cache that can only be filled by a round trip serves the
+  default value to the first render. Handle "main does not know yet" — omit the parameter, and let
+  the renderer fall back to what it can read for itself.
+- Keep that query parameter as fresh as the cache, with `refreshWindowCreationState`
+  (`src/renderer/services/window-creation-state.util.ts`). A RELOAD replays the URL main built when
+  the window was created, and by then the window's own pre-host store has been handed over and
+  deleted, so the URL is the only seed a reloaded document has: without the refresh it comes up on
+  the state the window OPENED on. One `history.replaceState` per change — same document, no
+  navigation, every other parameter carried over, and skipped when the query already says it. Do NOT
+  reach for a second seed source (a "what this window last held" `localStorage` key) or for
+  `performance.getEntriesByType('navigation')[0].type === 'reload'` to choose between two seeds:
+  seeds that are always fresh never disagree, and a `localStorage` key is profile-wide where the URL
+  is per window.
+- Make `papi.{service}` in the renderer resolve to the cache rather than to the shared network proxy.
+  Web views take `window.papi` from the window hosting them, so two authorities in one window means
+  the hook and `papi` can disagree about the same instant.
+- Treat "the cache says nothing changed" as untrustworthy until the first snapshot has landed, and
+  send the write anyway. The reconcile only ever runs on a write that was sent.
+- Debounce the host's persistence and flush it on `will-quit`. Every `localStorage.setItem` in main
+  is a synchronous fsync on the event loop that carries the whole app's JSON-RPC traffic.
+- Persist what was adopted BEFORE recording that the migration ran, when taking over state from a
+  store the host cannot read. One file per key means no atomicity across them, and the other order
+  can strand a profile as migrated-with-nothing-migrated. Write the value the host could never
+  derive for itself first — user-defined themes, not a current theme that has a default.
+- Make the host's "do I already have state of my own?" flag evidence of a USER ACTION, never of a
+  write the host derived. Both worked examples need one and they answer it differently for a real
+  reason: the scroll group's is memory (`Object.keys(scrRefs).length > 0`, which is only non-empty
+  once something was navigated), while the theme host writes its value keys on its own during
+  startup — matching the theme type to the machine's dark-mode preference persists a current theme
+  on the first start of a dark-mode machine — so IT seeds from a dedicated marker key that only the
+  setters and an adoption write. Seeding from the value keys reads the host's own writes back as a
+  user choice one restart later, refuses a handover that has not happened, and the offering window
+  deletes its copy on the refusal. Keep "may I adopt an offer?" and "do I have state worth handing a
+  new window?" as two questions: they have different answers.
+- Await `app.whenReady()` inside the host's start function if it touches ANY Electron API
+  (`nativeTheme`, `screen`, `powerMonitor`, `session`) — those are unusable before `ready`, so the
+  engine cannot be built at module load. Know what that costs: the start function is awaited in
+  `main.ts`'s app-global batch, so everything after that batch — the .NET data provider and the
+  extension-host spawn — is behind `ready` too. Measure it with `PT_STARTUP_MARKS` (README §
+  Startup performance) rather than assuming.
+- Re-take a subscription the host depends on whenever its provider is announced
+  (`onDidCreateNetworkObject`), not once at startup, when that provider is registered by another
+  process. Main's app-global hosts start BEFORE the extension host is spawned and
+  `platform.restartExtensionHost` replaces it mid-session, so a one-shot subscription can be taken
+  before the provider exists and is never re-armed after a restart. Anchor any deadline that depends
+  on the subscription's data to the data's arrival, not to this process's age — process age is not a
+  bound on when another process publishes.
+
+**Don't:**
+
+- Elect a host window (ADR-0009) for state that is app-global. The takeover path, the re-arm in every
+  consumer, and the cross-window mirror exist only because the state lived somewhere closable. That
+  machinery is gone from this repo; do not reintroduce it.
+- Read a per-machine fact (OS dark mode, locale, display scaling) once per window. Read it in main —
+  `nativeTheme.shouldUseDarkColors` plus `nativeTheme.on('updated')` for dark mode — and let the
+  host derive from it, so N windows cannot disagree and there is no per-window listener to unwind.
+- Reach for your own process's data provider when you ARE the host process. Main's title bar reads
+  the theme host's module directly; going through the provider would put a JSON-RPC round trip
+  between a change and the object in the next module that already knows.
+- Let a persist failure abort the broadcast. The broadcast is what keeps the other windows agreeing;
+  the file only decides what the next start opens on.
+- Leave a failed resync unretried. Without a retry — or a re-arm on the next inbound event — the
+  window shows a value the host rejected for the rest of the session, and every later write in that
+  group starts from it.
+- Add a second module named after the service. The `*.service.ts` that already exists in each process
+  grows the cache; a new one beside it is a second answer to the same question.
 
 ### Command Naming
 
