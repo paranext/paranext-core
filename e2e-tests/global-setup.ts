@@ -46,6 +46,47 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
+/**
+ * Newest file modification time (ms since epoch) under `dir`, recursively. Used to detect a stale
+ * dev main bundle. `node_modules` is skipped — dependency changes are reflected in package.json.
+ */
+function newestMtimeMs(dir: string): number {
+  return fs.readdirSync(dir, { withFileTypes: true }).reduce((newest, entry) => {
+    if (entry.name === 'node_modules') return newest;
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return Math.max(newest, newestMtimeMs(entryPath));
+    if (entry.isFile()) return Math.max(newest, fs.statSync(entryPath).mtimeMs);
+    return newest;
+  }, 0);
+}
+
+/**
+ * Whether the dev main bundle is older than the main-process sources it was built from. Playwright
+ * launches Electron against this prebuilt bundle (there is no webpack watcher in an E2E run), so a
+ * bundle from before the current checkout's changes would silently test STALE main-process code —
+ * the renderer, served fresh by the dev server, would be new while main stayed old.
+ */
+function isDevMainBundleStale(rootDir: string, devMainPath: string): boolean {
+  const bundleMtime = fs.statSync(devMainPath).mtimeMs;
+  // The bundle's inputs: the main-process entry tree (src/main plus the src/shared and src/node
+  // code it imports; src/extension-host and src/renderer run from source/dev-server and cannot go
+  // stale this way), the workspace library the bundle compiles in (platform-bible-utils; the
+  // platform-bible-react import in src/shared is types-only and never reaches the bundle), the
+  // webpack configs that shape the bundle, and package.json (dependency changes).
+  const sourceDirs = [
+    'src/main',
+    'src/shared',
+    'src/node',
+    'lib/platform-bible-utils/src',
+    '.erb/configs',
+  ];
+  const newestSource = Math.max(
+    ...sourceDirs.map((dir) => newestMtimeMs(path.join(rootDir, dir))),
+    fs.statSync(path.join(rootDir, 'package.json')).mtimeMs,
+  );
+  return newestSource > bundleMtime;
+}
+
 // Playwright global setup requires this signature even though config is unused
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default async function globalSetup(_config: FullConfig): Promise<void> {
@@ -84,13 +125,17 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     },
   );
 
-  // Ensure the dev main bundle exists
+  // Ensure the dev main bundle exists and is at least as new as the main-process sources — a
+  // stale bundle would run OLD main-process code against the fresh dev-server renderer.
   const devMainPath = path.join(rootDir, '.erb/dll/main.bundle.dev.js');
   if (!fs.existsSync(devMainPath)) {
     console.log('Development main bundle not found. Building...');
     execSync('npm run prestart', { cwd: rootDir, stdio: 'inherit' });
+  } else if (isDevMainBundleStale(rootDir, devMainPath)) {
+    console.log('Development main bundle is older than main-process sources. Rebuilding...');
+    execSync('npm run prestart', { cwd: rootDir, stdio: 'inherit' });
   } else {
-    console.log('Development main bundle found.');
+    console.log('Development main bundle found and up to date.');
   }
 
   // Start the webpack dev server for the renderer if not already running
