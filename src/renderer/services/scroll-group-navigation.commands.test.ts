@@ -8,7 +8,6 @@ import {
 // vi.mock and vi.hoisted calls are hoisted by vitest above the imports above at transform time, so
 // the static imports can be written first here to satisfy import/first.
 const mocks = vi.hoisted(() => ({
-  getLastSelectedScriptureNavigableWebViewId: vi.fn(),
   getNavigationTargetWebView: vi.fn(),
   updateWebViewDefinitionSync: vi.fn(() => true),
   getScrRefSync: vi.fn(),
@@ -16,9 +15,7 @@ const mocks = vi.hoisted(() => ({
   // Typed to accept args so tests can read written refs back out of `mock.calls`
   setScrRefSync: vi.fn<(...args: unknown[]) => boolean>(() => true),
   navigateReferenceHistoryPhysicalSync: vi.fn<(...args: unknown[]) => boolean>(() => false),
-  getBookChapterControlHandle: vi.fn(),
   pdpGet: vi.fn(),
-  windowServiceGetFocus: vi.fn(),
 }));
 
 // Capture the handlers `startScrollGroupNavigationCommands` registers so the reference-history
@@ -28,7 +25,6 @@ const { registeredCommandHandlers } = vi.hoisted(() => ({
 }));
 
 vi.mock('@renderer/services/window.service-shard', () => ({
-  getLastSelectedScriptureNavigableWebViewId: mocks.getLastSelectedScriptureNavigableWebViewId,
   getNavigationTargetWebView: mocks.getNavigationTargetWebView,
 }));
 vi.mock('@renderer/services/web-view.service-shard', () => ({
@@ -40,10 +36,6 @@ vi.mock('@renderer/services/scroll-group.service', () => ({
   setScrRefSync: mocks.setScrRefSync,
   navigateReferenceHistoryPhysicalSync: mocks.navigateReferenceHistoryPhysicalSync,
 }));
-vi.mock('@renderer/services/book-chapter-control.registry', () => ({
-  TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID: 'top-toolbar',
-  getBookChapterControlHandle: mocks.getBookChapterControlHandle,
-}));
 vi.mock('@shared/services/project-data-provider.service', () => ({
   papiFrontendProjectDataProviderService: { get: mocks.pdpGet },
 }));
@@ -54,9 +46,6 @@ vi.mock('@shared/services/command.service', () => ({
       return () => Promise.resolve(true);
     },
   ),
-}));
-vi.mock('@shared/services/window.service', () => ({
-  windowService: { getFocus: mocks.windowServiceGetFocus },
 }));
 
 const GEN_5_3: SerializedVerseRef = { book: 'GEN', chapterNum: 5, verseNum: 3 };
@@ -74,8 +63,6 @@ beforeEach(() => {
   mocks.navigateReferenceHistoryPhysicalSync.mockReturnValue(false);
   // No resolved navigation target by default — individual describe blocks override.
   mocks.getNavigationTargetWebView.mockReturnValue(undefined);
-  mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
-  mocks.windowServiceGetFocus.mockResolvedValue(undefined);
   // No project → book list falls back to ALL_BOOK_IDS
   mocks.pdpGet.mockRejectedValue(new Error('no project'));
 });
@@ -407,86 +394,6 @@ describe('command serialization', () => {
   });
 });
 
-describe('platform.openBookChapterControl', () => {
-  test("prefers the currently focused web view's handle over the tracked web view", async () => {
-    mocks.windowServiceGetFocus.mockResolvedValue({ focusType: 'webView', id: 'focused-1' });
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('tracked-1');
-
-    const focusedHandle = { open: vi.fn() };
-    const trackedHandle = { open: vi.fn() };
-    mocks.getBookChapterControlHandle.mockImplementation((ownerId: string) => {
-      if (ownerId === 'focused-1') return focusedHandle;
-      if (ownerId === 'tracked-1') return trackedHandle;
-      return undefined;
-    });
-
-    await navigationCommandHandlers['platform.openBookChapterControl']();
-
-    expect(focusedHandle.open).toHaveBeenCalled();
-    expect(trackedHandle.open).not.toHaveBeenCalled();
-  });
-
-  test('treats a focused web view tab (tabType webView) the same as focus on the web view itself', async () => {
-    mocks.windowServiceGetFocus.mockResolvedValue({
-      focusType: 'tab',
-      tabType: 'webView',
-      id: 'focused-tab-1',
-    });
-
-    const focusedHandle = { open: vi.fn() };
-    mocks.getBookChapterControlHandle.mockImplementation((ownerId: string) =>
-      ownerId === 'focused-tab-1' ? focusedHandle : undefined,
-    );
-
-    await navigationCommandHandlers['platform.openBookChapterControl']();
-
-    expect(focusedHandle.open).toHaveBeenCalled();
-  });
-
-  test("falls back to the tracked web view's handle when the focused subject has none registered", async () => {
-    // Focus is on a non-web-view tab (e.g. a settings tab) — no control there
-    mocks.windowServiceGetFocus.mockResolvedValue({
-      focusType: 'tab',
-      tabType: 'settings-tab',
-      id: 'settings-1',
-    });
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue('tracked-1');
-
-    const trackedHandle = { open: vi.fn() };
-    mocks.getBookChapterControlHandle.mockImplementation((ownerId: string) =>
-      ownerId === 'tracked-1' ? trackedHandle : undefined,
-    );
-
-    await navigationCommandHandlers['platform.openBookChapterControl']();
-
-    expect(trackedHandle.open).toHaveBeenCalled();
-  });
-
-  test("falls back to the top toolbar's handle when neither the focused nor tracked web view has one", async () => {
-    mocks.windowServiceGetFocus.mockResolvedValue(undefined);
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
-
-    const toolbarHandle = { open: vi.fn() };
-    mocks.getBookChapterControlHandle.mockImplementation((ownerId: string) =>
-      ownerId === 'top-toolbar' ? toolbarHandle : undefined,
-    );
-
-    await navigationCommandHandlers['platform.openBookChapterControl']();
-
-    expect(toolbarHandle.open).toHaveBeenCalled();
-  });
-
-  test('no-ops without throwing when no handle is registered anywhere', async () => {
-    mocks.windowServiceGetFocus.mockResolvedValue(undefined);
-    mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
-    mocks.getBookChapterControlHandle.mockReturnValue(undefined);
-
-    await expect(
-      navigationCommandHandlers['platform.openBookChapterControl'](),
-    ).resolves.toBeUndefined();
-  });
-});
-
 describe('reference-history keyboard commands resolve the active toolbar scroll group', () => {
   async function getRegisteredHandler(commandName: string) {
     await startScrollGroupNavigationCommands();
@@ -548,7 +455,6 @@ describe('navigation commands are registered per window', () => {
     'platform.goToPreviousBook',
     'platform.goToNextVerse',
     'platform.goToPreviousVerse',
-    'platform.openBookChapterControl',
     'platform.navigateLeftInReferenceHistory',
     'platform.navigateRightInReferenceHistory',
   ];

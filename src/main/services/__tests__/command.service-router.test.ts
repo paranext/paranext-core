@@ -159,9 +159,7 @@ describe('renderer-hosted request service routers', () => {
   });
 
   test('routes the scripture navigation commands, so two windows cannot fight over them', () => {
-    const claimed = registrations();
-    expect(claimed.has('command:platform.goToNextChapter')).toBe(true);
-    expect(claimed.has('command:platform.openBookChapterControl')).toBe(true);
+    expect(registrations().has('command:platform.goToNextChapter')).toBe(true);
   });
 
   test('sends a command carrying a web view id to the window that owns that web view', async () => {
