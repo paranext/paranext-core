@@ -35,6 +35,7 @@ import {
   WindowDataTypes,
   windowServiceProviderName,
 } from '@shared/services/window.service-model';
+import { WindowServiceShard } from '@shared/models/window.service-shard.model';
 import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platform-bible-utils';
 
 /**
@@ -50,11 +51,11 @@ export type GetWindowService = (windowId: number) => Promise<IWindowService | un
  * These shards are data providers rather than plain network objects, which changes only how they
  * are resolved; they are discovered exactly like every other shard.
  */
-const windowServiceShards = createServiceShardIndex<IWindowService>({
+const windowServiceShards = createServiceShardIndex<WindowServiceShard>({
   objectType: WINDOW_SERVICE_SHARD_OBJECT_TYPE,
   // What the index holds is the shard's network object id, which for a data provider already ends
   // in the suffix `getByType` would otherwise append (see `getDataProviderObjectId`)
-  resolveShard: (networkObjectId) => getDataProviderByType<IWindowService>(networkObjectId),
+  resolveShard: (networkObjectId) => getDataProviderByType<WindowServiceShard>(networkObjectId),
 });
 
 /**
@@ -70,7 +71,9 @@ const windowServiceShards = createServiceShardIndex<IWindowService>({
  *
  * @param windowId The Electron BrowserWindow ID
  */
-export async function getWindowServiceShard(windowId: number): Promise<IWindowService | undefined> {
+export async function getWindowServiceShard(
+  windowId: number,
+): Promise<WindowServiceShard | undefined> {
   return windowServiceShards.getShard(windowId);
 }
 
