@@ -400,6 +400,56 @@ describe('handleSwitchToSimpleMode', () => {
     const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
     expect(bibleTextsPanelTabs.map((tab) => tab.id)).not.toContain('scripture-text-grid-tab');
   });
+
+  it('a superseded switch never reaches loadLayout, even if its own async work finishes after a newer switch started', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-stale', isEditable: true });
+
+    // Start two overlapping switches without awaiting the first - simulates the user changing
+    // their mind mid-switch (the scenario Tier 0 finding #1 in the fix spec is about). Both calls'
+    // synchronous prefixes (including capturing their own switch generation) run before either
+    // call's first await resumes, so the ordering here is deterministic, not racy.
+    const firstSwitch = host.handleSwitchToSimpleMode();
+    setLastOpenedProject({ id: 'proj-latest', isEditable: true });
+    const secondSwitch = host.handleSwitchToSimpleMode();
+    await Promise.all([firstSwitch, secondSwitch]);
+
+    // The superseded (first) switch must never even build a layout for the stale project, let
+    // alone load one.
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalledWith(
+      'proj-stale',
+      expect.anything(),
+    );
+    expect(fakeDockLayout.loadLayout).toHaveBeenCalledWith(
+      expect.objectContaining({ builtForProjectId: 'proj-latest' }),
+    );
+  });
+
+  it('never persists the Simple-mode layout to the Power storage key, even when currentInterfaceMode currently reads power', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    // Everything (including the interfaceMode registerDockLayout seeds on its own initial load)
+    // reads 'power' here - simulating a moment where currentInterfaceMode has moved on to 'power'
+    // while this Simple-mode switch's tail is still running, independent of whether the
+    // switch-generation guard also would have caught it.
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    host.registerDockLayout(fakeDockLayout);
+    localStorage.setItem(
+      'dock-saved-layout',
+      JSON.stringify({ dockbox: { mode: 'horizontal', children: [] }, marker: 'power-layout' }),
+    );
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-1', isEditable: true });
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(localStorage.getItem('dock-saved-layout')).toContain('power-layout');
+  });
 });
 
 describe('resolveProjectIsEditable', () => {
