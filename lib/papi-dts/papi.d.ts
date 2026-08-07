@@ -2658,6 +2658,22 @@ declare module 'shared/services/network-object.service' {
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
+   * The request type one method of a network object is served under.
+   *
+   * This module decides that format, so anything that has to name a single method of a network object
+   * from the outside — attaching a custom request timeout to it, for instance — derives the name here
+   * rather than spelling it a second time somewhere a change to the format would never reach.
+   *
+   * @param networkObjectId ID the network object was registered under
+   * @param methodName Method on that object to name
+   * @returns The request type that method's calls travel on
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export const getNetworkObjectMethodRequestType: (
+    networkObjectId: string,
+    methodName: string,
+  ) => `${string}:${string}`;
+  /**
    * Search locally known network objects for the given ID. Don't look on the network for more
    * objects.
    *
@@ -4742,28 +4758,34 @@ declare module 'papi-shared-types' {
     /**
      * Navigate the reference history in the physical "left" direction. Acts on the same scroll
      * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
-     * and the on-screen history buttons can never disagree. The renderer resolves the physical
-     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
-     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
-     * dispatches this directly so it never needs to know the UI direction or the active scroll
-     * group.
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: left = back in
+     * LTR, forward in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
      *
      * @returns `true` if navigation happened; `false` when there is no history in that direction or
      *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
      * @experimental
      */
     'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
     /**
      * Navigate the reference history in the physical "right" direction. Acts on the same scroll
      * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
-     * and the on-screen history buttons can never disagree. The renderer resolves the physical
-     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
-     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
-     * dispatches this directly so it never needs to know the UI direction or the active scroll
-     * group.
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: right = forward
+     * in LTR, back in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
      *
      * @returns `true` if navigation happened; `false` when there is no history in that direction or
      *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
      * @experimental
      */
     'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
@@ -8782,12 +8804,13 @@ declare module 'renderer/services/scroll-group.service' {
   /**
    * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
    * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
-   * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
-   * commands so the main-process keyboard handler can dispatch the physical key directly and stay
-   * direction-agnostic.
+   * via {@link resolveReferenceHistoryDirection}). Backs the top toolbar's history buttons, which know
+   * which way the user pointed rather than which way that is through the history.
    *
-   * The mapping lives in the renderer because layout direction is renderer state: `readDirection`
-   * reads the document, which only this process has. The host exposes logical back/forward only.
+   * The mapping is made here because layout direction is renderer state: `readDirection` reads the
+   * document, which only this process has. The host exposes logical back/forward only. The
+   * `platform.navigateLeft/RightInReferenceHistory` commands make the same mapping in the main
+   * process, from the layout direction the window reports in its navigation context.
    */
   export function navigateReferenceHistoryPhysicalSync(
     scrollGroupId: ScrollGroupId | undefined,

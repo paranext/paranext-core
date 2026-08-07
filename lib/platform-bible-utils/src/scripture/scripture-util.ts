@@ -202,7 +202,7 @@ export const BOOKS_PRESENT_DEFAULT = '';
  *
  * @experimental This export is unstable and may change shape or disappear without notice
  */
-export const ALL_BOOK_IDS: string[] = Canon.allBookIds.filter(
+export const ALL_BOOK_IDS: readonly string[] = Canon.allBookIds.filter(
   (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
 );
 
