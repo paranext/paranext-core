@@ -122,42 +122,46 @@ vi.mock('@shared/services/data-provider.service', () => ({
 // `platformScriptureEditor.bibleTexts` tab so the real (unmocked) default-layout-supplement merge
 // has a matching anchor to attach the Scripture Text Grid supplement tab to (see the merge tests
 // below) - the merge/filter logic itself is real production code, not mocked.
-const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock } = vi.hoisted(() => {
-  // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
-  // real Simple-mode tab ids, while defaulting to empty for every other test (matching real
-  // SIMPLE_LAYOUT_TAB_IDS's shape without needing to know its actual values). Declared as its own
-  // explicitly-typed variable (rather than an inline `[] as string[]`) so the array's element type
-  // doesn't need a type assertion.
-  const simpleLayoutTabIds: string[] = [];
-  return {
-    buildSimpleLayoutForProjectMock: vi.fn((projectId: string, isReadOnly: boolean) => ({
-      dockbox: {
-        mode: 'horizontal' as const,
-        children: [
-          {
-            mode: 'vertical' as const,
-            children: [
-              {
-                tabs: [
-                  {
-                    id: 'bible-texts-tab',
-                    data: { webViewType: 'platformScriptureEditor.bibleTexts' },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      builtForProjectId: projectId,
-      builtIsReadOnly: isReadOnly,
-    })),
-    simpleLayoutTabIdsMock: simpleLayoutTabIds,
-  };
-});
+const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLayoutTabIdsMock } =
+  vi.hoisted(() => {
+    // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
+    // real Simple-mode tab ids, while defaulting to empty for every other test (matching real
+    // SIMPLE_LAYOUT_TAB_IDS's/VISIBLE_SIMPLE_LAYOUT_TAB_IDS's shape without needing to know their
+    // actual values). Declared as their own explicitly-typed variables (rather than an inline
+    // `[] as string[]`) so the array's element type doesn't need a type assertion.
+    const simpleLayoutTabIds: string[] = [];
+    const visibleSimpleLayoutTabIds: string[] = [];
+    return {
+      buildSimpleLayoutForProjectMock: vi.fn((projectId: string, isReadOnly: boolean) => ({
+        dockbox: {
+          mode: 'horizontal' as const,
+          children: [
+            {
+              mode: 'vertical' as const,
+              children: [
+                {
+                  tabs: [
+                    {
+                      id: 'bible-texts-tab',
+                      data: { webViewType: 'platformScriptureEditor.bibleTexts' },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        builtForProjectId: projectId,
+        builtIsReadOnly: isReadOnly,
+      })),
+      simpleLayoutTabIdsMock: simpleLayoutTabIds,
+      visibleSimpleLayoutTabIdsMock: visibleSimpleLayoutTabIds,
+    };
+  });
 vi.mock('@renderer/components/docking/simple-layout.builder', () => ({
   buildSimpleLayoutForProject: buildSimpleLayoutForProjectMock,
   SIMPLE_LAYOUT_TAB_IDS: simpleLayoutTabIdsMock,
+  VISIBLE_SIMPLE_LAYOUT_TAB_IDS: visibleSimpleLayoutTabIdsMock,
 }));
 
 // `LayoutInfo` is deliberately opaque in the shared model, so building a layout fixture and reading
@@ -346,6 +350,7 @@ describe('handleSwitchToSimpleMode', () => {
     dataProviderGetMock.mockResolvedValue(undefined);
     buildSimpleLayoutForProjectMock.mockClear();
     simpleLayoutTabIdsMock.length = 0;
+    visibleSimpleLayoutTabIdsMock.length = 0;
   });
 
   afterEach(() => {
@@ -439,6 +444,46 @@ describe('handleSwitchToSimpleMode', () => {
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalled();
   }, 3000);
+
+  it('fast path: the tabs-resolved tracker only waits on VISIBLE_SIMPLE_LAYOUT_TAB_IDS, not the full SIMPLE_LAYOUT_TAB_IDS list', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-visible-tabs', isEditable: true });
+    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    // Populate the full (5-tab) list with an id that never fires an open/update event (the
+    // network-event mocks at the top of this file are no-ops). Leave the visible-only list empty.
+    // If the switch is still tracking the full list, it will block on the tracker's real timeout;
+    // if it correctly narrowed to the (empty) visible list, it resolves on the next tick.
+    simpleLayoutTabIdsMock.push('hidden-tab-not-in-visible-list');
+
+    const start = Date.now();
+    await host.handleSwitchToSimpleMode();
+    const elapsedMs = Date.now() - start;
+
+    // Well under the tracker's 3s timeout - proves the switch didn't wait on the full list.
+    expect(elapsedMs).toBeLessThan(1000);
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('timed out'));
+  }, 6000);
+
+  it('fast path: warns when the visible-tabs tracker times out before every tab resolves', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-visible-tabs-timeout', isEditable: true });
+    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    // Non-empty visible-tab list whose id never fires an open/update event - forces the tracker to
+    // resolve via its real (production) timeout rather than immediately.
+    visibleSimpleLayoutTabIdsMock.push('visible-tab-1');
+
+    await host.handleSwitchToSimpleMode();
+
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+  }, 6000);
 
   it('slow path: resolves the most recent project, looks up real editability, and seeds the cache', async () => {
     const host = await importHost();

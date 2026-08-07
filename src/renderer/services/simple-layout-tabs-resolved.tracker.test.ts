@@ -29,7 +29,7 @@ function makeSubscriber(): {
 }
 
 /** Wraps a promise with a synchronous `resolved` flag for ordering assertions. */
-function trackResolution(promise: Promise<void>): { isResolved: () => boolean } {
+function trackResolution(promise: Promise<unknown>): { isResolved: () => boolean } {
   let resolved = false;
   promise
     .then(() => {
@@ -134,6 +134,37 @@ describe('trackSimpleLayoutTabsResolved', () => {
     vi.advanceTimersByTime(500);
     await Promise.resolve();
     expect(tracker.isResolved()).toBe(true);
+  });
+
+  it('resolves with { timedOut: true } when resolved via the timeout, not all events firing', async () => {
+    const open = makeSubscriber();
+    const update = makeSubscriber();
+    const { promise } = trackSimpleLayoutTabsResolved({
+      tabIds: ['a', 'b'],
+      onDidOpenWebView: open.subscriber,
+      onDidUpdateWebView: update.subscriber,
+      timeoutMs: 1000,
+    });
+
+    vi.advanceTimersByTime(1000);
+
+    await expect(promise).resolves.toEqual({ timedOut: true });
+  });
+
+  it('resolves with { timedOut: false } when every tracked id fires before the timeout', async () => {
+    const open = makeSubscriber();
+    const update = makeSubscriber();
+    const { promise } = trackSimpleLayoutTabsResolved({
+      tabIds: ['a', 'b'],
+      onDidOpenWebView: open.subscriber,
+      onDidUpdateWebView: update.subscriber,
+      timeoutMs: 1000,
+    });
+
+    open.fire('a');
+    open.fire('b');
+
+    await expect(promise).resolves.toEqual({ timedOut: false });
   });
 
   it('uses DEFAULT_SIMPLE_LAYOUT_TABS_RESOLVED_TIMEOUT_MS when timeoutMs is omitted', async () => {
@@ -276,8 +307,9 @@ describe('trackSimpleLayoutTabsResolved', () => {
       timeoutMs: 10_000,
     });
 
-    // The promise should resolve without advancing the fake timer — nothing to wait for.
-    await expect(promise).resolves.toBeUndefined();
+    // The promise should resolve without advancing the fake timer — nothing to wait for. Not a
+    // timeout: there was nothing to time out on.
+    await expect(promise).resolves.toEqual({ timedOut: false });
     // Subscriptions should have been torn down as part of the immediate resolve.
     expect(open.unsubscribe).toHaveBeenCalledTimes(1);
     expect(update.unsubscribe).toHaveBeenCalledTimes(1);

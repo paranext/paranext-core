@@ -4,6 +4,7 @@ import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import {
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_TAB_IDS,
+  VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
   visitPanels,
   visitTabs,
 } from './simple-layout.builder';
@@ -58,6 +59,33 @@ describe('simple-layout.builder', () => {
 
     it('all IDs are unique', () => {
       expect(new Set(SIMPLE_LAYOUT_TAB_IDS).size).toBe(SIMPLE_LAYOUT_TAB_IDS.length);
+    });
+  });
+
+  describe('VISIBLE_SIMPLE_LAYOUT_TAB_IDS', () => {
+    it('contains exactly one ID per panel in simpleLayout (the first/default-active tab)', () => {
+      const expectedIds: string[] = [];
+      visitPanels(simpleLayout, (panel) => {
+        const firstTab = panel.tabs[0];
+        if (firstTab?.id) expectedIds.push(firstTab.id);
+      });
+      expect(VISIBLE_SIMPLE_LAYOUT_TAB_IDS).toEqual(expectedIds);
+    });
+
+    it('is a strict subset of SIMPLE_LAYOUT_TAB_IDS, smaller since Column 3 stacks other tabs behind the visible one', () => {
+      VISIBLE_SIMPLE_LAYOUT_TAB_IDS.forEach((id) => {
+        expect(SIMPLE_LAYOUT_TAB_IDS).toContain(id);
+      });
+      expect(VISIBLE_SIMPLE_LAYOUT_TAB_IDS.length).toBeLessThan(SIMPLE_LAYOUT_TAB_IDS.length);
+    });
+
+    it('excludes the Column 3 tabs stacked behind the default-active one', () => {
+      const staticTabs: SavedTabInfo[] = [];
+      visitTabs(simpleLayout, (tab) => staticTabs.push(tab));
+      const hiddenIds = staticTabs
+        .filter((tab) => tab.id && !VISIBLE_SIMPLE_LAYOUT_TAB_IDS.includes(tab.id))
+        .map((tab) => tab.id);
+      expect(hiddenIds.length).toBeGreaterThan(1);
     });
   });
 

@@ -109,6 +109,7 @@ import {
 import {
   buildSimpleLayoutForProject,
   SIMPLE_LAYOUT_TAB_IDS,
+  VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
 import {
@@ -1322,8 +1323,13 @@ async function runProjectBoundSimpleSwitch(
     // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
     // where the previous switch's resolved titles are still in the dock layout and the new update
     // events for them are what tell us the project content has actually landed.
+    // Only the tabs that are actually on-screen should gate the overlay: Column 3 of `simpleLayout`
+    // stacks other tabs behind the one active tab, and the others are mounted-but-hidden (rc-dock
+    // `display: none`) - waiting on them too would block the overlay on content the user can't even
+    // see yet. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is the narrower subset; see its doc comment in
+    // simple-layout.builder.ts for what it does and does not account for.
     tabsResolved = trackSimpleLayoutTabsResolvedImpl({
-      tabIds: SIMPLE_LAYOUT_TAB_IDS,
+      tabIds: VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
       onDidOpenWebView,
       onDidUpdateWebView,
     });
@@ -1349,9 +1355,14 @@ async function runProjectBoundSimpleSwitch(
     // must never be written to the Power-mode storage key regardless of what `currentInterfaceMode`
     // reads by the time `loadLayout` would otherwise call `saveLayout`.
     await loadLayout(layoutToLoad, { persist: false });
-    // Wait for every simple-layout tab's webview to fire its open/update event, which is when
-    // `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
-    await tabsResolved.promise;
+    // Wait for every visible simple-layout tab's webview to fire its open/update event, which is
+    // when `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
+    const { timedOut } = await tabsResolved.promise;
+    if (timedOut) {
+      logger.warn(
+        `Simple-mode layout tabs for project ${projectId} timed out before all resolved; the overlay was released anyway so the switch doesn't hang indefinitely.`,
+      );
+    }
   } catch (err) {
     logger.warn(
       `Dock layout failed to load project-bound Simple-mode layout for project ${projectId}: ${err}`,
