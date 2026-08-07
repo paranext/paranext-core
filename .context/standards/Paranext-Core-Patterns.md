@@ -1103,6 +1103,16 @@ export function setScrRefSync(/* ... */): boolean {
   load. A cache that can only be filled by a round trip serves the default value to the first render.
   Handle "main does not know yet" — omit the parameter, and let the renderer fall back to what it can
   read for itself.
+- Keep that query parameter as fresh as the cache, with `refreshWindowCreationState`
+  (`src/renderer/services/window-creation-state.util.ts`). A RELOAD replays the URL main built when
+  the window was created, and by then the window's own pre-host store has been handed over and
+  deleted, so the URL is the only seed a reloaded document has: without the refresh it comes up on
+  the state the window OPENED on. One `history.replaceState` per change — same document, no
+  navigation, every other parameter carried over, and skipped when the query already says it. Do NOT
+  reach for a second seed source (a "what this window last held" `localStorage` key) or for
+  `performance.getEntriesByType('navigation')[0].type === 'reload'` to choose between two seeds:
+  seeds that are always fresh never disagree, and a `localStorage` key is profile-wide where the URL
+  is per window.
 - Make `papi.{service}` in the renderer resolve to the cache rather than to the shared network proxy.
   Web views take `window.papi` from the window hosting them, so two authorities in one window means
   the hook and `papi` can disagree about the same instant.
