@@ -85,15 +85,20 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
 }));
 
-vi.mock('@shared/services/data-provider.service', () => ({
-  dataProviderService: {
-    registerEngine: vi.fn(async (_name, engine) => engine),
-    // `getNavigationContext` carries the `ignore` decorator, which is evaluated when the engine
-    // class is defined at module load — so the mock has to provide it even though nothing here
-    // exercises the data provider machinery it speaks to
-    decorators: { ignore: () => {} },
-  },
-}));
+vi.mock('@shared/services/data-provider.service', async (importOriginal) => {
+  const { dataProviderService: realDataProviderService } =
+    await importOriginal<typeof import('@shared/services/data-provider.service')>();
+  return {
+    dataProviderService: {
+      registerEngine: vi.fn(async (_name, engine) => engine),
+      // The REAL decorator, not a stub. `getNavigationContext` carries it, and it is the only
+      // thing standing between this engine and a registration that fails for want of a
+      // `setNavigationContext`. Stubbing it out would hide a decorator dropped from the shard —
+      // the whole unit suite would stay green while every window failed to start.
+      decorators: { ignore: realDataProviderService.decorators.ignore },
+    },
+  };
+});
 
 // The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
 // mock never invokes the callback, so `currentInterfaceMode` stays `undefined` (treated as not
@@ -495,5 +500,18 @@ describe('getNavigationContext', () => {
     await expect(engine.getNavigationContext()).resolves.toEqual(
       expect.objectContaining({ readDirection: 'rtl' }),
     );
+  });
+
+  test('is marked so registration does not read it as the getter for a data type', async () => {
+    // A `get___` method on an engine is otherwise classified as the getter for a
+    // `NavigationContext` data type, and registration fails for want of a `setNavigationContext` —
+    // taking this window's startup with it. The mark is what keeps it a plain method the network
+    // object exposes, and it is the single most easily-deleted line on the whole navigation path.
+    const engine = createTestEngine();
+
+    // Read off the method rather than declared on it: the mark is what the decorator leaves behind
+    const isIgnored: unknown = Reflect.get(engine.getNavigationContext, 'isIgnored');
+
+    expect(isIgnored).toBe(true);
   });
 });
