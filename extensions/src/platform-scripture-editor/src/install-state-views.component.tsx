@@ -1,5 +1,45 @@
 import { Button, Spinner } from 'platform-bible-react';
-import { ReactNode } from 'react';
+import { ReactNode, useId, useState } from 'react';
+
+/**
+ * Toggle button + collapsible body for empty-state "More info / Less info" disclosures. Shared by
+ * the Model Text and Resource (Bible Texts) panels, which render an identical block and differ only
+ * in the localized labels and body text they resolve. Uses `Button variant="link"` rather than a
+ * raw `<button>` so it stays on the component system.
+ *
+ * @param moreLabel Already-localized label shown when the body is collapsed (e.g. "More info").
+ * @param lessLabel Already-localized label shown when the body is expanded (e.g. "Less info").
+ * @param body Already-localized body text revealed when expanded.
+ */
+export function ExpandableInfo({
+  moreLabel,
+  lessLabel,
+  body,
+}: {
+  moreLabel: ReactNode;
+  lessLabel: ReactNode;
+  body: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const bodyId = useId();
+
+  return (
+    <>
+      <Button
+        variant="link"
+        className="tw:h-auto tw:p-0 tw:text-sm"
+        aria-expanded={isOpen}
+        aria-controls={bodyId}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        {isOpen ? lessLabel : moreLabel}
+      </Button>
+      <p id={bodyId} hidden={!isOpen} className="tw:text-sm tw:text-muted-foreground tw:max-w-xs">
+        {body}
+      </p>
+    </>
+  );
+}
 
 /**
  * Full-panel "installing/selecting a resource" spinner state. Shared by the Model Text and Resource

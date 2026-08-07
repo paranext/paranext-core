@@ -3,6 +3,11 @@ import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
+/** Rc-dock panel IDs for the Simple-mode layout. Used by the onboarding tour to locate panels. */
+export const SIMPLE_PANEL_ID_MODEL_TEXT = 'simple-panel-model-text';
+export const SIMPLE_PANEL_ID_PROJECT = 'simple-panel-project';
+export const SIMPLE_PANEL_ID_RESOURCES = 'simple-panel-resources';
+
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
 export const simpleLayout: LayoutBase = {
@@ -15,6 +20,7 @@ export const simpleLayout: LayoutBase = {
         size: 1,
         children: [
           {
+            id: SIMPLE_PANEL_ID_MODEL_TEXT,
             group: HEADLESS_GROUP,
             panelLock: { minWidth: 300 },
             tabs: [
@@ -38,6 +44,7 @@ export const simpleLayout: LayoutBase = {
         size: 2,
         children: [
           {
+            id: SIMPLE_PANEL_ID_PROJECT,
             group: HEADLESS_GROUP,
             panelLock: { minWidth: 300 },
             tabs: [
@@ -61,6 +68,7 @@ export const simpleLayout: LayoutBase = {
         size: 1,
         children: [
           {
+            id: SIMPLE_PANEL_ID_RESOURCES,
             group: TAB_GROUP_RESOURCES,
             panelLock: { minWidth: 300 },
             tabs: [

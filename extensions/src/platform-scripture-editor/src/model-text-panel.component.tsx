@@ -25,13 +25,12 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference } from './resource-reference.utils';
+import { isDblResourceReference, getRefLabel } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ExpandableInfo, InstallFailedView, InstallingView } from './install-state-views.component';
 import { scrollToVerse } from './editor-dom.util';
-import { getRefLabel } from './resource-reference.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -61,6 +60,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
+  '%webView_modelTextPanel_emptyState_moreInfo%',
+  '%webView_modelTextPanel_emptyState_lessInfo%',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%',
 ] as const);
 
 type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
@@ -381,6 +383,11 @@ export function ModelTextPanel({
         ) : (
           <>
             <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
+            <ExpandableInfo
+              moreLabel={localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
+              lessLabel={localizedStrings['%webView_modelTextPanel_emptyState_lessInfo%']}
+              body={localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
+            />
             <Button onClick={() => handlePickModelText()}>
               {localizedStrings['%webView_modelTextPanel_pickModelText%']}
             </Button>

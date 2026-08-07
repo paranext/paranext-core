@@ -388,9 +388,13 @@ export async function retryFirstRunResolution(): Promise<void> {
   return resolvePromise;
 }
 
+// The onboarding tour shows once per user in Simple mode and is persisted in localStorage.
+// Key lives here alongside other platform-bible.* namespace entries.
+const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
+
 /**
- * Resets in-memory store state to match current localStorage. Clears listeners and the resolve
- * dedupe guard.
+ * Resets in-memory store state to match current localStorage. Clears listeners, the resolve dedupe
+ * guard, and the tour-done localStorage flag so a complete round-trip reset is possible in tests.
  *
  * WARNING: Test-only. @internal
  */
@@ -400,4 +404,19 @@ export function resetFirstRunStore(): void {
   resolving = false;
   backgroundRecheckStarted = false;
   listeners.clear();
+  try {
+    localStorage.removeItem(ONBOARDING_TOUR_DONE_KEY);
+  } catch {
+    // Ignore storage errors in environments where localStorage is unavailable.
+  }
+}
+
+/** Returns true if the onboarding tour has been completed or skipped. */
+export function readTourDone(): boolean {
+  return readBooleanFlag(ONBOARDING_TOUR_DONE_KEY);
+}
+
+/** Records that the onboarding tour has been completed or skipped. */
+export function writeTourDone(): void {
+  writeBooleanFlag(ONBOARDING_TOUR_DONE_KEY, true);
 }
