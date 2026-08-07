@@ -18,8 +18,7 @@ import {
   setScrRef,
 } from '@main/services/scroll-group.service-host';
 import { getWebViewShard } from '@main/services/web-view.service-router';
-import { getWindowServiceShard } from '@main/services/window.service-router';
-import { getTargetWindowId } from '@main/services/window-state.service';
+import { getTargetWindowServiceShard } from '@main/services/window.service-router';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -57,33 +56,31 @@ type ResolvedNavigationContext = {
 /**
  * Ask the window the user is working in what navigation should act on there.
  *
- * Returns `undefined` when there is no window to ask or its shard cannot answer — the commands then
- * do nothing, which is what they did in a renderer that had no navigation target.
+ * Throws when there is no window to ask, when the window has registered no window service, and when
+ * the window fails to answer — the same three ways every other routed name in main reports an
+ * unreachable window. These commands resolve a value (`undefined` from a go-to, a boolean from a
+ * history command), so answering quietly instead would be indistinguishable, to whoever asked, from
+ * the navigation having happened.
+ *
+ * "There is nothing here to navigate" is a different thing entirely, and it comes back as a
+ * successful answer whose {@link NavigationContext.target} is absent.
  */
-async function resolveNavigationContext(): Promise<ResolvedNavigationContext | undefined> {
-  const windowId = getTargetWindowId();
-  if (windowId === undefined) {
-    logger.debug('Navigation command ignored: no window to navigate in');
-    return undefined;
-  }
-  try {
-    const windowShard = await getWindowServiceShard(windowId);
-    if (!windowShard) {
-      logger.debug(
-        `Navigation command ignored: window ${windowId} has not registered its window service`,
-      );
-      return undefined;
-    }
-    return { windowId, context: await windowShard.getNavigationContext() };
-  } catch (e) {
-    logger.warn(
-      `Navigation command could not read the navigation context of window ${windowId}: ${getErrorMessage(e)}`,
-    );
-    return undefined;
-  }
+async function resolveNavigationContext(): Promise<ResolvedNavigationContext> {
+  const { windowId, shard } = await getTargetWindowServiceShard();
+  return { windowId, context: await shard.getNavigationContext() };
 }
 
-/** The current reference of whatever the target follows — its scroll group, or its own ref */
+/**
+ * The current reference of whatever the target follows — its scroll group, or its own ref.
+ *
+ * The scroll group read goes to this process's own host rather than back to the window that
+ * answered, even though the window keeps a predicting cache that can be a hop ahead of the host for
+ * a navigation the window itself just made. The host is what makes a held key advance one step per
+ * repeat: {@link navigationCommandMutex} keeps each run's read-compute-write to itself, and the
+ * write lands in the host synchronously, so the next run reads its own last step. A window's cache
+ * only learns of that write when the host's broadcast reaches it, which is after the lock has been
+ * released — so reading the window instead would make N repeats advance one step, N times.
+ */
 async function getCurrentRef(
   target: NonNullable<NavigationContext['target']>,
 ): Promise<SerializedVerseRef> {
@@ -219,15 +216,20 @@ async function writeNewRef(
 }
 
 /**
- * Serializes go-to command executions. Each run reads the current ref, awaits several round trips,
- * then writes the stepped ref — so overlapping runs (e.g. holding a shortcut key, whose auto-repeat
- * sends one command per repeat) would read the same starting ref and lose steps, and a slow earlier
- * run could write its stale result after a newer one, stepping backward. Running each behind the
- * previous one (the mutex is FIFO) makes N presses advance exactly N steps, in order.
+ * Serializes the read-compute-write half of a go-to command. A run reads the current ref, awaits
+ * several round trips, then writes the stepped ref — so overlapping runs (e.g. holding a shortcut
+ * key, whose auto-repeat sends one command per repeat) would read the same starting ref and lose
+ * steps, and a slow earlier run could write its stale result after a newer one, stepping backward.
+ * Running each behind the previous one (the mutex is FIFO) makes N presses advance exactly N steps,
+ * in order.
  *
  * App-global, since the handler runs in the main process: two windows driving the same scroll group
- * are serialized against each other as well, which a per-renderer lock could not do. Cross-window
- * ordering beyond this is TODO(PT-4270).
+ * are serialized against each other as well, which a per-renderer lock could not do. That is a
+ * trade, not a free win — a slow window now delays go-to commands issued in every other window,
+ * where a per-renderer lock could only ever delay its own. Asking the window what to act on is
+ * therefore deliberately kept OUTSIDE the lock (it is the one step that waits on another process),
+ * leaving only this process's own work inside it. Cross-window ordering beyond this is
+ * TODO(PT-4270).
  */
 const navigationCommandMutex = new Mutex();
 
@@ -247,15 +249,19 @@ function makeGoToCommandHandler(
     needsPreviousBook = false,
   }: { needsBounds?: boolean; needsPreviousBook?: boolean } = {},
 ): () => Promise<void> {
-  return () =>
-    navigationCommandMutex.runExclusive(async () => {
-      const resolved = await resolveNavigationContext();
-      const target = resolved?.context.target;
-      if (!resolved || !target) {
-        logger.debug('Navigation command ignored: no active web view to navigate');
-        return;
-      }
+  return async () => {
+    // Asked before the lock is taken: this is a request to another process, and holding the
+    // app-global lock across it would let one unresponsive window stall go-to commands issued in
+    // every other window for as long as that request takes to give up. What the lock is for is the
+    // read-compute-write below, all of which is this process's own state.
+    const resolved = await resolveNavigationContext();
+    const { target } = resolved.context;
+    if (!target) {
+      logger.debug('Navigation command ignored: no active web view to navigate');
+      return;
+    }
 
+    await navigationCommandMutex.runExclusive(async () => {
       // Start acquiring the versification provider right away — it depends only on the project
       // id, so it can resolve concurrently with the current-ref and books-present round trips
       // below instead of serializing after them
@@ -284,6 +290,7 @@ function makeGoToCommandHandler(
       if (!newRef) return;
       await writeNewRef(resolved, newRef);
     });
+  };
 }
 
 /**
@@ -304,12 +311,16 @@ function getActiveReferenceHistoryScrollGroupId(
  *
  * The window reports its layout direction and this applies the agreed physical→logical mapping, so
  * the main process's keyboard handler can dispatch the physical key and stay direction-agnostic.
+ *
+ * `false` means one thing only: nothing moved, because there was no entry that way or the target
+ * carries a detached reference. A window that could not be reached throws instead — the keyboard
+ * handler reads `false` as "the shortcut had nothing to do here" and falls through to its next
+ * option on it.
  */
 async function navigateReferenceHistoryPhysical(
   physicalDirection: 'left' | 'right',
 ): Promise<boolean> {
   const resolved = await resolveNavigationContext();
-  if (!resolved) return false;
   const scrollGroupId = getActiveReferenceHistoryScrollGroupId(resolved.context);
   if (scrollGroupId === undefined) return false;
   const logicalDirection = resolveReferenceHistoryDirection(
