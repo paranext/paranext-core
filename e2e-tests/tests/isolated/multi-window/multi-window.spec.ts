@@ -15,10 +15,13 @@
  *    services register under scoped names with no collisions, generic window-service calls route to
  *    whichever window has focus, and closing the secondary window neither quits the app nor runs
  *    shutdown tasks.
- * 2. Surviving the host window: window 1 hosts the app-global theme service, and closing it hands
- *    hosting to window 2; the scroll group service is hosted in main, so closing window 1 must not
- *    disturb it at all. Both are proven by live PAPI reads after the close, and the scroll group by
- *    a write round-trip as well.
+ * 2. Scroll groups across windows, and surviving the host window: a scroll group change reaches every
+ *    open window's toolbar, a window created afterwards starts on the current reference rather than
+ *    the default, and then window 1 — which hosts the app-global theme service — is closed, handing
+ *    theme hosting to a survivor while the main-hosted scroll group service is undisturbed. The
+ *    theme half is proven by live PAPI reads after the close; the scroll group half by what the
+ *    surviving windows are DISPLAYING, since a PAPI read only ever talks to main and would pass
+ *    even if no window heard anything.
  * 3. Quit with two windows: the shutdown tasks run exactly once (not once per window, not zero times)
  *    and the process exits cleanly.
  *
@@ -226,6 +229,31 @@ function isVerseRefShaped(ref: VerseRefLike): boolean {
   return typeof ref?.book === 'string' && typeof ref.chapterNum === 'number';
 }
 
+/**
+ * What a window's toolbar is DISPLAYING for the scroll group it follows — the book/chapter
+ * control's trigger text, e.g. `John 3:16`.
+ *
+ * This is the assertion the PAPI reads cannot make: those go straight to main over the WebSocket,
+ * so they only prove main answers. This proves the window's own renderer heard about the change and
+ * put it on screen, which is what a user sees and the point of the whole move.
+ */
+async function readToolbarReference(page: Page): Promise<string> {
+  return (
+    (await page.locator('button[aria-label="book-chapter-trigger"]').first().textContent()) ?? ''
+  );
+}
+
+/** Wait until a window's toolbar displays a reference containing `expected` (e.g. `'3:16'`). */
+async function expectToolbarReferenceToContain(
+  page: Page,
+  expected: string,
+  timeoutMs: number,
+): Promise<void> {
+  await expect(async () => {
+    expect(await readToolbarReference(page)).toContain(expected);
+  }).toPass({ timeout: timeoutMs, intervals: [500] });
+}
+
 // #endregion
 
 // #region window focus helpers
@@ -414,7 +442,7 @@ test.describe('multi-window lifecycle', () => {
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
   });
 
-  test('closing the window hosting the theme hands it over, and the scroll group service is unaffected', async ({
+  test('a scroll group change reaches every window, and closing the theme host disturbs neither', async ({
     electronApp,
     mainPage,
   }) => {
@@ -459,6 +487,24 @@ test.describe('multi-window lifecycle', () => {
     }).toPass({ timeout: 60_000, intervals: [1_000] });
     logStep(`window ${window2Id} up and stepped aside for the theme service`);
 
+    // THE HEADLINE BEHAVIOUR: a change to a scroll group reaches every window's UI. Written through
+    // the host (which is where a navigation in any window ends up) and then read off BOTH windows'
+    // toolbars, so this fails if the host stops broadcasting or a window's cache stops listening —
+    // neither of which a PAPI read, which only ever talks to main, can see.
+    const sharedRef = { book: 'JHN', chapterNum: 3, verseNum: 16 };
+    await setScrollGroupRef(sharedRef);
+    await expectToolbarReferenceToContain(page2, '3:16', 60_000);
+    await expectToolbarReferenceToContain(mainPage, '3:16', 60_000);
+    logStep('scroll group change reached both windows');
+
+    // A window created AFTER that navigation must show it on its first paint rather than starting on
+    // the default and jumping: main puts the state on the window's URL, the same channel the window
+    // id arrives on.
+    const page3 = await createSecondWindow(electronApp);
+    expect(decodeURIComponent(page3.url())).toContain('JHN');
+    await expectToolbarReferenceToContain(page3, '3:16', 60_000);
+    logStep('a newly created window starts on the current reference');
+
     // Close WINDOW 1 — the host — the way a user does.
     const beforeHostCloseMark = output.mark();
     const page1Closed = mainPage.waitForEvent('close', { timeout: 30_000 });
@@ -493,9 +539,10 @@ test.describe('multi-window lifecycle', () => {
     expect(isVerseRefShaped(refAfterClose)).toBe(true);
     logStep('scroll group service still answering');
 
-    // A write round-trip proves it serves writes, not just cached reads: set scroll group 0's
-    // reference and read the same value back.
-    const targetRef = { book: 'JHN', chapterNum: 3, verseNum: 16 };
+    // A write round-trip proves it serves writes, not just cached reads, AND that the surviving
+    // windows are still being fed: set scroll group 0's reference, read the same value back, and
+    // then look at what the survivors are actually displaying.
+    const targetRef = { book: 'ROM', chapterNum: 8, verseNum: 28 };
     await pollUntil(
       async () => {
         await setScrollGroupRef(targetRef);
@@ -508,7 +555,9 @@ test.describe('multi-window lifecycle', () => {
       30_000,
       'a scroll-group write round-trip after the host window closed',
     );
-    logStep('scroll-group write round-trip verified after the host window closed');
+    await expectToolbarReferenceToContain(page2, '8:28', 60_000);
+    await expectToolbarReferenceToContain(page3, '8:28', 60_000);
+    logStep('surviving windows followed a scroll-group write made after the host window closed');
 
     // The handover is recorded in the log: the theme provider the closed window hosted is announced
     // as gone, which is what every process holding it acts on. (Successful re-hosting itself is
