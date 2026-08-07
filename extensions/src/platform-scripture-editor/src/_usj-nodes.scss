@@ -2107,6 +2107,43 @@
   font-size: 0.7em;
 }
 
+/* Standard view: editable markers within formatted text get the PT9 marker look.
+   MarkerNode carries its marker-syntax class (opening/closing/selfClosing), not
+   `marker` (dropped in #359); ImmutableTypedTextNode (book id) carries `marker`.
+   Verse/chapter tokens are deliberately excluded: PT9 styles them via their own
+   usfm_v/usfm_c stylesheet classes, not the grey marker look.
+   Scoped to .formatted-font so the Unformatted view keeps full-size plain markers. */
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker {
+  color: rgba(140, 140, 140, 1);
+}
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker:not(.chapter) {
+  font-size: 0.7em;
+}
+
+/* Marker validation states (PT9 ScriptureBase.css .status_unknown/.status_invalid):
+   flag markers the project stylesheet reports as unknown or invalid. Applied to
+   marker GLYPH spans only — body text stays normal (PT9 Standard.xslt stamps status
+   on the marker span, not the element). Same error red as the unmatched-closer
+   `.invalid` rule below. */
+.marker-editable .status_unknown,
+.formatted-font.marker-editable .status_unknown {
+  color: rgba(204, 30, 20, 1);
+  font-weight: bold;
+}
+
+.marker-editable .status_invalid,
+.formatted-font.marker-editable .status_invalid {
+  color: rgba(204, 30, 20, 1);
+  border-bottom: 1px solid rgba(204, 30, 20, 1);
+}
+
 .notetext {
   unicode-bidi: embed;
 }
@@ -2291,17 +2328,6 @@
    table-marker section above (.usfm .table-row, .usfm .table-cell). */
 .usfm rt {
   cursor: pointer;
-}
-
-/* Style statues */
-.status_unknown {
-  color: rgba(204, 30, 20, 1);
-  font-weight: bold;
-}
-
-.status_invalid {
-  border-bottom: 1px solid rgba(204, 30, 20, 1);
-  color: rgba(204, 30, 20, 1);
 }
 
 /* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,
