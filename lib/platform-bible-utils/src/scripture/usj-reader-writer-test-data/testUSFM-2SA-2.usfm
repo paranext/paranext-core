@@ -1,5 +1,4 @@
-\c 2
- \ca 2 ca
+\c 2 \ca 2 ca
 \cp 2 cp \f + \fr 2.0 \ft For some reason, Paratext's backslash menu allows you to insert a note and nothing else in a cp marker. You can add \wj character markers\wj* inside the note.\f* more \wj cp\wj* text
 \p
 \v 1 Notice that this chapter's attribute marker ca does not apply to the chapter as the altnumber attribute because the ca is not closed and therefore has the closed="true" attribute. Because ca is not translated to an attribute, attribute marker cp also follows suit and is not translated into pubnumber. This prior separation of cp from the chapter marker allows Paratext 9.5 to understand that it should make cp an independent marker that may have other marker contents in it. But see chapter 3 in which Paratext 9.5 fails to recognize that cp should be an independent marker.
