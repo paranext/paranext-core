@@ -1675,13 +1675,23 @@ step, no automation. Just a record.
   `renderer-hosted-command-registry.ts`, `renderer-hosted-dialog-registry.ts`, and both startup
   coverage checks are deleted; what replaces their guarantee is that each router's registration list
   is asserted by its own test, and each shard's methods are checked by its interface. Owner-vs-focus
-  routing is no longer derived from OpenRPC parameter names — it is written per command in the
-  router, so `platform.openSettings` naming a web view routes by ownership while
-  `platform.openUserSettings` follows focus, and each is pinned by a test. One behavior change: the
-  navigation mutex was per-renderer and is now app-global, since the handler runs in main — two
-  windows driving one scroll group are serialized against each other, which is strictly better than
-  the interleaving the per-renderer lock allowed. Cross-window navigation ordering beyond this is
-  PT-4270. Registering three routers plus the navigation commands adds four entries to main's awaited
-  startup batch; they are in-process registrations against main's own RPC server.
+  routing is no longer derived from OpenRPC parameter names as a routing INPUT — it is written per
+  command in the router, so `platform.openSettings` naming a web view routes by ownership while
+  `platform.openUserSettings` follows focus, and each is pinned by a test; the parameter names are
+  kept as a startup assertion instead, so a command that documents `webViewId` first and is not
+  owner-routed is reported rather than silently following focus. All twenty moved names report an
+  unreachable window the same way — by throwing at call time, as the transitional router did — which
+  the eight navigation commands need stating explicitly because they resolve a value: a go-to
+  resolves `undefined` and a history command resolves a boolean, so `false` means "nothing to move
+  to" and never "this could not run". Two behavior changes. The navigation mutex was per-renderer
+  and is now app-global, since the handler runs in main: two windows driving one scroll group are
+  serialized against each other, which a per-renderer lock could not do, at the cost of a slow
+  window being able to delay another window's navigation — so the round trip that asks a window what
+  to navigate is deliberately outside the lock, leaving only main's own read-compute-write inside
+  it. And a go-to now steps from the reference main holds rather than from the asking window's
+  predicting cache, which is what keeps a held key advancing one step per repeat; a navigation the
+  window itself just made reaches main one hop later. Cross-window navigation ordering beyond this
+  is PT-4270. Registering three routers plus the navigation commands adds four entries to main's
+  awaited startup batch; they are in-process registrations against main's own RPC server.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.

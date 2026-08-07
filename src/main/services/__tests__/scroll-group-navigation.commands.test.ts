@@ -6,7 +6,7 @@ import { startScrollGroupNavigationCommands } from '@main/services/scroll-group-
 const mocks = vi.hoisted(() => ({
   registerRequestHandler: vi.fn(),
   getTargetWindowId: vi.fn(),
-  getWindowServiceShard: vi.fn(),
+  getTargetWindowServiceShard: vi.fn(),
   getWebViewShard: vi.fn(),
   setScrRef: vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => true),
   getScrRef: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
 }));
 vi.mock('@main/services/window.service-router', () => ({
-  getWindowServiceShard: mocks.getWindowServiceShard,
+  getTargetWindowServiceShard: mocks.getTargetWindowServiceShard,
 }));
 vi.mock('@main/services/web-view.service-router', () => ({
   getWebViewShard: mocks.getWebViewShard,
@@ -58,6 +58,18 @@ async function getHandler(commandName: string) {
   return registration.handler;
 }
 
+/** Every command name this module claims, for the checks that must hold across all of them */
+const NAVIGATION_COMMAND_NAMES = [
+  'platform.goToNextChapter',
+  'platform.goToPreviousChapter',
+  'platform.goToNextBook',
+  'platform.goToPreviousBook',
+  'platform.goToNextVerse',
+  'platform.goToPreviousVerse',
+  'platform.navigateLeftInReferenceHistory',
+  'platform.navigateRightInReferenceHistory',
+];
+
 /**
  * Wire the target window to answer with the given navigation context, and hand back the window's
  * WebView shard so tests can see what was written to it.
@@ -65,9 +77,10 @@ async function getHandler(commandName: string) {
 function withNavigationContext(context: unknown, windowId = 2) {
   const webViewShard = { setDetachedScrRef: vi.fn(async () => true) };
   mocks.getTargetWindowId.mockReturnValue(windowId);
-  mocks.getWindowServiceShard.mockImplementation(async (id: number) =>
-    id === windowId ? { getNavigationContext: vi.fn(async () => context) } : undefined,
-  );
+  mocks.getTargetWindowServiceShard.mockImplementation(async () => ({
+    windowId: mocks.getTargetWindowId(),
+    shard: { getNavigationContext: vi.fn(async () => context) },
+  }));
   mocks.getWebViewShard.mockImplementation(async (id: number) =>
     id === windowId ? webViewShard : undefined,
   );
@@ -111,6 +124,52 @@ describe('which commands the navigation module claims', () => {
 
     registrations().forEach(({ docs }) => expect(docs).toBeDefined());
   });
+});
+
+describe('when there is no window to navigate in', () => {
+  // Every routed name in main reports an unreachable window by throwing. These eight resolve a
+  // value — `undefined` from a go-to, `false` from a history command — so answering quietly here
+  // would be indistinguishable, to the caller, from a navigation that happened. `false` has to keep
+  // meaning "there was nowhere to move to", which is the answer the keyboard handler acts on.
+  test.each(NAVIGATION_COMMAND_NAMES)('%s reports that no window could be asked', async (name) => {
+    mocks.getTargetWindowServiceShard.mockRejectedValue(
+      new Error('No windows available to route platform.windowServiceDataProvider call'),
+    );
+    const handler = await getHandler(name);
+
+    await expect(handler()).rejects.toThrow('No windows available');
+  });
+
+  test.each(NAVIGATION_COMMAND_NAMES)(
+    '%s reports a window that has not registered its window service',
+    async (name) => {
+      mocks.getTargetWindowServiceShard.mockRejectedValue(
+        new Error(
+          'platform.windowServiceDataProvider for window 2 is not available. The renderer may not have started yet.',
+        ),
+      );
+      const handler = await getHandler(name);
+
+      await expect(handler()).rejects.toThrow('is not available');
+    },
+  );
+
+  test.each(NAVIGATION_COMMAND_NAMES)(
+    '%s reports a window that failed to answer what to navigate',
+    async (name) => {
+      mocks.getTargetWindowServiceShard.mockResolvedValue({
+        windowId: 2,
+        shard: {
+          getNavigationContext: vi.fn(async () => {
+            throw new Error('the websocket went away mid-call');
+          }),
+        },
+      });
+      const handler = await getHandler(name);
+
+      await expect(handler()).rejects.toThrow('the websocket went away mid-call');
+    },
+  );
 });
 
 describe('go-to commands', () => {
@@ -245,20 +304,19 @@ describe('a detached target', () => {
     const answeringWindowShard = { setDetachedScrRef: vi.fn(async () => true) };
     const otherWindowShard = { setDetachedScrRef: vi.fn(async () => true) };
     mocks.getTargetWindowId.mockReturnValue(2);
-    mocks.getWindowServiceShard.mockImplementation(async (id: number) =>
-      id === 2
-        ? {
-            getNavigationContext: vi.fn(async () => {
-              // Focus moves to window 3 while this window is answering
-              mocks.getTargetWindowId.mockReturnValue(3);
-              return {
-                readDirection: 'ltr',
-                target: { webViewId: 'web-view-1', scrollGroupScrRef: GEN_5_3 },
-              };
-            }),
-          }
-        : undefined,
-    );
+    mocks.getTargetWindowServiceShard.mockResolvedValue({
+      windowId: 2,
+      shard: {
+        getNavigationContext: vi.fn(async () => {
+          // Focus moves to window 3 while this window is answering
+          mocks.getTargetWindowId.mockReturnValue(3);
+          return {
+            readDirection: 'ltr',
+            target: { webViewId: 'web-view-1', scrollGroupScrRef: GEN_5_3 },
+          };
+        }),
+      },
+    });
     mocks.getWebViewShard.mockImplementation(async (id: number) =>
       id === 2 ? answeringWindowShard : otherWindowShard,
     );
@@ -367,9 +425,13 @@ describe('serialization across windows', () => {
       2: { readDirection: 'ltr', target: { webViewId: 'a', scrollGroupScrRef: 2, projectId: 'p' } },
       3: { readDirection: 'ltr', target: { webViewId: 'b', scrollGroupScrRef: 2, projectId: 'p' } },
     };
-    mocks.getWindowServiceShard.mockImplementation(async (id: number) => ({
-      getNavigationContext: vi.fn(async () => contextsByWindowId[id]),
-    }));
+    mocks.getTargetWindowServiceShard.mockImplementation(async () => {
+      const windowId = mocks.getTargetWindowId();
+      return {
+        windowId,
+        shard: { getNavigationContext: vi.fn(async () => contextsByWindowId[windowId]) },
+      };
+    });
     // Stateful current ref: each read returns the last written ref, so the assertions can tell
     // whether the second run read the first run's result (serialized) or the original (raced)
     mocks.getScrRefForProject.mockImplementation(async () => {
@@ -396,5 +458,47 @@ describe('serialization across windows', () => {
       { book: 'GEN', chapterNum: 5, verseNum: 5 },
       'p',
     );
+  });
+
+  test('a window that is slow to answer does not hold up navigation in another window', async () => {
+    // The lock is app-global, so anything held inside it is held against every window. Asking a
+    // window what to navigate is a request to another process, and a window that has stopped
+    // answering takes the whole request timeout to say so — long enough to stall a second window's
+    // keystrokes and queue every auto-repeat behind them. Only this process's own
+    // read-compute-write belongs inside the lock.
+    let releaseFirstWindow = () => {};
+    let askedWindowCount = 0;
+    mocks.getTargetWindowServiceShard.mockImplementation(async () => {
+      const windowId = mocks.getTargetWindowId();
+      askedWindowCount += 1;
+      if (askedWindowCount === 1)
+        await new Promise<void>((resolve) => {
+          releaseFirstWindow = resolve;
+        });
+      return {
+        windowId,
+        shard: {
+          getNavigationContext: vi.fn(async () => ({
+            readDirection: 'ltr',
+            target: { webViewId: `web-view-${windowId}`, scrollGroupScrRef: 2, projectId: 'p' },
+          })),
+        },
+      };
+    });
+    const goToNextVerse = await getHandler('platform.goToNextVerse');
+
+    mocks.getTargetWindowId.mockReturnValue(2);
+    const stalledInWindow2 = goToNextVerse();
+    mocks.getTargetWindowId.mockReturnValue(3);
+    const fromWindow3 = goToNextVerse();
+    // Let everything that CAN make progress make it, without waiting on the stalled window
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(mocks.setScrRef).toHaveBeenCalledTimes(1);
+    releaseFirstWindow();
+    await Promise.all([stalledInWindow2, fromWindow3]);
+    expect(mocks.setScrRef).toHaveBeenCalledTimes(2);
   });
 });

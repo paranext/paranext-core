@@ -20,6 +20,7 @@
 
 import { getTargetWindowId, onDidChangeRoutingTarget } from '@main/services/window-state.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { createTargetWindowShardResolver } from '@main/services/target-shard-resolver.util';
 import { WINDOW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
@@ -76,6 +77,19 @@ export async function getWindowServiceShard(
 ): Promise<WindowServiceShard | undefined> {
   return windowServiceShards.getShard(windowId);
 }
+
+/**
+ * Get the window service shard of the window the user is currently working in, along with that
+ * window's id — throwing, with the reason, when no window can answer.
+ *
+ * This is how the main process's navigation commands ask a window what to act on. They act on the
+ * answer afterwards, so they need the window that gave it; and an unreachable window has to reach
+ * the caller as a failure rather than as a navigation that quietly did nothing.
+ */
+export const getTargetWindowServiceShard = createTargetWindowShardResolver(
+  windowServiceProviderName,
+  windowServiceShards,
+);
 
 /**
  * Fires with a window id when that window registers its window service shard.
