@@ -1,7 +1,7 @@
 /**
- * Dialog service shard — the dialog service implementation for THIS window. Its request handlers
- * are registered under window-scoped request names (e.g. "dialog:showDialog-1") so several windows
- * can coexist; the main process's `command.service-router.ts` publishes the generic names and
+ * Dialog service shard — the dialog service implementation for THIS window. Registered as a network
+ * object under a window-scoped name (e.g. "DialogService-1") so several windows can coexist; the
+ * main process's `dialog.service-router.ts` publishes the generic `dialog:*` request names and
  * forwards each request to the window that should show the dialog.
  *
  * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
@@ -10,7 +10,6 @@
 
 import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
-import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
 import { DIALOGS } from '@renderer/components/dialogs/index';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import { showModalDialogOverlay } from '@renderer/services/overlays/overlay.service-host';
@@ -27,16 +26,21 @@ import {
 } from '@shared/models/dialog-options.model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
-import { registerScopedCommands } from '@renderer/services/renderer-hosted-command-registry';
-import { registerScopedDialogRequest } from '@renderer/services/renderer-hosted-dialog-registry';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
-  aggregateUnsubscriberAsyncs,
+  DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME,
+  IDialogServiceShard,
+} from '@shared/models/dialog.service-shard.model';
+import {
+  DIALOG_SERVICE_SHARD_OBJECT_TYPE,
+  getServiceShardAttributes,
+} from '@shared/models/service-shard.model';
+import {
   isLocalizeKey,
   LocalizeKey,
   newGuid,
   newPlatformError,
   serialize,
-  UnsubscriberAsync,
 } from 'platform-bible-utils';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
@@ -331,180 +335,41 @@ async function selectProject(
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
-/** Register the commands that back the PAPI dialog service */
+/**
+ * The dialog service implementation this window serves. Declared as the shard interface so a member
+ * added to the dialog service cannot silently become a name this window does not answer for.
+ */
+const dialogServiceShard: IDialogServiceShard = {
+  showDialog,
+  selectProject,
+  showAboutDialog,
+};
+
+/** Register the network object that backs the PAPI dialog service for this window */
 export async function startDialogServiceShard(): Promise<void> {
   await initialize();
-  const complexArrayDescription =
-    'String representation of RegExp pattern(s) to match against projects’ projectInterfaces (using https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test) to determine if they should be included. Each array entry is handled based on its type (at least one entry must match for this filter condition to pass). If the entry is a string, it will be matched against each projectInterface. If any match, the project will pass this filter condition. If the entry is an array of strings, each will be matched against each projectInterface. If every string matches against at least one projectInterface, the project will pass this filter condition. In other words, each entry in the first-level array is OR’ed together. Each entry in second-level arrays (arrays within the first-level array) are AND’ed together.';
+  if (!globalThis.windowId) throw new Error('Cannot start DialogService: windowId is not set');
 
-  // register functions as requests
-  const unsubPromises: Promise<UnsubscriberAsync>[] = [];
-  unsubPromises.push(
-    registerScopedDialogRequest(
-      'showDialog',
-      showDialog,
-      {
-        method: {
-          // Experimental: this is a window-scoped name, and which window a dialog opens in is part
-          // of what the multi-window work is still settling.
-          'x-experimental': true,
-          summary: 'Shows a dialog to the user and prompts the user to respond',
-          params: [
-            {
-              name: 'dialogType',
-              required: true,
-              summary: 'The type of dialog to show the user',
-              schema: {
-                enum: Object.values(DialogTypesValues),
-              },
-            },
-            {
-              name: 'options',
-              required: false,
-              summary: 'Various options for configuring the dialog that shows',
-              schema: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  iconUrl: { type: 'string' },
-                  prompt: { type: 'string' },
-                  includeProjectInterfaces: {
-                    type: 'array',
-                    items: {
-                      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
-                    },
-                    description: complexArrayDescription,
-                  },
-                  excludeProjectInterfaces: {
-                    type: 'array',
-                    items: {
-                      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
-                    },
-                    description: complexArrayDescription,
-                  },
-                  includePdpFactoryIds: { type: 'array', items: { type: 'string' } },
-                  excludePdpFactoryIds: { type: 'array', items: { type: 'string' } },
-                  includeProjectIds: { type: 'array', items: { type: 'string' } },
-                  excludeProjectIds: { type: 'array', items: { type: 'string' } },
-                  selectedProjectIds: { type: 'array', items: { type: 'string' } },
-                  selectedBookIds: { type: 'array', items: { type: 'string' } },
-                  okLabel: { type: 'string' },
-                  cancelLabel: { type: 'string' },
-                  isDestructive: { type: 'boolean' },
-                  isModal: { type: 'boolean' },
-                },
-              },
-            },
-          ],
-          result: {
-            name: 'return value',
-            summary: 'Response from user',
-            schema: {
-              oneOf: [
-                { type: 'string' },
-                { type: 'array', items: { type: 'string' } },
-                { type: 'null' },
-              ],
-            },
-          },
-        },
-      },
-      {
-        timeoutMilliseconds: 0,
-      },
-    ),
+  // Registered under this window's scoped name (e.g. `DialogService-1`) so every window can own its
+  // own dialogs. The object type and window id are how the main process's dialog service router
+  // finds this shard; the name it is registered under is nobody else's business.
+  const dialogServiceNetworkObject = await networkObjectService.set<IDialogServiceShard>(
+    `${DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`,
+    dialogServiceShard,
+    DIALOG_SERVICE_SHARD_OBJECT_TYPE,
+    getServiceShardAttributes(globalThis.windowId),
+    // Experimental at the object level, which fans out over every method: this is a window-scoped
+    // name that only the main process's router is meant to call, and both the name and the split
+    // between what a shard answers and what its router answers are still moving.
+    { 'x-experimental': true },
   );
-  unsubPromises.push(
-    registerScopedDialogRequest(
-      'selectProject',
-      selectProject,
-      {
-        method: {
-          // Experimental for the same reason as `showDialog` above
-          'x-experimental': true,
-          summary:
-            'Shows a select project dialog to the user and prompts the user to select a project',
-          params: [
-            {
-              name: 'options',
-              summary: 'Various options for configuring the dialog that shows',
-              required: false,
-              schema: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string' },
-                  iconUrl: { type: 'string' },
-                  prompt: { type: 'string' },
-                  includeProjectInterfaces: {
-                    type: 'array',
-                    items: {
-                      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
-                    },
-                    description: complexArrayDescription,
-                  },
-                  excludeProjectInterfaces: {
-                    type: 'array',
-                    items: {
-                      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
-                    },
-                    description: complexArrayDescription,
-                  },
-                  includePdpFactoryIds: { type: 'array', items: { type: 'string' } },
-                  excludePdpFactoryIds: { type: 'array', items: { type: 'string' } },
-                  includeProjectIds: { type: 'array', items: { type: 'string' } },
-                  excludeProjectIds: { type: 'array', items: { type: 'string' } },
-                },
-              },
-            },
-          ],
-          result: {
-            name: 'return value',
-            summary: "The user's selected project id or nothing if the user cancels",
-            schema: {
-              oneOf: [{ type: 'string' }, { type: 'null' }],
-            },
-          },
-        },
-      },
-      {
-        timeoutMilliseconds: 0,
-      },
-    ),
-  );
-  unsubPromises.push(
-    registerScopedDialogRequest(
-      'showAboutDialog',
-      showAboutDialog,
-      {
-        method: {
-          // Experimental for the same reason as `showDialog` above
-          'x-experimental': true,
-          summary: 'Shows a dialog with essential information about the application.',
-          params: [],
-          result: {
-            name: 'void',
-            schema: {},
-          },
-        },
-      },
-      {
-        timeoutMilliseconds: 0,
-      },
-    ),
-  );
-  // Register under a window-scoped name so multiple windows can coexist. The main process command
-  // service router handles forwarding the generic name to the focused window.
-  unsubPromises.push(...registerScopedCommands({ 'platform.about': showAboutDialog }));
 
-  // Wait to successfully register all requests
-  const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
-
-  // On closing, try to remove request listeners
+  // On closing, try to release the shard and fail the dialogs this window will never answer
   // TODO: should do this on the server when the connection closes or when the server exits as well
   window.addEventListener('beforeunload', async () => {
     // TODO: preserve requests between refreshes - stop rejecting all remaining requests
     dialogRequests.forEach((request) => request.reject(`DialogService is shutting down`));
-    await unsubscribeRequests();
+    await dialogServiceNetworkObject.dispose();
   });
 }
 
