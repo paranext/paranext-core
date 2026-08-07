@@ -487,5 +487,17 @@ describe('web view service router', () => {
       await expect(openSettings('owned-view')).rejects.toThrow('unreachable');
       expect(shards[1].openSettingsTab).not.toHaveBeenCalled();
     });
+
+    test.each([
+      'platform.openSettings',
+      'platform.openProjectSettings',
+      'platform.openUserSettings',
+    ])('%s refuses to route rather than guessing when no window is available', async (name) => {
+      const handler = await getCommandHandler(name);
+      mocks.getTargetWindowId.mockReturnValue(undefined);
+      withWindows({});
+
+      await expect(handler('owned-view')).rejects.toThrow('No windows available');
+    });
   });
 });
