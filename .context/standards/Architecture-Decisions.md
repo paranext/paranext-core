@@ -247,8 +247,17 @@ step, no automation. Just a record.
   `rpc.discover` already give for free.
 - **Consequences:** every window-scoped service now has a scoped identity and (via the proxy) a
   generic one; new window-scoped services must follow the same convention and get a routing proxy if
-  generic-name callers exist. Registrations must be disposed per window at window close.
-- **Source:** multi-window PR.
+  generic-name callers exist. **Do not rely on a window disposing its own registrations as it
+  closes** — it cannot: a closing window drops its RPC connection without disposing anything it
+  hosted, and `destroy()` does not run `beforeunload` at all. Scoped registrations are instead
+  cleaned up by the surviving processes: main announces the close on
+  `EVENT_NAME_ON_DID_CLOSE_WINDOW`, and every process sweeps the registrations that announcement
+  makes unreachable (`sweepUnreachableRemoteObjectsAfterWindowClose` in `network-object.service.ts`,
+  with one retry for the sweep that runs before the connection teardown lands). A window-scoped
+  service therefore has to tolerate its own registrations outliving its window for a moment, and
+  consumers have to tolerate resolving one that is already gone.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
+  `pt-1891-multi-window`.
 
 ## ADR-0008: Generic-name routing proxies in main forward to the focused/owning window's scoped service
 
@@ -269,10 +278,14 @@ step, no automation. Just a record.
   window — rejected as the general answer: most of these calls are single-target actions where
   fanning out isn't meaningful, and forwarding to a not-yet-ready window is measurably costly.
 - **Consequences:** external callers of the generic name are unaffected by multi-window; the
-  owner/target-selection logic in each proxy is now load-bearing. Known gaps in that logic (fan-out
-  cost against unready windows, owner-probe fallback swallowing errors) are tracked as separate
-  review findings, not blockers to the pattern.
-- **Source:** multi-window PR.
+  owner/target-selection logic in each proxy is now load-bearing, and two rules fell out of getting
+  it wrong first. Fan-outs ask only the windows that can answer (`getReadyWindowIds`), because
+  forwarding to a window whose renderer has not registered costs that call the network service's
+  whole registration retry. And an owner probe that could not reach a window fails the call rather
+  than falling back to the routing target: "could not ask" is not "answered no", and the window that
+  did not answer may be the one that owns the web view.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
+  `pt-1891-multi-window`.
 
 ## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
 
@@ -294,7 +307,8 @@ step, no automation. Just a record.
   transparent to consumers. The election/sweep/re-host machinery is implemented twice today (theme,
   scroll group) and has already drifted between the two copies, so the duplication is worth
   extracting into a shared helper.
-- **Source:** multi-window PR.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
+  `pt-1891-multi-window`.
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
 
@@ -308,7 +322,12 @@ step, no automation. Just a record.
   `onDidCreateNetworkObject`), used as a single proxy signal for "this window's services are up," and
   marked not-ready on close. `getTargetWindowId()` prefers the focused window if it is ready; failing
   that, the most recently focused window that is still ready (an MRU list, since a window can lose
-  its "ready" status without losing focus); failing that, the first ready window in creation order. A
+  its "ready" status without losing focus); failing that, the first ready window in creation order.
+  Every rung passes over a window that has begun closing, however ready and however focused it still
+  is: a close runs that window's shutdown work first and the window keeps focus and keeps serving
+  throughout, so new work would otherwise land in a window that is on its way out. When every window
+  is closing, the fallback still names one of them, so a quit's own progress reports have somewhere
+  to go. A
   dedicated `onDidChangeRoutingTarget` event fires whenever this computed target actually changes —
   either the target window id, or the same window flipping ready/not-ready — so routing proxies and
   other consumers can react without polling.
@@ -321,4 +340,5 @@ step, no automation. Just a record.
 - **Consequences:** routing proxies get a cheap way to skip an unready window in the common case, at
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
-- **Source:** multi-window PR.
+- **Source:** PT-4275 (multi-window epic); introduced in PR #2621, branch
+  `pt-1891-multi-window`.
