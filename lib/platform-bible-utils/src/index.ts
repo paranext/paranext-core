@@ -69,6 +69,7 @@ export {
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newGuid,
+  retryUntil,
   wait,
   waitForDuration,
 } from './util';

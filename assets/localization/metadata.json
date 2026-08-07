@@ -29,10 +29,25 @@
       "message": "We made the internet settings its own page so the localized string needs to indicate that. The new localized string key is %data_loading_error_internetAccess_disabled%."
     }
   },
+  "%firstRun_button_continueWithoutFinishingSetup%": {
+    "notes": "In zh-Hans and zh-Hant this intentionally matches the value of the deprecated %firstRun_button_continueWithoutSetup% key ('不完成设置继续' / '不完成設定繼續') — the Chinese already read \"continue without finishing setup\", so the identical entries are expected, not a copy error to reconcile."
+  },
+  "%firstRun_button_continueWithoutSetup%": {
+    "deprecationInfo": {
+      "date": "2026-07-31",
+      "message": "Reworded to \"Continue without finishing setup\" to match the surrounding body copy (PT-4302). The new key is %firstRun_button_continueWithoutFinishingSetup%."
+    }
+  },
   "%firstRun_button_skip%": {
     "deprecationInfo": {
       "date": "2026-07-27",
       "message": "Replaced by %firstRun_button_skipSync% when the real sync-consent step was implemented in PT-4178."
+    }
+  },
+  "%firstRun_error_body%": {
+    "deprecationInfo": {
+      "date": "2026-07-30",
+      "message": "Reworded to stop blaming the network: the registration check is local, so an unresolved probe means the provider is still starting up, not that the connection is down (PT-4302). The new key is %firstRun_error_body_providerStartingUp%."
     }
   },
   "%firstRun_step_language_placeholder%": {
