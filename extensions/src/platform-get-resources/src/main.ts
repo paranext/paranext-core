@@ -7,7 +7,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceData } from 'platform-bible-utils';
+import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -73,17 +73,22 @@ async function startBackgroundFetchResources(): Promise<void> {
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
     try {
-      // Checks to make sure all the `installed` flags are accurate
+      // Checks to make sure all the `installed` flags are accurate.
+      // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
+      // locally-installed resources that don't implement USJ (e.g. VULGP83, TNN, TND, HBK)
+      // are found and their installed flags are correctly set to true.
       let isChanged = false;
       const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        includeProjectInterfaces: ['platform.base'],
       });
       const newCachedResources = cachedResources.map((resource) => {
         const matchingLocalProject = localProjectMetadata.find((localProject) =>
           // If the `projectId` is defined then tries to use that
           resource.projectId
             ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id
+            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
+              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+              resource.dblEntryUid !== '' &&
               localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
         );
 
@@ -128,6 +133,93 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       return undefined;
     }
   });
+}
+
+/**
+ * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
+ * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
+ * were installed outside the DBL download flow.
+ *
+ * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
+ * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
+ * `DblResourceReference` when the user selects one.
+ */
+async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+  try {
+    // Retry until at least one isEditable=false project appears — mirrors the reasoning in
+    // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
+    // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capping
+    // at 5 attempts (each with a 500 ms back-off) avoids blocking forever during tests or when the
+    // data provider is genuinely absent.
+    let allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platform.base'],
+    });
+    const MAX_RETRIES = 5;
+    for (
+      let attempt = 0;
+      attempt < MAX_RETRIES && !allMetadata.some((m) => m.isEditable === false);
+      attempt++
+    ) {
+      // eslint-disable-next-line no-await-in-loop
+      await wait(500);
+      // eslint-disable-next-line no-await-in-loop
+      allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platform.base'],
+      });
+    }
+
+    logger.warn(
+      `getLocalNonDblResources: ${allMetadata.length} total projects, ` +
+        `${allMetadata.filter((m) => m.isEditable === false).length} with isEditable=false`,
+    );
+
+    // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
+    // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
+    const dblEntries = cachedResources ?? [];
+    const nonDblMetadata = allMetadata.filter((m) => {
+      if (m.isEditable !== false) return false;
+      const matchingDblEntry = dblEntries.find(
+        (r) =>
+          (r.projectId !== '' && r.projectId === m.id) ||
+          // Guard against empty dblEntryUid: ''.startsWith('') is true for every string
+          (r.dblEntryUid !== '' && m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
+      );
+      if (matchingDblEntry) {
+        logger.warn(
+          `getLocalNonDblResources: excluding ${m.id} — matched DBL entry uid="${matchingDblEntry.dblEntryUid}" projectId="${matchingDblEntry.projectId}" (${matchingDblEntry.projectId !== '' && matchingDblEntry.projectId === m.id ? 'exact projectId' : 'startsWith uid'})`,
+        );
+        return false;
+      }
+      return true;
+    });
+
+    logger.warn(
+      `getLocalNonDblResources: ${nonDblMetadata.length} non-DBL resources (${dblEntries.length} DBL entries checked): ${nonDblMetadata.map((m) => m.id).join(', ')}`,
+    );
+
+    // Use name/fullName/language from the project metadata directly — the C# factory populates
+    // these at enumeration time (same values as the platform.name/fullName/language settings),
+    // so no per-project PDP call is needed.
+    return nonDblMetadata.map(
+      (m): DblResourceData => ({
+        // Convention: dblEntryUid === projectId marks this as a non-DBL synthetic entry.
+        // selectTextConnection detects this and creates a ProjectReference instead of a
+        // DblResourceReference so the resource is resolvable without a catalog entry.
+        dblEntryUid: m.id,
+        displayName: m.name ?? m.id,
+        fullName: m.fullName ?? m.name ?? m.id,
+        bestLanguageName: m.language ?? '',
+        type: 'ScriptureResource' as ResourceType,
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: m.id,
+      }),
+    );
+  } catch (error: unknown) {
+    logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
+    return [];
+  }
 }
 
 let manageExtensions: ManageExtensions;
@@ -293,6 +385,11 @@ export async function activate(context: ExecutionActivationContext) {
     getCachedResources,
   );
 
+  const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getLocalNonDblResources',
+    getLocalNonDblResources,
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
@@ -319,6 +416,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
     await getCachedResourcesCommandPromise,
+    await getLocalNonDblResourcesCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
 

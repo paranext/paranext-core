@@ -27,6 +27,20 @@ const RESOURCE_B = {
   projectId: 'proj-b',
 };
 
+// Synthetic entry for a locally-installed non-DBL resource (e.g. VULGP83).
+// Convention: dblEntryUid === projectId marks it as non-DBL.
+const RESOURCE_LOCAL = {
+  dblEntryUid: 'VULGP83',
+  displayName: 'VULGP83',
+  fullName: 'Vulgate P83',
+  bestLanguageName: 'Latin',
+  type: 'ScriptureResource' as const,
+  size: 0,
+  installed: true,
+  updateAvailable: false,
+  projectId: 'VULGP83',
+};
+
 function makeUserList(ids: string[]): ResourceReferenceList {
   return {
     dataVersion: '1.0.0',
@@ -114,6 +128,54 @@ describe('selectDblResource', () => {
       await expect(
         selectTextConnection(RESOURCE_A, vi.fn().mockResolvedValue(makeUserList([])), setUserList),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('non-DBL local resource (dblEntryUid === projectId)', () => {
+    it('stores a ProjectReference instead of a DblResourceReference', async () => {
+      const setUserList = vi.fn().mockResolvedValue(undefined);
+      const getUserList = vi.fn().mockResolvedValue(makeUserList([]));
+      await selectTextConnection(RESOURCE_LOCAL, getUserList, setUserList);
+
+      expect(setUserList).toHaveBeenCalledWith(
+        expect.objectContaining({
+          items: [{ type: 'project', name: 'VULGP83', id: 'VULGP83' }],
+        }),
+      );
+    });
+
+    it('deduplicates an existing ProjectReference with the same id', async () => {
+      const getUserList = vi.fn().mockResolvedValue({
+        dataVersion: '1.0.0',
+        items: [
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          { type: 'project' as never, name: 'VULGP83', id: 'VULGP83' },
+          { type: 'dblResource' as const, name: 'name-uid-a', id: 'uid-a' },
+        ],
+      });
+      const setUserList = vi.fn().mockResolvedValue(undefined);
+      await selectTextConnection(RESOURCE_LOCAL, getUserList, setUserList);
+
+      expect(setUserList).toHaveBeenCalledWith({
+        dataVersion: '1.0.0',
+        items: [
+          { type: 'project', name: 'VULGP83', id: 'VULGP83' },
+          { type: 'dblResource', name: 'name-uid-a', id: 'uid-a' },
+        ],
+      });
+    });
+
+    it('calls onSelect with the projectId (which equals dblEntryUid)', async () => {
+      const setUserList = vi.fn().mockResolvedValue(undefined);
+      const onSelect = vi.fn();
+      await selectTextConnection(
+        RESOURCE_LOCAL,
+        vi.fn().mockResolvedValue(makeUserList([])),
+        setUserList,
+        undefined,
+        onSelect,
+      );
+      expect(onSelect).toHaveBeenCalledWith('VULGP83');
     });
   });
 

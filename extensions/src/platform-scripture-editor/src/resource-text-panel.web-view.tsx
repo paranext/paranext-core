@@ -35,22 +35,14 @@ import {
 } from 'platform-bible-utils';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type {
-  DblResourceReference,
-  EffectiveResourceReference,
-  ResourceReferenceList,
-} from 'platform-scripture';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import type { ResourceReferenceList } from 'platform-scripture';
+import { useResourcePickerResources } from './use-resource-picker-resources.hook';
+import type { PickerResource } from './downloaded-resources.utils';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useIsOnline } from './use-is-online.hook';
-import {
-  isDblResourceReference,
-  isProjectReference,
-  getRefLabel,
-} from './resource-reference.utils';
-import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
@@ -88,17 +80,28 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
-/** Returns the `id` field for reference types that have one, or `undefined` for others. */
-function getRefId(ref: EffectiveResourceReference): string | undefined {
-  if (isDblResourceReference(ref) || isProjectReference(ref)) {
-    return ref.id;
-  }
+function pickerRowId(row: PickerResource): string | undefined {
+  if (isDblResourceReference(row.reference) || isProjectReference(row.reference))
+    return row.reference.id;
   return undefined;
 }
 
+function getRefLabel(row: PickerResource, dblResourcesList: DblResourceData[]): string {
+  const { reference } = row;
+  if (isDblResourceReference(reference)) {
+    const dblData = dblResourcesList.find((r) => r.dblEntryUid === reference.id);
+    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
+    return reference.name;
+  }
+  if (isProjectReference(reference)) {
+    return reference.name;
+  }
+  return '';
+}
+
 type ResourceSelectorDropdownProps = {
-  filteredResources: EffectiveResourceReference[];
-  selectedRef: EffectiveResourceReference | undefined;
+  filteredResources: PickerResource[];
+  selectedRef: PickerResource | undefined;
   dblResources: DblResourceData[];
   onSelectResource: (id: string) => void;
   onShowResourcePicker: () => void;
@@ -129,11 +132,11 @@ function ResourceSelectorDropdown({
         </DropdownMenuTrigger>
         <DropdownMenuContent className="tw:w-72">
           {filteredResources.map((ref) => {
-            const refId = getRefId(ref);
+            const refId = pickerRowId(ref);
             return (
               <DropdownMenuCheckboxItem
                 key={refId}
-                checked={refId === (selectedRef ? getRefId(selectedRef) : undefined)}
+                checked={refId === (selectedRef ? pickerRowId(selectedRef) : undefined)}
                 onCheckedChange={() => {
                   if (refId) onSelectResource(refId);
                 }}
@@ -151,6 +154,8 @@ function ResourceSelectorDropdown({
     </div>
   );
 }
+
+const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
 globalThis.webViewComponent = function ResourceTextPanel({
   projectId,
@@ -224,11 +229,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
-  const [effectiveResources] = useEffectiveResourceReferenceList(
-    projectId,
-    'platformScripture.referencedProjectsAndResources',
-  );
-
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
@@ -252,6 +252,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const dblResources = useMemo(
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
+  );
+  const [pickerResources, isPickerLoading] = useResourcePickerResources(
+    projectId,
+    RESOURCE_PICKER_OPTIONS,
+    dblResources,
   );
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
@@ -278,19 +283,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Filter list based on resourceType
 
-  const filteredResources = useMemo((): EffectiveResourceReference[] => {
-    if (!effectiveResources) return [];
-    return effectiveResources.items.filter((ref) => {
-      if (isDblResourceReference(ref)) {
-        return dblResources.find((r) => r.dblEntryUid === ref.id)?.type === resourceType;
-      }
-      if (isProjectReference(ref)) {
-        // ProjectReferences only appear in the Bible Texts tab
-        return resourceType === 'ScriptureResource';
-      }
-      return false;
-    });
-  }, [effectiveResources, dblResources, resourceType]);
+  const filteredResources = useMemo<PickerResource[]>(
+    () => (pickerResources ?? []).filter((row) => row.type === resourceType),
+    [pickerResources, resourceType],
+  );
 
   // #endregion
 
@@ -304,7 +300,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Once the pending resource appears in filteredResources, commit it as the active selection.
   useEffect(() => {
     if (!pendingResourceId) return;
-    const found = filteredResources.find((r) => getRefId(r) === pendingResourceId);
+    const found = filteredResources.find((r) => pickerRowId(r) === pendingResourceId);
     if (found) {
       setSelectedResourceId(pendingResourceId);
       setPendingResourceId(undefined);
@@ -316,22 +312,25 @@ globalThis.webViewComponent = function ResourceTextPanel({
   useEffect(() => {
     if (filteredResources.length === 0) return;
     if (pendingResourceId) return;
-    const currentId = filteredResources.find((r) => getRefId(r) === selectedResourceId);
-    if (!currentId) setSelectedResourceId(getRefId(filteredResources[0]));
+    const currentId = filteredResources.find((r) => pickerRowId(r) === selectedResourceId);
+    if (!currentId) setSelectedResourceId(pickerRowId(filteredResources[0]));
   }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
 
   const selectedRef =
-    filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
+    filteredResources.find((r) => pickerRowId(r) === selectedResourceId) ?? filteredResources[0];
 
-  let resourceProjectId: string | undefined;
+  // PickerResource.projectId is pre-computed — no need to re-derive from the reference shape.
+  const resourceProjectId = selectedRef?.projectId;
+
+  // dblMatch is still needed for the dynamic title's displayName.
   let dblMatch: (typeof dblResources)[number] | undefined;
   const [isSelecting, setIsSelecting] = useState(false);
 
-  if (isDblResourceReference(selectedRef)) {
-    dblMatch = findCachedDblResource(selectedRef, dblResources);
-    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-  } else if (isProjectReference(selectedRef)) {
-    resourceProjectId = selectedRef.id;
+  if (selectedRef) {
+    const { reference } = selectedRef;
+    if (isDblResourceReference(reference)) {
+      dblMatch = dblResources.find((r) => r.dblEntryUid === reference.id);
+    }
   }
 
   // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
@@ -354,10 +353,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // #region Dynamic title
 
   let resourceShortName: string | undefined;
-  if (isDblResourceReference(selectedRef) && dblMatch?.installed) {
-    resourceShortName = dblMatch.displayName;
-  } else if (isProjectReference(selectedRef)) {
-    resourceShortName = selectedRef?.name;
+  if (selectedRef) {
+    const { reference } = selectedRef;
+    if (isDblResourceReference(reference) && dblMatch?.installed) {
+      resourceShortName = dblMatch.displayName;
+    } else if (isProjectReference(reference)) {
+      resourceShortName = reference.name;
+    }
   }
 
   const titleKey =
@@ -437,13 +439,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Resource picker dialog
 
-  // Only DblResourceReference IDs are passed to the Resource Picker as pre-selected
+  // Build the set of resource IDs that are already in the user's text collection. Resources with
+  // source 'downloaded' are locally installed but NOT in text connections — they should appear in
+  // INSTALLED in the picker (not INCLUDED). Only text-connection resources (source 'admin' or
+  // 'user') are INCLUDED. ProjectReference IDs are included so that locally-installed non-DBL
+  // resources added via selectTextConnection appear in INCLUDED rather than re-appearing in
+  // INSTALLED on the next picker open.
   const currentFilteredDblIds = useMemo(() => {
-    return filteredResources
-      .filter(
-        (r): r is EffectiveResourceReference & DblResourceReference => r.type === 'dblResource',
-      )
-      .map((r) => r.id);
+    return filteredResources.flatMap((r) => {
+      if (r.source === 'downloaded') return [];
+      const { reference } = r;
+      if (isDblResourceReference(reference)) return [reference.id];
+      if (isProjectReference(reference)) return [reference.id];
+      return [];
+    });
   }, [filteredResources]);
 
   const handleResourceSelect = useCallback(
@@ -545,7 +554,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Also shows spinner for if loading resources, except if there is no resources then it should
   // directly show the button to pick a resource bellow
-  if (!effectiveResources || (isLoadingResources && filteredResources.length !== 0)) {
+  if (isPickerLoading || (isLoadingResources && filteredResources.length !== 0)) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />

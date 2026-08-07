@@ -1,6 +1,10 @@
-import type { DblResourceReference, ResourceReferenceList } from 'platform-scripture';
+import type {
+  DblResourceReference,
+  ProjectReference,
+  ResourceReferenceList,
+} from 'platform-scripture';
 import { DblResourceData } from 'platform-bible-utils';
-import { isDblResourceReference } from './resource-reference.utils';
+import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
 
 /**
@@ -31,11 +35,15 @@ export async function selectTextConnection(
       return;
     }
   }
-  const newRef: DblResourceReference = {
-    type: 'dblResource',
-    name: resource.displayName,
-    id: resource.dblEntryUid,
-  };
+
+  // Non-DBL locally-installed resources (e.g. VULGP83, TNN, TND, HBK) are returned by
+  // getLocalNonDblResources with dblEntryUid === projectId as a synthetic marker. They must be
+  // stored as ProjectReferences so the resource viewer can load them directly by project ID
+  // without needing a DBL catalog entry.
+  const isLocalOnly = resource.dblEntryUid === resource.projectId;
+  const newRef: DblResourceReference | ProjectReference = isLocalOnly
+    ? { type: 'project', name: resource.displayName, id: resource.projectId }
+    : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
 
   const rawUserList = await getUserTextConnections();
   const rawUserItems = rawUserList?.items ?? [];
@@ -43,8 +51,10 @@ export async function selectTextConnection(
     dataVersion: rawUserList?.dataVersion ?? DEFAULT_RESOURCE_REFERENCE_LIST.dataVersion,
     items: [
       newRef,
-      ...rawUserItems.filter(
-        (item) => !isDblResourceReference(item) || item.id !== resource.dblEntryUid,
+      ...rawUserItems.filter((item) =>
+        isLocalOnly
+          ? !isProjectReference(item) || item.id !== resource.projectId
+          : !isDblResourceReference(item) || item.id !== resource.dblEntryUid,
       ),
     ],
   });

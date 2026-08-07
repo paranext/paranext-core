@@ -15,6 +15,7 @@ import {
   setUserDisplay,
   type TextCollectionSources,
 } from './scripture-text-grid-contents.utils';
+import type { DownloadedResource } from './downloaded-resources.utils';
 
 // #region fixtures
 
@@ -376,6 +377,51 @@ describe('getViewOptionsTexts', () => {
     expect(bottom.map((entry) => entry.reference.id)).toEqual(['x']);
     expect(bottom[0].checked).toBe(true);
     expect(bottom[0].isAdminLocked).toBe(false);
+  });
+
+  it('appends downloaded projects not already listed to the bottom section (unchecked, not removable)', () => {
+    const sources = makeSources();
+    const downloaded: DownloadedResource[] = [
+      { projectId: 'proj-kjn', name: 'KJN', fullName: 'King James New', language: 'English' },
+    ];
+    const { bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    expect(bottom).toContainEqual(
+      expect.objectContaining({
+        reference: expect.objectContaining({ id: 'proj-kjn' }),
+        checked: false,
+        isUserRemovable: false,
+        isAdminLocked: false,
+      }),
+    );
+  });
+
+  it('does not append a downloaded project that is already an admin/user row', () => {
+    const sources = makeSources({
+      adminReferenced: list([project('proj-web', { isInTextCollection: true })]),
+    });
+    const downloaded: DownloadedResource[] = [
+      { projectId: 'proj-web', name: 'WEB', fullName: 'World English Bible', language: 'English' },
+    ];
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const allForWeb = [...top, ...bottom].filter((r) => r.reference.id === 'proj-web');
+    expect(allForWeb).toHaveLength(1);
+  });
+
+  it('does not append a downloaded project whose ID starts with an existing DblResourceReference ID', () => {
+    const sources = makeSources({
+      adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
+    });
+    const downloaded: DownloadedResource[] = [
+      {
+        projectId: 'dbl-uid-123extra',
+        name: 'DBL Resource',
+        fullName: 'DBL Resource Full',
+        language: 'English',
+      },
+    ];
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
+    const duplicate = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
+    expect(duplicate).toHaveLength(0);
   });
 
   it('stamps longName from the resolver onto rows', () => {
