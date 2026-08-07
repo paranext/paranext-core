@@ -42,12 +42,8 @@ export function expandThemeFamiliesByIdWithDefault(
   return expandThemeContribution(themeFamiliesById, THEMES_DATA_OBJECT[DEFAULT_THEME_FAMILY]);
 }
 
-/**
- * Expanded themes that are built into the software
- *
- * @experimental
- */
-export const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded =
+/** Expanded themes that are built into the software */
+const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded =
   expandThemeFamiliesByIdWithDefault(THEMES_DATA_OBJECT);
 
 const defaultThemePossiblyUndefined = BUILT_IN_THEMES[DEFAULT_THEME_FAMILY]?.[DEFAULT_THEME_TYPE];
@@ -64,14 +60,8 @@ if (!defaultThemePossiblyUndefined)
  */
 export const DEFAULT_THEME: ThemeDefinitionExpanded = defaultThemePossiblyUndefined;
 
-/**
- * Gets name of user-defined theme family for the given number
- *
- * @param themeNumber Which user-defined theme family to name
- * @returns The family id for that user-defined theme family
- * @experimental
- */
-export function getUserThemeFamilyName(themeNumber: number): string {
+/** Gets name of user-defined theme family for the given number */
+function getUserThemeFamilyName(themeNumber: number): string {
   return `${USER_THEME_FAMILY_PREFIX}${themeNumber}`;
 }
 
