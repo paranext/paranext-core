@@ -6,34 +6,44 @@ import {
   SHOULD_MATCH_SYSTEM_STORAGE_KEY,
   USER_THEMES_STORAGE_KEY,
 } from '@shared/services/theme.service-model';
-import { ThemeDefinitionExpanded, ThemeFamiliesByIdExpanded } from 'platform-bible-utils';
+import {
+  ThemeDefinitionExpanded,
+  ThemeFamiliesById,
+  ThemeFamiliesByIdExpanded,
+} from 'platform-bible-utils';
 
 // The host reads the OS dark-mode preference through Electron's `nativeTheme` and publishes the
 // theme as a data provider. Both are stubbed so a test can drive the OS preference directly and
 // reach the registered engine.
-const { nativeThemeMock, appMock, registerEngine, subscribeAllThemes, allThemesHandlers } =
-  vi.hoisted(() => {
-    const handlers: ((allThemes: unknown) => void)[] = [];
-    const nativeThemeUpdatedHandlers: (() => void)[] = [];
-    return {
-      allThemesHandlers: handlers,
-      nativeThemeMock: {
-        shouldUseDarkColors: false,
-        updatedHandlers: nativeThemeUpdatedHandlers,
-        on: (_eventName: string, handler: () => void) => {
-          nativeThemeUpdatedHandlers.push(handler);
-        },
+const {
+  nativeThemeMock,
+  appMock,
+  registerEngine,
+  subscribeAllThemes,
+  allThemesHandlers,
+  networkObjectCreatedHandlers,
+} = vi.hoisted(() => {
+  const handlers: ((allThemes: unknown) => void)[] = [];
+  const nativeThemeUpdatedHandlers: (() => void)[] = [];
+  const createdHandlers: ((details: { id: string }) => void)[] = [];
+  return {
+    allThemesHandlers: handlers,
+    networkObjectCreatedHandlers: createdHandlers,
+    nativeThemeMock: {
+      shouldUseDarkColors: false,
+      updatedHandlers: nativeThemeUpdatedHandlers,
+      on: (_eventName: string, handler: () => void) => {
+        nativeThemeUpdatedHandlers.push(handler);
       },
-      appMock: { whenReady: vi.fn(async () => undefined) },
-      registerEngine: vi.fn(),
-      subscribeAllThemes: vi.fn(
-        async (_selector: unknown, handler: (allThemes: unknown) => void) => {
-          handlers.push(handler);
-          return async () => true;
-        },
-      ),
-    };
-  });
+    },
+    appMock: { whenReady: vi.fn(async (): Promise<void> => undefined) },
+    registerEngine: vi.fn(),
+    subscribeAllThemes: vi.fn(async (_selector: unknown, handler: (allThemes: unknown) => void) => {
+      handlers.push(handler);
+      return async () => true;
+    }),
+  };
+});
 
 vi.mock('electron', () => ({ app: appMock, nativeTheme: nativeThemeMock }));
 vi.mock('@shared/services/data-provider.service', () => ({
@@ -41,6 +51,12 @@ vi.mock('@shared/services/data-provider.service', () => ({
 }));
 vi.mock('@shared/services/theme-data.service', () => ({
   themeDataService: { subscribeAllThemes },
+}));
+vi.mock('@shared/services/network-object.service', () => ({
+  onDidCreateNetworkObject: (handler: (details: { id: string }) => void) => {
+    networkObjectCreatedHandlers.push(handler);
+    return () => true;
+  },
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -53,6 +69,7 @@ type RegisteredThemeEngine = {
   getShouldMatchSystem: () => Promise<boolean>;
   setShouldMatchSystem: (shouldMatchSystem: boolean) => Promise<unknown>;
   getAllThemes: () => Promise<ThemeFamiliesByIdExpanded>;
+  setAllThemes: (userThemes: ThemeFamiliesById) => Promise<unknown>;
   migrateStoredThemeState: (state: PersistedThemeState) => Promise<boolean>;
 };
 
@@ -80,12 +97,40 @@ function setSystemDarkMode(isDark: boolean) {
   [...nativeThemeMock.updatedHandlers].forEach((handler) => handler());
 }
 
+/** Stand in for a network object being registered anywhere on the network */
+function announceNetworkObject(id: string) {
+  [...networkObjectCreatedHandlers].forEach((handler) => handler({ id }));
+}
+
+/** The network object id the theme data provider is registered under */
+const THEME_DATA_PROVIDER_OBJECT_ID = 'platform.themeDataServiceDataProvider-data';
+
 /** Start the host and hand back the engine it registered */
 async function startHost() {
   const host = await import('@main/services/theme.service-host');
   await host.startThemeServiceHost();
-  const engine: RegisteredThemeEngine = registerEngine.mock.calls[0][1];
+  const engine: RegisteredThemeEngine =
+    registerEngine.mock.calls[registerEngine.mock.calls.length - 1][1];
   return { host, engine };
+}
+
+/**
+ * Start the app again on the store the last run left behind: a fresh module graph, the same
+ * `localStorage`. What a restart carries forward is exactly what is persisted.
+ */
+async function restartHost() {
+  vi.resetModules();
+  allThemesHandlers.length = 0;
+  nativeThemeMock.updatedHandlers.length = 0;
+  networkObjectCreatedHandlers.length = 0;
+  return startHost();
+}
+
+/** Let the queued promise callbacks behind a resubscribe run */
+async function settlePendingWork() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 beforeEach(() => {
@@ -98,6 +143,8 @@ beforeEach(() => {
   registerEngine.mockResolvedValue({ onDidDispose: vi.fn() });
   allThemesHandlers.length = 0;
   nativeThemeMock.updatedHandlers.length = 0;
+  networkObjectCreatedHandlers.length = 0;
+  subscribeAllThemes.mockClear();
   nativeThemeMock.shouldUseDarkColors = false;
   Object.values(logger).forEach((logMock) => vi.mocked(logMock).mockClear());
 });
@@ -241,7 +288,10 @@ describe('adopting theme state stored before the host moved to main', () => {
     expect((await engine.getCurrentTheme()).type).toBe('light');
   });
 
-  it('refuses an offer once this process already has stored theme state', async () => {
+  it('refuses an offer once this process has stored theme state a user chose', async () => {
+    // An earlier offer failed to arrive, but the app has been used since: the theme the user last
+    // chose has to beat the one they left behind before any of this
+    localStorage.setItem('theme.service-host.hasUserThemeState', 'true');
     localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
     const { engine } = await startHost();
 
@@ -281,10 +331,22 @@ describe('adopting theme state stored before the host moved to main', () => {
 // A window is handed the current theme on its URL so its first frame is painted with it; main omits
 // it when it has nothing to hand over.
 describe('the theme for a new window', () => {
-  it('has nothing to hand a window while the theme is still only in a renderer store', async () => {
+  it('has nothing to hand a window while it is on the theme the window falls back to anyway', async () => {
     const { host } = await startHost();
 
     expect(host.getCurrentThemeForNewWindow()).toBeUndefined();
+  });
+
+  // Asks "do I have a theme worth handing over?", NOT "did the user choose one?" — a theme derived
+  // from the machine's dark-mode preference is the theme the app is on, and a window that is not
+  // told about it paints light and flashes.
+  it('hands over a theme it derived from the OS preference, which no user chose', async () => {
+    nativeThemeMock.shouldUseDarkColors = true;
+    const { host } = await startHost();
+
+    publishExtensionThemes({ '': { light: makeTheme('', 'light'), dark: makeTheme('', 'dark') } });
+
+    expect(host.getCurrentThemeForNewWindow()?.type).toBe('dark');
   });
 
   it('hands over a theme change that has not reached the store yet', async () => {
@@ -322,9 +384,241 @@ describe('registration', () => {
 
   it('waits for Electron to be ready before reading the OS dark-mode preference', async () => {
     // `nativeTheme` is unusable before the app's `ready` event, and startup reaches the host well
-    // before main.ts's own `app.whenReady()` handler runs.
-    await startHost();
+    // before main.ts's own `app.whenReady()` handler runs. Asserting the ORDER, not just the call:
+    // moving the wait below the engine's construction would leave this reading `nativeTheme` too
+    // early, which is the thing the wait is for.
+    let markElectronReady = () => {};
+    appMock.whenReady.mockImplementationOnce(
+      async () =>
+        new Promise<void>((resolve) => {
+          markElectronReady = () => resolve();
+        }),
+    );
+    const readDarkMode = vi.spyOn(nativeThemeMock, 'shouldUseDarkColors', 'get');
 
-    expect(appMock.whenReady).toHaveBeenCalled();
+    const host = await import('@main/services/theme.service-host');
+    const starting = host.startThemeServiceHost();
+    await settlePendingWork();
+
+    expect(readDarkMode).not.toHaveBeenCalled();
+
+    markElectronReady();
+    await starting;
+
+    expect(readDarkMode).toHaveBeenCalled();
+  });
+});
+
+// The theme list is published by the EXTENSION HOST, which this process spawns only after its own
+// app-global services have started and which `platform.restartExtensionHost` can replace at any
+// time. The subscription is therefore taken whenever that provider appears, not once and hoped for.
+describe('keeping up with the extension host theme contributions', () => {
+  it('subscribes when the theme data provider appears after this process started', async () => {
+    subscribeAllThemes.mockRejectedValueOnce(new Error('the extension host has not registered it'));
+    const { engine } = await startHost();
+    expect(await engine.getAllThemes()).toEqual({});
+
+    announceNetworkObject(THEME_DATA_PROVIDER_OBJECT_ID);
+    await settlePendingWork();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+
+    // Without this the app has no theme list at all for the session: nothing else would ever ask
+    expect(await engine.getAllThemes()).toHaveProperty('testFamily');
+  });
+
+  it('takes the subscription again when the extension host is restarted', async () => {
+    const { engine } = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+
+    // `platform.restartExtensionHost`: the old provider goes away and a new one registers
+    announceNetworkObject(THEME_DATA_PROVIDER_OBJECT_ID);
+    await settlePendingWork();
+
+    expect(subscribeAllThemes.mock.calls.length).toBeGreaterThan(1);
+    publishExtensionThemes({ otherFamily: { light: makeTheme('otherFamily', 'light') } });
+    expect(await engine.getAllThemes()).toHaveProperty('otherFamily');
+  });
+
+  it('ignores every other network object', async () => {
+    await startHost();
+    const subscribeCallsAfterStart = subscribeAllThemes.mock.calls.length;
+
+    announceNetworkObject('platform.someOtherService');
+    await settlePendingWork();
+
+    expect(subscribeAllThemes.mock.calls.length).toBe(subscribeCallsAfterStart);
+  });
+});
+
+// The current theme can only be checked against a theme list, and that list arrives when the
+// extension host publishes it — which this process does not control and cannot bound.
+describe('resetting a theme that no longer exists', () => {
+  it('does not reset an extension theme just because this process started slowly', async () => {
+    localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
+    const { engine } = await startHost();
+
+    // A slow start — a cold disk, an antivirus scan, a dev build. The theme data provider publishes
+    // its first payload when the extension host initialises, BEFORE the extensions that contribute
+    // themes have loaded, so that payload never contains an extension's theme however complete the
+    // list eventually becomes. Measuring this process's age resets the user's theme here, and
+    // persists the reset.
+    await vi.advanceTimersByTimeAsync(60_000);
+    publishExtensionThemes({ '': { light: makeTheme('', 'light') } });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toContain('testFamily');
+  });
+
+  it('resets once the theme list has had its chance and the theme is still missing', async () => {
+    localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
+    const { engine } = await startHost();
+
+    // The extension host is up and publishing; extensions contributing themes load after it
+    publishExtensionThemes({ otherFamily: { light: makeTheme('otherFamily', 'light') } });
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('');
+  });
+});
+
+// What makes the host refuse a migration offer has to be evidence of a USER action. The engine also
+// writes on its own while the theme list catches up — matching the machine's dark-mode preference,
+// picking up a changed definition — and those writes say nothing about what the user picked.
+describe('telling this process own theme state from what it derived', () => {
+  const offeredState: PersistedThemeState = {
+    currentTheme: TEST_DARK,
+    shouldMatchSystem: false,
+    userThemes: { 'user-0': { light: { label: '%mine%', cssVariables: { primary: 'red' } } } },
+  };
+
+  it('still adopts an offer after a run in which it only ever wrote what it derived', async () => {
+    // A dark-mode machine: the engine matches the theme type to the system and persists the result
+    // on the very first start, before the user has touched anything
+    nativeThemeMock.shouldUseDarkColors = true;
+    await startHost();
+    publishExtensionThemes({ '': { light: makeTheme('', 'light'), dark: makeTheme('', 'dark') } });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).not.toBeNull();
+
+    // The window's offer failed to land last time, so it is made again. Refusing it here would
+    // delete the user's themes: the offering window discards its copy on a refusal.
+    const { engine } = await restartHost();
+
+    expect(await engine.migrateStoredThemeState(offeredState)).toBe(true);
+    expect(localStorage.getItem(USER_THEMES_STORAGE_KEY)).toContain('red');
+  });
+
+  it('refuses an offer on the next start once the user has chosen a theme', async () => {
+    const first = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    await first.engine.setCurrentTheme({ themeFamilyId: 'testFamily', type: 'dark' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const { engine } = await restartHost();
+
+    expect(await engine.migrateStoredThemeState(offeredState)).toBe(false);
+  });
+
+  it('writes the user themes before anything it could derive again', async () => {
+    const { engine } = await startHost();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    await engine.migrateStoredThemeState(offeredState);
+
+    // A crash part-way through leaves the profile un-migrated and the offer is made again, so the
+    // order only decides what is lost if the retry never happens — and the user themes are the one
+    // thing this process could never derive for itself.
+    const writtenKeys = setItem.mock.calls.map(([key]) => key);
+    expect(writtenKeys[0]).toBe(USER_THEMES_STORAGE_KEY);
+    expect(writtenKeys[writtenKeys.length - 1]).toBe('theme.service-host.didMigrateStoredState');
+  });
+
+  it('rejects rather than refusing when it cannot store what it adopted', async () => {
+    const { engine } = await startHost();
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    // A caller told "refused" discards its copy; this is the one outcome where its copy is still
+    // the only durable one, so it has to be told something else
+    await expect(engine.migrateStoredThemeState(offeredState)).rejects.toThrow('disk full');
+    expect(logger.error).toHaveBeenCalled();
+  });
+});
+
+// Everything in this process that paints from the theme — the Windows title-bar overlay colours —
+// hears about it through one local event, so every assignment of the current theme has to announce.
+describe('announcing the current theme to this process own consumers', () => {
+  it('announces a theme adopted from a window that had stored state', async () => {
+    const { host, engine } = await startHost();
+    const themesAnnounced: ThemeDefinitionExpanded[] = [];
+    host.onDidChangeCurrentTheme((theme) => themesAnnounced.push(theme));
+
+    await engine.migrateStoredThemeState({ currentTheme: TEST_DARK });
+
+    // The title bar is painted from `ready-to-show`, which is before the offering window's renderer
+    // gets as far as offering, so without this it keeps the pre-adoption colours for the session
+    expect(themesAnnounced).toContainEqual(TEST_DARK);
+  });
+
+  it('tells the other consumers and still persists when one of them throws', async () => {
+    const { host, engine } = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    host.onDidChangeCurrentTheme(() => {
+      throw new Error('this consumer window is already gone');
+    });
+    const themesAnnounced: ThemeDefinitionExpanded[] = [];
+    host.onDidChangeCurrentTheme((theme) => themesAnnounced.push(theme));
+
+    await engine.setCurrentTheme({ themeFamilyId: 'testFamily', type: 'dark' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(themesAnnounced).toHaveLength(1);
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toContain('"type":"dark"');
+    expect(logger.error).toHaveBeenCalled();
+  });
+});
+
+// Adopting replaces the engine's live state, and the served theme list has to be rebuilt from it —
+// from the last payload rather than from the merged list, or a user-defined family that the adopted
+// state no longer has would live on in what is served.
+describe('rebuilding the served theme list around adopted state', () => {
+  it('drops a user-defined family the adopted state does not have', async () => {
+    const { engine } = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    await engine.setAllThemes({
+      'user-3': { light: { label: '%mine%', cssVariables: { primary: 'red' } } },
+    });
+    expect(await engine.getAllThemes()).toHaveProperty('user-3');
+    localStorage.clear();
+
+    const { engine: restarted } = await restartHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    await restarted.migrateStoredThemeState({
+      userThemes: { 'user-0': { light: { label: '%theirs%', cssVariables: {} } } },
+    });
+
+    const allThemes = await restarted.getAllThemes();
+    expect(allThemes).not.toHaveProperty('user-3');
+    expect(allThemes).toHaveProperty('user-0');
+  });
+
+  it('does not let the rebuild write over what the adoption is persisting', async () => {
+    const { engine } = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    await engine.migrateStoredThemeState({
+      currentTheme: TEST_DARK,
+      userThemes: { 'user-0': { light: { label: '%mine%', cssVariables: {} } } },
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // The adoption writes every value itself, in an order chosen so an interrupted migration is
+    // retried rather than stranded; a debounced write landing afterwards would undo that ordering
+    expect(setItem.mock.calls.filter(([key]) => key === CURRENT_THEME_STORAGE_KEY)).toHaveLength(1);
   });
 });
