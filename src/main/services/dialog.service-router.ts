@@ -27,7 +27,9 @@ import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import { networkObjectService } from '@shared/services/network-object.service';
+import { sharedStoreService } from '@shared/services/shared-store.service';
 import { serializeRequestType } from '@shared/utils/util';
+import { getErrorMessage } from 'platform-bible-utils';
 
 /**
  * The dialog service shard each window registers, found by network object type and window attribute
@@ -49,6 +51,45 @@ const getTargetDialogShard = createTargetShardResolver(
  * otherwise the request gives up while the dialog is still open.
  */
 const DIALOG_HANDLER_OPTIONS: NetworkMethodHandlerOptions = { timeoutMilliseconds: 0 };
+
+/** The shard methods that wait for the user, so a call to one must not time out */
+const USER_ANSWERED_SHARD_METHODS = [
+  'showDialog',
+  'selectProject',
+  'showAboutDialog',
+] as const satisfies readonly (keyof IDialogServiceShard)[];
+
+/**
+ * Lift the request timeout on a window's dialog shard methods.
+ *
+ * Disabling the timeout on this router's own registrations covers only the inbound half. Calling
+ * the shard is a request in its own right, and on the default timeout it gives up while the dialog
+ * is still on screen — so the caller gets a timeout error for a dialog the user has not answered
+ * yet, and answering it later resolves nothing.
+ *
+ * Set here rather than by the shard because the timeout lives in the shared store, whose entries
+ * belong to the process that created them: a renderer that reloads comes back as a different
+ * process and cannot rewrite its own keys, where main's process outlives every window. Re-setting
+ * the same value is a no-op, so a window registering again costs nothing.
+ */
+function liftRequestTimeoutForWindowDialogs(windowId: number): void {
+  USER_ANSWERED_SHARD_METHODS.forEach((methodName) => {
+    const requestType = `object:${DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${windowId}.${methodName}`;
+    try {
+      sharedStoreService.set(`platform.customNetworkTimeoutMs.${requestType}`, 0);
+    } catch (e) {
+      // A dialog in this window would fail ~30s in rather than waiting for the user, which is worth
+      // saying out loud — but it is not a reason to refuse to route to the window at all
+      logger.warn(
+        `Could not disable the request timeout for ${requestType}; dialogs in window ${windowId} may time out before the user answers them: ${getErrorMessage(e)}`,
+      );
+    }
+  });
+}
+
+// A window's shard can register before or after this module starts, so both paths are covered: the
+// event for windows that arrive later, and a reconcile below for any already indexed.
+dialogShards.onDidAddShard(liftRequestTimeoutForWindowDialogs);
 
 /**
  * OpenRPC documentation for the generic dialog request names, which are the ones consumers call.
@@ -106,6 +147,10 @@ const ABOUT_COMMAND_DOCS: SingleMethodDocumentation = {
  * starts. Must be called during main process startup, before createWindow().
  */
 export async function startDialogServiceRouter(): Promise<void> {
+  // onDidAddShard has no replay, so reconcile against what is already indexed — otherwise a window
+  // that registered before this ran keeps the default timeout on its dialogs
+  dialogShards.getShardWindowIds().forEach(liftRequestTimeoutForWindowDialogs);
+
   await Promise.all([
     networkService.registerRequestHandler(
       serializeRequestType(CATEGORY_DIALOG, 'showDialog'),
