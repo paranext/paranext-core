@@ -15,12 +15,14 @@
  * service shard".
  */
 
+import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
   BOOK_CHAPTER_CONTROL_SERVICE_SHARD_NETWORK_OBJECT_NAME,
   IBookChapterControlServiceShard,
 } from '@shared/models/book-chapter-control.service-shard.model';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { BOOK_CHAPTER_CONTROL_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
@@ -44,24 +46,35 @@ const getTargetBookChapterControlShard = createTargetShardResolver(
   bookChapterControlShards,
 );
 
+/** OpenRPC documentation for the generic command name, which is the one consumers call */
+const OPEN_BOOK_CHAPTER_CONTROL_DOCS: SingleMethodDocumentation = {
+  method: {
+    'x-experimental': true,
+    summary:
+      "Open the appropriate Book Chapter Control (the active tab's if it shows one, else the " +
+      "top toolbar's) and focus its input, ready for typing a reference",
+    params: [],
+    result: { name: 'return value', schema: { type: 'null' } },
+  },
+};
+
 /**
  * Register `platform.openBookChapterControl` under the generic name so it is claimed before any
  * renderer starts. Must be called during main process startup, before createWindow().
  */
 export async function startBookChapterControlServiceRouter(): Promise<void> {
+  assertCommandRoutingMatchesDocs('BookChapterControl service router', [
+    {
+      commandName: 'platform.openBookChapterControl',
+      docs: OPEN_BOOK_CHAPTER_CONTROL_DOCS,
+      routing: 'focus',
+    },
+  ]);
+
   await networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, 'platform.openBookChapterControl'),
     async () => (await getTargetBookChapterControlShard()).open(),
-    {
-      method: {
-        'x-experimental': true,
-        summary:
-          "Open the appropriate Book Chapter Control (the active tab's if it shows one, else the " +
-          "top toolbar's) and focus its input, ready for typing a reference",
-        params: [],
-        result: { name: 'return value', schema: { type: 'null' } },
-      },
-    },
+    OPEN_BOOK_CHAPTER_CONTROL_DOCS,
   );
   logger.info('BookChapterControl service router registered');
 }
