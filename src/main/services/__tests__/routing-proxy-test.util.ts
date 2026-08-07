@@ -12,8 +12,6 @@ import type { Mock } from 'vitest';
 
 /** The mocked `window-state.service` and network object lookups a routing proxy fans out through */
 export interface RoutingWindowMocks {
-  /** Mock of `getWindows`, which reports every tracked window whether or not it can answer */
-  getWindows: Mock;
   /** Mock of `getReadyWindowIds`, which reports only the windows a fan-out can get an answer from */
   getReadyWindowIds: Mock;
   /** Mock of `networkObjectService.get`, which resolves a window's scoped service by name */
@@ -39,7 +37,6 @@ export function withWindows(
 ): void {
   const windowIds = Object.keys(servicesByWindowId).map(Number);
   const unreadyWindowIds = options?.unreadyWindowIds ?? [];
-  mocks.getWindows.mockReturnValue(windowIds.map((id) => ({ id })));
   mocks.getReadyWindowIds.mockReturnValue(windowIds.filter((id) => !unreadyWindowIds.includes(id)));
   mocks.networkObjectGet.mockImplementation(async (name: string) => {
     const windowId = Number(name.split('-').pop());

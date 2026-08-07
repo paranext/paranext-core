@@ -10,7 +10,6 @@ import type { WebViewServiceType } from '@shared/services/web-view.service-model
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
-  getWindows: vi.fn(),
   getReadyWindowIds: vi.fn(),
   isWindowReady: vi.fn(),
   networkObjectGet: vi.fn(),
@@ -19,7 +18,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
-  getWindows: mocks.getWindows,
   getReadyWindowIds: mocks.getReadyWindowIds,
   isWindowReady: mocks.isWindowReady,
 }));
@@ -49,7 +47,6 @@ describe('web view routing proxy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
-    mocks.getWindows.mockReturnValue([]);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
   });

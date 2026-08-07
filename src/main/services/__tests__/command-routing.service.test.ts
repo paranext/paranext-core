@@ -9,7 +9,6 @@ import type { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
-  getWindows: vi.fn(),
   getReadyWindowIds: vi.fn(),
   registerRequestHandler: vi.fn(),
   request: vi.fn(),
@@ -18,7 +17,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
-  getWindows: mocks.getWindows,
   getReadyWindowIds: mocks.getReadyWindowIds,
 }));
 vi.mock('@shared/services/network.service', () => ({
@@ -74,7 +72,6 @@ describe('renderer-hosted request routing proxies', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(2);
-    mocks.getWindows.mockReturnValue([]);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());

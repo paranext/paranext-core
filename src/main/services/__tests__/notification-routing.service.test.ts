@@ -6,7 +6,6 @@ import type { INotificationService } from '@shared/models/notification.service-m
 
 const mocks = vi.hoisted(() => ({
   getTargetWindowId: vi.fn(),
-  getWindows: vi.fn(),
   getReadyWindowIds: vi.fn(),
   networkObjectGet: vi.fn(),
   networkObjectSet: vi.fn(),
@@ -14,7 +13,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
-  getWindows: mocks.getWindows,
   getReadyWindowIds: mocks.getReadyWindowIds,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
@@ -48,7 +46,6 @@ describe('notification routing proxy', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
-    mocks.getWindows.mockReturnValue([]);
     mocks.getReadyWindowIds.mockReturnValue([]);
   });
 
