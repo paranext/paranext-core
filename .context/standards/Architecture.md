@@ -103,15 +103,13 @@ more than one window.
 
 **Rules of the pattern:**
 
-- **Target state: platform code in the renderer registers zero globally-unique names.** Every global
-  name is registered by main, and a renderer only ever registers window-scoped objects, which makes
-  "a second window cannot start because the name is taken" structurally impossible rather than fixed
-  case by case. That is where the window-scoped services have arrived, and where the scroll group
-  service arrived by moving its host into main (`src/main/services/scroll-group.service-host.ts`,
-  ADR-0012). One app-global host has not moved yet and is the exception: `theme.service-host.ts`
-  still registers its global name from whichever renderer gets there first, and the collision is
-  handled by host election with takeover instead — see ADR-0009. The invariant holds outright once
-  that host moves to main too.
+- **Platform code in the renderer registers zero globally-unique names.** Every global name is
+  registered by main, and a renderer only ever registers window-scoped objects, which makes "a second
+  window cannot start because the name is taken" structurally impossible rather than fixed case by
+  case. The window-scoped services got there by scoping their names; the two app-global services got
+  there by moving their hosts into main — `src/main/services/scroll-group.service-host.ts`
+  (ADR-0012) and `src/main/services/theme.service-host.ts` (ADR-0013). The host election with
+  takeover that used to resolve the collision instead (ADR-0009) is gone, with no consumers left.
 - **A shard declares what it is, and which window it is for.** It registers with a distinct
   `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
   `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
@@ -136,17 +134,19 @@ more than one window.
 (`extensions/src/platform-scripture/src/checks/check-aggregator.service.ts`) is a different shape —
 N sources holding different data, combined into one view.
 
-`theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global
-(one current theme, one scroll group 0) and keep the service-host name — the scroll group one from
-main, the theme one from a renderer until it moves.
+`theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global (one
+current theme, one scroll group 0), they keep the service-host name, and both now live in
+`src/main/services/`.
 
 An app-global host in main pairs with a `*.service.ts` that is more than a proxy: where the UI needs
-a synchronous read or write, the service keeps a cache of the host's state and predicts the host's
-answer for a write, reconciling afterwards. The cache is seeded twice — synchronously at module load
-from the state main puts on the window's URL, so the first render is already right, and again from
-the host's snapshot once the network is up — and kept current by the host's events after that. In the
-renderer `papi.scrollGroups` resolves to that same cache, so everything in one window agrees.
-`src/renderer/services/scroll-group.service.ts` is the worked example; the Do/Don't list is in
+a synchronous read, the service keeps a cache of the host's state, and where it needs a synchronous
+write it predicts the host's answer and reconciles afterwards. The cache is seeded synchronously at
+module load from the state main puts on the window's URL, so the first render is already right, and
+again from the host once the network is up — the scroll group from a snapshot call, the theme from
+its subscription's immediate delivery — and kept current by the host's events after that. In the
+renderer `papi.scrollGroups` and `papi.themes` resolve to those same caches, so everything in one
+window agrees. `src/renderer/services/scroll-group.service.ts` (predicting) and
+`src/renderer/services/theme.service.ts` (read-only) are the worked examples; the Do/Don't list is in
 [Paranext-Core-Patterns.md](Paranext-Core-Patterns.md#app-global-services-service-host-in-main--predicting-cache).
 
 ### Main Process Services (`src/main/services/`)
@@ -158,6 +158,7 @@ renderer `papi.scrollGroups` resolves to that same cache, so everything in one w
 | `app.service-host.ts` | App metadata and lifecycle |
 | `data-protection.service-host.ts` | Encryption/decryption |
 | `scroll-group.service-host.ts` | App-global scroll group references and reference history |
+| `theme.service-host.ts` | App-global current theme, system-theme matching, and user themes |
 | `rpc-server.ts` | WebSocket JSON-RPC server |
 
 ### Shared Services (`src/shared/services/`)
