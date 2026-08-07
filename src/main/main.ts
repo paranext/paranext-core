@@ -48,6 +48,13 @@ import {
   startScrollGroupServiceHost,
 } from '@main/services/scroll-group.service-host';
 import {
+  flushPersistedThemeState,
+  getCurrentThemeForNewWindow,
+  getCurrentThemeSync,
+  onDidChangeCurrentTheme,
+  startThemeServiceHost,
+} from '@main/services/theme.service-host';
+import {
   getWindowIdsWithServiceShard,
   getWindowServiceShard,
   onDidRegisterWindowServiceShard,
@@ -116,6 +123,7 @@ import {
   SCROLL_GROUP_STATE_QUERY_PARAMETER,
   STARTUP_MARK_PROCESS_START,
   STARTUP_MARKS_QUERY_PARAMETER,
+  THEME_STATE_QUERY_PARAMETER,
   WINDOW_ID,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
@@ -135,11 +143,11 @@ import {
   getErrorMessage,
   isPlatformError,
   serialize,
+  ThemeDefinitionExpanded,
   UnsubscriberAsyncList,
   wait,
   waitForDuration,
 } from 'platform-bible-utils';
-import { themeService } from '@shared/services/theme.service';
 
 // #region Helper functions
 
@@ -304,8 +312,8 @@ async function main() {
   // Claim every app-global network name before any window is created, so a renderer never has to
   // race for one. The service routers claim generic names (e.g. "WebViewService",
   // "platform.openSettings") that renderers answer for behind window-scoped shards; the scroll group
-  // service host claims a name it answers for itself, since a scroll group is app-global rather than
-  // per window.
+  // and theme service hosts claim names they answer for themselves, since a scroll group and the
+  // theme are app-global rather than per window.
   // Started together rather than one after another: each claims its own set of names and none reads
   // anything another one registers, so serializing them only adds their round trips together on the
   // startup path every window is waiting behind.
@@ -319,6 +327,7 @@ async function main() {
     { name: 'notification service router', started: startNotificationServiceRouter() },
     { name: 'window service router', started: startWindowServiceRouter() },
     { name: 'scroll group service host', started: startScrollGroupServiceHost() },
+    { name: 'theme service host', started: startThemeServiceHost() },
   ];
   const globalServiceOutcomes = await Promise.allSettled(
     globalServiceStarts.map(({ started }) => started),
@@ -846,61 +855,50 @@ async function main() {
       // Adjust the Window button colors based on the current theme
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       if (process.platform !== 'darwin' && process.platform !== 'linux') {
-        try {
-          windowCloseUnsubscribers.add(
-            await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
-              if (isPlatformError(newTheme)) {
-                logger.warn(
-                  `Failed to set title bar window button colors: Failed to get new current theme: ${getErrorMessage(
-                    newTheme,
-                  )}`,
-                );
-                return;
-              }
-              if (!newTheme.cssVariables.primary) {
-                logger.warn(
-                  `Failed to set title bar window button colors: New theme primary color is falsy!`,
-                );
-                return;
-              }
+        const paintTitleBarForTheme = (newTheme: ThemeDefinitionExpanded) => {
+          if (!newTheme.cssVariables.primary) {
+            logger.warn(
+              `Failed to set title bar window button colors: New theme primary color is falsy!`,
+            );
+            return;
+          }
 
-              // Convert oklch color to hex format for Electron compatibility
-              let symbolColorHex: string;
-              try {
-                symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
-              } catch (e) {
-                logger.warn(
-                  `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
-                );
-                return;
-              }
+          // Convert oklch color to hex format for Electron compatibility
+          let symbolColorHex: string;
+          try {
+            symbolColorHex = chroma(newTheme.cssVariables.primary).hex();
+          } catch (e) {
+            logger.warn(
+              `Failed to set title bar window button colors: Could not convert primary color '${newTheme.cssVariables.primary}' to hex: ${getErrorMessage(e)}`,
+            );
+            return;
+          }
 
-              // A destroyed window has no title bar left to color. The unsubscribe that runs when
-              // this window closes normally gets here first, but a theme change in flight at that
-              // moment can still arrive afterwards — and painting it would otherwise be reported as
-              // a color conversion problem, which is the one thing it is not.
-              if (newWindow.isDestroyed()) return;
+          // A destroyed window has no title bar left to color. The unsubscribe that runs when
+          // this window closes normally gets here first, but a theme change in flight at that
+          // moment can still arrive afterwards — and painting it would otherwise be reported as
+          // a color conversion problem, which is the one thing it is not.
+          if (newWindow.isDestroyed()) return;
 
-              try {
-                newWindow.setTitleBarOverlay({
-                  color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
-                  symbolColor: symbolColorHex,
-                  height: TITLE_BAR_BUTTON_HEIGHT,
-                });
-              } catch (e) {
-                logger.warn(
-                  `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
-                );
-              }
-            }),
-          );
-        } catch (e) {
-          logger.warn(
-            `Failed to subscribe to current theme to adjust window button colors: ${getErrorMessage(
-              e,
-            )}`,
-          );
-        }
+          try {
+            newWindow.setTitleBarOverlay({
+              color: TITLE_BAR_BUTTON_BACKGROUND_COLOR,
+              symbolColor: symbolColorHex,
+              height: TITLE_BAR_BUTTON_HEIGHT,
+            });
+          } catch (e) {
+            logger.warn(
+              `Failed to set title bar window button colors on window ${windowId}: ${getErrorMessage(e)}`,
+            );
+          }
+        };
+
+        // Read and subscribed locally, not through the theme data provider: the provider is
+        // registered by this very process, so going through it would put a JSON-RPC round trip
+        // between the theme changing and the object in the next module that already knows. There is
+        // no error case left either — a local event delivers a theme or nothing.
+        paintTitleBarForTheme(getCurrentThemeSync());
+        windowCloseUnsubscribers.add(onDidChangeCurrentTheme(paintTitleBarForTheme));
       }
     });
 
@@ -1104,6 +1102,14 @@ async function main() {
     const scrollGroupStateForWindow = getScrollGroupStateForNewWindow();
     if (scrollGroupStateForWindow)
       searchParamsObject[SCROLL_GROUP_STATE_QUERY_PARAMETER] = serialize(scrollGroupStateForWindow);
+
+    // The current theme travels with the window for the same reason, and matters even earlier: the
+    // window's own stylesheet and the one baked into every web view it restores are read during the
+    // first render, so a window that had to ask for the theme would paint the default and flash.
+    // Omitted when this process has none yet, which is the case the renderer's own fallback covers.
+    const currentThemeForWindow = getCurrentThemeForNewWindow();
+    if (currentThemeForWindow)
+      searchParamsObject[THEME_STATE_QUERY_PARAMETER] = serialize(currentThemeForWindow);
 
     // If the URL doesn't load, we might need to show something to the user
     const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
@@ -1362,11 +1368,13 @@ async function main() {
   app.on('will-quit', async (e) => {
     if (!isAppQuitting) {
       logger.info('Main process is quitting');
-      // Before anything that can fail or wait: the scroll group host lets its store lag memory so a
-      // held-down navigation key does not fsync per verse, and this is the last moment that lag can
-      // be closed. Synchronous and unconditional, so quitting right after navigating still opens on
-      // the right reference next time.
+      // Before anything that can fail or wait: the scroll group and theme hosts let their stores lag
+      // memory so a held-down navigation key does not fsync per verse and a dragged colour picker
+      // does not fsync per frame, and this is the last moment that lag can be closed. Synchronous
+      // and unconditional, so quitting right after navigating or changing the theme still opens on
+      // the right reference, in the right theme, next time.
       flushPersistedScrollGroupState();
+      flushPersistedThemeState();
       // Stop the startup boot-race retry loop before networkService.shutdown() tears down the
       // connection, so a late retry can't resurrect it (a no-op if the window close already aborted).
       startupTasksAbort.abort();
