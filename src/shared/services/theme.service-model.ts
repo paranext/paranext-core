@@ -1,6 +1,7 @@
 import {
   OnDidDispose,
   PlatformError,
+  Unsubscriber,
   UnsubscriberAsync,
   ThemeDefinitionExpanded,
   ThemeFamiliesByIdExpanded,
@@ -290,6 +291,15 @@ export function createReattachingSubscribeCurrentTheme(
     let isSubscribed = true;
     /** Ends the subscription to the theme provider currently serving this one */
     let unsubscribeFromProvider: UnsubscriberAsync | undefined;
+    /**
+     * Takes this subscription's reattach hook back off the provider currently serving it.
+     *
+     * The provider is one long-lived object shared by everything in the process, so a hook left on
+     * it outlives whatever registered it and retains that closure — the callback of a web view
+     * iframe that has been destroyed, or of a window that has closed. Every web view subscribes to
+     * the current theme on load and unsubscribes on unload, so this is ordinary tab churn.
+     */
+    let unsubscribeFromProviderDispose: Unsubscriber | undefined;
 
     const subscribeThroughCurrentProvider = async (isReattaching: boolean): Promise<void> => {
       const unsubscribeFromDepartedProvider = unsubscribeFromProvider;
@@ -312,7 +322,11 @@ export function createReattachingSubscribeCurrentTheme(
         return;
       }
 
-      themeProvider.onDidDispose(() => {
+      // Exactly one hook is outstanding for this subscription at a time: the one on the provider
+      // that just went away is dropped as the replacement goes on, so reattaching repeatedly — the
+      // longest-lived subscriptions reattach the most — cannot accumulate them.
+      unsubscribeFromProviderDispose?.();
+      unsubscribeFromProviderDispose = themeProvider.onDidDispose(() => {
         if (!isSubscribed) return;
         reattachThroughCurrentProvider();
       });
@@ -335,6 +349,8 @@ export function createReattachingSubscribeCurrentTheme(
 
     return async () => {
       isSubscribed = false;
+      unsubscribeFromProviderDispose?.();
+      unsubscribeFromProviderDispose = undefined;
       return unsubscribeFromProvider ? unsubscribeFromProvider() : true;
     };
   };
