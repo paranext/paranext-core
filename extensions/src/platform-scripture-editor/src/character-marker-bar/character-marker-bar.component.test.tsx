@@ -38,6 +38,11 @@ beforeAll(() => {
 const mockMode = { isPowerMode: false };
 vi.mock('../use-is-power-mode.hook', () => ({ useIsPowerMode: () => mockMode.isPowerMode }));
 
+const removeCharacterMarker = vi.fn();
+vi.mock('./use-remove-character-marker.hook', () => ({
+  useRemoveCharacterMarker: () => removeCharacterMarker,
+}));
+
 // Imported after the mock so CharacterMarkerToolbar picks up the mocked useIsPowerMode.
 // eslint-disable-next-line import/first
 import { CharacterMarkerBar } from './character-marker-bar.component';
@@ -50,6 +55,7 @@ const STRINGS = {
     'No character markers are available here.',
   '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%':
     'Search to add a character style.',
+  '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%': 'Remove character marker',
   '%webView_platformScriptureEditor_syncEditBlocked_banner%': 'Editing paused',
   // `usfmMarkers.bd.description`. The editor web view loads every marker description (see
   // EDITOR_LOCALIZED_STRINGS), so the bar really does have this string available at runtime.
@@ -157,5 +163,17 @@ describe('CharacterMarkerBar', () => {
     // inherits no direction and `align="end"` would resolve PHYSICALLY — pinning a 200px menu to the
     // right in an RTL project, off the iframe's inline-start edge. Only an explicit `dir` mirrors it.
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('offers a remove row that calls the removal action', async () => {
+    // `contextMarker: 'nd'` is the caret sitting inside an existing \nd run — the single-marker
+    // case, so the menu offers "Remove character marker".
+    const user = userEvent.setup();
+    renderBar({ contextMarker: 'nd' });
+
+    await user.click(screen.getByRole('button'));
+    await user.click(await screen.findByText('Remove character marker'));
+
+    expect(removeCharacterMarker).toHaveBeenCalledWith('nd');
   });
 });

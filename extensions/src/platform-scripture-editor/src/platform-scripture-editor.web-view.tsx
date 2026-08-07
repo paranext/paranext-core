@@ -130,6 +130,7 @@ import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragr
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
 import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
+import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -169,6 +170,8 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // here because the web view owns the key list; resolving one extra key in Power mode renders
   // nothing.
   ...CHARACTER_MARKER_CONTROL_STRING_KEYS,
+  // Consumed by the character-marker bar's removal action, which this file does not call directly.
+  ...REMOVE_CHARACTER_MARKER_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -1870,6 +1873,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 blockMarker={blockMarker}
                 contextMarker={contextMarker}
                 isSyncBlocked={isSyncBlocked}
+                projectId={projectId}
                 // The same direction the editor itself is given below. The marker menu portals to
                 // `document.body`, outside that `dir` element, so it can only mirror its alignment for
                 // an RTL project if the direction is handed to it explicitly.
