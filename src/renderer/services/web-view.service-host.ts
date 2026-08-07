@@ -47,8 +47,16 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { registerCommand } from '@shared/services/command.service';
+import { registerCommand, sendCommand } from '@shared/services/command.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
+import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-store';
+import {
+  getLastOpenedProject,
+  setLastOpenedProject,
+  LastOpenedProject,
+} from '@renderer/services/last-opened-project-cache';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
   createBufferedNetworkEventEmitter,
@@ -90,7 +98,14 @@ import {
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
+  wait,
 } from 'platform-bible-utils';
+import {
+  buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_TAB_IDS,
+  VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
+} from '@renderer/components/docking/simple-layout.builder';
+import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -589,6 +604,32 @@ const DOCK_LAYOUT_KEY = 'dock-saved-layout';
  */
 let currentInterfaceMode: 'simple' | 'power' | undefined;
 
+/**
+ * Bumped once per interface-mode switch (in either direction), so an in-flight switch can tell it
+ * has been superseded by a newer one and bail out before mutating the dock or persisted storage.
+ *
+ * Rapid Power<->Simple toggling (e.g. the user changing their mind mid-switch, which can already
+ * take multiple seconds) previously let two switches run concurrently: two overlay tokens
+ * outstanding, two `SIMPLE_LAYOUT_TAB_IDS` trackers each satisfied by the other's events, and —
+ * worse — a stale switch's `loadLayout` call could still fire `onLayoutChange` -> `saveLayout`
+ * after `currentInterfaceMode` had already moved on, persisting the wrong layout into the wrong
+ * slot. This is a plain counter, not a queue: a new switch always starts immediately (the user can
+ * always abort/redirect an in-flight switch), and a superseded switch's tail self-cancels rather
+ * than blocking behind it or racing it. See {@link startNewSwitchGeneration}.
+ */
+let switchGeneration = 0;
+
+/**
+ * Starts a new switch generation and returns it. Called once per user-initiated mode change (from
+ * the `platform.interfaceMode` subscription below), and — via {@link handleSwitchToSimpleMode}'s
+ * default parameter — once per standalone call for callers (tests) that invoke it directly outside
+ * that subscription flow.
+ */
+function startNewSwitchGeneration(): number {
+  switchGeneration += 1;
+  return switchGeneration;
+}
+
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
   return new AsyncVariable<PapiDockLayout>('web-view.service-host.platformDockLayout');
@@ -805,22 +846,46 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
 /**
  * Loads layout information into the dock layout.
  *
+ * Accepts either the shared model's opaque `LayoutInfo` or rc-dock's `LayoutBase`. The two are
+ * structurally compatible at runtime; `LayoutInfo` is opaque in the shared model to keep callers
+ * outside the docking module unaware of rc-dock's type. Callers inside the renderer that already
+ * speak rc-dock (e.g. `buildSimpleLayoutForProject`) can pass `LayoutBase` directly without a
+ * cast.
+ *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  *   the persisted layout information and loads it into the dock layout.
+ * @param options.persist Only meaningful when `layout` is provided (the no-arg branch never
+ *   persists a _loaded_ layout back out — it only reacts to subsequent interactive changes via
+ *   `onLayoutChange`). Defaults to `true`. Pass `false` when the caller knows — independent of
+ *   whatever `currentInterfaceMode` reads at this moment — that this layout must never be written
+ *   to `DOCK_LAYOUT_KEY` (e.g. the Simple-mode project-bound switch in
+ *   `runProjectBoundSimpleSwitch`). This is a deliberate, explicit alternative to routing through
+ *   `onLayoutChange` -> `saveLayout`'s implicit `currentInterfaceMode` read, which is the read that
+ *   a superseded, still-in-flight switch could otherwise race (see `switchGeneration`'s doc comment
+ *   for the incident this defends against).
  */
-async function loadLayout(layout?: LayoutInfo): Promise<void> {
+async function loadLayout(
+  layout?: LayoutInfo | LayoutBase,
+  options?: { persist?: boolean },
+): Promise<void> {
   const dockLayoutVar = await getDockLayout();
   // Capture the web views open before the load so close events can be emitted for the ones the
   // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
   if (layout) {
-    // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    // NOTE: we intentionally do NOT apply the default-layout supplement here — a caller passing an
-    // explicit layout owns its full contents. If a future "reset to default layout" path routes
-    // through here and should include supplement tabs, merge `getEnabledSupplementEntries()` in too.
-    dockLayoutVar.loadLayout(layout);
-    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layout);
-    await onLayoutChange(layout);
+    // NOTE: this branch intentionally does NOT apply the default-layout supplement — a caller
+    // passing an explicit layout owns its full contents. A caller that wants supplement tabs
+    // merged in must do it itself before calling `loadLayout` (see `runProjectBoundSimpleSwitch`
+    // for an example, via `getEnabledSupplementEntries` + `mergeDefaultLayoutSupplement`).
+    // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
+    // to. Matches the convention in `platform-dock-layout.component.tsx`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const layoutAsInfo = layout as unknown as LayoutInfo;
+    dockLayoutVar.loadLayout(layoutAsInfo);
+    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
+    // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
+    // unless the caller explicitly opted out (see the `options.persist` doc above).
+    if (options?.persist !== false) await saveLayout(layoutAsInfo);
     return;
   }
 
@@ -885,12 +950,29 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  * power-save-dropped-on-switch race. Falls back to a direct settings read only before the cache has
  * been seeded (very early startup).
  *
+ * Also refuses to persist a layout that still contains one of Simple mode's fixed tab ids
+ * (`SIMPLE_LAYOUT_TAB_IDS`) while not in Simple mode. This is reached via rc-dock's own reactive
+ * `onLayoutChange` callback (this function is called from there, not only from this module's own
+ * explicit `loadLayout` calls), which can fire from a stale async webview-content-load
+ * (`openOrReloadWebView` -> `addWebViewToDock`) completing after the user switched back to Power
+ * mid-switch — a path the switch-generation guard in `runProjectBoundSimpleSwitch` cannot reach,
+ * since rc-dock triggers it directly rather than through this module's own call chain. A genuine
+ * Power layout can never legitimately contain these exact synthetic ids, so their presence is an
+ * unambiguous signal to keep the previously-saved layout instead.
+ *
  * @param layout Layout to persist
  */
 async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
+  const containedWebViewIds = collectWebViewIdsFromLayoutInfo(layout);
+  if (SIMPLE_LAYOUT_TAB_IDS.some((id) => containedWebViewIds.has(id))) {
+    logger.warn(
+      `Refused to persist a ${interfaceMode}-mode layout that still contains a Simple-mode tab id; leaving the previously-saved layout untouched.`,
+    );
+    return;
+  }
   localStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
 }
 
@@ -948,11 +1030,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // Update the cache synchronously with the notification so any `saveLayout` racing the
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
-          try {
-            await loadLayout();
-          } catch (err) {
-            logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
-          }
+          const generation = startNewSwitchGeneration();
+          if (newMode === 'simple') await handleSwitchToSimpleMode(generation);
+          else await loadLayoutWithWarning(generation);
         },
         { retrieveDataImmediately: false },
       );
@@ -997,6 +1077,364 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 
     return true;
   };
+}
+
+/**
+ * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares four
+ * tabs with empty state (no `projectId`); restoring it would mount four empty webviews, fire
+ * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all four
+ * webviews with the project — paying a full webview teardown + remount cycle twice. Power mode
+ * avoids this because its persisted layout already has every tab's state populated.
+ *
+ * To match the power-mode shape, we resolve the most-recent project here, bake its `projectId` into
+ * a cloned simple layout via {@link buildSimpleLayoutForProject}, and pass that to `loadLayout`.
+ * Each web-view provider's `getWebView` then receives `savedWebView.projectId` directly from the
+ * layout — same code path power mode uses on restore — and renders project content immediately,
+ * with no empty-placeholder → reload round-trip.
+ *
+ * Fast path: `getLastOpenedProject` returns the cached id synchronously (populated reactively from
+ * `useProjectPickerData`), then a tightly-bounded re-check of its editability runs before the
+ * layout swap (see {@link resolveFastPathIsEditable} for why this exists and why it's cheap - it's
+ * defense-in-depth, not expected to change the cached value in practice).
+ *
+ * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup, plus one
+ * more await to resolve the resolved project's real editability (see `resolveProjectIsEditable`).
+ * Both lookups are bounded by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
+ *
+ * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
+ * let the picker do the slow legacy path.
+ *
+ * Both paths resolve real editability rather than assuming the target project is editable: the
+ * cached/most-recent project can be a read-only Resource Viewer. See
+ * {@link buildSimpleLayoutForProject}'s `isReadOnly` param.
+ */
+/**
+ * Bound on `getMostRecentProjectId`/`resolveProjectIsEditable` while resolving the Simple-mode
+ * cold-start path (no cached last-opened project). Without this, a slow or not-yet-registered PDP
+ * factory can leave `projectLookupService.getMetadataForProject` waiting up to 20s for a factory
+ * plus a further startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the
+ * whole switch for tens of seconds - defeating the point of this being the "fast" switch path.
+ */
+export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
+
+/**
+ * Bound on the fast path's editability re-check (see {@link resolveFastPathIsEditable}). Tighter
+ * than {@link COLD_START_LOOKUP_TIMEOUT_MS} since this is defense-in-depth on the path that's
+ * supposed to be fast, not a lookup this path fundamentally needs to wait on.
+ */
+export const FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS = 1000;
+
+/**
+ * Sentinel distinguishing "timed out" from a lookup that legitimately resolved to `undefined` (e.g.
+ * no recent project on a fresh profile) - the two need different log treatment, since the latter is
+ * an expected, non-warning-worthy outcome.
+ */
+const LOOKUP_TIMED_OUT = Symbol('lookup-timed-out');
+
+/**
+ * Races an async lookup against a bound. Both `getMostRecentProjectId` and
+ * `resolveProjectIsEditable` already catch their own errors internally and never reject, so a plain
+ * `Promise.race` (rather than `waitForDuration` from `platform-bible-utils`, which collapses a
+ * timeout and a resolved `undefined` to the same result) is enough to distinguish the two outcomes
+ * for logging.
+ */
+async function withTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs: number,
+): Promise<T | typeof LOOKUP_TIMED_OUT> {
+  const timedOut: Promise<typeof LOOKUP_TIMED_OUT> = wait(timeoutMs).then(() => LOOKUP_TIMED_OUT);
+  return Promise.race([fn(), timedOut]);
+}
+
+/**
+ * Re-checks a cached project's editability against live metadata, with a tight bound. This is
+ * defense-in-depth, not a load-bearing correctness fix: `platform.isEditable` reflects whether a
+ * project is a resource vs. a normal translation project (essentially fixed at creation), not a
+ * per-session permission that Send/Receive can revoke - a repo-wide grep of the Paratext data model
+ * found no Send/Receive path that changes it for an already-cached project. This check exists only
+ * in case that assumption is wrong in some case this investigation missed, so on error or timeout
+ * it falls back to the cached value (not a hardcoded default) and logs a warning - a recurring
+ * warning here is a signal to revisit the assumption above, not routine/expected noise.
+ */
+async function resolveFastPathIsEditable(cached: LastOpenedProject): Promise<boolean> {
+  const cachedIsEditable = cached.isEditable !== false;
+  try {
+    const result = await withTimeout(async () => {
+      const metadata = await projectLookupService.getMetadataForProject(cached.id);
+      return metadata.isEditable !== false;
+    }, FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS);
+    if (result === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `Timed out after ${FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS}ms re-checking editability for cached project ${cached.id} on the fast Simple-mode switch path; trusting the cached value (${cachedIsEditable}). If this recurs, see the comment on resolveFastPathIsEditable.`,
+      );
+      return cachedIsEditable;
+    }
+    return result;
+  } catch (err) {
+    logger.warn(
+      `Could not re-check editability for cached project ${cached.id} on the fast Simple-mode switch path (${getErrorMessage(err)}); trusting the cached value (${cachedIsEditable}). If this recurs, see the comment on resolveFastPathIsEditable.`,
+    );
+    return cachedIsEditable;
+  }
+}
+
+/**
+ * @param generation This switch's generation (see {@link switchGeneration}). Defaults to starting a
+ *   fresh one, for callers (tests) invoking this directly rather than through the
+ *   `platform.interfaceMode` subscription, which starts one itself before calling this.
+ */
+export async function handleSwitchToSimpleMode(
+  generation: number = startNewSwitchGeneration(),
+): Promise<void> {
+  // Raised here, before any lookup - not just before the layout swap inside
+  // `runProjectBoundSimpleSwitch` - so the still-visible Power layout is blocked from interaction
+  // for the whole switch, including the fast path's editability re-check and the cold-start path's
+  // recents lookup, both of which otherwise give no feedback that a switch is even happening. A
+  // live per-webview "editing disabled" signal on the active Power editor would be more targeted,
+  // but has no reactive channel today (`setFullWebViewStateById` only seeds state before a webview
+  // mounts, not for an already-mounted one) - raising the overlay this early is the practical
+  // stand-in.
+  const releaseWorkspaceUpdate = startWorkspaceUpdate();
+  // Force React to commit + browser to paint the overlay BEFORE any lookup, otherwise the show can
+  // batch with later state changes and the overlay never actually appears on screen.
+  await waitForNextPaint();
+  // Set right before returning from a successful `runProjectBoundSimpleSwitch` call, so `finally`
+  // below knows whether (and for which project) to replay `openScriptureEditor`'s side effects.
+  // Left `undefined` for every path that didn't actually load a project-bound layout.
+  let switchedProjectId: string | undefined;
+  try {
+    const cached = getLastOpenedProject();
+    if (cached) {
+      const isEditable = await resolveFastPathIsEditable(cached);
+      await runProjectBoundSimpleSwitch(cached.id, !isEditable, generation);
+      switchedProjectId = cached.id;
+      return;
+    }
+
+    const resolvedId = await withTimeout(getMostRecentProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
+    if (resolvedId === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving the most recent project while switching to Simple mode; loading the bare layout instead.`,
+      );
+    }
+    if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
+      await loadLayoutWithWarning(generation);
+      return;
+    }
+
+    const isEditable = await withTimeout(
+      () => resolveProjectIsEditable(resolvedId),
+      COLD_START_LOOKUP_TIMEOUT_MS,
+    );
+    if (isEditable === LOOKUP_TIMED_OUT) {
+      logger.warn(
+        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
+      );
+      await loadLayoutWithWarning(generation);
+      return;
+    }
+    // Populate the cache so the next switch can take the fast path.
+    setLastOpenedProject({ id: resolvedId, isEditable });
+    await runProjectBoundSimpleSwitch(resolvedId, !isEditable, generation);
+    switchedProjectId = resolvedId;
+  } catch (err) {
+    // Belt-and-suspenders: `runProjectBoundSimpleSwitch` already recovers from its own failures
+    // internally (see its try/catch/finally), so this is only reached if something upstream of it
+    // throws unexpectedly. Either way, a settings-subscription callback must never produce an
+    // unhandled rejection, and the dock must never be left stuck on the pre-switch layout while
+    // `platform.interfaceMode` already reads `'simple'`.
+    logger.warn(
+      `Switching to Simple mode failed unexpectedly (${getErrorMessage(err)}); falling back to the bare layout.`,
+    );
+    await loadLayoutWithWarning(generation);
+  } finally {
+    // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
+    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
+    await waitForNextPaint();
+    releaseWorkspaceUpdate();
+    // Fire non-blocking, after the overlay has already released above, and only if this switch
+    // actually loaded a project-bound layout and is still current (not superseded by a newer
+    // switch while the above was in flight). This has to live in `finally` rather than after the
+    // whole try/catch/finally: the fast path above returns early from inside `try`, and `finally`
+    // is the only place that still runs on every path, early return included.
+    if (switchedProjectId && generation === switchGeneration) {
+      replayOpenScriptureEditorSideEffects(switchedProjectId);
+    }
+  }
+}
+
+/**
+ * Resolves whether a project's Scripture text is editable, for baking the correct `isReadOnly` into
+ * the simple-mode layout. Mirrors the "missing means editable" default used elsewhere for
+ * `ProjectMetadata.isEditable` (see `use-project-picker-data.hook.ts`); a lookup failure is treated
+ * the same way, since falling back to editable (rather than blocking the switch) matches how this
+ * function is only ever used on the already-slow cold-start path.
+ */
+export async function resolveProjectIsEditable(projectId: string): Promise<boolean> {
+  try {
+    const metadata = await projectLookupService.getMetadataForProject(projectId);
+    return metadata.isEditable !== false;
+  } catch (err) {
+    logger.warn(
+      `Could not resolve editability for project ${projectId} while switching to Simple mode, defaulting to editable: ${getErrorMessage(err)}`,
+    );
+    return true;
+  }
+}
+
+/**
+ * Wrapper around `loadLayout()` that catches any failure and logs a single consistent warning. Used
+ * by the mode-change subscription and the fast-switch fallback — both paths want
+ * "load-and-keep-going" semantics rather than propagating the error.
+ *
+ * @param generation This switch's generation (see {@link switchGeneration}). Skips the load entirely
+ *   if a newer switch has since started — a superseded switch must never overwrite the dock with
+ *   its now-stale target layout.
+ */
+async function loadLayoutWithWarning(generation: number): Promise<void> {
+  if (generation !== switchGeneration) return;
+  try {
+    await loadLayout();
+  } catch (err) {
+    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+  }
+}
+
+async function runProjectBoundSimpleSwitch(
+  projectId: string,
+  isReadOnly: boolean,
+  generation: number,
+): Promise<void> {
+  if (generation !== switchGeneration) return; // superseded before this switch even started
+
+  // The tracker is acquired *inside* `try` (not before it) so a throw from it still reaches
+  // `catch`/`finally` below. `finally` only disposes it if it was actually acquired.
+  let tabsResolved: ReturnType<typeof trackSimpleLayoutTabsResolvedImpl> | undefined;
+  try {
+    // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
+    // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
+    // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
+    // where the previous switch's resolved titles are still in the dock layout and the new update
+    // events for them are what tell us the project content has actually landed.
+    // Only the tabs that are actually on-screen should gate the overlay: Column 3 of `simpleLayout`
+    // stacks other tabs behind the one active tab, and the others are mounted-but-hidden (rc-dock
+    // `display: none`) - waiting on them too would block the overlay on content the user can't even
+    // see yet. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is the narrower subset; see its doc comment in
+    // simple-layout.builder.ts for what it does and does not account for.
+    tabsResolved = trackSimpleLayoutTabsResolvedImpl({
+      tabIds: VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
+      onDidOpenWebView,
+      onDidUpdateWebView,
+    });
+
+    const projectBoundLayout = buildSimpleLayoutForProject(projectId, isReadOnly);
+    // `loadLayout`'s explicit-layout branch deliberately does not apply the default-layout
+    // supplement (a caller passing an explicit layout owns its full contents) - so this caller
+    // must merge it in itself, mirroring what `loadLayout`'s own no-arg branch does. Without this,
+    // an enabled supplement tab (e.g. Scripture Text Grid) shows on a cold Simple start but
+    // disappears after every Power -> Simple switch.
+    const enabledEntries = await getEnabledSupplementEntries();
+    const layoutToLoad =
+      enabledEntries.length === 0
+        ? projectBoundLayout
+        : mergeDefaultLayoutSupplement(projectBoundLayout, enabledEntries);
+    // Re-check right before the mutating load: a newer switch (the user changing their mind) may
+    // have started and become current during the awaits above. A superseded switch must never
+    // reach `loadLayout` — that's what would let it persist stale data into the wrong slot (see
+    // `switchGeneration`'s doc comment).
+    if (generation !== switchGeneration) return; // tabsResolved is disposed in `finally` below
+    // `persist: false` is defense-in-depth alongside the generation check above: even if this
+    // switch is (impossibly, as far as this function knows) still current, a Simple-mode layout
+    // must never be written to the Power-mode storage key regardless of what `currentInterfaceMode`
+    // reads by the time `loadLayout` would otherwise call `saveLayout`.
+    await loadLayout(layoutToLoad, { persist: false });
+    // Wait for every visible simple-layout tab's webview to fire its open/update event, which is
+    // when `loadWebViewTab` replaces the `%tab_title_unknown%` placeholder with the real title.
+    const { timedOut } = await tabsResolved.promise;
+    if (timedOut) {
+      logger.warn(
+        `Simple-mode layout tabs for project ${projectId} timed out before all resolved; the overlay was released anyway so the switch doesn't hang indefinitely.`,
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      `Dock layout failed to load project-bound Simple-mode layout for project ${projectId}: ${err}`,
+    );
+    // Rethrow so the caller (`handleSwitchToSimpleMode`) can fall back to the bare layout instead
+    // of silently leaving the dock on whatever it showed when this failed.
+    throw err;
+  } finally {
+    // `dispose` is idempotent (a no-op once the tracker has already finished) - safe to call
+    // unconditionally here even on the happy path, where `await tabsResolved.promise` above means
+    // the tracker already disposed itself. One unconditional cleanup site is easier to trust than
+    // reasoning about which of several paths already handled it. The overlay itself is the
+    // caller's (`handleSwitchToSimpleMode`'s) responsibility now, since it spans the whole switch,
+    // not just this layout swap.
+    tabsResolved?.dispose();
+  }
+}
+
+/**
+ * Resolves after the next browser paint. Double `requestAnimationFrame` so we wait one frame for
+ * React to commit + browser to paint, and a second frame to ensure that paint has been flushed
+ * before the caller proceeds. Falls back to immediate resolution in environments that don't provide
+ * `requestAnimationFrame` (some test runners).
+ */
+function waitForNextPaint(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame !== 'function') {
+      resolve();
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+}
+
+async function getMostRecentProjectId(): Promise<string | undefined> {
+  try {
+    const recentsProvider = await dataProviderService.get(
+      'platformScripture.recentlyOpenedProjects',
+    );
+    if (!recentsProvider) return undefined;
+    const recents = await recentsProvider.getRecentProjects(undefined);
+    return Array.isArray(recents) ? recents[0] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Replicates the side effects that `platformScriptureEditor.openScriptureEditor` normally performs
+ * on project open/switch (applying the admin's shared layout, syncing on project switch, and
+ * recording the project as recently-opened), which the switch above bypasses by baking `projectId`
+ * directly into the layout instead of going through that command's own driver logic (see
+ * `openDefaultActiveProjectIfApplicable`'s `'no-empty'` short-circuit in
+ * platform-scripture-editor.utils.ts). Mirrors `platform-bible-toolbar.tsx`'s `openProject`
+ * callback, the equivalent Power-mode replication of this same command + `recordProjectOpened`
+ * pairing.
+ *
+ * Deliberately fire-and-forget and called only after the switch's overlay has already released: the
+ * whole reason this switch bakes the layout directly is performance, so blocking the visible switch
+ * on this command's network round trip would erode that win. This timing choice is specific to this
+ * already-fast, already-rendered switch — a future cold-start caller of this same machinery should
+ * re-evaluate rather than assume the same non-blocking-after-release shape fits, since cold start
+ * has no already-rendered UI whose perceived latency this is protecting.
+ */
+function replayOpenScriptureEditorSideEffects(projectId: string): void {
+  // This command comes from an extension and is not typed in CommandHandlers.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+  (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId)
+    .then(async () => {
+      const recentsProvider = await dataProviderService.get(
+        'platformScripture.recentlyOpenedProjects',
+      );
+      await recentsProvider?.recordProjectOpened(projectId);
+    })
+    .catch((err: unknown) => {
+      logger.warn(
+        `Failed to replay openScriptureEditor side effects for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
+      );
+    });
 }
 
 // #endregion Dock layouts

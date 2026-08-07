@@ -56,6 +56,14 @@ vi.mock('@shared/services/project-data-provider.service', () => ({
   },
 }));
 
+vi.mock('@renderer/services/last-opened-project-cache', () => ({
+  setLastOpenedProject: vi.fn(),
+}));
+
+vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
+  useIsPowerMode: vi.fn(() => false),
+}));
+
 // --- Helpers ---
 
 const EDITOR_WEB_VIEW_TYPE = 'platformScriptureEditor.react';
@@ -91,7 +99,7 @@ function metadata(fixture: MetadataFixture) {
 /**
  * Maps fixtures to the metadata list `getMetadataForAllProjects` resolves. The hook fetches the
  * list once per refresh (filtered service-side to the picker's projectInterface) and derives
- * currentProject/recents/allProjects locally, so tests resolve the mapped list directly via
+ * currentSimpleProject/recents/allProjects locally, so tests resolve the mapped list directly via
  * `mockResolvedValue` - the same idiom `beforeEach` uses for this mock.
  */
 function metadataList(items: MetadataFixture[]) {
@@ -106,12 +114,16 @@ async function importMocks() {
     '@shared/services/project-data-provider.service'
   );
   const { useData } = await import('@renderer/hooks/papi-hooks');
+  const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+  const { useIsPowerMode } = await import('@renderer/hooks/use-is-power-mode.hook');
   return {
     getNetworkEvent,
     webViews,
     projectLookupService,
     papiFrontendProjectDataProviderService,
     useData,
+    setLastOpenedProject,
+    useIsPowerMode,
   };
 }
 
@@ -149,9 +161,11 @@ describe('useProjectPickerData', () => {
     // that calls mockReturnValue(...) contaminates all subsequent tests.
     vi.resetAllMocks();
 
-    const { getNetworkEvent, webViews, projectLookupService, useData } = await importMocks();
+    const { getNetworkEvent, webViews, projectLookupService, useData, useIsPowerMode } =
+      await importMocks();
 
     vi.mocked(getNetworkEvent).mockImplementation(() => vi.fn(() => vi.fn()));
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
     // Default the single-project fallback to "not found" (it throws in production when no PDPF
@@ -177,15 +191,15 @@ describe('useProjectPickerData', () => {
       );
   });
 
-  it('returns undefined currentProject when no Scripture Editor web view is open', async () => {
+  it('returns undefined currentSimpleProject when no Scripture Editor web view is open', async () => {
     const { result } = renderHook(() => useProjectPickerData());
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
   });
 
-  it('returns currentProject from the first open Scripture Editor web view, from metadata alone', async () => {
+  it('returns currentSimpleProject from the first open Scripture Editor web view, from metadata alone', async () => {
     const { webViews, projectLookupService } = await importMocks();
     vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
@@ -198,8 +212,60 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject?.fullName).toBe('Genesis Project');
-    expect(result.current.currentProject?.id).toBe('proj-abc');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Genesis Project');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-abc');
+  });
+
+  it('caches the current project id, name, and isEditable when it resolves', async () => {
+    // The cache-writing effect is the sole write path that seeds the fast-path cache
+    // `handleSwitchToSimpleMode` (web-view.service-host.ts) reads to bake `isReadOnly` into the
+    // Simple-mode layout. Assert its happy-path payload directly, not just the error-guard case
+    // covered by the adjacent 'does not overwrite...' test.
+    const { webViews, projectLookupService, setLastOpenedProject } = await importMocks();
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-resource' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([
+        {
+          id: 'proj-resource',
+          fullName: 'A Resource',
+          name: 'Resource',
+          isEditable: false,
+        },
+      ]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    expect(result.current.currentSimpleProject?.isEditable).toBe(false);
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenCalledWith({
+      id: 'proj-resource',
+      name: 'A Resource',
+      isEditable: false,
+    });
+  });
+
+  it('does not cache the current project when in Power mode', async () => {
+    // The cache represents "last project selected/loaded in Simple mode" - browsing projects/tabs
+    // in Power mode (which has no project selector, but can still change which editor is active)
+    // must never overwrite it.
+    const { webViews, projectLookupService, setLastOpenedProject, useIsPowerMode } =
+      await importMocks();
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-power' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-power', fullName: 'Power Project', name: 'Power' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+
+    expect(result.current.currentSimpleProject?.id).toBe('proj-power');
+    expect(vi.mocked(setLastOpenedProject)).not.toHaveBeenCalled();
   });
 
   it('returns allProjects from projectLookupService metadata, without opening any project data provider', async () => {
@@ -310,11 +376,11 @@ describe('useProjectPickerData', () => {
 
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    // currentProject, recentProjects, and allProjects must all derive from ONE metadata fan-out
+    // currentSimpleProject, recentProjects, and allProjects must all derive from ONE metadata fan-out
     // per refresh - the service contacts every PDP factory per call, so three filtered calls
     // would triple the startup-path cost this hook exists to avoid.
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
-    expect(result.current.currentProject?.id).toBe('proj-r1');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
     expect(result.current.recentProjects).toHaveLength(1);
   });
 
@@ -390,7 +456,7 @@ describe('useProjectPickerData', () => {
     expect(result.current.recentProjects[0].id).toBe('proj-r1');
   });
 
-  it('refreshes currentProject when onDidUpdateWebView fires', async () => {
+  it('refreshes currentSimpleProject when onDidUpdateWebView fires', async () => {
     const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
     let capturedCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
@@ -413,13 +479,13 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
     expect(result.current.isLoading).toBe(false);
-    expect(result.current.currentProject).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
 
     expect(capturedCallback).toBeDefined();
     act(() => capturedCallback!());
 
     await settle(result);
-    expect(result.current.currentProject?.fullName).toBe('Updated Project');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Updated Project');
   });
 
   it('resolves the current project by direct lookup when it is absent from the filtered list snapshot', async () => {
@@ -440,9 +506,9 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
 
-    expect(result.current.currentProject?.id).toBe('proj-late');
-    expect(result.current.currentProject?.fullName).toBe('Late Project');
-    expect(result.current.currentProjectError).toBeUndefined();
+    expect(result.current.currentSimpleProject?.id).toBe('proj-late');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Late Project');
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
     expect(vi.mocked(projectLookupService.getMetadataForProject)).toHaveBeenCalledWith('proj-late');
   });
 
@@ -480,23 +546,75 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
     // Phase 1: absent from snapshot and direct lookup fails → error card.
-    expect(result.current.currentProjectError).toBe('Unable to load current project details');
+    expect(result.current.currentSimpleProjectError).toBe('Unable to load current project details');
 
     // Phase 2: editor closes → current project clears (and the error resets).
     openDefs = [];
     act(() => webViewCallback!());
     await settle(result);
-    expect(result.current.currentProject).toBeUndefined();
-    expect(result.current.currentProjectError).toBeUndefined();
+    expect(result.current.currentSimpleProject).toBeUndefined();
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
 
     // Phase 3: the same project reopens, now resolvable by the direct lookup → it resolves instead
     // of staying stuck on the error card.
     openDefs = [{ id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-stuck' }];
     act(() => webViewCallback!());
     await settle(result);
-    expect(result.current.currentProject?.id).toBe('proj-stuck');
-    expect(result.current.currentProject?.fullName).toBe('Recovered Project');
-    expect(result.current.currentProjectError).toBeUndefined();
+    expect(result.current.currentSimpleProject?.id).toBe('proj-stuck');
+    expect(result.current.currentSimpleProject?.fullName).toBe('Recovered Project');
+    expect(result.current.currentSimpleProjectError).toBeUndefined();
+  });
+
+  it('does not overwrite the cached isEditable when a later metadata fetch fails', async () => {
+    // A transient metadata-fetch failure resolves currentSimpleProject to a degraded placeholder
+    // with no `isEditable` field (the `currentSimpleProject` promise's catch branch in the hook).
+    // Without the currentSimpleProjectError guard on the cache-writing effect, this would overwrite
+    // a previously-cached
+    // `isEditable: false` (e.g. for a Resource Viewer) with "no info" - which
+    // `handleSwitchToSimpleMode` in `web-view.service-host` treats as editable, reintroducing the
+    // read-only-baked-as-editable bug.
+    const { getNetworkEvent, webViews, projectLookupService, setLastOpenedProject } =
+      await importMocks();
+    let webViewCallback: (() => void) | undefined;
+    vi.mocked(getNetworkEvent).mockImplementation(
+      (eventName: string) =>
+        vi.fn((cb: () => void) => {
+          if (eventName === EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) webViewCallback = cb;
+          return vi.fn();
+        }) as never,
+    );
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-resource' },
+    ] as never);
+    // Absent from the filtered snapshot, so the hook falls back to the direct per-id lookup.
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
+    vi.mocked(projectLookupService.getMetadataForProject)
+      .mockResolvedValueOnce(
+        metadata({
+          id: 'proj-resource',
+          fullName: 'A Resource',
+          name: 'Resource',
+          isEditable: false,
+        }) as never,
+      )
+      .mockRejectedValueOnce(new Error('transient PDP error'));
+
+    const { result } = renderHook(() => useProjectPickerData());
+    await settle(result);
+    expect(result.current.currentSimpleProject?.isEditable).toBe(false);
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'proj-resource', isEditable: false }),
+    );
+
+    // A later refresh (web view event) hits the transient failure, degrading currentSimpleProject
+    // to the error placeholder.
+    act(() => webViewCallback!());
+    await settle(result);
+    expect(result.current.currentSimpleProjectError).toBe('Unable to load current project details');
+
+    // The cache write must be skipped entirely, not overwritten with `isEditable: undefined`.
+    expect(vi.mocked(setLastOpenedProject)).toHaveBeenCalledTimes(1);
   });
 
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {
@@ -521,15 +639,15 @@ describe('useProjectPickerData', () => {
     const { result } = renderHook(() => useProjectPickerData());
     await settle(result);
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
-    expect(result.current.currentProject?.id).toBe('proj-r1');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
 
     expect(webViewCallback).toBeDefined();
     act(() => webViewCallback!());
     await settle(result);
 
-    // The web view event re-ran currentProject but reused the cached metadata: still one fetch.
+    // The web view event re-ran currentSimpleProject but reused the cached metadata: still one fetch.
     expect(projectLookupService.getMetadataForAllProjects).toHaveBeenCalledTimes(1);
-    expect(result.current.currentProject?.id).toBe('proj-r1');
+    expect(result.current.currentSimpleProject?.id).toBe('proj-r1');
   });
 
   it('re-fetches metadata when onDidReloadExtensions fires (project set may have changed)', async () => {
