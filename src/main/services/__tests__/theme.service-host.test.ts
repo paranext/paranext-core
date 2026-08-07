@@ -439,6 +439,24 @@ describe('keeping up with the extension host theme contributions', () => {
     expect(await engine.getAllThemes()).toHaveProperty('otherFamily');
   });
 
+  it('does not hold up startup waiting for a provider that does not exist yet', async () => {
+    // Resolving a data provider that is not registered spends the whole RPC retry budget — ten
+    // attempts a second apart — before answering, and on a cold start it never is registered: the
+    // extension host that registers it has not been spawned. Everything main awaits after this
+    // batch, including the .NET and extension-host spawns, would wait behind it.
+    subscribeAllThemes.mockImplementation(
+      async () =>
+        new Promise<() => Promise<boolean>>(() => {
+          // Never settles: stands in for the retry budget being spent
+        }),
+    );
+
+    const host = await import('@main/services/theme.service-host');
+    await host.startThemeServiceHost();
+
+    expect(registerEngine).toHaveBeenCalled();
+  });
+
   it('ignores every other network object', async () => {
     await startHost();
     const subscribeCallsAfterStart = subscribeAllThemes.mock.calls.length;
