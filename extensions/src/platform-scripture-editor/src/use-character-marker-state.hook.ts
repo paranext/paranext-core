@@ -29,8 +29,12 @@ export type UseCharacterMarkerStateOptions = {
   contextMarker?: string;
   /** Localized strings for the marker titles and the remove row. */
   localizedStrings: LanguageStrings;
-  /** Supplied once removal exists upstream; absent means the menu offers no remove row. */
-  removeCharacterMarker?: (marker: string) => void;
+  /**
+   * Supplied once removal exists upstream; absent means the menu offers no remove row. Optional
+   * marker: the generator calls this with no argument for the mixed-selection "remove all" row (see
+   * `character-marker-menu.utils.ts`) and with a marker to remove just that one.
+   */
+  removeCharacterMarker?: (marker?: string) => void;
   /** Supplied once replacement exists upstream; absent means picking a marker adds instead. */
   changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
 };

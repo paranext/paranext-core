@@ -266,4 +266,115 @@ describe('generateCharacterMarkerMenuListItems', () => {
       '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%',
     );
   });
+
+  it('offers a remove-all row instead of a single remove row when coverage is mixed', () => {
+    const { ref } = makeMockEditorRef();
+    const removeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT, {
+      removeCharacterMarker,
+      coverage: { markerStates: { bd: 'partial', nd: 'partial' }, hasUncovered: false },
+    });
+
+    const commandRows = items.filter((item) => !item.marker);
+    expect(commandRows).toHaveLength(1);
+    expect(commandRows[0].title).toBe(
+      '%webView_platformScriptureEditor_characterMarkerMenu_removeAllMarkers%',
+    );
+  });
+
+  it('removes every marker in the selection with one argument-less call', () => {
+    // One call, not one per marker: the editor removes each covered run's innermost marker in a
+    // single update, which is what keeps undo to a single step. Asserting the argument list is the
+    // only way to tell "remove everything" apart from "remove the innermost one".
+    const { ref } = makeMockEditorRef();
+    const close = vi.fn();
+    const removeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
+      removeCharacterMarker,
+      coverage: { markerStates: { bd: 'partial', nd: 'partial' }, hasUncovered: false },
+    });
+
+    items.find((item) => !item.marker)?.action();
+
+    expect(removeCharacterMarker).toHaveBeenCalledTimes(1);
+    expect(removeCharacterMarker).toHaveBeenCalledWith();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a marked run plus unmarked text as mixed, not as a single applied marker', () => {
+    // `resolveCurrentMarker` in the state hook returns 'bd' here (exactly one covering marker), so
+    // without the coverage check this would offer "Remove marker" and quietly leave the unmarked
+    // half out of the story.
+    const { ref } = makeMockEditorRef();
+    const removeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT, {
+      currentCharacterMarker: 'bd',
+      removeCharacterMarker,
+      coverage: { markerStates: { bd: 'partial' }, hasUncovered: true },
+    });
+
+    expect(items.find((item) => !item.marker)?.title).toBe(
+      '%webView_platformScriptureEditor_characterMarkerMenu_removeAllMarkers%',
+    );
+  });
+
+  it('removes just that marker when a fully-covering marker row is picked', () => {
+    // The prototype's toggle-off (plan §U4): a row whose marker covers the whole selection removes
+    // it rather than nesting a second copy.
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const removeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
+      currentCharacterMarker: 'bd',
+      removeCharacterMarker,
+      coverage: { markerStates: { bd: 'all' }, hasUncovered: false },
+    });
+
+    items.find((item) => item.marker === 'bd')?.action();
+
+    expect(removeCharacterMarker).toHaveBeenCalledWith('bd');
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a partially-covering marker row inert (extend is PT-XXX-B4)', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const close = vi.fn();
+    const removeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {
+      removeCharacterMarker,
+      coverage: { markerStates: { bd: 'partial' }, hasUncovered: true },
+    });
+
+    items.find((item) => item.marker === 'bd')?.action();
+
+    expect(removeCharacterMarker).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it('stamps selectionState on every row from coverage', () => {
+    const { ref } = makeMockEditorRef();
+    const removeCharacterMarker = vi.fn();
+    const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT, {
+      removeCharacterMarker,
+      coverage: { markerStates: { bd: 'all', nd: 'partial' }, hasUncovered: true },
+    });
+
+    expect(items.find((item) => item.marker === 'bd')?.selectionState).toBe('all');
+    expect(items.find((item) => item.marker === 'nd')?.selectionState).toBe('partial');
+    expect(items.find((item) => item.marker === 'it')?.selectionState).toBe('none');
+    // The remove row reads 'partial' while any of the selection is unmarked, 'none' when every
+    // character carries a marker — the behavior the state hook used to stamp.
+    expect(items.find((item) => !item.marker)?.selectionState).toBe('partial');
+  });
+
+  it('leaves selectionState undefined when there is no coverage', () => {
+    // The pre-menu-open path. No coverage means no selection affordance and no aria-checked, which
+    // is how every consumer that does not track a selection behaves.
+    const { ref } = makeMockEditorRef();
+    const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT);
+
+    expect(items.every((item) => item.selectionState === undefined)).toBe(true);
+  });
 });
