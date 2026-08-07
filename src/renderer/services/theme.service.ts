@@ -36,6 +36,7 @@ import {
   isPlatformError,
   PlatformEvent,
   PlatformEventEmitter,
+  serialize,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 
@@ -129,17 +130,72 @@ function readPreviouslyStoredThemeState(): PersistedThemeState | undefined {
 }
 
 /**
+ * `localStorage` key holding the last theme a window in this profile painted.
+ *
+ * Deliberately NOT one of the keys the host now owns: those hold the state persisted before the
+ * host existed, are offered to it once, and are then deleted. This one is window-side scratch —
+ * rewritten on every change, never offered to anyone, and read only to paint a first frame.
+ */
+const LAST_PAINTED_THEME_STORAGE_KEY = 'theme.service.lastPaintedTheme';
+
+/** The last theme a window in this profile painted, if it recorded one this module can use */
+function readLastPaintedTheme(): ThemeDefinitionExpanded | undefined {
+  try {
+    const serialized = localStorage.getItem(LAST_PAINTED_THEME_STORAGE_KEY);
+    return serialized ? deserialize(serialized) : undefined;
+  } catch (e) {
+    logger.warn(`Could not read the theme this window last painted. ${getErrorMessage(e)}`);
+    return undefined;
+  }
+}
+
+/** Record the theme being painted so a reload of this document can start from it */
+function rememberLastPaintedTheme(theme: ThemeDefinitionExpanded): void {
+  try {
+    localStorage.setItem(LAST_PAINTED_THEME_STORAGE_KEY, serialize(theme));
+  } catch (e) {
+    // Costs a reload its first frame, nothing else: the theme in memory is unaffected and the
+    // subscription corrects a reload a round trip later.
+    logger.warn(`Could not record the theme this window is painting. ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Whether this document is a RELOAD of the URL main built when the window was created, rather than
+ * that window's first load.
+ *
+ * The difference matters for the first frame: a reload replays a URL that is as old as the window,
+ * while everything else this module can read has been kept current since.
+ */
+function isDocumentReload(): boolean {
+  const [navigationEntry] = globalThis.performance?.getEntriesByType?.('navigation') ?? [];
+  // `getEntriesByType` is typed as the base entry, but the 'navigation' key only ever yields
+  // `PerformanceNavigationTiming`, and its `type` is the thing being read.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (navigationEntry as PerformanceNavigationTiming | undefined)?.type === 'reload';
+}
+
+/**
  * Work out the theme to paint with before anything has started, synchronously, while this module is
  * being evaluated — which is before React renders.
  *
- * What main handed over wins: it is the app's live theme, and it is the only one of the two that
- * moves while the app runs. This window's own leftover store is the fallback for the single start
- * after an upgrade, where main has nothing until the handover in {@link startThemeService}
- * completes. The default is the last resort, for a profile that has never chosen a theme.
+ * What main handed over on the URL normally wins: it is the app's live theme at the moment this
+ * window was created. On a RELOAD it does not, because the URL being replayed was built when the
+ * window was created and the theme has been free to change since — so the last theme painted in
+ * this profile, which is as new as the last change any window heard, goes first instead. Getting
+ * this order wrong is visible: the window paints the wrong theme and then flashes into the right
+ * one a round trip later.
+ *
+ * The keys left over from before the host existed are the fallback for the single start after an
+ * upgrade, where main has nothing until the handover in {@link startThemeService} completes. The
+ * default is the last resort, for a profile that has never chosen a theme.
  */
 function seedCurrentThemeBeforeFirstRender(): ThemeDefinitionExpanded {
-  const fromMain = readWindowCreationCurrentTheme();
-  if (isThemeShaped(fromMain)) return fromMain;
+  const seedsInPreferenceOrder = isDocumentReload()
+    ? [readLastPaintedTheme(), readWindowCreationCurrentTheme()]
+    : [readWindowCreationCurrentTheme(), readLastPaintedTheme()];
+  const seed = seedsInPreferenceOrder.find(isThemeShaped);
+  if (seed) return seed;
   const fromOwnStore = readPreviouslyStoredThemeState()?.currentTheme;
   if (isThemeShaped(fromOwnStore)) return fromOwnStore;
   return DEFAULT_THEME;
@@ -204,6 +260,7 @@ async function subscribeToCurrentTheme(): Promise<void> {
         return;
       }
       cachedCurrentTheme = currentTheme;
+      rememberLastPaintedTheme(currentTheme);
       onDidChangeCurrentThemeEmitter.emit(currentTheme);
     },
     { retrieveDataImmediately: true },
