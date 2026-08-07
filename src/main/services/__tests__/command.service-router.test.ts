@@ -116,13 +116,6 @@ describe('renderer-hosted request service routers', () => {
     expect(registrations().has('command:platform.openSettings')).toBe(true);
   });
 
-  test('claims the generic dialog request names too', () => {
-    const claimed = registrations();
-    expect(claimed.has('dialog:showDialog')).toBe(true);
-    expect(claimed.has('dialog:selectProject')).toBe(true);
-    expect(claimed.has('dialog:showAboutDialog')).toBe(true);
-  });
-
   test('forwards a command to the focused window’s scoped handler', async () => {
     await registrations().get('command:platform.openSettings')?.handler('arg');
 
@@ -144,10 +137,6 @@ describe('renderer-hosted request service routers', () => {
     await expect(registrations().get('command:platform.openSettings')?.handler()).rejects.toThrow(
       'No windows available',
     );
-  });
-
-  test('disables the timeout on the dialog routes, since a dialog waits for the user', () => {
-    expect(registrations().get('dialog:showDialog')?.options).toEqual({ timeoutMilliseconds: 0 });
   });
 
   test('documents the generic name, which is the one consumers call', () => {

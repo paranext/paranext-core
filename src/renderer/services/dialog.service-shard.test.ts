@@ -66,26 +66,32 @@ vi.mock('@renderer/components/dialogs/index', () => ({
   default: mockDialogs,
 }));
 
-// Capture the showDialog handler from registerRequestHandler
-let capturedShowDialog: (...args: unknown[]) => Promise<unknown>;
-const mockRegisterRequestHandler = vi
-  .fn()
-  .mockImplementation((requestType: string, handler: (...args: unknown[]) => Promise<unknown>) => {
-    if (requestType.includes('showDialog')) {
-      capturedShowDialog = handler;
-    }
-    return Promise.resolve(vi.fn());
-  });
 vi.mock('@shared/services/network.service', () => ({
-  registerRequestHandler: mockRegisterRequestHandler,
-  // dialog.service-shard now reaches web-view.service-model (for RENDERER_HOSTED_COMMAND_NAMES) via
-  // renderer-hosted-command-registry, which pulls in network-object-status.service; that module
-  // calls getNetworkEvent at load time, so the mock needs to provide it even though this test never
-  // exercises it directly.
+  registerRequestHandler: vi.fn().mockResolvedValue(vi.fn()),
+  // network-object.service calls getNetworkEvent at load time, and this test reaches that module on
+  // its import path, even though it never exercises the event directly.
   getNetworkEvent: vi.fn(() => vi.fn()),
   // network-object.service subscribes to this at module load so a process that leaves during
   // startup is still announced, and this test reaches that module on its import path.
   onDidDisconnectClient: vi.fn(() => vi.fn()),
+}));
+
+// Capture the shard object the window registers, which is what the main process's dialog service
+// router calls into
+let capturedShowDialog: (...args: unknown[]) => Promise<unknown>;
+const mockNetworkObjectSet = vi
+  .fn()
+  .mockImplementation(async (_id: string, objectToShare: Record<string, unknown>) => {
+    // networkObjectService.set takes the shared object untyped here, so reading one method back off
+    // it needs the assertion; the shard's own type is checked where it is declared
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    capturedShowDialog = objectToShare.showDialog as (...args: unknown[]) => Promise<unknown>;
+    return { dispose: vi.fn().mockResolvedValue(true) };
+  });
+vi.mock('@shared/services/network-object.service', () => ({
+  networkObjectService: { set: mockNetworkObjectSet, get: vi.fn() },
+  onDidCreateNetworkObject: vi.fn(() => vi.fn()),
+  onDidDisposeNetworkObject: vi.fn(() => vi.fn()),
 }));
 
 // Mock command service
@@ -114,13 +120,11 @@ vi.mock('@renderer/components/dialogs/dialog-definition.model', async () => {
   return actual;
 });
 
-// Mock platform-bible-utils aggregateUnsubscriberAsyncs
 vi.mock('platform-bible-utils', async () => {
   const actual = await vi.importActual('platform-bible-utils');
   return {
     ...actual,
     newGuid: vi.fn(() => 'mock-guid'),
-    aggregateUnsubscriberAsyncs: vi.fn().mockReturnValue(vi.fn()),
   };
 });
 
@@ -128,13 +132,16 @@ describe('dialog.service-shard', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
+    // A renderer receives its window id as a string query parameter
+    globalThis.windowId = '1';
+
     // Re-mock after clearAllMocks to restore return values
-    mockRegisterRequestHandler.mockImplementation(
-      (requestType: string, handler: (...args: unknown[]) => Promise<unknown>) => {
-        if (requestType.includes('showDialog')) {
-          capturedShowDialog = handler;
-        }
-        return Promise.resolve(vi.fn());
+    mockNetworkObjectSet.mockImplementation(
+      async (_id: string, objectToShare: Record<string, unknown>) => {
+        // Same untyped read-back as the hoisted mock above
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        capturedShowDialog = objectToShare.showDialog as (...args: unknown[]) => Promise<unknown>;
+        return { dispose: vi.fn().mockResolvedValue(true) };
       },
     );
 
@@ -144,8 +151,7 @@ describe('dialog.service-shard', () => {
     const { registerCommand } = await import('@shared/services/command.service');
     vi.mocked(registerCommand).mockResolvedValue(vi.fn());
 
-    const { aggregateUnsubscriberAsyncs, newGuid } = await import('platform-bible-utils');
-    vi.mocked(aggregateUnsubscriberAsyncs).mockReturnValue(vi.fn());
+    const { newGuid } = await import('platform-bible-utils');
     vi.mocked(newGuid).mockReturnValue('mock-guid');
 
     mockCloseTab.mockResolvedValue(true);
