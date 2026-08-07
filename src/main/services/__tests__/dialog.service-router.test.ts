@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     getNotReadyWindowIds: vi.fn(),
     registerRequestHandler: vi.fn(),
     networkObjectGet: vi.fn(),
+    sharedStoreSet: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -46,6 +47,9 @@ vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet },
   onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
+}));
+vi.mock('@shared/services/shared-store.service', () => ({
+  sharedStoreService: { set: mocks.sharedStoreSet },
 }));
 
 /** A window's dialog service shard, recording what the router asked it to do */
@@ -80,6 +84,7 @@ describe('dialog service router', () => {
     mocks.getNotReadyWindowIds.mockReturnValue([]);
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
+    mocks.sharedStoreSet.mockReturnValue(undefined);
     await startDialogServiceRouter();
   });
 
@@ -174,5 +179,33 @@ describe('dialog service router', () => {
     await expect(registrations().get('dialog:showDialog')?.handler('t')).rejects.toThrow(
       'No windows available',
     );
+  });
+
+  test('lets a window’s dialog outlive the default request timeout', async () => {
+    // The router disabling its own inbound timeout is only half the path: the call it then makes to
+    // the window's shard is a request of its own, and on the default timeout it gives up ~30s in
+    // while the dialog is still on screen. Every method that waits for the user needs the timeout
+    // lifted on the shard's request type too.
+    withWindows({ 2: dialogShard() });
+
+    const disabledRequestTypes = mocks.sharedStoreSet.mock.calls
+      .filter(([, value]) => value === 0)
+      .map(([key]) => key);
+
+    expect(disabledRequestTypes).toEqual(
+      expect.arrayContaining([
+        'platform.customNetworkTimeoutMs.object:DialogService-2.showDialog',
+        'platform.customNetworkTimeoutMs.object:DialogService-2.selectProject',
+        'platform.customNetworkTimeoutMs.object:DialogService-2.showAboutDialog',
+      ]),
+    );
+  });
+
+  test('lifts the timeout for every window that registers a dialog shard', async () => {
+    withWindows({ 2: dialogShard(), 3: dialogShard() });
+
+    const keys = mocks.sharedStoreSet.mock.calls.map(([key]) => key);
+
+    expect(keys).toContain('platform.customNetworkTimeoutMs.object:DialogService-3.showDialog');
   });
 });
