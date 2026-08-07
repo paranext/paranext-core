@@ -160,9 +160,9 @@ test('all dialog types render correctly in modal and non-modal form', async ({ m
   await waitForAtLeastOneProjectMetadata();
   // The generic dialog:showDialog name is claimed by main's service router before any window's
   // renderer exists, so waiting on it does not prove a real dialog service is ready. Wait for a
-  // window-scoped dialog:showDialog-{id} registration instead, which only appears once a
-  // renderer's own dialog service has wired up, avoiding forwarding to a closed renderer socket.
-  await waitForPapiMethodRegistered(/^dialog:showDialog-\d+$/);
+  // window's dialog service shard instead, which only appears once a renderer's own dialog service
+  // has wired up, avoiding forwarding to a closed renderer socket.
+  await waitForPapiMethodRegistered(/^object:DialogService-\d+\.showDialog$/);
 
   // =========================================================================
   // Alert Dialog
