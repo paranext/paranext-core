@@ -7,9 +7,10 @@ import {
   WebViewType,
 } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
-import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+import { CommandNames, WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import { NetworkObject } from '@shared/models/network-object.model';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -107,6 +108,9 @@ export interface WebViewServiceType {
    * @param webViewId The ID of the WebView whose saved properties to get
    * @returns Saved properties of the WebView definition with the specified ID or undefined if not
    *   found
+   * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+   *   in the window that did not answer, so `undefined` there would be indistinguishable from the
+   *   WebView genuinely not existing.
    */
   getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 
@@ -124,6 +128,9 @@ export interface WebViewServiceType {
    * actual WebView definitions.
    *
    * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+   * @throws If any window could not be asked what it has open. Callers read this as the complete
+   *   picture, and a window that could not answer is indistinguishable in the result from one with
+   *   nothing open, so a short list is refused rather than passed off as the whole landscape.
    */
   getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
 
@@ -271,3 +278,204 @@ export type CloseWebViewEvent = {
 };
 
 export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+
+/**
+ * Command names that are hosted by the renderer process and need to be registered with
+ * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+ * the generic names that forward to the focused window's scoped handler.
+ *
+ * @experimental
+ */
+export const RENDERER_HOSTED_COMMAND_NAMES = [
+  'platform.about',
+  'platform.openSettings',
+  'platform.openProjectSettings',
+  'platform.openUserSettings',
+  'platform.usersnapSubmitIdea',
+  'platform.usersnapReportIssue',
+  'platform.isUsersnapFormCurrentlyOpen',
+  'platform.closeOpenUsersnapForm',
+  // Navigation commands act on the window's own navigation target (the web view the top toolbar
+  // follows), so they must run in the window the user is looking at, not whichever renderer
+  // happened to register first.
+  'platform.goToNextChapter',
+  'platform.goToPreviousChapter',
+  'platform.goToNextBook',
+  'platform.goToPreviousBook',
+  'platform.goToNextVerse',
+  'platform.goToPreviousVerse',
+  'platform.openBookChapterControl',
+  'platform.navigateLeftInReferenceHistory',
+  'platform.navigateRightInReferenceHistory',
+] as const satisfies readonly CommandNames[];
+
+/**
+ * OpenRPC documentation for renderer-hosted commands, keyed by the generic (unscoped) command name.
+ *
+ * The documentation belongs to the generic name because that is the command consumers call; the
+ * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
+ * an implementation detail of multi-window routing and are deliberately left undocumented. The main
+ * process attaches these when it registers the routing proxies.
+ *
+ * @experimental
+ */
+export const RENDERER_HOSTED_COMMAND_DOCS: Record<
+  (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
+  SingleMethodDocumentation
+> = {
+  'platform.about': {
+    method: {
+      summary: 'Open a dialog that displays essential information about the application',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openSettings': {
+    method: {
+      summary: 'Open a Settings tab, optionally limited to the project shown in a given web view',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'Web view whose project the Settings tab should be limited to, if any',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openProjectSettings': {
+    method: {
+      deprecated: true,
+      summary:
+        'Open the Settings tab limited to the project shown in the given web view. Renamed to ' +
+        'platform.openSettings',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view whose project the Settings tab should be limited to',
+          schema: { type: 'string' },
+        },
+      ],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openUserSettings': {
+    method: {
+      deprecated: true,
+      summary:
+        'Open the Settings tab without limiting it to any particular project. Renamed to ' +
+        'platform.openSettings',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.usersnapSubmitIdea': {
+    method: {
+      summary: 'Open Usersnap feedback form to submit an idea',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.usersnapReportIssue': {
+    method: {
+      summary: 'Open Usersnap feedback form to report an issue',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.isUsersnapFormCurrentlyOpen': {
+    method: {
+      summary: 'Check if a Usersnap form is currently open',
+      params: [],
+      result: { name: 'isOpen', schema: { type: 'boolean' } },
+    },
+  },
+  'platform.closeOpenUsersnapForm': {
+    method: {
+      summary: 'Call close function for Usersnap forms known to the application',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToNextChapter': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the next chapter (rolls into the next book)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToPreviousChapter': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Navigate the active scroll group to the previous chapter (rolls into the previous book)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToNextBook': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the next book (chapter 1, verse 1)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToPreviousBook': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the previous book (chapter 1, verse 1)',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToNextVerse': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the next verse',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.goToPreviousVerse': {
+    method: {
+      'x-experimental': true,
+      summary: 'Navigate the active scroll group to the previous verse',
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.openBookChapterControl': {
+    method: {
+      'x-experimental': true,
+      summary:
+        "Open the appropriate Book Chapter Control (the active tab's if it shows one, else the " +
+        "top toolbar's) and focus its input, ready for typing a reference",
+      params: [],
+      result: { name: 'return value', schema: { type: 'null' } },
+    },
+  },
+  'platform.navigateLeftInReferenceHistory': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Navigate the reference history of the active scroll group (the one the top toolbar ' +
+        'follows) in the physical "left" direction (back in LTR, forward in RTL)',
+      params: [],
+      result: { name: 'didNavigate', schema: { type: 'boolean' } },
+    },
+  },
+  'platform.navigateRightInReferenceHistory': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Navigate the reference history of the active scroll group (the one the top toolbar ' +
+        'follows) in the physical "right" direction (forward in LTR, back in RTL)',
+      params: [],
+      result: { name: 'didNavigate', schema: { type: 'boolean' } },
+    },
+  },
+};

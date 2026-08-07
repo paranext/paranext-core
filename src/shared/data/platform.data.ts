@@ -10,6 +10,13 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
+/**
+ * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+ *
+ * @experimental
+ */
+export const WINDOW_ID = 'windowId';
+
 /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 

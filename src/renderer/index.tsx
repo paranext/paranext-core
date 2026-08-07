@@ -9,6 +9,8 @@ import { initAutoSyncEditBlockDriver } from '@renderer/services/auto-sync-edit-b
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import { startNotificationService } from '@renderer/services/notification.service-host';
 import { startOverlayService } from '@renderer/services/overlays/overlay.service-host';
+import { assertAllRendererHostedCommandsRegistered } from '@renderer/services/renderer-hosted-command-registry';
+import { assertAllRendererHostedDialogRequestsRegistered } from '@renderer/services/renderer-hosted-dialog-registry';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupNavigationCommands } from '@renderer/services/scroll-group-navigation.commands';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
@@ -126,6 +128,30 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     // reload during an in-flight sync seeds the store instead of assuming unblocked.
     initAutoSyncBlockingService();
     initAutoSyncEditBlockDriver();
+
+    // Every name in RENDERER_HOSTED_COMMAND_NAMES and RENDERER_HOSTED_DIALOG_REQUEST_NAMES must
+    // have been registered by one of the services started above (startWebViewService,
+    // startDialogService, startScrollGroupNavigationCommands) — otherwise the main process's
+    // routing proxy for it has nothing to forward to.
+    //
+    // Placed directly after those registrations and before anything else that can fail: run from
+    // the shared catch below, a registration gap would be reported as the same generic message as
+    // every other startup failure, and anything that threw between the registrations and this point
+    // would skip the check entirely. What the app ends up with is the same in dev and packaged
+    // builds; only how loudly it says so differs.
+    //
+    // A catch each, rather than one around both: in dev these throw, so a single catch would let a
+    // missing command hide a missing dialog request and report only half of what is broken.
+    try {
+      assertAllRendererHostedCommandsRegistered();
+    } catch (e) {
+      logger.error(`Renderer-hosted command coverage check failed: ${getErrorMessage(e)}`);
+    }
+    try {
+      assertAllRendererHostedDialogRequestsRegistered();
+    } catch (e) {
+      logger.error(`Renderer-hosted dialog request coverage check failed: ${getErrorMessage(e)}`);
+    }
 
     // Subscribe to updates to the current theme
     await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {

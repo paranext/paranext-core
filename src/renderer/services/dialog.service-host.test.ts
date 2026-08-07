@@ -78,6 +78,11 @@ const mockRegisterRequestHandler = vi
   });
 vi.mock('@shared/services/network.service', () => ({
   registerRequestHandler: mockRegisterRequestHandler,
+  // dialog.service-host now reaches web-view.service-model (for RENDERER_HOSTED_COMMAND_NAMES) via
+  // renderer-hosted-command-registry, which pulls in network-object-status.service; that module
+  // calls getNetworkEvent at load time, so the mock needs to provide it even though this test never
+  // exercises it directly.
+  getNetworkEvent: vi.fn(() => vi.fn()),
 }));
 
 // Mock command service

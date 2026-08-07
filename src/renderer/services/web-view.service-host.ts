@@ -47,7 +47,6 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
@@ -72,7 +71,6 @@ import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
 import cloneDeep from 'lodash/cloneDeep';
 import memoizeOne from 'memoize-one';
-import { CommandNames } from 'papi-shared-types';
 import {
   AsyncVariable,
   deserialize,
@@ -91,6 +89,13 @@ import {
   Unsubscriber,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
+import withWindowScopedWebViewIds, {
+  withWindowScopedWebViewIdInTab,
+} from '@renderer/components/docking/window-scoped-web-view-ids.util';
+import {
+  registerScopedCommands,
+  RendererHostedCommandHandlers,
+} from '@renderer/services/renderer-hosted-command-registry';
 import {
   closeOpenUsersnapForm,
   isUsersnapFormCurrentlyOpen,
@@ -102,6 +107,7 @@ import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
 } from './web-views/web-view-legacy-color-vars.util';
+import localWindowStorage from './local-storage.service';
 
 // These web view lifecycle emitters are created at module load as buffered emitters so they're
 // usable immediately. Sync paths like `onLayoutChange` and `updateWebViewDefinitionSync` can run
@@ -833,11 +839,25 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
   // subsequent `saveLayout`) sees the current mode without another settings round-trip.
   currentInterfaceMode = interfaceMode;
-  const layoutToLoad =
+  // Every layout gets its web view ids scoped to this window, including one restored from storage:
+  // `localWindowStorage` migrates a pre-multi-window layout from its unprefixed key WITHOUT
+  // deleting it, so two windows can each migrate the same legacy blob and end up holding the same
+  // unscoped ids. Re-scoping replaces the suffix rather than stacking another one, so this is safe
+  // to run on a layout this window already scoped and saved.
+  const layoutToLoad = withWindowScopedWebViewIds(
     interfaceMode === 'simple'
       ? dockLayoutVar.simpleLayout
-      : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
-  const enabledEntries = await getEnabledSupplementEntries();
+      : getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout),
+  );
+  // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
+  // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
+  // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
+  // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
+  // the scoped copy already in a restored layout and the tab would be appended again on every load.
+  const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
+    ...entry,
+    tab: withWindowScopedWebViewIdInTab(entry.tab),
+  }));
   if (enabledEntries.length === 0) {
     // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
     dockLayoutVar.loadLayout(layoutToLoad);
@@ -870,7 +890,7 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
  * @returns The value of the key fetched from local storage, or the default value if not found.
  */
 function getStorageValue<T>(key: string, defaultValue: T): T {
-  const saved = localStorage.getItem(key);
+  const saved = localWindowStorage.getItem(key);
   const initial = saved ? deserialize(saved) : undefined;
   return initial || defaultValue;
 }
@@ -891,7 +911,7 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
-  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
+  localWindowStorage.setItem(DOCK_LAYOUT_KEY, serialize(layout));
 }
 
 /**
@@ -2185,14 +2205,22 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
   await initialize();
+  if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
+
+  // Register network object under a window-scoped name (e.g. "WebViewService-1") so multiple
+  // renderers can coexist. The main process registers a proxy under the generic name.
   await networkObjectService.set<WebViewServiceType>(
-    NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+    `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     papiWebViewService,
   );
 
-  // This map should allow any functions because commands can be any function type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+  // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
+  // renderers can coexist. The main process registers proxies under the generic names. Typing this
+  // against RendererHostedCommandHandlers makes an unrecognized or misspelled key a compile error;
+  // registerScopedCommands records each name so a command that is on RENDERER_HOSTED_COMMAND_NAMES
+  // but never registered anywhere is caught too, at startup (see
+  // assertAllRendererHostedCommandsRegistered).
+  const commandHandlers: RendererHostedCommandHandlers = {
     'platform.openSettings': openSettingsTab,
     'platform.openProjectSettings': openSettingsTab,
     'platform.openUserSettings': openSettingsTab,
@@ -2201,10 +2229,8 @@ export async function startWebViewService(): Promise<void> {
     'platform.isUsersnapFormCurrentlyOpen': () => isUsersnapFormCurrentlyOpen(),
     'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
-
-  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    // Re-assert type after passing through `forEach`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    registerCommand(commandName as CommandNames, handler);
-  });
+  // Awaited the way the other callers await theirs: the startup coverage check reads what these
+  // registrations record, and leaving them in flight would both let that check run before they had
+  // landed and turn a rejected registration into an unhandled rejection.
+  await Promise.all(registerScopedCommands(commandHandlers));
 }
