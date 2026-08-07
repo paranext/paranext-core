@@ -139,11 +139,11 @@ const SHUTDOWN_MODE_UNREADABLE_LOG = 'Could not read platform.interfaceMode';
 // #region PAPI helpers (one-shot WebSocket JSON-RPC against the main process, port 8876)
 
 /**
- * Per-attempt timeout for polled PAPI calls. While an app-global service's host window is gone and
- * no survivor has re-registered yet, the main process retries its handler lookup for up to ~9
- * seconds (10 attempts, 1 second apart — see `requestWithRetry` in `src/shared/data/rpc.model.ts`)
- * before answering method-not-found, so each attempt needs a budget above that to distinguish "not
- * re-registered yet" from a transport failure.
+ * Per-attempt timeout for polled PAPI calls. A window-scoped service whose window has just gone
+ * away leaves the main process retrying its handler lookup for up to ~9 seconds (10 attempts, 1
+ * second apart — see `requestWithRetry` in `src/shared/data/rpc.model.ts`) before answering
+ * method-not-found, so each attempt needs a budget above that to distinguish "not registered yet"
+ * from a transport failure.
  */
 const PAPI_ATTEMPT_TIMEOUT_MS = 15_000;
 
@@ -334,8 +334,8 @@ test.use({
 });
 
 test.describe('multi-window lifecycle', () => {
-  // Each test pays full app startup (up to ~180 s worst case) plus one extra window startup and,
-  // for the takeover test, a handover that can take tens of seconds (see the poll budgets below).
+  // Each test pays full app startup (up to ~180 s worst case) plus one or two extra window
+  // startups, each of which can take tens of seconds (see the poll budgets below).
   test.setTimeout(420_000);
 
   let restoreSettings: (() => void) | undefined;
@@ -480,20 +480,20 @@ test.describe('multi-window lifecycle', () => {
     await waitForAppReady(mainPage, 180_000);
     logStep('window 1 ready');
 
-    // Baselines: both app-global services answer while window 1 (their host) is alive. Without
-    // this, a takeover failure would be indistinguishable from services that never worked.
+    // Baselines: both app-global services answer before anything is changed or closed. Without
+    // this, a service that broke later would be indistinguishable from one that never worked.
     const baselineTheme = await pollUntil(
       getCurrentTheme,
       isThemeShaped,
       60_000,
-      'theme service to answer before the host closes',
+      'theme service to answer before anything is changed',
     );
     expect(isThemeShaped(baselineTheme)).toBe(true);
     const baselineRef = await pollUntil(
       getScrollGroupRef,
       isVerseRefShaped,
       60_000,
-      'scroll group service to answer before the host closes',
+      'scroll group service to answer before anything is changed',
     );
     expect(isVerseRefShaped(baselineRef)).toBe(true);
 
@@ -538,13 +538,13 @@ test.describe('multi-window lifecycle', () => {
 
     // Close WINDOW 1 the way a user does. It hosts neither app-global service — both live in main —
     // so nothing about this close should be special.
-    const beforeHostCloseMark = output.mark();
+    const beforeWindowCloseMark = output.mark();
     const page1Closed = mainPage.waitForEvent('close', { timeout: 30_000 });
     await mainPage.evaluate(() => {
       setTimeout(() => window.close(), 0);
     });
     await page1Closed;
-    logStep('window 1 (the host) closed');
+    logStep('window 1 closed');
 
     // Both services are hosted in main, which did not go anywhere, so both must keep answering
     // across the close with no handover at all.
@@ -597,9 +597,9 @@ test.describe('multi-window lifecycle', () => {
     // ordinary" checkable rather than merely asserted — a renderer that started claiming the name
     // again would show up here even while every read above still passed.
     await expect(() => {
-      expect(output.textFrom(beforeHostCloseMark)).toContain(ANNOUNCE_DEPARTED_OBJECTS_LOG);
+      expect(output.textFrom(beforeWindowCloseMark)).toContain(ANNOUNCE_DEPARTED_OBJECTS_LOG);
     }).toPass({ timeout: 60_000, intervals: [1_000] });
-    expect(output.textFrom(beforeHostCloseMark)).not.toMatch(ANNOUNCE_THEME_OBJECT_PATTERN);
+    expect(output.textFrom(beforeWindowCloseMark)).not.toMatch(ANNOUNCE_THEME_OBJECT_PATTERN);
 
     // The whole flow — second window start, app-global changes, a window close — must complete
     // without faults.
