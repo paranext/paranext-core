@@ -98,7 +98,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
   },
 }));
 
-vi.mock('@renderer/services/theme.service-host', () => ({
+vi.mock('@renderer/services/theme.service', () => ({
   localThemeService: {
     getCurrentThemeSync: vi.fn(() => ({
       type: 'light',
