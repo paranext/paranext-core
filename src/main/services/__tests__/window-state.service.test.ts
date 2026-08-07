@@ -712,6 +712,62 @@ describe('window state tracking', () => {
       expect(getTargetWindowId()).toBe(1);
     });
 
+    test('prefers a window that can still answer when every window is closing', () => {
+      // The user opened a second window and quit before its renderer finished starting. The new
+      // window takes OS focus the moment it is shown, so on the quit it is both the focused window
+      // and the one window that cannot serve a call — while the first is closing but still serving
+      // until its own teardown finishes. A quit reports its progress and asks its questions through
+      // this target, so naming the window that cannot answer fails every one of them.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      setFocusedWindowId(1);
+      addWindow(fakeWindow(2));
+      setFocusedWindowId(2);
+
+      markWindowClosing(1);
+      markWindowClosing(2);
+
+      expect(getTargetWindowId()).toBe(1);
+    });
+
+    test('announces once as a window goes from closing to no longer serving', () => {
+      // A closing window runs both mutations in the same teardown: recorded as closing at the top of
+      // its `close` handler, dropped from the routable set once that handler's shutdown work
+      // finishes. Routing has already left it at the first of those, so the second must not announce
+      // a move that already happened — every announcement makes routing proxies re-resolve and
+      // re-notify their subscribers.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowClosing(1);
+      markWindowNotReady(1);
+      unsubscribe();
+
+      expect(heard).toEqual([2]);
+    });
+
+    test('announces once as the last window goes from closing to no longer serving', () => {
+      // The same pair on a quit, where there is no other window to move to. Routing stays with the
+      // closing window while it can still answer — that is where the quit's own progress reports
+      // go — and moves exactly once, when it stops being able to.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      setFocusedWindowId(1);
+      const heard: (number | undefined)[] = [];
+      const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
+
+      markWindowClosing(1);
+      markWindowNotReady(1);
+      unsubscribe();
+
+      expect(heard).toEqual([1]);
+    });
+
     test('keeps a closing window in the fan-out list while it is still there to answer', () => {
       // A window is the only thing that knows what it has open, and the shutdown sync selects the
       // projects it sends by asking every window in this list what editors it has. During a quit

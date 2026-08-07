@@ -178,9 +178,15 @@ export function getFocusedWindowId(): number | undefined {
  * every notification, dialog, and newly opened web view for the whole of that wait lands in the
  * window the user is watching disappear.
  *
- * When no window is ready — ordinary startup — or when every window is closing, this falls back to
+ * Once every window is closing there is no window that is not closing left to prefer, so the
+ * readiness preference comes back: a closing window still serves calls until its own teardown
+ * finishes, and a quit reports its progress and asks its questions through this target. The one
+ * that can answer beats the one that happens to hold focus — which on a quit is often a window the
+ * user opened moments earlier whose renderer never finished starting.
+ *
+ * When no window can answer at all — ordinary startup, or the end of a quit — this falls back to
  * the focused or first tracked window, so callers get the honest "the renderer has not started yet"
- * error rather than silence, and a quit's own progress reports still have somewhere to go.
+ * error rather than silence.
  */
 function getRoutingTarget(): RoutingTarget {
   const canTakeNewWork = (windowId: number) =>
@@ -197,6 +203,18 @@ function getRoutingTarget(): RoutingTarget {
     canTakeNewWork(windowId),
   )?.windowId;
   if (firstReadyWindowId !== undefined) return { windowId: firstReadyWindowId, isReady: true };
+
+  // Gated on every window closing rather than applied whenever the rungs above miss: while any
+  // window is staying, routing deliberately leaves a closing window even for one that cannot answer
+  // yet, because that one is where the user's next work goes. Once nothing is staying, there is no
+  // next work — only the quit's own calls, which need a window that can serve them.
+  if (areAllWindowsClosing()) {
+    const firstReadyClosingWindowId = trackedWindows.find(({ windowId }) =>
+      readyWindowIds.has(windowId),
+    )?.windowId;
+    if (firstReadyClosingWindowId !== undefined)
+      return { windowId: firstReadyClosingWindowId, isReady: true };
+  }
 
   return { windowId: focusedWindowId ?? trackedWindows[0]?.windowId, isReady: false };
 }

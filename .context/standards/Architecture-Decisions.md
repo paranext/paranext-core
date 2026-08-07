@@ -325,9 +325,11 @@ step, no automation. Just a record.
   its "ready" status without losing focus); failing that, the first ready window in creation order.
   Every rung passes over a window that has begun closing, however ready and however focused it still
   is: a close runs that window's shutdown work first and the window keeps focus and keeps serving
-  throughout, so new work would otherwise land in a window that is on its way out. When every window
-  is closing, the fallback still names one of them, so a quit's own progress reports have somewhere
-  to go. A
+  throughout, so new work would otherwise land in a window that is on its way out. Once every window
+  is closing there is no window that is not closing left to prefer, so readiness takes over again and
+  the target is the first window that can still answer: a quit's own progress reports and prompts go
+  through this target, and the window holding focus during a quit is often one the user opened
+  moments earlier whose renderer never finished starting. A
   dedicated `onDidChangeRoutingTarget` event fires whenever this computed target actually changes —
   either the target window id, or the same window flipping ready/not-ready — so routing proxies and
   other consumers can react without polling.
