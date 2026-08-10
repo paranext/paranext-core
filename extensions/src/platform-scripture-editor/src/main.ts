@@ -35,6 +35,7 @@ import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
 import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
   convertScriptureRangeToEditorRange,
+  finalizeProjectSwitch,
   formatEditorTitle,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
@@ -1476,6 +1477,36 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const finalizeProjectSwitchPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.finalizeProjectSwitch',
+    (projectId, isEditable) =>
+      finalizeProjectSwitch(papi, projectId, isEditable, (id) =>
+        sharedLayoutReceiver ? sharedLayoutReceiver.applyForProject(id) : Promise.resolve(),
+      ),
+    {
+      method: {
+        summary:
+          "Replay the project-switch side effects (S/R sync, shared-layout auto-apply, recently-opened) for a project whose Scripture Editor tab is already showing correctly, bypassing openScriptureEditor's focus-existing short-circuit",
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project now showing in the Scripture Editor',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'isEditable',
+            required: true,
+            summary:
+              "The project's own platform.isEditable setting (Scripture-editable project vs. read-only resource), not whether the current user's role can edit it",
+            schema: { type: 'boolean' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -1520,6 +1551,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
     await applySharedLayoutPromise,
+    await finalizeProjectSwitchPromise,
     sharedLayoutReArmEmitter,
     {
       dispose: async () => {

@@ -1220,15 +1220,17 @@ export async function handleSwitchToSimpleMode(
   // batch with later state changes and the overlay never actually appears on screen.
   await waitForNextPaint();
   // Set right before returning from a successful `runProjectBoundSimpleSwitch` call, so `finally`
-  // below knows whether (and for which project) to replay `openScriptureEditor`'s side effects.
-  // Left `undefined` for every path that didn't actually load a project-bound layout.
+  // below knows whether (and for which project) to finalize the switch's side effects. Left
+  // `undefined` for every path that didn't actually load a project-bound layout.
   let switchedProjectId: string | undefined;
+  let switchedProjectIsEditable = false;
   try {
     const cached = getLastOpenedProject();
     if (cached) {
       const isEditable = await resolveFastPathIsEditable(cached);
       await runProjectBoundSimpleSwitch(cached.id, !isEditable, generation);
       switchedProjectId = cached.id;
+      switchedProjectIsEditable = isEditable;
       return;
     }
 
@@ -1258,6 +1260,7 @@ export async function handleSwitchToSimpleMode(
     setLastOpenedProject({ id: resolvedId, isEditable });
     await runProjectBoundSimpleSwitch(resolvedId, !isEditable, generation);
     switchedProjectId = resolvedId;
+    switchedProjectIsEditable = isEditable;
   } catch (err) {
     // Belt-and-suspenders: `runProjectBoundSimpleSwitch` already recovers from its own failures
     // internally (see its try/catch/finally), so this is only reached if something upstream of it
@@ -1279,7 +1282,7 @@ export async function handleSwitchToSimpleMode(
     // whole try/catch/finally: the fast path above returns early from inside `try`, and `finally`
     // is the only place that still runs on every path, early return included.
     if (switchedProjectId && generation === switchGeneration) {
-      replayOpenScriptureEditorSideEffects(switchedProjectId);
+      finalizeProjectSwitch(switchedProjectId, switchedProjectIsEditable);
     }
   }
 }
@@ -1425,14 +1428,14 @@ async function getMostRecentProjectId(): Promise<string | undefined> {
 }
 
 /**
- * Replicates the side effects that `platformScriptureEditor.openScriptureEditor` normally performs
- * on project open/switch (applying the admin's shared layout, syncing on project switch, and
- * recording the project as recently-opened), which the switch above bypasses by baking `projectId`
- * directly into the layout instead of going through that command's own driver logic (see
- * `openDefaultActiveProjectIfApplicable`'s `'no-empty'` short-circuit in
- * platform-scripture-editor.utils.ts). Mirrors `platform-bible-toolbar.tsx`'s `openProject`
- * callback, the equivalent Power-mode replication of this same command + `recordProjectOpened`
- * pairing.
+ * Finalizes a project-bound Simple-mode switch by replaying the side effects
+ * `platformScriptureEditor.openScriptureEditor` normally performs on project open/switch (S/R sync,
+ * admin's shared layout auto-apply, recording recently-opened) — which the switch above bypasses by
+ * baking `projectId` directly into the layout instead of going through that command's driver logic.
+ * Calling `openScriptureEditor` itself here would not work: with `projectId` already baked in, its
+ * dispatch resolves to `focus-existing` and returns before any of those side effects run (see
+ * `resolveOpenEditorDispatch` in platform-scripture-editor.utils.ts), so this instead calls a
+ * purpose-built command that runs them directly.
  *
  * Deliberately fire-and-forget and called only after the switch's overlay has already released: the
  * whole reason this switch bakes the layout directly is performance, so blocking the visible switch
@@ -1440,22 +1443,22 @@ async function getMostRecentProjectId(): Promise<string | undefined> {
  * already-fast, already-rendered switch — a future cold-start caller of this same machinery should
  * re-evaluate rather than assume the same non-blocking-after-release shape fits, since cold start
  * has no already-rendered UI whose perceived latency this is protecting.
+ *
+ * @param isEditable The project's own `platform.isEditable` setting (Scripture-editable project vs.
+ *   read-only resource), not whether the current user's role can edit it.
  */
-function replayOpenScriptureEditorSideEffects(projectId: string): void {
+function finalizeProjectSwitch(projectId: string, isEditable: boolean): void {
   // This command comes from an extension and is not typed in CommandHandlers.
   // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-  (sendCommand as any)('platformScriptureEditor.openScriptureEditor', projectId)
-    .then(async () => {
-      const recentsProvider = await dataProviderService.get(
-        'platformScripture.recentlyOpenedProjects',
-      );
-      await recentsProvider?.recordProjectOpened(projectId);
-    })
-    .catch((err: unknown) => {
-      logger.warn(
-        `Failed to replay openScriptureEditor side effects for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
-      );
-    });
+  (sendCommand as any)(
+    'platformScriptureEditor.finalizeProjectSwitch',
+    projectId,
+    isEditable,
+  ).catch((err: unknown) => {
+    logger.warn(
+      `Failed to finalize project switch for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
+    );
+  });
 }
 
 // #endregion Dock layouts

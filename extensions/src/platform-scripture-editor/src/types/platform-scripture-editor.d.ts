@@ -824,6 +824,25 @@ declare module 'papi-shared-types' {
      */
     'platformScriptureEditor.applySharedLayout': NotificationClickCommandHandler;
     /**
+     * Replays the project-switch side effects (S/R sync, admin's shared layout auto-apply,
+     * recording recently-opened) for a project whose Scripture Editor tab is already showing
+     * correctly. `openScriptureEditor` cannot be used for this: when the target project already
+     * matches the active editor tab, its dispatch resolves to `focus-existing` and returns before
+     * any of those side effects run. Intended for callers (e.g. Platform.Bible core's Power ->
+     * Simple mode switch) that bake `projectId` directly into a layout instead of routing through
+     * `openScriptureEditor`.
+     *
+     * @param projectId The project now showing in the Scripture Editor.
+     * @param isEditable The project's own `platform.isEditable` setting — i.e. whether it is a
+     *   Scripture-editable project rather than a read-only resource (DBL/published), NOT whether
+     *   the current user's role can edit it. Gates the shared-layout auto-apply, matching
+     *   `openScriptureEditor`'s own behavior.
+     */
+    'platformScriptureEditor.finalizeProjectSwitch': (
+      projectId: string,
+      isEditable: boolean,
+    ) => Promise<void>;
+    /**
      * Opens the model text panel WebView for a translation project
      *
      * @param projectId The project ID of the translation project (not the resource). If not
