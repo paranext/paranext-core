@@ -1120,6 +1120,12 @@ describe('useEditorPdpSync', () => {
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
     // The message names the defect as a lossy round-trip so the log is greppable.
     expect(mockLoggerWarn.mock.calls[0][0]).toMatch(/lossy/i);
+    // The warn must carry the FULL differing entries, not only the bounded summary: with settled
+    // saves this line names a real round-trip defect, and a 200-character truncation is not enough
+    // to attribute one.
+    const warnText = String(mockLoggerWarn.mock.calls.at(-1)?.[0] ?? '');
+    expect(warnText).toContain('Full sent entry:');
+    expect(warnText).toContain('Full received entry:');
     // The editor is never clobbered while the loop runs.
     expect(setUsjSpy).not.toHaveBeenCalled();
   });

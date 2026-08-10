@@ -107,6 +107,24 @@ function describeFirstUsjContentDifference(
 }
 
 /**
+ * The two differing entries in full, for the ONE warning a given difference ever produces. The
+ * bounded summary above is what a repeated line should carry; a defect that fires once needs enough
+ * bytes to attribute — the divergences this catches are single-character whitespace shifts inside a
+ * span, which a 200-character truncation can hide entirely.
+ */
+function describeFullUsjContentDifference(
+  sent: Usj | undefined,
+  received: Usj | undefined,
+): string {
+  const difference = firstSignificantUsjContentDifference(sent, received);
+  if (!difference) return '';
+  return (
+    `\nFull sent entry: ${JSON.stringify(difference.sentEntry)}` +
+    `\nFull received entry: ${JSON.stringify(difference.receivedEntry)}`
+  );
+}
+
+/**
  * How many DISTINCT lossy differences the warn-once dedup remembers at a time. Bounded so a long
  * session that surfaces many different non-convergent spots cannot grow the memory without limit;
  * old differences fall out FIFO. Sized well above the handful of distinct spots a real chapter
@@ -349,8 +367,10 @@ export function useEditorPdpSync({
                 `useEditorPdpSync: our own save round-tripped through the PDP to DIFFERENT content ` +
                   `beyond insignificant whitespace and has not converged — the editor is doing ` +
                   `something lossy (a stable non-idempotent USFM round-trip of our own push, not an ` +
-                  `external edit). Investigate the editor's USJ->USFM->USJ handling. First differing ` +
-                  `content entry: ${describeFirstUsjContentDifference(editorUsj, usjFromPdp)}`,
+                  `external edit). The editor's getUsj() is settled, so this is not a mid-edit save ` +
+                  `snapshot: it is a real USJ->USFM->USJ defect. First differing content entry: ` +
+                  `${describeFirstUsjContentDifference(editorUsj, usjFromPdp)}` +
+                  `${describeFullUsjContentDifference(editorUsj, usjFromPdp)}`,
               );
             }
           }
