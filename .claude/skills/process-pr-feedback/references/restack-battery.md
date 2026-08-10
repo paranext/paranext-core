@@ -42,6 +42,17 @@ because the failures it catches are invisible in per-commit review.
    `gh pr view <n> --json baseRefName`. Rebasing a stacked branch onto `main` instead of its
    real base produces a conflict storm and a wrong diff.
 
+4. **Record each PR's approval state**, alongside the counts:
+
+   ```bash
+   gh pr view <n> --json reviewDecision,reviews --jq \
+     '{decision: .reviewDecision, approvers: [.reviews[] | select(.state=="APPROVED") | .author.login] | unique}'
+   ```
+
+   This is the "before" half of the check under *Force-pushing*, and like the counts it is
+   worthless if it is read afterwards. Write down the decision and the list of approvers per
+   branch.
+
 ## Rebase, don't merge
 
 Rebase the stack bottom-up, each branch `--onto` the new tip of the one below:
@@ -136,9 +147,33 @@ Only after the battery passes, and only after the G2 approval that covers pushin
   this repo, so do not assume it is available.
 - After pushing, re-check `git rev-list --count origin/<branch>..<branch>` for every branch — it
   must be `0`, and the count must match the expectation recorded in step 1.
+- **Re-check the approval state, immediately after each branch's push.** A force-push can
+  **dismiss reviewer approvals**: repositories configured to dismiss stale approvals on new
+  commits drop every approving review when the head moves, and a restack moves every head by
+  construction. Nothing announces it — the push succeeds, the battery passes, and the PR quietly
+  goes from `APPROVED` to `REVIEW_REQUIRED` as a side effect of a rebase done for unrelated
+  reasons. Compare against step 4's recorded decision and approver list:
+
+  ```bash
+  gh pr view <n> --json reviewDecision,reviews --jq \
+    '{decision: .reviewDecision, approvers: [.reviews[] | select(.state=="APPROVED") | .author.login] | unique}'
+  ```
+
+  If an approval was dismissed: **re-request review from exactly the reviewers who had approved**
+  (`gh pr edit <n> --add-reviewer <login>`) and report it in the same breath as the push result.
+  Both silences are costly — the reviewer sees an approval they gave apparently thrown away, and
+  the author sees a PR that looks ready to merge and is not. Whether a given repo dismisses is a
+  branch-protection setting, so **check the state rather than reasoning about the config**: the
+  before/after pair answers it for this repo today, at no cost, and a wrong assumption either way
+  is silent.
 
 ## Reporting
 
 The G2 presentation includes the battery results, not a claim that it was run: the counts before
-and after, the `N \ A` and `A \ N` sets (ideally empty), and the range-diff verdict. "Restack
-verified" without those numbers is not a result.
+and after, the `N \ A` and `A \ N` sets (ideally empty), the range-diff verdict, and the approval
+state recorded in step 4. "Restack verified" without those numbers is not a result.
+
+The pushes themselves happen after G2, so the approval **re-check** belongs to the push report:
+per branch, the decision before and after, and — if any approval was dismissed — who it was
+re-requested from. That one goes to the user proactively; it is not an implementation detail,
+because the person whose approval vanished is going to notice.

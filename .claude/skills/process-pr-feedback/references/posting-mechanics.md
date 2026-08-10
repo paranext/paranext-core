@@ -68,7 +68,10 @@ Run every check over the extracted bodies:
 5. **Internal labels.** No label the reviewer has never seen. This one is **configuration, not a
    constant**: an id the reviewer assigned themselves is shared vocabulary and belongs in the
    body, while an id that exists only in our packet does not (see `reply-conventions.md` rule 6).
-   List the round's internal labels explicitly and check for those. Allow a match only when **the
+   The configuration is the **Internal** list in the packet's `shared-vocabulary.md`, written at
+   P2 — read it, do not re-derive the distinction here. If that file is missing, stop and write it
+   rather than guessing: a check whose deny-list was invented at posting time only tests whichever
+   labels the poster happened to think of. Allow a match only when **the
    match itself** sits inside a URL — not merely inside a token that contains one. Testing the
    whole token waves through `[FIX-B](https://…)`, where the label is the link *text*: the most
    reviewer-visible position in the body, and exactly what gets linked. Print what was allowed so
@@ -236,7 +239,8 @@ for it in items:
 # themselves are shared vocabulary and must NOT be listed here — see reply-conventions.md rule 6.
 PLACEHOLDERS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
                 r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{"]
-INTERNAL_LABELS = [r"\bFIX-[A-Z]\b"]        # <- fill in per round; keep reviewer-visible ids out
+# <- transcribe from the "Internal" list in the packet's shared-vocabulary.md, not from memory
+INTERNAL_LABELS = [r"\bFIX-[A-Z]\b"]
 for it in items:
     for pat in PLACEHOLDERS + INTERNAL_LABELS:
         for m in re.finditer(pat, it["body"]):
