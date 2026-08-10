@@ -165,11 +165,30 @@ function readWindowCreationScrollGroupState(): PersistedScrollGroupState | undef
 }
 
 /**
+ * Marks that this profile's pre-host scroll group keys have been handed over, so nothing offers
+ * them again.
+ *
+ * A marker rather than deleting the keys, for the same reason the theme service keeps its own: the
+ * keys are what an OLDER build reads, and only what an older build reads. Deleting them makes a
+ * downgrade come up at the default reference instead of where the user left off, and a build that
+ * never heard of this key ignores it.
+ *
+ * Deliberately renderer-local — spelled here and nowhere shared. Main must never read it: it says
+ * something about this profile's renderer store, which main cannot see and has no business in.
+ */
+const HANDED_OVER_SCROLL_GROUP_STATE_STORAGE_KEY =
+  'scroll-group.service.handedOverPreviouslyStoredState';
+
+/**
  * Where the scroll group state used to be persisted, back when a renderer held it: this window's
  * own `localStorage`, under the keys the host now uses for its own store. The host cannot read it —
  * main's `localStorage` polyfill is a different store in a different place — so a profile that
  * predates the host has to hand it over, and until it has, this is the only thing in this process
  * that knows where the user left off.
+ *
+ * Answers with nothing once {@link HANDED_OVER_SCROLL_GROUP_STATE_STORAGE_KEY} is set, which is what
+ * makes the handover one-time: the keys themselves stay for a downgraded build, and this build must
+ * not read them back as a reference main has not heard about.
  *
  * This module never treats these keys as its own state: they are read to seed the first render on
  * the one start where main has nothing yet, and to be offered once (see
@@ -178,6 +197,7 @@ function readWindowCreationScrollGroupState(): PersistedScrollGroupState | undef
  */
 function readPreviouslyStoredScrollGroupState(): PersistedScrollGroupState | undefined {
   try {
+    if (localStorage.getItem(HANDED_OVER_SCROLL_GROUP_STATE_STORAGE_KEY)) return undefined;
     const storedScrRefs = localStorage.getItem(SCR_REFS_STORAGE_KEY);
     const storedSourceProjectIds = localStorage.getItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY);
     if (!storedScrRefs && !storedSourceProjectIds) return undefined;
@@ -987,11 +1007,12 @@ async function seedCacheFromHost(): Promise<void> {
  * state, since these keys were app-global even while a renderer held them.
  *
  * The offer is terminal in both directions. Adopted means the host now owns it; refused means the
- * host has state that beats it. Either way this window's copy is finished, so the keys are removed:
- * left in place they would be re-offered by every window on every start forever, and — worse — a
- * profile whose main-process store is ever cleared would silently resurrect a reference from before
- * the host existed. Only a rejection (the host was unreachable, or could not store what it adopted)
- * keeps them, because that is the one case where this copy is still the only one.
+ * host has state that beats it. Either way this window's copy is finished, and
+ * {@link HANDED_OVER_SCROLL_GROUP_STATE_STORAGE_KEY} records that: left offerable it would be
+ * re-offered by every window on every start forever, and — worse — a profile whose main-process
+ * store is ever cleared would silently resurrect a reference from before the host existed. Only a
+ * rejection (the host was unreachable, or could not store what it adopted) leaves it offerable,
+ * because that is the one case where this copy is still the only one.
  *
  * Best-effort: a failed offer costs the user their last reference for this session, which
  * navigating fixes, and it leaves the host with nothing adopted so a later start can offer again.
@@ -1003,8 +1024,7 @@ async function handOverPreviouslyStoredState(): Promise<void> {
   try {
     const host = await getScrollGroupHost();
     await host.migrateStoredScrollGroupState(previouslyStoredState);
-    localStorage.removeItem(SCR_REFS_STORAGE_KEY);
-    localStorage.removeItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY);
+    localStorage.setItem(HANDED_OVER_SCROLL_GROUP_STATE_STORAGE_KEY, 'true');
   } catch (e) {
     logger.warn(
       `Could not hand this window's previously stored scroll group state to the scroll group service host; it will be offered again. ${getErrorMessage(e)}`,
