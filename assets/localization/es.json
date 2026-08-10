@@ -228,6 +228,7 @@
   "%mainMenu_layout%": "Diseño",
   "%mainMenu_openDeveloperDocumentation%": "Abrir documentación para desarrolladores",
   "%mainMenu_openHome%": "Inicio...",
+  "%mainMenu_openNewWindow%": "Abrir ventana nueva",
   "%mainMenu_openProject%": "Abrir proyecto",
   "%mainMenu_project%": "Proyecto",
   "%mainMenu_quitProductName%": "Salir de {%product_name%}",

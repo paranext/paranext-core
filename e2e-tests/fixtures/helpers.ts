@@ -13,10 +13,16 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
- * Same serialized request type as `registerCommand('platform.about', ...)` in command.service
- * (`command` + `:` + `platform.about`).
+ * A renderer's window-scoped `platform.about` command (`command:platform.about-{windowId}`, see
+ * `dialog.service-host.ts`).
+ *
+ * The gate matches the SCOPED name rather than the generic `command:platform.about`: the main
+ * process registers routing proxies under the generic names before it creates any window, so the
+ * generic name appears in `rpc.discover` while no renderer exists to serve it. A scoped name can
+ * only come from a live renderer that finished registering its commands. The window id is an
+ * Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
  */
-const PLATFORM_ABOUT_COMMAND = 'command:platform.about';
+const SCOPED_PLATFORM_ABOUT_COMMAND = /^command:platform\.about-\d+$/;
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
@@ -360,14 +366,20 @@ export async function sendPapiRequestOnce<T>(
 }
 
 /**
- * Poll `rpc.discover` until `methodName` appears in `result.methods` or `timeoutMs` elapses. Uses
- * the same registration map as the live PAPI server (renderer-registered commands included).
+ * Poll `rpc.discover` until a method matching `methodName` appears in `result.methods` or
+ * `timeoutMs` elapses. Uses the same registration map as the live PAPI server (renderer-registered
+ * commands included).
+ *
+ * @param methodName Exact method name, or a pattern to match against every registered name (for
+ *   names that carry a runtime-assigned suffix, e.g. a window-scoped command).
  */
 export async function waitForPapiMethodRegistered(
-  methodName: string,
+  methodName: string | RegExp,
   port: number = DEFAULT_WEBSOCKET_PORT,
   timeoutMs = 60_000,
 ): Promise<void> {
+  const isMatch = (name: string) =>
+    typeof methodName === 'string' ? name === methodName : methodName.test(name);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
@@ -381,7 +393,7 @@ export async function waitForPapiMethodRegistered(
         port,
         Math.min(10_000, Math.max(1000, remaining)),
       );
-      if (result.methods?.some((m) => m.name === methodName)) return;
+      if (result.methods?.some((m) => isMatch(m.name))) return;
     } catch {
       /* next poll */
     }
@@ -534,10 +546,10 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
- * platform-dock layout to appear, then for the dialog service to finish registering menu commands
- * like `platform.about` (the dock can render before that async work completes), and finally for the
- * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
- * theme) finish initializing — it must be gone before tests interact with the UI.
+ * platform-dock layout to appear, then for a renderer to finish registering its window-scoped menu
+ * commands (the dock can render before that async work completes), and finally for the full-screen
+ * initialization overlay to clear. The overlay lingers while async services (settings, theme)
+ * finish initializing — it must be gone before tests interact with the UI.
  */
 export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
   const start = Date.now();
@@ -546,7 +558,11 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     timeout,
   });
   const remaining1 = Math.max(1000, timeout - (Date.now() - start));
-  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining1);
+  await waitForPapiMethodRegistered(
+    SCOPED_PLATFORM_ABOUT_COMMAND,
+    DEFAULT_WEBSOCKET_PORT,
+    remaining1,
+  );
   const remaining2 = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after dock-layout mounts and platform.about
   // registers, so the overlay can outlast both earlier signals.

@@ -79,6 +79,18 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /**
+     * Create a new application window
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.createWindow': () => Promise<void>;
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */
@@ -900,6 +912,32 @@ declare module 'papi-shared-types' {
      * @experimental Recently added; may change as we learn how it is used.
      */
     'platform.onDidChangeProjects': undefined;
+    /**
+     * Emitted when the Scripture reference for a scroll group changes. Multi-source because every
+     * open window navigates its own UI and announces the result — a scroll group is app-wide, so
+     * each window must be able to tell the others where it moved to.
+     */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes. Multi-source for the
+     * same reason as {@link MultiSourceNetworkEvents['scrollGroup:onDidUpdateScrRef']}.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
+    /**
+     * Multi-source because web views belong to the window that opened them, so every window
+     * announces its own.
+     *
+     * @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead.
+     */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created in any window. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated in any window. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed in any window. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
   };
 
   /**
@@ -923,22 +961,6 @@ declare module 'papi-shared-types' {
   export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
-    /** Emitted when the Scripture reference for a scroll group changes. */
-    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /**
-     * Emitted when a scroll group's back/forward reference history changes.
-     *
-     * @experimental
-     */
-    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
-    /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
-    'webView:onDidAddWebView': OpenWebViewEvent;
-    /** Emitted when a WebView is created. */
-    'webView:onDidOpenWebView': OpenWebViewEvent;
-    /** Emitted when a WebView is updated. */
-    'webView:onDidUpdateWebView': UpdateWebViewEvent;
-    /** Emitted when a WebView is closed. */
-    'webView:onDidCloseWebView': CloseWebViewEvent;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

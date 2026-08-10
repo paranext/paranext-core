@@ -5,6 +5,7 @@ import {
   DEV_MODE_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
   STARTUP_MARKS_QUERY_PARAMETER,
+  WINDOW_ID,
 } from '@shared/data/platform.data';
 import type { LogLevel } from 'electron-log';
 
@@ -41,5 +42,8 @@ globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !=
 // null is used in this API meaning the param is not present
 // eslint-disable-next-line no-null/no-null
 globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
+
+// Window id of the Electron browser window
+globalThis.windowId = searchParams.get(WINDOW_ID) ?? undefined;
 
 // #endregion
