@@ -592,6 +592,29 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getWorkspaceUpdating()).toBe(false);
   });
 
+  it('does not hang indefinitely waiting for a paint that never happens (e.g. a hidden/occluded window)', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-hidden-window', isEditable: true });
+    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    // Simulate a hidden/occluded window: Chromium's backgroundThrottling stops rAF callbacks from
+    // ever firing (it doesn't remove requestAnimationFrame or make it throw - the callback just
+    // never runs), so a bare double-rAF wait with no bound would hang here forever.
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 0),
+    );
+
+    const start = Date.now();
+    await host.handleSwitchToSimpleMode();
+    const elapsedMs = Date.now() - start;
+
+    expect(elapsedMs).toBeLessThan(3000);
+    vi.unstubAllGlobals();
+  }, 5000);
+
   it('fast path: finalizes the project switch non-blocking after the switch completes', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();

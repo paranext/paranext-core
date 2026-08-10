@@ -1125,6 +1125,14 @@ export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
 export const FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS = 1000;
 
 /**
+ * Bound on {@link waitForNextPaint}. A double `requestAnimationFrame` normally resolves in well
+ * under this (roughly one or two display frames), so this timeout never fires in the visible case -
+ * it exists only for the hidden/occluded-window case (see {@link waitForNextPaint}'s doc comment),
+ * where rAF never calls back at all.
+ */
+export const PAINT_WAIT_TIMEOUT_MS = 500;
+
+/**
  * Sentinel distinguishing "timed out" from a lookup that legitimately resolved to `undefined` (e.g.
  * no recent project on a fresh profile) - the two need different log treatment, since the latter is
  * an expected, non-warning-worthy outcome.
@@ -1196,8 +1204,9 @@ export async function handleSwitchToSimpleMode(
   // stand-in.
   const releaseWorkspaceUpdate = startWorkspaceUpdate();
   // Force React to commit + browser to paint the overlay BEFORE any lookup, otherwise the show can
-  // batch with later state changes and the overlay never actually appears on screen.
-  await waitForNextPaint();
+  // batch with later state changes and the overlay never actually appears on screen. Bounded: see
+  // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
+  await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
   // Set right before returning from a successful `runProjectBoundSimpleSwitch` call, so `finally`
   // below knows whether (and for which project) to finalize the switch's side effects. Left
   // `undefined` for every path that didn't actually load a project-bound layout.
@@ -1252,8 +1261,10 @@ export async function handleSwitchToSimpleMode(
     await loadLayoutWithWarning(generation);
   } finally {
     // Let the resolved tabs paint behind the overlay before we hide it, so the user sees a clean
-    // handoff (overlay → tabs) instead of a flash of an unresolved layout.
-    await waitForNextPaint();
+    // handoff (overlay → tabs) instead of a flash of an unresolved layout. Bounded: without this,
+    // a hidden/occluded window would leave the overlay stuck up until the workspace-updating
+    // store's own 30s leash (see waitForNextPaint's doc comment).
+    await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
     releaseWorkspaceUpdate();
     // Fire non-blocking, after the overlay has already released above, and only if this switch
     // actually loaded a project-bound layout and is still current (not superseded by a newer
@@ -1382,6 +1393,13 @@ async function runProjectBoundSimpleSwitch(
  * React to commit + browser to paint, and a second frame to ensure that paint has been flushed
  * before the caller proceeds. Falls back to immediate resolution in environments that don't provide
  * `requestAnimationFrame` (some test runners).
+ *
+ * Hidden/occluded-window case: Electron/Chromium's `backgroundThrottling` (on by default) stops rAF
+ * callbacks from ever firing while the window is minimized or occluded - it doesn't remove
+ * `requestAnimationFrame` or make it throw, the callback just never runs. So this alone would hang
+ * forever if the switch happens while the window isn't visible. Every call site races this against
+ * {@link PAINT_WAIT_TIMEOUT_MS} and proceeds either way - deliberately not logged as a warning on
+ * timeout, since a hidden window during a mode switch is a normal condition, not a fault.
  */
 function waitForNextPaint(): Promise<void> {
   return new Promise<void>((resolve) => {
