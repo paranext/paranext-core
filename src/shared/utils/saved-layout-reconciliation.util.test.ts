@@ -120,6 +120,72 @@ describe('reconcileSavedLayout', () => {
     });
   });
 
+  test('repoints a panel’s activeId when the tab it names is dropped', () => {
+    // The second panel's copy of `alpha` loses to the docked one, taking the tab `activeId` names
+    // with it. rc-dock silently falls back to the leftmost tab when `activeId` matches none of a
+    // panel's tabs, so a dangling id would quietly land the user on `beta` anyway — say so in the
+    // data rather than leaving a reference to a tab that is no longer there.
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          { tabs: [tab('alpha')], activeId: 'alpha' },
+          { tabs: [tab('alpha'), tab('beta')], activeId: 'alpha' },
+        ],
+      },
+    };
+
+    const reconciled = reconcileSavedLayout(layout);
+
+    expect(reconciled.dockbox).toEqual({
+      mode: 'horizontal',
+      children: [
+        { tabs: [tab('alpha')], activeId: 'alpha' },
+        { tabs: [tab('beta')], activeId: 'beta' },
+      ],
+    });
+  });
+
+  test('drops an activeId when a panel keeps no tabs but survives for its children', () => {
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [
+          {
+            tabs: [{ tabType: 'webView' }],
+            activeId: 'gone',
+            children: [{ tabs: [tab('alpha')] }],
+          },
+        ],
+      },
+    };
+
+    const reconciled = reconcileSavedLayout(layout);
+
+    expect(reconciled.dockbox).toEqual({
+      mode: 'horizontal',
+      children: [{ tabs: [], children: [{ tabs: [tab('alpha')] }] }],
+    });
+  });
+
+  test('drops an activeId from a node that carries no tabs at all', () => {
+    // No producer writes this shape, but the input is arbitrary JSON off disk — version skew or a
+    // hand-edited structure file — and sanitizing it is exactly this pass's job
+    const layout: LayoutInfo = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [{ activeId: 'gone', children: [{ tabs: [tab('alpha')] }] }],
+      },
+    };
+
+    const reconciled = reconcileSavedLayout(layout);
+
+    expect(reconciled.dockbox).toEqual({
+      mode: 'horizontal',
+      children: [{ children: [{ tabs: [tab('alpha')] }] }],
+    });
+  });
+
   test('removes an emptied floatbox entirely but keeps an emptied dockbox', () => {
     const layout: LayoutInfo = {
       dockbox: { mode: 'horizontal', children: [{ tabs: [] }] },

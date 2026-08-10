@@ -31,8 +31,9 @@ function getTabId(value: unknown): string | undefined {
 }
 
 /**
- * Reconcile one node of a saved layout: keep only tabs with usable, not-yet-seen ids, recurse into
- * child boxes, and report an emptied (or never-valid) node as `undefined` so the parent drops it.
+ * Reconcile one node of a saved layout: keep only tabs with usable, not-yet-seen ids, re-point an
+ * `activeId` left naming a dropped tab, recurse into child boxes, and report an emptied (or
+ * never-valid) node as `undefined` so the parent drops it.
  */
 function reconcileNode(value: unknown, seenTabIds: Set<string>): LayoutNode | undefined {
   const node = asLayoutNode(value);
@@ -44,15 +45,29 @@ function reconcileNode(value: unknown, seenTabIds: Set<string>): LayoutNode | un
 
   const result: LayoutNode = { ...node };
   let keptCount = 0;
+  const keptTabs = tabs
+    ? tabs.filter((tab) => {
+        const tabId = getTabId(tab);
+        if (!tabId || seenTabIds.has(tabId)) return false;
+        seenTabIds.add(tabId);
+        return true;
+      })
+    : [];
   if (tabs) {
-    const keptTabs = tabs.filter((tab) => {
-      const tabId = getTabId(tab);
-      if (!tabId || seenTabIds.has(tabId)) return false;
-      seenTabIds.add(tabId);
-      return true;
-    });
     keptCount += keptTabs.length;
     result.tabs = keptTabs;
+  }
+  // A panel remembers its active tab by id, so dropping that tab leaves the id pointing at nothing.
+  // rc-dock silently falls back to the leftmost tab when `activeId` matches none of a panel's tabs,
+  // so name that tab outright rather than persisting a dangling reference. Checked on every node,
+  // not just panels: no producer writes an `activeId` onto a tab-less box, but the input here is
+  // arbitrary JSON off disk, and a reference to a tab the node does not have is what this pass
+  // exists to remove.
+  const { activeId } = node;
+  if (typeof activeId === 'string' && !keptTabs.some((tab) => getTabId(tab) === activeId)) {
+    const firstKeptTabId = keptTabs.length > 0 ? getTabId(keptTabs[0]) : undefined;
+    if (firstKeptTabId !== undefined) result.activeId = firstKeptTabId;
+    else delete result.activeId;
   }
   if (children) {
     const keptChildren = children
@@ -77,7 +92,9 @@ function emptiedBox(value: unknown): LayoutNode {
  * occurrence wins, walking `dockbox` before the floating/maximized/windowed boxes so a duplicate
  * resolves in favor of the docked copy), tabs with no usable id, tabs not reachable through a
  * panel, and panels or boxes left empty by those removals. An emptied `dockbox` is kept (a layout
- * must have one); the other root boxes are removed entirely when emptied.
+ * must have one); the other root boxes are removed entirely when emptied. A panel whose `activeId`
+ * named one of the removed tabs is re-pointed at its first surviving tab, so no saved layout
+ * carries an active-tab reference to a tab that is no longer in it.
  *
  * A layout with none of those problems round-trips unchanged. The input is never mutated.
  */
