@@ -1173,6 +1173,12 @@ export function setScrRefSync(/* ... */): boolean {
   store the host cannot read. One file per key means no atomicity across them, and the other order
   can strand a profile as migrated-with-nothing-migrated. Write the value the host could never
   derive for itself first — user-defined themes, not a current theme that has a default.
+- Write the key that the "do I already have state of my own?" flag reads LAST, of all the keys one
+  persist touches. The same no-atomicity fact applies WITHIN a single persist: a failure part-way
+  strands one key, and the flag's key is what decides how the next start reads what is left. Last, a
+  stranded write leaves the flag closed and the whole write is simply retried. First, it leaves the
+  flag open over state that was never finished, so the retry is REFUSED rather than repeated — and
+  the offering window deletes its copy on being told so.
 - Make the host's "do I already have state of my own?" flag evidence of a USER ACTION, never of a
   write the host derived. Both worked examples need one and they answer it differently for a real
   reason: the scroll group's is memory (`Object.keys(scrRefs).length > 0`, which is only non-empty

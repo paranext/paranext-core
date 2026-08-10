@@ -495,6 +495,35 @@ describe('adopting previously stored state', () => {
     });
   });
 
+  it('does not consume the one-time adoption when only the second of the two writes fails', async () => {
+    // The store is one file per key with no atomicity across them, so a failure between them leaves
+    // one written and the other not. The key backing the "do I already have state of my own?" gate
+    // has to be the one written LAST, or a half-written migration reads at the next start as a
+    // finished one: the retry is refused, the offering window deletes its copy on being told so,
+    // and the half that never landed is gone for good.
+    const host = await import('@main/services/scroll-group.service-host');
+    const realSetItem = Storage.prototype.setItem;
+    let writeCount = 0;
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(function failAfterTheFirst(this: Storage, key: string, value: string) {
+        writeCount += 1;
+        if (writeCount > 1) throw new Error('disk full');
+        realSetItem.call(this, key, value);
+      });
+
+    await expect(host.migrateStoredScrollGroupState(previouslyStored)).rejects.toThrow();
+    setItem.mockRestore();
+
+    vi.resetModules();
+    const hostAfterRestart = await import('@main/services/scroll-group.service-host');
+    expect(await hostAfterRestart.migrateStoredScrollGroupState(previouslyStored)).toBe(true);
+    // The versification the reference is expressed in is what a stranded first write loses, and
+    // losing it silently reinterprets the reference against the wrong project
+    const snapshot = await hostAfterRestart.getScrollGroupSnapshot();
+    expect(snapshot.scrRefSourceProjectIds[0]).toBe('projOld');
+  });
+
   it('ignores an offered entry that is not shaped like a reference', async () => {
     const host = await import('@main/services/scroll-group.service-host');
 
