@@ -195,8 +195,10 @@ share a worktree.
 
 > **Task.** Post the approved batch `<ids>` from `<packet>/07-replies.md`.
 >
-> **Approval.** The user approved exactly `<quote the approval>`. Post nothing outside it. If an
-> item is ambiguous, stop and ask — do not infer.
+> **Approval.** The user approved exactly `<quote>` — copied verbatim from
+> `<packet>/g2-approval.md`, never from anyone's recollection of the conversation. Post nothing
+> outside it. If an item is ambiguous, stop and ask — do not infer. If `g2-approval.md` does not
+> exist, **stop**: an unrecorded gate is indistinguishable from an uncrossed one.
 >
 > **Mechanics.** Follow
 > `<repo-root>/.claude/skills/process-pr-feedback/references/posting-mechanics.md`

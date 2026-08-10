@@ -74,7 +74,7 @@ Run every check over the extracted bodies:
    at posting time tests only the labels whoever assembled it happened to think of, and it is
    assembled by the one role that must not be editing bodies. Allow a match only when **the
    match itself** sits inside a URL — not merely inside a token that contains one. Testing the
-   whole token waves through `[FIX-B](https://…)`, where the label is the link *text*: the most
+   whole token waves through `[<label>](https://…)`, where the label is the link *text*: the most
    reviewer-visible position in the body, and exactly what gets linked. Print what was allowed so
    it can be eyeballed.
 6. **Targets resolve.** For a new inline comment: `side` as intended, `line > 0`, and the item's
@@ -100,8 +100,20 @@ still resolves — see `pr-thread-conversion.md` for the anchor verification scr
 ## 6. Post sequentially, stop on first failure, never retry
 
 One item per invocation. No loops that continue past an error, and no automatic retries — a
-retry after an ambiguous failure is how a comment gets double-posted. Append to a log after
-every post, and refuse to post an item the log already records as `OK`.
+retry after an ambiguous failure is how a comment gets double-posted.
+
+The log is what makes that rule enforceable, so it is **write-ahead**: a `PENDING` row goes in
+*before* the call and is settled to `OK` or `FAIL` after it. Three states, three meanings:
+
+| Row | Outcome | On a later invocation |
+|---|---|---|
+| `OK` | Posted, id recorded | Refuse — already sent |
+| `FAIL` | `gh` reported failure | Proceed only deliberately, after `verify_posted.py` shows a clean stray list |
+| `PENDING` with neither beside it | **Unknown** — killed between the call and the log write | Refuse, and make a human read the PR |
+
+Without the write-ahead row that third state leaves *no row at all*, and since `verify_posted.py`
+derives the PRs it queries from the log, a PR whose only item died in that window is never read
+back — which is precisely where an unnoticed stray becomes a double post.
 
 Walk order: group by PR, threads before that PR's index comment, so the reviewer sees a coherent
 sequence in their notifications.
@@ -153,10 +165,20 @@ if item_id not in items:
 it = items[item_id]
 
 # --- double-post guard: the log is the source of truth on what already went out ---
+prior = []
 if os.path.exists(LOG):
-    for ln in open(LOG, encoding="utf-8"):
-        if ln.startswith(f"OK\t{item_id}\t"):
-            sys.exit(f"REFUSING: {item_id} already posted -> {ln.strip()}")
+    prior = [ln.rstrip("\n").split("\t") for ln in open(LOG, encoding="utf-8") if ln.strip()]
+mine = [r for r in prior if len(r) > 1 and r[1] == item_id]
+if any(r[0] == "OK" for r in mine):
+    sys.exit(f"REFUSING: {item_id} already posted -> {mine[-1]}")
+# A PENDING row blocks only when the outcome is genuinely UNKNOWN — no OK and no FAIL beside it,
+# meaning a previous run was killed between the POST and the log write, and GitHub may or may not
+# have created the comment. A PENDING followed by FAIL is a known outcome: `gh` reported the
+# failure, and re-posting after a clean stray list is exactly what verify_posted.py prescribes.
+if any(r[0] == "PENDING" for r in mine) and not any(r[0] == "FAIL" for r in mine):
+    sys.exit(f"REFUSING: {item_id} has an unresolved PENDING row.\n"
+             f"  A post may already be live. Check the PR before re-posting, then either\n"
+             f"  complete that row as OK with the real id, or delete it if nothing landed.")
 
 # --- build the payload for this item's kind ---
 if it["kind"] == "reply":            # threaded reply inside an existing inline thread
@@ -171,6 +193,15 @@ else:                                # issue comment on the PR
     payload = {"body": it["body"]}
 
 print(f"POST {endpoint}\n  item={item_id} kind={it['kind']} bodylen={len(it['body'])}")
+
+# --- write-ahead: log the INTENT before the call, so a hard kill still leaves a trace ---
+# Without this there is a window between `gh` succeeding and the OK row being written in which
+# the process can die leaving NO row at all — and verify_posted.py derives the PRs it queries
+# from the log, so a PR whose only item died in that window is never read back and its stray is
+# never found. The row is rewritten to OK below.
+with open(LOG, "a", encoding="utf-8") as f:
+    f.write(f"PENDING\t{item_id}\t{it['pr']}\t{it['kind']}\t-\t-\t"
+            f"{datetime.now().isoformat(timespec='seconds')}\n")
 
 proc = subprocess.run(["gh", "api", "--method", "POST", endpoint, "--input", "-"],
                       input=json.dumps(payload), capture_output=True, text=True)
@@ -192,6 +223,14 @@ print(f"  -> id={resp['id']}\n  -> {resp['html_url']}")
 if it["kind"] == "inline":
     print(f"  -> path={resp.get('path')} line={resp.get('line')} "
           f"side={resp.get('side')} subject_type={resp.get('subject_type')}")
+    # Assert, do not merely print. A file-level comment is a DIFFERENT artifact from the
+    # line-anchored one that was approved at G2, and nothing downstream can tell them apart:
+    # the id-set verification passes either way.
+    if resp.get("subject_type") != "line":
+        sys.exit(f"DEGRADED ANCHOR: {item_id} posted as "
+                 f"subject_type={resp.get('subject_type')!r}, expected 'line' - STOPPING. "
+                 f"The comment IS live ({resp['html_url']}); decide whether to keep or delete it "
+                 f"before posting anything else.")
 # For replies, prove it nested where it was meant to. The id-set verification cannot tell a
 # reply in the right thread from one in a stranger's.
 if it["kind"] == "reply" and resp.get("in_reply_to_id") != it["comment_id"]:
@@ -240,8 +279,12 @@ for it in items:
 # themselves are shared vocabulary and must NOT be listed here — see reply-conventions.md rule 6.
 PLACEHOLDERS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
                 r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{"]
-# <- transcribe from the "Internal" list in the packet's shared-vocabulary.md, not from memory
-INTERNAL_LABELS = [r"\bFIX-[A-Z]\b"]
+# <- transcribe from the "Internal" list in the packet's shared-vocabulary.md, not from memory.
+# This default is a SHAPE, not a starting point: replace it wholesale. Copying it blindly is a
+# live hazard — `FIX-B` and `FIX-D` were SHARED vocabulary in the round reply-conventions.md
+# quotes, so this pattern would hard-FAIL a batch containing a legitimate, already-posted reply,
+# and the poster is forbidden from editing a body to get past a check.
+INTERNAL_LABELS = [r"\bR\d-\d\d-internal\b"]
 for it in items:
     for pat in PLACEHOLDERS + INTERNAL_LABELS:
         for m in re.finditer(pat, it["body"]):
@@ -254,7 +297,7 @@ for it in items:
             tok = it["body"][s:e]
             # Where the URL starts inside the token: at its head, or just past a markdown "](".
             # Test the MATCH's own offset against that, not just "does this token contain a URL":
-            # in `[FIX-B](https://…)` the label is the link TEXT, and a whole-token test allows
+            # in `[<label>](https://…)` the label is the link TEXT, and a whole-token test allows
             # it — leaking the label into the most reviewer-visible position in the body.
             link = tok.find("](http")
             url_at = 0 if tok.startswith("http") else (link + 2 if link != -1 else None)
@@ -324,10 +367,15 @@ who = subprocess.run(["gh", "api", "user", "--jq", ".login"],
 
 logged = defaultdict(lambda: {"review": set(), "issue": set()})
 rows, failed_rows = 0, []
-for ln in open(LOG, encoding="utf-8"):
-    if not ln.strip():
+log_rows = [ln.rstrip("\n").split("\t") for ln in open(LOG, encoding="utf-8") if ln.strip()]
+# A PENDING row is post.py's write-ahead marker. Once the item's outcome is known — an OK or a
+# FAIL row beside it — the PENDING is spent, so drop it; otherwise every clean batch would report
+# PARTIAL. A PENDING with neither is a real unknown and must stay visible.
+settled = {r[1] for r in log_rows if r[0] in ("OK", "FAIL")}
+for row in log_rows:
+    if row[0] == "PENDING" and row[1] in settled:
         continue
-    status, item, pr, kind, cid = ln.rstrip("\n").split("\t")[:5]
+    status, item, pr, kind, cid = row[:5]
     # Touch the PR for EVERY row, including failures, so it enters the query set below with an
     # empty expected set. `gh` can fail after GitHub already created the comment, and that stray
     # only surfaces on a PR something actually reads back — a PR whose every row failed is
@@ -336,7 +384,7 @@ for ln in open(LOG, encoding="utf-8"):
     if status != "OK":
         # A partial batch is exactly when this script matters most, so record the failed row
         # and keep going rather than exiting — the items that DID land still need verifying.
-        failed_rows.append(ln.strip())
+        failed_rows.append("\t".join(row))
         continue
     entry["issue" if kind == "issue" else "review"].add(int(cid))
     rows += 1

@@ -64,8 +64,9 @@ Every run writes one packet, and **never reuses another run's**:
   05-self-review.md      P4   /code-review findings + adjudication
   06-verification.md     P5   gate battery results, e2e, live verification
   07-replies.md          P6   reply drafts, one per thread, with target ids
+  g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to do
   bodies.json            P7   drafts extracted to JSON — the exact bytes that will post
-  08-posting-log.txt     P7   append-only: status, item, pr, kind, comment id, url, time
+  08-posting-log.txt     P7   append-only, write-ahead: status, item, pr, kind, id, url, time
   09-record.md           P8   what landed where, durability copies, residue
   _phase-<n>-complete    all  one per finished phase, naming what it produced (see below)
   _scout-complete        P2   written only by a `--scout-only` run, at the point it stops
@@ -272,7 +273,7 @@ it is how a round processes a whole reviewer's feedback against a branch that ne
 
 Sweep **all** surfaces, not just the obvious one:
 
-- PR review bodies — `gh api repos/paranext/paranext-core/pulls/<pr>/reviews`
+- PR review bodies — `gh api repos/paranext/paranext-core/pulls/<pr>/reviews --paginate`
 - Inline review threads (these are the ones with reply endpoints) —
   `gh api repos/paranext/paranext-core/pulls/<pr>/comments --paginate`
 - Issue comments on the PR — `gh api repos/paranext/paranext-core/issues/<pr>/comments --paginate`
@@ -313,7 +314,18 @@ not a dismissal.
 items. Items from earlier rounds are inventoried as **context, not work**, in their own section,
 each carrying an explicit `already-handled` marker with the round that handled it, its
 disposition, and where the fix or reply landed. They are there so this round can see what was
-already promised to this reviewer, and for nothing else:
+already promised to this reviewer, and for nothing else.
+
+**Build that section from our own posted replies, not from the previous packet.** Packets are
+git-ignored and machine-local — round 1's may be on another machine, or gone. What is always
+recoverable is what we actually said in public: `pulls/<pr>/comments --paginate` and
+`issues/<pr>/comments --paginate` return our replies whether or not their threads were resolved,
+each one already stating its disposition and where the fix landed, which is exactly the content
+this section needs. Use the round-1 packet when it happens to be present; never depend on it.
+Anything we promised and cannot now find a reply for is itself a finding — it means a commitment
+went out with no public record.
+
+The rules:
 
 - They are **not re-verified.** A verifier's item list never includes them, and no agent is
   briefed to re-check them. Re-verification burns a round's budget re-deriving conclusions that
@@ -600,17 +612,29 @@ unread.
 Repeat the house rule. Approval must name what is approved — "post the replies", "push the
 stack", or the specific items. A general go-ahead does not cross this gate.
 
+**Write the approval verbatim into `g2-approval.md`, dated, before starting P7** — exactly as G1
+writes `03-rulings.md`, and for exactly the same reason. P7 is the phase that pushes and posts
+under the user's name, and the Poster brief requires the approval quoted word for word; taking
+that quote from conversation memory is the one place this skill would depend on a session
+surviving. It does not. A session that dies between G2 and the end of P7 leaves a packet with
+replies drafted, nothing in the posting log, and no way to tell whether posting was authorised —
+and the safe reading of that state ("re-ask the user") is only available if the absence of the
+file means something. Record what was approved, what was explicitly *not*, and the date.
+
 ### P7 — Publish
 
-**In:** G2 approval, `07-replies.md`.
+**In:** `g2-approval.md`, `07-replies.md`.
 **Out:** `08-posting-log.txt`, updated remotes.
 **Agent:** `poster`, brief in `references/agent-briefs.md`; mechanics in
 `references/posting-mechanics.md`.
 
-1. **Push** — `--force-with-lease` for restacked branches, in stack order, bottom first, one
-   command at a time with the result checked before the next. Re-check each PR's approval state
-   immediately after its own push, per P6 step 2 — a dismissed approval is reported and
-   re-requested in this run, not discovered by the reviewer later.
+1. **Push** — per `references/restack-battery.md` § *Force-pushing*, which is the authority on
+   how: `--force-with-lease=<branch>:<the remote tip SHA recorded in step 1>`, **never bare
+   `--force-with-lease`** (with no expected value the lease is checked against the
+   remote-tracking ref, which any `git fetch` across the two gates has already advanced), in
+   stack order, bottom first, one command at a time with the result checked before the next.
+   Re-check each PR's approval state immediately after its own push, per P6 step 2 — a dismissed
+   approval is reported and re-requested in this run, not discovered by the reviewer later.
 2. **Post** per `references/posting-mechanics.md`: extract bodies to JSON, run the dry-run
    checks, re-derive every head SHA at posting time, post sequentially, stop on the first
    failure with no retry, then verify by count and id set against the live API.
