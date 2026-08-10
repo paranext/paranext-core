@@ -493,6 +493,21 @@ describe('window layout persistence service', () => {
     await expect(service.writeNow([71])).resolves.toBeUndefined();
   });
 
+  test('a failed write leaves the write chain usable, so later writes still land', async () => {
+    mocks.writeFile.mockRejectedValueOnce(new Error('disk full'));
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 71);
+    service.setMainWindowId(71);
+
+    await service.writeNow([71]);
+
+    // Every write queues behind the one before it, so a failure left unresolved in that queue would
+    // skip persistence for the rest of the session — including the quit-time flush
+    await service.writeNow([71]);
+    expect(mocks.writeFile).toHaveBeenCalledTimes(2);
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual(['one']);
+  });
+
   test('removing a window cancels its pending debounced write so the flush stays the last write', async () => {
     vi.useFakeTimers();
     const service = await startService();
