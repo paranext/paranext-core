@@ -36,9 +36,7 @@ export interface DebouncedPdpSaveParams {
    * consume.
    */
   paletteLiteralRun?: string;
-  /** Settle pending mid-edit marker text in the editor so the saved USJ matches the screen. */
-  commitPendingMarkerEdits: () => void;
-  /** Read the editor's current (post-commit) USJ. */
+  /** Read the editor's current USJ. Already settled — see `EditorRef.getUsj`. */
   getEditorUsj: () => Usj | undefined;
 }
 
@@ -120,9 +118,11 @@ export function resolveUsjToSaveToPdp(
  *   reading it would pull the new chapter's content, and the current save fn would write it to the
  *   wrong chapter.
  * - Otherwise (same chapter), preserve the existing behavior: with a marker-palette session open,
- *   save the scheduled USJ without settling markers (the palette's apply must consume the typed
- *   literal); with no palette session, settle pending marker edits then save what the editor
- *   shows.
+ *   save the SCHEDULED USJ — the raw serialization captured at the keystroke, whose un-settled
+ *   trigger literal the strip below removes and the palette's apply is still going to consume; with
+ *   no palette session, save what the editor shows, which `EditorRef.getUsj` already returns
+ *   settled. Nothing in this path mutates the document: a pre-save settle used to, and that
+ *   mutation is exactly what made a debounced save able to re-settle an explicitly-undone literal.
  *
  * This narrows, but does not remove, the effect-ordering dependency: both save fns still resolve
  * the actual PDP setter via `saveUsjToPdpRawStableRef.current` in
@@ -139,7 +139,6 @@ export function performDebouncedPdpSave({
   latestSave,
   isPaletteSessionOpen,
   paletteLiteralRun,
-  commitPendingMarkerEdits,
   getEditorUsj,
 }: DebouncedPdpSaveParams): void {
   if (scheduledChapterKey !== currentChapterKey) {
@@ -150,6 +149,5 @@ export function performDebouncedPdpSave({
     latestSave(stripPaletteLiteral(usj, paletteLiteralRun));
     return;
   }
-  commitPendingMarkerEdits();
   latestSave(getEditorUsj() ?? usj);
 }

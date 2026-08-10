@@ -2194,7 +2194,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               paletteSession.current?.kind === 'backslash'
                 ? `\\${paletteSession.current.filter}`
                 : undefined,
-            commitPendingMarkerEdits: () => editorRef.current?.commitPendingMarkerEdits(),
             getEditorUsj: () => editorRef.current?.getUsj(),
           });
         },

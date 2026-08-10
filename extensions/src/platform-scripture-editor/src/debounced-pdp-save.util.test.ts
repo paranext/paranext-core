@@ -21,7 +21,6 @@ describe('performDebouncedPdpSave', () => {
   it('saves the captured content via the captured save fn when the chapter changed, without touching the editor', () => {
     const capturedSave = vi.fn();
     const latestSave = vi.fn();
-    const commitPendingMarkerEdits = vi.fn();
     const getEditorUsj = vi.fn(() => freshEditorUsj);
 
     performDebouncedPdpSave({
@@ -31,13 +30,11 @@ describe('performDebouncedPdpSave', () => {
       capturedSave,
       latestSave,
       isPaletteSessionOpen: false,
-      commitPendingMarkerEdits,
       getEditorUsj,
     });
 
     expect(capturedSave).toHaveBeenCalledWith(scheduledUsj);
     expect(latestSave).not.toHaveBeenCalled();
-    expect(commitPendingMarkerEdits).not.toHaveBeenCalled();
     expect(getEditorUsj).not.toHaveBeenCalled(); // never reads the wrong chapter's editor content
   });
 
@@ -47,7 +44,6 @@ describe('performDebouncedPdpSave', () => {
   it('saves the scheduled content via the latest save fn without settling markers when a palette session is open', () => {
     const capturedSave = vi.fn();
     const latestSave = vi.fn();
-    const commitPendingMarkerEdits = vi.fn();
     const getEditorUsj = vi.fn(() => freshEditorUsj);
 
     performDebouncedPdpSave({
@@ -57,20 +53,19 @@ describe('performDebouncedPdpSave', () => {
       capturedSave,
       latestSave,
       isPaletteSessionOpen: true,
-      commitPendingMarkerEdits,
       getEditorUsj,
     });
 
     expect(latestSave).toHaveBeenCalledWith(scheduledUsj);
-    expect(commitPendingMarkerEdits).not.toHaveBeenCalled();
     expect(capturedSave).not.toHaveBeenCalled();
   });
 
-  // Same chapter, no palette: settle pending marker edits, then save what the editor shows post-commit.
-  it('settles markers then saves the fresh editor content via the latest save fn on the same chapter', () => {
+  // Same chapter, no palette: save what the editor shows. The editor's getUsj() is already SETTLED,
+  // so the save path never mutates the document to make it so — a pre-save commit would push an undo
+  // entry and could re-settle content the user just undid.
+  it('saves the settled editor content via the latest save fn on the same chapter', () => {
     const capturedSave = vi.fn();
     const latestSave = vi.fn();
-    const commitPendingMarkerEdits = vi.fn();
     const getEditorUsj = vi.fn(() => freshEditorUsj);
 
     performDebouncedPdpSave({
@@ -80,11 +75,10 @@ describe('performDebouncedPdpSave', () => {
       capturedSave,
       latestSave,
       isPaletteSessionOpen: false,
-      commitPendingMarkerEdits,
       getEditorUsj,
     });
 
-    expect(commitPendingMarkerEdits).toHaveBeenCalled();
+    expect(getEditorUsj).toHaveBeenCalled();
     expect(latestSave).toHaveBeenCalledWith(freshEditorUsj);
     expect(capturedSave).not.toHaveBeenCalled();
   });
@@ -101,7 +95,6 @@ describe('performDebouncedPdpSave', () => {
       capturedSave: vi.fn(),
       latestSave,
       isPaletteSessionOpen: false,
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj,
     });
 
@@ -123,7 +116,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       latestSave,
       isPaletteSessionOpen: true,
       paletteLiteralRun: '\\f',
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
 
@@ -143,7 +135,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       latestSave,
       isPaletteSessionOpen: true,
       paletteLiteralRun: '\\f',
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
 
@@ -161,7 +152,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       latestSave,
       isPaletteSessionOpen: true,
       paletteLiteralRun: '\\zz',
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
     expect(latestSave).toHaveBeenCalledWith(usj);
@@ -178,7 +168,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       latestSave,
       isPaletteSessionOpen: true,
       paletteLiteralRun: '\\f',
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
     expect(usj).toEqual(usjWith('tell\\f,')); // caller's object untouched
@@ -195,7 +184,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       capturedSave: vi.fn(),
       latestSave,
       isPaletteSessionOpen: true,
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
     expect(latestSave).toHaveBeenCalledWith(usj);
@@ -216,7 +204,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       latestSave: vi.fn(),
       isPaletteSessionOpen: true,
       paletteLiteralRun: '\\f',
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
 
@@ -235,7 +222,6 @@ describe('performDebouncedPdpSave — palette literal stripping', () => {
       capturedSave,
       latestSave: vi.fn(),
       isPaletteSessionOpen: true,
-      commitPendingMarkerEdits: vi.fn(),
       getEditorUsj: vi.fn(),
     });
 
