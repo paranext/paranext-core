@@ -1,10 +1,8 @@
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { LanguageStrings } from 'platform-bible-utils';
 import { MutableRefObject, useMemo } from 'react';
-import {
-  CharacterMarkerControl,
-  CharacterMarkerToolbar,
-} from '../character-marker-control.component';
+import { CharacterMarkerControl } from '../character-marker-control/character-marker-control.component';
+import { CharacterMarkerToolbar } from '../character-marker-control/character-marker-toolbar.component';
 import { CharacterMarkerSelection } from '../character-marker-coverage.utils';
 import { useCharacterMarkerState } from '../use-character-marker-state.hook';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
@@ -24,8 +22,12 @@ export type CharacterMarkerBarProps = {
    * The project text's direction, as the editor itself is given it. Passed on to the menu so it
    * mirrors its alignment in an RTL project — see `menuDirection` on `CharacterMarkerControl` for
    * why this cannot be inferred from the document.
+   *
+   * Required for the same reason `menuDirection` is: the popover is portaled outside every element
+   * this app gives a `dir`, so an omitted direction resolves physically and an RTL project's menu
+   * runs off the iframe's inline-start edge.
    */
-  textDirection?: 'ltr' | 'rtl';
+  textDirection: 'ltr' | 'rtl';
   /** Localized strings for the control, its tooltips, and the menu. */
   localizedStrings: LanguageStrings;
 };

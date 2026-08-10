@@ -108,6 +108,7 @@ vi.mock('platform-bible-react', () => ({
   Label: ({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) => (
     <label htmlFor={htmlFor}>{children}</label>
   ),
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,

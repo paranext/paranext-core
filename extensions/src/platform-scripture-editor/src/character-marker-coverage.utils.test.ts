@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { computeCharacterMarkerCoverage } from './character-marker-coverage.utils';
 
-// `kolo \bd Mulu\bd* rest` — a partially marked paragraph. Paths:
+// `kolo \bd Mulu\bd* rest` — U3's worked example. Paths:
 //   $.content[2].content[1]             → 'kolo '
 //   $.content[2].content[2].content[0]  → 'Mulu' (inside \bd)
 //   $.content[2].content[3]             → ' rest'
@@ -130,7 +130,7 @@ const MULU = '$.content[2].content[2].content[0]';
 const REST = '$.content[2].content[3]';
 
 describe('computeCharacterMarkerCoverage', () => {
-  it("reports 'partial' and uncovered text for a kolo + \\bd Mulu\\bd* selection", () => {
+  it("reports 'partial' and uncovered text for U3's kolo + \\bd Mulu\\bd* selection", () => {
     const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
       start: { jsonPath: KOLO, offset: 0 },
       end: { jsonPath: MULU, offset: 4 },
@@ -192,6 +192,19 @@ describe('computeCharacterMarkerCoverage', () => {
     expect(coverage.hasUncovered).toBe(true);
   });
 
+  it('reports no information rather than uncovered text for a caret inside a note', () => {
+    // The caret sits in the note's `ft` content, which coverage excludes entirely. Reporting
+    // `hasUncovered: true` here would claim unmarked text is selected at a location this function
+    // deliberately does not measure; the empty result instead makes the caller fall back to its own
+    // context, as it does for any other unresolvable selection.
+    const coverage = computeCharacterMarkerCoverage(USJ_WITH_NOTE, {
+      start: { jsonPath: '$.content[2].content[2].content[0].content[0]', offset: 2 },
+      end: { jsonPath: '$.content[2].content[2].content[0].content[0]', offset: 2 },
+    });
+
+    expect(coverage).toEqual({ markerStates: {}, hasUncovered: false });
+  });
+
   it('ignores the non-character markers a selection spans', () => {
     // The selection crosses the `\bd` char node and lands in plain text; `p` and `v` are block and
     // numbering markers and must never appear in the result.
@@ -228,6 +241,67 @@ describe('computeCharacterMarkerCoverage', () => {
     expect(coverage.markerStates.bd).toBe('partial');
     expect(coverage.markerStates.v).toBeUndefined();
     expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('treats a collapsed caret in unmarked text as uncovered', () => {
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 2 },
+      end: { jsonPath: KOLO, offset: 2 },
+    });
+
+    expect(coverage.markerStates).toEqual({});
+    expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('degrades an end it can never reach to the start node alone', () => {
+    // `end` precedes `start` in document order, so walking forward never arrives at it. Without the
+    // degrade the walk runs to the end of the chapter and drags ' rest' in, reporting `bd` as
+    // 'partial' over uncovered text.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: MULU, offset: 0 },
+      end: { jsonPath: KOLO, offset: 5 },
+    });
+
+    expect(coverage.markerStates.bd).toBe('all');
+    expect(coverage.hasUncovered).toBe(false);
+  });
+
+  it('counts the text inside an end that names a marker rather than its text', () => {
+    // `end` is the `\bd` MarkerObject itself, not the 'Mulu' inside it. The walk visits an object
+    // before descending into it, so it must not stop on arrival or the marker's own text goes
+    // uncounted and `bd` vanishes from the result entirely.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 0 },
+      end: { jsonPath: '$.content[2].content[2]' },
+    });
+
+    // 'kolo ' (5) + 'Mulu' (4): `bd` covers 4 of 9, and ' rest' after the marker stays out.
+    expect(coverage.markerStates.bd).toBe('partial');
+    expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('drops a trailing marker the selection stops short of', () => {
+    // Ending at offset 0 of 'Mulu' selects up to the bold run without entering it. Untrimmed, the
+    // whole of 'Mulu' would count and report `bd` as covering part of the selection.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: KOLO, offset: 0 },
+      end: { jsonPath: MULU, offset: 0 },
+    });
+
+    expect(coverage.markerStates).toEqual({});
+    expect(coverage.hasUncovered).toBe(true);
+  });
+
+  it('drops trailing uncovered text the selection stops short of', () => {
+    // The mirror of the case above: ending at offset 0 of ' rest' keeps the selection wholly inside
+    // `\bd`. Untrimmed, ' rest' would count as uncovered and demote `bd` to 'partial'.
+    const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
+      start: { jsonPath: MULU, offset: 0 },
+      end: { jsonPath: REST, offset: 0 },
+    });
+
+    expect(coverage.markerStates.bd).toBe('all');
+    expect(coverage.hasUncovered).toBe(false);
   });
 
   it('returns an empty coverage rather than throwing for degenerate input', () => {

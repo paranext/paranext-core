@@ -3,18 +3,7 @@ import path from 'path';
 import { describe, expect, it } from 'vitest';
 
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
-
-// Duplicated from `CHARACTER_MARKER_CONTROL_STRING_KEYS` in `character-marker-control.component`
-// rather than imported: this suite runs in a node environment, and importing that component pulls
-// in the editor's DOM-dependent modules, which fail to load without a `document`.
-const CHARACTER_MARKER_CONTROL_STRING_KEYS = [
-  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%',
-  '%webView_platformScriptureEditor_characterMarkerControl_mixed%',
-  '%webView_platformScriptureEditor_characterMarkerControl_none%',
-  '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%',
-  '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%',
-  '%webView_platformScriptureEditor_syncEditBlocked_banner%',
-];
+import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
@@ -71,21 +60,58 @@ describe('character marker menu labels', () => {
   });
 });
 
-// Same en/es parity guard for the character-marker control's own strings, driven off its exported
-// key list. The sentence-case assertion above deliberately does not apply here: several of these are
-// parenthetical status words ("(mixto)", "(ninguno)") that do not open with a capital letter.
-describe('character marker control labels', () => {
-  CHARACTER_MARKER_CONTROL_STRING_KEYS.forEach((key) => {
-    it(`has an English label for ${key}`, () => {
-      expect(localizedStrings.en[key]).toBeTruthy();
-    });
+// Keys the control asks for that this file cannot assert on, each for its own reason. Anything not
+// listed here is checked, so a key added to the control is covered without anyone editing this file.
+const CHARACTER_MARKER_CONTROL_KEYS_CHECKED_ELSEWHERE: readonly string[] = [
+  // Format strings: asserted by the placeholder block below instead, which drops the
+  // differs-from-English assertion that does not apply to them.
+  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%',
+  '%webView_platformScriptureEditor_characterMarkerControl_label_format%',
+  // Ships in `platform-bible-react`'s own localized strings beside its `_insert` and `_paragraph`
+  // siblings, not in this extension's contribution, so it is absent from the file read here.
+  '%markerMenu_searchPlaceholder_character%',
+];
 
-    it(`has a Spanish label for ${key}`, () => {
-      expect(localizedStrings.es[key]).toBeTruthy();
-    });
+const CHARACTER_MARKER_CONTROL_KEYS = CHARACTER_MARKER_CONTROL_STRING_KEYS.filter(
+  (key) => !CHARACTER_MARKER_CONTROL_KEYS_CHECKED_ELSEWHERE.includes(key),
+);
 
-    it(`Spanish label differs from English for ${key}`, () => {
-      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
-    });
+// Same guard as above, for the control's own strings: nothing in the build enforces en/es parity.
+// Driven off the exported key list, minus the documented exclusions, so a key added to the control
+// is covered here automatically.
+describe.each(CHARACTER_MARKER_CONTROL_KEYS)('character marker control label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
+
+// The format strings are checked separately because the differs-from-English assertion above does
+// not apply to them: a format string is punctuation and placeholders, so es and en legitimately
+// match until a locale needs different ordering or separators. What must hold is that both locales
+// carry every placeholder the code substitutes — a dropped one silently renders an empty slot.
+const CHARACTER_MARKER_CONTROL_FORMAT_KEYS: [key: string, placeholders: string[]][] = [
+  ['%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%', ['name', 'value']],
+  [
+    '%webView_platformScriptureEditor_characterMarkerControl_label_format%',
+    ['marker', 'description'],
+  ],
+];
+
+describe.each(CHARACTER_MARKER_CONTROL_FORMAT_KEYS)(
+  'character marker control format string %s',
+  (key, placeholders) => {
+    it.each(['en', 'es'])('has every placeholder in %s', (locale) => {
+      const value = localizedStrings[locale][key];
+      expect(value).toBeTruthy();
+      placeholders.forEach((placeholder) => expect(value).toContain(`{${placeholder}}`));
+    });
+  },
+);

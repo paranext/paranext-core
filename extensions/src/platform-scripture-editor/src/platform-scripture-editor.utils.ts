@@ -14,10 +14,9 @@
 import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
-// Type-only: `main.ts` runs in the extension host, whose `require` shim supplies nothing but `papi`,
-// so a value import from here would break extension activation. `USJ_VERSION` is only ever read as
-// `typeof USJ_VERSION`, so no runtime value is needed. Enforced by
-// `extension-host-import-boundary.test.ts`.
+// Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
+// only `papi`, so this package must never become a runtime import here (see the note at the top of
+// this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
 import type { Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,

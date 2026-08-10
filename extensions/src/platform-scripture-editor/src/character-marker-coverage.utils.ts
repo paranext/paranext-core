@@ -10,6 +10,12 @@ import {
 export type CharacterMarkerSelectionState = 'all' | 'partial' | 'none';
 
 /**
+ * The states a marker can have inside {@link CharacterMarkerCoverage.markerStates}. `'none'` cannot
+ * occur there: a marker covering none of the selection is expressed by absence from the map.
+ */
+type CharacterMarkerCoverageState = Exclude<CharacterMarkerSelectionState, 'none'>;
+
+/**
  * The subset of the editor's `SelectionRange` this analysis needs. Declared structurally so the
  * analysis stays free of any dependency on the editor package — a real `SelectionRange` satisfies
  * it.
@@ -27,7 +33,7 @@ export type CharacterMarkerCoverage = {
    * Every character marker covering any part of the selection, and whether it covers all of the
    * selected text or only part of it. A marker absent from this map covers none of the selection.
    */
-  markerStates: Readonly<Record<string, 'all' | 'partial'>>;
+  markerStates: Readonly<Record<string, CharacterMarkerCoverageState>>;
   /** `true` when some of the selected text carries no character marker at all. */
   hasUncovered: boolean;
 };
@@ -36,6 +42,19 @@ const EMPTY_COVERAGE: CharacterMarkerCoverage = Object.freeze({
   markerStates: Object.freeze({}),
   hasUncovered: false,
 });
+
+/**
+ * Whether a coverage carries no information at all — no marker covers any of the selection AND
+ * nothing is uncovered.
+ *
+ * This is the "nothing to measure" result, NOT "the selection carries no marker": it arises from an
+ * unresolvable json path, a selection inside a note, or a caret whose start node holds no text.
+ * Callers should degrade to their own context on it rather than report an unmarked selection.
+ * Exported so that test lives in one place instead of being re-derived at each call site.
+ */
+export function isEmptyCoverage(coverage: CharacterMarkerCoverage): boolean {
+  return Object.keys(coverage.markerStates).length === 0 && !coverage.hasUncovered;
+}
 
 /**
  * Guard on the ancestor walk. USJ nesting is shallow in practice (book > para > char > char), so a
@@ -85,9 +104,9 @@ function getAncestorCharacterMarkers(
  *
  * @param usj The chapter USJ the selection's json paths refer to.
  * @param selection The selection to analyze. `undefined` yields an empty coverage.
- * @returns Per-marker coverage. Empty (no markers, nothing uncovered) when the selection cannot be
- *   resolved against `usj` — an unresolvable path is treated as "no information", never as a
- *   throw.
+ * @returns Per-marker coverage. Empty (no markers, nothing uncovered) when there is nothing to
+ *   measure — an unresolvable path, or a selection inside a note — which is treated as "no
+ *   information", never as a throw and never as "the selection is unmarked".
  */
 export function computeCharacterMarkerCoverage(
   usj: Usj,
@@ -114,16 +133,32 @@ export function computeCharacterMarkerCoverage(
   // walk includes its starting point, and returning `true` stops it.
   const segments: { jsonPath: string; text: string }[] = [];
   let reachedEnd = false;
+  // Set when the end path names a MarkerObject rather than a text node — see below.
+  let isInsideEndSubtree = false;
+  const isDescendantOfEnd = (jsonPath: string) => jsonPath.startsWith(`${endJsonPath}.`);
   usjRW.findNextMatchingNode(startLocation, ({ node, documentLocation }) => {
-    if (isString(node)) segments.push({ jsonPath: documentLocation.jsonPath, text: node });
-    if (documentLocation.jsonPath === endJsonPath) {
+    const { jsonPath } = documentLocation;
+    // Leaving the end node's subtree ends the walk. Checked before collecting so the node that
+    // carried us out never enters `segments`.
+    if (isInsideEndSubtree && !isDescendantOfEnd(jsonPath)) return true;
+
+    if (isString(node)) segments.push({ jsonPath, text: node });
+
+    if (jsonPath === endJsonPath) {
       reachedEnd = true;
-      return true;
+      if (isString(node)) return true;
+      // The end resolved to a MarkerObject, not to its text. The walk is PRE-ORDER — it runs the
+      // callback on an object before descending into its `content` — so stopping here would end
+      // the walk before the marker's own text was ever collected and silently undercount it.
+      // Descend instead, and stop on the way back out.
+      isInsideEndSubtree = true;
     }
     return false;
   });
-  // An end that never came up (a reversed or unreachable range) degrades to the start node alone
-  // rather than to the rest of the chapter.
+  // An end that never came up (an unreachable range) degrades to the start node alone rather than
+  // to the rest of the chapter. Note this is not the backwards-drag case: the editor normalizes
+  // selection direction before this sees it (`$getUsjSelectionFromEditor` swaps anchor and focus
+  // on `isBackward()`), so `start` always precedes `end` in document order.
   if (!reachedEnd) segments.length = Math.min(segments.length, 1);
 
   // Trim the first and last segments to the selection's offsets. With one segment both apply to it.
@@ -131,7 +166,13 @@ export function computeCharacterMarkerCoverage(
     const startOffset = selection.start.offset ?? 0;
     const endOffset = selection.end?.offset;
     if (segments.length === 1) {
-      segments[0].text = segments[0].text.slice(startOffset, endOffset);
+      // `endOffset` indexes the END node's text. It applies here only when the end was actually
+      // reached, which for a single segment means start and end name the same text node. On the
+      // degraded path above the sole segment is the START node, and applying the end node's offset
+      // to it would keep an arbitrary prefix instead of the whole node.
+      segments[0].text = reachedEnd
+        ? segments[0].text.slice(startOffset, endOffset)
+        : segments[0].text.slice(startOffset);
     } else {
       segments[0].text = segments[0].text.slice(startOffset);
       const last = segments[segments.length - 1];
@@ -156,8 +197,13 @@ export function computeCharacterMarkerCoverage(
   // A collapsed caret selects no text, so length accounting says nothing. Fall back to the markers
   // enclosing the caret and call them 'all': everything selected (nothing) is inside them.
   if (totalLength === 0) {
-    const ancestors = getAncestorCharacterMarkers(usjRW, selection.start.jsonPath) ?? [];
-    const caretStates: Record<string, 'all' | 'partial'> = {};
+    const ancestors = getAncestorCharacterMarkers(usjRW, selection.start.jsonPath);
+    // Inside a note, which coverage excludes entirely. Report "no information" rather than
+    // `hasUncovered: true`: claiming unmarked text is selected would describe a location this
+    // function deliberately does not measure. The empty result makes the caller fall back to its
+    // own context, exactly as it does for any other unresolvable selection.
+    if (!ancestors) return EMPTY_COVERAGE;
+    const caretStates: Record<string, CharacterMarkerCoverageState> = {};
     ancestors.forEach((marker) => {
       caretStates[marker] = 'all';
     });
@@ -167,7 +213,7 @@ export function computeCharacterMarkerCoverage(
     };
   }
 
-  const markerStates: Record<string, 'all' | 'partial'> = {};
+  const markerStates: Record<string, CharacterMarkerCoverageState> = {};
   coveredLengthByMarker.forEach((coveredLength, marker) => {
     markerStates[marker] = coveredLength >= totalLength ? 'all' : 'partial';
   });

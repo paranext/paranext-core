@@ -3,10 +3,10 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mockSetting = { value: 'simple' as unknown };
+const mockSetting = { value: 'simple' as unknown, isLoading: false };
 
 vi.mock('@papi/frontend/react', () => ({
-  useSetting: () => [mockSetting.value, vi.fn(), vi.fn()],
+  useSetting: () => [mockSetting.value, vi.fn(), vi.fn(), mockSetting.isLoading],
 }));
 
 const mockLoggerWarn = vi.fn();
@@ -22,6 +22,7 @@ import { useIsPowerMode } from './use-is-power-mode.hook';
 afterEach(() => {
   vi.clearAllMocks();
   mockSetting.value = 'simple';
+  mockSetting.isLoading = false;
 });
 
 describe('useIsPowerMode', () => {
@@ -33,6 +34,15 @@ describe('useIsPowerMode', () => {
   it('reports true in power mode', () => {
     mockSetting.value = 'power';
     expect(renderHook(() => useIsPowerMode()).result.current).toBe(true);
+  });
+
+  it('reports undefined while the setting is still loading, so callers render nothing', () => {
+    // `useSetting` hands back its `defaultState` ('simple') while the read is in flight. Reporting
+    // Simple there would flash Simple-only UI into a Power session for a frame.
+    mockSetting.isLoading = true;
+    mockSetting.value = 'simple';
+
+    expect(renderHook(() => useIsPowerMode()).result.current).toBeUndefined();
   });
 
   it('reports false and warns when the setting cannot be read', () => {

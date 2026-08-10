@@ -13,6 +13,7 @@ import { AlertCircle, CircleCheck } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { WizardStepForm } from '../wizard-step-form.component';
 import { FirstRunStepProps } from '../first-run-step-props.model';
+import { StepLoading } from '../step-loading.component';
 
 // Copied from the paratext-registration extension — keep in sync if the extension changes.
 //   REGISTRATION_CODE_REGEX_STRING, REGISTRATION_CODE_LENGTH_WITH_DASHES:
@@ -284,14 +285,7 @@ export function IdentifyStep({
   const activeErrorDescription = error ? errorDescription : saveErrorDescription;
 
   if (isRestarting) {
-    return (
-      <div className="tw:flex tw:flex-col tw:items-center tw:gap-4 tw:py-8 tw:text-center">
-        <Spinner />
-        <p className="tw:text-sm tw:text-muted-foreground">
-          {strings['%paratextRegistration_button_restarting%']}
-        </p>
-      </div>
-    );
+    return <StepLoading message={strings['%paratextRegistration_button_restarting%']} />;
   }
 
   // Re-register mode surfaces an escape hatch in the back-button slot; at the identify entry the

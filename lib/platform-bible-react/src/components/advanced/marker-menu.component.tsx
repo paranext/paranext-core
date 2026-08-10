@@ -1,5 +1,5 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
-import { Ban, Check, Minus } from 'lucide-react';
+import { Ban, Check } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -21,9 +21,10 @@ export const MARKER_MENU_STRING_KEYS = Object.freeze([
   '%markerMenu_disallowed_label%',
   '%markerMenu_noResults%',
   '%markerMenu_searchPlaceholder%',
-  // These two keys are not read by this component directly; they are provided here so callers can
-  // localize them and pass the result into the optional `searchPlaceholder` prop to override the
-  // default search-field placeholder.
+  // These three keys are not read by this component directly; they are provided here so callers
+  // can localize them and pass the result into the optional `searchPlaceholder` prop to override
+  // the default search-field placeholder.
+  '%markerMenu_searchPlaceholder_character%',
   '%markerMenu_searchPlaceholder_insert%',
   '%markerMenu_searchPlaceholder_paragraph%',
 ] as const);
@@ -74,6 +75,17 @@ export interface MarkerMenuItem {
    * neither visibility nor selectability. It is display only.
    */
   selectionState?: 'all' | 'partial' | 'none';
+  /**
+   * Whether the consumer currently has no operation for this row, so it must not be selectable.
+   * Optional and additive — with no value the row is selectable exactly as it has always been.
+   *
+   * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
+   * nothing about the marker itself and so renders no trailing label: those two describe a property
+   * of the marker, while this describes the consumer's momentary inability to act on it. It also
+   * does not affect visibility — the row stays listed, because a row that disappears reads as "this
+   * marker does not exist here" rather than "you cannot do that to it right now."
+   */
+  isDisabled?: boolean;
   /** Function to be triggered when the marker or command is selected */
   action: () => void;
 }
@@ -103,8 +115,16 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 }
 
 /**
- * Leading tri-state indicator for a marker row. Rendered only when the consumer supplies a
- * selection state, so rows without one render no leading column at all.
+ * Leading selection indicator for a marker row, on the start side per the Component Choices
+ * guideline. Rendered only when the consumer supplies a selection state, so rows without one keep
+ * the layout they have always had.
+ *
+ * A checked row means the marker is on the selection — whether on all of it or only part of it. UX
+ * chose this two-glyph reading over a three-glyph one (decided 2026-08-06): a dash for partial read
+ * as a disabled checkbox rather than as "some of this", and an empty box for `'none'` made a
+ * single-select picker look multi-select. The distinction is not lost, only moved: `aria-checked`
+ * still reports `mixed` for a partial row, so the tri-state survives for screen-reader users while
+ * the visual stays binary. The `'none'` box still reserves its width so rows stay aligned.
  */
 function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | 'none' }) {
   return (
@@ -112,11 +132,7 @@ function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | '
       data-slot="marker-selection-state"
       className="tw:flex tw:w-4 tw:min-w-4 tw:items-center tw:justify-center"
     >
-      {state === 'all' && <Check size={16} />}
-      {state === 'partial' && <Minus size={16} />}
-      {state === 'none' && (
-        <span className="tw:size-3 tw:rounded-[3px] tw:border tw:border-input" />
-      )}
+      {state !== 'none' && <Check size={16} />}
     </div>
   );
 }
@@ -135,7 +151,8 @@ function MarkerMenuCommandItem({
   return (
     <CommandItem
       className="tw:flex tw:gap-2 tw:hover:bg-accent"
-      disabled={item.isDisallowed || item.isDeprecated}
+      disabled={item.isDisallowed || item.isDeprecated || item.isDisabled}
+      // Absent for items with no selection state, so existing consumers' rows are unchanged.
       // Never pair this with `data-checked`: CommandItem renders its own trailing check for that,
       // which would double the checkmark.
       aria-checked={
@@ -160,9 +177,19 @@ function MarkerMenuCommandItem({
           </div>
         )}
       </div>
-      <div>
-        <p className="tw:text-sm">{item.title}</p>
-        {item.subtitle && <p className="tw:text-xs tw:text-muted-foreground">{item.subtitle}</p>}
+      {/* tw:min-w-0 lets this flex child shrink below its content width so tw:truncate can clip
+          the title and subtitle instead of letting them wrap, per the Responsiveness guideline's
+          rule that menu entries truncate in small widths (consumers pin this popover as narrow as
+          200px). The native `title` tooltips keep the full text reachable on hover. */}
+      <div className="tw:min-w-0 tw:flex-1">
+        <p className="tw:truncate tw:text-sm" title={item.title}>
+          {item.title}
+        </p>
+        {item.subtitle && (
+          <p className="tw:truncate tw:text-xs tw:text-muted-foreground" title={item.subtitle}>
+            {item.subtitle}
+          </p>
+        )}
       </div>
       {(item.isDisallowed || item.isDeprecated) && (
         <CommandShortcut className="tw:font-sans">
