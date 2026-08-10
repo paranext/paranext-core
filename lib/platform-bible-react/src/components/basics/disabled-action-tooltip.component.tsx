@@ -5,6 +5,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
+import { DisabledTooltipWrapper } from './disabled-tooltip-wrapper.component';
 
 export type DisabledActionTooltipProps = {
   /**
@@ -23,9 +24,10 @@ export type DisabledActionTooltipProps = {
 
 /**
  * Wraps one or more actions (buttons, a popover trigger, etc.) that may be disabled, surfacing a
- * tooltip explanation while they are. A disabled `<button>` cannot itself host a tooltip or receive
- * focus, so this renders a focusable, labeled wrapper around the content instead — reachable via
- * keyboard/screen reader exactly while `disabled` is true.
+ * tooltip explanation while they are, via {@link DisabledTooltipWrapper}. This is the convenience
+ * shape for the common case of a single tooltip message driving both the wrapper's accessible name
+ * and the tooltip body — use `DisabledTooltipWrapper` directly if the accessible name and the
+ * tooltip content need to differ, or the `Tooltip` needs non-default props.
  */
 export function DisabledActionTooltip({
   disabled,
@@ -37,20 +39,13 @@ export function DisabledActionTooltip({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* When the action(s) are disabled they are not focusable, so make this wrapper
-              focusable and named while disabled to keep the explanatory tooltip reachable for
-              keyboard and screen-reader users. */}
-          <div
+          <DisabledTooltipWrapper
             className={className}
-            role={disabled ? 'group' : undefined}
-            // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to
-            // surface the explanation to keyboard and screen-reader users.
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-            tabIndex={disabled ? 0 : undefined}
-            aria-label={disabled ? tooltipText : undefined}
+            isDisabled={disabled}
+            disabledExplanation={tooltipText}
           >
             {children}
-          </div>
+          </DisabledTooltipWrapper>
         </TooltipTrigger>
         {disabled && (
           <TooltipContent>

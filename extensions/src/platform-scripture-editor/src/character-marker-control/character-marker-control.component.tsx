@@ -2,6 +2,7 @@ import { ChevronDown, Type } from 'lucide-react';
 import {
   Button,
   cn,
+  DisabledTooltipWrapper,
   MarkerMenu,
   MarkerMenuItem,
   Popover,
@@ -15,7 +16,6 @@ import {
 } from 'platform-bible-react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DisabledTooltipWrapper } from '../disabled-tooltip-wrapper.component';
 import {
   ARIA_LABEL_FORMAT_KEY,
   ARIA_LABEL_KEY,
